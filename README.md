@@ -1,16 +1,16 @@
-### Hi there 👋
+# About GreatSQL
 
-<!--
-**greatsql/GreatSQL** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+--- 
 
-Here are some ideas to get you started:
+GreatSQL is a MySQL branch originated from GreatOpensource.
+It is based on the MySQL official release and has many performance and reliability enhancements, especially around MGR.
+It can be used as a free, fully compatible, enhanced and open source drop-in replacement for MySQL.
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+# GreatSQL Release Notes
+---
+- Changes in GreatSQL 8.0.23 (2021-3-20) 
+
+# GreatSQL Wiki
+---
+
+[Wiki](https://github.com/greatsql/GreatSQL/wiki)
