@@ -14,3 +14,6 @@ It can be used as a free, fully compatible, enhanced and open source drop-in rep
 ---
 
 [Wiki](https://github.com/greatsql/GreatSQL/wiki)
+
+# Contributors
+[Contributors](https://github.com/greatsql/GreatSQL/doc/Contributors.md)
