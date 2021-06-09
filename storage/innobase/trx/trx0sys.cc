@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2021, Oracle and/or its affiliates.
+Copyright (c) 1996, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -555,7 +557,8 @@ void trx_sys_create(void) {
   new (&trx_sys->rw_trx_ids)
       trx_ids_t(ut_allocator<trx_id_t>(mem_key_trx_sys_t_rw_trx_ids));
 
-  new (&trx_sys->rw_trx_set) TrxIdSet();
+  // new (&trx_sys->rw_trx_set) TrxIdSet();
+  trx_sys->rw_trx_hash.init();
 
   new (&trx_sys->rsegs) Rsegs();
   trx_sys->rsegs.set_empty();
@@ -624,7 +627,8 @@ void trx_sys_close(void) {
 
   trx_sys->rw_trx_ids.~trx_ids_t();
 
-  trx_sys->rw_trx_set.~TrxIdSet();
+  // trx_sys->rw_trx_set.~TrxIdSet();
+  trx_sys->rw_trx_hash.destroy();
 
   ut_free(trx_sys);
 

@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 2012, 2021, Oracle and/or its affiliates.
+Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -442,6 +444,7 @@ LatchDebug::LatchDebug() {
   LEVEL_MAP_INSERT(SYNC_THREADS);
   LEVEL_MAP_INSERT(SYNC_TRX);
   LEVEL_MAP_INSERT(SYNC_TRX_SYS);
+  LEVEL_MAP_INSERT(SYNC_RW_TRX_HASH_ELEMENT);
   LEVEL_MAP_INSERT(SYNC_LOCK_SYS_GLOBAL);
   LEVEL_MAP_INSERT(SYNC_LOCK_SYS_SHARDED);
   LEVEL_MAP_INSERT(SYNC_LOCK_WAIT_SYS);
@@ -699,6 +702,7 @@ Latches *LatchDebug::check_order(const latch_t *latch,
     case SYNC_THREADS:
     case SYNC_LOCK_SYS_GLOBAL:
     case SYNC_LOCK_WAIT_SYS:
+    case SYNC_RW_TRX_HASH_ELEMENT:
     case SYNC_TRX_SYS:
     case SYNC_IBUF_BITMAP_MUTEX:
     case SYNC_TEMP_SPACE_RSEG:
@@ -1500,6 +1504,9 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
 
   LATCH_ADD_MUTEX(REDO_LOG_ARCHIVE_QUEUE_MUTEX, SYNC_NO_ORDER_CHECK,
                   PFS_NOT_INSTRUMENTED);
+
+  LATCH_ADD_MUTEX(RW_TRX_HASH_ELEMENT, SYNC_RW_TRX_HASH_ELEMENT,
+                  rw_trx_hash_element_mutex_key);
 
   LATCH_ADD_MUTEX(DBLWR, SYNC_DBLWR, dblwr_mutex_key);
 

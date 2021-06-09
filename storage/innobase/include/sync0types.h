@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2021, Oracle and/or its affiliates.
+Copyright (c) 1995, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -278,6 +280,7 @@ enum latch_level_t {
   SYNC_THREADS,
   SYNC_TRX,
   SYNC_POOL,
+  SYNC_RW_TRX_HASH_ELEMENT,
   SYNC_POOL_MANAGER,
   SYNC_TRX_SYS,
   SYNC_LOCK_SYS_SHARDED,
@@ -478,6 +481,7 @@ enum latch_id_t {
   LATCH_ID_DBLR,
   LATCH_ID_REDO_LOG_ARCHIVE_ADMIN_MUTEX,
   LATCH_ID_REDO_LOG_ARCHIVE_QUEUE_MUTEX,
+  LATCH_ID_RW_TRX_HASH_ELEMENT,
   LATCH_ID_TEST_MUTEX,
   LATCH_ID_MAX = LATCH_ID_TEST_MUTEX
 };

@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2021, Oracle and/or its affiliates.
+Copyright (c) 1996, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -369,6 +371,7 @@ Copy the transaction ids from the source vector */
 
 void ReadView::copy_trx_ids(const trx_ids_t &trx_ids) {
   ut_ad(!m_cloned);
+  ut_ad(mutex_own(&trx_sys->mutex));
   ulint size = trx_ids.size();
 
   if (m_creator_trx_id > 0) {
@@ -424,11 +427,33 @@ void ReadView::copy_trx_ids(const trx_ids_t &trx_ids) {
 
 #ifdef UNIV_DEBUG
   /* Assert that all transaction ids in list are active. */
+  // for (trx_ids_t::const_iterator it = trx_ids.begin(); it != trx_ids.end();
+  //      ++it) {
+  //   trx_t *trx = trx_get_rw_trx_by_id(*it);
+  //   ut_ad(trx != nullptr);
+  //   ut_ad(trx->state == TRX_STATE_ACTIVE || trx->state ==
+  //   TRX_STATE_PREPARED);
+  // }
+
+  /* Original assertion was here to make sure that rw_trx_ids and
+  rw_trx_hash are in sync and they hold either ACTIVE or PREPARED
+  transaction.
+
+  Now rw_trx_hash.find() does
+  ut_ad(trx_state_eq(trx, TRX_STATE_ACTIVE) ||
+        trx_state_eq(trx, TRX_STATE_PREPARED)).
+  No need to repeat it here. We even can't repeat it here: it'll be race
+  condition because we need trx->element->mutex locked to perform this
+  check (see how it is done in find()).
+
+  Now rw_trx_ids and rw_trx_hash may get out of sync for a short while:
+  when transaction is registered it first gets added into rw_trx_ids
+  under trx_sys->mutex protection and then to rw_trx_hash without mutex
+  protection. Thus we need repeat this lookup. */
   for (trx_ids_t::const_iterator it = trx_ids.begin(); it != trx_ids.end();
        ++it) {
-    trx_t *trx = trx_get_rw_trx_by_id(*it);
-    ut_ad(trx != nullptr);
-    ut_ad(trx->state == TRX_STATE_ACTIVE || trx->state == TRX_STATE_PREPARED);
+    while (!trx_sys->rw_trx_hash.find(*it))
+      ;
   }
 #endif /* UNIV_DEBUG */
 }

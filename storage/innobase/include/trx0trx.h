@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2021, Oracle and/or its affiliates.
+Copyright (c) 1996, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -54,6 +56,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef UNIV_HOTBACKUP
 #include "fts0fts.h"
 #endif /* !UNIV_HOTBACKUP */
+#include "lf.h"
 #include "srv0srv.h"
 
 // Forward declaration
@@ -64,6 +67,8 @@ class ReadView;
 
 // Forward declaration
 class FlushObserver;
+
+struct rw_trx_hash_element_t;
 
 /** Dummy session used currently in MySQL interface */
 extern sess_t *trx_dummy_sess;
@@ -395,18 +400,18 @@ committed and the reference count is not incremented.
 @param trx Transaction that is being referenced
 @param do_ref_count Increment the reference iff this is true
 @return transaction instance if it is not committed */
-UNIV_INLINE
-trx_t *trx_reference(trx_t *trx, bool do_ref_count);
+// UNIV_INLINE
+// trx_t *trx_reference(trx_t *trx, bool do_ref_count);
 
 /**
 Release the transaction. Decrease the reference count.
 @param trx Transaction that is being released */
-UNIV_INLINE
-void trx_release_reference(trx_t *trx);
+// UNIV_INLINE
+// void trx_release_reference(trx_t *trx);
 
 /**
 Check if the transaction is being referenced. */
-#define trx_is_referenced(t) ((t)->n_ref > 0)
+// #define trx_is_referenced(t) ((t)->n_ref > 0)
 
 /**
 @param[in] requestor	Transaction requesting the lock
@@ -1351,13 +1356,20 @@ struct trx_t {
   const char *start_file; /*!< Filename where it was started */
 #endif                    /* UNIV_DEBUG */
 
-  lint n_ref; /*!< Count of references, protected
-              by trx_t::mutex. We can't release the
-              locks nor commit the transaction until
-              this reference is 0.  We can change
-              the state to COMMITTED_IN_MEMORY to
-              signify that it is no longer
-              "active". */
+  // lint n_ref; /*!< Count of references, protected
+  //             by trx_t::mutex. We can't release the
+  //             locks nor commit the transaction until
+  //             this reference is 0.  We can change
+  //             the state to COMMITTED_IN_MEMORY to
+  //             signify that it is no longer
+  //             "active". */
+
+  /**
+ Count of references.
+ We can't release the locks nor commit the transaction until this reference
+ is 0.  We can change the state to COMMITTED_IN_MEMORY to signify
+ that it is no longer "active". */
+  std::atomic_long n_ref;
 
   /** Version of this instance. It is incremented each time the
   instance is re-used in trx_start_low(). It is used to track
@@ -1393,6 +1405,9 @@ struct trx_t {
                   Committed on DD tables */
 #endif            /* UNIV_DEBUG */
   trx_stats stats;
+
+  rw_trx_hash_element_t *rw_trx_hash_element;
+  LF_PINS *rw_trx_hash_pins;
   ulint magic_n;
 
   bool is_read_uncommitted() const {
@@ -1413,6 +1428,24 @@ struct trx_t {
   }
 
   bool allow_semi_consistent() const { return (skip_gap_locks()); }
+
+  bool is_referenced() { return n_ref.load(std::memory_order_relaxed) > 0; }
+
+  void reference() {
+#ifdef UNIV_DEBUG
+    auto old_n_ref =
+#endif
+        n_ref.fetch_add(1, std::memory_order_relaxed);
+    ut_ad(old_n_ref >= 0);
+  }
+
+  void release_reference() {
+#ifdef UNIV_DEBUG
+    auto old_n_ref =
+#endif
+        n_ref.fetch_sub(1, std::memory_order_relaxed);
+    ut_ad(old_n_ref > 0);
+  }
 };
 #ifndef UNIV_HOTBACKUP
 

@@ -1,7 +1,9 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2021, Oracle and/or its affiliates.
+Copyright (c) 1995, 2021, Oracle and/or its affiliates. All rights reserved.
 Copyright (c) 2008, Google Inc.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -135,6 +137,7 @@ mysql_pfs_key_t event_manager_mutex_key;
 mysql_pfs_key_t sync_array_mutex_key;
 mysql_pfs_key_t zip_pad_mutex_key;
 mysql_pfs_key_t row_drop_list_mutex_key;
+mysql_pfs_key_t rw_trx_hash_element_mutex_key;
 mysql_pfs_key_t file_open_mutex_key;
 mysql_pfs_key_t master_key_id_mutex_key;
 mysql_pfs_key_t clone_sys_mutex_key;

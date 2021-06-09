@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2021, Oracle and/or its affiliates.
+Copyright (c) 1996, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -587,37 +589,38 @@ typedef std::vector<trx_id_t, ut_allocator<trx_id_t>> trx_ids_t;
 
 /** Mapping read-write transactions from id to transaction instance, for
 creating read views and during trx id lookup for MVCC and locking. */
-struct TrxTrack {
-  explicit TrxTrack(trx_id_t id, trx_t *trx = nullptr) : m_id(id), m_trx(trx) {
-    // Do nothing
-  }
+// struct TrxTrack {
+//   explicit TrxTrack(trx_id_t id, trx_t *trx = nullptr) : m_id(id), m_trx(trx)
+//   {
+//     // Do nothing
+//   }
 
-  trx_id_t m_id;
-  trx_t *m_trx;
-};
+//   trx_id_t m_id;
+//   trx_t *m_trx;
+// };
 
-struct TrxTrackHash {
-  size_t operator()(const TrxTrack &key) const { return (size_t(key.m_id)); }
-};
-
-/**
-Comparator for TrxMap */
-struct TrxTrackHashCmp {
-  bool operator()(const TrxTrack &lhs, const TrxTrack &rhs) const {
-    return (lhs.m_id == rhs.m_id);
-  }
-};
+// struct TrxTrackHash {
+//   size_t operator()(const TrxTrack &key) const { return (size_t(key.m_id)); }
+// };
 
 /**
 Comparator for TrxMap */
-struct TrxTrackCmp {
-  bool operator()(const TrxTrack &lhs, const TrxTrack &rhs) const {
-    return (lhs.m_id < rhs.m_id);
-  }
-};
+// struct TrxTrackHashCmp {
+//   bool operator()(const TrxTrack &lhs, const TrxTrack &rhs) const {
+//     return (lhs.m_id == rhs.m_id);
+//   }
+// };
+
+/**
+Comparator for TrxMap */
+// struct TrxTrackCmp {
+//   bool operator()(const TrxTrack &lhs, const TrxTrack &rhs) const {
+//     return (lhs.m_id < rhs.m_id);
+//   }
+// };
 
 // typedef std::unordered_set<TrxTrack, TrxTrackHash, TrxTrackHashCmp> TrxIdSet;
-typedef std::set<TrxTrack, TrxTrackCmp, ut_allocator<TrxTrack>> TrxIdSet;
+// typedef std::set<TrxTrack, TrxTrackCmp, ut_allocator<TrxTrack>> TrxIdSet;
 
 struct TrxVersion {
   TrxVersion(trx_t *trx);

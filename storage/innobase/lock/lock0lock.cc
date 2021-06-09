@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2021, Oracle and/or its affiliates.
+Copyright (c) 1996, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -846,6 +848,7 @@ static const lock_t *lock_rec_other_has_conflicting(
 
 /** Checks if some transaction has an implicit x-lock on a record in a secondary
  index.
+ @param[in/out] caller_trx  trx of current thread
  @param[in]   rec       user record
  @param[in]   index     secondary index
  @param[in]   offsets   rec_get_offsets(rec, index)
@@ -853,7 +856,8 @@ static const lock_t *lock_rec_other_has_conflicting(
  NOTE that this function can return false positives but never false
  negatives. The caller must confirm all positive results by checking if the trx
  is still active. */
-static trx_t *lock_sec_rec_some_has_impl(const rec_t *rec, dict_index_t *index,
+static trx_t *lock_sec_rec_some_has_impl(trx_t *caller_trx, const rec_t *rec,
+                                         dict_index_t *index,
                                          const ulint *offsets) {
   trx_t *trx;
   trx_id_t max_trx_id;
@@ -884,7 +888,7 @@ static trx_t *lock_sec_rec_some_has_impl(const rec_t *rec, dict_index_t *index,
     x-lock. We have to look in the clustered index. */
 
   } else {
-    trx = row_vers_impl_x_locked(rec, index, offsets);
+    trx = row_vers_impl_x_locked(caller_trx, rec, index, offsets);
   }
 
   return (trx);
@@ -908,14 +912,14 @@ static bool lock_rec_other_trx_holds_expl(ulint precise_mode, const trx_t *trx,
 
   /* We will inspect locks from various shards when inspecting transactions. */
   locksys::Global_exclusive_latch_guard guard{UT_LOCATION_HERE};
-  /* If trx_rw_is_active returns non-null impl_trx it only means that impl_trx
+  /* If rw_trx_hash.find returns non-null impl_trx it only means that impl_trx
   was active at some moment during the call, but might already be in
   TRX_STATE_COMMITTED_IN_MEMORY when we execute the body of the if.
   However, we hold exclusive latch on whole lock_sys, which prevents anyone
   from creating any new explicit locks.
   So, all explicit locks we will see must have been created at the time when
   the transaction was not committed yet. */
-  if (trx_t *impl_trx = trx_rw_is_active(trx->id, nullptr, false)) {
+  if (trx_t *impl_trx = trx_sys->rw_trx_hash.find(trx->id, false)) {
     ulint heap_no = page_rec_get_heap_no(rec);
     mutex_enter(&trx_sys->mutex);
 
@@ -5028,8 +5032,9 @@ static void rec_queue_validate_latched(const buf_block_t *block,
 
     trx_id = lock_clust_rec_some_has_impl(rec, index, offsets);
 
-    const trx_t *impl_trx = trx_rw_is_active_low(trx_id, nullptr);
+    trx_t *impl_trx = trx_sys->rw_trx_hash.find(trx_id, true);
     if (impl_trx != nullptr) {
+      ut_ad(impl_trx->is_referenced());
       ut_ad(owns_page_shard(block->get_page_id()));
       ut_ad(trx_sys_mutex_own());
       /* impl_trx cannot become TRX_STATE_COMMITTED_IN_MEMORY nor removed from
@@ -5037,8 +5042,9 @@ static void rec_queue_validate_latched(const buf_block_t *block,
       other threads in the system consider this impl_trx active and thus should
       respect implicit locks held by impl_trx*/
 
-      const lock_t *other_lock =
-          lock_rec_other_has_expl_req(LOCK_S, block, true, heap_no, impl_trx);
+      // const lock_t *other_lock =
+      //     lock_rec_other_has_expl_req(LOCK_S, block, true, heap_no,
+      //     impl_trx);
 
       /* The impl_trx is holding an implicit lock on the
       given record 'rec'. So there cannot be another
@@ -5046,13 +5052,33 @@ static void rec_queue_validate_latched(const buf_block_t *block,
       explicit waiting lock only if the impl_trx has an
       explicit granted lock. */
 
-      if (other_lock != nullptr) {
-        ut_a(lock_get_wait(other_lock));
-        ut_a(lock_rec_has_expl(LOCK_X | LOCK_REC_NOT_GAP, block, heap_no,
-                               impl_trx));
+      // if (other_lock != nullptr) {
+      //   ut_a(lock_get_wait(other_lock));
+      //   ut_a(lock_rec_has_expl(LOCK_X | LOCK_REC_NOT_GAP, block, heap_no,
+      //                          impl_trx));
+
+      /* trx->mutex is required. See trx_release_impl_and_expl_locks */
+      trx_mutex_enter(impl_trx);
+      if (!trx_state_eq(impl_trx, TRX_STATE_COMMITTED_IN_MEMORY)) {
+        const lock_t *other_lock =
+            lock_rec_other_has_expl_req(LOCK_S, block, true, heap_no, impl_trx);
+
+        /* The impl_trx is holding an implicit lock on the
+        given record 'rec'. So there cannot be another
+        explicit granted lock.  Also, there can be another
+        explicit waiting lock only if the impl_trx has an
+        explicit granted lock. */
+
+        if (other_lock != nullptr) {
+          ut_a(lock_get_wait(other_lock));
+          ut_a(lock_rec_has_expl(LOCK_X | LOCK_REC_NOT_GAP, block, heap_no,
+                                 impl_trx));
+        }
+      }
+      trx_mutex_exit(impl_trx);
+      impl_trx->release_reference();
       }
     }
-  }
 
   Lock_iter::for_each(rec_id, [&](lock_t *lock) {
     ut_ad(!trx_is_ac_nl_ro(lock->trx));
@@ -5393,7 +5419,7 @@ static void lock_rec_convert_impl_to_expl_for_trx(
     trx_t *trx,               /*!< in/out: active transaction */
     ulint heap_no)            /*!< in: rec heap number to lock */
 {
-  ut_ad(trx_is_referenced(trx));
+  ut_ad(trx->is_referenced());
 
   DEBUG_SYNC_C("before_lock_rec_convert_impl_to_expl_for_trx");
   {
@@ -5436,18 +5462,20 @@ static void lock_rec_convert_impl_to_expl_for_trx(
     trx_mutex_exit(trx);
   }
 
-  trx_release_reference(trx);
+  trx->release_reference();
 
   DEBUG_SYNC_C("after_lock_rec_convert_impl_to_expl_for_trx");
 }
 
 /** If a transaction has an implicit x-lock on a record, but no explicit x-lock
 set on the record, sets one for it.
+@param[in/out]  caller_trx  trx of current thread
 @param[in]	block		buffer block of rec
 @param[in]	rec		user record on page
 @param[in]	index		index of record
 @param[in]	offsets		rec_get_offsets(rec, index) */
-static void lock_rec_convert_impl_to_expl(const buf_block_t *block,
+static void lock_rec_convert_impl_to_expl(trx_t *caller_trx,
+                                          const buf_block_t *block,
                                           const rec_t *rec, dict_index_t *index,
                                           const ulint *offsets) {
   trx_t *trx;
@@ -5464,11 +5492,11 @@ static void lock_rec_convert_impl_to_expl(const buf_block_t *block,
 
     trx_id = lock_clust_rec_some_has_impl(rec, index, offsets);
 
-    trx = trx_rw_is_active(trx_id, nullptr, true);
+    trx = trx_sys->rw_trx_hash.find(caller_trx, trx_id, true);
   } else {
     ut_ad(!dict_index_is_online_ddl(index));
 
-    trx = lock_sec_rec_some_has_impl(rec, index, offsets);
+    trx = lock_sec_rec_some_has_impl(caller_trx, rec, index, offsets);
     if (trx) {
       DEBUG_SYNC_C("lock_rec_convert_impl_to_expl_will_validate");
       ut_ad(!lock_rec_other_trx_holds_expl(LOCK_S | LOCK_REC_NOT_GAP, trx, rec,
@@ -5479,7 +5507,7 @@ static void lock_rec_convert_impl_to_expl(const buf_block_t *block,
   if (trx != nullptr) {
     ulint heap_no = page_rec_get_heap_no(rec);
 
-    ut_ad(trx_is_referenced(trx));
+    ut_ad(trx->is_referenced());
 
     /* If the transaction is still active and has no
     explicit x-lock set on the record, set one for it.
@@ -5494,7 +5522,7 @@ void lock_rec_convert_active_impl_to_expl(const buf_block_t *block,
                                           const rec_t *rec, dict_index_t *index,
                                           const ulint *offsets, trx_t *trx,
                                           ulint heap_no) {
-  trx_reference(trx, true);
+  trx->reference();
   lock_rec_convert_impl_to_expl_for_trx(block, rec, index, offsets, trx,
                                         heap_no);
 }
@@ -5534,7 +5562,7 @@ dberr_t lock_clust_rec_modify_check_and_lock(
   /* If a transaction has no explicit x-lock set on the record, set one
   for it */
 
-  lock_rec_convert_impl_to_expl(block, rec, index, offsets);
+  lock_rec_convert_impl_to_expl(thr_get_trx(thr), block, rec, index, offsets);
 
   {
     locksys::Shard_latch_guard guard{UT_LOCATION_HERE, block->get_page_id()};
@@ -5643,7 +5671,7 @@ dberr_t lock_sec_rec_read_check_and_lock(
   if ((page_get_max_trx_id(block->frame) >= trx_rw_min_trx_id() ||
        recv_recovery_is_on()) &&
       !page_rec_is_supremum(rec)) {
-    lock_rec_convert_impl_to_expl(block, rec, index, offsets);
+    lock_rec_convert_impl_to_expl(thr_get_trx(thr), block, rec, index, offsets);
   }
   {
     locksys::Shard_latch_guard guard{UT_LOCATION_HERE, block->get_page_id()};
@@ -5692,7 +5720,7 @@ dberr_t lock_clust_rec_read_check_and_lock(
   heap_no = page_rec_get_heap_no(rec);
 
   if (heap_no != PAGE_HEAP_NO_SUPREMUM) {
-    lock_rec_convert_impl_to_expl(block, rec, index, offsets);
+    lock_rec_convert_impl_to_expl(thr_get_trx(thr), block, rec, index, offsets);
   }
 
   DEBUG_SYNC_C("after_lock_clust_rec_read_check_and_lock_impl_to_expl");
@@ -6139,8 +6167,8 @@ void lock_trx_release_locks(trx_t *trx) /*!< in/out: transaction */
   check_trx_state(trx);
   ut_ad(trx_state_eq(trx, TRX_STATE_COMMITTED_IN_MEMORY));
 
-  if (trx_is_referenced(trx)) {
-    while (trx_is_referenced(trx)) {
+  if (trx->is_referenced()) {
+    while (trx->is_referenced()) {
       trx_mutex_exit(trx);
 
       DEBUG_SYNC_C("waiting_trx_is_not_referenced");
@@ -6153,7 +6181,7 @@ void lock_trx_release_locks(trx_t *trx) /*!< in/out: transaction */
     }
   }
 
-  ut_ad(!trx_is_referenced(trx));
+  ut_ad(!trx->is_referenced());
 
   /* If the background thread trx_rollback_or_clean_recovered()
   is still active then there is a chance that the rollback

@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 1997, 2021, Oracle and/or its affiliates.
+Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -48,6 +50,7 @@ class ReadView;
 
 /** Finds out if an active transaction has inserted or modified a secondary
  index record.
+ @param[in,out] caller_trx  trx of current thread
  @param[in]   rec       record in a secondary index
  @param[in]   index     the secondary index
  @param[in]   offsets   rec_get_offsets(rec, index)
@@ -56,8 +59,8 @@ class ReadView;
  negatives. The caller must confirm all positive results by checking if the trx
  is still active.
 */
-trx_t *row_vers_impl_x_locked(const rec_t *rec, const dict_index_t *index,
-                              const ulint *offsets);
+trx_t *row_vers_impl_x_locked(trx_t *caller_trx, const rec_t *rec,
+                              const dict_index_t *index, const ulint *offsets);
 
 /** Finds out if we must preserve a delete marked earlier version of a clustered
  index record, because it is >= the purge view.
@@ -134,9 +137,9 @@ the view, that is, it was freshly inserted afterwards
 @param[out] vrow Virtual row, old version, or null if it is not updated in the
 view */
 void row_vers_build_for_semi_consistent_read(
-    const rec_t *rec, mtr_t *mtr, dict_index_t *index, ulint **offsets,
-    mem_heap_t **offset_heap, mem_heap_t *in_heap, const rec_t **old_vers,
-    const dtuple_t **vrow);
+    trx_t *caller_trx, const rec_t *rec, mtr_t *mtr, dict_index_t *index,
+    ulint **offsets, mem_heap_t **offset_heap, mem_heap_t *in_heap,
+    const rec_t **old_vers, const dtuple_t **vrow);
 
 #include "row0vers.ic"
 

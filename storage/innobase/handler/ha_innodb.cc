@@ -1,9 +1,11 @@
 /*****************************************************************************
 
-Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
 Copyright (c) 2008, 2009 Google Inc.
 Copyright (c) 2009, Percona Inc.
 Copyright (c) 2012, Facebook Inc.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -773,6 +775,7 @@ static PSI_mutex_info all_innodb_mutexes[] = {
 #endif /* UNIV_DEBUG */
     PSI_MUTEX_KEY(rw_lock_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(rw_lock_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(rw_trx_hash_element_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(srv_innodb_monitor_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(srv_misc_tmpfile_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(srv_monitor_file_mutex, 0, 0, PSI_DOCUMENT_ME),
@@ -26005,4 +26008,21 @@ static bool innobase_check_reserved_file_name(
   }
   return (true);
 }
+
+/**
+  Gets current trx.
+
+  This function may be called during InnoDB initialisation, when
+  innodb_hton_ptr->slot is not yet set to meaningful value.
+*/
+trx_t *current_trx() {
+  THD *thd = current_thd;
+  if (likely(thd != nullptr) && innodb_hton_ptr->slot != HA_SLOT_UNDEF) {
+    trx_t *&trx = thd_to_trx(thd);
+    return (trx);
+  } else {
+    return (nullptr);
+  }
+}
+
 #endif /* !UNIV_HOTBACKUP */

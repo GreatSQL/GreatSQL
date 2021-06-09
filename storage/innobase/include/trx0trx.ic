@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2021, Oracle and/or its affiliates.
+Copyright (c) 1996, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -232,36 +234,36 @@ committed and the reference count is not incremented.
 @param trx Transaction that is being referenced
 @param do_ref_count Increment the reference iff this is true
 @return transaction instance if it is not committed */
-UNIV_INLINE
-trx_t *trx_reference(trx_t *trx, bool do_ref_count) {
-  trx_mutex_enter(trx);
+// UNIV_INLINE
+// trx_t *trx_reference(trx_t *trx, bool do_ref_count) {
+//   trx_mutex_enter(trx);
 
-  if (trx_state_eq(trx, TRX_STATE_COMMITTED_IN_MEMORY)) {
-    trx_mutex_exit(trx);
-    trx = nullptr;
-  } else if (do_ref_count) {
-    ut_ad(trx->n_ref >= 0);
-    ++trx->n_ref;
-    trx_mutex_exit(trx);
-  } else {
-    trx_mutex_exit(trx);
-  }
+//   if (trx_state_eq(trx, TRX_STATE_COMMITTED_IN_MEMORY)) {
+//     trx_mutex_exit(trx);
+//     trx = nullptr;
+//   } else if (do_ref_count) {
+//     ut_ad(trx->n_ref >= 0);
+//     ++trx->n_ref;
+//     trx_mutex_exit(trx);
+//   } else {
+//     trx_mutex_exit(trx);
+//   }
 
-  return (trx);
-}
+//   return (trx);
+// }
 
 /**
 Release the transaction. Decrease the reference count.
 @param trx Transaction that is being released */
-UNIV_INLINE
-void trx_release_reference(trx_t *trx) {
-  trx_mutex_enter(trx);
+// UNIV_INLINE
+// void trx_release_reference(trx_t *trx) {
+//   trx_mutex_enter(trx);
 
-  ut_ad(trx->n_ref > 0);
-  --trx->n_ref;
+//   ut_ad(trx->n_ref > 0);
+//   --trx->n_ref;
 
-  trx_mutex_exit(trx);
-}
+//   trx_mutex_exit(trx);
+// }
 
 /**
 @param trx		Get the active view for this transaction, if one exists

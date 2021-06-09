@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -34,7 +36,7 @@ Utilities related to CPU cache. */
 namespace ut {
 
 /** CPU cache line size */
-#ifdef __powerpc__
+#if defined(__powerpc__) || defined(__aarch64__)
 constexpr size_t INNODB_CACHE_LINE_SIZE = 128;
 #else
 constexpr size_t INNODB_CACHE_LINE_SIZE = 64;
