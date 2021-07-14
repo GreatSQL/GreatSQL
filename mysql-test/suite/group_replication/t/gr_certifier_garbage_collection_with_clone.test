@@ -134,8 +134,8 @@ while($inserts)
 --let $assert_cond= "10" = "[SELECT Count_transactions_rows_validating FROM performance_schema.replication_group_member_stats WHERE member_id IN (SELECT @@server_uuid)]"
 --source include/assert.inc
 
---let $assert_text= 'Transactions_committed_all_members must be equal to aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-4 on server1'
---let $assert_cond= "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-4" = "[SELECT Transactions_committed_all_members FROM performance_schema.replication_group_member_stats WHERE member_id IN (SELECT @@server_uuid)]"
+--let $assert_text= 'Transactions_committed_all_members must be equal to aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5 on server1'
+--let $assert_cond= "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5" = "[SELECT Transactions_committed_all_members FROM performance_schema.replication_group_member_stats WHERE member_id IN (SELECT @@server_uuid)]"
 --source include/assert.inc
 
 --let $rpl_connection_name= server2
@@ -154,8 +154,8 @@ while($inserts)
 --let $assert_cond= "10" = "[SELECT Count_transactions_rows_validating FROM performance_schema.replication_group_member_stats WHERE member_id IN (SELECT @@server_uuid)]"
 --source include/assert.inc
 
---let $assert_text= 'Transactions_committed_all_members must be equal to aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-4 on server3'
---let $assert_cond= "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-4" = "[SELECT Transactions_committed_all_members FROM performance_schema.replication_group_member_stats WHERE member_id IN (SELECT @@server_uuid)]"
+--let $assert_text= 'Transactions_committed_all_members must be equal to aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5 on server3'
+--let $assert_cond= "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5" = "[SELECT Transactions_committed_all_members FROM performance_schema.replication_group_member_stats WHERE member_id IN (SELECT @@server_uuid)]"
 --source include/assert.inc
 
 # Resume applier on server3.

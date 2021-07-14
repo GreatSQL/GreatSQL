@@ -1,4 +1,5 @@
-/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -212,7 +213,7 @@ struct plugin_options_variables {
   char *ip_whitelist_var;
   char *ip_allowlist_var;
 
-#define DEFAULT_COMMUNICATION_MAX_MESSAGE_SIZE 10485760
+#define DEFAULT_COMMUNICATION_MAX_MESSAGE_SIZE 1048576
 #define MAX_COMMUNICATION_MAX_MESSAGE_SIZE get_max_slave_max_allowed_packet()
 #define MIN_COMMUNICATION_MAX_MESSAGE_SIZE 0
   ulong communication_max_message_size_var;
@@ -224,6 +225,8 @@ struct plugin_options_variables {
 
   bool single_primary_mode_var;
   bool enforce_update_everywhere_checks_var;
+  bool majority_after_mode_var;
+  int single_primary_fast_mode_var;
 
   const char *flow_control_mode_values[3] = {"DISABLED", "QUOTA",
                                              (const char *)nullptr};
@@ -235,6 +238,10 @@ struct plugin_options_variables {
 #define MIN_FLOW_CONTROL_THRESHOLD 0
   long flow_control_certifier_threshold_var;
   long flow_control_applier_threshold_var;
+#define MAX_FLOW_CONTROL_REPLAY_LAG_BEHIND 86400
+  long flow_control_replay_lag_behind_var;
+#define MAX_FLOW_CONTROL_WAIT_TIME 86400
+  long flow_control_max_wait_time_var;
 
 #define DEFAULT_TRANSACTION_SIZE_LIMIT 150000000
 #define MAX_TRANSACTION_SIZE_LIMIT 2147483647
@@ -253,6 +260,8 @@ struct plugin_options_variables {
 
   uint autorejoin_tries_var;
 
+  uint zone_id_var;
+
   ulong timeout_on_unreachable_var;
 
 #define DEFAULT_MEMBER_WEIGHT 50
@@ -267,6 +276,7 @@ struct plugin_options_variables {
   int flow_control_period_var;
   int flow_control_hold_percent_var;
   int flow_control_release_percent_var;
+  int broadcast_gtid_executed_period_var;
 
   ulonglong clone_threshold_var;
 

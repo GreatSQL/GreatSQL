@@ -1,4 +1,5 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +32,23 @@
 #include "my_inttypes.h"
 #include "plugin/group_replication/include/gcs_plugin_messages.h"
 #include "plugin/group_replication/include/plugin_psi.h"
+
+#define FLOW_CONTROL_LOWER_THRESHOLD 65536
+#define FLOW_CONTROL_LOW_THRESHOLD 131072
+#define FLOW_CONTROL_MID_THRESHOLD 1048576
+#define FLOW_CONTROL_HIGH_THRESHOLD 10485760
+#define FLOW_CONTROL_HIGHER_THRESHOLD 41943040
+#define FLOW_CONTROL_MUCH_HIGHER_THRESHOLD 104857600
+#define FLOW_CONTROL_DANGEROUS_THRESHOLD 209715200
+
+#define FLOW_CONTROL_MAX_WAIT_TIME 3600000
+#define FLOW_CONTROL_ADD_LEVEL7_WAIT_TIME 300000
+#define FLOW_CONTROL_ADD_LEVEL6_WAIT_TIME 60000
+#define FLOW_CONTROL_ADD_LEVEL5_WAIT_TIME 5000
+#define FLOW_CONTROL_ADD_LEVEL4_WAIT_TIME 500
+#define FLOW_CONTROL_ADD_LEVEL3_WAIT_TIME 50
+#define FLOW_CONTROL_ADD_LEVEL2_WAIT_TIME 20
+#define FLOW_CONTROL_ADD_LEVEL1_WAIT_TIME 10
 
 /**
   Flow control modes:
@@ -617,7 +635,7 @@ class Flow_control_module {
     Evaluate the information received in the last flow control period
     and adjust the system parameters accordingly
   */
-  void flow_control_step(Pipeline_stats_member_collector *);
+  void flow_control_step(Pipeline_stats_member_collector *, bool);
 
   /**
     Returns copy of individual member stats information.
@@ -641,8 +659,19 @@ class Flow_control_module {
   int32 do_wait();
 
  private:
+  bool check_still_waiting();
+
+ private:
   mysql_mutex_t m_flow_control_lock;
   mysql_cond_t m_flow_control_cond;
+
+  int64 m_wait_counter;
+  int64 m_leave_counter;
+  ulonglong m_last_cert_database_size;
+  int m_current_wait_msec;
+  int m_flow_control_need_refreshed;
+  int m_flow_control_flag;
+  int m_max_wait_time;
 
   Flow_control_module_info m_info;
   /*

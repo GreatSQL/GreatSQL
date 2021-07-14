@@ -1,4 +1,5 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -197,6 +198,32 @@ class Synchronized_queue : public Synchronized_queue_interface<T> {
     mysql_cond_broadcast(&cond);
     mysql_mutex_unlock(&lock);
 
+    return false;
+  }
+
+  bool push_all(std::queue<T> *delayed_queue) {
+    mysql_mutex_lock(&lock);
+    size_t qsize = queue.size();
+    if (qsize > 0) {
+      do {
+        T out = queue.front();
+        delayed_queue->push(out);
+        queue.pop();
+        qsize--;
+      } while (qsize > 0);
+    }
+
+    qsize = delayed_queue->size();
+    if (qsize) {
+      do {
+        T out = delayed_queue->front();
+        queue.push(out);
+        delayed_queue->pop();
+        qsize--;
+      } while (qsize > 0);
+    }
+    mysql_cond_broadcast(&cond);
+    mysql_mutex_unlock(&lock);
     return false;
   }
 

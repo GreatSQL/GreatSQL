@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -625,6 +626,9 @@ enum_gcs_error Gcs_xcom_state_exchange::broadcast_state(
 
   Gcs_group_identifier group_id(*m_group_name);
   Gcs_message message(m_local_information, group_id, message_data);
+
+  MYSQL_GCS_LOG_INFO(
+      "xcom_communication do_send_message CT_INTERNAL_STATE_EXCHANGE");
 
   unsigned long long message_length = 0;
   return xcom_communication->do_send_message(

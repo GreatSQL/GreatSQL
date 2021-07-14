@@ -45,13 +45,13 @@ include/gr_stop_applier_sql_thread.inc
 STOP REPLICA SQL_THREAD FOR CHANNEL "group_replication_applier";
 [connection server1]
 include/assert.inc ['Count_transactions_rows_validating must be equal to 10 on server1']
-include/assert.inc ['Transactions_committed_all_members must be equal to aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-4 on server1']
+include/assert.inc ['Transactions_committed_all_members must be equal to aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5 on server1']
 [connection server2]
 include/assert.inc ['Count_transactions_rows_validating must be equal to 0 on server2']
 include/assert.inc ['Transactions_committed_all_members must be equal to "" on server2']
 [connection server3]
 include/assert.inc ['Count_transactions_rows_validating must be equal to 10 on server3']
-include/assert.inc ['Transactions_committed_all_members must be equal to aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-4 on server3']
+include/assert.inc ['Transactions_committed_all_members must be equal to aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5 on server3']
 include/gr_start_applier_sql_thread.inc
 START REPLICA SQL_THREAD FOR CHANNEL "group_replication_applier";
 

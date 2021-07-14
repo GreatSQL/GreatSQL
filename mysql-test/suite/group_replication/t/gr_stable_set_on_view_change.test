@@ -36,8 +36,8 @@ SET @@GLOBAL.DEBUG= '+d,group_replication_certifier_broadcast_thread_big_period'
 --echo #
 
 --let $transactions_committed_all_members= query_get_value(SELECT Transactions_committed_all_members from performance_schema.replication_group_member_stats where member_id in (SELECT @@server_uuid), Transactions_committed_all_members, 1)
---let $assert_text= 'Transactions_committed_all_members should be empty'
---let $assert_cond= "$transactions_committed_all_members" = ""
+--let $assert_text= 'Transactions_committed_all_members should be one'
+--let $assert_cond= "$transactions_committed_all_members" = "6d387320-185d-11e6-bdf4-0800200c9a66:1"
 --source include/assert.inc
 
 --echo #
@@ -68,8 +68,8 @@ INSERT INTO t1 VALUES (1);
 --source include/wait_condition.inc
 
 --let $transactions_committed_all_members= query_get_value(SELECT Transactions_committed_all_members from performance_schema.replication_group_member_stats where member_id in (SELECT @@server_uuid), Transactions_committed_all_members, 1)
---let $assert_text= 'Transactions_committed_all_members should have the transactions previous to member 2 entry'
---let $assert_cond= "$transactions_committed_all_members" = "6d387320-185d-11e6-bdf4-0800200c9a66:1-3"
+--let $assert_text= 'Transactions_committed_all_members should have four'
+--let $assert_cond= "$transactions_committed_all_members" = "6d387320-185d-11e6-bdf4-0800200c9a66:1-4"
 --source include/assert.inc
 
 --echo #

@@ -1,4 +1,5 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -141,8 +142,14 @@ class Group_member_info : public Plugin_gcs_message {
     // Length of the payload item: variable
     PIT_RECOVERY_ENDPOINTS = 20,
 
+    // Length of the payload item: 1 bytes
+    PIT_ZONE_ID = 21,
+
+    // Length of the payload item: 1 bytes
+    PIT_FAST_MODE = 22,
+
     // No valid type codes can appear after this one.
-    PIT_MAX = 21
+    PIT_MAX = 23
   };
 
   /*
@@ -208,7 +215,8 @@ class Group_member_info : public Plugin_gcs_message {
                     bool has_enforces_update_everywhere_checks,
                     uint member_weight_arg, uint lower_case_table_names_arg,
                     bool default_table_encryption_arg,
-                    const char *recovery_endpoints_arg,
+                    const char *recovery_endpoints_arg, int zone_id_arg,
+                    int single_primary_fast_mode_arg,
                     PSI_mutex_key psi_mutex_key_arg =
                         key_GR_LOCK_group_member_info_update_lock);
 
@@ -271,7 +279,8 @@ class Group_member_info : public Plugin_gcs_message {
               bool has_enforces_update_everywhere_checks,
               uint member_weight_arg, uint lower_case_table_names_arg,
               bool default_table_encryption_arg,
-              const char *recovery_endpoints_arg);
+              const char *recovery_endpoints_arg, int zone_id_arg,
+              int single_primary_fast_mode_arg);
 
   /**
     Update Group_member_info.
@@ -483,6 +492,11 @@ class Group_member_info : public Plugin_gcs_message {
   bool is_unreachable();
 
   /**
+    Return true if this is single primary fast mode
+  */
+  int in_single_primary_fast_mode();
+
+  /**
     Update this member conflict detection to true
    */
   void enable_conflict_detection();
@@ -543,6 +557,9 @@ class Group_member_info : public Plugin_gcs_message {
    */
   void set_recovery_endpoints(const char *endpoints);
 
+  int get_zone_id();
+  void set_zone_id(int id);
+
  protected:
   void encode_payload(std::vector<unsigned char> *buffer) const override;
   void decode_payload(const unsigned char *buffer,
@@ -585,6 +602,8 @@ class Group_member_info : public Plugin_gcs_message {
   bool group_action_running;
   bool primary_election_running;
   std::string recovery_endpoints;
+  int zone_id;
+  int single_primary_fast_mode;
 #ifndef NDEBUG
  public:
   bool skip_encode_default_table_encryption;
@@ -734,7 +753,7 @@ class Group_member_info_manager_interface {
 
     @param[in] uuid        member uuid
    */
-  virtual void set_member_unreachable(const std::string &uuid) = 0;
+  virtual bool set_member_unreachable(const std::string &uuid) = 0;
 
   /**
     Sets the identified member as reachable.
@@ -937,7 +956,7 @@ class Group_member_info_manager : public Group_member_info_manager_interface {
                             Group_member_info::Group_member_status new_status,
                             Notification_context &ctx) override;
 
-  void set_member_unreachable(const std::string &uuid) override;
+  bool set_member_unreachable(const std::string &uuid) override;
 
   void set_member_reachable(const std::string &uuid) override;
 

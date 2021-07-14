@@ -1,4 +1,5 @@
-# Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2021, GreatDB Software Co., Ltd
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -11380,6 +11381,23 @@ ER_IB_MSG_DEPRECATED_INNODB_PARALLEL_DBLWR_ENCRYPT
 #
 # End of Percona Server 8.0 server error log messages
 #
+
+#
+# Start of GreatSQL 8.0 server error log messages
+#
+start-error-number 49500
+
+ER_GRP_RPL_MULTI_PRIM_MODE_NOT_ALLOWED_WITH_FAST_MODE
+  eng "It is not allowed to run multiple primary mode with 'group_replication_single_primary_fast_mode' enabled."
+
+ER_GRP_RPL_FAST_MODE_NOT_COMPATIBLE
+  eng "The member is configured with a single_primary_fast_mode option value '%d' not compatible from the group '%d'. The member will now exit the group."
+
+ER_GRP_RPL_CERTIFY_GET_NEXT_GTID
+  eng "Getting group next available gtid is failed."
+
+ER_GRP_RPL_CERTIFY_IS_INITIALIZED
+  eng "Certify initializing is failed."
 
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for

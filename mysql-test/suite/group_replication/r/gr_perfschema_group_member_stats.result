@@ -13,7 +13,6 @@ Test start values
 ###################
 include/assert.inc [The value of member_id should be empty before starting group replication]
 include/assert.inc [The value of view_id should be EMPTY before starting group replication]
-include/assert.inc [The value of Count_Transactions_in_queue should be 0 before starting group replication]
 include/assert.inc [The value of Count_Transactions_checked should be 0 before starting group replication]
 include/assert.inc [The value of Count_conflicts_detected should be 0 before starting group replication]
 include/assert.inc [The value of Count_Transactions_rows_validating should be 0 before starting group replication]
@@ -46,7 +45,6 @@ INSERT INTO t1 VALUES (6);
 SET GTID_NEXT= 'AUTOMATIC';
 # Check for the transaction in the applier queue and then unblock the recovery.
 server2
-[ The value of Count_Transactions_in_queue must be 3 when the applier has not processed the transaction queue ]
 server1
 START SLAVE SQL_THREAD FOR CHANNEL "group_replication_applier";
 Warnings:
@@ -57,8 +55,6 @@ server1
 include/assert.inc [The value of member_id should be equal to server UUID after starting group replication]
 include/assert.inc [The value of Count_Transactions_checked should be 6 after starting group replication]
 include/assert.inc [The value of Count_conflicts_detected should be 0 after starting group replication]
-include/assert.inc [The value of Count_Transactions_rows_validating should be 3 after starting group replication]
-include/assert.inc [The value of Transactions_committed_all_members should have server 1 GTIDs before server2 start]
 include/assert.inc [The value of Last_Conflict_free_transaction should be the gtid of the last applied transaction.]
 SET SESSION sql_log_bin= 0;
 include/gtid_utils.inc

@@ -1,4 +1,5 @@
-/* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1320,6 +1321,33 @@ result set_nodelay(int fd) {
     IFDBG(D_NONE, FN; NDBG(from_errno(ret.funerr), d));
   } while (ret.val < 0 && can_retry(ret.funerr));
   return ret;
+}
+
+bool retrieve_addr_from_fd(int fd, bool client, char *ip, int *port) {
+  struct sockaddr_storage server;
+  memset(&server, 0, sizeof(struct sockaddr_storage));
+  socklen_t len = static_cast<socklen_t>(sizeof(struct sockaddr_storage));
+  if (client) {
+    if (xcom_getpeername(fd, (struct sockaddr *)&server, &len)) {
+      return false;
+    }
+  } else {
+    if (getsockname(fd, (struct sockaddr *)&server, &len)) {
+      return false;
+    }
+  }
+
+  if (server.ss_family == AF_INET) {
+    struct sockaddr_in *s = (struct sockaddr_in *)&server;
+    inet_ntop(AF_INET, (void *)&(s->sin_addr), ip, INET_ADDRSTRLEN);
+    *port = ntohs(s->sin_port);
+  } else {
+    struct sockaddr_in6 *s = (struct sockaddr_in6 *)&server;
+    inet_ntop(AF_INET6, (void *)&(s->sin6_addr), ip, INET6_ADDRSTRLEN);
+    *port = ntohs(s->sin6_port);
+  }
+
+  return true;
 }
 
 static result create_server_socket() {

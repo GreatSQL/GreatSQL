@@ -1,4 +1,5 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -688,4 +689,12 @@ bool Gcs_operations::is_initialized() {
   bool ret = nullptr != gcs_interface;
   gcs_operations_lock->unlock();
   return ret;
+}
+
+void Gcs_operations::update_zone_id_through_gcs(const char *ip, int zone_id) {
+  gcs_operations_lock->wrlock();
+  if (gcs_interface != nullptr && gcs_interface->is_initialized()) {
+    gcs_interface->update_zone_id_for_xcom_node(ip, zone_id);
+  }
+  gcs_operations_lock->unlock();
 }

@@ -1,4 +1,5 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -77,6 +78,7 @@ class Plugin_gcs_events_handler : public Gcs_communication_event_listener,
   Gcs_message_data *get_exchangeable_data() const override;
   void on_suspicions(
       const std::vector<Gcs_member_identifier> &members,
+      const std::vector<Gcs_member_identifier *> &left_members,
       const std::vector<Gcs_member_identifier> &unreachable) const override;
 
   /**

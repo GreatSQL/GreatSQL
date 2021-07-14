@@ -1,4 +1,5 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -49,6 +50,8 @@
 #define SYNC_BEFORE_EXECUTION_PACKET_TYPE 5
 #define TRANSACTION_PREPARED_PACKET_TYPE 6
 #define LEAVING_MEMBERS_PACKET_TYPE 7
+#define CERTIFICATION_PACKET_TYPE 8
+#define SYNC_PREPARED_COMPLETE_TYPE 101
 
 // Define the applier return error codes
 #define APPLIER_GTID_CHECK_TIMEOUT_ERROR -1
@@ -84,6 +87,38 @@ class Action_packet : public Packet {
 };
 
 /**
+  @class Certification_packet
+
+  A wrapper for raw certification packets.
+*/
+class Certification_packet : public Packet {
+ public:
+  /**
+    Create a new certification packet wrapper.
+
+    @param[in]  data             the packet data
+    @param[in]  len              the packet length
+    @param[in]  gcs_member_id    the member id that
+                                   message was delivered
+  */
+  Certification_packet(const uchar *data, ulong len,
+                       const Gcs_member_identifier &gcs_member_id)
+      : Packet(CERTIFICATION_PACKET_TYPE),
+        payload(nullptr),
+        len(len),
+        m_member_id(gcs_member_id) {
+    payload = (uchar *)my_malloc(PSI_NOT_INSTRUMENTED, len, MYF(0));
+    memcpy(payload, data, len);
+  }
+
+  ~Certification_packet() override { my_free(payload); }
+
+  uchar *payload;
+  ulong len;
+  Gcs_member_identifier m_member_id;
+};
+
+/**
   @class View_change_packet
   A packet to send view change related info to the applier
 */
@@ -101,6 +136,17 @@ class View_change_packet : public Packet {
 
   std::string view_id;
   std::vector<std::string> group_executed_set;
+};
+
+/**
+  @class Prepared_finished_packet
+  A packet to send a finished processing flag related info to the prepared
+  packets
+*/
+class Prepared_finished_packet : public Packet {
+ public:
+  Prepared_finished_packet() : Packet(SYNC_PREPARED_COMPLETE_TYPE) {}
+  ~Prepared_finished_packet() override {}
 };
 
 /**
@@ -257,6 +303,9 @@ class Applier_module_interface {
   virtual Member_applier_state get_applier_status() = 0;
   virtual void add_suspension_packet() = 0;
   virtual void add_view_change_packet(View_change_packet *packet) = 0;
+  virtual void add_prepared_finished_packet() = 0;
+  virtual void add_certification_change_packet(
+      Certification_packet *packet) = 0;
   virtual void add_single_primary_action_packet(
       Single_primary_action_packet *packet) = 0;
   virtual void add_transaction_prepared_action_packet(
@@ -270,7 +319,7 @@ class Applier_module_interface {
                      std::list<Gcs_member_identifier> *online_members) = 0;
   virtual int handle_pipeline_action(Pipeline_action *action) = 0;
   virtual Flow_control_module *get_flow_control_module() = 0;
-  virtual void run_flow_control_step() = 0;
+  virtual void run_flow_control_step(bool) = 0;
   virtual int purge_applier_queue_and_restart_applier_module() = 0;
   virtual bool queue_and_wait_on_queue_checkpoint(
       std::shared_ptr<Continuation> checkpoint_condition) = 0;
@@ -391,6 +440,12 @@ class Applier_module : public Applier_module_interface {
   int handle(const uchar *data, ulong len,
              enum_group_replication_consistency_level consistency_level,
              std::list<Gcs_member_identifier> *online_members) override {
+#ifndef NDEBUG
+    if (wait_online) {
+      my_sleep(3000000);
+      wait_online = false;
+    }
+#endif
     this->incoming->push(
         new Data_packet(data, len, consistency_level, online_members));
     return 0;
@@ -488,6 +543,19 @@ class Applier_module : public Applier_module_interface {
   void add_view_change_packet(View_change_packet *packet) override {
     incoming->push(packet);
   }
+
+  void add_certification_change_packet(Certification_packet *packet) override {
+    incoming->push(packet);
+  }
+
+  void add_prepared_finished_packet() override {
+    incoming->push(new Prepared_finished_packet());
+  }
+
+  /**
+     Fix sync problems for after consistency when view change is happened
+   */
+  void add_delayed_packets();
 
   /**
     Queues a single primary action packet into the applier.
@@ -699,8 +767,9 @@ class Applier_module : public Applier_module_interface {
     return &flow_control_module;
   }
 
-  void run_flow_control_step() override {
-    flow_control_module.flow_control_step(&pipeline_stats_member_collector);
+  void run_flow_control_step(bool send_stats_flag) override {
+    flow_control_module.flow_control_step(&pipeline_stats_member_collector,
+                                          send_stats_flag);
   }
 
   bool queue_and_wait_on_queue_checkpoint(
@@ -772,7 +841,14 @@ class Applier_module : public Applier_module_interface {
       @retval !=0    Error when applying packet
   */
   int apply_transaction_prepared_action_packet(
+      Transaction_prepared_action_packet *packet, int *delayed);
+
+  /* Check if remote prepare packets should be delayed */
+  bool check_remote_prepare_before_view_change(
       Transaction_prepared_action_packet *packet);
+
+  /* Check if it needs to delay a packet after delayed_view_change */
+  bool check_and_delay_packet_after_delayed_view_change(Packet *packet);
 
   /**
     Apply a synchronization before execution action packet received
@@ -798,6 +874,8 @@ class Applier_module : public Applier_module_interface {
   */
   int apply_leaving_members_action_packet(
       Leaving_members_action_packet *packet);
+
+  int apply_certification_change_action_packet(Certification_packet *packet);
 
   /**
     Suspends the applier module, being transactions still queued in the incoming
@@ -892,6 +970,9 @@ class Applier_module : public Applier_module_interface {
   /* The incoming event queue */
   Synchronized_queue<Packet *> *incoming;
 
+  /* Delayed packets */
+  std::queue<Packet *> *delayed_packets_queue;
+
   /* The applier pipeline for event execution */
   Event_handler *pipeline;
 
@@ -904,6 +985,11 @@ class Applier_module : public Applier_module_interface {
   Pipeline_stats_member_collector pipeline_stats_member_collector;
   Flow_control_module flow_control_module;
   Plugin_stage_monitor_handler stage_handler;
+  bool has_delayed_view_change_event;
+#ifndef NDEBUG
+  int conditional_trap;
+  bool wait_online;
+#endif
 };
 
 #endif /* APPLIER_INCLUDE */

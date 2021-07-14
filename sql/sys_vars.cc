@@ -1,4 +1,5 @@
-/* Copyright (c) 2009, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2009, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -6409,6 +6410,11 @@ static Sys_var_uint Sys_sync_relayloginfo_period(
     GLOBAL_VAR(sync_relayloginfo_period), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(0, UINT_MAX), DEFAULT(10000), BLOCK_SIZE(1));
 
+/*
+ * If the value is too small, it will affect mts speed.
+ * If the value is too large, it will affect slave consistent reading speed for
+ * mgr.
+ */
 static Sys_var_uint Sys_checkpoint_mts_period(
     "slave_checkpoint_period",
     "Gather workers' activities to "

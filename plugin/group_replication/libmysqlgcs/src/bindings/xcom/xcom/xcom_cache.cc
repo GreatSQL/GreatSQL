@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -341,10 +342,11 @@ static inline int can_deallocate(lru_machine *link_iter) {
           past that point. This test effectively stops  garbage  collection
           of  old  messages until the joining node has got a chance to tell
           the others about its low water mark. If  it  has  not  done  that
-          within  DETECTOR_LIVE_TIMEOUT,  it will be considered dead by the
-          other nodes anyway, and expelled.
+          within  DEFAULT_DETECTOR_LIVE_TIMEOUT,  it will be considered dead by
+          the other nodes anyway, and expelled.
   */
-  if ((site->install_time + DETECTOR_LIVE_TIMEOUT) > task_now()) return 0;
+  if ((site->install_time + DEFAULT_DETECTOR_LIVE_TIMEOUT) > task_now())
+    return 0;
   if (dealloc_site == 0) /* Synode does not match any site, OK to deallocate */
     return 1;
   delivered_msg = get_min_delivered_msg(site);

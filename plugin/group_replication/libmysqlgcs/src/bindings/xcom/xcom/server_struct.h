@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -43,13 +44,16 @@ struct server {
   connection_descriptor con; /* Descriptor for open connection */
   double active;             /* Last activity */
   double detected;           /* Last incoming */
+  double large_transfer_detected; /* Process large transfer */
+  double last_ping_received;      /* Last received ping timestamp */
   channel outgoing;          /* Outbound messages */
   task_env *sender;          /* The sender task */
   task_env *reply_handler;   /* The reply task */
   srv_buf out_buf;
   int invalid;
+  int unreachable;
   int number_of_pings_received; /* Number of pings received from this server */
-  double last_ping_received;    /* Last received ping timestamp */
+  unsigned int zone_id : 4;
 };
 
 typedef struct server server;

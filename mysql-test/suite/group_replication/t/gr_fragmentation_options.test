@@ -28,7 +28,7 @@
 --let $sound_threshold= 50000
 --let $double_sound_threshold= `SELECT $sound_threshold * 2`
 --let $half_sound_threshold= `SELECT $sound_threshold / 2`
---let $default_threshold= 10485760
+--let $default_threshold= 1048576
 --let $incorrect_threshold= "AAAA"
 --let $overflow_threshold= 4294967297
 --let $negative_threshold= -1

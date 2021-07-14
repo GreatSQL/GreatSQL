@@ -1,4 +1,5 @@
-/* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -359,6 +360,7 @@ static unsigned short oom_abort = 0;
 /* Forward declarations */
 long xcom_unique_long(void);
 
+static double wakeup_delay_for_perf(double old);
 static double wakeup_delay(double old);
 static void note_snapshot(node_no node);
 
@@ -708,29 +710,39 @@ static site_def *forced_config = 0;
 static int is_forcing_node(pax_machine const *p) { return p->enforcer; }
 static int wait_forced_config = 0;
 
+#define MAX_ZONE_NUM 16
+
 /* Definition of majority */
 static inline int majority(bit_set const *nodeset, site_def const *s, int all,
                            int delay MY_ATTRIBUTE((unused)), int force) {
   node_no ok = 0;
   node_no i = 0;
   int retval = 0;
-#ifdef WAIT_FOR_ALL_FIRST
   double sec = task_now();
-#endif
   node_no max = max_check(s);
+  int zone_hit[MAX_ZONE_NUM];
+  int zone_ack_hit[MAX_ZONE_NUM];
+
+  for (i = 0; i < MAX_ZONE_NUM; i++) {
+    zone_hit[i] = 0;
+    zone_ack_hit[i] = 0;
+  }
 
   /* IFDBG(D_NONE, FN; NDBG(max,lu); NDBG(all,d); NDBG(delay,d); NDBG(force,d));
    */
 
   /* Count nodes that has answered */
   for (i = 0; i < max; i++) {
+    zone_hit[s->servers[i]->zone_id]++;
     if (BIT_ISSET(i, nodeset)) {
       ok++;
+      zone_ack_hit[s->servers[i]->zone_id]++;
     }
 #ifdef WAIT_FOR_ALL_FIRST
     else {
       if (all) return 0; /* Delay until all nodes have answered */
-      if (delay && !may_be_dead(s->detected, i, sec)) {
+      if (delay && !may_be_dead(s->detected, i, sec, DEFAULT_SILENT,
+                                s->servers[i]->unreachable)) {
         return 0; /* Delay until all live nodes have answered */
       }
     }
@@ -764,6 +776,27 @@ static inline int majority(bit_set const *nodeset, site_def const *s, int all,
 #endif
     /* 	IFDBG(D_NONE, FN; NDBG(max,lu); NDBG(all,d); NDBG(delay,d);
      * NDBG(retval,d)); */
+
+    if (retval) {
+      int zone_num = 0, zone_ack_num = 0;
+      for (i = 0; i < max; i++) {
+        if (may_be_dead(s->detected, i, sec, DEFAULT_SILENT,
+                        s->servers[i]->unreachable)) {
+          continue;
+        }
+        if (zone_hit[s->servers[i]->zone_id]) {
+          zone_num++;
+        }
+        if (zone_ack_hit[s->servers[i]->zone_id]) {
+          zone_ack_num++;
+        }
+      }
+
+      if (zone_ack_num != zone_num) {
+        return 0;
+      }
+    }
+
     return retval;
   }
 }
@@ -2131,7 +2164,9 @@ static bool constexpr should_ignore_forced_config_or_view(
 static node_no leader(site_def const *s) {
   node_no leader = 0;
   for (leader = 0; leader < get_maxnodes(s); leader++) {
-    if (!may_be_dead(s->detected, leader, task_now())) return leader;
+    if (!may_be_dead(s->detected, leader, task_now(), DEFAULT_SILENT,
+                     s->servers[leader]->unreachable))
+      return leader;
   }
   return 0;
 }
@@ -2274,12 +2309,13 @@ int get_xcom_message(pax_machine **p, synode_no msgno, int n) {
     if (get_maxnodes(ep->site) > 1 && iamthegreatest(ep->site) &&
         ep->site->global_node_set.node_set_val &&
         !ep->site->global_node_set.node_set_val[msgno.node] &&
-        may_be_dead(ep->site->detected, msgno.node, task_now())) {
+        may_be_dead(ep->site->detected, msgno.node, task_now(), DEFAULT_SILENT,
+                    ep->site->servers[msgno.node]->unreachable)) {
       propose_missing_values(n);
     } else {
       find_value(ep->site, &ep->wait, n);
     }
-    TIMED_TASK_WAIT(&(*p)->rv, ep->delay = wakeup_delay(ep->delay));
+    TIMED_TASK_WAIT(&(*p)->rv, ep->delay = wakeup_delay_for_perf(ep->delay));
     *p = get_cache(msgno);
     dump_debug_exec_state();
   }
@@ -2318,7 +2354,7 @@ int get_xcom_message(pax_machine **p, synode_no msgno, int n) {
     find_value(ep->site, &ep->wait, n);
     IFDBG(D_NONE, FN; STRLIT("after find_value"); SYCEXP(msgno); PTREXP(*p);
           NDBG(ep->wait, u); SYCEXP(msgno));
-    ep->delay = wakeup_delay(ep->delay);
+    ep->delay = wakeup_delay_for_perf(ep->delay);
     IFDBG(D_NONE, FN; NDBG(ep->delay, f));
     TIMED_TASK_WAIT(&(*p)->rv, ep->delay);
     *p = get_cache(msgno);
@@ -2746,7 +2782,9 @@ static bool_t are_there_dead_nodes_in_new_config(app_data_ptr a) {
         return TRUE;
       }
 
-      if (may_be_dead(get_site_def()->detected, node, task_now())) {
+      if (may_be_dead(get_site_def()->detected, node, task_now(),
+                      DEFAULT_SILENT,
+                      get_site_def()->servers[node]->unreachable)) {
         G_ERROR(
             "%s is suspected to be failed."
             "Only alive members in the current configuration should be present"
@@ -3496,12 +3534,32 @@ static double wakeup_delay(double old) {
   } else {
     retval = old * 1.4142136; /* Exponential backoff */
   }
+
   {
 #ifdef EXECUTOR_TASK_AGGRESSIVE_NO_OP
     double const maximum_threshold = 1.0;
 #else
     double const maximum_threshold = 3.0;
 #endif /* EXECUTOR_TASK_AGGRESSIVE_NO_OP */
+    while (retval > maximum_threshold) retval /= 1.31415926;
+  }
+  /* IFDBG(D_NONE, FN; NDBG(retval,d)); */
+  return retval;
+}
+
+static double wakeup_delay_for_perf(double old) {
+  double retval = 0.0;
+  if (0.0 == old) {
+    double m = median_time() / 100;
+    if (m == 0.0 || m > 0.003) m = 0.001;
+    retval = 0.001 + 5.0 * m + m * xcom_drand48();
+  } else {
+    retval = old * 1.4142136; /* Exponential backoff */
+  }
+
+  {
+    /* Set max value to be 3 millisecond */
+    double const maximum_threshold = 0.003;
     while (retval > maximum_threshold) retval /= 1.31415926;
   }
   /* IFDBG(D_NONE, FN; NDBG(retval,d)); */
@@ -6706,6 +6764,7 @@ static connection_descriptor *connect_xcom(char const *server, xcom_port port) {
     }
     {
       int peer = 0;
+      int same_ip;
       /* Sanity check before return */
       SET_OS_ERR(0);
       {
@@ -6714,6 +6773,10 @@ static connection_descriptor *connect_xcom(char const *server, xcom_port port) {
       }
       ret.funerr = to_errno(GET_OS_ERR);
       if (peer >= 0) {
+        if (!check_tcp_connection_valid(fd.val, &same_ip)) {
+          xcom_shut_close_socket(&fd.val);
+          goto end;
+        }
         ret = set_nodelay(fd.val);
         if (ret.val < 0) {
           /* purecov: begin inspected */
@@ -7289,7 +7352,7 @@ typedef enum xcom_send_app_wait_result xcom_send_app_wait_result;
 static xcom_send_app_wait_result xcom_send_app_wait_and_get(
     connection_descriptor *fd, app_data *a, int force, pax_msg *p) {
   int retval = 0;
-  int retry_count = 10; /* Same as 'connection_attempts' */
+  int retry_count = 1; /* Same as 'connection_attempts' */
   pax_msg *rp = 0;
 
   do {
@@ -7309,7 +7372,6 @@ static xcom_send_app_wait_result xcom_send_app_wait_and_get(
         case REQUEST_RETRY:
           G_DEBUG("cli_err %d", cli_err);
           if (retry_count > 1) xdr_free((xdrproc_t)xdr_pax_msg, (char *)p);
-          xcom_sleep(1);
           break;
         default:
           G_WARNING("client protocol botched");
@@ -7322,7 +7384,7 @@ static xcom_send_app_wait_result xcom_send_app_wait_and_get(
   } while (--retry_count);
   /* Timeout after REQUEST_RETRY has been received 'retry_count' times */
   G_MESSAGE(
-      "Request failed: maximum number of retries (10) has been exhausted.");
+      "Request failed: maximum number of retries (1) has been exhausted.");
   return RETRIES_EXCEEDED;
 }
 

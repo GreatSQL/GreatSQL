@@ -1,4 +1,5 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -322,6 +323,8 @@ class Gcs_operations {
     @retval false otherwise.
   */
   bool is_initialized();
+
+  void update_zone_id_through_gcs(const char *ip, int zone_id);
 
  private:
   /**

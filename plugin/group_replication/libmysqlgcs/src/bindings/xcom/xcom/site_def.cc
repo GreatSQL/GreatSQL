@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -499,9 +500,14 @@ synode_no get_min_delivered_msg(site_def const *s) {
   u_int i;
   synode_no retval = null_synode;
   int init = 1;
-
+  double current = task_now();
   for (i = 0; i < s->nodes.node_list_len; i++) {
-    if (s->servers[i]->detected + DETECTOR_LIVE_TIMEOUT > task_now()) {
+    double timeout = DEFAULT_DETECTOR_LIVE_TIMEOUT;
+    double diff = current - s->servers[i]->large_transfer_detected;
+    if (diff < DEFAULT_SILENT) {
+      timeout = MAX_DETECTOR_LIVE_TIMEOUT;
+    }
+    if (s->servers[i]->detected + timeout > task_now()) {
       if (init) {
         init = 0;
         retval = s->delivered_msg[i];

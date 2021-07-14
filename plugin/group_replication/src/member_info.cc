@@ -1,4 +1,5 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -44,7 +45,8 @@ Group_member_info::Group_member_info(
     Group_member_info::Group_member_role role_arg, bool in_single_primary_mode,
     bool has_enforces_update_everywhere_checks, uint member_weight_arg,
     uint lower_case_table_names_arg, bool default_table_encryption_arg,
-    const char *recovery_endpoints_arg, PSI_mutex_key psi_mutex_key_arg)
+    const char *recovery_endpoints_arg, int zone_id_arg,
+    int single_primary_fast_mode_arg, PSI_mutex_key psi_mutex_key_arg)
     : Plugin_gcs_message(CT_MEMBER_INFO_MESSAGE),
       hostname(hostname_arg),
       port(port_arg),
@@ -63,6 +65,8 @@ Group_member_info::Group_member_info(
       primary_election_running(false),
       recovery_endpoints(recovery_endpoints_arg ? recovery_endpoints_arg
                                                 : "DEFAULT"),
+      zone_id(zone_id_arg),
+      single_primary_fast_mode(single_primary_fast_mode_arg),
 #ifndef NDEBUG
       skip_encode_default_table_encryption(false),
 #endif
@@ -72,7 +76,9 @@ Group_member_info::Group_member_info(
   member_version = new Member_version(member_version_arg.get_version());
 
   /* Handle single_primary_mode */
-  if (in_single_primary_mode) configuration_flags |= CNF_SINGLE_PRIMARY_MODE_F;
+  if (in_single_primary_mode) {
+    configuration_flags |= CNF_SINGLE_PRIMARY_MODE_F;
+  }
 
   /* Handle enforce_update_everywhere_checks */
   if (has_enforces_update_everywhere_checks)
@@ -101,6 +107,8 @@ Group_member_info::Group_member_info(Group_member_info &other)
       group_action_running(other.is_group_action_running()),
       primary_election_running(other.is_primary_election_running()),
       recovery_endpoints(other.get_recovery_endpoints()),
+      zone_id(other.get_zone_id()),
+      single_primary_fast_mode(other.in_single_primary_fast_mode()),
 #ifndef NDEBUG
       skip_encode_default_table_encryption(false),
 #endif
@@ -122,6 +130,8 @@ Group_member_info::Group_member_info(const uchar *data, size_t len,
       group_action_running(false),
       primary_election_running(false),
       recovery_endpoints("DEFAULT"),
+      zone_id(0),
+      single_primary_fast_mode(0),
 #ifndef NDEBUG
       skip_encode_default_table_encryption(false),
 #endif
@@ -146,7 +156,8 @@ void Group_member_info::update(
     Group_member_info::Group_member_role role_arg, bool in_single_primary_mode,
     bool has_enforces_update_everywhere_checks, uint member_weight_arg,
     uint lower_case_table_names_arg, bool default_table_encryption_arg,
-    const char *recovery_endpoints_arg) {
+    const char *recovery_endpoints_arg, int zone_id_arg,
+    int single_primary_fast_mode_arg) {
   MUTEX_LOCK(lock, &update_lock);
 
   hostname.assign(hostname_arg);
@@ -163,6 +174,12 @@ void Group_member_info::update(
   default_table_encryption = default_table_encryption_arg;
   group_action_running = false;
   primary_election_running = false;
+  zone_id = zone_id_arg;
+  if (in_single_primary_mode) {
+    single_primary_fast_mode = single_primary_fast_mode_arg;
+  } else {
+    single_primary_fast_mode = 0;
+  }
 
   executed_gtid_set.clear();
   purged_gtid_set.clear();
@@ -196,7 +213,8 @@ void Group_member_info::update(Group_member_info &other) {
       other.get_configuration_flags() | CNF_ENFORCE_UPDATE_EVERYWHERE_CHECKS_F,
       other.get_member_weight(), other.get_lower_case_table_names(),
       other.get_default_table_encryption(),
-      other.get_recovery_endpoints().c_str());
+      other.get_recovery_endpoints().c_str(), other.get_zone_id(),
+      other.in_single_primary_fast_mode());
 }
 
 /*
@@ -292,6 +310,10 @@ void Group_member_info::encode_payload(
   encode_payload_item_string(buffer, PIT_RECOVERY_ENDPOINTS,
                              recovery_endpoints.c_str(),
                              recovery_endpoints.length());
+  char zone_id_aux = zone_id;
+  encode_payload_item_char(buffer, PIT_ZONE_ID, zone_id_aux);
+
+  encode_payload_item_char(buffer, PIT_FAST_MODE, single_primary_fast_mode);
 }
 
 void Group_member_info::decode_payload(const unsigned char *buffer,
@@ -432,6 +454,20 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
           slider += payload_item_length;
         }
         break;
+      case PIT_ZONE_ID:
+        if (slider + payload_item_length <= end) {
+          unsigned char zone_id_value = *slider;
+          slider += payload_item_length;
+          zone_id = (int)zone_id_value;
+        }
+        break;
+      case PIT_FAST_MODE:
+        if (slider + payload_item_length <= end) {
+          int fast_mode = *slider;
+          slider += payload_item_length;
+          single_primary_fast_mode = fast_mode;
+        }
+        break;
     }
   }
 }
@@ -569,6 +605,11 @@ bool Group_member_info::in_primary_mode() {
   return in_primary_mode_internal();
 }
 
+int Group_member_info::in_single_primary_fast_mode() {
+  MUTEX_LOCK(lock, &update_lock);
+  return single_primary_fast_mode;
+}
+
 bool Group_member_info::has_enforces_update_everywhere_checks() {
   MUTEX_LOCK(lock, &update_lock);
   return configuration_flags & CNF_ENFORCE_UPDATE_EVERYWHERE_CHECKS_F;
@@ -642,6 +683,16 @@ bool Group_member_info::is_primary_election_running() {
 void Group_member_info::set_is_primary_election_running(bool is_running) {
   MUTEX_LOCK(lock, &update_lock);
   primary_election_running = is_running;
+}
+
+int Group_member_info::get_zone_id() {
+  MUTEX_LOCK(lock, &update_lock);
+  return zone_id;
+}
+
+void Group_member_info::set_zone_id(int id) {
+  MUTEX_LOCK(lock, &update_lock);
+  zone_id = id;
 }
 
 bool Group_member_info::operator==(Group_member_info &other) {
@@ -1025,13 +1076,16 @@ void Group_member_info_manager::update_member_status(
   mysql_mutex_unlock(&update_lock);
 }
 
-void Group_member_info_manager::set_member_unreachable(
+bool Group_member_info_manager::set_member_unreachable(
     const std::string &uuid) {
   MUTEX_LOCK(lock, &update_lock);
 
   auto it = members->find(uuid);
   if (it != members->end()) {
     (*it).second->set_unreachable();
+    return true;
+  } else {
+    return false;
   }
 }
 

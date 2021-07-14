@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -285,6 +286,7 @@ static int _send_msg(server *s, pax_msg *p, node_no to, int64_t *ret) {
           /* Still not enough? Message must be huge, send without buffering */
           if (ep->buflen > srv_buf_free_space(&s->out_buf)) {
             IFDBG(D_TRANSPORT, FN; STRLIT("task_write "); NDBG(ep->buflen, u));
+            s->large_transfer_detected = task_now();
             TASK_CALL(task_write(&s->con, ep->buf, ep->buflen, &sent));
             if (s->con.fd < 0) {
               TASK_FAIL;
@@ -564,9 +566,12 @@ static server *mksrv(char *srv, xcom_port port) {
   s->refcnt = 0;
   s->srv = srv;
   s->port = port;
+  s->zone_id = 0;
   reset_connection(&s->con);
   s->active = 0.0;
   s->detected = 0.0;
+  s->large_transfer_detected = task_now();
+  s->unreachable = 0;
   s->last_ping_received = 0.0;
   s->number_of_pings_received = 0;
   channel_init(&s->outgoing, TYPE_HASH("msg_link"));
@@ -808,12 +813,48 @@ int tcp_server(task_arg arg) {
   }
 #endif
 
-void server_detected(server *s) { s->detected = task_now(); }
+void server_detected(server *s) {
+  if (!s->unreachable) {
+    s->detected = task_now();
+  }
+}
+
+bool check_tcp_connection_valid(int fd, int *same_ip) {
+  char client_addr[INET6_ADDRSTRLEN];
+  char server_addr[INET6_ADDRSTRLEN];
+  int client_port, server_port;
+
+  bool result = true;
+
+  *same_ip = 0;
+  /* Get client address */
+  if (!retrieve_addr_from_fd(fd, true, client_addr, &client_port)) {
+    result = false;
+  } else {
+    /* Get server address */
+    if (!retrieve_addr_from_fd(fd, false, server_addr, &server_port)) {
+      result = false;
+    } else {
+      /* Compare IP and port */
+      if (strcmp(client_addr, server_addr) == 0) {
+        if (client_port == server_port) {
+          /* Avoid self connect */
+          result = false;
+        } else {
+          *same_ip = 1;
+        }
+      }
+    }
+  }
+
+  return result;
+}
 
 /* Try to connect to another node */
 static int dial(server *s) {
   DECL_ENV
   int dummy;
+  int same_ip;
   END_ENV;
 
   TASK_BEGIN
@@ -824,6 +865,8 @@ static int dial(server *s) {
   if (s->con.fd < 0) {
     IFDBG(D_NONE, FN; STRLIT("could not dial "); STRLIT(s->srv);
           NDBG(s->port, u););
+  } else if (!check_tcp_connection_valid(s->con.fd, &ep->same_ip)) {
+    shut_close_socket(&(s->con.fd));
   } else {
     if (NAGLE == 0) {
       set_nodelay(s->con.fd);
@@ -983,7 +1026,9 @@ int send_to_someone(site_def const *s, pax_msg *p,
   i = (i + 1) % max;
   while (i != prev) {
     /* IFDBG(D_NONE, FN; NDBG(i,u); NDBG(prev,u)); */
-    if (i != s->nodeno && !may_be_dead(s->detected, i, task_now())) {
+    if (i != s->nodeno &&
+        !may_be_dead(s->detected, i, task_now(), DEFAULT_SILENT,
+                     s->servers[i]->unreachable)) {
       IFDBG(D_NONE, FN; STRLIT(dbg); NDBG(i, u); NDBG(max, u); PTREXP(p));
       retval = _send_server_msg(s, i, p);
       break;
@@ -1450,7 +1495,11 @@ int sender_task(task_arg arg) {
     G_DEBUG("Connecting to %s:%d", ep->s->srv, ep->s->port);
     for (;;) {
       TASK_CALL(dial(ep->s));
-      if (is_connected(&ep->s->con)) break;
+      if (is_connected(&ep->s->con)) {
+        ep->s->unreachable = 0;
+        break;
+      }
+      ep->s->unreachable++;
       TIMED_TASK_WAIT(&connect_wait, ep->dtime);
       if (xcom_shutdown) TERMINATE;
       /* Delay cleanup of messages to avoid unnecessary loss when connecting */
@@ -1916,6 +1965,19 @@ static int match_address(parse_buf *p) {
     return match_ipv6(p);
   else /* IPv4 address or name */
     return match_ipv4_or_name(p);
+}
+
+void update_zone_id_for_consensus(const char *ip, int zone_id) {
+  int i;
+  for (i = 0; i < maxservers; i++) {
+    if (strcmp(all_servers[i]->srv, ip) == 0) {
+      /*
+       * Update server zone id when updated.
+       *
+       */
+      all_servers[i]->zone_id = zone_id;
+    }
+  }
 }
 
 /* Return 1 if address is well-formed, 0 if not */

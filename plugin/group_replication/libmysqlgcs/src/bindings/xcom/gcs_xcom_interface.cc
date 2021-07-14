@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -466,11 +467,17 @@ enum_gcs_error Gcs_xcom_interface::configure(
     return GCS_NOK;
   }
 
+  bool find_group = false;
+  m_group_interface_lock.rdlock();
   // Try and retrieve already instantiated group interfaces for a certain group
   registered_group = m_group_interfaces.find(*group_name_str);
+  if (registered_group != m_group_interfaces.end()) {
+    find_group = true;
+  }
+  m_group_interface_lock.unlock();
 
   // Error! Group interface does not exist
-  if (registered_group == m_group_interfaces.end()) {
+  if (!find_group) {
     MYSQL_GCS_LOG_ERROR("Group interface does not exist for group "
                         << group_name_str->c_str())
     error = GCS_NOK;
@@ -687,16 +694,29 @@ gcs_xcom_group_interfaces *Gcs_xcom_interface::get_group_interfaces(
     const Gcs_group_identifier &group_identifier) {
   if (!is_initialized()) return nullptr;
 
+  bool find_group = false;
   // Try and retrieve already instantiated group interfaces for a certain group
+  m_group_interface_lock.rdlock();
   map<std::string, gcs_xcom_group_interfaces *>::const_iterator
       registered_group;
   registered_group = m_group_interfaces.find(group_identifier.get_group_id());
+  if (registered_group != m_group_interfaces.end()) {
+    find_group = true;
+  }
+  m_group_interface_lock.unlock();
 
   gcs_xcom_group_interfaces *group_interface = nullptr;
-  if (registered_group == m_group_interfaces.end()) {
+  if (!find_group) {
     /*
       Retrieve some initialization parameters.
     */
+    m_group_interface_lock.wrlock();
+    registered_group = m_group_interfaces.find(group_identifier.get_group_id());
+    if (registered_group != m_group_interfaces.end()) {
+      m_group_interface_lock.unlock();
+      return registered_group->second;
+    }
+
     const std::string *join_attempts_str =
         m_initialization_parameters.get_parameter("join_attempts");
     const std::string *join_sleep_time_str =
@@ -745,6 +765,7 @@ gcs_xcom_group_interfaces *Gcs_xcom_interface::get_group_interfaces(
     // Store the created objects for later deletion
     group_interface->vce = vce;
     group_interface->se = se;
+    m_group_interface_lock.unlock();
 
     configure_message_stages(group_identifier);
   } else {
@@ -759,6 +780,7 @@ enum_gcs_error Gcs_xcom_interface::set_logger(Logger_interface *logger) {
 }
 
 void Gcs_xcom_interface::clean_group_interfaces() {
+  m_group_interface_lock.wrlock();
   map<string, gcs_xcom_group_interfaces *>::iterator group_if;
   for (group_if = m_group_interfaces.begin();
        group_if != m_group_interfaces.end(); group_if++) {
@@ -774,6 +796,7 @@ void Gcs_xcom_interface::clean_group_interfaces() {
   }
 
   m_group_interfaces.clear();
+  m_group_interface_lock.unlock();
 }
 
 void Gcs_xcom_interface::clean_group_references() {
@@ -1227,11 +1250,17 @@ Gcs_ip_allowlist &Gcs_xcom_interface::get_ip_allowlist() {
   return m_ip_allowlist;
 }
 
+void Gcs_xcom_interface::update_zone_id_for_xcom_node(const char *ip,
+                                                      int zone_id) {
+  Gcs_xcom_utils::update_zone_id_for_paxos_node(ip, zone_id);
+}
+
 void cb_xcom_receive_data(synode_no message_id, node_set nodes, u_int size,
                           synode_no last_removed, char *data) {
   const site_def *site = find_site_def(message_id);
 
   if (site->nodeno == VOID_NODE_NO) {
+    MYSQL_GCS_LOG_INFO("cb_xcom_receive_data:nodeno is VOID_NODE_NO");
     free_node_set(&nodes);
     free(data);
     return;
@@ -1314,7 +1343,7 @@ void do_cb_xcom_receive_data(synode_no message_id,
     down so the message will be simply discarded.
   */
   if (!xcom_control->is_xcom_running()) {
-    MYSQL_GCS_LOG_DEBUG(
+    MYSQL_GCS_LOG_INFO(
         "Rejecting this message. The group communication engine has already "
         "stopped.")
     return;
@@ -1345,7 +1374,7 @@ void do_cb_xcom_receive_data(synode_no message_id,
   bool const received_initial_global_view =
       last_accepted_xcom_config.has_view();
   if (!received_initial_global_view) {
-    MYSQL_GCS_LOG_DEBUG(
+    MYSQL_GCS_LOG_INFO(
         "Rejecting this message. The member is not in a view yet.")
     return;
   }
@@ -1367,6 +1396,8 @@ void do_cb_xcom_receive_data(synode_no message_id,
 
   switch (packet.get_cargo_type()) {
     case Cargo_type::CT_INTERNAL_STATE_EXCHANGE:
+      MYSQL_GCS_LOG_INFO(
+          "Do receive CT_INTERNAL_STATE_EXCHANGE message from xcom");
       ::do_cb_xcom_receive_data_state_exchange(
           std::move(packet), std::move(xcom_nodes), *xcom_communication,
           *xcom_control);
@@ -1390,7 +1421,7 @@ void cb_xcom_receive_global_view(synode_no config_id, synode_no message_id,
 
   if (site->nodeno == VOID_NODE_NO) {
     free_node_set(&nodes);
-    MYSQL_GCS_LOG_DEBUG("Rejecting this view. Invalid site definition.");
+    MYSQL_GCS_LOG_INFO("Rejecting this view. Invalid site definition.");
     return;
   }
 
@@ -1403,7 +1434,7 @@ void cb_xcom_receive_global_view(synode_no config_id, synode_no message_id,
       event_horizon, max_synode);
   bool scheduled = gcs_engine->push(notification);
   if (!scheduled) {
-    MYSQL_GCS_LOG_DEBUG(
+    MYSQL_GCS_LOG_INFO(
         "Tried to enqueue a global view but the member is about to stop.")
     delete xcom_nodes;
     delete notification;

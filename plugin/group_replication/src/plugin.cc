@@ -1,4 +1,5 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -264,12 +265,22 @@ ulong get_exit_state_action_var() { return ov.exit_state_action_var; }
 
 ulong get_flow_control_mode_var() { return ov.flow_control_mode_var; }
 
+bool get_majority_after_mode_var() { return ov.majority_after_mode_var; }
+
 long get_flow_control_certifier_threshold_var() {
   return ov.flow_control_certifier_threshold_var;
 }
 
 long get_flow_control_applier_threshold_var() {
   return ov.flow_control_applier_threshold_var;
+}
+
+long get_flow_control_replay_lag_behind_var() {
+  return ov.flow_control_replay_lag_behind_var;
+}
+
+long get_flow_control_max_wait_time_var() {
+  return ov.flow_control_max_wait_time_var;
 }
 
 long get_flow_control_min_quota_var() { return ov.flow_control_min_quota_var; }
@@ -292,6 +303,10 @@ int get_flow_control_hold_percent_var() {
 
 int get_flow_control_release_percent_var() {
   return ov.flow_control_release_percent_var;
+}
+
+int get_broadcast_gtid_executed_period_var() {
+  return ov.broadcast_gtid_executed_period_var;
 }
 
 ulong get_components_stop_timeout_var() {
@@ -393,6 +408,12 @@ bool plugin_get_group_members(
 
   return get_group_members_info(index, callbacks, group_member_mgr,
                                 channel_name);
+}
+
+void plugin_update_zone_id_for_communication_node(const char *ip, int zone_id) {
+  if (gcs_module) {
+    gcs_module->update_zone_id_through_gcs(ip, zone_id);
+  }
 }
 
 /*
@@ -824,7 +845,8 @@ int configure_group_member_manager() {
         Group_member_info::MEMBER_ROLE_SECONDARY, ov.single_primary_mode_var,
         ov.enforce_update_everywhere_checks_var, ov.member_weight_var,
         lv.gr_lower_case_table_names, lv.gr_default_table_encryption,
-        ov.advertise_recovery_endpoints_var);
+        ov.advertise_recovery_endpoints_var, ov.zone_id_var,
+        ov.single_primary_fast_mode_var);
   } else {
     local_member_info = new Group_member_info(
         hostname, port, uuid, lv.write_set_extraction_algorithm,
@@ -833,7 +855,8 @@ int configure_group_member_manager() {
         Group_member_info::MEMBER_ROLE_SECONDARY, ov.single_primary_mode_var,
         ov.enforce_update_everywhere_checks_var, ov.member_weight_var,
         lv.gr_lower_case_table_names, lv.gr_default_table_encryption,
-        ov.advertise_recovery_endpoints_var);
+        ov.advertise_recovery_endpoints_var, ov.zone_id_var,
+        ov.single_primary_fast_mode_var);
   }
 
 #ifndef NDEBUG
@@ -1215,6 +1238,14 @@ int initialize_plugin_modules(gr_modules::mask modules_to_init) {
     // we can only start the applier if the log has been initialized
     if (configure_and_start_applier_module())
       return GROUP_REPLICATION_REPLICATION_APPLIER_INIT_ERROR;
+    DBUG_SIGNAL_WAIT_FOR(current_thd,
+                         "group_replication_status_when_terminal_applier",
+                         "reach_before_terminate_applier_sync",
+                         "end_before_terminate_applier_sync");
+    if (DBUG_EVALUATE_IF("group_replication_status_when_terminal_applier", true,
+                         false)) {
+      return 1;
+    }
   }
 
   /*
@@ -2043,6 +2074,9 @@ int terminate_applier_module() {
       error = GROUP_REPLICATION_APPLIER_STOP_TIMEOUT;
     }
   }
+  DBUG_SIGNAL_WAIT_FOR(
+      current_thd, "group_replication_status_when_terminal_applier",
+      "reach_after_terminate_applier_sync", "end_after_terminate_applier_sync");
   return error;
 }
 
@@ -2438,6 +2472,12 @@ static int check_if_server_properly_configured() {
     LogPluginErr(
         ERROR_LEVEL,
         ER_GRP_RPL_SINGLE_PRIM_MODE_NOT_ALLOWED_WITH_UPDATE_EVERYWHERE);
+    return 1;
+  }
+
+  if ((!ov.single_primary_mode_var) && ov.single_primary_fast_mode_var) {
+    LogPluginErr(ERROR_LEVEL,
+                 ER_GRP_RPL_MULTI_PRIM_MODE_NOT_ALLOWED_WITH_FAST_MODE);
     return 1;
   }
 
@@ -3344,7 +3384,78 @@ static int check_single_primary_mode(MYSQL_THD, SYS_VAR *, void *save,
     return 1;
   }
 
+  if ((!single_primary_mode_val) && ov.single_primary_fast_mode_var) {
+    mysql_mutex_unlock(&lv.plugin_running_mutex);
+    my_message(ER_WRONG_VALUE_FOR_VAR,
+               "Cannot turn OFF group_replication_single_primary_mode while "
+               "group_replication_single_primary_fast_mode is "
+               "enabled.",
+               MYF(0));
+    return 1;
+  }
+
   *(bool *)save = single_primary_mode_val;
+
+  mysql_mutex_unlock(&lv.plugin_running_mutex);
+  return 0;
+}
+
+static int check_majority_after_mode(MYSQL_THD, SYS_VAR *, void *save,
+                                     struct st_mysql_value *value) {
+  DBUG_TRACE;
+  bool enforce_majojrity_after_checks_val;
+
+  if (!get_bool_value_using_type_lib(value, enforce_majojrity_after_checks_val))
+    return 1;
+
+  if (plugin_running_mutex_trylock()) return 1;
+
+  if (plugin_is_group_replication_running()) {
+    mysql_mutex_unlock(&lv.plugin_running_mutex);
+    my_message(ER_GROUP_REPLICATION_RUNNING,
+               "Cannot turn ON/OFF "
+               "group_replication_majority_after_mode while "
+               "Group Replication is running.",
+               MYF(0));
+    return 1;
+  }
+
+  *(bool *)save = enforce_majojrity_after_checks_val;
+
+  mysql_mutex_unlock(&lv.plugin_running_mutex);
+  return 0;
+}
+
+static int check_single_primary_fast_mode(MYSQL_THD, SYS_VAR *, void *save,
+                                          struct st_mysql_value *value) {
+  DBUG_TRACE;
+
+  if (plugin_running_mutex_trylock()) return 1;
+
+  if (plugin_is_group_replication_running()) {
+    mysql_mutex_unlock(&lv.plugin_running_mutex);
+    my_message(ER_GROUP_REPLICATION_RUNNING,
+               "Cannot change "
+               "group_replication_single_primary_fast_mode while "
+               "Group Replication is running.",
+               MYF(0));
+    return 1;
+  }
+
+  longlong in_val = 0;
+  value->val_int(value, &in_val);
+
+  if ((!ov.single_primary_mode_var) && in_val) {
+    mysql_mutex_unlock(&lv.plugin_running_mutex);
+    my_message(ER_WRONG_VALUE_FOR_VAR,
+               "Cannot set "
+               "group_replication_single_primary_fast_mode while "
+               "group_replication_single_primary_mode is false.",
+               MYF(0));
+    return 1;
+  }
+
+  *(int *)save = in_val;
 
   mysql_mutex_unlock(&lv.plugin_running_mutex);
   return 0;
@@ -3566,6 +3677,35 @@ static void update_autorejoin_tries(MYSQL_THD, SYS_VAR *, void *var_ptr,
   } else {
     ov.autorejoin_tries_var = in_val;
   }
+
+  mysql_mutex_unlock(&lv.plugin_running_mutex);
+}
+
+static int check_zone_id(MYSQL_THD, SYS_VAR *, void *save,
+                         struct st_mysql_value *value) {
+  DBUG_TRACE;
+  if (plugin_running_mutex_trylock()) return 1;
+  longlong in_val = 0;
+  value->val_int(value, &in_val);
+  if (in_val < 0 || in_val > 8) {
+    mysql_mutex_unlock(&lv.plugin_running_mutex);
+    return 1;
+  }
+  *(uint *)save = in_val;
+  mysql_mutex_unlock(&lv.plugin_running_mutex);
+  return 0;
+}
+
+static void update_zone_id(MYSQL_THD, SYS_VAR *, void *var_ptr,
+                           const void *save) {
+  DBUG_TRACE;
+
+  if (plugin_running_mutex_trylock()) return;
+
+  uint in_val = *static_cast<const uint *>(save);
+  *static_cast<uint *>(var_ptr) = in_val;
+
+  ov.zone_id_var = in_val;
 
   mysql_mutex_unlock(&lv.plugin_running_mutex);
 }
@@ -4265,6 +4405,28 @@ static MYSQL_SYSVAR_BOOL(
     true);                     /* default*/
 
 static MYSQL_SYSVAR_BOOL(
+    majority_after_mode,        /* name */
+    ov.majority_after_mode_var, /* var */
+    PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_PERSIST_AS_READ_ONLY,
+    "Instructs the group to adopt majority after mode. Default: TRUE.",
+    check_majority_after_mode, /* check func*/
+    nullptr,                   /* update func*/
+    true);                     /* default*/
+
+static MYSQL_SYSVAR_INT(
+    single_primary_fast_mode,        /* name */
+    ov.single_primary_fast_mode_var, /* var */
+    PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_PERSIST_AS_READ_ONLY,
+    "Instructs the group to adopt single primary fast mode. Default: 0.",
+    check_single_primary_fast_mode,        /* check func. */
+    nullptr,                               /* update func. */
+    MGR_FAST_MODE_NEVER,                   /* default */
+    MGR_FAST_MODE_NEVER,                   /* min */
+    MGR_FAST_MODE_WITHOUT_PARALLEL_REPLAY, /* max */
+    0                                      /* block */
+);
+
+static MYSQL_SYSVAR_BOOL(
     enforce_update_everywhere_checks,        /* name */
     ov.enforce_update_everywhere_checks_var, /* var */
     PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_NODEFAULT |
@@ -4299,6 +4461,34 @@ static MYSQL_SYSVAR_LONG(
     MIN_FLOW_CONTROL_THRESHOLD,     /* min */
     MAX_FLOW_CONTROL_THRESHOLD,     /* max */
     0                               /* block */
+);
+
+static MYSQL_SYSVAR_LONG(
+    flow_control_replay_lag_behind,                        /* name */
+    ov.flow_control_replay_lag_behind_var,                 /* var */
+    PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var */
+    "Specifies the number of waiting seconds that will lag behind the master."
+    "Default: 60",
+    nullptr,                            /* check func. */
+    nullptr,                            /* update func. */
+    60,                                 /* default */
+    0,                                  /* min */
+    MAX_FLOW_CONTROL_REPLAY_LAG_BEHIND, /* max */
+    0                                   /* block */
+);
+
+static MYSQL_SYSVAR_LONG(flow_control_max_wait_time,        /* name */
+                         ov.flow_control_max_wait_time_var, /* var */
+                         PLUGIN_VAR_OPCMDARG |
+                             PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var */
+                         "Specifies the max value that will do wait."
+                         "Default: 3600",
+                         nullptr,                    /* check func. */
+                         nullptr,                    /* update func. */
+                         3600,                       /* default */
+                         0,                          /* min */
+                         MAX_FLOW_CONTROL_WAIT_TIME, /* max */
+                         0                           /* block */
 );
 
 static MYSQL_SYSVAR_LONG(
@@ -4365,6 +4555,18 @@ static MYSQL_SYSVAR_UINT(autorejoin_tries,        /* name */
                          0U,                      /* min */
                          lv.MAX_AUTOREJOIN_TRIES, /* max */
                          0);                      /* block */
+
+static MYSQL_SYSVAR_UINT(zone_id,        /* name */
+                         ov.zone_id_var, /* var */
+                         PLUGIN_VAR_OPCMDARG |
+                             PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var */
+                         "The zone id for this node.",
+                         check_zone_id,  /* check func */
+                         update_zone_id, /* update func */
+                         0U,             /* default */
+                         0U,             /* min */
+                         8U,             /* max */
+                         0);             /* block */
 
 static MYSQL_SYSVAR_ULONG(
     unreachable_majority_timeout,                          /* name */
@@ -4464,6 +4666,20 @@ static MYSQL_SYSVAR_INT(
     1,       /* default */
     1,       /* min */
     60,      /* max */
+    0        /* block */
+);
+
+static MYSQL_SYSVAR_INT(
+    broadcast_gtid_executed_period,                        /* name */
+    ov.broadcast_gtid_executed_period_var,                 /* var */
+    PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var */
+    "Specifies how many milliseconds to wait between gtid broadcast."
+    "Default: 1000",
+    nullptr, /* check func. */
+    nullptr, /* update func. */
+    1000,    /* default */
+    200,     /* min */
+    60000,   /* max */
     0        /* block */
 );
 
@@ -4628,8 +4844,11 @@ static SYS_VAR *group_replication_system_vars[] = {
     MYSQL_SYSVAR(ip_allowlist),
     MYSQL_SYSVAR(single_primary_mode),
     MYSQL_SYSVAR(enforce_update_everywhere_checks),
+    MYSQL_SYSVAR(majority_after_mode),
     MYSQL_SYSVAR(flow_control_mode),
     MYSQL_SYSVAR(flow_control_certifier_threshold),
+    MYSQL_SYSVAR(flow_control_replay_lag_behind),
+    MYSQL_SYSVAR(flow_control_max_wait_time),
     MYSQL_SYSVAR(flow_control_applier_threshold),
     MYSQL_SYSVAR(transaction_size_limit),
     MYSQL_SYSVAR(communication_debug_options),
@@ -4637,6 +4856,8 @@ static SYS_VAR *group_replication_system_vars[] = {
     MYSQL_SYSVAR(autorejoin_tries),
     MYSQL_SYSVAR(unreachable_majority_timeout),
     MYSQL_SYSVAR(member_weight),
+    MYSQL_SYSVAR(zone_id),
+    MYSQL_SYSVAR(single_primary_fast_mode),
     MYSQL_SYSVAR(flow_control_min_quota),
     MYSQL_SYSVAR(flow_control_min_recovery_quota),
     MYSQL_SYSVAR(flow_control_max_quota),
@@ -4644,6 +4865,7 @@ static SYS_VAR *group_replication_system_vars[] = {
     MYSQL_SYSVAR(flow_control_period),
     MYSQL_SYSVAR(flow_control_hold_percent),
     MYSQL_SYSVAR(flow_control_release_percent),
+    MYSQL_SYSVAR(broadcast_gtid_executed_period),
     MYSQL_SYSVAR(member_expel_timeout),
     MYSQL_SYSVAR(message_cache_size),
     MYSQL_SYSVAR(clone_threshold),

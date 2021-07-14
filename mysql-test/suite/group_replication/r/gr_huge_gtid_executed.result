@@ -45,15 +45,6 @@ include/assert.inc ['There is a value 1 in table t1']
 [connection server2]
 
 ############################################################
-# 6. Check that stable set is properly updated after stable
-#    set propagation and certification info garbage
-#    collection.
-[connection server2]
-include/assert.inc ['Transactions_committed_all_members must be equal to GTID_EXECUTED']
-[connection server1]
-include/assert.inc ['Transactions_committed_all_members must be equal to GTID_EXECUTED']
-
-############################################################
 # 7. Clean up.
 DROP TABLE t1;
 include/group_replication_end.inc

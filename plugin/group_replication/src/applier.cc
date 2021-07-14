@@ -1,4 +1,5 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -59,6 +60,7 @@ Applier_module::Applier_module()
       waiting_for_applier_suspension(false),
       shared_stop_write_lock(nullptr),
       incoming(nullptr),
+      delayed_packets_queue(nullptr),
       pipeline(nullptr),
       stop_wait_timeout(LONG_TIMEOUT),
       applier_channel_observer(nullptr) {
@@ -70,6 +72,12 @@ Applier_module::Applier_module()
   mysql_cond_init(key_GR_COND_applier_module_suspend, &suspend_cond);
   mysql_cond_init(key_GR_COND_applier_module_wait,
                   &suspension_waiting_condition);
+
+  has_delayed_view_change_event = false;
+#ifndef NDEBUG
+  conditional_trap = 0;
+  wait_online = false;
+#endif
 }
 
 Applier_module::~Applier_module() {
@@ -81,6 +89,16 @@ Applier_module::~Applier_module() {
     }
     delete incoming;
   }
+
+  if (this->delayed_packets_queue) {
+    while (!this->delayed_packets_queue->empty()) {
+      Packet *packet = this->delayed_packets_queue->front();
+      this->delayed_packets_queue->pop();
+      delete packet;
+    }
+    delete delayed_packets_queue;
+  }
+
   delete applier_channel_observer;
 
   mysql_mutex_destroy(&run_lock);
@@ -101,6 +119,7 @@ int Applier_module::setup_applier_module(Handler_pipeline_type pipeline_type,
 
   // create the receiver queue
   this->incoming = new Synchronized_queue<Packet *>();
+  this->delayed_packets_queue = new std::queue<Packet *>();
 
   stop_wait_timeout = stop_timeout;
 
@@ -316,6 +335,7 @@ int Applier_module::apply_view_change_packet(
                         "prepared transactions",
                         view_change_packet->view_id.c_str()));
     transaction_consistency_manager->schedule_view_change_event(pevent);
+    has_delayed_view_change_event = true;
     return error;
   }
 
@@ -385,9 +405,9 @@ int Applier_module::apply_single_primary_action_packet(
 }
 
 int Applier_module::apply_transaction_prepared_action_packet(
-    Transaction_prepared_action_packet *packet) {
+    Transaction_prepared_action_packet *packet, int *delayed) {
   return transaction_consistency_manager->handle_remote_prepare(
-      packet->get_sid(), packet->m_gno, packet->m_gcs_member_id);
+      packet->get_sid(), packet->m_gno, packet->m_gcs_member_id, delayed);
 }
 
 int Applier_module::apply_sync_before_execution_action_packet(
@@ -400,6 +420,82 @@ int Applier_module::apply_leaving_members_action_packet(
     Leaving_members_action_packet *packet) {
   return transaction_consistency_manager->handle_member_leave(
       packet->m_leaving_members);
+}
+
+int Applier_module::apply_certification_change_action_packet(
+    Certification_packet *packet) {
+  return (get_certification_handler()->get_certifier()->handle_certifier_data(
+      packet->payload, packet->len, packet->m_member_id));
+}
+
+/**
+  Fix sync problems for after consistency when view change is happened
+*/
+void Applier_module::add_delayed_packets() {
+  incoming->push_all(delayed_packets_queue);
+}
+
+bool Applier_module::check_remote_prepare_before_view_change(
+    Transaction_prepared_action_packet *packet) {
+  return transaction_consistency_manager->is_remote_prepare_before_view_change(
+      packet->get_sid(), packet->m_gno);
+}
+
+bool Applier_module::check_and_delay_packet_after_delayed_view_change(
+    Packet *packet) {
+  bool expected = true;
+  int packet_type = packet->get_packet_type();
+  switch (packet_type) {
+    case TRANSACTION_PREPARED_PACKET_TYPE:
+      DBUG_EXECUTE_IF("consistency_after_conditional_trap", {
+        if (conditional_trap) {
+          const char act[] =
+              "now signal "
+              "signal.consistency_after_conditional_trap_waiting "
+              "wait_for "
+              "signal.consistency_after_conditional_trap_continue "
+              "NO_CLEAR_EVENT";
+          assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+        }
+      });
+      DBUG_EXECUTE_IF("consistency_after_set_trap", { conditional_trap = 1; });
+
+      if (!check_remote_prepare_before_view_change(
+              static_cast<Transaction_prepared_action_packet *>(packet))) {
+        LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                        "packet type is not expected:%d, buffer it",
+                        packet_type);
+        this->incoming->pop();
+        this->delayed_packets_queue->push(packet);
+        expected = false;
+      }
+      break;
+    case SYNC_BEFORE_EXECUTION_PACKET_TYPE:
+    case ACTION_PACKET_TYPE:
+    case VIEW_CHANGE_PACKET_TYPE:
+    case DATA_PACKET_TYPE:
+    case SINGLE_PRIMARY_PACKET_TYPE:
+    case LEAVING_MEMBERS_PACKET_TYPE:
+    case CERTIFICATION_PACKET_TYPE:
+      LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                      "packet type is not expected:%d, buffer it", packet_type);
+      this->incoming->pop();
+      this->delayed_packets_queue->push(packet);
+      expected = false;
+      break;
+    case SYNC_PREPARED_COMPLETE_TYPE:
+      break;
+    default:
+      LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
+                      "packet type is not expected:%d", packet_type);
+      assert(0);
+  }
+
+  if (expected) {
+    return false;
+  } else {
+    return true;
+  }
 }
 
 int Applier_module::applier_thread_handle() {
@@ -416,7 +512,7 @@ int Applier_module::applier_thread_handle() {
   Continuation *cont = nullptr;
   Packet *packet = nullptr;
   bool loop_termination = false;
-  int packet_application_error = 0;
+  int packet_application_error = 0, delayed = 0;
 
   applier_error = setup_pipeline_handlers();
 
@@ -476,9 +572,18 @@ int Applier_module::applier_thread_handle() {
 
   // applier main loop
   while (!applier_error && !packet_application_error && !loop_termination) {
-    if (is_applier_thread_aborted()) break;
-
+    /* Delayed packets are activated by later packets */
     this->incoming->front(&packet);  // blocking
+
+    DBUG_EXECUTE_IF(
+        "group_replication_before_commit_wait_recovery_message_applied",
+        { wait_online = true; };);
+
+    if (has_delayed_view_change_event) {
+      if (check_and_delay_packet_after_delayed_view_change(packet)) {
+        continue;
+      }
+    }
 
     switch (packet->get_packet_type()) {
       case ACTION_PACKET_TYPE:
@@ -504,7 +609,8 @@ int Applier_module::applier_thread_handle() {
         break;
       case TRANSACTION_PREPARED_PACKET_TYPE:
         packet_application_error = apply_transaction_prepared_action_packet(
-            static_cast<Transaction_prepared_action_packet *>(packet));
+            static_cast<Transaction_prepared_action_packet *>(packet),
+            &delayed);
         this->incoming->pop();
         break;
       case SYNC_BEFORE_EXECUTION_PACKET_TYPE:
@@ -517,11 +623,28 @@ int Applier_module::applier_thread_handle() {
             static_cast<Leaving_members_action_packet *>(packet));
         this->incoming->pop();
         break;
+      case CERTIFICATION_PACKET_TYPE:
+        packet_application_error = apply_certification_change_action_packet(
+            static_cast<Certification_packet *>(packet));
+        this->incoming->pop();
+        break;
+      case SYNC_PREPARED_COMPLETE_TYPE:
+        has_delayed_view_change_event = false;
+        this->incoming->pop();
+        if (delayed_packets_queue->size() > 0) {
+          add_delayed_packets();
+        }
+        break;
       default:
         assert(0); /* purecov: inspected */
     }
 
-    delete packet;
+    if (!delayed) {
+      delete packet;
+    } else {
+      this->incoming->push(packet);
+      delayed = 0;
+    }
   }
   if (packet_application_error) applier_error = packet_application_error;
   delete fde_evt;

@@ -1,4 +1,5 @@
-/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -47,6 +48,8 @@
   Since we support up to 64 bits hashes, 8 bytes are enough to store the info.
 */
 #define BUFFER_READ_PKE 8
+
+#define AFTER_PREPARE_SURPLUS_EXPECTED_GTID 7
 
 void cleanup_transaction_write_set(
     Transaction_write_set *transaction_write_set) {
@@ -218,6 +221,16 @@ int group_replication_trans_before_commit(Trans_param *param) {
               member_status)) {
         return 1; /* purecov: inspected */
       }
+
+      DBUG_EXECUTE_IF(
+          "group_replication_before_commit_wait_recovery_message_applied", {
+            if (param->gtid_info.gno == AFTER_PREPARE_SURPLUS_EXPECTED_GTID) {
+              const char act[] =
+                  "now WAIT_FOR "
+                  "signal.continue_to_commit";
+              assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+            }
+          };);
     }
 
     return 0;

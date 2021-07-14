@@ -1,4 +1,5 @@
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,6 +36,16 @@ static char *group_replication_switch_to_multi_primary_mode(
 
   if (local_member_info && !local_member_info->in_primary_mode()) {
     const char *return_message = "The group is already on multi-primary mode.";
+    size_t return_length = strlen(return_message);
+    strcpy(result, return_message);
+    *length = return_length;
+    return result;
+  }
+
+  if (local_member_info && local_member_info->in_single_primary_fast_mode()) {
+    const char *return_message =
+        "The group is on single primary fast mode and could not switch to "
+        "multi-primary mode.";
     size_t return_length = strlen(return_message);
     strcpy(result, return_message);
     *length = return_length;

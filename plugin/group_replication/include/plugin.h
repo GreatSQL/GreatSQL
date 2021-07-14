@@ -1,4 +1,5 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -81,6 +82,16 @@ enum enum_exit_state_action {
   EXIT_STATE_ACTION_READ_ONLY = 0,
   EXIT_STATE_ACTION_ABORT_SERVER,
   EXIT_STATE_ACTION_OFFLINE_MODE
+};
+
+/**
+  @enum_mgr_fast_mode_type
+  @brief fast mode when performing mgr
+*/
+enum enum_mgr_fast_mode_type {
+  MGR_FAST_MODE_NEVER = 0,
+  MGR_FAST_MODE_WITH_PARALLEL_REPLAY,
+  MGR_FAST_MODE_WITHOUT_PARALLEL_REPLAY
 };
 
 /**
@@ -212,11 +223,14 @@ void enable_server_shutdown_status();
 bool get_server_shutdown_status();
 void set_plugin_is_setting_read_mode(bool value);
 bool get_plugin_is_setting_read_mode();
+bool get_majority_after_mode_var();
 const char *get_group_name_var();
 ulong get_exit_state_action_var();
 ulong get_flow_control_mode_var();
 long get_flow_control_certifier_threshold_var();
 long get_flow_control_applier_threshold_var();
+long get_flow_control_replay_lag_behind_var();
+long get_flow_control_max_wait_time_var();
 long get_flow_control_min_quota_var();
 long get_flow_control_min_recovery_quota_var();
 long get_flow_control_max_quota_var();
@@ -224,6 +238,7 @@ int get_flow_control_member_quota_percent_var();
 int get_flow_control_period_var();
 int get_flow_control_hold_percent_var();
 int get_flow_control_release_percent_var();
+int get_broadcast_gtid_executed_period_var();
 ulong get_components_stop_timeout_var();
 void set_error_state_due_to_error_during_autorejoin();
 bool get_error_state_due_to_error_during_autorejoin();
@@ -248,6 +263,7 @@ bool plugin_get_group_member_stats(
     uint index,
     const GROUP_REPLICATION_GROUP_MEMBER_STATS_CALLBACKS &callbacks);
 uint plugin_get_group_members_number();
+void plugin_update_zone_id_for_communication_node(const char *ip, int zone_id);
 
 /**
   Method to set retrieved certification info from a recovery channel extracted

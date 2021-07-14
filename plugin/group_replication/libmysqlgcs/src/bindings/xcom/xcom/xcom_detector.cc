@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -54,18 +55,30 @@
 extern task_env *detector;
 extern int xcom_shutdown;
 extern linkage detector_wait;
-#define MAX_SILENT 4.0
-
-#define DETECT(site, i)      \
-  (i == get_nodeno(site)) || \
-      (site->detected[i] + DETECTOR_LIVE_TIMEOUT > task_now())
-
-/* static double	detected[NSERVERS]; */
 
 /* See if node has been suspiciously still for some time */
-int may_be_dead(detector_state const ds, node_no i, double seconds) {
-  /* IFDBG(D_DETECT, FN; NDBG(i,u); NDBG(ds[i] < seconds - 2.0, d)); */
-  return ds[i] < seconds - MAX_SILENT;
+int may_be_dead(detector_state const ds, node_no i, double seconds, int silent,
+                int unreachable) {
+  if (unreachable) {
+    return 1;
+  } else {
+    return ds[i] < seconds - silent;
+  }
+}
+
+static int detect_node_timeout(site_def const *site, node_no node) {
+  double timeout = DEFAULT_DETECTOR_LIVE_TIMEOUT;
+  double current = task_now();
+  double diff = current - site->servers[node]->large_transfer_detected;
+  if (diff < DEFAULT_SILENT) {
+    timeout = MAX_DETECTOR_LIVE_TIMEOUT;
+  } else {
+    if (site->servers[node]->unreachable >= MAX_CONNECT_FAIL_TIMES) {
+      timeout = 1;
+    }
+  }
+  return (node == get_nodeno(site)) ||
+         (site->detected[node] + timeout > current);
 }
 
 void init_detector(detector_state ds) {
@@ -83,7 +96,7 @@ int note_detected(site_def const *site, node_no node) {
   assert(site->nodes.node_list_len <= NSERVERS);
 
   if (site && node < site->nodes.node_list_len) {
-    retval = DETECT(site, node);
+    retval = detect_node_timeout(site, node);
     server_detected(site->servers[node]);
   }
   return retval;
@@ -176,7 +189,12 @@ int enough_live_nodes(site_def *site) {
   /* IFDBG(D_DETECT, FN; NDBG(maxnodes,d); );*/
   if (maxnodes == 0) return 0;
   for (i = 0; i < maxnodes; i++) {
-    if (i == self || t - site->detected[i] < DETECTOR_LIVE_TIMEOUT) {
+    double timeout = DEFAULT_DETECTOR_LIVE_TIMEOUT;
+    double diff = task_now() - site->servers[i]->large_transfer_detected;
+    if (diff < DEFAULT_SILENT) {
+      timeout = MAX_DETECTOR_LIVE_TIMEOUT;
+    }
+    if (i == self || t - site->detected[i] < timeout) {
       n++;
     }
   }
@@ -209,7 +227,7 @@ static void check_global_node_set(site_def *site, int *notify) {
 
   site->global_node_count = 0;
   for (i = 0; i < nodes && i < site->global_node_set.node_set_len; i++) {
-    int detect = DETECT(site, i);
+    int detect = detect_node_timeout(site, i);
     IFDBG(
         D_DETECT, if (i == 0) {
           FN;
@@ -230,7 +248,7 @@ static void check_local_node_set(site_def *site, int *notify) {
   u_int nodes = get_maxnodes(site);
 
   for (i = 0; i < nodes && i < site->global_node_set.node_set_len; i++) {
-    int detect = DETECT(site, i);
+    int detect = detect_node_timeout(site, i);
     if (site->local_node_set.node_set_val[i] != detect) {
       site->local_node_set.node_set_val[i] = detect;
       *notify = 1;
@@ -243,7 +261,8 @@ static node_no leader(site_def const *s) {
   if (s) {
     node_no leader = 0;
     for (leader = 0; leader < get_maxnodes(s); leader++) {
-      if (!may_be_dead(s->detected, leader, task_now()) &&
+      if (!may_be_dead(s->detected, leader, task_now(), DEFAULT_SILENT,
+                       s->servers[leader]->unreachable) &&
           is_set(s->global_node_set, leader))
         return leader;
     }
@@ -360,7 +379,7 @@ node_set detector_node_set(site_def const *site) {
     {
       u_int i = 0;
       for (i = 0; i < nodes; i++) {
-        new_set.node_set_val[i] = DETECT(site, i);
+        new_set.node_set_val[i] = detect_node_timeout(site, i);
       }
     }
   }
@@ -439,21 +458,30 @@ int alive_task(task_arg arg MY_ATTRIBUTE((unused))) {
         {
           node_no i;
           for (i = 0; i < get_maxnodes(site); i++) {
-            if (i != get_nodeno(site) && may_be_dead(site->detected, i, sec)) {
-              replace_pax_msg(&ep->you_p, pax_msg_new(alive_synode, site));
-              ep->you_p->op = are_you_alive_op;
+            if (i != get_nodeno(site)) {
+              int silent = DEFAULT_SILENT;
+              double diff =
+                  task_now() - site->servers[i]->large_transfer_detected;
+              if (diff < DEFAULT_SILENT) {
+                silent = MAX_SILENT;
+              }
+              if (may_be_dead(site->detected, i, sec, silent,
+                              site->servers[i]->unreachable)) {
+                replace_pax_msg(&ep->you_p, pax_msg_new(alive_synode, site));
+                ep->you_p->op = are_you_alive_op;
 
-              ep->you_p->a = new_app_data();
-              ep->you_p->a->app_key.group_id = ep->you_p->a->group_id =
-                  get_group_id(site);
-              ep->you_p->a->body.c_t = xcom_boot_type;
-              init_node_list(1, &site->nodes.node_list_val[i],
-                             &ep->you_p->a->body.app_u_u.nodes);
+                ep->you_p->a = new_app_data();
+                ep->you_p->a->app_key.group_id = ep->you_p->a->group_id =
+                    get_group_id(site);
+                ep->you_p->a->body.c_t = xcom_boot_type;
+                init_node_list(1, &site->nodes.node_list_val[i],
+                               &ep->you_p->a->body.app_u_u.nodes);
 
-              IFDBG(D_DETECT, FN; COPY_AND_FREE_GOUT(
-                        dbg_list(&ep->you_p->a->body.app_u_u.nodes)););
+                IFDBG(D_DETECT, FN; COPY_AND_FREE_GOUT(
+                          dbg_list(&ep->you_p->a->body.app_u_u.nodes)););
 
-              send_server_msg(site, i, ep->you_p);
+                send_server_msg(site, i, ep->you_p);
+              }
             }
           }
         }

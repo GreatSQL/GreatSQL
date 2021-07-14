@@ -86,7 +86,7 @@ SET @@GLOBAL.group_replication_communication_max_message_size= default;
 --let $saved_gr_advertise_recovery_endpoints = `SELECT @@GLOBAL.group_replication_advertise_recovery_endpoints;`
 
 # Total number of GR variables.
---let $total_gr_vars= 58
+--let $total_gr_vars= 64
 
 --echo #
 --echo # Test Unit#1
@@ -333,8 +333,8 @@ SET @@SESSION.group_replication_consistency= default;
 --source include/assert.inc
 
 # group_replication_communication_max_message_size
---let $assert_text= Default group_replication_communication_max_message_size is 10485760
---let $assert_cond= "[SELECT @@GLOBAL.group_replication_communication_max_message_size]" = 10485760
+--let $assert_text= Default group_replication_communication_max_message_size is 1048576
+--let $assert_cond= "[SELECT @@GLOBAL.group_replication_communication_max_message_size]" = 1048576
 --source include/assert.inc
 
 #group_replication_autorejoin_tries

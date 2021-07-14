@@ -1,4 +1,5 @@
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -56,6 +57,14 @@ Transaction_consistency_info::Transaction_consistency_info(
        m_consistency_level, m_transaction_prepared_locally,
        m_transaction_prepared_remotely));
 
+  if (local_transaction) {
+    m_least_prepared_num =
+        members_that_must_prepare_the_transaction->size() + 1;
+    m_least_prepared_num = m_least_prepared_num >> 1;
+  } else {
+    m_least_prepared_num = 1;
+  }
+
   if (nullptr != sid) {
     m_sid.copy_from(*sid);
   } else {
@@ -108,6 +117,15 @@ int Transaction_consistency_info::after_applier_prepare(
   */
   m_thread_id = thread_id;
   m_transaction_prepared_locally = true;
+
+  DBUG_EXECUTE_IF(
+      "group_replication_wait_on_after_applier_prepare_locally_set", {
+        const char act[] =
+            "now signal signal.after_applier_prepare_locally_set_waiting "
+            "wait_for "
+            "signal.after_applier_prepare_locally_set_continue";
+        assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+      };);
 
   DBUG_PRINT(
       "info",
@@ -170,22 +188,57 @@ int Transaction_consistency_info::handle_remote_prepare(
        m_consistency_level, m_transaction_prepared_locally,
        m_transaction_prepared_remotely));
 
-  m_members_that_must_prepare_the_transaction->remove(gcs_member_id);
+  bool finished = false;
 
-  if (m_members_that_must_prepare_the_transaction->empty()) {
+  m_members_that_must_prepare_the_transaction->remove(gcs_member_id);
+  m_least_prepared_num = m_least_prepared_num - 1;
+
+  if (get_majority_after_mode_var()) {
+    if (m_least_prepared_num == 0) {
+      finished = true;
+    }
+  } else {
+    finished = m_members_that_must_prepare_the_transaction->empty();
+  }
+
+  if (finished) {
     m_transaction_prepared_remotely = true;
 
-    if (m_transaction_prepared_locally) {
-      if (transactions_latch->releaseTicket(m_thread_id)) {
-        /* purecov: begin inspected */
-        LogPluginErr(ERROR_LEVEL,
-                     ER_GRP_RPL_RELEASE_COMMIT_AFTER_GROUP_PREPARE_FAILED,
-                     m_sidno, m_gno, m_thread_id);
-        return CONSISTENCY_INFO_OUTCOME_ERROR;
-        /* purecov: end */
-      }
+    DBUG_EXECUTE_IF("group_replication_wait_on_after_remote_prepare", {
+      const char act[] =
+          "now signal signal.after_remote_prepare_waiting "
+          "wait_for "
+          "signal.after_remote_prepare_continue";
+      my_sleep(3000000);
+      assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+    };);
 
-      return CONSISTENCY_INFO_OUTCOME_COMMIT;
+    if (get_majority_after_mode_var()) {
+      if (m_local_transaction) {
+        if (transactions_latch->releaseTicket(m_thread_id)) {
+          /* purecov: begin inspected */
+          LogPluginErr(ERROR_LEVEL,
+                       ER_GRP_RPL_RELEASE_COMMIT_AFTER_GROUP_PREPARE_FAILED,
+                       m_sidno, m_gno, m_thread_id);
+          return CONSISTENCY_INFO_OUTCOME_ERROR;
+          /* purecov: end */
+        }
+
+        return CONSISTENCY_INFO_OUTCOME_COMMIT;
+      }
+    } else {
+      if (m_transaction_prepared_locally) {
+        if (transactions_latch->releaseTicket(m_thread_id)) {
+          /* purecov: begin inspected */
+          LogPluginErr(ERROR_LEVEL,
+                       ER_GRP_RPL_RELEASE_COMMIT_AFTER_GROUP_PREPARE_FAILED,
+                       m_sidno, m_gno, m_thread_id);
+          return CONSISTENCY_INFO_OUTCOME_ERROR;
+          /* purecov: end */
+        }
+
+        return CONSISTENCY_INFO_OUTCOME_COMMIT;
+      }
     }
   }
 
@@ -305,6 +358,15 @@ int Transaction_consistency_manager::after_certification(
     /* purecov: end */
   }
 
+  DBUG_EXECUTE_IF("group_replication_wait_on_after_certification", {
+    const char act[] =
+        "now signal "
+        "signal.after_certification_waiting "
+        "wait_for "
+        "signal.after_certification_continue NO_CLEAR_EVENT";
+    assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+  };);
+
   DBUG_PRINT(
       "info",
       ("gtid: %d:%llu; consistency_level: %d; ", transaction_info->get_sidno(),
@@ -333,15 +395,17 @@ int Transaction_consistency_manager::after_applier_prepare(
   const bool transaction_prepared_remotely =
       transaction_info->is_the_transaction_prepared_remotely();
 
-  if (!transaction_prepared_remotely &&
-      transactions_latch->registerTicket(thread_id)) {
-    /* purecov: begin inspected */
-    LogPluginErr(ERROR_LEVEL,
-                 ER_GRP_RPL_REGISTER_TRX_TO_WAIT_FOR_GROUP_PREPARE_FAILED,
-                 sidno, gno, thread_id);
-    m_map_lock->unlock();
-    return 1;
-    /* purecov: end */
+  if (!get_majority_after_mode_var()) {
+    if (!transaction_prepared_remotely &&
+        transactions_latch->registerTicket(thread_id)) {
+      /* purecov: begin inspected */
+      LogPluginErr(ERROR_LEVEL,
+                   ER_GRP_RPL_REGISTER_TRX_TO_WAIT_FOR_GROUP_PREPARE_FAILED,
+                   sidno, gno, thread_id);
+      m_map_lock->unlock();
+      return 1;
+      /* purecov: end */
+    }
   }
 
   DBUG_PRINT(
@@ -371,14 +435,16 @@ int Transaction_consistency_manager::after_applier_prepare(
     assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
   };);
 
-  if (!transaction_prepared_remotely &&
-      transactions_latch->waitTicket(thread_id)) {
-    /* purecov: begin inspected */
-    LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_TRX_WAIT_FOR_GROUP_PREPARE_FAILED,
-                 sidno, gno, thread_id);
-    error = 1;
-    goto end;
-    /* purecov: end */
+  if (!get_majority_after_mode_var()) {
+    if (!transaction_prepared_remotely &&
+        transactions_latch->waitTicket(thread_id)) {
+      /* purecov: begin inspected */
+      LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_TRX_WAIT_FOR_GROUP_PREPARE_FAILED,
+                   sidno, gno, thread_id);
+      error = 1;
+      goto end;
+      /* purecov: end */
+    }
   }
 
   // Remove transaction from map
@@ -396,17 +462,61 @@ end:
   if (error) {
     /* purecov: begin inspected */
     remove_prepared_transaction(key);
-    transactions_latch->releaseTicket(thread_id);
-    transactions_latch->waitTicket(thread_id);
+    if (!get_majority_after_mode_var()) {
+      transactions_latch->releaseTicket(thread_id);
+      transactions_latch->waitTicket(thread_id);
+    }
     /* purecov: end */
   }
 
   return error;
 }
 
+bool Transaction_consistency_manager::is_remote_prepare_before_view_change(
+    const rpl_sid *sid, rpl_gno gno) {
+  DBUG_TRACE;
+  rpl_sidno sidno = 0;
+
+  bool result = false;
+  if (sid != nullptr) {
+    /*
+     This transaction has a UUID different from the group name,
+     thence we need to fetch the corresponding sidno from the
+     global sid_map.
+    */
+    sidno = get_sidno_from_global_sid_map(*sid);
+    if (sidno <= 0) {
+      return result;
+      /* purecov: end */
+    }
+  } else {
+    /*
+      This transaction has the group name as UUID, so we can skip
+      a lock on global sid_map and use the cached group sidno.
+    */
+    sidno = get_group_sidno();
+  }
+
+  Transaction_consistency_manager_key key(sidno, gno);
+
+  m_map_lock->rdlock();
+  typename Transaction_consistency_manager_map::iterator it = m_map.find(key);
+  if (it != m_map.end()) {
+    Transaction_consistency_info *transaction_info = it->second;
+    if (transaction_info->is_local_transaction() &&
+        transaction_info->is_transaction_prepared_locally()) {
+      result = true;
+    }
+  }
+
+  m_map_lock->unlock();
+
+  return result;
+}
+
 int Transaction_consistency_manager::handle_remote_prepare(
-    const rpl_sid *sid, rpl_gno gno,
-    const Gcs_member_identifier &gcs_member_id) {
+    const rpl_sid *sid, rpl_gno gno, const Gcs_member_identifier &gcs_member_id,
+    int *delayed) {
   DBUG_TRACE;
   rpl_sidno sidno = 0;
 
@@ -449,6 +559,23 @@ int Transaction_consistency_manager::handle_remote_prepare(
       return 0;
     }
 
+    DBUG_EXECUTE_IF(
+        "group_replication_before_commit_wait_recovery_message_applied", {
+          const char act[] =
+              "now SIGNAL "
+              "signal.continue_to_commit";
+          assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+        };);
+
+    Certifier_interface *certifier =
+        applier_module->get_certification_handler()->get_certifier();
+    if (certifier->is_gtid_committed(gtid)) {
+      LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                      "Avoid fatal error for gtid:%lld", gno);
+      m_map_lock->unlock();
+      return 0;
+    }
+
     /* purecov: begin inspected */
     LogPluginErr(ERROR_LEVEL,
                  ER_GRP_RPL_TRX_DOES_NOT_EXIST_ON_TCM_ON_HANDLE_REMOTE_PREPARE,
@@ -459,6 +586,12 @@ int Transaction_consistency_manager::handle_remote_prepare(
   }
 
   Transaction_consistency_info *transaction_info = it->second;
+
+  if (!transaction_info->is_transaction_prepared_locally()) {
+    m_map_lock->unlock();
+    *delayed = 1;
+    return 0;
+  }
 
   DBUG_PRINT(
       "info",
@@ -520,6 +653,15 @@ int Transaction_consistency_manager::after_commit(my_thread_id, rpl_sidno sidno,
   DBUG_PRINT("info", ("gtid: %d:%llu", sidno, gno));
   int error = 0;
 
+  DBUG_EXECUTE_IF("group_replication_wait_after_commit", {
+    const char act[] =
+        "now signal "
+        "signal.after_commit_transaction_waiting "
+        "wait_for "
+        "signal.after_commit_transaction_continue NO_CLEAR_EVENT";
+    assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+  };);
+
   // Only acquire a write lock if really needed.
   m_prepared_transactions_on_my_applier_lock->rdlock();
   bool empty = m_prepared_transactions_on_my_applier.empty();
@@ -577,12 +719,22 @@ int Transaction_consistency_manager::before_transaction_begin(
   }
 
   if (m_primary_election_active) {
-    if (consistency_level ==
+    if (local_member_info->in_single_primary_fast_mode() ||
+        consistency_level ==
             GROUP_REPLICATION_CONSISTENCY_BEFORE_ON_PRIMARY_FAILOVER ||
         consistency_level == GROUP_REPLICATION_CONSISTENCY_AFTER) {
       return m_hold_transactions.wait_until_primary_failover_complete(timeout);
     }
   }
+
+  DBUG_EXECUTE_IF("group_replication_wait_after_before_transaction_begin", {
+    const char act[] =
+        "now signal "
+        "signal.after_before_transaction_begin_waiting "
+        "wait_for "
+        "signal.after_before_transaction_begin_continue";
+    assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+  };);
 
   return 0;
 }
@@ -756,6 +908,15 @@ int Transaction_consistency_manager::schedule_view_change_event(
   m_delayed_view_change_events.push_back(pevent);
   m_prepared_transactions_on_my_applier_lock->unlock();
 
+  DBUG_EXECUTE_IF("group_replication_wait_schedule_view_change_event", {
+    const char act[] =
+        "now signal "
+        "signal.after_schedule_view_change_event_waiting "
+        "wait_for "
+        "signal.after_schedule_view_change_event_continue";
+    assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+  };);
+
   return 0;
 }
 
@@ -796,6 +957,18 @@ int Transaction_consistency_manager::remove_prepared_transaction(
       }
     } else if (-1 == next_prepared.first && -1 == next_prepared.second) {
       assert(!m_delayed_view_change_events.empty());
+
+      /*
+       * This is added in order to fix the problem of abnormal primary node
+       * rejection.
+       */
+      if (transaction_consistency_manager->has_local_prepared_transactions()) {
+        LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                        "Avoid serious bug when view changes when calling "
+                        "remove_prepared_transaction");
+        break;
+      }
+
       /*
         This is a view change that was waiting for prepared
         transactions completion, now it is time to log it.
@@ -810,6 +983,9 @@ int Transaction_consistency_manager::remove_prepared_transaction(
       if (error) {
         abort_plugin_process("unable to log the View_change_log_event");
       }
+
+      applier_module->add_prepared_finished_packet();
+
     } else {
       break;
     }

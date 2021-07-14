@@ -1,0 +1,107 @@
+include/group_replication.inc [rpl_server_count=3]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connection server3]
+SET sql_log_bin = 0;
+call mtr.add_suppression("Member was expelled from the group due to network failures, changing member status to ERROR.");
+call mtr.add_suppression("The server was automatically set into read only mode after an error was detected.");
+SET sql_log_bin = 1;
+
+############################################################
+# 01. Create a table on the group.
+[connection server1]
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY);
+
+############################################################
+# 02. remove server3 from the group.
+[connection server3]
+# Get server 3 pid.
+SET SESSION sql_log_bin= 0;
+CREATE TABLE pid_table(pid_no INT);
+LOAD DATA LOCAL INFILE 'pid_file' INTO TABLE pid_table;
+DROP TABLE pid_table;
+SET SESSION sql_log_bin= 1;
+# Suspending server 3...
+
+############################################################
+# 03. Check that all members are still in the group on
+#     servers 1 and 2, which should both be ONLINE.
+#     Server 3 should still be in the group but UNREACHABLE.
+[connection server1]
+
+############################################################
+# 04. Make server2 block before send its prepare message. This
+#     will allow us to deterministically to remove server1 from
+#     the group while others are waiting for server3 acknowledge.
+[connection server2]
+SET @@GLOBAL.DEBUG= '+d,group_replication_wait_before_message_send_after_applier_prepare';
+SELECT @@GLOBAL.DEBUG;
+@@GLOBAL.DEBUG
+d,group_replication_wait_before_message_send_after_applier_prepare
+
+############################################################
+# 05. Execute T1 on server1, blocked by server2 prepared message wait.
+INSERT INTO t1 VALUES (1);
+
+############################################################
+# 06. Execute T2 on server1, wait after before_transactin_begin.
+SET @@SESSION.DEBUG= '+d,group_replication_wait_after_before_transaction_begin';
+INSERT INTO t1 VALUES (2);
+
+############################################################
+# 07. Enable group_replication_wait_schedule_view_change_event
+#     on server1.
+[connection server1]
+SET @@GLOBAL.DEBUG= '+d,group_replication_wait_schedule_view_change_event';
+
+############################################################
+# 08. Resume server 3 by sending a signal SIGCONT to it.
+#     Server should change to ONLINE state.
+[connection server3]
+# Send signal SIGCONT to server 3.
+SET @@GLOBAL.DEBUG= '+d,group_replication_wait_on_after_remote_prepare';
+SET @@GLOBAL.DEBUG= '+d,group_replication_wait_on_after_applier_prepare_locally_set';
+
+############################################################
+# 09. Wait for a Delaying view change on server1.
+[connection server1]
+SET DEBUG_SYNC= "now WAIT_FOR signal.after_schedule_view_change_event_waiting";
+SET DEBUG_SYNC= 'now SIGNAL signal.after_schedule_view_change_event_continue';
+SET @@GLOBAL.DEBUG= '-d,group_replication_wait_schedule_view_change_event';
+
+############################################################
+# 10. Wait T2 on server1.
+[connection server1]
+SET DEBUG_SYNC= "now WAIT_FOR signal.after_before_transaction_begin_waiting";
+SET DEBUG_SYNC= 'now SIGNAL signal.after_before_transaction_begin_continue';
+
+############################################################
+# 11. Wait until T1 & T2 are prepared on server2.
+[connection server2]
+SET DEBUG_SYNC= "now WAIT_FOR signal.after_before_message_send_after_applier_prepare_waiting";
+SET DEBUG_SYNC= 'now SIGNAL signal.after_before_message_send_after_applier_prepare_continue';
+SET @@GLOBAL.DEBUG= '-d,group_replication_wait_before_message_send_after_applier_prepare';
+
+############################################################
+[connection server3]
+SET DEBUG_SYNC= "now WAIT_FOR signal.after_remote_prepare_waiting TIMEOUT 10";
+SET DEBUG_SYNC= 'now SIGNAL signal.after_remote_prepare_continue';
+SET DEBUG_SYNC= "now WAIT_FOR signal.after_applier_prepare_locally_set_waiting TIMEOUT 10";
+SET DEBUG_SYNC= 'now SIGNAL signal.after_applier_prepare_locally_set_continue';
+SET @@GLOBAL.DEBUG= '-d,group_replication_wait_on_after_applier_prepare_locally_set';
+SET @@GLOBAL.DEBUG= '-d,group_replication_wait_on_after_remote_prepare';
+
+############################################################
+# 12. Wait T1 & T2 response
+
+############################################################
+# 13. Check that all members in the group should be ONLINE.
+[connection server1]
+
+############################################################
+# 14. Check that all members in the group should be ONLINE.
+[connection server1]
+drop table t1;
+include/group_replication_end.inc

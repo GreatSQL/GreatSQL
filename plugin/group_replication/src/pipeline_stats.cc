@@ -1,4 +1,5 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -602,9 +603,7 @@ void Pipeline_member_stats::update_member_stats(
 
   /*
     Only update the transaction GTIDs if the current stats message contains
-    these GTIDs, i.e. if they are "dirty" and in need of an update. Currently
-    these updates are sent in 30 sec periods, while the stats message itself is
-    sent at 1 sec period (for flow control purposes).
+    these GTIDs, i.e. if they are "dirty" and in need of an update.
    */
   if (msg.get_transation_gtids_present()) {
     m_transactions_committed_all_members =
@@ -620,11 +619,7 @@ void Pipeline_member_stats::update_member_stats(
 }
 
 bool Pipeline_member_stats::is_flow_control_needed() {
-  return (m_flow_control_mode == FCM_QUOTA) &&
-         (m_transactions_waiting_certification >
-              get_flow_control_certifier_threshold_var() ||
-          m_transactions_waiting_apply >
-              get_flow_control_applier_threshold_var());
+  return m_flow_control_mode == FCM_QUOTA;
 }
 
 int32 Pipeline_member_stats::get_transactions_waiting_certification() {
@@ -720,6 +715,13 @@ Flow_control_module::Flow_control_module()
                    &m_flow_control_lock, MY_MUTEX_INIT_FAST);
   mysql_cond_init(key_GR_COND_pipeline_stats_flow_control,
                   &m_flow_control_cond);
+  m_wait_counter = 0;
+  m_leave_counter = 0;
+  m_current_wait_msec = 10;
+  m_last_cert_database_size = 0;
+  m_flow_control_need_refreshed = 0;
+  m_flow_control_flag = 0;
+  m_max_wait_time = FLOW_CONTROL_MAX_WAIT_TIME;
   m_flow_control_module_info_lock = new Checkable_rwlock(
 #ifdef HAVE_PSI_INTERFACE
       key_GR_RWLOCK_flow_control_module_info
@@ -734,196 +736,61 @@ Flow_control_module::~Flow_control_module() {
 }
 
 void Flow_control_module::flow_control_step(
-    Pipeline_stats_member_collector *member) {
-  if (--seconds_to_skip > 0) return;
-
-  int32 holds = m_holds_in_period.exchange(0);
+    Pipeline_stats_member_collector *member, bool send_stats_flag) {
   Flow_control_mode fcm =
       static_cast<Flow_control_mode>(get_flow_control_mode_var());
-  seconds_to_skip = get_flow_control_period_var();
-  m_stamp++;
 
   /*
     Send statistics to other members
   */
-  member->send_stats_member_message(fcm);
-
-  DBUG_EXECUTE_IF("flow_control_simulate_delayed_members", {
-    Pipeline_stats_member_message message(1000, 100000, 500, 500, 500, 0, 0,
-                                          false, "", "", 0, FCM_QUOTA);
-    Pipeline_member_stats stats;
-    stats.update_member_stats(message, 1);
-
-    m_info.clear();
-    m_info["m1"] = stats;
-    m_info["m2"] = stats;
-
-    holds = 2;
-  });
-
-  switch (fcm) {
-    case FCM_QUOTA: {
-      double HOLD_FACTOR =
-          1.0 -
-          static_cast<double>(get_flow_control_hold_percent_var()) / 100.0;
-      double RELEASE_FACTOR =
-          1.0 +
-          static_cast<double>(get_flow_control_release_percent_var()) / 100.0;
-      double TARGET_FACTOR =
-          static_cast<double>(get_flow_control_member_quota_percent_var()) /
-          100.0;
-      int64 max_quota = static_cast<int64>(get_flow_control_max_quota_var());
-
-      /*
-        Postponed transactions
-      */
-      int64 quota_size = m_quota_size.exchange(0);
-      int64 quota_used = m_quota_used.exchange(0);
-      int64 extra_quota = (quota_size > 0 && quota_used > quota_size)
-                              ? quota_used - quota_size
-                              : 0;
-
-      /*
-        Release waiting transactions on do_wait().
-      */
-      if (extra_quota > 0) {
-        mysql_mutex_lock(&m_flow_control_lock);
-        mysql_cond_broadcast(&m_flow_control_cond);
-        mysql_mutex_unlock(&m_flow_control_lock);
-      }
-
-      if (holds > 0) {
-        uint num_writing_members = 0, num_non_recovering_members = 0;
-        int64 min_certifier_capacity = MAXTPS, min_applier_capacity = MAXTPS,
-              safe_capacity = MAXTPS;
-
-        m_flow_control_module_info_lock->rdlock();
-        Flow_control_module_info::iterator it = m_info.begin();
-        while (it != m_info.end()) {
-          if (it->second.get_stamp() < (m_stamp - 10)) {
-            /*
-              Purge member stats that were not updated on the last
-              10 flow control steps.
-            */
-            m_info.erase(it++);
-          } else {
-            if (it->second.get_flow_control_mode() == FCM_QUOTA) {
-              if (get_flow_control_certifier_threshold_var() > 0 &&
-                  it->second.get_delta_transactions_certified() > 0 &&
-                  it->second.get_transactions_waiting_certification() -
-                          get_flow_control_certifier_threshold_var() >
-                      0 &&
-                  min_certifier_capacity >
-                      it->second.get_delta_transactions_certified()) {
-                min_certifier_capacity =
-                    it->second.get_delta_transactions_certified();
-              }
-
-              if (it->second.get_delta_transactions_certified() > 0)
-                safe_capacity =
-                    std::min(safe_capacity,
-                             it->second.get_delta_transactions_certified());
-
-              if (get_flow_control_applier_threshold_var() > 0 &&
-                  it->second.get_delta_transactions_applied() > 0 &&
-                  it->second.get_transactions_waiting_apply() -
-                          get_flow_control_applier_threshold_var() >
-                      0) {
-                if (min_applier_capacity >
-                    it->second.get_delta_transactions_applied())
-                  min_applier_capacity =
-                      it->second.get_delta_transactions_applied();
-
-                if (it->second.get_delta_transactions_applied() > 0)
-                  num_non_recovering_members++;
-              }
-
-              if (it->second.get_delta_transactions_applied() > 0)
-                safe_capacity = std::min(
-                    safe_capacity, it->second.get_delta_transactions_applied());
-
-              if (it->second.get_delta_transactions_local() > 0)
-                num_writing_members++;
-            }
-            ++it;
-          }
-        }
-        m_flow_control_module_info_lock->unlock();
-
-        // Avoid division by zero.
-        num_writing_members = num_writing_members > 0 ? num_writing_members : 1;
-        int64 min_capacity = (min_certifier_capacity > 0 &&
-                              min_certifier_capacity < min_applier_capacity)
-                                 ? min_certifier_capacity
-                                 : min_applier_capacity;
-
-        // Minimum capacity will never be less than lim_throttle.
-        int64 lim_throttle = static_cast<int64>(
-            0.05 * std::min(get_flow_control_certifier_threshold_var(),
-                            get_flow_control_applier_threshold_var()));
-        if (get_flow_control_min_recovery_quota_var() > 0 &&
-            num_non_recovering_members == 0)
-          lim_throttle = get_flow_control_min_recovery_quota_var();
-        if (get_flow_control_min_quota_var() > 0)
-          lim_throttle = get_flow_control_min_quota_var();
-
-        min_capacity =
-            std::max(std::min(min_capacity, safe_capacity), lim_throttle);
-        quota_size = static_cast<int64>(min_capacity * HOLD_FACTOR);
-
-        if (max_quota > 0) quota_size = std::min(quota_size, max_quota);
-
-        if (num_writing_members > 1) {
-          if (get_flow_control_member_quota_percent_var() == 0)
-            quota_size /= num_writing_members;
-          else
-            quota_size = static_cast<int64>(static_cast<double>(quota_size) *
-                                            TARGET_FACTOR);
-        }
-
-        quota_size =
-            (quota_size - extra_quota > 1) ? quota_size - extra_quota : 1;
-
-#ifndef NDEBUG
-        LogPluginErr(INFORMATION_LEVEL, ER_GRP_RPL_FLOW_CONTROL_STATS,
-                     quota_size, get_flow_control_period_var(),
-                     num_writing_members, num_non_recovering_members,
-                     min_capacity, lim_throttle);
-#endif
-      } else {
-        if (quota_size > 0 && get_flow_control_release_percent_var() > 0 &&
-            (quota_size * RELEASE_FACTOR) < MAXTPS) {
-          int64 quota_size_next =
-              static_cast<int64>(quota_size * RELEASE_FACTOR);
-          quota_size =
-              quota_size_next > quota_size ? quota_size_next : quota_size + 1;
-        } else
-          quota_size = 0;
-      }
-
-      if (max_quota > 0)
-        quota_size =
-            std::min(quota_size > 0 ? quota_size : max_quota, max_quota);
-
-      m_quota_size.store(quota_size);
-      m_quota_used.store(0);
-      break;
-    }
-
-    case FCM_DISABLED:
-      m_quota_size.store(0);
-      m_quota_used.store(0);
-      break;
-
-    default:
-      assert(0);
+  if (send_stats_flag) {
+    member->send_stats_member_message(fcm);
   }
 
-  // compute applier rate during recovery
-  if (local_member_info->get_recovery_status() ==
-      Group_member_info::MEMBER_IN_RECOVERY) {
-    applier_module->get_pipeline_stats_member_collector()
-        ->compute_transactions_deltas_during_recovery();
+  if (fcm == FCM_QUOTA) {
+    Certifier_interface *cert_interface =
+        (applier_module && applier_module->get_certification_handler())
+            ? applier_module->get_certification_handler()->get_certifier()
+            : nullptr;
+    if (cert_interface) {
+      ulonglong size = cert_interface->get_certification_info_size();
+
+      double estimated_replay_time =
+          cert_interface->get_certification_estimated_replay_time();
+      int max_wait_time = get_flow_control_max_wait_time_var() * 1000;
+
+      mysql_mutex_lock(&m_flow_control_lock);
+      if (estimated_replay_time < get_flow_control_replay_lag_behind_var()) {
+        if (m_wait_counter != m_leave_counter) {
+          mysql_cond_broadcast(&m_flow_control_cond);
+          m_current_wait_msec = 10;
+          m_flow_control_need_refreshed = 0;
+          m_max_wait_time = max_wait_time;
+          m_flow_control_flag = 1;
+        } else {
+          m_flow_control_flag = 0;
+        }
+      } else {
+        m_flow_control_flag = 1;
+        double added = cert_interface->get_certification_add_velocity();
+        double deleted = cert_interface->get_certification_delete_velocity();
+        if (added > deleted) {
+          m_flow_control_need_refreshed = 1;
+        }
+
+        if (max_wait_time > FLOW_CONTROL_MAX_WAIT_TIME &&
+            max_wait_time > m_max_wait_time) {
+          m_max_wait_time = max_wait_time;
+        }
+      }
+      m_last_cert_database_size = size;
+
+      mysql_mutex_unlock(&m_flow_control_lock);
+    } else {
+      m_flow_control_flag = 1;
+    }
+  } else {
+    m_flow_control_flag = 0;
   }
 }
 
@@ -986,17 +853,60 @@ Pipeline_member_stats *Flow_control_module::get_pipeline_stats(
   return member_pipeline_stats;
 }
 
+bool Flow_control_module::check_still_waiting() {
+  bool result = false;
+  mysql_mutex_lock(&m_flow_control_lock);
+  if (m_wait_counter != m_leave_counter) {
+    result = true;
+  }
+  mysql_mutex_unlock(&m_flow_control_lock);
+
+  return result;
+}
+
 int32 Flow_control_module::do_wait() {
   DBUG_TRACE;
-  int64 quota_size = m_quota_size.load();
-  int64 quota_used = ++m_quota_used;
 
-  if (quota_used > quota_size && quota_size != 0) {
+  if (m_flow_control_flag &&
+      (m_last_cert_database_size > FLOW_CONTROL_LOWER_THRESHOLD ||
+       check_still_waiting())) {
     struct timespec delay;
-    set_timespec(&delay, 1);
+    /* 10ms as the first wait time */
+    set_timespec_nsec(&delay, m_current_wait_msec * 1000000ULL);
 
     mysql_mutex_lock(&m_flow_control_lock);
+    m_wait_counter = m_wait_counter + 1;
+    if (m_flow_control_need_refreshed) {
+      m_flow_control_need_refreshed = 0;
+      if (m_last_cert_database_size > FLOW_CONTROL_LOWER_THRESHOLD) {
+        int added = 0;
+        if (m_last_cert_database_size < FLOW_CONTROL_LOW_THRESHOLD) {
+          added = FLOW_CONTROL_ADD_LEVEL1_WAIT_TIME;
+        } else if (m_last_cert_database_size < FLOW_CONTROL_MID_THRESHOLD) {
+          added = FLOW_CONTROL_ADD_LEVEL2_WAIT_TIME;
+        } else if (m_last_cert_database_size < FLOW_CONTROL_HIGH_THRESHOLD) {
+          added = FLOW_CONTROL_ADD_LEVEL3_WAIT_TIME;
+        } else if (m_last_cert_database_size < FLOW_CONTROL_HIGHER_THRESHOLD) {
+          added = FLOW_CONTROL_ADD_LEVEL4_WAIT_TIME;
+        } else if (m_last_cert_database_size <
+                   FLOW_CONTROL_MUCH_HIGHER_THRESHOLD) {
+          added = FLOW_CONTROL_ADD_LEVEL5_WAIT_TIME;
+        } else if (m_last_cert_database_size <
+                   FLOW_CONTROL_DANGEROUS_THRESHOLD) {
+          added = FLOW_CONTROL_ADD_LEVEL6_WAIT_TIME;
+        } else {
+          added = FLOW_CONTROL_ADD_LEVEL7_WAIT_TIME;
+        }
+
+        m_current_wait_msec = m_current_wait_msec + added;
+
+        if (m_current_wait_msec > m_max_wait_time) {
+          m_current_wait_msec = m_max_wait_time;
+        }
+      }
+    }
     mysql_cond_timedwait(&m_flow_control_cond, &m_flow_control_lock, &delay);
+    m_leave_counter = m_leave_counter + 1;
     mysql_mutex_unlock(&m_flow_control_lock);
   }
 

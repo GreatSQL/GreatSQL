@@ -1,4 +1,5 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +32,9 @@ class Certifier_stats {
   virtual ulonglong get_positive_certified() = 0;
   virtual ulonglong get_negative_certified() = 0;
   virtual ulonglong get_certification_info_size() = 0;
+  virtual ulonglong get_certification_delete_velocity() = 0;
+  virtual ulonglong get_certification_add_velocity() = 0;
+  virtual ulonglong get_certification_estimated_replay_time() = 0;
   virtual int get_group_stable_transactions_set_string(char **buffer,
                                                        size_t *length) = 0;
   virtual void get_last_conflict_free_transaction(std::string *value) = 0;

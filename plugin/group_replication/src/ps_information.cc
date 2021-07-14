@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -179,13 +180,20 @@ bool get_group_member_stats(
   // Check if the group replication has started and a valid certifier exists
   MUTEX_LOCK(lock, get_plugin_running_lock());
   Pipeline_member_stats *pipeline_stats = nullptr;
-  if (!get_plugin_is_stopping() && applier_module != nullptr &&
+  bool ret = (!get_plugin_is_stopping() && applier_module != nullptr);
+  DBUG_SIGNAL_WAIT_FOR(
+      current_thd, "group_replication_status_when_terminal_applier",
+      "reach_get_member_status_sync", "end_get_member_status_sync");
+  ret = ret && plugin_is_group_replication_running();
+  ret =
+      ret &&
       (pipeline_stats =
            ((local_member_info && !local_member_info->get_uuid().compare(uuid))
                 ? applier_module->get_local_pipeline_stats()
                 : applier_module->get_flow_control_module()->get_pipeline_stats(
                       member_info->get_gcs_member_id().get_member_id()))) !=
-          nullptr) {
+          nullptr;
+  if (ret) {
     std::string last_conflict_free_transaction;
     pipeline_stats->get_transaction_last_conflict_free(
         last_conflict_free_transaction);

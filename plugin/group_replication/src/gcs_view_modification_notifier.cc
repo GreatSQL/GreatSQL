@@ -1,4 +1,5 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,6 +25,7 @@
 
 #include <time.h>
 
+#include <mysql/components/services/log_builtins.h>
 #include "my_dbug.h"
 #include "my_systime.h"
 #include "mysql/psi/mysql_cond.h"
@@ -72,6 +74,7 @@ void Plugin_gcs_view_modification_notifier::cancel_view_modification(
   this->error = errnr;
   mysql_cond_broadcast(&wait_for_view_cond);
   mysql_mutex_unlock(&wait_for_view_mutex);
+  LogPluginErrMsg(INFORMATION_LEVEL, 0, "Set cancelled_view_change true");
 }
 
 bool Plugin_gcs_view_modification_notifier::is_cancelled() {
@@ -96,6 +99,10 @@ bool Plugin_gcs_view_modification_notifier::wait_for_view_modification(
 
     if (result != 0)  // It means that it broke by timeout or an error.
     {
+      LogPluginErrMsg(INFORMATION_LEVEL, 0,
+                      "Wait for view modification, timeout:%ld result:%d",
+                      timeout, result);
+
       view_changing = false;
       break;
     }
