@@ -1,5 +1,7 @@
 # -*- cperl -*-
 # Copyright (c) 2005, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2021, Huawei Technologies Co., Ltd.
+# Copyright (c) 2021, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -348,6 +350,12 @@ sub create_disabled_test_list($$) {
   unshift(@disabled_collection,
           "$::glob_mysql_test_dir/collections/disabled_ndb.def")
     if $::ndbcluster_enabled;
+
+  if ($::opt_pq) {
+    # Add 'disabled_ndb.def' to the list of disabled files if ndb is enabled.
+    unshift(@disabled_collection,
+          "$::glob_mysql_test_dir/collections/disabled-pq.def");
+  }
 
   # Check for the tests to be skipped in a sanitizer which are listed
   # in "mysql-test/collections/disabled-<sanitizer>.list" file.
@@ -1176,6 +1184,10 @@ sub collect_one_test_case {
                             shortname => $tname,);
 
   my $result_file = "$resdir/$tname.result";
+  if ($::opt_pq and ($::opt_record or -f "$resdir/$tname.result-pq")) {
+    $result_file = "$resdir/$tname.result-pq";
+  }
+
   if (-f $result_file) {
     $tinfo->{result_file} = $result_file;
   } else {

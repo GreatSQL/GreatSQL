@@ -1,0 +1,5 @@
+--source include/pq_test.inc
+
+create table t1(a int);
+
+drop table t1;

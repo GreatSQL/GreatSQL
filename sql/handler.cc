@@ -1,4 +1,6 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -117,7 +119,7 @@
 #include "sql/sql_select.h"  // actual_key_parts
 #include "sql/sql_table.h"   // build_table_filename
 #include "sql/sql_zip_dict.h"
-#include "sql/strfunc.h"     // strnncmp_nopads
+#include "sql/strfunc.h"  // strnncmp_nopads
 #include "sql/system_variables.h"
 #include "sql/table.h"
 #include "sql/tc_log.h"
@@ -3130,6 +3132,30 @@ int handler::ha_rnd_init(bool scan) {
   return result;
 }
 
+int handler::ha_pq_init(uint &dop, uint keyno) {
+  DBUG_EXECUTE_IF("ha_pq_init_fail", return HA_ERR_TABLE_DEF_CHANGED;);
+  int result;
+  DBUG_ENTER("handler::ha_pq_init");
+  assert(table_share->tmp_table != NO_TMP_TABLE || m_lock_type != F_UNLCK);
+  assert(inited == NONE || inited == INDEX || (inited == PQ));
+  THD *cur_thd = table->in_use;
+  inited =
+      (result = pq_leader_scan_init(keyno, cur_thd->pq_ctx, dop)) ? NONE : PQ;
+  end_range = NULL;
+  pq_ref = false;
+  pq_reverse_scan = false;
+  DBUG_RETURN(result);
+}
+
+int handler::ha_pq_signal_all() {
+  DBUG_ENTER("handler::ha_pq_signal_all");
+  int result;
+  THD *cur_thd = table->in_use;
+  result = pq_leader_signal_all(cur_thd->pq_ctx);
+
+  DBUG_RETURN(result);
+}
+
 /**
   End use of random access.
 
@@ -3147,7 +3173,24 @@ int handler::ha_rnd_end() {
   inited = NONE;
   end_range = nullptr;
   m_record_buffer = nullptr;
+  pq_range_type = PQ_QUICK_SELECT_NONE;
+
   return rnd_end();
+}
+
+int handler::ha_pq_end() {
+  DBUG_ENTER("handler::ha_pq_end");
+
+  if (pq_table_scan) {
+    inited = RND;
+    ha_rnd_end();
+  } else {
+    inited = INDEX;
+    ha_index_end();
+  }
+
+  THD *thd = current_thd;
+  DBUG_RETURN(pq_leader_scan_end(thd->pq_ctx));
 }
 
 /**
@@ -3183,6 +3226,27 @@ int handler::ha_rnd_next(uchar *buf) {
   }
 
   return result;
+}
+
+int handler::ha_pq_next(uchar *buf, void *scan_ctx) {
+  int result;
+  DBUG_EXECUTE_IF("ha_pq_next_deadlock", return HA_ERR_LOCK_DEADLOCK;);
+  DBUG_ENTER("handler::ha_pq_next");
+  assert(table_share->tmp_table != NO_TMP_TABLE || m_lock_type != F_UNLCK);
+
+  // Set status for the need to update generated fields
+  m_update_generated_read_fields = table->has_gcol();
+
+  MYSQL_TABLE_IO_WAIT(PSI_TABLE_FETCH_ROW,
+                      pq_table_scan ? MAX_KEY : active_index, result,
+                      { result = pq_worker_scan_next(scan_ctx, buf); })
+  if (!result && m_update_generated_read_fields) {
+    result = update_generated_read_fields(
+        buf, table, pq_table_scan ? MAX_KEY : active_index);
+    m_update_generated_read_fields = false;
+  }
+  table->set_row_status_from_handler(result);
+  DBUG_RETURN(result);
 }
 
 /**
@@ -3575,9 +3639,9 @@ bool handler::is_using_full_key(key_part_map keypart_map,
          (keypart_map == ((key_part_map(1) << actual_key_parts) - 1));
 }
 
-bool handler::is_using_full_unique_key(uint index, key_part_map keypart_map,
-                                       enum ha_rkey_function find_flag) const
-    noexcept {
+bool handler::is_using_full_unique_key(
+    uint index, key_part_map keypart_map,
+    enum ha_rkey_function find_flag) const noexcept {
   return (
       is_using_full_key(keypart_map, table->key_info[index].actual_key_parts) &&
       find_flag == HA_READ_KEY_EXACT &&
@@ -6812,6 +6876,13 @@ int DsMrr_impl::dsmrr_init(RANGE_SEQ_IF *seq_funcs, void *seq_init_param,
     return retval;
   }
 
+  if (!thd->in_sp_trigger && thd->parallel_exec &&
+      table->file->pq_range_type != PQ_QUICK_SELECT_NONE) {
+    use_default_impl = true;
+    retval = h->handler::multi_range_read_init(seq_funcs, seq_init_param,
+                                               n_ranges, mode, buf);
+    return retval;
+  }
   /*
     This assert will hit if we have pushed an index condition to the
     primary key index and then "change our mind" and use a different
@@ -7681,10 +7752,9 @@ void handler::set_end_range(const key_range *range,
     save_end_range = *range;
     end_range = &save_end_range;
     range_key_part = table->key_info[active_index].key_part;
-    key_compare_result_on_equal =
-        ((range->flag == HA_READ_BEFORE_KEY)
-             ? 1
-             : (range->flag == HA_READ_AFTER_KEY) ? -1 : 0);
+    key_compare_result_on_equal = ((range->flag == HA_READ_BEFORE_KEY)  ? 1
+                                   : (range->flag == HA_READ_AFTER_KEY) ? -1
+                                                                        : 0);
     m_virt_gcol_in_end_range = key_has_vcol(range_key_part, range->length);
   } else
     end_range = nullptr;
@@ -8201,8 +8271,7 @@ int handler::ha_write_row(uchar *buf) {
 
   DBUG_TRACE;
   DEBUG_SYNC(ha_thd(), "start_ha_write_row");
-  DBUG_EXECUTE_IF("inject_error_ha_write_row",
-                  return HA_ERR_INTERNAL_ERROR;);
+  DBUG_EXECUTE_IF("inject_error_ha_write_row", return HA_ERR_INTERNAL_ERROR;);
   DBUG_EXECUTE_IF("simulate_storage_engine_out_of_memory",
                   return HA_ERR_SE_OUT_OF_MEMORY;);
   mark_trx_read_write();
@@ -8477,9 +8546,8 @@ static void copy_blob_data(const TABLE *table, const MY_BITMAP *const fields,
   }
 }
 
-bool handler::is_using_prohibited_gap_locks(TABLE *table,
-                                            bool using_full_primary_key) const
-    noexcept {
+bool handler::is_using_prohibited_gap_locks(
+    TABLE *table, bool using_full_primary_key) const noexcept {
   const THD *thd = table->in_use;
   const thr_lock_type lock_type = table->reginfo.lock_type;
 

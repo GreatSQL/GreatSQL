@@ -2538,6 +2538,16 @@ static void row_sel_store_row_id_to_prebuilt(
   ut_memcpy(prebuilt->row_id, data, len);
 }
 
+void pq_row_sel_store_row_id_to_prebuilt(
+    row_prebuilt_t *prebuilt,  /*!< in/out: prebuilt */
+    const rec_t *index_rec,    /*!< in: record */
+    const dict_index_t *index, /*!< in: index of the record */
+    const ulint *offsets)      /*!< in: rec_get_offsets
+(index_rec, index) */
+{
+  row_sel_store_row_id_to_prebuilt(prebuilt, index_rec, index, offsets);
+}
+
 /** Stores a non-SQL-NULL field in the MySQL format. The counterpart of this
 function is row_mysql_store_col_in_innobase_format() in row0mysql.cc.
 @param[in,out] dest		buffer where to store; NOTE
@@ -3156,42 +3166,6 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
 
   return err;
 }
-
-/** Helper class to cache clust_rec and old_ver */
-class Row_sel_get_clust_rec_for_mysql {
-  const rec_t *cached_clust_rec;
-  rec_t *cached_old_vers;
-
- public:
-  /** Constructor */
-  Row_sel_get_clust_rec_for_mysql()
-      : cached_clust_rec(nullptr), cached_old_vers(nullptr) {}
-
-  /** Retrieve the clustered index record corresponding to a record in a
-  non-clustered index. Does the necessary locking.
-  @param[in]     prebuilt    prebuilt struct in the handle
-  @param[in]     sec_index   secondary index where rec resides
-  @param[in]     rec         record in a non-clustered index
-  @param[in]     thr         query thread
-  @param[out]    out_rec     clustered record or an old version of it,
-                             NULL if the old version did not exist in the
-                             read view, i.e., it was a fresh inserted version
-  @param[in,out] offsets     in: offsets returned by
-                                 rec_get_offsets(rec, sec_index);
-                             out: offsets returned by
-                                 rec_get_offsets(out_rec, clust_index)
-  @param[in,out] offset_heap memory heap from which the offsets are allocated
-  @param[out]    vrow        virtual column to fill
-  @param[in]     mtr         mtr used to get access to the non-clustered record;
-                             the same mtr is used to access the clustered index
-  @param[in]     lob_undo    the LOB undo information.
-  @return DB_SUCCESS, DB_SUCCESS_LOCKED_REC, or error code */
-  dberr_t operator()(row_prebuilt_t *prebuilt, dict_index_t *sec_index,
-                     const rec_t *rec, que_thr_t *thr, const rec_t **out_rec,
-                     ulint **offsets, mem_heap_t **offset_heap,
-                     const dtuple_t **vrow, mtr_t *mtr,
-                     lob::undo_vers_t *lob_undo);
-};
 
 /** Retrieve the clustered index record corresponding to a record in a
 non-clustered index. Does the necessary locking.
@@ -3832,7 +3806,7 @@ static ulint row_sel_try_search_shortcut_for_mysql(
 
 /** Check a pushed-down index condition.
  @return ICP_NO_MATCH, ICP_MATCH, or ICP_OUT_OF_RANGE */
-static ICP_RESULT row_search_idx_cond_check(
+ICP_RESULT row_search_idx_cond_check(
     byte *mysql_rec,          /*!< out: record
                               in MySQL format (invalid unless
                               prebuilt->idx_cond == true and
@@ -6135,6 +6109,15 @@ normal_return:
   /*-------------------------------------------------------------*/
   que_thr_stop_for_mysql_no_error(thr, trx);
 
+  if (err == DB_SUCCESS && prebuilt->pq_index_read) {
+    if (prebuilt->pq_heap) mem_heap_free(prebuilt->pq_heap);
+    prebuilt->pq_heap =
+        mem_heap_create(sizeof(btr_pcur_t) + (srv_page_size / 16));
+    prebuilt->pq_tuple = row_rec_to_index_entry_low(
+        rec, index,
+        rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED, &prebuilt->heap),
+        prebuilt->pq_heap);
+  }
   mtr_commit(&mtr);
 
   /* Rollback blocking transactions from hit list for high priority
@@ -6623,4 +6606,34 @@ bool row_search_index_stats(const char *db_name, const char *tbl_name,
   mtr_commit(&mtr);
   mem_heap_free(heap);
   return (false);
+}
+
+/** Searches for rows in the database. This is used in the interface to
+MySQL. This function opens a cursor, and also implements fetch next
+and fetch prev. NOTE that if we do a search with a full key value
+from a unique index (ROW_SEL_EXACT), then we will not store the cursor
+position and fetch next or fetch prev must not be tried to the cursor!
+
+@param[out]	buf		buffer for the fetched row in MySQL format
+@param[in]	mode		search mode PAGE_CUR_L
+@param[in,out]	prebuilt	prebuilt struct for the table handler;
+                                this contains the info to search_tuple,
+                                index; if search tuple contains 0 field then
+                                we position the cursor at start or the end of
+                                index, depending on 'mode'
+@param[in]	match_mode	0 or ROW_SEL_EXACT or ROW_SEL_EXACT_PREFIX
+@param[in]	direction	0 or ROW_SEL_NEXT or ROW_SEL_PREV;
+                                Note: if this is != 0, then prebuilt must has a
+                                pcur with stored position! In opening of a
+                                cursor 'direction' should be 0.
+@return DB_SUCCESS, DB_RECORD_NOT_FOUND, DB_END_OF_INDEX, DB_DEADLOCK,
+DB_LOCK_TABLE_FULL, DB_CORRUPTION, or DB_TOO_BIG_RECORD */
+dberr_t row_search_for_mysql(byte *buf, page_cur_mode_t mode,
+                             row_prebuilt_t *prebuilt, ulint match_mode,
+                             ulint direction) {
+  if (!prebuilt->table->is_intrinsic()) {
+    return (row_search_mvcc(buf, mode, prebuilt, match_mode, direction));
+  } else {
+    return (row_search_no_mvcc(buf, mode, prebuilt, match_mode, direction));
+  }
 }

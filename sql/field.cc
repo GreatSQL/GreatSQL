@@ -1,5 +1,7 @@
 /*
-   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -70,9 +72,9 @@
 #include "sql/mysqld.h"  // log_10
 #include "sql/protocol.h"
 #include "sql/psi_memory_key.h"
-#include "sql/rpl_rli.h"                // Relay_log_info
-#include "sql/rpl_slave.h"              // rpl_master_has_bug
-#include "sql/spatial.h"                // Geometry
+#include "sql/rpl_rli.h"    // Relay_log_info
+#include "sql/rpl_slave.h"  // rpl_master_has_bug
+#include "sql/spatial.h"    // Geometry
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"              // THD
 #include "sql/sql_exception_handler.h"  // handle_std_exception
@@ -2786,7 +2788,9 @@ Field_new_decimal::Field_new_decimal(uint32 len_arg, bool is_nullable_arg,
   bin_size = my_decimal_get_binary_size(precision, dec);
 }
 
-Field *Field_new_decimal::create_from_item(const Item *item) {
+Field *Field_new_decimal::create_from_item(const Item *item, MEM_ROOT *root) {
+  MEM_ROOT *pq_check_root = root ? root : *THR_MALLOC;
+
   uint8 dec = item->decimals;
   uint8 intg = item->decimal_precision() - dec;
   uint32 len = item->max_char_length();
@@ -2822,7 +2826,7 @@ Field *Field_new_decimal::create_from_item(const Item *item) {
       /* Corrected value fits. */
       len = required_length;
   }
-  return new (*THR_MALLOC)
+  return new (pq_check_root)
       Field_new_decimal(len, item->is_nullable(), item->item_name.ptr(), dec,
                         item->unsigned_flag);
 }
@@ -3492,9 +3496,9 @@ int Field_short::cmp(const uchar *a_ptr, const uchar *b_ptr) const {
   }
 
   if (is_unsigned())
-    return ((unsigned short)a < (unsigned short)b)
-               ? -1
-               : ((unsigned short)a > (unsigned short)b) ? 1 : 0;
+    return ((unsigned short)a < (unsigned short)b)   ? -1
+           : ((unsigned short)a > (unsigned short)b) ? 1
+                                                     : 0;
   return (a < b) ? -1 : (a > b) ? 1 : 0;
 }
 
@@ -4015,9 +4019,9 @@ int Field_longlong::cmp(const uchar *a_ptr, const uchar *b_ptr) const {
     b = longlongget(b_ptr);
   }
   if (is_unsigned())
-    return ((ulonglong)a < (ulonglong)b)
-               ? -1
-               : ((ulonglong)a > (ulonglong)b) ? 1 : 0;
+    return ((ulonglong)a < (ulonglong)b)   ? -1
+           : ((ulonglong)a > (ulonglong)b) ? 1
+                                           : 0;
   return (a < b) ? -1 : (a > b) ? 1 : 0;
 }
 
@@ -5890,8 +5894,9 @@ int Field_datetime::cmp(const uchar *a_ptr, const uchar *b_ptr) const {
     a = longlongget(a_ptr);
     b = longlongget(b_ptr);
   }
-  return ((ulonglong)a < (ulonglong)b) ? -1
-                                       : ((ulonglong)a > (ulonglong)b) ? 1 : 0;
+  return ((ulonglong)a < (ulonglong)b)   ? -1
+         : ((ulonglong)a > (ulonglong)b) ? 1
+                                         : 0;
 }
 
 size_t Field_datetime::make_sort_key(uchar *to, size_t length) const {
@@ -10108,6 +10113,22 @@ uint Field::null_offset() const { return null_offset(table->record[0]); }
 void Field::init(TABLE *table_arg) {
   table = table_arg;
   table_name = &table_arg->alias;
+}
+
+/*
+ * store extra info. (a.k.a. Aggr.->count) into Field
+ *
+ * @param   extra    the value of Aggr.->count
+ * @param   len      the length of (Aggr.->count), i.e., sizeof(longlong)
+ */
+type_conversion_status Field::store_extra(const uchar *extra, size_t len) {
+  if (len == 0 || extra == nullptr) {
+    return TYPE_OK;
+  }
+  assert(pack_length() >= len);
+  uchar *extra_ptr = ptr + pack_length() - len;
+  memcpy(extra_ptr, extra, len);
+  return TYPE_OK;
 }
 
 // Byteswaps and/or truncates int16 values; used for both pack() and unpack().

@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 1997, 2021, Oracle and/or its affiliates.
+Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -120,6 +122,12 @@ bool row_sel_store_mysql_rec(byte *mysql_rec, row_prebuilt_t *prebuilt,
                              lob::undo_vers_t *lob_undo,
                              mem_heap_t *&blob_heap);
 
+void pq_row_sel_store_row_id_to_prebuilt(
+    row_prebuilt_t *prebuilt,  /*!< in/out: prebuilt */
+    const rec_t *index_rec,    /*!< in: record */
+    const dict_index_t *index, /*!< in: index of the record */
+    const ulint *offsets);     /*!< in: rec_get_offsets */
+
 /** Converts a key value stored in MySQL format to an Innobase dtuple. The last
  field of the key value may be just a prefix of a fixed length field: hence
  the parameter key_len. But currently we do not allow search keys where the
@@ -163,7 +171,6 @@ position and fetch next or fetch prev must not be tried to the cursor!
                                 cursor 'direction' should be 0.
 @return DB_SUCCESS, DB_RECORD_NOT_FOUND, DB_END_OF_INDEX, DB_DEADLOCK,
 DB_LOCK_TABLE_FULL, DB_CORRUPTION, or DB_TOO_BIG_RECORD */
-UNIV_INLINE
 dberr_t row_search_for_mysql(byte *buf, page_cur_mode_t mode,
                              row_prebuilt_t *prebuilt, ulint match_mode,
                              ulint direction)
@@ -512,6 +519,42 @@ cardinality for the each column.
 bool row_search_index_stats(const char *db_name, const char *tbl_name,
                             const char *index_name, ulint col_offset,
                             ulonglong *cardinality);
+
+/** Helper class to cache clust_rec and old_ver */
+class Row_sel_get_clust_rec_for_mysql {
+  const rec_t *cached_clust_rec;
+  rec_t *cached_old_vers;
+
+ public:
+  /** Constructor */
+  Row_sel_get_clust_rec_for_mysql()
+      : cached_clust_rec(nullptr), cached_old_vers(nullptr) {}
+
+  /** Retrieve the clustered index record corresponding to a record in a
+  non-clustered index. Does the necessary locking.
+  @param[in]     prebuilt    prebuilt struct in the handle
+  @param[in]     sec_index   secondary index where rec resides
+  @param[in]     rec         record in a non-clustered index
+  @param[in]     thr         query thread
+  @param[out]    out_rec     clustered record or an old version of it,
+                             NULL if the old version did not exist in the
+                             read view, i.e., it was a fresh inserted version
+  @param[in,out] offsets     in: offsets returned by
+                                 rec_get_offsets(rec, sec_index);
+                             out: offsets returned by
+                                 rec_get_offsets(out_rec, clust_index)
+  @param[in,out] offset_heap memory heap from which the offsets are allocated
+  @param[out]    vrow        virtual column to fill
+  @param[in]     mtr         mtr used to get access to the non-clustered record;
+                             the same mtr is used to access the clustered index
+  @param[in]     lob_undo    the LOB undo information.
+  @return DB_SUCCESS, DB_SUCCESS_LOCKED_REC, or error code */
+  dberr_t operator()(row_prebuilt_t *prebuilt, dict_index_t *sec_index,
+                     const rec_t *rec, que_thr_t *thr, const rec_t **out_rec,
+                     ulint **offsets, mem_heap_t **offset_heap,
+                     const dtuple_t **vrow, mtr_t *mtr,
+                     lob::undo_vers_t *lob_undo);
+};
 
 #include "row0sel.ic"
 

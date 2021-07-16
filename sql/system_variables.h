@@ -1,4 +1,6 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -470,6 +472,16 @@ struct System_variables {
     @sa Sys_select_disk_sync_delay
   */
   uint select_into_disk_sync_delay;
+
+  bool force_parallel_execute;
+
+  ulong parallel_cost_threshold;
+
+  ulong parallel_default_dop;
+
+  ulong parallel_queue_timeout;
+
+  bool pq_copy_from(System_variables leader);
 };
 
 /**
@@ -557,6 +569,8 @@ struct System_status_var {
 
   /** fragmentation statistics */
   fragmentation_stats_t fragmentation_stats;
+  bool reset;
+  bool pq_merge_status(System_status_var worker);
 };
 
 /*

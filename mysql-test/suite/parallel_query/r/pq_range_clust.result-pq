@@ -1,0 +1,30 @@
+create database pq_test;
+use pq_test;
+create table t1(
+id int primary key auto_increment,
+col1 varchar(100),
+col2 int,
+key idx_col2(col2)
+)engine= innodb;
+show variables like 'force_parallel_execute';
+Variable_name	Value
+force_parallel_execute	ON
+select count(*) from pq_test.t1;
+count(*)
+1000
+select * from pq_test.t1 limit 1;
+id	col1	col2
+1	testtesttesttest	1000
+select * from pq_test.t1 order by id desc limit 1;
+id	col1	col2
+1000	testtesttesttest	1
+select * from pq_test.t1 ignore index(idx_col2) where id < 300;
+select * from pq_test.t1 ignore index(idx_col2) where id <= 300;
+select id from pq_test.t1 ignore index(idx_col2) where id > 200;
+select * from pq_test.t1 ignore index(idx_col2) where id >= 200;
+select * from pq_test.t1 ignore index(idx_col2)  where id > 100 and id < 800;
+select * from pq_test.t1 ignore index(idx_col2) where id >= 100 and id <= 800;
+select * from pq_test.t1 ignore index(idx_col2)  where id < 300 or id > 500;
+select * from pq_test.t1 ignore index(idx_col2)  where (id > 100 and id < 500) or (id > 600 and id < 900);
+drop table pq_test.t1;
+drop database pq_test;

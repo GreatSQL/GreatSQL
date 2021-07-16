@@ -1,7 +1,9 @@
 #ifndef SQL_BASIC_ROW_ITERATORS_H_
 #define SQL_BASIC_ROW_ITERATORS_H_
 
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,6 +35,7 @@
 
 #include <memory>
 
+#include "filesort.h"
 #include "map_helpers.h"
 #include "mem_root_deque.h"
 #include "my_alloc.h"
@@ -40,6 +43,7 @@
 #include "my_inttypes.h"
 #include "sql/mem_root_array.h"
 #include "sql/row_iterator.h"
+#include "sql/sql_executor.h"
 #include "sql/sql_list.h"
 
 class Filesort_info;
@@ -50,6 +54,109 @@ class THD;
 class handler;
 struct IO_CACHE;
 struct TABLE;
+class Gather_operator;
+
+class ORDER;
+class MQ_record_gather;
+class QEP_TAB;
+
+/**
+ * Parallel scan iterator, which is used in parallel leader
+ */
+class ParallelScanIterator final : public TableRowIterator {
+ public:
+  ParallelScanIterator(THD *thd, QEP_TAB *tab, TABLE *table,
+                       ha_rows *examined_rows, JOIN *join,
+                       Gather_operator *gather, bool stab_output = false,
+                       uint ref_length = 0);
+
+  ~ParallelScanIterator() override;
+
+  bool Init() override;
+  int Read() override;
+  int End() override;
+
+ public:
+  void UnlockRow() override {}
+  void SetNullRowFlag(bool) override {}
+  void StartPSIBatchMode() override {}
+  void EndPSIBatchModeIfStarted() override {}
+
+ private:
+  uchar *const m_record;
+  ha_rows *const m_examined_rows;
+  uint m_dop;
+  JOIN *m_join;
+  Gather_operator *m_gather;
+  MQ_record_gather *m_record_gather;
+  ORDER *m_order; /** use for records merge sort */
+  QEP_TAB *m_tab;
+
+  bool m_stable_sort; /** determine whether using stable sort */
+  uint m_ref_length;
+
+ private:
+  /** construct filesort on leader when needing stab_output or merge_sort */
+  bool pq_make_filesort(Filesort **sort);
+  /** init m_record_gather */
+  bool pq_init_record_gather();
+  /** launch worker threads to execute parallel query */
+  bool pq_launch_worker();
+  /** wait all workers finished */
+  void pq_wait_workers_finished();
+  /** outoput parallel query error code */
+  int pq_error_code();
+};
+
+class PQ_worker_manager;
+
+/**
+ * block scan iterator, which is used is in parallel worker.
+ * a whole talbe is cut into many blocks for parallel scan
+ */
+class PQblockScanIterator final : public TableRowIterator {
+ public:
+  PQblockScanIterator(THD *thd, TABLE *table, uchar *record,
+                      ha_rows *examined_rows, Gather_operator *gather,
+                      bool need_rowid = false);
+  ~PQblockScanIterator() override;
+
+  bool Init() override;
+  int Read() override;
+  int End() override;
+
+ private:
+  uchar *const m_record;
+  ha_rows *const m_examined_rows;
+  void *m_pq_ctx;  // parallel query context
+  uint keyno;
+  Gather_operator *m_gather;
+
+  bool m_need_rowid;
+};
+
+/**
+ * pq explain iterator, which is used to store worker explain analyze
+ * information.
+ */
+class PQExplainIterator : public RowIterator {
+ public:
+  PQExplainIterator() : RowIterator(NULL) {}
+  ~PQExplainIterator() {}
+
+  void copy(RowIterator *src_iterator);
+  bool Init() override { return 0; }
+  int Read() override { return 0; }
+  int End() override { return 0; }
+  void UnlockRow() override {}
+  void SetNullRowFlag(bool) override {}
+  std::string TimingString() const override { return time_string; }
+
+ private:
+  std::vector<std::string> str;
+  std::vector<unique_ptr_destroy_only<PQExplainIterator>> iter;
+  std::string time_string;
+};
 
 /**
   Scan a table from beginning to end.

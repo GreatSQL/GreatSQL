@@ -2,6 +2,8 @@
 # -*- cperl -*-
 
 # Copyright (c) 2004, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2021, Huawei Technologies Co., Ltd.
+# Copyright (c) 2021, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -315,6 +317,7 @@ our @DEFAULT_SUITES = qw(
   interactive_utilities
   jp
   stress
+  parallel_query
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;
@@ -322,6 +325,7 @@ our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;
 # End of list of default suites
 
 our $opt_big_test                  = 0;
+our $opt_pq                        = 0;
 our $opt_check_testcases           = 1;
 our $opt_clean_vardir              = $ENV{'MTR_CLEAN_VARDIR'};
 our $opt_ctest                     = env_or_val(MTR_UNIT_TESTS => -1);
@@ -1691,6 +1695,7 @@ sub command_line_setup {
 
     # Control what test suites or cases to run
     'big-test'                           => \$opt_big_test,
+    'pq'                                 => \$opt_pq,
     'combination=s'                      => \@opt_combinations,
     'do-suite=s'                         => \$opt_do_suite,
     'do-test=s'                          => \&collect_option,
@@ -2160,6 +2165,8 @@ sub command_line_setup {
   }
 
   $ENV{'BIG_TEST'} = 1 if ($opt_big_test or $opt_only_big_test);
+  
+  $ENV{'PQ_TEST'} = 1 if ($opt_pq);
 
   # Gcov flag
   if (($opt_gcov or $opt_gprof) and !$source_dist) {
@@ -2257,6 +2264,12 @@ sub command_line_setup {
     push(@opt_extra_mysqld_opt, "--optimizer_trace=enabled=on,one_line=off");
     # Some queries yield big traces:
     push(@opt_extra_mysqld_opt, "--optimizer-trace-max-mem-size=1000000");
+  }
+
+  # Check parallel query
+  if ($opt_pq) {
+    push(@opt_extra_mysqld_opt, "--force_parallel_execute=1");
+    push(@opt_extra_mysqld_opt, "--parallel_cost_threshold=0");
   }
 
   # Check valgrind arguments
@@ -7753,6 +7766,7 @@ Options to control what test suites or cases to run
   force                 Continue to run the suite after failure.
   include-ndb[cluster]  Enable all tests that need cluster.
   only-big-test         Run only big tests and skip the normal(non-big) tests.
+  pq                    run tests using 4 threads parallel query
   print-testcases       Don't run the tests but print details about all the
                         selected tests, in the order they would be run.
   skip-ndb[cluster]     Skip all tests that need cluster. This setting is

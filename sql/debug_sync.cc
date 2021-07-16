@@ -1,4 +1,6 @@
-/* Copyright (c) 2009, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2009, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -932,7 +934,8 @@ static void debug_sync_remove_action(st_debug_sync_control *ds_control,
   uint dsp_idx = static_cast<uint>(action - ds_control->ds_action);
   DBUG_TRACE;
   assert(ds_control);
-  assert(ds_control == current_thd->debug_sync_control);
+  assert(ds_control == current_thd->debug_sync_control ||
+         ds_control == current_thd->pq_leader->debug_sync_control);
   assert(action);
   assert(dsp_idx < ds_control->ds_active);
 

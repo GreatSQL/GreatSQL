@@ -1,0 +1,58 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+CALL mtr.add_suppression("send message to MQ error");
+
+set @saved_debug_pq_worker_stall = @@debug_pq_worker_stall;
+
+create table t1(id int, a varchar(10));
+
+--disable_query_log
+ let $loop=1000;
+ while($loop)
+ {
+  eval insert into t1 values($loop, 'aa');
+  dec $loop;
+ }
+--enable_query_log
+
+set global debug_pq_worker_stall = true;
+
+connect (con1, localhost, root);
+
+--connection con1
+select @@force_parallel_execute;
+let $qid= `SELECT CONNECTION_ID()`;
+
+explain select sum(id) from t1;
+--send select sum(id) from t1;
+
+--connection default
+
+--sleep 1
+show status like "PQ_threads_running";
+
+--replace_regex /[0-9]/#/
+show status like "PQ_memory_used";
+
+--replace_regex /[0-9]+/#/
+--eval KILL query $qid
+
+connection con1;
+--error ER_QUERY_INTERRUPTED
+--reap
+
+--sleep 1
+show status like "PQ_threads_running";
+show status like "PQ_memory_used";
+
+connection default;
+set global debug_pq_worker_stall = @saved_debug_pq_worker_stall;
+
+SET @@SESSION.max_execution_time= 2;
+
+# Following select should timeout
+--error ER_QUERY_TIMEOUT
+SELECT *, SLEEP(0.5) from t1;
+
+drop table t1;

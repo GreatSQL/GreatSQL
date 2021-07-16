@@ -1,7 +1,9 @@
 #ifndef ITEM_CMPFUNC_INCLUDED
 #define ITEM_CMPFUNC_INCLUDED
 
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -370,6 +372,7 @@ class Item_func_true : public Item_func_bool_const {
     str->append("true");
   }
   enum Functype functype() const override { return TRUE_FUNC; }
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /// A predicate that is "always false".
@@ -384,6 +387,7 @@ class Item_func_false : public Item_func_bool_const {
   void print(const THD *, String *str, enum_query_type) const override {
     str->append("false");
   }
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /**
@@ -447,6 +451,7 @@ class Item_func_truth final : public Item_bool_func {
         break;
     }
   }
+  Item *pq_clone(THD *thd, Query_block *select) override;
 
  protected:
   Bool_test truth_test;  ///< The value we're testing for.
@@ -717,6 +722,7 @@ class Item_func_xor final : public Item_bool_func2 {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 class Item_func_not : public Item_bool_func {
@@ -735,6 +741,7 @@ class Item_func_not : public Item_bool_func {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /**
@@ -892,6 +899,7 @@ class Item_func_trig_cond final : public Item_bool_func {
   plan_idx idx() const { return m_idx; }
 
   bool contains_only_equi_join_condition() const override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 class Item_func_not_all : public Item_func_not {
@@ -1046,6 +1054,7 @@ class Item_func_eq : public Item_func_comparison {
   /// we save a list of all of the fields that were considered equal.
   void ensure_multi_equality_fields_are_available(table_map left_side_tables,
                                                   table_map right_side_tables);
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /**
@@ -1078,6 +1087,8 @@ class Item_func_equal final : public Item_func_comparison {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /**
@@ -1098,6 +1109,8 @@ class Item_func_ge final : public Item_func_comparison {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /**
@@ -1118,6 +1131,8 @@ class Item_func_gt final : public Item_func_comparison {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /**
@@ -1138,6 +1153,7 @@ class Item_func_le final : public Item_func_comparison {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /**
@@ -1180,6 +1196,8 @@ class Item_func_lt final : public Item_func_comparison {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /**
@@ -1200,6 +1218,8 @@ class Item_func_ne final : public Item_func_comparison {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /*
@@ -1236,6 +1256,8 @@ class Item_func_opt_neg : public Item_int_func {
   }
   bool eq(const Item *item, bool binary_cmp) const override;
   bool subst_argument_checker(uchar **) override { return true; }
+
+  bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
 };
 
 class Item_func_between final : public Item_func_opt_neg {
@@ -1288,6 +1310,7 @@ class Item_func_between final : public Item_func_opt_neg {
         args[0]->not_null_tables() |
         (args[1]->not_null_tables() & args[2]->not_null_tables());
   }
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 class Item_func_strcmp final : public Item_bool_func2 {
@@ -1308,6 +1331,7 @@ class Item_func_strcmp final : public Item_bool_func2 {
     fix_char_length(2);  // returns "1" or "0" or "-1"
     return false;
   }
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 struct interval_range {
@@ -1334,14 +1358,26 @@ class Item_func_interval final : public Item_int_func {
     allowed_arg_cols = 0;  // Fetch this value from first argument
   }
 
+  Item_func_interval(const POS &pos, Item_row *tmprow)
+      : super(pos, tmprow),
+        row(tmprow),
+        use_decimal_comparison(false),
+        intervals(0) {
+    allowed_arg_cols = 0;
+  }
+
   bool itemize(Parse_context *pc, Item **res) override;
   longlong val_int() override;
   bool resolve_type(THD *) override;
+  enum Functype functype() const override { return INTERVAL_FUNC; }
   const char *func_name() const override { return "interval"; }
   uint decimal_precision() const override { return 2; }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
   void update_used_tables() override;
+
+  Item *pq_clone(THD *thd, Query_block *select) override;
+  bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
 
  private:
   // Runs in CTOR init list, cannot access *this as Item_func_interval
@@ -1389,6 +1425,7 @@ class Item_func_coalesce : public Item_func_numhybrid {
   enum Item_result result_type() const override { return hybrid_type; }
   const char *func_name() const override { return "coalesce"; }
   enum Functype functype() const override { return COALESCE_FUNC; }
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 class Item_func_ifnull final : public Item_func_coalesce {
@@ -1408,6 +1445,7 @@ class Item_func_ifnull final : public Item_func_coalesce {
   const char *func_name() const override { return "ifnull"; }
   Field *tmp_table_field(TABLE *table) override;
   uint decimal_precision() const override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /**
@@ -1422,6 +1460,7 @@ class Item_func_any_value final : public Item_func_coalesce {
   const char *func_name() const override { return "any_value"; }
   bool aggregate_check_group(uchar *arg) override;
   bool aggregate_check_distinct(uchar *arg) override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 class Item_func_if final : public Item_func {
@@ -1464,6 +1503,7 @@ class Item_func_if final : public Item_func {
     not_null_tables_cache =
         (args[1]->not_null_tables() & args[2]->not_null_tables());
   }
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 class Item_func_nullif final : public Item_bool_func2 {
@@ -1502,6 +1542,7 @@ class Item_func_nullif final : public Item_bool_func2 {
     inherit from Item_func instead of Item_bool_func2
   */
   bool is_bool_func() const override { return false; }
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /* Functions to handle the optimized IN */
@@ -1555,6 +1596,10 @@ class in_vector {
   virtual bool compare_elems(uint pos1, uint pos2) const = 0;
 
   virtual bool is_row_result() const { return false; }
+
+  virtual in_vector *pq_clone(THD *thd MY_ATTRIBUTE((unused))) {
+    return nullptr;
+  }
 
   /**
     Fill the vector by evaluating the items passed as arguments.
@@ -1629,6 +1674,7 @@ class in_longlong : public in_vector {
   }
   bool find_item(Item *item) override;
   bool compare_elems(uint pos1, uint pos2) const override;
+  void resize_and_sort_ll() { resize_and_sort(); }
 
  private:
   void set(uint pos, Item *item) override { val_item(item, &base[pos]); }
@@ -1973,6 +2019,8 @@ class Item_func_case final : public Item_func {
     return cmp_collation.collation;
   }
   enum Functype functype() const override { return CASE_FUNC; }
+  Item *pq_clone(THD *thd, Query_block *select) override;
+  bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
 };
 
 /**
@@ -2069,6 +2117,8 @@ class Item_func_in final : public Item_func_opt_neg {
       not_null_tables_cache &= (*arg)->not_null_tables();
     not_null_tables_cache |= args[0]->not_null_tables();
   }
+
+  Item *pq_clone(THD *thd, Query_block *select) override;
 
  private:
   /**
@@ -2194,6 +2244,8 @@ class Item_func_isnull : public Item_bool_func {
     return args[0]->collation.collation;
   }
   bool fix_fields(THD *thd, Item **ref) override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
+  bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
 };
 
 /* Functions used by HAVING for rewriting IN subquery */
@@ -2256,6 +2308,7 @@ class Item_func_isnotnull final : public Item_bool_func {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 class Item_func_like final : public Item_bool_func2 {
@@ -2317,6 +2370,8 @@ class Item_func_like final : public Item_bool_func2 {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+
+  Item *pq_clone(THD *thd, Query_block *select) override;
 
  private:
   /**
@@ -2398,6 +2453,7 @@ class Item_cond : public Item_bool_func {
   /// Treat UNKNOWN result like FALSE because callers see no difference
   bool ignore_unknown() const { return abort_on_null; }
   bool equality_substitution_analyzer(uchar **) override { return true; }
+  bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
 };
 
 #ifdef MYSQL_SERVER
@@ -2494,6 +2550,7 @@ class Item_equal final : public Item_bool_func {
   Item_equal(Item *c, Item_field *f);
   Item_equal(Item_equal *item_equal);
 
+  inline List<Item_field> get_fields() { return fields; }
   inline Item *get_const() { return const_item; }
   void set_const(Item *c) { const_item = c; }
   bool compare_const(THD *thd, Item *c);
@@ -2562,6 +2619,8 @@ class Item_equal final : public Item_bool_func {
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
   Item *m_const_folding[2];  ///< temporary area used for constant folding
+  Item *pq_clone(THD *thd, Query_block *select) override;
+  bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
 
  private:
   void check_covering_prefix_keys();
@@ -2616,6 +2675,8 @@ class Item_cond_and final : public Item_cond {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
+  bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
 
   bool contains_only_equi_join_condition() const override;
 };
@@ -2645,6 +2706,7 @@ class Item_cond_or final : public Item_cond {
                              table_map read_tables,
                              const MY_BITMAP *fields_to_ignore,
                              double rows_in_table) override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /// Builds condition: (a AND b) IS TRUE

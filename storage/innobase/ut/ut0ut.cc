@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2021, Oracle and/or its affiliates.
+Copyright (c) 1994, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -433,6 +435,8 @@ const char *ut_strerr(dberr_t num) {
       return ("End of index");
     case DB_END_OF_BLOCK:
       return ("End of block");
+    case DB_END_OF_RANGE:
+      return ("Reache end of Parallel Query Range");
     case DB_IO_ERROR:
       return ("I/O error");
     case DB_TABLE_IN_FK_CHECK:

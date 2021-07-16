@@ -1,4 +1,6 @@
-/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -51,6 +53,7 @@ class Explain_format_JSON : public Explain_format {
   bool end_context(enum_parsing_context context) override;
   bool flush_entry() override { return false; }
   qep_row *entry() override;
+  bool is_json() const override { return true; }
 };
 
 #endif  // OPT_EXPLAIN_FORMAT_JSON_INCLUDED

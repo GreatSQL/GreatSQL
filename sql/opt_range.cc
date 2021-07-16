@@ -1,4 +1,6 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -149,6 +151,7 @@
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "mysys_err.h"  // EE_CAPACITY_EXCEEDED
+#include "pq_range.h"
 #include "sql/check_stack.h"
 #include "sql/current_thd.h"
 #include "sql/derror.h"         // ER_THD
@@ -920,6 +923,76 @@ void QUICK_SELECT_I::trace_quick_description(Opt_trace_context *trace) {
   range_trace.add_utf8("used_index", range_info.ptr(), range_info.length());
 }
 
+bool QUICK_SELECT_I::pq_copy_from(THD *thd MY_ATTRIBUTE((unused)),
+                                  QUICK_SELECT_I *quick) {
+  records = quick->records;
+  cost_est.reset();
+  cost_est += quick->cost_est;
+  max_used_key_length = quick->max_used_key_length;
+  used_key_parts = quick->used_key_parts;
+  forced_by_hint = quick->forced_by_hint;
+  last_rowid = quick->last_rowid;
+  return false;
+}
+
+uint QUICK_RANGE_SELECT::quick_select_type() { return PQ_RANGE_SELECT; }
+
+QUICK_SELECT_I *QUICK_RANGE_SELECT::pq_clone(THD *thd, TABLE *table) {
+  bool create_err = false;
+  QUICK_SELECT_I *pq_quick =
+      new QUICK_RANGE_SELECT(thd, table, index, false, nullptr, &create_err);
+  if (!pq_quick || create_err || pq_quick->pq_copy_from(thd, this) ||
+      pq_quick->init() || DBUG_EVALUATE_IF("pq_clone_error1", true, false)) {
+    if (pq_quick) {
+      delete pq_quick;
+    }
+    return nullptr;
+  }
+  return pq_quick;
+}
+
+// select *from t1 where a > 1 and a < 5;
+bool QUICK_RANGE_SELECT::pq_copy_from(THD *thd, QUICK_SELECT_I *quick) {
+  QUICK_SELECT_I::pq_copy_from(thd, quick);
+  QUICK_RANGE_SELECT *quick_range_select =
+      dynamic_cast<QUICK_RANGE_SELECT *>(quick);
+  assert(quick_range_select);
+  in_ror_merged_scan = quick_range_select->in_ror_merged_scan;
+  bitmap_copy(&column_bitmap, &quick_range_select->column_bitmap);
+  for (size_t ix = 0; ix < quick_range_select->ranges.size(); ++ix) {
+    QUICK_RANGE *orig = quick_range_select->ranges[ix];
+    QUICK_RANGE *range = new (alloc.get())
+        QUICK_RANGE(orig->min_key, orig->min_length, orig->min_keypart_map,
+                    orig->max_key, orig->max_length, orig->max_keypart_map,
+                    orig->flag, orig->rkey_func_flag);
+    if (!range) {
+      return true;
+    }
+    ranges.push_back(range);
+  }
+
+  free_file = quick_range_select->free_file;
+
+  /*Will init by reset: cur_range,last_range,qr_traversal_ctx，mrr_buf_desc */
+  mrr_flags = quick_range_select->mrr_flags;
+  mrr_buf_size = quick_range_select->mrr_buf_size;
+  uint range_key_size = quick_range_select->used_key_parts;
+
+  key_parts = (KEY_PART *)alloc->Alloc(sizeof(KEY_PART) * range_key_size);
+  if (!key_parts) {
+    return true;
+  }
+  memcpy(key_parts, quick_range_select->key_parts,
+         sizeof(KEY_PART) * range_key_size);
+
+  for (uint i = 0; i < range_key_size; i++) {
+    key_parts[i].field = key_part_info[i].field;
+  }
+
+  dont_free = quick_range_select->dont_free;
+  return false;
+}
+
 QUICK_RANGE_SELECT::QUICK_RANGE_SELECT(THD *thd, TABLE *table, uint key_nr,
                                        bool no_alloc, MEM_ROOT *parent_alloc,
                                        bool *create_error)
@@ -1006,6 +1079,36 @@ QUICK_INDEX_MERGE_SELECT::QUICK_INDEX_MERGE_SELECT(THD *thd_param, TABLE *table)
   head = table;
   init_sql_alloc(key_memory_quick_index_merge_root, &alloc,
                  thd->variables.range_alloc_block_size, 0);
+}
+
+bool QUICK_INDEX_MERGE_SELECT::pq_copy_from(THD *thd, QUICK_SELECT_I *quick) {
+  QUICK_SELECT_I::pq_copy_from(thd, quick);
+  QUICK_INDEX_MERGE_SELECT *quick_index_merge_select =
+      dynamic_cast<QUICK_INDEX_MERGE_SELECT *>(quick);
+  assert(quick_index_merge_select);
+
+  List_iterator_fast<QUICK_RANGE_SELECT> it(
+      quick_index_merge_select->quick_selects);
+  QUICK_RANGE_SELECT *quick_select;
+  while ((quick_select = it++)) {
+    QUICK_SELECT_I *quick_select_new = quick_select->pq_clone(thd, head);
+    if (!quick_select_new) {
+      return true;
+    }
+    quick_selects.push_back((QUICK_RANGE_SELECT *)quick_select_new);
+  }
+
+  return false;
+}
+QUICK_SELECT_I *QUICK_INDEX_MERGE_SELECT::pq_clone(THD *thd, TABLE *tab) {
+  QUICK_SELECT_I *pq_quick = new QUICK_INDEX_MERGE_SELECT(thd, tab);
+  if (!pq_quick || pq_quick->pq_copy_from(thd, this) || pq_quick->init()) {
+    if (pq_quick) {
+      delete pq_quick;
+    }
+    return nullptr;
+  }
+  return pq_quick;
 }
 
 int QUICK_INDEX_MERGE_SELECT::init() {
@@ -1289,6 +1392,44 @@ bool QUICK_ROR_INTERSECT_SELECT::push_quick_back(QUICK_RANGE_SELECT *quick) {
   return quick_selects.push_back(quick);
 }
 
+bool QUICK_ROR_INTERSECT_SELECT::pq_copy_from(THD *thd, QUICK_SELECT_I *quick) {
+  QUICK_SELECT_I::pq_copy_from(thd, quick);
+  QUICK_ROR_INTERSECT_SELECT *quick_ror_intersect_select =
+      dynamic_cast<QUICK_ROR_INTERSECT_SELECT *>(quick);
+  assert(quick_ror_intersect_select);
+  scans_inited = quick_ror_intersect_select->scans_inited;
+  if (quick_ror_intersect_select->cpk_quick) {
+    cpk_quick = dynamic_cast<QUICK_RANGE_SELECT *>(
+        quick_ror_intersect_select->cpk_quick->pq_clone(thd, head));
+    if (!cpk_quick) return true;
+  }
+
+  List_iterator_fast<QUICK_RANGE_SELECT> it(
+      quick_ror_intersect_select->quick_selects);
+  QUICK_RANGE_SELECT *orig_quick_range_select = nullptr;
+  QUICK_RANGE_SELECT *new_quick_range_select = nullptr;
+  while ((orig_quick_range_select = it++)) {
+    new_quick_range_select = dynamic_cast<QUICK_RANGE_SELECT *>(
+        orig_quick_range_select->pq_clone(thd, head));
+    if (!new_quick_range_select) return true;
+    quick_selects.push_back(new_quick_range_select);
+  }
+
+  return false;
+}
+
+QUICK_SELECT_I *QUICK_ROR_INTERSECT_SELECT::pq_clone(THD *thd, TABLE *table) {
+  QUICK_SELECT_I *pq_quick =
+      new QUICK_ROR_INTERSECT_SELECT(thd, table, need_to_fetch_row, NULL);
+  if (!pq_quick || pq_quick->pq_copy_from(thd, this) || pq_quick->init()) {
+    if (pq_quick) {
+      delete pq_quick;
+    }
+    return nullptr;
+  }
+  return pq_quick;
+}
+
 QUICK_ROR_INTERSECT_SELECT::~QUICK_ROR_INTERSECT_SELECT() {
   DBUG_TRACE;
   quick_selects.delete_elements();
@@ -1391,6 +1532,37 @@ int QUICK_ROR_UNION_SELECT::reset() {
   }
 
   return 0;
+}
+
+bool QUICK_ROR_UNION_SELECT::pq_copy_from(THD *thd, QUICK_SELECT_I *quick) {
+  QUICK_SELECT_I::pq_copy_from(thd, quick);
+  QUICK_ROR_UNION_SELECT *quick_ror_union_select =
+      dynamic_cast<QUICK_ROR_UNION_SELECT *>(quick);
+  assert(quick_ror_union_select);
+
+  List_iterator_fast<QUICK_SELECT_I> it(quick_ror_union_select->quick_selects);
+  QUICK_SELECT_I *quick_select;
+  while ((quick_select = it++)) {
+    QUICK_SELECT_I *quick_select_new = quick_select->pq_clone(thd, head);
+    if (!quick_select_new) {
+      return true;
+    }
+    quick_selects.push_back(quick_select_new);
+  }
+
+  return false;
+}
+
+QUICK_SELECT_I *QUICK_ROR_UNION_SELECT::pq_clone(THD *thd, TABLE *table) {
+  QUICK_SELECT_I *pq_quick = new QUICK_ROR_UNION_SELECT(thd, table);
+  if (!pq_quick || pq_quick->pq_copy_from(thd, this) || pq_quick->init() ||
+      DBUG_EVALUATE_IF("pq_clone_error1", true, false)) {
+    if (pq_quick) {
+      delete pq_quick;
+    }
+    return nullptr;
+  }
+  return pq_quick;
 }
 
 bool QUICK_ROR_UNION_SELECT::push_quick_back(QUICK_SELECT_I *quick_sel_range) {
@@ -10313,6 +10485,25 @@ QUICK_SELECT_DESC::QUICK_SELECT_DESC(QUICK_RANGE_SELECT *q,
   rev_it.rewind();
   q->dont_free = true;  // Don't free shared mem
 }
+
+QUICK_SELECT_I *QUICK_SELECT_DESC::pq_clone(THD *thd, TABLE *table) {
+  QUICK_RANGE_SELECT *quick_range_select = dynamic_cast<QUICK_RANGE_SELECT *>(
+      this->QUICK_RANGE_SELECT::pq_clone(thd, table));
+  if (!quick_range_select) {
+    return nullptr;
+  }
+  QUICK_SELECT_I *pq_quick = quick_range_select->make_reverse(m_used_key_parts);
+  delete quick_range_select;
+  if (!pq_quick || pq_quick->init()) {
+    if (pq_quick) {
+      delete pq_quick;
+    }
+    return nullptr;
+  }
+  return pq_quick;
+}
+
+uint QUICK_SELECT_DESC::quick_select_type() { return PQ_RANGE_SELECT; }
 
 int QUICK_SELECT_DESC::get_next() {
   DBUG_TRACE;

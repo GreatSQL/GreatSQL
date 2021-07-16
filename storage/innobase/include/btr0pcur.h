@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2021, Oracle and/or its affiliates.
+Copyright (c) 1996, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -519,7 +521,6 @@ struct btr_pcur_t {
     return (old_fetch_mode);
   }
 
- private:
   /** Moves the persistent cursor backward if it is on the first record
   of the page. Commits mtr. Note that to prevent a possible deadlock, the
   operation first stores the position of the cursor, commits mtr, acquires
@@ -532,7 +533,6 @@ struct btr_pcur_t {
   @param[in,out]	mtr		      Mini-tranaction. */
   void move_backward_from_page(mtr_t *mtr);
 
- public:
   /** a B-tree cursor */
   btr_cur_t m_btr_cur;
 

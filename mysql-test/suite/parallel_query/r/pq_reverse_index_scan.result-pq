@@ -1,0 +1,54 @@
+create database pq_test;
+use pq_test;
+create table t1 (a int, key(a desc));
+insert into t1 values(1),(2),(3),(4),(5),(6),(7);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+pq_test.t1	analyze	status	OK
+explain select a from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	7	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	a	5	NULL	7	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`a` AS `a` from `pq_test`.`t1`
+select a from t1;
+a
+7
+6
+5
+4
+3
+2
+1
+explain select a from t1 order by a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	7	100.00	Backward index scan; Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	a	5	NULL	7	100.00	Backward index scan; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`a` AS `a` from `pq_test`.`t1` order by `pq_test`.`t1`.`a`
+select a from t1 order by a;
+a
+1
+2
+3
+4
+5
+6
+7
+explain select a from t1 order by a desc;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	7	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	a	5	NULL	7	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`a` AS `a` from `pq_test`.`t1` order by `pq_test`.`t1`.`a` desc
+select a from t1 order by a desc;
+a
+7
+6
+5
+4
+3
+2
+1
+drop table pq_test.t1;
+drop database pq_test;

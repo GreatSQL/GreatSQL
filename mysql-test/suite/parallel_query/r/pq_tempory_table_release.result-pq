@@ -1,0 +1,26 @@
+create table t1(a int primary key, b varchar(10), c decimal(5,2));
+insert into t1 values (1, 'The', '3.14');
+insert into t1 values (2, 'quick', '4.25');
+insert into t1 values (3, 'brown', '5.36');
+insert into t1 values (4, 'fox', '6.47');
+insert into t1 values (5, 'jumps', '3.14');
+insert into t1 values (6, 'over', '4.25');
+insert into t1 values (7, 'the', '5.36');
+insert into t1 values (8, 'lazy', '6.47');
+insert into t1 values (9, 'dog', '7.58');
+set session force_parallel_execute=1;
+explain select c,sum(a) from t1 group by(c);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`c` AS `c`,sum(`test`.`t1`.`a`) AS `sum(a)` from `test`.`t1` group by `test`.`t1`.`c`
+select c,sum(a) from t1 group by(c);
+c	sum(a)
+3.14	6
+4.25	8
+5.36	10
+6.47	12
+7.58	9
+drop table t1;
+# restart

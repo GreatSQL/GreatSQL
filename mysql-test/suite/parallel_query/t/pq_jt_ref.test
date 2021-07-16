@@ -1,0 +1,39 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+create database pq_test;
+use pq_test;
+
+--disable_warnings
+DROP TABLE IF EXISTS t2;
+--enable_warnings
+
+CREATE TABLE `t2` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c` varchar(100) DEFAULT NULL,
+  `d` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_abc` (`a`,`b`,`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=16384 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+insert into t2(a, b, c, d) values(6,4,'bcabcabcabca','bcabcabcabca');
+insert into t2(a, b, c, d) values(6,4,'bcabcabcabca','bcabcabcabca');
+insert into t2(a, b, c, d) values(6,4,'bcabcabcabca','bcabcabcabca');
+insert into t2(a, b, c, d) values(6,4,'bcabcabcabca','bcabcabcabca');
+insert into t2(a, b, c, d) values(6,4,'bcabcabcabca','bcabcabcabca');
+
+select * from t2;
+
+explain select * from t2 where a = 6;
+select * from t2 where a = 6;
+
+explain select * from t2 where a = 8;
+select * from t2 where a = 8;
+
+explain select * from t2 where a = 4;
+select * from t2 where a = 4;
+
+drop table pq_test.t2;
+drop database pq_test;

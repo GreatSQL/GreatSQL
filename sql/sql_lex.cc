@@ -1,6 +1,8 @@
 
 /*
-   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2597,6 +2599,9 @@ void Query_expression::print(const THD *thd, String *str,
 void Query_block::print_order(const THD *thd, String *str, ORDER *order,
                               enum_query_type query_type) {
   for (; order; order = order->next) {
+    if (!(*order->item)) {
+      continue;
+    }
     unwrap_rollup_group(*order->item)
         ->print_for_order(thd, str, query_type, order->used_alias);
     if (order->direction == ORDER_DESC) str->append(STRING_WITH_LEN(" desc"));
@@ -4694,6 +4699,59 @@ bool Query_block::walk(Item_processor processor, enum_walk walk, uchar *arg) {
   return false;
 }
 
+bool Query_block::pq_check_table_list() {
+  for (TABLE_LIST *tbl_list = table_list.first; tbl_list != nullptr;
+       tbl_list = tbl_list->next_local) {
+    // skip derived table or view
+    if (tbl_list->is_view_or_derived()) return true;
+
+    // skip explicit table lock
+    if (tbl_list->lock_descriptor().type > TL_READ_DEFAULT ||
+        current_thd->locking_clause)
+      return true;
+
+    TABLE *tb = tbl_list->table;
+    if (tb != nullptr &&
+        (tb->s->tmp_table != NO_TMP_TABLE ||         // template table
+         tb->file->ht->db_type != DB_TYPE_INNODB ||  // Non-InnoDB table
+         tb->part_info ||                            // partition table
+         tb->fulltext_searched))                     // fulltext match search
+      return true;
+  }
+  return false;
+}
+
+/*
+ * determine whether suitable for parallel query
+ *
+ */
+bool Query_block::suite_for_parallel_query(THD *thd) {
+  if (!thd->suite_for_parallel_query() ||
+      first_inner_query_expression() !=
+          nullptr ||  // nesting subquery, including view〝derived
+                      // table〝subquery condition and so on.
+      outer_query_block() != nullptr ||  // nested subquery
+      is_distinct() ||                   // select distinct
+      saved_windows_elements)            // windows function
+  {
+    thd->m_suite_for_pq = false;
+    return false;
+  }
+
+  return true;
+}
+
+void Query_block::fix_prepare_information_for_order(
+    THD *thd, SQL_I_List<ORDER> *list, Group_list_ptrs **list_ptrs) {
+  Group_list_ptrs *p = *list_ptrs;
+  if (!p) {
+    void *mem = thd->stmt_arena->alloc(sizeof(Group_list_ptrs));
+    *list_ptrs = p = new (mem) Group_list_ptrs(thd->stmt_arena->mem_root);
+  }
+  p->reserve(list->elements);
+  for (ORDER *order = list->first; order; order = order->next)
+    p->push_back(order);
+}
 /**
   Finds a (possibly unresolved) table reference in the from clause by name.
 

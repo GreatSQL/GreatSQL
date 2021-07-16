@@ -1,4 +1,6 @@
-/* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -79,11 +81,12 @@ static const char *traditional_extra_tags[ET_total] = {
     "Table function:",                  // ET_TABLE_FUNCTION
     "Index dive skipped due to FORCE",  // ET_SKIP_RECORDS_IN_RANGE
     "Using secondary engine",           // ET_USING_SECONDARY_ENGINE
-    "Rematerialize"                     // ET_REMATERIALIZE
+    "Rematerialize",                    // ET_REMATERIALIZE
+    "Parallel execute"                  // ET_PARALLEL_SCAN
 };
 
-static const char *mod_type_name[] = {"NONE", "INSERT", "UPDATE", "DELETE",
-                                      "REPLACE"};
+static const char *mod_type_name[] = {"NONE",   "INSERT",  "UPDATE",
+                                      "DELETE", "REPLACE", "SIMPLE"};
 
 bool Explain_format_traditional::send_headers(Query_result *result) {
   return ((nil = new Item_null) == nullptr ||
@@ -251,6 +254,7 @@ bool Explain_format_traditional::flush_entry() {
           case ET_USING_JOIN_BUFFER:
           case ET_FIRST_MATCH:
           case ET_REMATERIALIZE:
+          case ET_PARALLEL_EXE:
             brackets = true;  // for backward compatibility
             break;
           default:

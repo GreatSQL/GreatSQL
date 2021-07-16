@@ -1,4 +1,6 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -268,6 +270,15 @@ bool PT_qb_level_hint::contextualize(Parse_context *pc) {
         conflict = true;
       else
         pc->select->add_base_options(SELECT_STRAIGHT_JOIN);
+      break;
+    case PQ_HINT_ENUM:
+      if (args > 0)
+        pc->thd->pq_dop = args;
+      else
+        pc->thd->pq_dop = pc->thd->variables.parallel_default_dop;
+      break;
+    case NO_PQ_HINT_ENUM:
+      pc->thd->no_pq = true;
       break;
     default:
       assert(0);

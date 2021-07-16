@@ -1,6 +1,7 @@
 /*
-   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
-   Copyright (c) 2016, Percona Inc. All Rights Reserved.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -94,6 +95,7 @@
 #include "sql/sql_cmd.h"
 #include "sql/sql_handler.h"  // mysql_ha_cleanup
 #include "sql/sql_lex.h"
+#include "sql/sql_parallel.h"
 #include "sql/sql_parse.h"    // is_update_query
 #include "sql/sql_plugin.h"   // plugin_thdvar_init
 #include "sql/sql_prepare.h"  // Prepared_statement
@@ -377,6 +379,16 @@ THD::THD(bool enable_plugins)
       m_dd_client(new dd::cache::Dictionary_client(this)),
       m_query_string(NULL_CSTR),
       m_db(NULL_CSTR),
+      pq_leader(nullptr),
+      parallel_exec(false),
+      pq_threads_running(0),
+      pq_dop(0),
+      no_pq(false),
+      in_sp_trigger(false),
+      locking_clause(0),
+      pq_error(false),
+      pq_check_fields(0),
+      pq_check_reclen(0),
       rli_fake(nullptr),
       rli_slave(nullptr),
       initial_status_var(nullptr),
@@ -464,6 +476,14 @@ THD::THD(bool enable_plugins)
   init_sql_alloc(key_memory_thd_main_mem_root, &main_mem_root,
                  global_system_variables.query_alloc_block_size,
                  global_system_variables.query_prealloc_size);
+
+  pq_mem_root = NULL, pq_mem_root = new MEM_ROOT();
+  init_sql_alloc(key_memory_pq_mem_root, pq_mem_root,
+                 global_system_variables.query_alloc_block_size,
+                 global_system_variables.query_prealloc_size);
+  pq_mem_root->allocCBFunc = add_pq_memory;
+  pq_mem_root->freeCBFunc = sub_pq_memory;
+
   stmt_arena = this;
   thread_stack = nullptr;
   m_catalog.str = "std";
@@ -478,6 +498,7 @@ THD::THD(bool enable_plugins)
   num_truncated_fields = 0L;
   m_sent_row_count = 0L;
   current_found_rows = 0;
+  pq_current_found_rows = 0;
   previous_found_rows = 0;
   is_operating_gtid_table_implicitly = false;
   is_operating_substatement_implicitly = false;
@@ -1001,7 +1022,9 @@ void THD::cleanup(void) {
 
   /* Protects user_vars. */
   mysql_mutex_lock(&LOCK_thd_data);
-  user_vars.clear();
+  if (!is_worker()) {
+    user_vars.clear();
+  }
   mysql_mutex_unlock(&LOCK_thd_data);
 
   /*
@@ -1111,6 +1134,17 @@ void THD::release_resources() {
   m_release_resources_done = true;
 }
 
+bool THD::suite_for_parallel_query() {
+  if (no_pq || !pq_dop || lex->in_execute_ps ||
+      in_sp_trigger ||                   // store procedure or trigger
+      m_attachable_trx ||                // attachable transaction
+      tx_isolation == ISO_SERIALIZABLE)  // serializable without snapshot read
+  {
+    return false;
+  }
+  return true;
+}
+
 THD::~THD() {
   THD_CHECK_SENTRY(this);
   DBUG_TRACE;
@@ -1162,6 +1196,10 @@ THD::~THD() {
   unregister_slave(this, true, true);
 
   free_root(&main_mem_root, MYF(0));
+  if (pq_mem_root) {
+    free_root(pq_mem_root, MYF(0));
+    delete pq_mem_root;
+  }
 
   if (m_token_array != nullptr) {
     my_free(m_token_array);
@@ -1635,6 +1673,22 @@ void THD::cleanup_after_query() {
   if (rli_slave) rli_slave->cleanup_after_query();
   // Set the default "cute" mode for the execution environment:
   check_for_truncated_fields = CHECK_FIELD_IGNORE;
+
+  if (!in_sp_trigger) {
+    // cleanup for parallel query
+    if (pq_threads_running > 0) {
+      release_pq_running_threads(pq_threads_running);
+      pq_threads_running = 0;
+    }
+    if (pq_mem_root) free_root(pq_mem_root, MYF(0));
+    pq_dop = 0;
+    no_pq = false;
+    locking_clause = 0;
+    pq_error = false;
+
+    if (killed == THD::KILL_PQ_QUERY)
+      killed.store(THD::NOT_KILLED);  // restore killed for next query
+  }
 }
 
 /*
@@ -1703,6 +1757,22 @@ void THD::update_charset() {
                                 variables.character_set_filesystem, &not_used);
 }
 
+/**
+  Record a transient change to a pointer to an Item within another Item.
+*/
+void THD::change_item_tree(Item **place, Item *new_value) {
+  /* TODO: check for OOM condition here */
+  if (!stmt_arena->is_regular()) {
+    DBUG_PRINT("info", ("change_item_tree place %p old_value %p new_value %p",
+                        place, *place, new_value));
+    nocheck_register_item_tree_change(place, new_value);
+  }
+  if (new_value != nullptr) {
+    new_value->origin_item = *place;
+  }
+  *place = new_value;
+}
+
 int THD::send_explain_fields(Query_result *result) {
   mem_root_deque<Item *> field_list(current_thd->mem_root);
   Item *item;
@@ -1759,9 +1829,9 @@ void THD::shutdown_active_vio() {
 const char *get_client_host(const THD &client) noexcept {
   return client.security_context()->host_or_ip().length
              ? client.security_context()->host_or_ip().str
-             : client.security_context()->host().length
-                   ? client.security_context()->host().str
-                   : "";
+         : client.security_context()->host().length
+             ? client.security_context()->host().str
+             : "";
 }
 
 void THD::shutdown_clone_vio() {
@@ -1816,16 +1886,18 @@ void THD::rollback_item_tree_changes() {
 }
 
 void Query_arena::add_item(Item *item) {
+  item->pq_alloc_item = true;
   item->next_free = m_item_list;
   m_item_list = item;
 }
 
-void Query_arena::free_items() {
+void Query_arena::free_items(bool parallel_exec MY_ATTRIBUTE((unused))) {
   Item *next;
   DBUG_TRACE;
   /* This works because items are allocated with (*THR_MALLOC)->Alloc() */
   for (; m_item_list; m_item_list = next) {
     next = m_item_list->next_free;
+    assert(!parallel_exec || (parallel_exec && m_item_list->pq_alloc_item));
     m_item_list->delete_self();
   }
   /* Postcondition: free_list is 0 */
@@ -1976,7 +2048,8 @@ void THD::send_kill_message() const {
       assuming it's come as far as the execution stage, so that the user
       can look at the execution plan and statistics so far.
     */
-    if (!running_explain_analyze) {
+    if ((pq_leader != nullptr && !pq_leader->running_explain_analyze) ||
+        (pq_leader == nullptr && !running_explain_analyze)) {
       my_error(err, MYF(ME_FATALERROR));
     }
   }

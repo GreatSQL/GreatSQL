@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2021, Oracle and/or its affiliates.
+Copyright (c) 1996, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -210,6 +212,7 @@ enum dberr_t {
   DB_END_OF_INDEX,
   DB_END_SAMPLE_READ,
 
+  DB_END_OF_RANGE,  // reach parallel Query range end
   /** Generic error code for "Not found" type of errors */
   DB_NOT_FOUND,
 

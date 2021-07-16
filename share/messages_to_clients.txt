@@ -1,4 +1,6 @@
-# Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2021, Huawei Technologies Co., Ltd.
+# Copyright (c) 2021, GreatDB Software Co., Ltd
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -9724,6 +9726,25 @@ ER_CANT_DROP_CF
 #
 # End of MyRocks specific client messages
 #
+
+
+################################################################################
+# Error numbers starting at 8500: server-to-client messages hwsql
+#
+# Start of hwsql error messages (error log).
+#
+
+start-error-number 8500
+
+ER_PARALLEL_FAIL_INIT
+  eng "Failed to parallel execute. this SQL is not supported."
+
+ER_WARN_BAD_PARALLEL_NUM
+  eng "Incorrect number for degree of parallel"
+
+ER_PARALLEL_EXEC_ERROR
+  eng "Parallel execution error"
+
 
 ################################################################################
 # DO NOT add messages for the error-log to this file;

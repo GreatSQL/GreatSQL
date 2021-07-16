@@ -1,4 +1,6 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -71,6 +73,7 @@
 #include "sql/item_cmpfunc.h"
 #include "sql/item_func.h"
 #include "sql/item_row.h"
+#include "sql/item_strfunc.h"
 #include "sql/item_subselect.h"
 #include "sql/item_sum.h"  // Item_sum
 #include "sql/join_optimizer/access_path.h"
@@ -88,6 +91,7 @@
 #include "sql/opt_trace_context.h"
 #include "sql/parse_tree_node_base.h"
 #include "sql/parser_yystype.h"
+#include "sql/pq_clone.h"
 #include "sql/query_options.h"
 #include "sql/query_result.h"
 #include "sql/sql_base.h"  // init_ftfuncs
@@ -164,15 +168,22 @@ JOIN::JOIN(THD *thd_arg, Query_block *select)
       // Needed in case optimizer short-cuts, set properly in
       // make_tmp_tables_info()
       fields(&select->fields),
-      tmp_table_param(thd_arg->mem_root),
+      origin_tmp_table_param(thd_arg->mem_root),
+      tmp_table_param(&origin_tmp_table_param),
+      saved_tmp_table_param(nullptr),
       lock(thd->lock),
       // @todo Can this be substituted with select->is_implicitly_grouped()?
       implicit_grouping(select->is_implicitly_grouped()),
       select_distinct(select->is_distinct()),
-      keyuse_array(thd->mem_root),
+      origin_keyuse_array(thd_arg->mem_root),
+      keyuse_array(&origin_keyuse_array),
       query_block_fields(&select->fields),
       order(select->order_list.first, ESC_ORDER_BY),
       group_list(select->group_list.first, ESC_GROUP_BY),
+      pq_tab_idx(-1),
+      pq_rebuilt_group(false),
+      pq_stable_sort(false),
+      pq_last_sort_idx(-1),
       m_windows(select->m_windows),
       /*
         Those four members are meaningless before JOIN::optimize(), so force a
@@ -183,7 +194,9 @@ JOIN::JOIN(THD *thd_arg, Query_block *select)
       having_for_explain(reinterpret_cast<Item *>(1)),
       tables_list(reinterpret_cast<TABLE_LIST *>(1)),
       current_ref_item_slice(REF_SLICE_SAVED_BASE),
-      with_json_agg(select->json_agg_func_used()) {
+      last_slice_before_pq(REF_SLICE_SAVED_BASE),
+      with_json_agg(select->json_agg_func_used()),
+      select_count(false) {
   rollup_state = RollupState::NONE;
   if (select->order_list.first) explain_flags.set(ESC_ORDER_BY, ESP_EXISTS);
   if (select->group_list.first) explain_flags.set(ESC_GROUP_BY, ESP_EXISTS);
@@ -192,6 +205,8 @@ JOIN::JOIN(THD *thd_arg, Query_block *select)
   // Calculate the number of groups
   for (ORDER *group = group_list.order; group; group = group->next)
     send_group_parts++;
+
+  tmp_table_param->end_write_records = HA_POS_ERROR;
 }
 
 bool JOIN::alloc_ref_item_slice(THD *thd_arg, int sliceno) {
@@ -204,16 +219,657 @@ bool JOIN::alloc_ref_item_slice(THD *thd_arg, int sliceno) {
   return false;
 }
 
+bool JOIN::alloc_indirection_slices1() {
+  const uint card = REF_SLICE_WIN_1 + m_windows.elements * 2;
+
+  assert(ref_items1 == nullptr);
+
+  ref_items1 =
+      (Ref_item_array *)(*THR_MALLOC)->ArrayAlloc<Ref_item_array>(card);
+  if (ref_items1 == nullptr) return true;
+
+  tmp_all_fields1 =
+      (*THR_MALLOC)->ArrayAlloc<mem_root_deque<Item *>>(card, *THR_MALLOC);
+  if (tmp_all_fields1 == nullptr) return true;
+
+  tmp_fields1 =
+      (*THR_MALLOC)->ArrayAlloc<mem_root_deque<Item *>>(card, *THR_MALLOC);
+  if (tmp_fields1 == nullptr) return true;
+
+  for (uint i = 0; i < card; i++) {
+    ref_items1[i].reset();
+    tmp_all_fields1[i].empty();
+    tmp_fields1[i].empty();
+  }
+  ref_items = ref_items1;
+  tmp_fields = tmp_fields1;
+  tmp_all_fields = tmp_all_fields1;
+
+  return false;
+}
+
 bool JOIN::alloc_indirection_slices() {
+  // const uint card = REF_SLICE_WIN_1 + m_windows.elements * 2;
+
+  // assert(ref_items == nullptr);
+  // ref_items = (*THR_MALLOC)->ArrayAlloc<Ref_item_array>(card);
+  // if (ref_items == nullptr) return true;
+
+  // tmp_fields =
+  //     (*THR_MALLOC)->ArrayAlloc<mem_root_deque<Item *>>(card, *THR_MALLOC);
+  // if (tmp_fields == nullptr) return true;
+  // return false;
   const uint card = REF_SLICE_WIN_1 + m_windows.elements * 2;
 
   assert(ref_items == nullptr);
-  ref_items = (*THR_MALLOC)->ArrayAlloc<Ref_item_array>(card);
-  if (ref_items == nullptr) return true;
+  ref_items0 =
+      (Ref_item_array *)(*THR_MALLOC)->Alloc(sizeof(Ref_item_array) * card);
+  if (ref_items0 == nullptr) return true;
 
-  tmp_fields =
+  tmp_all_fields0 =
       (*THR_MALLOC)->ArrayAlloc<mem_root_deque<Item *>>(card, *THR_MALLOC);
-  if (tmp_fields == nullptr) return true;
+  if (tmp_all_fields0 == nullptr) return true;
+
+  tmp_fields0 =
+      (*THR_MALLOC)->ArrayAlloc<mem_root_deque<Item *>>(card, *THR_MALLOC);
+  if (tmp_fields0 == nullptr) return true;
+
+  for (uint i = 0; i < card; i++) {
+    ref_items0[i].reset();
+    tmp_all_fields0[i].empty();
+    tmp_fields0[i].empty();
+  }
+
+  ref_items = ref_items0;
+  tmp_fields = tmp_fields0;
+  tmp_all_fields = tmp_all_fields0;
+
+  return false;
+}
+
+static const enum_field_types NO_PQ_SUPPORTED_FIELD_TYPES[] = {
+    MYSQL_TYPE_TINY_BLOB, MYSQL_TYPE_MEDIUM_BLOB, MYSQL_TYPE_BLOB,
+    MYSQL_TYPE_LONG_BLOB, MYSQL_TYPE_JSON,        MYSQL_TYPE_GEOMETRY};
+
+static const Item_sum::Sumfunctype NO_PQ_SUPPORTED_AGG_FUNC_TYPES[] = {
+    Item_sum::COUNT_DISTINCT_FUNC,
+    Item_sum::SUM_DISTINCT_FUNC,
+    Item_sum::AVG_DISTINCT_FUNC,
+    Item_sum::GROUP_CONCAT_FUNC,
+    Item_sum::JSON_AGG_FUNC,
+    Item_sum::UDF_SUM_FUNC,
+    Item_sum::STD_FUNC,
+    Item_sum::VARIANCE_FUNC};
+
+static const Item_func::Functype NO_PQ_SUPPORTED_FUNC_TYPES[] = {
+    Item_func::MATCH_FUNC, Item_func::SUSERVAR_FUNC, Item_func::FUNC_SP,
+    Item_func::JSON_FUNC,  Item_func::SUSERVAR_FUNC, Item_func::UDF_FUNC,
+    Item_func::XML_FUNC};
+
+static const char *NO_PQ_SUPPORTED_FUNC_ARGS[] = {
+    "rand",          "json_valid",         "json_length",
+    "json_type",     "json_contains_path", "json_unquote",
+    "st_distance",   "get_lock",           "is_free_lock",
+    "is_used_lock",  "release_lock",       "sleep",
+    "xml_str",       "json_func",
+    "weight_string",  // Data truncation (MySQL BUG)
+    "des_decrypt"     // Data truncation
+};
+
+static const char *NO_PQ_SUPPORTED_FUNC_NO_ARGS[] = {"release_all_locks"};
+
+/*
+ * return true when type is a not_supported_field; return false otherwise.
+ */
+static bool pq_not_support_datatype(enum_field_types type) {
+  for (const enum_field_types &field_type : NO_PQ_SUPPORTED_FIELD_TYPES) {
+    if (type == field_type) return true;
+  }
+  return false;
+}
+
+/**
+ * check PQ supported funcation type
+ */
+static bool pq_not_support_functype(Item_func::Functype type) {
+  for (const Item_func::Functype &func_type : NO_PQ_SUPPORTED_FUNC_TYPES) {
+    if (type == func_type) return true;
+  }
+  return false;
+}
+
+/**
+ * check PQ supported funcation
+ */
+static bool pq_not_support_func(Item_func *func) {
+  if (pq_not_support_functype(func->functype())) return true;
+  for (const char *funcname : NO_PQ_SUPPORTED_FUNC_ARGS) {
+    if (!strcmp(func->func_name(), funcname) && func->arg_count != 0)
+      return true;
+  }
+  for (const char *funcname : NO_PQ_SUPPORTED_FUNC_NO_ARGS) {
+    if (!strcmp(func->func_name(), funcname)) return true;
+  }
+  return false;
+}
+
+/**
+ * check PQ support aggregation funcation
+ */
+static bool pq_not_support_aggr_functype(Item_sum::Sumfunctype type) {
+  for (const Item_sum::Sumfunctype &sum_func_type :
+       NO_PQ_SUPPORTED_AGG_FUNC_TYPES) {
+    if (sum_func_type == type) return true;
+  }
+  return false;
+}
+
+static const Item_ref::Ref_Type not_supported_type[] = {
+    Item_ref::VIEW_REF, Item_ref::OUTER_REF, Item_ref::AGGREGATE_REF};
+
+/*
+ * check PQ supported ref function
+ */
+static bool pq_not_support_ref(Item_ref *ref) {
+  Item_ref::Ref_Type type = ref->ref_type();
+  for (auto &ref_type : not_supported_type) {
+    if (type == ref_type) return true;
+  }
+  return false;
+}
+
+/**
+ * check item is supported by Parallel Query or not
+ *
+ * @retval:
+ *     true : supported
+ *     false : not supported
+ */
+static bool check_pq_support_fieldtype(Item *item) {
+  if (!item || pq_not_support_datatype(item->data_type())) return false;
+
+  if (item->type() == Item::FIELD_ITEM) {
+    Field *field = static_cast<Item_field *>(item)->field;
+    assert(field);
+    // not supported for generated column
+    if (field && (field->is_gcol() || pq_not_support_datatype(field->type())))
+      return false;
+  } else if (item->type() == Item::FUNC_ITEM) {
+    Item_func *func = static_cast<Item_func *>(item);
+    assert(func);
+
+    // check func type
+    if (pq_not_support_func(func)) return false;
+
+    // the case of Item_func_make_set
+    if (!strcmp(func->func_name(), "make_set")) {
+      Item *arg_item = down_cast<Item_func_make_set *>(func)->item;
+      if (arg_item && !check_pq_support_fieldtype(arg_item)) return false;
+    }
+
+    // check func args type
+    for (uint i = 0; i < func->arg_count; i++) {
+      // c1: Item_func::args contain aggr. function, (i.e., Item_sum)
+      // c2: args contain unsupported fields
+      Item *arg_item = func->arguments()[i];
+      if (!arg_item || arg_item->type() == Item::SUM_FUNC_ITEM ||  // c1
+          !check_pq_support_fieldtype(arg_item))                   // c2
+        return false;
+    }
+
+    // the case of Item_equal
+    if (func->functype() == Item_func::MULT_EQUAL_FUNC) {
+      Item_equal *item_equal = down_cast<Item_equal *>(item);
+      assert(item_equal);
+
+      // check const_item
+      Item *const_item = item_equal->get_const();
+      if (const_item && (const_item->type() == Item::SUM_FUNC_ITEM ||  // c1
+                         !check_pq_support_fieldtype(const_item)))     // c2
+        return false;
+
+      // check fields
+      Item *field_item = nullptr;
+      List<Item_field> fields = item_equal->get_fields();
+      List_iterator_fast<Item_field> it(fields);
+      for (size_t i = 0; (field_item = it++); i++) {
+        if (!check_pq_support_fieldtype(field_item)) return false;
+      }
+    }
+
+  } else if (item->type() == Item::COND_ITEM) {
+    Item_cond *cond = static_cast<Item_cond *>(item);
+    assert(cond);
+
+    if (pq_not_support_functype(cond->functype())) return false;
+    Item *arg_item = nullptr;
+    List_iterator_fast<Item> it(*cond->argument_list());
+    for (size_t i = 0; (arg_item = it++); i++) {
+      if (arg_item->type() == Item::SUM_FUNC_ITEM ||  // c1
+          !check_pq_support_fieldtype(arg_item))      // c2
+        return false;
+    }
+  } else if (item->type() == Item::SUM_FUNC_ITEM) {
+    Item_sum *sum = static_cast<Item_sum *>(item);
+    if (!sum || pq_not_support_aggr_functype(sum->sum_func())) return false;
+
+    for (uint i = 0; i < sum->arg_count; i++) {
+      if (!check_pq_support_fieldtype(sum->get_arg(i))) return false;
+    }
+  } else if (item->type() == Item::REF_ITEM) {
+    Item_ref *item_ref = down_cast<Item_ref *>(item);
+    if (!item_ref || pq_not_support_ref(item_ref)) return false;
+
+    if (item_ref->ref[0]->type() == Item::SUM_FUNC_ITEM ||
+        !check_pq_support_fieldtype(item_ref->ref[0]))
+      return false;
+  } else if (item->type() == Item::CACHE_ITEM) {
+    Item_cache *item_cache = dynamic_cast<Item_cache *>(item);
+    if (item_cache == nullptr) return false;
+
+    Item *example_item = item_cache->get_example();
+    if (!example_item || example_item->type() == Item::SUM_FUNC_ITEM ||  // c1
+        !check_pq_support_fieldtype(example_item))                       // c2
+      return false;
+  } else if (item->type() == Item::ROW_ITEM) {
+    // check each item in Item_row
+    Item_row *row_item = down_cast<Item_row *>(item);
+    for (uint i = 0; i < row_item->cols(); i++) {
+      Item *n_item = row_item->element_index(i);
+      if (!n_item || n_item->type() == Item::SUM_FUNC_ITEM ||  // c1
+          !check_pq_support_fieldtype(n_item))                 // c2
+        return false;
+    }
+  }
+
+  return true;
+}
+
+/*
+ * check if order_list contains aggregate function
+ *
+ * *@retval:
+ *    true: contained
+ *    false:
+ */
+static bool check_pq_sort_aggregation(const ORDER_with_src &order_list) {
+  if (!order_list.order) return false;
+
+  ORDER *tmp = nullptr;
+  Item *order_item = nullptr;
+
+  for (tmp = order_list.order; tmp; tmp = tmp->next) {
+    order_item = *(tmp->item);
+    if (!check_pq_support_fieldtype(order_item)) return true;
+  }
+  return false;
+}
+
+/*
+ * generate item's result_field
+ *
+ * @retval:
+ *    false: generate success
+ *    ture: otherwise
+ */
+
+bool pq_create_result_fields(THD *thd, Temp_table_param *param,
+                             mem_root_deque<Item *> &fields,
+                             bool save_sum_fields, ulonglong select_options,
+                             MEM_ROOT *root) {
+  const bool not_all_columns = !(select_options & TMP_TABLE_ALL_COLUMNS);
+  long hidden_field_count = param->hidden_field_count;
+  Field *from_field = nullptr;
+  Field **tmp_from_field = &from_field;
+  Field **default_field = &from_field;
+
+  bool force_copy_fields = false;
+  TABLE_SHARE s;
+  TABLE table;
+  table.s = &s;
+
+  uint copy_func_count = param->func_count;
+  if (param->precomputed_group_by) copy_func_count += param->sum_func_count;
+
+  Func_ptr_array *copy_func = new (root) Func_ptr_array(root);
+  if (!copy_func) return true;
+
+  copy_func->reserve(copy_func_count);
+  for (Item *item : fields) {
+    Field *new_field = NULL;
+    Item::Type type = item->type();
+    const bool is_sum_func =
+        type == Item::SUM_FUNC_ITEM && !item->m_is_window_function;
+
+    // if (type == Item::COPY_STR_ITEM) {
+    //   item = ((Item_copy *)item)->get_item();
+    //   if (item != nullptr) {
+    //     type = item->type();
+    //   }
+    // }
+    if (not_all_columns && item != nullptr) {
+      if (item->has_aggregation() && type != Item::SUM_FUNC_ITEM) {
+        if (item->used_tables() & OUTER_REF_TABLE_BIT)
+          item->update_used_tables();
+        if (type == Item::SUBSELECT_ITEM ||
+            (item->used_tables() & ~OUTER_REF_TABLE_BIT)) {
+          param->using_outer_summary_function = 1;
+          goto update_hidden;
+        }
+      }
+      if (item->m_is_window_function) {
+        if (!param->m_window || param->m_window_frame_buffer) {
+          goto update_hidden;
+        }
+        if (param->m_window != down_cast<Item_sum *>(item)->window()) {
+          goto update_hidden;
+        }
+      } else if (item->has_wf()) {
+        if (param->m_window == nullptr || !param->m_window->is_last())
+          goto update_hidden;
+      }
+      if (item->const_item() && (int)hidden_field_count <= 0)
+        continue;  // We don't have to store this
+    }
+
+    if (is_sum_func && !save_sum_fields) {
+      /* Can't calc group yet */
+    } else {
+      if (param->schema_table) {
+        new_field =
+            item ? create_tmp_field_for_schema(item, &table, root) : nullptr;
+      } else {
+        new_field =
+            item ? create_tmp_field(thd, &table, item, type, copy_func,
+                                    tmp_from_field, default_field, false,  //(1)
+                                    !force_copy_fields && not_all_columns,
+                                    item->marker == Item::MARKER_BIT ||
+                                        param->bit_fields_as_long,  //(2)
+                                    force_copy_fields, false, root)
+                 : nullptr;
+      }
+      if (!new_field) {
+        assert(thd->is_fatal_error());
+        return true;
+      }
+      if (not_all_columns && type == Item::SUM_FUNC_ITEM) {
+        ((Item_sum *)item)->set_result_field(new_field);
+      }
+    }
+
+  update_hidden:
+    if (!--hidden_field_count) {
+      param->hidden_field_count = 0;
+    }
+  }  // end of while ((item=li++)).
+
+  Field *result_field = nullptr;
+
+  for (Item *item : fields) {
+    // c1: const_item will not produce field in the first rewritten table
+    if (item->const_item() || item->basic_const_item()) continue;
+
+    // c2: check Item_copy. In the original execution plan, const_item will be
+    // transformed into Item_copy in the rewritten-table's slice.
+
+    // if (item->type() == Item::COPY_STR_ITEM) {
+    //   Item *orig_item = down_cast<Item_copy *>(item)->get_item();
+    //   assert(orig_item);
+    //   if (orig_item->const_item() || orig_item->basic_const_item()) continue;
+    // }
+    // note that: the above item will not be pushed into worker
+
+    result_field = item->get_result_field();
+    if (result_field) {
+      enum_field_types field_type = result_field->type();
+      // c3: result_field contains unsupported data type
+      if (pq_not_support_datatype(field_type)) {
+        return true;
+      }
+    } else {
+      // c4: item is not FIELD_ITEM and it has no result_field
+      if (item->type() != Item::FIELD_ITEM) return true;
+
+      result_field = down_cast<Item_field *>(item)->result_field;
+      if (result_field && pq_not_support_datatype(result_field->type())) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * check whether the select result fields is suitable for parallel query
+ *
+ * @return:
+ *    true, suitable
+ *    false.
+ */
+bool JOIN::check_pq_select_fields() {
+  DBUG_ENTER("check fields is suitable for parallel query or not");
+  MEM_ROOT *pq_check_root = ::new MEM_ROOT();
+  if (!pq_check_root) DBUG_RETURN(true);
+  init_sql_alloc(key_memory_thd_main_mem_root, pq_check_root,
+                 global_system_variables.query_alloc_block_size,
+                 global_system_variables.query_prealloc_size);
+
+  bool suit_for_parallel = false;
+
+  mem_root_deque<Item *> *tmp_all_fields = fields;
+
+  tmp_table_param->pq_copy(saved_tmp_table_param);
+  tmp_table_param->copy_fields.clear();
+
+  Temp_table_param *tmp_param =
+      new (pq_check_root) Temp_table_param(*tmp_table_param);
+
+  if (tmp_param == nullptr) {
+    // free the memory
+    free_root(pq_check_root, MYF(0));
+    if (pq_check_root) ::delete pq_check_root;
+    DBUG_RETURN(suit_for_parallel);
+  }
+
+  tmp_param->m_window_frame_buffer = true;
+  // List<Item> tmplist(tmp_all_fields, thd->mem_root);
+  mem_root_deque<Item *> tmplist(*tmp_all_fields);
+  // tmp_param->hidden_field_count =
+  //     tmp_all_fields->size() - tmp_field_lists->size();
+  tmp_param->hidden_field_count = CountHiddenFields(*fields);
+
+  // create_tmp_table may change the original item's result_field, hence
+  // we must save it before.
+  std::vector<Field *> saved_result_field(tmplist.size(), nullptr);
+  // List_iterator_fast<Item> it(tmp_all_fields);
+  // Item *tmp_item = nullptr;
+  int i = 0;
+  for (Item *tmp_item : *tmp_all_fields) {
+    if (tmp_item->type() == Item::FIELD_ITEM ||
+        tmp_item->type() == Item::DEFAULT_VALUE_ITEM) {
+      saved_result_field[i] = down_cast<Item_field *>(tmp_item)->result_field;
+    } else {
+      saved_result_field[i] = tmp_item->get_result_field();
+    }
+    i++;
+  }
+  if (pq_create_result_fields(thd, tmp_param, tmplist, true,
+                              query_block->active_options(), pq_check_root)) {
+    suit_for_parallel = false;
+  } else
+    suit_for_parallel = true;
+
+  // restore result_field
+  i = 0;
+  for (Item *tmp_item : *tmp_all_fields) {
+    if (tmp_item->type() == Item::FIELD_ITEM ||
+        tmp_item->type() == Item::DEFAULT_VALUE_ITEM) {
+      down_cast<Item_field *>(tmp_item)->result_field = saved_result_field[i];
+    } else {
+      tmp_item->set_result_field(saved_result_field[i]);
+    }
+    i++;
+  }
+
+  // free the memory
+  free_root(pq_check_root, MYF(0));
+  if (pq_check_root) ::delete pq_check_root;
+  DBUG_RETURN(suit_for_parallel);
+}
+
+/**
+ * choose a table that do parallel query, currently only do parallel scan on
+ * first no-const primary table.
+ *
+ *
+ * @return:
+ *    true, found a parallel scan table
+ *    false, cann't found a parallel scan table
+ */
+bool JOIN::choose_parallel_tables() {
+  if ((best_read < thd->variables.parallel_cost_threshold) ||
+      (!thd->m_suite_for_pq) || thd->in_sp_trigger ||
+      (primary_tables == const_tables /* || primary_tables > 1*/) ||
+      (select_distinct || select_count) ||
+      (query_block_fields->size() > MAX_FIELDS) ||
+      (rollup_state != RollupState::NONE) ||
+      (query_block->pq_check_table_list()) || (zero_result_cause != nullptr))
+    return false;
+
+  QEP_TAB *tab = &qep_tab[const_tables];
+  // only support table/index full/range scan
+  join_type scan_type = tab->type();
+  if (scan_type != JT_ALL && scan_type != JT_INDEX_SCAN &&
+      scan_type != JT_REF &&
+      (scan_type != JT_RANGE || !tab->quick() ||
+       tab->quick()->quick_select_type() != PQ_RANGE_SELECT))
+    return false;
+
+  if (check_pq_sort_aggregation(order)) return false;
+
+  // check whether contains blob, text, json and geometry field
+  for (Item *item : *query_block_fields) {
+    if (!check_pq_support_fieldtype(item)) return false;
+  }
+  Item *n_where_cond = query_block->where_cond();
+  Item *n_having_cond = query_block->having_cond();
+
+  if (n_where_cond && !check_pq_support_fieldtype(n_where_cond)) return false;
+
+  /*
+   * For Having Aggr. function, the having_item will be pushed
+   * into all_fields in prepare phase. Currently, we have not support this
+   * operation.
+   */
+  if (n_having_cond && !check_pq_support_fieldtype(n_having_cond)) return false;
+
+  if (rollup_state != RollupState::NONE) return false;
+
+  tab->do_parallel_scan = true;
+
+  return true;
+}
+
+void count_field_types(Query_block *select_lex, Temp_table_param *param,
+                       List<Item> &fields, bool reset_with_sum_func,
+                       bool save_sum_fields);
+
+bool JOIN::restore_optimized_vars() {
+  // restore the make_tmp_tables_info's parameter through
+  // saved_optimized_variables
+  grouped = saved_optimized_vars.pq_grouped;
+  group_optimized_away = saved_optimized_vars.pq_group_optimized_away;
+  implicit_grouping = saved_optimized_vars.pq_implicit_grouping;
+  need_tmp_before_win = saved_optimized_vars.pq_need_tmp_before_win;
+  simple_group = saved_optimized_vars.pq_simple_group;
+  simple_order = saved_optimized_vars.pq_simple_order;
+  streaming_aggregation = saved_optimized_vars.pq_streaming_aggregation;
+  m_ordered_index_usage = static_cast<ORDERED_INDEX_USAGE>(
+      saved_optimized_vars.pq_m_ordered_index_usage);
+  skip_sort_order = saved_optimized_vars.pq_skip_sort_order;
+
+  // no need for template_join
+  if (need_tmp_pq || need_tmp_pq_leader) {
+    ORDER *optimized_order = NULL;
+    group_list.clean();
+
+    optimized_order = restore_optimized_group_order(
+        query_block->group_list, saved_optimized_vars.optimized_group_flags);
+    if (optimized_order) {
+      group_list = ORDER_with_src(optimized_order, ESC_GROUP_BY);
+    }
+
+    order.clean();
+    optimized_order = restore_optimized_group_order(
+        query_block->order_list, saved_optimized_vars.optimized_order_flags);
+
+    if (optimized_order) {
+      order = ORDER_with_src(optimized_order, ESC_ORDER_BY);
+    }
+
+    if (!group_list.empty()) {
+      uint old_group_parts = tmp_table_param->group_parts;
+      calc_group_buffer(this, group_list.order);
+      send_group_parts = tmp_table_param->group_parts; /* Save org parts */
+      if (send_group_parts != old_group_parts)  // error: leader and worker have
+                                                // different group fields
+        return true;
+    }
+
+    /** Traverse expressions and inject cast nodes to compatible data types (in
+     * general for time related item), if needed */
+    {
+      for (Item *item : *query_block_fields) {
+        item->walk(&Item::cast_incompatible_args, enum_walk::POSTFIX, nullptr);
+      }
+    }
+  }
+  return false;
+}
+
+void JOIN::save_optimized_vars() {
+  // saved optimized variables
+  saved_optimized_vars.pq_grouped = grouped;
+  saved_optimized_vars.pq_group_optimized_away = group_optimized_away;
+  saved_optimized_vars.pq_implicit_grouping = implicit_grouping;
+  saved_optimized_vars.pq_need_tmp_before_win = need_tmp_before_win;
+  saved_optimized_vars.pq_simple_group = simple_group;
+  saved_optimized_vars.pq_simple_order = simple_order;
+  saved_optimized_vars.pq_streaming_aggregation = streaming_aggregation;
+  saved_optimized_vars.pq_skip_sort_order = skip_sort_order;
+  saved_optimized_vars.pq_m_ordered_index_usage = m_ordered_index_usage;
+
+  // record the mapping: JOIN::group_list -> select_lex->group_list
+  record_optimized_group_order(query_block->saved_group_list_ptrs, group_list,
+                               saved_optimized_vars.optimized_group_flags);
+  record_optimized_group_order(query_block->saved_order_list_ptrs, order,
+                               saved_optimized_vars.optimized_order_flags);
+}
+
+bool JOIN::setup_tmp_table_info(JOIN *orig) {
+  if (alloc_indirection_slices()) return true;
+
+  // The base ref items from query block are assigned as JOIN's ref items
+  ref_items[REF_SLICE_ACTIVE] = query_block->base_ref_items;
+
+  // make aggregation temp table info and create temp table for group by/order
+  // by/sort
+  tmp_table_param->pq_copy(orig->saved_tmp_table_param);
+  saved_tmp_table_param = new (thd->mem_root) Temp_table_param();
+  if (!saved_tmp_table_param) {
+    return true;
+  }
+  saved_tmp_table_param->pq_copy(orig->saved_tmp_table_param);
+
+  // aggregation
+  if (restore_optimized_vars()) return true;
+
+  select_distinct = orig->select_distinct;
+
+  if (alloc_func_list()) {
+    return true;
+  }
 
   return false;
 }
@@ -275,9 +931,9 @@ bool JOIN::optimize() {
   trace_optimize.add_select_number(query_block->select_number);
   Opt_trace_array trace_steps(trace, "steps");
 
-  count_field_types(query_block, &tmp_table_param, *fields, false, false);
+  count_field_types(query_block, tmp_table_param, *fields, false, false);
 
-  assert(tmp_table_param.sum_func_count == 0 || !group_list.empty() ||
+  assert(tmp_table_param->sum_func_count == 0 || !group_list.empty() ||
          implicit_grouping);
 
   const bool has_windows = m_windows.elements != 0;
@@ -485,7 +1141,7 @@ bool JOIN::optimize() {
     best_rowcount = 1;
     error = 0;
     if (make_tmp_tables_info()) return true;
-    count_field_types(query_block, &tmp_table_param, *fields, false, false);
+    count_field_types(query_block, tmp_table_param, *fields, false, false);
     // Make plan visible for EXPLAIN
     set_plan_state(NO_TABLES);
     create_access_paths();
@@ -512,7 +1168,7 @@ bool JOIN::optimize() {
       substitute_gc(thd, query_block, where_cond, group_list.order,
                     order.order)) {
     // We added hidden fields to the all_fields list, count them.
-    count_field_types(query_block, &tmp_table_param, query_block->fields, false,
+    count_field_types(query_block, tmp_table_param, query_block->fields, false,
                       false);
   }
   // Ensure there are no errors prior making query plan
@@ -715,10 +1371,10 @@ bool JOIN::optimize() {
     // JOIN::optimize_rollup() may set allow_group_via_temp_table = false,
     // and we must not undo that.
     const bool save_allow_group_via_temp_table =
-        tmp_table_param.allow_group_via_temp_table;
+        tmp_table_param->allow_group_via_temp_table;
 
-    count_field_types(query_block, &tmp_table_param, *fields, false, false);
-    tmp_table_param.allow_group_via_temp_table =
+    count_field_types(query_block, tmp_table_param, *fields, false, false);
+    tmp_table_param->allow_group_via_temp_table =
         save_allow_group_via_temp_table;
   }
 
@@ -868,6 +1524,17 @@ bool JOIN::optimize() {
     DBUG_PRINT("error", ("Error: Query_result::optimize() failed"));
     return true;  // error == -1
   }
+  if (choose_parallel_tables()) {
+    // save temp table param for later PQ scan
+    saved_tmp_table_param = new (thd->pq_mem_root) Temp_table_param();
+    if (!saved_tmp_table_param) return true;
+
+    saved_tmp_table_param->pq_copy(tmp_table_param);
+
+    // saved optimized variables to saved_optimized_vars.
+    save_optimized_vars();
+    saved_optimized_vars.pq_no_jbuf_after = no_jbuf_after;
+  }
 
   if (make_join_readinfo(this, no_jbuf_after))
     return true; /* purecov: inspected */
@@ -892,7 +1559,7 @@ bool JOIN::optimize() {
     sort_cost = 0.0;
   }
 
-  count_field_types(query_block, &tmp_table_param, *fields, false, false);
+  count_field_types(query_block, tmp_table_param, *fields, false, false);
 
   create_access_paths();
 
@@ -989,6 +1656,26 @@ bool JOIN::push_to_engines() {
       }
     }
   }
+  return false;
+}
+
+bool JOIN::pq_copy_from(JOIN *orig) {
+  query_block->join = this;
+  where_cond = query_block->where_cond();
+  tables_list = query_block->leaf_tables;
+  having_for_explain = orig->having_for_explain;
+  tables = orig->tables;
+  explain_flags = orig->explain_flags;
+  set_plan_state(JOIN::PLAN_READY);
+  pq_tab_idx = orig->pq_tab_idx;
+  calc_found_rows = orig->calc_found_rows;
+  m_select_limit = orig->m_select_limit;
+  query_expression()->select_limit_cnt =
+      orig->query_expression()->select_limit_cnt;
+  query_expression()->offset_limit_cnt = 0;
+  pq_stable_sort = orig->pq_stable_sort;
+  saved_optimized_vars = orig->saved_optimized_vars;
+
   return false;
 }
 
@@ -1145,10 +1832,48 @@ bool JOIN::alloc_qep(uint n) {
 
   ASSERT_BEST_REF_IN_JOIN_ORDER(this);
 
-  qep_tab = new (thd->mem_root)
-      QEP_TAB[n + 1];        // The last one holds only the final op_type.
-  if (!qep_tab) return true; /* purecov: inspected */
-  for (uint i = 0; i < n; ++i) qep_tab[i].init(best_ref[i]);
+  qep_tab0 = new (thd->mem_root)
+      QEP_TAB[n + 1];         // The last one holds only the final op_type.
+  if (!qep_tab0) return true; /* purecov: inspected */
+  for (uint i = 0; i < n; ++i) {
+    qep_tab0[i].init(best_ref[i]);
+    qep_tab0[i].pos = i;
+  }
+  qep_tab = qep_tab0;
+  return false;
+}
+
+bool JOIN::alloc_qep1(uint n) {
+  static_assert(MAX_TABLES <= INT_MAX8, "plan_idx needs to be wide enough.");
+  assert(tables == n);
+
+  qep_tab1 = new (thd->pq_mem_root) QEP_TAB[n + 1];
+  if (!qep_tab1) return true; /* purecov: inspected */
+
+  for (uint i = 0; i < n; i++) qep_tab1[i].pos = i;
+
+  for (uint i = 0; i < n; i++) {
+    qep_tab1[i].set_qs(qep_tab0[i].get_qs());
+    qep_tab1[i].set_join(this);
+    qep_tab1[i].op_type = qep_tab0[i].op_type;
+    qep_tab1[i].table_ref = qep_tab0[i].table_ref;
+    qep_tab1[i].using_dynamic_range = qep_tab0[i].using_dynamic_range;
+    qep_tab0[i].set_old_type(qep_tab0[i].type());
+    qep_tab0[i].set_old_ref(&qep_tab0[i].ref());
+    qep_tab0[i].set_old_quick_optim();
+  }
+
+  for (uint i = 0; i < primary_tables; i++) {
+    qep_tab1[i].pq_copy(thd, &qep_tab0[i]);
+    TABLE *tb = qep_tab0[i].table();
+    qep_tab1[i].set_table(tb);
+
+    if (qep_tab0[i].quick()) {
+      qep_tab1[i].set_quick(qep_tab0[i].quick());
+    }
+  }
+  qep_tab = qep_tab1;
+
   return false;
 }
 
@@ -1292,7 +2017,7 @@ bool JOIN::optimize_distinct_group_order() {
   const bool windowing = m_windows.elements > 0;
   const bool may_trace = select_distinct || !group_list.empty() ||
                          !order.empty() || windowing ||
-                         tmp_table_param.sum_func_count;
+                         tmp_table_param->sum_func_count;
   Opt_trace_context *const trace = &thd->opt_trace;
   Opt_trace_disable_I_S trace_disabled(trace, !may_trace);
   Opt_trace_object wrapper(trace);
@@ -1336,7 +2061,7 @@ bool JOIN::optimize_distinct_group_order() {
   JOIN_TAB *const tab = best_ref[const_tables];
 
   if (plan_is_single_table() && (!group_list.empty() || select_distinct) &&
-      !tmp_table_param.sum_func_count &&
+      !tmp_table_param->sum_func_count &&
       (!tab->quick() ||
        tab->quick()->get_type() != QUICK_SELECT_I::QS_TYPE_GROUP_MIN_MAX)) {
     if (!group_list.empty() && rollup_state == RollupState::NONE &&
@@ -1356,7 +2081,7 @@ bool JOIN::optimize_distinct_group_order() {
           .add("removed_distinct", true);
     }
   }
-  if (!(!group_list.empty() || tmp_table_param.sum_func_count || windowing) &&
+  if (!(!group_list.empty() || tmp_table_param->sum_func_count || windowing) &&
       select_distinct && plan_is_single_table() &&
       rollup_state == RollupState::NONE) {
     int order_idx = -1, group_idx = -1;
@@ -1382,7 +2107,7 @@ bool JOIN::optimize_distinct_group_order() {
           tab, order, m_select_limit,
           true,  // no_changes
           &tab->table()->keys_in_use_for_order_by, &order_idx);
-      count_field_types(query_block, &tmp_table_param, *fields, false, false);
+      count_field_types(query_block, tmp_table_param, *fields, false, false);
     }
     ORDER *o;
     bool all_order_fields_used;
@@ -1397,7 +2122,7 @@ bool JOIN::optimize_distinct_group_order() {
                                   true,  // no_changes
                                   &tab->table()->keys_in_use_for_group_by,
                                   &group_idx);
-      count_field_types(query_block, &tmp_table_param, *fields, false, false);
+      count_field_types(query_block, tmp_table_param, *fields, false, false);
       // ORDER BY and GROUP BY are using different indexes, can't skip sorting
       if (group_idx >= 0 && order_idx >= 0 && group_idx != order_idx)
         skip_sort_order = false;
@@ -1420,7 +2145,7 @@ bool JOIN::optimize_distinct_group_order() {
             Force MySQL to read the table in sorted order to get result in
             ORDER BY order.
           */
-          tmp_table_param.allow_group_via_temp_table = false;
+          tmp_table_param->allow_group_via_temp_table = false;
         }
         grouped = true;  // For end_write_group
         trace_opt.add("changed_distinct_to_group_by", true);
@@ -1452,7 +2177,7 @@ bool JOIN::optimize_distinct_group_order() {
   }
 
   calc_group_buffer(this, group_list.order);
-  send_group_parts = tmp_table_param.group_parts; /* Save org parts */
+  send_group_parts = tmp_table_param->group_parts; /* Save org parts */
 
   /*
      If ORDER BY is a prefix of GROUP BY and if windowing or ROLLUP
@@ -1462,7 +2187,7 @@ bool JOIN::optimize_distinct_group_order() {
   */
   if ((test_if_subpart(group_list.order, order.order) && !m_windows_sort &&
        query_block->olap != ROLLUP_TYPE) ||
-      (group_list.empty() && tmp_table_param.sum_func_count)) {
+      (group_list.empty() && tmp_table_param->sum_func_count)) {
     if (!order.empty()) {
       order.clean();
       trace_opt.add("removed_order_by", true);
@@ -1520,7 +2245,7 @@ void JOIN::test_skip_sort() {
         TODO: Explain the allow_group_via_temp_table part of the test below.
        */
       if ((m_ordered_index_usage != ORDERED_INDEX_GROUP_BY) &&
-          (tmp_table_param.allow_group_via_temp_table ||
+          (tmp_table_param->allow_group_via_temp_table ||
            (tab->emb_sj_nest &&
             tab->position()->sj_strategy == SJ_OPT_LOOSE_SCAN))) {
         need_tmp_before_win = true;
@@ -2472,7 +3197,7 @@ check_reverse_order:
         tab->set_type(calc_join_type(tab->quick()->get_type()));
         tab->use_quick = QS_RANGE;
         if (tab->quick()->is_loose_index_scan())
-          join->tmp_table_param.precomputed_group_by = true;
+          join->tmp_table_param->precomputed_group_by = true;
         tab->position()->filter_effect = COND_FILTER_STALE;
       }
     }  // best_key >= 0
@@ -2870,7 +3595,7 @@ bool JOIN::get_best_combination() {
       (!group_list.empty() || (implicit_grouping && m_windows.elements) > 0
            ? 1
            : 0) +
-      (select_distinct ? (tmp_table_param.outer_sum_func_count ? 2 : 1) : 0) +
+      (select_distinct ? (tmp_table_param->outer_sum_func_count ? 2 : 1) : 0) +
       (order.empty() ? 0 : 1) +
       (query_block->active_options() &
                (SELECT_BIG_RESULT | OPTION_BUFFER_RESULT)
@@ -5045,7 +5770,7 @@ bool JOIN::make_join_plan() {
 
   // Build the key access information, which is the basis for ref access.
   if (where_cond || query_block->outer_join) {
-    if (update_ref_and_keys(thd, &keyuse_array, join_tab, tables, where_cond,
+    if (update_ref_and_keys(thd, keyuse_array, join_tab, tables, where_cond,
                             ~query_block->outer_join, query_block, &sargables))
       return true;
   }
@@ -7877,7 +8602,7 @@ static void add_loose_index_scan_and_skip_scan_keys(JOIN *join,
                  (uchar *)&indexed_fields);
     }
     cause = "distinct";
-  } else if (join->tmp_table_param.sum_func_count &&
+  } else if (join->tmp_table_param->sum_func_count &&
              is_indexed_agg_distinct(join, &indexed_fields)) {
     /*
       SELECT list with AGGFN(distinct col). The query qualifies for
@@ -10383,8 +11108,8 @@ static TABLE *get_sort_by_table(ORDER *a, ORDER *b, TABLE_LIST *tables) {
 */
 
 void JOIN::optimize_keyuse() {
-  for (size_t ix = 0; ix < keyuse_array.size(); ++ix) {
-    Key_use *keyuse = &keyuse_array.at(ix);
+  for (size_t ix = 0; ix < keyuse_array->size(); ++ix) {
+    Key_use *keyuse = &keyuse_array->at(ix);
     table_map map;
     /*
       If we find a ref, assume this table matches a proportional
@@ -10913,9 +11638,9 @@ double calculate_subquery_executions(const Item_subselect *subquery,
 */
 
 bool JOIN::optimize_rollup() {
-  tmp_table_param.allow_group_via_temp_table = false;
+  tmp_table_param->allow_group_via_temp_table = false;
   rollup_state = RollupState::INITED;
-  tmp_table_param.group_parts = send_group_parts;
+  tmp_table_param->group_parts = send_group_parts;
   return false;
 }
 

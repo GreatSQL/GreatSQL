@@ -1,4 +1,6 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1048,11 +1050,10 @@ bool Arg_comparator::get_date_from_const(Item *date_arg, Item *str_arg,
       value = get_date_from_str(thd, str_val, t_type, date_arg->item_name.ptr(),
                                 &error);
       if (error) {
-        const char *typestr = (date_arg_type == MYSQL_TYPE_DATE)
-                                  ? "DATE"
-                                  : (date_arg_type == MYSQL_TYPE_DATETIME)
-                                        ? "DATETIME"
-                                        : "TIMESTAMP";
+        const char *typestr = (date_arg_type == MYSQL_TYPE_DATE) ? "DATE"
+                              : (date_arg_type == MYSQL_TYPE_DATETIME)
+                                  ? "DATETIME"
+                                  : "TIMESTAMP";
 
         ErrConvString err(str_val->ptr(), str_val->length(),
                           thd->variables.character_set_client);
@@ -3103,10 +3104,9 @@ static inline longlong compare_between_int_result(
     bool negated, Item **args, bool *null_value) {
   {
     LLorULL a, b, value;
-    value = compare_as_temporal_times
-                ? args[0]->val_time_temporal()
-                : compare_as_temporal_dates ? args[0]->val_date_temporal()
-                                            : args[0]->val_int();
+    value = compare_as_temporal_times   ? args[0]->val_time_temporal()
+            : compare_as_temporal_dates ? args[0]->val_date_temporal()
+                                        : args[0]->val_int();
     if ((*null_value = args[0]->null_value)) return 0; /* purecov: inspected */
     if (compare_as_temporal_times) {
       a = args[1]->val_time_temporal();
@@ -6884,6 +6884,7 @@ bool Item_equal::fix_fields(THD *thd, Item **) {
   not_null_tables_cache = used_tables_cache = 0;
   bool nullable = false;
   while ((item = li++)) {
+    if (!item->fixed && item->fix_fields(thd, &item)) return true;
     used_tables_cache |= item->used_tables();
     not_null_tables_cache |= item->not_null_tables();
     nullable |= item->is_nullable();

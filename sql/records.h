@@ -1,6 +1,8 @@
 #ifndef SQL_RECORDS_H
 #define SQL_RECORDS_H
-/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -40,7 +42,8 @@ struct AccessPath;
 struct TABLE;
 
 AccessPath *create_table_access_path(THD *thd, TABLE *table, QEP_TAB *qep_tab,
-                                     bool count_examined_rows);
+                                     bool count_examined_rows,
+                                     bool *pq_replace_path = nullptr);
 
 /**
   Creates an iterator for the given table, then calls Init() on the resulting

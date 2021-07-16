@@ -1,4 +1,6 @@
-# Copyright (c) 2006, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2021, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2021, Huawei Technologies Co., Ltd.
+# Copyright (c) 2021, GreatDB Software Co., Ltd
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -463,6 +465,7 @@ SET(SQL_SHARED_SOURCES
   protocol_classic.cc
   psi_memory_key.cc
   query_result.cc
+  msg_queue.cc
   records.cc
   regexp/errors.cc
   regexp/regexp_engine.cc
@@ -531,6 +534,9 @@ SET(SQL_SHARED_SOURCES
   sql_locale.cc
   sql_manager.cc
   sql_optimizer.cc
+  sql_parallel.cc
+  pq_clone.cc
+  pq_clone_item.cc
   sql_parse.cc
   sql_partition.cc
   sql_partition_admin.cc
@@ -594,6 +600,9 @@ SET(SQL_SHARED_SOURCES
   uniques.cc
   xa.cc
   daemon_proxy_keyring/daemon_proxy_keyring.cc
+  exchange.cc
+  exchange_sort.cc
+  msg_queue.cc
 )
 
 # BISON_TARGET(<Name> <YaccInput> <CodeOutput>

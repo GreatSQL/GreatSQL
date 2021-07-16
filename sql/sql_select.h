@@ -1,7 +1,9 @@
 #ifndef SQL_SELECT_INCLUDED
 #define SQL_SELECT_INCLUDED
 
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -204,6 +206,18 @@ class Key_use {
         bound_keyparts(0),
         fanout(0.0),
         read_cost(0.0) {}
+
+  Key_use *pq_clone(THD *thd) {
+    Key_use *new_key_use = new (thd->pq_mem_root) Key_use(
+        nullptr, nullptr, used_tables, key, keypart, optimize, keypart_map,
+        ref_table_rows, null_rejecting, cond_guard, sj_pred_no);
+    if (new_key_use != nullptr) {
+      new_key_use->bound_keyparts = bound_keyparts;
+      new_key_use->fanout = fanout;
+      new_key_use->read_cost = read_cost;
+    }
+    return new_key_use;
+  }
 
   TABLE_LIST *table_ref;  ///< table owning the index
 
@@ -566,6 +580,8 @@ struct POSITION {
     }
     prefix_rowcount *= filter_effect;
   }
+
+  bool pq_copy(THD *thd, POSITION *orig);
 };
 
 /**
@@ -989,5 +1005,9 @@ SJ_TMP_TABLE *create_sj_tmp_table(THD *thd, JOIN *join,
   @return key flags.
  */
 uint actual_key_flags(const KEY *key_info);
+
+store_key *get_store_key(THD *thd, Item *val, table_map used_tables,
+                         table_map const_tables, const KEY_PART_INFO *key_part,
+                         uchar *key_buff, uint maybe_null);
 
 #endif /* SQL_SELECT_INCLUDED */

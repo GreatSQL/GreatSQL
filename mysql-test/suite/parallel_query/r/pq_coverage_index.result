@@ -1,0 +1,31 @@
+create database pq_test;
+use pq_test;
+SET GLOBAL transaction_isolation='REPEATABLE-READ';
+SET GLOBAL innodb_file_per_table=on;
+CREATE TABLE bug56680(
+a INT AUTO_INCREMENT PRIMARY KEY,
+b CHAR(1),
+c INT,
+INDEX(b))
+ENGINE=InnoDB STATS_PERSISTENT=0;
+INSERT INTO bug56680 VALUES(0,'x',1);
+BEGIN;
+SELECT b FROM bug56680;
+b
+x
+use pq_test;
+BEGIN;
+UPDATE bug56680 SET b='X';
+SELECT b FROM bug56680;
+b
+x
+SELECT * FROM bug56680;
+a	b	c
+1	x	1
+ROLLBACK;
+SELECT b FROM bug56680;
+b
+x
+COMMIT;
+drop table pq_test.bug56680;
+drop database pq_test;

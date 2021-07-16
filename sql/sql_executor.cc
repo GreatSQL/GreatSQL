@@ -1,4 +1,6 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -53,6 +55,7 @@
 #include "m_ctype.h"
 #include "mem_root_allocator.h"
 #include "mem_root_deque.h"
+#include "msg_queue.h"
 #include "my_alloc.h"
 #include "my_base.h"
 #include "my_bit.h"  // Overlaps
@@ -141,7 +144,7 @@ static bool alloc_group_fields(JOIN *join, ORDER *group);
 static inline pair<uchar *, key_part_map> FindKeyBufferAndMap(
     const TABLE_REF *ref);
 
-/// Maximum amount of space (in bytes) to allocate for a Record_buffer.
+//  Maximum amount of space (in bytes) to allocate for a Record_buffer.
 static constexpr size_t MAX_RECORD_BUFFER_SIZE = 128 * 1024;  // 128KB
 
 string RefToString(const TABLE_REF &ref, const KEY *key, bool include_nulls) {
@@ -193,7 +196,8 @@ string RefToString(const TABLE_REF &ref, const KEY *key, bool include_nulls) {
 
 bool JOIN::create_intermediate_table(
     QEP_TAB *const tab, const mem_root_deque<Item *> &tmp_table_fields,
-    ORDER_with_src &tmp_table_group, bool save_sum_fields) {
+    ORDER_with_src &tmp_table_group, bool save_sum_fields,
+    bool force_disk_table) {
   DBUG_TRACE;
   THD_STAGE_INFO(thd, stage_creating_tmp_table);
   const bool windowing = m_windows.elements > 0;
@@ -208,7 +212,11 @@ bool JOIN::create_intermediate_table(
           ? m_select_limit
           : HA_POS_ERROR;
 
-  tab->tmp_table_param = new (thd->mem_root) Temp_table_param(tmp_table_param);
+  tab->tmp_table_param = new (thd->mem_root) Temp_table_param(*tmp_table_param);
+  if (tab->tmp_table_param == nullptr) {
+    return true;
+  }
+
   tab->tmp_table_param->skip_create_table = true;
 
   bool distinct_arg =
@@ -219,12 +227,12 @@ bool JOIN::create_intermediate_table(
       (!windowing || (tab->tmp_table_param->m_window &&
                       tab->tmp_table_param->m_window->is_last()));
 
-  TABLE *table =
-      create_tmp_table(thd, tab->tmp_table_param, tmp_table_fields,
-                       tmp_table_group.order, distinct_arg, save_sum_fields,
-                       query_block->active_options(), tmp_rows_limit, "");
+  TABLE *table = create_tmp_table(
+      thd, tab->tmp_table_param, tmp_table_fields, tmp_table_group.order,
+      distinct_arg, save_sum_fields, query_block->active_options(),
+      tmp_rows_limit, "", force_disk_table);
   if (!table) return true;
-  tmp_table_param.using_outer_summary_function =
+  tmp_table_param->using_outer_summary_function =
       tab->tmp_table_param->using_outer_summary_function;
 
   assert(tab->idx() > 0);
@@ -258,12 +266,14 @@ bool JOIN::create_intermediate_table(
   /* if group or order on first table, sort first */
   if (!group_list.empty() && simple_group) {
     DBUG_PRINT("info", ("Sorting for group"));
-
-    if (m_ordered_index_usage != ORDERED_INDEX_GROUP_BY &&
-        add_sorting_to_table(const_tables, &group_list,
-                             /*force_stable_sort=*/false,
-                             /*sort_before_group=*/true))
-      goto err;
+    if (m_ordered_index_usage != ORDERED_INDEX_GROUP_BY) {
+      if (add_sorting_to_table(const_tables, &group_list,
+                               /*force_stable_sort=*/false,
+                               /*sort_before_group=*/true))
+        goto err;
+      pq_last_sort_idx = const_tables;
+      pq_rebuilt_group = true;
+    }
 
     if (alloc_group_fields(this, group_list.order)) goto err;
     if (make_sum_func_list(*fields, true)) goto err;
@@ -289,11 +299,13 @@ bool JOIN::create_intermediate_table(
         simple_order && rollup_state == RollupState::NONE && !m_windows_sort) {
       DBUG_PRINT("info", ("Sorting for order"));
 
-      if (m_ordered_index_usage != ORDERED_INDEX_ORDER_BY &&
-          add_sorting_to_table(const_tables, &order,
-                               /*force_stable_sort=*/false,
-                               /*sort_before_group=*/false))
-        goto err;
+      if (m_ordered_index_usage != ORDERED_INDEX_ORDER_BY) {
+        if (add_sorting_to_table(const_tables, &order,
+                                 /*force_stable_sort=*/false,
+                                 /*sort_before_group=*/false))
+          goto err;
+        pq_last_sort_idx = const_tables;
+      }
       order.clean();
     }
   }
@@ -641,7 +653,7 @@ QEP_TAB::enum_op_type JOIN::get_end_select_func() {
      more aggregate functions). Use end_send if the query should not
      be grouped.
    */
-  if (streaming_aggregation && !tmp_table_param.precomputed_group_by) {
+  if (streaming_aggregation && !tmp_table_param->precomputed_group_by) {
     DBUG_PRINT("info", ("Using end_send_group"));
     return QEP_TAB::OT_AGGREGATE;
   }
@@ -1473,12 +1485,12 @@ AccessPath *GetAccessPathForDerivedTable(
   if (query_expression->is_simple()) {
     subjoin = query_expression->first_query_block()->join;
     select_number = query_expression->first_query_block()->select_number;
-    tmp_table_param = &subjoin->tmp_table_param;
+    tmp_table_param = subjoin->tmp_table_param;
   } else if (query_expression->fake_query_block != nullptr) {
     // NOTE: subjoin here is never used, as ConvertItemsToCopy only uses it
     // for ROLLUP, and fake_query_block can't have ROLLUP.
     subjoin = query_expression->fake_query_block->join;
-    tmp_table_param = &subjoin->tmp_table_param;
+    tmp_table_param = subjoin->tmp_table_param;
     select_number = query_expression->fake_query_block->select_number;
   } else {
     tmp_table_param = new (thd->mem_root) Temp_table_param;
@@ -1528,7 +1540,7 @@ AccessPath *GetAccessPathForDerivedTable(
     // also conservative; if the CTE is defined within this join and used
     // only once, we could still stream without losing performance.
     path = NewStreamingAccessPath(thd, query_expression->root_access_path(),
-                                  subjoin, &subjoin->tmp_table_param, table,
+                                  subjoin, subjoin->tmp_table_param, table,
                                   /*ref_slice=*/-1);
     CopyCosts(*query_expression->root_access_path(), path);
   } else {
@@ -2831,34 +2843,48 @@ AccessPath *JOIN::create_root_access_path_for_join() {
     // Only const tables, so add a fake single row to join in all
     // the const tables (only inner-joined tables are promoted to
     // const tables in the optimizer).
-    path = NewFakeSingleRowAccessPath(thd, /*count_examined_rows=*/true);
-    qep_tab_map conditions_depend_on_outer_tables = 0;
-    if (where_cond != nullptr) {
-      path = PossiblyAttachFilter(path, vector<Item *>{where_cond}, thd,
-                                  &conditions_depend_on_outer_tables);
-    }
+    if (need_tmp_pq_leader) {
+      assert(thd->parallel_exec && !thd->is_worker());
+      QEP_TAB *tab = &qep_tab[const_tables];
+      // tab->iterator.reset();
+      // join_setup_iterator(tab);
+      // iterator = NewIterator<ParallelScanIterator>(
+      //     thd, tab, tab->table(), nullptr, this, tab->gather, pq_stable_sort,
+      //     tab->old_table()->file->ref_length);
+      path = NewParallelScanAccessPath(thd, tab, tab->table(), tab->gather,
+                                       pq_stable_sort,
+                                       tab->old_table()->file->ref_length);
+    } else {
+      path = NewFakeSingleRowAccessPath(thd, /*count_examined_rows=*/true);
+      qep_tab_map conditions_depend_on_outer_tables = 0;
+      if (where_cond != nullptr) {
+        path = PossiblyAttachFilter(path, vector<Item *>{where_cond}, thd,
+                                    &conditions_depend_on_outer_tables);
+      }
 
-    // Surprisingly enough, we can specify that the const tables are
-    // to be dumped immediately to a temporary table. If we don't do this,
-    // we risk that there are fields that are not copied correctly
-    // (tmp_table_param contains copy_funcs we'd otherwise miss).
-    if (const_tables > 0) {
-      QEP_TAB *qep_tab = &this->qep_tab[const_tables];
-      if (qep_tab->op_type == QEP_TAB::OT_MATERIALIZE) {
-        qep_tab->table()->alias = "<temporary>";
-        AccessPath *table_path =
-            create_table_access_path(thd, nullptr, qep_tab,
-                                     /*count_examined_rows=*/false);
-        path = NewMaterializeAccessPath(
-            thd,
-            SingleMaterializeQueryBlock(
-                thd, path, query_block->select_number, this,
-                /*copy_fields_and_items=*/true, qep_tab->tmp_table_param),
-            qep_tab->invalidators, qep_tab->table(), table_path,
-            /*cte=*/nullptr, query_expression(), qep_tab->ref_item_slice,
-            /*rematerialize=*/true, qep_tab->tmp_table_param->end_write_records,
-            /*reject_multiple_rows=*/false);
-        EstimateMaterializeCost(path);
+      // Surprisingly enough, we can specify that the const tables are
+      // to be dumped immediately to a temporary table. If we don't do this,
+      // we risk that there are fields that are not copied correctly
+      // (tmp_table_param contains copy_funcs we'd otherwise miss).
+      if (const_tables > 0) {
+        QEP_TAB *qep_tab = &this->qep_tab[const_tables];
+        if (qep_tab->op_type == QEP_TAB::OT_MATERIALIZE) {
+          qep_tab->table()->alias = "<temporary>";
+          AccessPath *table_path =
+              create_table_access_path(thd, nullptr, qep_tab,
+                                       /*count_examined_rows=*/false);
+          path = NewMaterializeAccessPath(
+              thd,
+              SingleMaterializeQueryBlock(
+                  thd, path, query_block->select_number, this,
+                  /*copy_fields_and_items=*/true, qep_tab->tmp_table_param),
+              qep_tab->invalidators, qep_tab->table(), table_path,
+              /*cte=*/nullptr, query_expression(), qep_tab->ref_item_slice,
+              /*rematerialize=*/true,
+              qep_tab->tmp_table_param->end_write_records,
+              /*reject_multiple_rows=*/false);
+          EstimateMaterializeCost(path);
+        }
       }
     }
   } else {
@@ -3024,7 +3050,7 @@ AccessPath *JOIN::create_root_access_path_for_join() {
             qep_tab->invalidators, qep_tab->table(), table_path,
             /*cte=*/nullptr, query_expression(),
             /*ref_slice=*/-1,
-            /*rematerialize=*/true, tmp_table_param.end_write_records,
+            /*rematerialize=*/true, tmp_table_param->end_write_records,
             /*reject_multiple_rows=*/false);
         EstimateMaterializeCost(path);
       }
@@ -3114,17 +3140,17 @@ AccessPath *JOIN::create_root_access_path_for_join() {
     do_aggregate = (qep_tab[primary_tables + tmp_tables].op_type ==
                     QEP_TAB::OT_AGGREGATE) ||
                    ((grouped || group_optimized_away) &&
-                    tmp_table_param.precomputed_group_by);
+                    tmp_table_param->precomputed_group_by);
   }
   if (do_aggregate) {
     // Aggregate as we go, with output into a special slice of the same table.
-    assert(streaming_aggregation || tmp_table_param.precomputed_group_by);
+    assert(streaming_aggregation || tmp_table_param->precomputed_group_by);
 #ifndef NDEBUG
     for (unsigned table_idx = const_tables; table_idx < tables; ++table_idx) {
       assert(qep_tab->op_type != QEP_TAB::OT_AGGREGATE_THEN_MATERIALIZE);
     }
 #endif
-    if (!tmp_table_param.precomputed_group_by) {
+    if (!tmp_table_param->precomputed_group_by) {
       path =
           NewAggregateAccessPath(thd, path, rollup_state != RollupState::NONE);
     }
@@ -3903,7 +3929,11 @@ bool DynamicRangeIterator::Init() {
   Key_map needed_reg_dummy;
   QUICK_SELECT_I *old_qck = m_qep_tab->quick();
   QUICK_SELECT_I *qck;
-  DEBUG_SYNC(thd(), "quick_not_created");
+  if (thd()->pq_leader != nullptr) {
+    DEBUG_SYNC(thd()->pq_leader, "quick_not_created");
+  } else {
+    DEBUG_SYNC(thd(), "quick_not_created");
+  }
   const int rc = test_quick_select(
       thd(), m_qep_tab->keys(),
       0,  // empty table map
@@ -3925,7 +3955,11 @@ bool DynamicRangeIterator::Init() {
     that, we need to take mutex and change type and quick_optim.
   */
 
-  DEBUG_SYNC(thd(), "quick_created_before_mutex");
+  if (thd()->pq_leader != nullptr) {
+    DEBUG_SYNC(thd()->pq_leader, "quick_created_before_mutex");
+  } else {
+    DEBUG_SYNC(thd(), "quick_created_before_mutex");
+  }
 
   thd()->lock_query_plan();
   m_qep_tab->set_type(qck ? calc_join_type(qck->get_type()) : JT_ALL);
@@ -3933,8 +3967,11 @@ bool DynamicRangeIterator::Init() {
   thd()->unlock_query_plan();
 
   delete old_qck;
-  DEBUG_SYNC(thd(), "quick_droped_after_mutex");
-
+  if (thd()->pq_leader != nullptr) {
+    DEBUG_SYNC(thd()->pq_leader, "quick_droped_after_mutex");
+  } else {
+    DEBUG_SYNC(thd(), "quick_droped_after_mutex");
+  }
   // Clear out and destroy any old iterators before we start constructing
   // new ones, since they may share the same memory in the union.
   m_iterator.reset();
@@ -4154,15 +4191,18 @@ bool AlternativeIterator::Init() {
 AccessPath *QEP_TAB::access_path() {
   assert(table());
   // Only some access methods support reversed access:
-  assert(!m_reversed_access || type() == JT_REF || type() == JT_INDEX_SCAN);
+  assert(current_thd->parallel_exec || !m_reversed_access || type() == JT_REF ||
+         type() == JT_INDEX_SCAN);
   TABLE_REF *used_ref = nullptr;
   AccessPath *path = nullptr;
 
   const TABLE *pushed_root = table()->file->member_of_pushed_join();
   const bool is_pushed_child = (pushed_root && pushed_root != table());
   // A 'pushed_child' has to be a REF type
-  assert(!is_pushed_child || type() == JT_REF || type() == JT_EQ_REF);
+  assert(current_thd->parallel_exec || !is_pushed_child || type() == JT_REF ||
+         type() == JT_EQ_REF);
 
+  bool pq_replace_accesspath = false;
   switch (type()) {
     case JT_REF:
       if (is_pushed_child) {
@@ -4174,6 +4214,7 @@ AccessPath *QEP_TAB::access_path() {
         path = NewRefAccessPath(join()->thd, table(), &ref(), use_order(),
                                 m_reversed_access,
                                 /*count_examined_rows=*/true);
+        pq_replace_accesspath = true;
       }
       used_ref = &ref();
       break;
@@ -4212,6 +4253,7 @@ AccessPath *QEP_TAB::access_path() {
       path = NewIndexScanAccessPath(join()->thd, table(), index(), use_order(),
                                     m_reversed_access,
                                     /*count_examined_rows=*/true);
+      pq_replace_accesspath = true;
       break;
     case JT_ALL:
     case JT_RANGE:
@@ -4221,7 +4263,8 @@ AccessPath *QEP_TAB::access_path() {
                                                   /*count_examined_rows=*/true);
       } else {
         path = create_table_access_path(join()->thd, nullptr, this,
-                                        /*count_examined_rows=*/true);
+                                        /*count_examined_rows=*/true,
+                                        &pq_replace_accesspath);
       }
       break;
     default:
@@ -4229,13 +4272,19 @@ AccessPath *QEP_TAB::access_path() {
       break;
   }
 
+  /** note that: for gather operator, we have no need to generate iterator */
+  if (current_thd->is_worker() && pq_replace_accesspath && do_parallel_scan) {
+    path = NewPQBlockScanAccessPath(current_thd, table(), gather,
+                                    join()->pq_stable_sort);
+  }
+
   /*
     If we have an item like <expr> IN ( SELECT f2 FROM t2 ), and we were not
     able to rewrite it into a semijoin, the optimizer may rewrite it into
     EXISTS ( SELECT 1 FROM t2 WHERE f2=<expr> LIMIT 1 ) (ie., pushing down the
-    value into the subquery), using a REF or REF_OR_NULL scan on t2 if possible.
-    This happens in Item_in_subselect::select_in_like_transformer() and the
-    functions it calls.
+    value into the subquery), using a REF or REF_OR_NULL scan on t2 if
+    possible. This happens in Item_in_subselect::select_in_like_transformer()
+    and the functions it calls.
 
     However, if <expr> evaluates to NULL, this transformation is incorrect,
     and the transformation used should instead be to
@@ -4243,9 +4292,9 @@ AccessPath *QEP_TAB::access_path() {
       EXISTS ( SELECT 1 FROM t2 LIMIT 1 ) ? NULL : FALSE.
 
     Thus, in the case of nullable <expr>, the rewriter inserts so-called
-    “condition guards” (pointers to bool saying whether <expr> was NULL or not,
-    for each part of <expr> if it contains multiple columns). These condition
-    guards do two things:
+    “condition guards” (pointers to bool saying whether <expr> was NULL or
+    not, for each part of <expr> if it contains multiple columns). These
+    condition guards do two things:
 
       1. They disable the pushed-down WHERE clauses.
       2. They change the REF/REF_OR_NULL accesses to table scans.
@@ -4257,10 +4306,11 @@ AccessPath *QEP_TAB::access_path() {
 
     Note that ideally, we'd plan a completely separate plan for the NULL case,
     as there might be e.g. a different index we could scan on, or even a
-    different optimal join order. (Note, however, that for the case of multiple
-    columns in the expression, we could get 2^N different plans.) However, given
-    that most cases are now handled by semijoins and not in2exists at all,
-    we don't need to jump through every possible hoop to optimize these cases.
+    different optimal join order. (Note, however, that for the case of
+    multiple columns in the expression, we could get 2^N different plans.)
+    However, given that most cases are now handled by semijoins and not
+    in2exists at all, we don't need to jump through every possible hoop to
+    optimize these cases.
    */
   if (used_ref != nullptr) {
     for (unsigned key_part_idx = 0; key_part_idx < used_ref->key_parts;
@@ -4316,8 +4366,8 @@ AccessPath *QEP_TAB::access_path() {
 
   @note The "error" parameter is required for the sake of testcases like the
         one in innodb-wl6742.test:272. Earlier if an error was raised by
-        ha_records, it wasn't handled by get_exact_record_count. Instead it was
-        just allowed to go to the execution phase, where end_send_group would
+        ha_records, it wasn't handled by get_exact_record_count. Instead it
+  was just allowed to go to the execution phase, where end_send_group would
         see the same error and raise it.
 
         But with the new function 'end_send_count' in the execution phase,
@@ -4570,7 +4620,8 @@ static inline void reset_wf_states(Func_ptr_array *func_ptr, bool framing) {
   }
 }
 /**
-  Walk the function calls and reset any framing window function's window state.
+  Walk the function calls and reset any framing window function's window
+  state.
 
   @param func_ptr   an array of function call items which might represent
                     or contain window function calls
@@ -4645,7 +4696,8 @@ static bool buffer_record_somewhere(THD *thd, Window *w, int64 rowno) {
     /* If this is a duplicate error, return immediately */
     if (t->file->is_ignorable_error(error)) return true;
 
-    /* Other error than duplicate error: Attempt to create a temporary table. */
+    /* Other error than duplicate error: Attempt to create a temporary table.
+     */
     bool is_duplicate;
     if (create_ondisk_from_heap(thd, t, error, true, &is_duplicate))
       return true;
@@ -4679,8 +4731,8 @@ static bool buffer_record_somewhere(THD *thd, Window *w, int64 rowno) {
         w->set_frame_buffer_partition_offset(w->frame_buffer_total_rows());
       /*
         The auto-generated primary key of the first row is 1. Our offset is
-        also one-based, so we can use w->frame_buffer_partition_offset() "as is"
-        to construct the position.
+        also one-based, so we can use w->frame_buffer_partition_offset() "as
+        is" to construct the position.
       */
       encode_innodb_position(
           w->m_frame_buffer_positions[first_in_partition].m_position,
@@ -4722,19 +4774,17 @@ static bool buffer_record_somewhere(THD *thd, Window *w, int64 rowno) {
 }
 
 /**
-  If we cannot evaluate all window functions for a window on the fly, buffer the
-  current row for later processing by process_buffered_windowing_record.
+  If we cannot evaluate all window functions for a window on the fly, buffer
+  the current row for later processing by process_buffered_windowing_record.
 
   @param thd                Current thread
   @param param              The temporary table parameter
 
   @param[in,out] new_partition If input is not nullptr:
-                            sets the bool pointed to to true if a new partition
-                            was found and there was a previous partition; if
-                            so the buffering of the first row in new
-                            partition isn't done and must be repeated
-                            later: we save away the row as rowno
-                            FBC_FIRST_IN_NEXT_PARTITION, then fetch it back
+                            sets the bool pointed to to true if a new
+  partition was found and there was a previous partition; if so the buffering
+  of the first row in new partition isn't done and must be repeated later: we
+  save away the row as rowno FBC_FIRST_IN_NEXT_PARTITION, then fetch it back
                             later, cf. end_write_wf.
                             If input is nullptr, this is the "later" call to
                             buffer the first row of the new partition:
@@ -4764,10 +4814,10 @@ bool buffer_windowing_record(THD *thd, Temp_table_param *param,
     The record is now ready in TABLE and can be saved. The window
     function(s) on the window have not yet been evaluated, but
     will be evaluated when we read frame rows back, before the end wf result
-    (usually ready in the last read when the last frame row has been read back)
-    can be produced. E.g. SUM(i): we save away all rows in partition.
-    We read back rows in current row's frame, producing the total SUM in the
-    last read back row. That value for SUM will then be used for the current row
+    (usually ready in the last read when the last frame row has been read
+    back) can be produced. E.g. SUM(i): we save away all rows in partition. We
+    read back rows in current row's frame, producing the total SUM in the last
+    read back row. That value for SUM will then be used for the current row
     output.
   */
 
@@ -4821,15 +4871,15 @@ static bool read_frame_buffer_row(int64 rowno, Window *w,
   if (rowno > cand->m_rowno) {
     /*
       The saved position didn't correspond exactly to where we want to go, but
-      is located one or more rows further out on the file, so read next to move
-      forward to desired row.
+      is located one or more rows further out on the file, so read next to
+      move forward to desired row.
     */
     const int64 cnt = rowno - cand->m_rowno;
 
     /*
-      We should have enough location hints to normally need only one extra read.
-      If we have just switched to INNODB due to MEM overflow, a rescan is
-      required, so skip assert if we have INNODB.
+      We should have enough location hints to normally need only one extra
+      read. If we have just switched to INNODB due to MEM overflow, a rescan
+      is required, so skip assert if we have INNODB.
     */
     assert(w->frame_buffer()->s->db_type()->db_type == DB_TYPE_INNODB ||
            cnt <= 1 ||
@@ -4888,8 +4938,8 @@ inline static void dbug_restore_all_columns(
   in the join, the logical input can consist of more than one table
   (qep_tab-1 .. qep_tab-n), so the record accordingly.
 
-  This method works by temporarily reversing the "normal" direction of the field
-  copying.
+  This method works by temporarily reversing the "normal" direction of the
+  field copying.
 
   Also make a note of the position of the record we retrieved in the window's
   m_frame_buffer_positions to be able to optimize succeeding retrievals.
@@ -5082,26 +5132,27 @@ static bool process_wfs_needing_card(
   the frame if required.
 
   This method contains the main execution time logic of the evaluation
-  window functions if we need buffering for one or more of the window functions
-  defined on the window.
+  window functions if we need buffering for one or more of the window
+  functions defined on the window.
 
   Moving (sliding) frames can be executed using a naive or optimized strategy
   for aggregate window functions, like SUM or AVG (but not MAX, or MIN).
-  In the naive approach, for each row considered for processing from the buffer,
-  we visit all the rows defined in the frame for that row, essentially leading
-  to N*M complexity, where N is the number of rows in the result set, and M is
-  the number for rows in the frame. This can be slow for large frames,
-  obviously, so we can choose an optimized evaluation strategy using inversion.
-  This means that when rows leave the frame as we move it forward, we re-use
-  the previous aggregate state, but compute the *inverse* function to eliminate
-  the contribution to the aggregate by the row(s) leaving the frame, and then
-  use the normal aggregate function to add the contribution of the rows moving
-  into the frame. The present method contains code paths for both strategies.
+  In the naive approach, for each row considered for processing from the
+  buffer, we visit all the rows defined in the frame for that row, essentially
+  leading to N*M complexity, where N is the number of rows in the result set,
+  and M is the number for rows in the frame. This can be slow for large
+  frames, obviously, so we can choose an optimized evaluation strategy using
+  inversion. This means that when rows leave the frame as we move it forward,
+  we re-use the previous aggregate state, but compute the *inverse* function
+  to eliminate the contribution to the aggregate by the row(s) leaving the
+  frame, and then use the normal aggregate function to add the contribution of
+  the rows moving into the frame. The present method contains code paths for
+  both strategies.
 
-  For integral data types, this is safe in the sense that the result will be the
-  same if no overflow occurs during normal evaluation. For floating numbers,
-  optimizing in this way may lead to different results, so it is not done by
-  default, cf the session variable "windowing_use_high_precision".
+  For integral data types, this is safe in the sense that the result will be
+  the same if no overflow occurs during normal evaluation. For floating
+  numbers, optimizing in this way may lead to different results, so it is not
+  done by default, cf the session variable "windowing_use_high_precision".
 
   Since the evaluation strategy is chosen based on the "most difficult" window
   function defined on the window, we must also be able to evaluate
@@ -5112,9 +5163,9 @@ static bool process_wfs_needing_card(
   cardinality is needed to compute it. Furthermore, FIRST_VALUE and LAST_VALUE
   heed the frames, but they are not aggregates.
 
-  The is a special optimized code path for *static aggregates*: when the window
-  frame is the default, e.g. the entire partition and there is no ORDER BY
-  specified, the value of the framing window functions, i.e. SUM, AVG,
+  The is a special optimized code path for *static aggregates*: when the
+  window frame is the default, e.g. the entire partition and there is no ORDER
+  BY specified, the value of the framing window functions, i.e. SUM, AVG,
   FIRST_VALUE, LAST_VALUE can be evaluated once and for all and saved when
   we visit and evaluate the first row of the partition. For later rows we
   restore the aggregate values and just fill in the other fields and evaluate
@@ -5127,8 +5178,8 @@ static bool process_wfs_needing_card(
   This is a temporary table, so BLOBs get copied in the normal way.
 
   Sometimes we save records containing already computed framing window
-  functions away into memory only: is the lifetime of the referenced BLOBs long
-  enough? We have two cases:
+  functions away into memory only: is the lifetime of the referenced BLOBs
+  long enough? We have two cases:
 
   BLOB results from wfs: Any BLOB results will reside in the copies in result
   fields of the Items ready for the out file, so they no longer need any BLOB
@@ -5284,8 +5335,8 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
   if (f->m_query_expression == WFU_RANGE) {
     lower_limit = w.first_rowno_in_range_frame();
     /*
-      For RANGE frame, we first buffer all the rows in the partition due to the
-      need to find last peer before first can be processed. This can be
+      For RANGE frame, we first buffer all the rows in the partition due to
+      the need to find last peer before first can be processed. This can be
       optimized,
       FIXME.
     */
@@ -5390,8 +5441,8 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
     This state means:
 
     We have read 4 rows, cf. value of last_rowno_in_cache.
-    We can now process row 1 since both lower (1-1=0) and upper (1+3=4) are less
-    than or equal to 4, the last row in the cache so far.
+    We can now process row 1 since both lower (1-1=0) and upper (1+3=4) are
+    less than or equal to 4, the last row in the cache so far.
 
     We can not process row 2 since: !(4 >= 2 + 3) and we haven't seen the last
     row in partition which means that the frame may not be full yet.
@@ -5469,8 +5520,8 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
   /**
     For optimized strategy we want to save away the previous aggregate result
     and reuse in later round by inversion. This keeps track of whether we
-    managed to compute results for this current row (result are "primed"), so we
-    can use inversion in later rows. Cf Window::m_aggregates_primed.
+    managed to compute results for this current row (result are "primed"), so
+    we can use inversion in later rows. Cf Window::m_aggregates_primed.
   */
   bool optimizable_primed = false;
 
@@ -5606,8 +5657,8 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
   } else if (row_optimizable && w.aggregates_primed()) {
     /*
       Rows 2..N in partition: we still have state from previous current row's
-      frame computation, now adjust by subtracting row 1 in frame (lower_limit)
-      and adding new, if any, final frame row
+      frame computation, now adjust by subtracting row 1 in frame
+      (lower_limit) and adding new, if any, final frame row
     */
     const bool remove_previous_first_row =
         (lower_limit > 1 && lower_limit - 1 <= last_rowno_in_cache);
@@ -5796,11 +5847,11 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
             w.set_inverse(true)
                 .
                 /*
-                  The next setting sets the logical last row number in the frame
-                  after inversion, so that final actions can do the right thing,
-                  e.g.  AVG needs to know the updated cardinality. The
-                  aggregates consults m_rowno_in_frame for that, so set it
-                  accordingly.
+                  The next setting sets the logical last row number in the
+                  frame after inversion, so that final actions can do the
+                  right thing, e.g.  AVG needs to know the updated
+                  cardinality. The aggregates consults m_rowno_in_frame for
+                  that, so set it accordingly.
                 */
                 set_rowno_in_frame(prev_last_rowno_in_frame -
                                    prev_first_rowno_in_frame + 1 - ++inverted)
@@ -5842,8 +5893,8 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
         if ((have_first_value || have_last_value) &&
             (rowno <= last_rowno_in_cache) && found_first) {
           /*
-             We have FIRST_VALUE or LAST_VALUE and have a new first row; make it
-             last also until we find something better.
+             We have FIRST_VALUE or LAST_VALUE and have a new first row; make
+             it last also until we find something better.
           */
           w.set_is_last_row_in_frame(true);
           w.set_rowno_being_visited(rowno);
@@ -5920,13 +5971,13 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
 
       if (w.before_frame() && empty) {
         assert(!row_added && !found_first);
-        // This row's value is too low to fit in frame. We already had an empty
-        // set of frame rows when evaluating for the previous row, and the set
-        // is still empty.  So, we can move the possible boundaries for the
-        // set of frame rows for the next row to be evaluated one row ahead.
-        // We need only update last_rowno_in_range_frame here, first_row
-        // no_in_range_frame will be adjusted below to be one higher, cf.
-        // "maintain invariant" comment.
+        // This row's value is too low to fit in frame. We already had an
+        // empty set of frame rows when evaluating for the previous row, and
+        // the set is still empty.  So, we can move the possible boundaries
+        // for the set of frame rows for the next row to be evaluated one row
+        // ahead. We need only update last_rowno_in_range_frame here,
+        // first_row no_in_range_frame will be adjusted below to be one
+        // higher, cf. "maintain invariant" comment.
         w.set_last_rowno_in_range_frame(
             min(w.last_rowno_in_range_frame() + 1, upper));
       }
@@ -6205,15 +6256,14 @@ static bool replace_embedded_rollup_references_with_tmp_fields(
   Change all funcs and sum_funcs to fields in tmp table, and create
   new list of all items.
 
-  @param fields                      list of all fields; should really be const,
-                                       but Item does not always respect
-                                       constness
+  @param fields                      list of all fields; should really be
+  const, but Item does not always respect constness
   @param thd                         THD pointer
-  @param [out] ref_item_array        array of pointers to top elements of filed
-  list
+  @param [out] ref_item_array        array of pointers to top elements of
+  filed list
   @param [out] res_fields            new list of all items
-  @param added_non_hidden_fields     number of visible fields added by subquery
-                                     to derived transformation
+  @param added_non_hidden_fields     number of visible fields added by
+  subquery to derived transformation
 
   @returns false if success, true if error
 */
@@ -6245,9 +6295,9 @@ bool change_to_use_tmp_fields(mem_root_deque<Item *> *fields, THD *thd,
       field = item->get_tmp_table_field();
       if (field != nullptr) {
         /*
-          Replace "@:=<expression>" with "@:=<tmp table column>". Otherwise, we
-          would re-evaluate <expression>, and if expression were a subquery,
-          this would access already-unlocked tables.
+          Replace "@:=<expression>" with "@:=<tmp table column>". Otherwise,
+          we would re-evaluate <expression>, and if expression were a
+          subquery, this would access already-unlocked tables.
         */
         Item_func_set_user_var *suv =
             new Item_func_set_user_var(thd, (Item_func_set_user_var *)item);
@@ -6280,7 +6330,9 @@ bool change_to_use_tmp_fields(mem_root_deque<Item *> *fields, THD *thd,
             orig_field->orig_table_name());
       }
 #ifndef NDEBUG
-      if (!new_item->item_name.is_set()) {
+      /* Do not set the item_name here when parallel query to keep the MTR
+         execution results of the release and debug versions same. */
+      if (!new_item->item_name.is_set() && !thd->m_suite_for_pq) {
         char buff[256];
         String str(buff, sizeof(buff), &my_charset_bin);
         str.length(0);
@@ -6350,16 +6402,15 @@ static bool replace_contents_of_rollup_wrappers_with_tmp_fields(
   sorted in the right order. (Otherwise, change_to_use_tmp_fields() would
   be used.)
 
-  @param fields                      list of all fields; should really be const,
-                                       but Item does not always respect
-                                       constness
+  @param fields                      list of all fields; should really be
+  const, but Item does not always respect constness
   @param select                      the query block we are doing this to
   @param thd                         THD pointer
-  @param [out] ref_item_array        array of pointers to top elements of filed
-  list
+  @param [out] ref_item_array        array of pointers to top elements of
+  filed list
   @param [out] res_fields            new list of items of select item list
-  @param added_non_hidden_fields     number of visible fields added by subquery
-                                     to derived transformation
+  @param added_non_hidden_fields     number of visible fields added by
+  subquery to derived transformation
 
   @returns false if success, true if error
 */
@@ -6531,9 +6582,9 @@ bool change_to_use_tmp_fields_except_sums(mem_root_deque<Item *> *fields,
   @note Setting field values for input tables is a destructive operation,
         since it overwrite the NULL value flags with 1 bits. Rows from
         const tables are never re-read, hence their NULL value flags must
-        be saved by this function and later restored by JOIN::restore_fields().
-        This is generally not necessary for non-const tables, since field
-        values are overwritten when new rows are read.
+        be saved by this function and later restored by
+  JOIN::restore_fields(). This is generally not necessary for non-const
+  tables, since field values are overwritten when new rows are read.
 
   @param[out] save_nullinfo Map of tables whose fields were set to NULL,
                             and for which NULL values must be restored.
@@ -6617,9 +6668,9 @@ int UnqualifiedCountIterator::Read() {
   }
 
   // If we are outputting to a temporary table, we need to copy the results
-  // into it here. It is also used for nonaggregated items, even when there are
-  // no temporary tables involved.
-  if (copy_fields_and_funcs(&m_join->tmp_table_param, m_join->thd)) {
+  // into it here. It is also used for nonaggregated items, even when there
+  // are no temporary tables involved.
+  if (copy_fields_and_funcs(m_join->tmp_table_param, m_join->thd)) {
     return 1;
   }
 
@@ -6676,8 +6727,9 @@ int TableValueConstructorIterator::Read() {
   if (*m_examined_rows == m_row_value_list.size()) return -1;
 
   // If the TVC has a single row, we don't create Item_values_column reference
-  // objects during resolving. We will instead use the single row directly from
-  // Query_block::item_list, such that we don't have to change references here.
+  // objects during resolving. We will instead use the single row directly
+  // from Query_block::item_list, such that we don't have to change references
+  // here.
   if (m_row_value_list.size() != 1) {
     auto output_refs_it = VisibleFields(*m_output_refs).begin();
     for (const Item *value : **m_row_it) {
@@ -6686,8 +6738,8 @@ int TableValueConstructorIterator::Read() {
       ++output_refs_it;
 
       // Ideally we would not be casting away constness here. However, as the
-      // evaluation of Item objects during execution is not const (i.e. none of
-      // the val methods are const), the reference contained in a
+      // evaluation of Item objects during execution is not const (i.e. none
+      // of the val methods are const), the reference contained in a
       // Item_values_column object cannot be const.
       ref->set_value(const_cast<Item *>(value));
     }

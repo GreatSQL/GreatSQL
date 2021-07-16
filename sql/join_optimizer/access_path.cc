@@ -1,4 +1,6 @@
-/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -212,6 +214,10 @@ table_map GetUsedTables(const AccessPath *path) {
           .table->pos_in_table_list->map();
     case AccessPath::CACHE_INVALIDATOR:
       return GetUsedTables(path->cache_invalidator().child);
+    case AccessPath::PARALLEL_SCAN:
+      return path->parallel_scan().table->pos_in_table_list->map();
+    case AccessPath::PQBLOCK_SCAN:
+      return path->pqblock_scan().table->pos_in_table_list->map();
   }
   assert(false);
   return 0;
@@ -704,6 +710,21 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
           thd, param.child, join, eligible_for_batch_mode);
       iterator =
           NewIterator<CacheInvalidatorIterator>(thd, move(child), param.name);
+      break;
+    }
+    case AccessPath::PQBLOCK_SCAN: {
+      const auto &param = path->pqblock_scan();
+      iterator = NewIterator<PQblockScanIterator>(
+          thd, param.table, param.table->record[0], &join->examined_rows,
+          param.gather, param.need_rowid);
+      break;
+    }
+    case AccessPath::PARALLEL_SCAN: {
+      const auto &param = path->parallel_scan();
+      iterator = NewIterator<ParallelScanIterator>(
+          thd, param.tab, param.table, nullptr, join, param.gather,
+          param.stable_sort, param.ref_len);
+
       break;
     }
   }

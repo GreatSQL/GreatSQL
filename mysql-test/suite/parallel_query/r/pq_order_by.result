@@ -1,0 +1,232 @@
+create table t1(
+a tinyint NOT NULL, 
+b smallint,  
+c mediumint not null, 
+d int,        
+e bigint not null,
+f float,      
+g double, 
+h decimal (6, 2)) ENGINE=Innodb DEFAULT CHARSET=utf8mb4;
+insert into t1 values (1,  10, 20, 11, 101, 0.1, 1.1, 5.21);
+insert into t1 values (28, 11, 21, 14, 49, 10.11, 29.12, 405.43);
+insert into t1 values (-7, 4,  198, 20081, 109992784, -1004.22, 49727648.11, 8857.29);
+insert into t1 values (88, -22, 9847, null, 91001544, null, 298847.91, null);
+insert into t1 values (09, null, 18837, 105, 8475291, 1746.11, -1837491.90, -472.11);
+select * from t1 order by a, b;
+a	b	c	d	e	f	g	h
+-7	4	198	20081	109992784	-1004.22	49727648.11	8857.29
+1	10	20	11	101	0.1	1.1	5.21
+9	NULL	18837	105	8475291	1746.11	-1837491.9	-472.11
+28	11	21	14	49	10.11	29.12	405.43
+88	-22	9847	NULL	91001544	NULL	298847.91	NULL
+select a, c, e, f from t1 order by g;
+a	c	e	f
+9	18837	8475291	1746.11
+1	20	101	0.1
+28	21	49	10.11
+88	9847	91001544	NULL
+-7	198	109992784	-1004.22
+select * from t1 order by a, b desc;
+a	b	c	d	e	f	g	h
+-7	4	198	20081	109992784	-1004.22	49727648.11	8857.29
+1	10	20	11	101	0.1	1.1	5.21
+9	NULL	18837	105	8475291	1746.11	-1837491.9	-472.11
+28	11	21	14	49	10.11	29.12	405.43
+88	-22	9847	NULL	91001544	NULL	298847.91	NULL
+select h, e, g, a from t1 order by a, b desc;
+h	e	g	a
+8857.29	109992784	49727648.11	-7
+5.21	101	1.1	1
+-472.11	8475291	-1837491.9	9
+405.43	49	29.12	28
+NULL	91001544	298847.91	88
+select * from t1 order by a, b desc;
+a	b	c	d	e	f	g	h
+-7	4	198	20081	109992784	-1004.22	49727648.11	8857.29
+1	10	20	11	101	0.1	1.1	5.21
+9	NULL	18837	105	8475291	1746.11	-1837491.9	-472.11
+28	11	21	14	49	10.11	29.12	405.43
+88	-22	9847	NULL	91001544	NULL	298847.91	NULL
+select * from t1 order by a desc, b asc;
+a	b	c	d	e	f	g	h
+88	-22	9847	NULL	91001544	NULL	298847.91	NULL
+28	11	21	14	49	10.11	29.12	405.43
+9	NULL	18837	105	8475291	1746.11	-1837491.9	-472.11
+1	10	20	11	101	0.1	1.1	5.21
+-7	4	198	20081	109992784	-1004.22	49727648.11	8857.29
+select a, c, e, f from t1 order by g, a desc, c asc;
+a	c	e	f
+9	18837	8475291	1746.11
+1	20	101	0.1
+28	21	49	10.11
+88	9847	91001544	NULL
+-7	198	109992784	-1004.22
+create table t2(
+a int NOT NULL, 
+b int NOT NULL, 
+c int, 
+primary key(a), 
+unique key(c)
+) ENGINE=Innodb DEFAULT CHARSET=utf8mb4;
+insert into t2 values (1, 1, 2);
+insert into t2 values (0, 1, 4);
+insert into t2 values (2, 0, 3);
+select * from t2 order by a, c;
+a	b	c
+0	1	4
+1	1	2
+2	0	3
+select * from t2 order by b;
+a	b	c
+2	0	3
+0	1	4
+1	1	2
+select * from t2 order by a desc, c asc;
+a	b	c
+2	0	3
+1	1	2
+0	1	4
+select * from t2 order by a;
+a	b	c
+0	1	4
+1	1	2
+2	0	3
+select * from t2 order by c;
+a	b	c
+1	1	2
+2	0	3
+0	1	4
+select * from t2 order by a desc;
+a	b	c
+2	0	3
+1	1	2
+0	1	4
+select * from t2 order by c desc;
+a	b	c
+0	1	4
+2	0	3
+1	1	2
+select * from t2;
+a	b	c
+0	1	4
+1	1	2
+2	0	3
+select a, c from t2;
+a	c
+1	2
+2	3
+0	4
+select a, b from t2;
+a	b
+0	1
+1	1
+2	0
+select b, c from t2;
+b	c
+1	4
+1	2
+0	3
+create table t3( 
+a int NOT NULL,  
+b int NOT NULL, 
+c int NOT NULL,
+primary key (a, b), 
+unique key(c)
+) ENGINE=Innodb DEFAULT CHARSET=utf8mb4;
+insert into t3 values (1, 1, 2);
+insert into t3 values (1, 2, 1);
+insert into t3 values (0, 1, 3);
+insert into t3 values (1, 0, 4);
+select * from t3;
+a	b	c
+1	2	1
+1	1	2
+0	1	3
+1	0	4
+select * from t3 order by a;
+a	b	c
+0	1	3
+1	0	4
+1	1	2
+1	2	1
+select * from t3 order by a, b;
+a	b	c
+0	1	3
+1	0	4
+1	1	2
+1	2	1
+select * from t3 order by b, a;
+a	b	c
+1	0	4
+0	1	3
+1	1	2
+1	2	1
+select * from t3 order by a, c;
+a	b	c
+0	1	3
+1	2	1
+1	1	2
+1	0	4
+select * from t3 order by a desc, b asc;
+a	b	c
+1	0	4
+1	1	2
+1	2	1
+0	1	3
+select * from t3 order by a + b;
+a	b	c
+0	1	3
+1	0	4
+1	1	2
+1	2	1
+select * from t3 order by a + b desc;
+a	b	c
+1	2	1
+1	1	2
+0	1	3
+1	0	4
+select * from t3 order by a + b * c;
+a	b	c
+1	0	4
+1	2	1
+1	1	2
+0	1	3
+select c from t3 order by a desc, b + c asc;
+c
+1
+2
+4
+3
+CREATE TABLE `t4` (
+`id` int NOT NULL AUTO_INCREMENT,
+`a` int DEFAULT NULL,
+`b` int DEFAULT NULL,
+`c` varchar(100) DEFAULT NULL,
+`d` varchar(100) DEFAULT NULL,
+PRIMARY KEY (`id`),
+KEY `idx_abc` (`a`,`b`,`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=16384 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+INSERT INTO `t4` VALUES 
+(1,1,2,'abcabcabcabc','cbacbacbacba'), 
+(2,1,2,'abcabcabcabc','cbacbacbacba'),
+(3,1,2,'abcabcabcabc','cbacbacbacba'),
+(4,1,2,'abcabcabcabc','cbacbacbacba'),
+(5,1,2,'abcabcabcabc','cbacbacbacba'),
+(6,1,2,'abcabcabcabc','cbacbacbacba'),
+(7,1,2,'abcabcabcabc','cbacbacbacba'),
+(8,1,2,'abcabcabcabc','cbacbacbacba'),
+(9,1,2,'abcabcabcabc','cbacbacbacba'),
+(10,1,2,'abcabcabcabc','cbacbacbacba');
+select count(*), a from t4 group by a;
+count(*)	a
+10	1
+select sum(b), a from t4 group by a order by sum(b);
+sum(b)	a
+20	1
+select avg(b), a from t4 group by a order by avg(b);
+avg(b)	a
+2.0000	1
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;

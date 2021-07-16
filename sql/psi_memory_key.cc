@@ -1,4 +1,6 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -147,6 +149,7 @@ PSI_memory_key key_memory_user_var_entry;
 PSI_memory_key key_memory_user_var_entry_value;
 PSI_memory_key key_memory_sp_cache;
 PSI_memory_key key_memory_write_set_extraction;
+PSI_memory_key key_memory_pq_mem_root;
 
 // Percona Server PSI memory keys
 PSI_memory_key key_memory_userstat_table_stats;
@@ -176,6 +179,8 @@ static PSI_memory_info all_server_memory[] = {
      PSI_DOCUMENT_ME},
     {&key_memory_thd_main_mem_root, "THD::main_mem_root", PSI_FLAG_THREAD, 0,
      "Main mem root used for e.g. the query arena."},
+    {&key_memory_pq_mem_root, "thd::parallel_query_mem_root", PSI_FLAG_THREAD,
+     0, PSI_DOCUMENT_ME},
     {&key_memory_help, "help", 0, 0,
      "Temporary memroot used to print help texts as part of usage "
      "description."},

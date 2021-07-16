@@ -1,4 +1,6 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -85,8 +87,9 @@
 #include "prealloced_array.h"
 #include "sql/auth/sql_security_ctx.h"  // Security_context
 #include "sql/current_thd.h"
-#include "sql/dd/string_type.h"      // dd::string_type
-#include "sql/discrete_interval.h"   // Discrete_interval
+#include "sql/dd/string_type.h"     // dd::string_type
+#include "sql/discrete_interval.h"  // Discrete_interval
+#include "sql/item.h"
 #include "sql/locked_tables_list.h"  // enum_locked_tables_mode
 #include "sql/mdl.h"
 #include "sql/opt_costmodel.h"
@@ -94,6 +97,7 @@
 #include "sql/psi_memory_key.h"
 #include "sql/query_options.h"
 #include "sql/resourcegroups/resource_group_basic_types.h"
+#include "sql/row_iterator.h"
 #include "sql/rpl_context.h"  // Rpl_thd_context
 #include "sql/rpl_gtid.h"
 #include "sql/session_tracker.h"  // Session_tracker
@@ -330,7 +334,7 @@ class Query_arena {
   void reset_item_list() { m_item_list = nullptr; }
   void set_item_list(Item *item) { m_item_list = item; }
   void add_item(Item *item);
-  void free_items();
+  void free_items(bool parallel_exec = false);
   void set_state(enum_state state_arg) { state = state_arg; }
   enum_state get_state() const { return state; }
   bool is_stmt_prepare() const { return state == STMT_INITIALIZED; }
@@ -1110,6 +1114,35 @@ class THD : public MDL_context_owner,
   String m_rewritten_query;
 
  public:
+  /* parallel reader context */
+  void *pq_ctx;
+  /* using for PQ worker threads */
+  THD *pq_leader;
+  /* using for explain */
+  bool parallel_exec;
+  /* parallel query running threads in session*/
+  uint pq_threads_running;
+  /* degree of parallel */
+  uint pq_dop;
+  /* disable parallel execute */
+  bool no_pq;
+  /* disable parallel query for store procedure and trigger */
+  bool in_sp_trigger;
+  /* select .. fro share/update */
+  bool locking_clause;
+  /* indicates whether parallel query is supported */
+  bool m_suite_for_pq{true};
+
+  /* indicates whether occurring error during execution */
+  bool pq_error{false};
+
+  /* save ParallelScanIterator or PQblockScanIterator here to call end() */
+  RowIterator *pq_iterator{NULL};
+
+  /* check first table. */
+  uint pq_check_fields{0};
+  uint pq_check_reclen{0};
+
   /* Used to execute base64 coded binlog events in MySQL server */
   Relay_log_info *rli_fake;
   /* Slave applier execution context */
@@ -1378,7 +1411,7 @@ class THD : public MDL_context_owner,
     return pointer_cast<Protocol_classic *>(m_protocol);
   }
 
- private:
+ public:
   Protocol *m_protocol;  // Current protocol
   /**
     SSL data attached to this connection.
@@ -1922,6 +1955,7 @@ class THD : public MDL_context_owner,
   /**@}*/
   // NOTE: Ideally those two should be in Protocol,
   // but currently its design doesn't allow that.
+ public:
   NET net;        // client connection descriptor
   String packet;  // dynamic buffer for network I/O
  public:
@@ -2303,6 +2337,7 @@ class THD : public MDL_context_owner,
     stable throughout the next query, see update_previous_found_rows.
   */
   ulonglong current_found_rows;
+  ulonglong pq_current_found_rows;
 
   /*
     Indicate if the gtid_executed table is being operated implicitly
@@ -2688,6 +2723,7 @@ class THD : public MDL_context_owner,
     KILL_CONNECTION = ER_SERVER_SHUTDOWN,
     KILL_QUERY = ER_QUERY_INTERRUPTED,
     KILL_TIMEOUT = ER_QUERY_TIMEOUT,
+    KILL_PQ_QUERY = ER_PARALLEL_EXEC_ERROR,
     KILLED_NO_VALUE /* means neither of the states */
   };
   std::atomic<killed_state> killed;
@@ -2919,6 +2955,7 @@ class THD : public MDL_context_owner,
 
   void release_resources();
   bool release_resources_done() const { return m_release_resources_done; }
+  bool suite_for_parallel_query();
 
  private:
   bool m_release_resources_done;
@@ -3157,7 +3194,12 @@ class THD : public MDL_context_owner,
     in the next statement.
   */
   inline void update_previous_found_rows() {
-    previous_found_rows = current_found_rows;
+    if (pq_current_found_rows != 0) {
+      previous_found_rows = pq_current_found_rows;
+      pq_current_found_rows = 0;
+    } else {
+      previous_found_rows = current_found_rows;
+    }
   }
 
   /**
@@ -3275,6 +3317,13 @@ class THD : public MDL_context_owner,
   */
   inline bool is_error() const { return get_stmt_da()->is_error(); }
 
+  inline bool is_pq_error() const {
+    return !pq_leader
+               ? pq_error
+               : (pq_error || (pq_leader->is_killed() || pq_leader->pq_error ||
+                               pq_leader->is_error()));
+  }
+
   /// Returns first Diagnostics Area for the current statement.
   Diagnostics_area *get_stmt_da() { return m_stmt_da; }
 
@@ -3358,15 +3407,7 @@ class THD : public MDL_context_owner,
   /**
     Record a transient change to a pointer to an Item within another Item.
   */
-  void change_item_tree(Item **place, Item *new_value) {
-    /* TODO: check for OOM condition here */
-    if (!stmt_arena->is_regular()) {
-      DBUG_PRINT("info", ("change_item_tree place %p old_value %p new_value %p",
-                          place, *place, new_value));
-      nocheck_register_item_tree_change(place, new_value);
-    }
-    *place = new_value;
-  }
+  void change_item_tree(Item **place, Item *new_value);
 
   /**
     Remember that place was updated with new_value so it can be restored
@@ -4092,6 +4133,21 @@ class THD : public MDL_context_owner,
   */
   void raise_note_printf(uint code, ...);
 
+  /**
+    Raise a generic SQL condition. Also calls mysql_audit_notify() unless
+    the condition is handled by a SQL condition handler.
+
+    @param sql_errno the condition error number
+    @param sqlstate the condition SQLSTATE
+    @param level the condition level
+    @param msg the condition message text
+    @param fatal_error should the fatal_error flag be set?
+    @return The condition raised, or NULL
+  */
+  Sql_condition *raise_condition(uint sql_errno, const char *sqlstate,
+                                 Sql_condition::enum_severity_level level,
+                                 const char *msg, bool fatal_error = false);
+
  private:
   /*
     Only the implementation of the SIGNAL and RESIGNAL statements
@@ -4107,21 +4163,6 @@ class THD : public MDL_context_owner,
                            Sql_condition::enum_severity_level severity,
                            uint code, const char *message_text);
   friend void my_message_sql(uint, const char *, myf);
-
-  /**
-    Raise a generic SQL condition. Also calls mysql_audit_notify() unless
-    the condition is handled by a SQL condition handler.
-
-    @param sql_errno the condition error number
-    @param sqlstate the condition SQLSTATE
-    @param level the condition level
-    @param msg the condition message text
-    @param fatal_error should the fatal_error flag be set?
-    @return The condition raised, or NULL
-  */
-  Sql_condition *raise_condition(uint sql_errno, const char *sqlstate,
-                                 Sql_condition::enum_severity_level level,
-                                 const char *msg, bool fatal_error = false);
 
  public:
   void set_command(enum enum_server_command command);
@@ -4379,6 +4420,12 @@ class THD : public MDL_context_owner,
   bool has_invoker() const { return m_invoker_user.str != nullptr; }
 
   void mark_transaction_to_rollback(bool all);
+
+ public:
+  /**
+   This memory root is used for Parallel Query
+   */
+  MEM_ROOT *pq_mem_root;
 
  private:
   /** The current internal error handler for this thread, or NULL. */
@@ -4694,6 +4741,10 @@ class THD : public MDL_context_owner,
  public:
   bool is_system_user();
   void set_system_user(bool system_user_flag);
+  bool is_worker();
+  bool pq_copy_from(THD *thd);
+  bool pq_merge_status(THD *thd);
+  bool pq_status_reset();
 
  public:
   Transactional_ddl_context m_transactional_ddl{this};
@@ -4779,4 +4830,5 @@ inline void THD::set_system_user(bool system_user_flag) {
   m_is_system_user.store(system_user_flag, std::memory_order_seq_cst);
 }
 
+inline bool THD::is_worker() { return pq_leader != nullptr; }
 #endif /* SQL_CLASS_INCLUDED */

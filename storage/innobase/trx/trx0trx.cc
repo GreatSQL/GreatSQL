@@ -2257,6 +2257,21 @@ ReadView *trx_assign_read_view(trx_t *trx) /*!< in/out: active transaction */
   return (trx->read_view);
 }
 
+ReadView *trx_clone_read_view(
+    trx_t *trx, ReadView *snapshot) /*!< in/out: active transaction */
+{
+  trx->read_view = UT_NEW_NOKEY(ReadView());
+  if (trx->read_view != nullptr) {
+    trx->read_view->Copy_readView(*snapshot);
+    trx->read_view->set_closed(false);
+    trx->read_view->set_cloned(true);
+    trx_sys_mutex_enter();
+    trx_sys->mvcc->view_add(trx->read_view);
+    trx_sys_mutex_exit();
+  }
+  return (trx->read_view);
+}
+
 /** Clones the read view from another transaction. All consistent reads within
 the receiver transaction will get the same read view as the donor transaction
 @param[in]	trx		receiver transaction

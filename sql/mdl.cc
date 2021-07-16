@@ -1,4 +1,6 @@
-/* Copyright (c) 2007, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2007, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -53,6 +55,7 @@
 #include "sql/current_thd.h"
 #include "sql/debug_sync.h"
 #include "sql/mysqld.h"
+#include "sql/sql_class.h"
 #include "sql/thr_malloc.h"
 
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *system_charset_info;
@@ -2652,6 +2655,7 @@ bool equivalent(const MDL_ticket *a, const MDL_ticket *b,
 }
 #endif /* not defined NDEBUG */
 
+THD *invalid_thd = (THD *)0x1;
 /**
   Check whether the context already holds a compatible lock ticket
   on an object.
@@ -2671,6 +2675,13 @@ MDL_ticket *MDL_context::find_ticket(MDL_request *mdl_request,
                                      enum_mdl_duration *result_duration) {
   auto h = m_ticket_store.find(*mdl_request);
   *result_duration = h.m_dur;
+  // PQ worker need to judge its leader got this ticket or not
+  // during xa recover, get_thd() maybe NULL
+  if (!h.m_ticket && get_thd() && get_thd() != invalid_thd &&
+      get_thd()->pq_leader) {
+    return get_thd()->pq_leader->mdl_context.find_ticket(mdl_request,
+                                                         result_duration);
+  }
   return h.m_ticket;
 }
 

@@ -1,4 +1,6 @@
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -179,6 +181,8 @@ int LimitOffsetIterator::Read() {
   return result;
 }
 
+int LimitOffsetIterator::End() { return m_source->End(); }
+
 AggregateIterator::AggregateIterator(
     THD *thd, unique_ptr_destroy_only<RowIterator> source, JOIN *join,
     TableCollection tables, bool rollup)
@@ -193,7 +197,7 @@ AggregateIterator::AggregateIterator(
 }
 
 bool AggregateIterator::Init() {
-  assert(!m_join->tmp_table_param.precomputed_group_by);
+  assert(!m_join->tmp_table_param->precomputed_group_by);
 
   // Disable any leftover rollup items used in children.
   m_current_rollup_position = -1;
@@ -397,6 +401,8 @@ int AggregateIterator::Read() {
   assert(false);
   return 1;
 }
+
+int AggregateIterator::End() { return m_source->End(); }
 
 void AggregateIterator::SetRollupLevel(int level) {
   if (m_rollup && m_current_rollup_position != level) {
@@ -1186,6 +1192,8 @@ int TemptableAggregateIterator::Read() {
   }
   return m_table_iterator->Read();
 }
+
+int TemptableAggregateIterator::End() { return m_subquery_iterator->End(); }
 
 MaterializedTableFunctionIterator::MaterializedTableFunctionIterator(
     THD *thd, Table_function *table_function, TABLE *table,

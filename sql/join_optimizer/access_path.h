@@ -1,4 +1,6 @@
-/* Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,6 +39,7 @@
 
 class Common_table_expr;
 class Filesort;
+class Gather_operator;
 class Item;
 class Item_func_eq;
 class JOIN;
@@ -197,7 +200,9 @@ struct AccessPath {
     WEEDOUT,
     REMOVE_DUPLICATES,
     ALTERNATIVE,
-    CACHE_INVALIDATOR
+    CACHE_INVALIDATOR,
+    PARALLEL_SCAN,
+    PQBLOCK_SCAN
   } type;
 
   /// Whether this access path counts as one that scans a base table,
@@ -558,6 +563,22 @@ struct AccessPath {
     assert(type == CACHE_INVALIDATOR);
     return u.cache_invalidator;
   }
+  auto &parallel_scan() {
+    assert(type == PARALLEL_SCAN);
+    return u.parallel_scan;
+  }
+  const auto &parallel_scan() const {
+    assert(type == PARALLEL_SCAN);
+    return u.parallel_scan;
+  }
+  auto &pqblock_scan() {
+    assert(type == PQBLOCK_SCAN);
+    return u.pqblock_scan;
+  }
+  const auto &pqblock_scan() const {
+    assert(type == PQBLOCK_SCAN);
+    return u.pqblock_scan;
+  }
 
  private:
   // We'd prefer if this could be an std::variant, but we don't have C++17 yet.
@@ -762,6 +783,20 @@ struct AccessPath {
       AccessPath *child;
       const char *name;
     } cache_invalidator;
+
+    struct {
+      QEP_TAB *tab;
+      TABLE *table;
+      Gather_operator *gather;
+      bool stable_sort; /** determine whether using stable sort */
+      uint ref_len;
+    } parallel_scan;
+
+    struct {
+      TABLE *table;
+      Gather_operator *gather;
+      bool need_rowid;
+    } pqblock_scan;
   } u;
 };
 static_assert(std::is_trivially_destructible<AccessPath>::value,
@@ -1223,6 +1258,31 @@ inline AccessPath *NewInvalidatorAccessPath(THD *thd, AccessPath *child,
   path->type = AccessPath::CACHE_INVALIDATOR;
   path->cache_invalidator().child = child;
   path->cache_invalidator().name = name;
+  return path;
+}
+
+inline AccessPath *NewParallelScanAccessPath(THD *thd, QEP_TAB *tab,
+                                             TABLE *table,
+                                             Gather_operator *gather,
+                                             bool stable_sort, uint ref_len) {
+  AccessPath *path = new (thd->mem_root) AccessPath;
+  path->type = AccessPath::PARALLEL_SCAN;
+  path->parallel_scan().tab = tab;
+  path->parallel_scan().table = table;
+  path->parallel_scan().gather = gather;
+  path->parallel_scan().stable_sort = stable_sort;
+  path->parallel_scan().ref_len = ref_len;
+  return path;
+}
+
+inline AccessPath *NewPQBlockScanAccessPath(THD *thd, TABLE *table,
+                                            Gather_operator *gather,
+                                            bool need_rowid) {
+  AccessPath *path = new (thd->mem_root) AccessPath;
+  path->type = AccessPath::PQBLOCK_SCAN;
+  path->pqblock_scan().table = table;
+  path->pqblock_scan().gather = gather;
+  path->pqblock_scan().need_rowid = need_rowid;
   return path;
 }
 

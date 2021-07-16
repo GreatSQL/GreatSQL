@@ -1,4 +1,6 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -214,6 +216,7 @@ size_t Filesort_buffer::sort_buffer(Sort_param *param, size_t num_input_rows,
       }
       return std::min(num_input_rows, max_output_rows);
     }
+    // this can ensure that smaller row_id be sorted in front.
     param->m_sort_algorithm = Sort_param::FILESORT_ALG_STD_SORT;
     if (prefilter_nth_element) {
       nth_element(it_begin, it_begin + max_output_rows - 1, it_end,

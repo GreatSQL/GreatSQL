@@ -1,4 +1,6 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2380,7 +2382,6 @@ void close_temporary_table(THD *thd, TABLE *table, bool free_share,
   close_temporary(thd, table, free_share, delete_table);
 
   mysql_mutex_unlock(&thd->LOCK_temporary_tables);
-
 }
 
 /*
@@ -2741,7 +2742,9 @@ static bool tdc_wait_for_old_version(THD *thd, const char *db,
   bool res = false;
 
   mysql_mutex_lock(&LOCK_open);
-  if ((share = get_cached_table_share(db, table_name)) &&
+  // when current thread is PQ thread, no need to wait for flush tables. because
+  // flush thread is waiting PQ leader thread finish.
+  if (!thd->is_worker() && (share = get_cached_table_share(db, table_name)) &&
       share->has_old_version()) {
     struct timespec abstime;
     set_timespec(&abstime, wait_timeout);
@@ -3300,7 +3303,7 @@ retry_share : {
 
 share_found:
   if (!(flags & MYSQL_OPEN_IGNORE_FLUSH)) {
-    if (share->has_old_version()) {
+    if (!thd->is_worker() && share->has_old_version()) {
       /*
         We already have an MDL lock. But we have encountered an old
         version of table in the table definition cache which is possible
@@ -8978,8 +8981,8 @@ bool resolve_var_assignments(THD *thd, LEX *lex) {
 bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
                   bool split_sum_funcs, bool column_update,
                   const mem_root_deque<Item *> *typed_items,
-                  mem_root_deque<Item *> *fields,
-                  Ref_item_array ref_item_array) {
+                  mem_root_deque<Item *> *fields, Ref_item_array ref_item_array,
+                  bool skip_check_grant) {
   DBUG_TRACE;
 
   Query_block *const select = thd->lex->current_query_block();
@@ -8992,13 +8995,14 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
   assert(want_privilege == 0 || want_privilege == SELECT_ACL ||
          want_privilege == INSERT_ACL || want_privilege == UPDATE_ACL);
   assert(!(column_update && (want_privilege & SELECT_ACL)));
-  if (want_privilege & SELECT_ACL)
-    thd->mark_used_columns = MARK_COLUMNS_READ;
-  else if (want_privilege & (INSERT_ACL | UPDATE_ACL) && !column_update)
-    thd->mark_used_columns = MARK_COLUMNS_WRITE;
-  else
-    thd->mark_used_columns = MARK_COLUMNS_NONE;
-
+  if (!skip_check_grant) {
+    if (want_privilege & SELECT_ACL)
+      thd->mark_used_columns = MARK_COLUMNS_READ;
+    else if (want_privilege & (INSERT_ACL | UPDATE_ACL) && !column_update)
+      thd->mark_used_columns = MARK_COLUMNS_WRITE;
+    else
+      thd->mark_used_columns = MARK_COLUMNS_NONE;
+  }
   DBUG_PRINT("info", ("thd->mark_used_columns: %d", thd->mark_used_columns));
   if (allow_sum_func)
     thd->lex->allow_sum_func |= (nesting_map)1 << select->nest_level;
@@ -10312,8 +10316,9 @@ static bool is_cond_equal(const Item *cond) noexcept {
 }
 
 static bool is_cond_mult_equal(const Item *cond) noexcept {
-  return (cond->type() == Item::FUNC_ITEM &&
-          (((const Item_func *)cond)->functype() == Item_func::MULT_EQUAL_FUNC));
+  return (
+      cond->type() == Item::FUNC_ITEM &&
+      (((const Item_func *)cond)->functype() == Item_func::MULT_EQUAL_FUNC));
 }
 
 /*
@@ -10414,8 +10419,8 @@ Table_node::Table_node(const TABLE *table_arg)
   }
 }
 
-inline Column_node *Table_node::get_column_node(const Field *field) const
-    noexcept {
+inline Column_node *Table_node::get_column_node(
+    const Field *field) const noexcept {
   return columns[field->field_index()];
 }
 
@@ -10615,7 +10620,7 @@ void Join_node::add_const_equi_columns(Item *cond) {
   if (is_cond_or(cond)) return;
   if (is_cond_and(cond)) {
     const List<Item> *args = ((const Item_cond *)cond)->argument_list();
-    List_iterator<Item> it(*const_cast<List<Item>*>(args));
+    List_iterator<Item> it(*const_cast<List<Item> *>(args));
     Item *c;
     while ((c = it++)) add_const_equi_columns(c);
     return;

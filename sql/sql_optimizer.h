@@ -1,7 +1,9 @@
 #ifndef SQL_OPTIMIZER_INCLUDED
 #define SQL_OPTIMIZER_INCLUDED
 
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -48,9 +50,12 @@
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
 #include "sql/sql_opt_exec_shared.h"
+#include "sql/sql_parallel.h"
 #include "sql/sql_select.h"  // Key_use
 #include "sql/table.h"
 #include "sql/temp_table_param.h"
+
+struct PQ_optimized_var;
 
 enum class Subquery_strategy : int;
 class COND_EQUAL;
@@ -60,8 +65,9 @@ class Opt_trace_context;
 class THD;
 class Window;
 struct AccessPath;
+class MQueue_handle;
 struct MYSQL_LOCK;
-
+class Gather_operator;
 class Item_equal;
 template <class T>
 class mem_root_deque;
@@ -136,7 +142,7 @@ class JOIN {
   /// Query block that is optimized and executed using this JOIN
   Query_block *const query_block;
   /// Thread handler
-  THD *const thd;
+  THD *thd;
 
   /**
     Optimal query execution plan. Initialized with a tentative plan in
@@ -146,6 +152,8 @@ class JOIN {
   JOIN_TAB *join_tab{nullptr};
   /// Array of QEP_TABs
   QEP_TAB *qep_tab{nullptr};
+  QEP_TAB *qep_tab0{nullptr};
+  QEP_TAB *qep_tab1{nullptr};
 
   /**
     Array of plan operators representing the current (partial) best
@@ -207,6 +215,7 @@ class JOIN {
      5. semi-joined tables used with materialization strategy
   */
   uint tables{0};          ///< Total number of tables in query block
+  uint old_tables{0};      ///< Save old total number of tables in query block
   uint primary_tables{0};  ///< Number of primary input tables in query block
   uint const_tables{0};    ///< Number of primary tables deemed constant
   uint tmp_tables{0};      ///< Number of temporary tables used by query
@@ -311,7 +320,9 @@ class JOIN {
      The one here is transiently used as a model by create_intermediate_table(),
      to build the tmp table's own tmp_table_param.
   */
-  Temp_table_param tmp_table_param;
+  Temp_table_param origin_tmp_table_param;
+  Temp_table_param *tmp_table_param;
+  Temp_table_param *saved_tmp_table_param;
   MYSQL_LOCK *lock;
 
   enum class RollupState { NONE, INITED, READY };
@@ -348,8 +359,8 @@ class JOIN {
     should be used instead of a filesort when computing
     ORDER/GROUP BY.
   */
-  enum {
-    ORDERED_INDEX_VOID,      // No ordered index avail.
+  enum ORDERED_INDEX_USAGE {
+    ORDERED_INDEX_VOID = 0,  // No ordered index avail.
     ORDERED_INDEX_GROUP_BY,  // Use index for GROUP BY
     ORDERED_INDEX_ORDER_BY   // Use index for ORDER BY
   } m_ordered_index_usage{ORDERED_INDEX_VOID};
@@ -367,14 +378,30 @@ class JOIN {
   */
   bool need_tmp_before_win{false};
 
+  // need a tmp table to store Parallel Query result
+  bool need_tmp_pq{false};
+
+  // need a tmp table for leader thread
+  bool need_tmp_pq_leader{false};
+
   /// If JOIN has lateral derived tables (is set at start of planning)
   bool has_lateral{false};
 
   /// Used and updated by JOIN::make_join_plan() and optimize_keyuse()
-  Key_use_array keyuse_array;
+  Key_use_array origin_keyuse_array;
+  Key_use_array *keyuse_array;
 
   /// List storing all expressions used in query block
   mem_root_deque<Item *> *query_block_fields;
+
+  /**
+     This is similar to tmp_fields_list, but it also contains necessary
+     extras: expressions added for ORDER BY, GROUP BY, window clauses,
+     underlying items of split items.
+  */
+  mem_root_deque<Item *> *tmp_all_fields = nullptr;
+  mem_root_deque<Item *> *tmp_all_fields0 = nullptr;
+  mem_root_deque<Item *> *tmp_all_fields1 = nullptr;
 
   /**
     Array of pointers to lists of expressions.
@@ -392,6 +419,8 @@ class JOIN {
     @see JOIN::make_tmp_tables_info()
   */
   mem_root_deque<Item *> *tmp_fields = nullptr;
+  mem_root_deque<Item *> *tmp_fields0 = nullptr;
+  mem_root_deque<Item *> *tmp_fields1 = nullptr;
 
   int error{0};  ///< set in optimize(), exec(), prepare_result()
 
@@ -399,6 +428,17 @@ class JOIN {
     ORDER BY and GROUP BY lists, to transform with prepare,optimize and exec
   */
   ORDER_with_src order, group_list;
+  // used for worker's make_tmp_tables_info
+  PQ_optimized_var saved_optimized_vars;
+
+  // the split table
+  int pq_tab_idx{-1};
+
+  bool pq_rebuilt_group{false};
+
+  bool pq_stable_sort{false};
+
+  int pq_last_sort_idx{-1};
 
   // Used so that AggregateIterator knows which items to signal when the rollup
   // level changes. Obviously only used in the presence of rollup.
@@ -512,12 +552,20 @@ class JOIN {
   Ref_item_array *ref_items{
       nullptr};  // cardinality: REF_SLICE_SAVED_BASE + 1 + #windows*2
 
+  Ref_item_array *ref_items0{
+      nullptr};  // cardinality: REF_SLICE_SAVED_BASE + 1 + #windows*2
+
+  Ref_item_array *ref_items1{nullptr};  // use for parallel Query leader
+
   /**
     The slice currently stored in ref_items[0].
     Used to restore the base ref_items slice from the "save" slice after it
     has been overwritten by another slice (1-3).
   */
   uint current_ref_item_slice;
+
+  // used for Parallel Query
+  uint last_slice_before_pq;
 
   /**
     Used only if this query block is recursive. Contains count of
@@ -578,6 +626,8 @@ class JOIN {
   */
   bool plan_is_single_table() { return primary_tables - const_tables == 1; }
 
+  bool check_pq_select_fields();
+  bool choose_parallel_tables();
   bool optimize();
   void reset();
   bool prepare_result();
@@ -664,7 +714,7 @@ class JOIN {
     returning the row.
   */
   bool send_row_on_empty_set() const {
-    return (do_send_rows && tmp_table_param.sum_func_count != 0 &&
+    return (do_send_rows && tmp_table_param->sum_func_count != 0 &&
             group_list.empty() && !group_optimized_away &&
             query_block->having_value != Item::COND_FALSE);
   }
@@ -673,6 +723,15 @@ class JOIN {
   void finalize_derived_keys();
   bool get_best_combination();
   bool attach_join_conditions(plan_idx last_tab);
+
+  /**
+   *  add for parallel to get expressions where after select or update set
+   * clause.
+   */
+  mem_root_deque<Item *> *visible_exprs() {
+    auto position = CountHiddenFields(*fields);
+    return &fields[position];
+  }
 
  private:
   bool attach_join_condition_to_nest(plan_idx first_inner, plan_idx last_tab,
@@ -779,7 +838,8 @@ class JOIN {
   bool create_intermediate_table(QEP_TAB *tab,
                                  const mem_root_deque<Item *> &tmp_table_fields,
                                  ORDER_with_src &tmp_table_group,
-                                 bool save_sum_fields);
+                                 bool save_sum_fields,
+                                 bool force_disk_table = false);
 
   /**
     Optimize distinct when used on a subset of the tables.
@@ -887,8 +947,35 @@ class JOIN {
                                          POSITION *sjm_pos);
 
   bool add_having_as_tmp_table_cond(uint curr_tmp_table);
+
+ public:
   bool make_tmp_tables_info();
+  // make Paralle Query leader's qep tables info
+  bool make_leader_tables_info();
+  // make a tmp table in Query_result_mq for PQ
+  bool make_pq_tables_info();
+  bool alloc_qep1(uint n);
+
+  /**
+   Test if an index could be used to replace filesort for ORDER BY/GROUP BY
+
+   @details
+     Investigate whether we may use an ordered index as part of either
+     DISTINCT, GROUP BY or ORDER BY execution. An ordered index may be
+     used for only the first of any of these terms to be executed. This
+     is reflected in the order which we check for test_if_skip_sort_order()
+     below. However we do not check for DISTINCT here, as it would have
+     been transformed to a GROUP BY at this stage if it is a candidate for
+     ordered index optimization.
+     If a decision was made to use an ordered index, the availability
+     if such an access path is stored in 'm_ordered_index_usage' for later
+     use by 'execute' or 'explain'
+ */
+  void test_skip_sort();
+
   void set_plan_state(enum_plan_state plan_state_arg);
+
+ private:
   bool compare_costs_of_subquery_strategies(Subquery_strategy *method);
   ORDER *remove_const(ORDER *first_order, Item *cond, bool change_list,
                       bool *simple_order, bool group_by);
@@ -911,30 +998,7 @@ class JOIN {
   */
   bool optimize_distinct_group_order();
 
-  /**
-    Test if an index could be used to replace filesort for ORDER BY/GROUP BY
-
-    @details
-      Investigate whether we may use an ordered index as part of either
-      DISTINCT, GROUP BY or ORDER BY execution. An ordered index may be
-      used for only the first of any of these terms to be executed. This
-      is reflected in the order which we check for test_if_skip_sort_order()
-      below. However we do not check for DISTINCT here, as it would have
-      been transformed to a GROUP BY at this stage if it is a candidate for
-      ordered index optimization.
-      If a decision was made to use an ordered index, the availability
-      if such an access path is stored in 'm_ordered_index_usage' for later
-      use by 'execute' or 'explain'
-  */
-  void test_skip_sort();
-
   bool alloc_indirection_slices();
-
-  /**
-    Convert the executor structures to a set of access paths, storing
-    the result in m_root_access_path.
-   */
-  void create_access_paths();
 
   /**
     Create access paths with the knowledge that there are going to be zero rows
@@ -952,11 +1016,28 @@ class JOIN {
   AccessPath *attach_access_paths_for_having_and_limit(AccessPath *path);
   /** @} */
 
+ public:
   /**
     An access path you can read from to get all records for this query
     (after you create an iterator from it).
    */
   AccessPath *m_root_access_path = nullptr;
+
+ public:
+  /**
+  Convert the executor structures to a set of access paths, storing
+  the result in m_root_access_path.
+ */
+  void create_access_paths();
+  bool pq_copy_from(JOIN *orig);
+
+  bool alloc_indirection_slices1();
+
+  bool setup_tmp_table_info(JOIN *orig);
+
+  bool restore_optimized_vars();
+
+  void save_optimized_vars();
 };
 
 /**
@@ -964,9 +1045,10 @@ class JOIN {
   final join order. If 'tables==0', one is not expected to consult best_ref
   cells, and best_ref may not even have been allocated.
 */
-#define ASSERT_BEST_REF_IN_JOIN_ORDER(join)                                 \
-  do {                                                                      \
-    assert((join)->tables == 0 || ((join)->best_ref && !(join)->join_tab)); \
+#define ASSERT_BEST_REF_IN_JOIN_ORDER(join)                     \
+  do {                                                          \
+    assert((join)->thd->parallel_exec || (join)->tables == 0 || \
+           ((join)->best_ref && !(join)->join_tab));            \
   } while (0)
 
 /**
@@ -1134,6 +1216,14 @@ extern const char *antijoin_null_cond;
   evaluated during optimization, or true otherwise
 */
 bool evaluate_during_optimization(const Item *item, const Query_block *select);
+extern Field *create_tmp_field_for_schema(Item *item, TABLE *table,
+                                          MEM_ROOT *root);
+
+extern void record_optimized_group_order(PQ_Group_list_ptrs *ptr,
+                                         ORDER_with_src &new_list,
+                                         std::vector<bool> &optimized_flags);
+extern ORDER *restore_optimized_group_order(SQL_I_List<ORDER> &orig_list,
+                                            std::vector<bool> &optimized_flags);
 
 /**
   Find the multiple equality predicate containing a field.

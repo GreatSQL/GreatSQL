@@ -1,0 +1,26 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+create database pq_test;
+use pq_test;
+
+CREATE TABLE t1 ( 
+pk INT NOT NULL AUTO_INCREMENT,
+c1_idx CHAR(1) DEFAULT 'y', 
+c2 INT, 
+PRIMARY KEY (pk),
+INDEX c1_idx (c1_idx)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (), (), (), ();
+
+ANALYZE TABLE t1;
+
+explain select * from t1 where c1_idx = 'y' order by pk desc;
+select * from t1 where c1_idx = 'y' order by pk desc;
+
+
+
+drop table pq_test.t1;
+drop database pq_test;
+

@@ -1,4 +1,6 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -44,9 +46,15 @@ class Item;
 class Item_subselect;
 class PT_select_var;
 class Query_expression;
+class TABLE;
+class Temp_table_param;
 class THD;
 struct CHARSET_INFO;
 struct TABLE_LIST;
+class JOIN;
+class MQueue_handle;
+struct Field_raw_data;
+class handler;
 
 /*
   This is used to get result from a query
@@ -67,6 +75,8 @@ class Query_result {
     Valid only for materialized derived tables/views.
   */
   double estimated_cost;
+
+  virtual MQueue_handle *get_mq_handler() { return nullptr; }
 
   Query_result() : unit(nullptr), estimated_rowcount(0), estimated_cost(0) {}
   virtual ~Query_result() {}
@@ -206,6 +216,51 @@ class Query_result_interceptor : public Query_result {
     return false;
   }
   bool is_interceptor() const final { return true; }
+};
+
+class Query_result_mq : public Query_result {
+ public:
+  Query_result_mq()
+      : Query_result(),
+        m_table(nullptr),
+        m_param(nullptr),
+        m_handler(nullptr),
+        m_join(nullptr),
+        send_fields(nullptr),
+        send_fields_size(0),
+        mq_fields_data(nullptr),
+        mq_fields_null_array(nullptr),
+        mq_fields_null_flag(nullptr),
+        m_file(nullptr),
+        m_stable_output(false) {}
+
+  Query_result_mq(JOIN *join, MQueue_handle *msg_handler,
+                  handler *file = nullptr, bool stab_output = false);
+
+  bool send_result_set_metadata(THD *thd, const mem_root_deque<Item *> &list,
+                                uint flags) override;
+  bool send_data(THD *thd, const mem_root_deque<Item *> &items) override;
+  bool send_eof(THD *thd MY_ATTRIBUTE((unused))) override;
+  bool check_simple_query_block() const override { return false; }
+
+  void cleanup(THD *) override;
+  MQueue_handle *get_mq_handler() override { return m_handler; }
+
+  TABLE *m_table{nullptr};
+  Temp_table_param *m_param{nullptr};
+  MQueue_handle *m_handler{nullptr};
+
+ private:
+  JOIN *m_join{nullptr};
+  mem_root_deque<Item *> *send_fields{nullptr};
+  uint send_fields_size{0};
+  Field_raw_data *mq_fields_data{nullptr};
+  bool *mq_fields_null_array{nullptr};
+  char *mq_fields_null_flag{nullptr};
+
+  // for stable output
+  handler *m_file;
+  bool m_stable_output;
 };
 
 class Query_result_send : public Query_result {

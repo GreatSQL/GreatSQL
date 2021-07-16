@@ -1,6 +1,7 @@
 /*
-   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
-   Copyright (c) 2018, Percona and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -78,6 +79,7 @@
 #include "sql/debug_sync.h"
 #include "sql/derror.h"
 #include "sql/error_handler.h"
+#include "sql/exchange_sort.h"
 #include "sql/field.h"
 #include "sql/filesort_utils.h"
 #include "sql/handler.h"
@@ -608,10 +610,9 @@ bool filesort(THD *thd, Filesort *filesort, RowIterator *source_iterator,
     else
       sort_mode.append("fixed_sort_key");
     sort_mode.append(", ");
-    sort_mode.append(param->using_packed_addons()
-                         ? "packed_additional_fields"
-                         : param->using_addon_fields() ? "additional_fields"
-                                                       : "rowid");
+    sort_mode.append(param->using_packed_addons()  ? "packed_additional_fields"
+                     : param->using_addon_fields() ? "additional_fields"
+                                                   : "rowid");
     sort_mode.append(">");
 
     const char *algo_text[] = {"none", "std::sort", "std::stable_sort"};
@@ -690,6 +691,7 @@ Filesort::Filesort(THD *thd, Mem_root_array<TABLE *> tables_arg,
                    bool sort_positions, bool unwrap_rollup)
     : m_thd(thd),
       tables(std::move(tables_arg)),
+      m_order(order),
       keep_buffers(keep_buffers_arg),
       limit(limit_arg),
       sortorder(nullptr),
@@ -698,7 +700,9 @@ Filesort::Filesort(THD *thd, Mem_root_array<TABLE *> tables_arg,
           force_stable_sort),  // keep relative order of equiv. elts
       m_remove_duplicates(remove_duplicates),
       m_force_sort_positions(sort_positions),
-      m_sort_order_length(make_sortorder(order, unwrap_rollup)) {}
+      m_sort_order_length(0) {
+  if (order) m_sort_order_length = make_sortorder(order, unwrap_rollup);
+}
 
 uint Filesort::make_sortorder(ORDER *order, bool unwrap_rollup) {
   uint count;
@@ -2324,4 +2328,114 @@ void change_double_for_sort(double nr, uchar *to) {
   swap(to[2], to[5]);
   swap(to[3], to[4]);
 #endif
+}
+
+/**
+ * compare table->record[0] of two workers in PQ_merge_sort
+ * @a: the ID of first worker
+ * @b: the ID of second worker
+ * @arg: PQ_merge sort
+ * @return
+ *     true if a's record is less than b's record;
+ *     false otherwise.
+ */
+
+bool heap_compare_records(int a, int b, void *arg) {
+  assert(arg);
+  bool convert_res;
+
+  Exchange_sort *merge_sort = static_cast<Exchange_sort *>(arg);
+  const Filesort *filesort = merge_sort->get_filesort();
+  THD *thd = merge_sort->get_thd();
+  assert(filesort && current_thd == thd);
+
+  uchar *row_id_0 = merge_sort->get_row_id(0);
+  uchar *row_id_1 = merge_sort->get_row_id(1);
+  uchar *key_0 = merge_sort->get_key(0);
+  uchar *key_1 = merge_sort->get_key(1);
+
+  /** using previous old table when comparing row_id (or PK) */
+  handler *file = merge_sort->get_file();
+  assert(file->ht->db_type == DB_TYPE_INNODB);
+#if !defined(NDEBUG)
+  uint ref_len = merge_sort->ref_length();
+  assert(ref_len == file->ref_length);
+#endif
+  bool force_stable_sort = merge_sort->is_stable();
+
+  Sort_param *sort_param = merge_sort->get_sort_param();
+  int key_len = 0, compare_len = 0;
+
+  if (sort_param) {
+    key_len = sort_param->max_record_length() + 1;
+    compare_len = sort_param->max_compare_length();
+  }
+
+  /**
+   * the compare process contains the following three steps:
+   *   1. copy to table->record[0]
+   *   2. add row_id info.
+   *   3. generate sort key
+   */
+  mq_record_st *compare_a = merge_sort->get_record(a);
+  convert_res = merge_sort->convert_mq_data_to_record(
+      compare_a->m_data, compare_a->m_length, row_id_0);
+
+  // there is an error during execution
+  if (!convert_res || DBUG_EVALUATE_IF("pq_msort_error6", true, false)) {
+    thd->pq_error = true;
+    return true;
+  }
+
+  /*
+   * using row_id to achieve stable sort, i.e.,
+   * record1 < record2 <=> key1 < key2 or (key1 = key2 && row_id1 < row_id2)
+   */
+
+  if (sort_param) {
+    sort_param->make_sortkey(key_0, key_len, filesort->tables);
+  }
+
+  mq_record_st *compare_b = merge_sort->get_record(b);
+  convert_res = merge_sort->convert_mq_data_to_record(
+      compare_b->m_data, compare_b->m_length, row_id_1);
+
+  // there is an error during execution
+  if (!convert_res || DBUG_EVALUATE_IF("pq_msort_error7", true, false)) {
+    thd->pq_error = true;
+    return true;
+  }
+
+  if (sort_param) {
+    sort_param->make_sortkey(key_1, key_len, filesort->tables);
+  }
+
+  // c1: table scan (or index scan with optimized order = nullptr)
+  if (!filesort->sortorder) {
+    assert(sort_param == nullptr && force_stable_sort);
+    assert(row_id_0 && row_id_1);
+    return file->cmp_ref(row_id_0, row_id_1) < 0;
+  } else {
+    int cmp_key_result;
+    // c2: with order
+    if (sort_param != nullptr && sort_param->using_varlen_keys()) {
+      cmp_varlen_keys(sort_param->local_sortorder, sort_param->use_hash, key_0,
+                      key_1, &cmp_key_result);
+      if (!force_stable_sort) {
+        return cmp_key_result < 0;
+      } else {
+        assert(row_id_0 && row_id_1);
+        return (cmp_key_result < 0 ||
+                (cmp_key_result == 0 && file->cmp_ref(row_id_0, row_id_1) < 0));
+      }
+    } else {
+      int cmp = memcmp(key_0, key_1, compare_len);
+      if (!force_stable_sort) {
+        return cmp < 0;
+      } else {
+        assert(row_id_0 && row_id_1);
+        return (cmp < 0 || (cmp == 0 && file->cmp_ref(row_id_0, row_id_1) < 0));
+      }
+    }
+  }
 }

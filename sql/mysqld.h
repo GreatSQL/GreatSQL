@@ -1,4 +1,6 @@
-/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -152,6 +154,9 @@ enum enum_server_operational_state {
 };
 enum_server_operational_state get_server_state();
 
+extern uint parallel_threads_running;
+extern uint parallel_threads_refused;
+extern uint parallel_memory_refused;
 extern bool opt_large_files, server_id_supplied;
 extern bool opt_bin_log;
 extern bool opt_log_slave_updates;
@@ -521,6 +526,7 @@ extern PSI_thread_key key_thread_compress_gtid_table;
 extern PSI_thread_key key_thread_parser_service;
 extern PSI_thread_key key_thread_handle_con_admin_sockets;
 extern PSI_cond_key key_monitor_info_run_cond;
+extern PSI_thread_key key_thread_parallel_query;
 
 extern PSI_file_key key_file_binlog;
 extern PSI_file_key key_file_binlog_index;

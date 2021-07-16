@@ -2,7 +2,9 @@
 #define HANDLER_INCLUDED
 
 /*
-   Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -61,7 +63,8 @@
 #include "my_thread_local.h"  // my_errno
 #include "mysql/components/services/psi_table_bits.h"
 #include "mysql_com.h"
-#include "nullable.h"          // Nullable
+#include "nullable.h"  // Nullable
+#include "pq_range.h"
 #include "sql/dd/object_id.h"  // dd::Object_id
 #include "sql/dd/string_type.h"
 #include "sql/dd/types/init_mode.h"
@@ -4251,6 +4254,12 @@ class handler {
   ha_rows estimation_rows_to_insert;
 
  public:
+  uint pq_range_type{0};
+  key_range pq_ref_key;
+  bool pq_ref{false};
+  bool pq_table_scan{false};
+  bool pq_reverse_scan{false};
+
   handlerton *ht; /* storage engine of this handler */
   /** Pointer to current row */
   uchar *ref;
@@ -4323,7 +4332,7 @@ class handler {
   /** Length of ref (1-8 or the clustered key length) */
   uint ref_length;
   FT_INFO *ft_handler;
-  enum { NONE = 0, INDEX, RND, SAMPLING } inited;
+  enum { NONE = 0, INDEX, RND, SAMPLING, PQ } inited;
   bool implicit_emptied; /* Can be !=0 only if HEAP */
   const Item *pushed_cond;
 
@@ -4577,8 +4586,12 @@ class handler {
   int ha_index_init(uint idx, bool sorted);
   int ha_index_end();
   int ha_rnd_init(bool scan);
+  int ha_pq_init(uint &dop, uint keyno);
   int ha_rnd_end();
+  int ha_pq_end();
+  int ha_pq_signal_all();
   int ha_rnd_next(uchar *buf);
+  int ha_pq_next(uchar *buf, void *scan_ctx);
   // See the comment on m_update_generated_read_fields.
   int ha_rnd_pos(uchar *buf, uchar *pos);
   int ha_index_read_map(uchar *buf, const uchar *key, key_part_map keypart_map,
@@ -4596,7 +4609,19 @@ class handler {
   int ha_reset();
   /* this is necessary in many places, e.g. in HANDLER command */
   int ha_index_or_rnd_end() {
-    return inited == INDEX ? ha_index_end() : inited == RND ? ha_rnd_end() : 0;
+    switch (inited) {
+      case INDEX:
+        return ha_index_end();
+        break;
+      case RND:
+        return ha_rnd_end();
+        break;
+      case PQ:
+        return ha_pq_end();
+        break;
+      default:
+        return 0;
+    }
   }
   /**
     The cached_table_flags is set at ha_open and ha_external_lock
@@ -4650,6 +4675,10 @@ class handler {
   int ha_unload_table(const char *db_name, const char *table_name,
                       bool error_if_not_loaded);
 
+  virtual int pq_leader_signal_all(void *scan_ctx MY_ATTRIBUTE((unused))) {
+    return (0);
+  }
+
   /**
     Initializes a parallel scan. It creates a parallel_scan_ctx that has to
     be used across all parallel_scan methods. Also, gets the number of
@@ -4668,6 +4697,22 @@ class handler {
                                  bool use_reserved_threads
                                      MY_ATTRIBUTE((unused))) {
     return 0;
+  }
+
+  /*
+  virtual void clone_consistent_snapshop(void *scan_ctx MY_ATTRIBUTE((unused)))
+  {
+  }
+  */
+  virtual int pq_leader_scan_init(uint keyno MY_ATTRIBUTE((unused)),
+                                  void *&scan_ctx MY_ATTRIBUTE((unused)),
+                                  uint &n_threads MY_ATTRIBUTE((unused))) {
+    return (0);
+  }
+
+  virtual int pq_worker_scan_init(uint keyno MY_ATTRIBUTE((unused)),
+                                  void *scan_ctx MY_ATTRIBUTE((unused))) {
+    return (0);
   }
 
   /**
@@ -4736,12 +4781,27 @@ class handler {
     return 0;
   }
 
+  virtual int pq_worker_scan_next(void *scan_ctx MY_ATTRIBUTE((unused)),
+                                  uchar *buf MY_ATTRIBUTE((unused))) {
+    return (0);
+  }
+
   /**
     End of the parallel scan.
     @param[in]      scan_ctx      A scan context created by parallel_scan_init.
   */
   virtual void parallel_scan_end(void *scan_ctx MY_ATTRIBUTE((unused))) {
     return;
+  }
+
+  virtual int pq_leader_scan_end(
+      void *parallel_scan_ctx MY_ATTRIBUTE((unused))) {
+    return (0);
+  }
+
+  virtual int pq_worker_scan_end(
+      void *parallel_scan_ctx MY_ATTRIBUTE((unused))) {
+    return (0);
   }
 
   /**

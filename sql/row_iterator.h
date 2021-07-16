@@ -1,7 +1,9 @@
 #ifndef SQL_ROW_ITERATOR_H_
 #define SQL_ROW_ITERATOR_H_
 
-/* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -185,6 +187,14 @@ class RowIterator {
    */
   virtual RowIterator *real_iterator() { return this; }
   virtual const RowIterator *real_iterator() const { return this; }
+
+  /**
+   * Ends the iterator
+   * @return 0: the normal iterator
+   * @return 1: the ParallelScanIterator
+   * @retrun -1: the PQblockScanIterator
+   */
+  virtual int End() { return 0; }
 
  protected:
   THD *thd() const { return m_thd; }

@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -43,8 +45,8 @@ Parallel_reader_adapter::Parallel_reader_adapter(size_t max_threads,
 
 dberr_t Parallel_reader_adapter::add_scan(trx_t *trx,
                                           const Parallel_reader::Config &config,
-                                          Parallel_reader::F &&f) {
-  return m_parallel_reader.add_scan(trx, config, std::move(f));
+                                          Parallel_reader::F &&f, bool split) {
+  return (m_parallel_reader.add_scan(trx, config, std::move(f), split));
 }
 
 Parallel_reader_adapter::Thread_ctx::Thread_ctx() {

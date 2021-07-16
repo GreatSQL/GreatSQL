@@ -1,0 +1,186 @@
+create table t3 (f1 int, f2 int)|
+insert into t3 values (1,1)|
+drop procedure if exists bug4579_1|
+create procedure bug4579_1 ()
+begin
+declare sf1 int;
+select f1 into sf1 from t3 where f1=1 and f2=1;
+update t3 set f2 = f2 + 1 where f1=1 and f2=1;
+call bug4579_2();
+end|
+drop procedure if exists bug4579_2|
+create procedure bug4579_2 ()
+begin
+end|
+call bug4579_1()|
+call bug4579_1()|
+call bug4579_1()|
+drop procedure bug4579_1|
+drop procedure bug4579_2|
+drop table t3|
+drop function if exists func_20028_a|
+drop function if exists func_20028_b|
+drop function if exists func_20028_c|
+drop procedure if exists proc_20028_a|
+drop procedure if exists proc_20028_b|
+drop procedure if exists proc_20028_c|
+drop table if exists table_20028|
+create table table_20028 (i int)|
+SET @save_sql_mode=@@sql_mode|
+SET sql_mode=''|
+create function func_20028_a() returns integer
+begin
+declare temp integer;
+select i into temp from table_20028 limit 1;
+return ifnull(temp, 0);
+end|
+create function func_20028_b() returns integer
+begin
+return func_20028_a();
+end|
+create function func_20028_c() returns integer
+begin
+declare div_zero integer;
+set SQL_MODE='TRADITIONAL';
+select 1/0 into div_zero;
+return div_zero;
+end|
+create procedure proc_20028_a()
+begin
+declare temp integer;
+select i into temp from table_20028 limit 1;
+end|
+create procedure proc_20028_b()
+begin
+call proc_20028_a();
+end|
+create procedure proc_20028_c()
+begin
+declare div_zero integer;
+set SQL_MODE='TRADITIONAL';
+select 1/0 into div_zero;
+end|
+select func_20028_a()|
+func_20028_a()
+0
+select func_20028_b()|
+func_20028_b()
+0
+select func_20028_c()|
+ERROR 22012: Division by 0
+call proc_20028_a()|
+Warnings:
+Warning	1329	No data - zero rows fetched, selected, or processed
+call proc_20028_b()|
+Warnings:
+Warning	1329	No data - zero rows fetched, selected, or processed
+call proc_20028_c()|
+ERROR 22012: Division by 0
+SET sql_mode='TRADITIONAL'|
+drop function func_20028_a|
+drop function func_20028_b|
+drop function func_20028_c|
+drop procedure proc_20028_a|
+drop procedure proc_20028_b|
+drop procedure proc_20028_c|
+create function func_20028_a() returns integer
+begin
+declare temp integer;
+select i into temp from table_20028 limit 1;
+return ifnull(temp, 0);
+end|
+create function func_20028_b() returns integer
+begin
+return func_20028_a();
+end|
+create function func_20028_c() returns integer
+begin
+declare div_zero integer;
+set SQL_MODE='';
+select 1/0 into div_zero;
+return div_zero;
+end|
+create procedure proc_20028_a()
+begin
+declare temp integer;
+select i into temp from table_20028 limit 1;
+end|
+create procedure proc_20028_b()
+begin
+call proc_20028_a();
+end|
+create procedure proc_20028_c()
+begin
+declare div_zero integer;
+set SQL_MODE='';
+select 1/0 into div_zero;
+end|
+select func_20028_a()|
+func_20028_a()
+0
+select func_20028_b()|
+func_20028_b()
+0
+select func_20028_c()|
+func_20028_c()
+NULL
+call proc_20028_a()|
+Warnings:
+Warning	1329	No data - zero rows fetched, selected, or processed
+call proc_20028_b()|
+Warnings:
+Warning	1329	No data - zero rows fetched, selected, or processed
+call proc_20028_c()|
+SET @@sql_mode=@save_sql_mode|
+drop function func_20028_a|
+drop function func_20028_b|
+drop function func_20028_c|
+drop procedure proc_20028_a|
+drop procedure proc_20028_b|
+drop procedure proc_20028_c|
+drop table table_20028|
+create table t1 (i int, j int default 10)|
+create table t2 (i int)|
+insert into t2 values (1), (2)|
+create trigger trg1 before insert on t1 for each row 
+begin
+if new.i = 1 then
+set new.j := 1;
+end if;
+end|
+create trigger trg2 after insert on t1 for each row set @a:= 1|
+set @a:= 0|
+insert into t1 (i) select * from t2|
+select * from t1|
+i	j
+1	1
+2	10
+select @a|
+@a
+1
+drop table t1, t2|
+create table t1 (a varchar(64), b int);
+create table t2 like t1;
+create trigger t1_ai after insert on t1 for each row
+set @a:= (select max(a) from t1);
+insert into t1 (a) values
+("Twas"),("brillig"),("and"),("the"),("slithy"),("toves"),
+("Did"),("gyre"),("and"),("gimble"),("in"),("the"),("wabe");
+create trigger t2_ai after insert on t2 for each row
+set @a:= (select max(a) from t2);
+insert into t2 select * from t1;
+load data infile '../../std_data/words.dat' into table t1 (a);
+drop trigger t1_ai;
+drop trigger t2_ai;
+drop table t1,t2;
+drop table if exists t1, t2;
+CREATE TABLE t1 (a int, PRIMARY KEY (a));
+CREATE TABLE t2 (a int, PRIMARY KEY (a)) ENGINE=InnoDB;
+create trigger trg_del_t2 after  delete on t2 for each row
+insert into t1 values (1);
+insert into t1 values (1);
+insert into t2 values (1),(2);
+delete t2 from t2;
+ERROR 23000: Duplicate entry '1' for key 't1.PRIMARY'
+DROP TABLE t1;
+DROP TABLE t2;

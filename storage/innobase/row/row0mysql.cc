@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -1457,7 +1459,12 @@ void row_prebuilt_free(row_prebuilt_t *prebuilt, ibool dict_locked) {
   }
 
   prebuilt->m_lob_undo.destroy();
+  prebuilt->ctx = NULL;
 
+  if (prebuilt->pq_heap) {
+    mem_heap_free(prebuilt->pq_heap);
+    prebuilt->pq_heap = nullptr;
+  }
   mem_heap_free(prebuilt->heap);
 }
 

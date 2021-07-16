@@ -1,4 +1,6 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -995,8 +997,10 @@ Information in the data-dictionary needs to be updated. */
 #define HA_ERR_FTS_TOO_MANY_NESTED_EXP 209
 /** Destination schema does not exist */
 #define HA_ERR_DEST_SCHEMA_NOT_EXIST 210
+/** Complete scan all Parallel Query ranges */
+#define HA_ERR_END_OF_RANGES 211
 /** Copy of last error number */
-#define HA_ERR_LAST 210
+#define HA_ERR_LAST 211
 
 /* Number of different errors */
 #define HA_ERR_ERRORS (HA_ERR_LAST - HA_ERR_FIRST + 1)

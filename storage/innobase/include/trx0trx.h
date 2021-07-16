@@ -241,6 +241,9 @@ void trx_mark_sql_stat_end(trx_t *trx); /*!< in: trx handle */
  when this function is first called for a new started transaction. */
 ReadView *trx_assign_read_view(trx_t *trx); /*!< in: active transaction */
 
+ReadView *trx_clone_read_view(
+    trx_t *trx, ReadView *readview); /*!< in: active transaction */
+
 /** @return the transaction's read view or NULL if one not assigned. */
 UNIV_INLINE
 ReadView *trx_get_read_view(trx_t *trx);

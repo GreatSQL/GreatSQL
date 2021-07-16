@@ -1,4 +1,7 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
+
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
    as published by the Free Software Foundation.
@@ -53,6 +56,7 @@
 #define MEM_ROOT_SINGLE_CHUNKS 0
 #endif
 
+const int PQ_MEMORY_USED_BUCKET = 16;
 std::pair<MEM_ROOT::Block *, size_t> MEM_ROOT::AllocBlock(
     size_t wanted_length, size_t minimum_length) {
   DBUG_TRACE;
@@ -97,6 +101,39 @@ std::pair<MEM_ROOT::Block *, size_t> MEM_ROOT::AllocBlock(
   // This ensures O(1) total mallocs (assuming Clear() is not called).
   m_block_size += m_block_size / 2;
   return {new_block, length};
+}
+
+void *MEM_ROOT::Alloc(size_t length) {
+  void *ret = nullptr;
+  length = ALIGN_SIZE(length);
+
+  // Skip the straight path if simulating OOM; it should always fail.
+  DBUG_EXECUTE_IF("simulate_out_of_memory", return AllocSlow(length););
+
+  size_t old_alloc_size = m_allocated_size;
+  // Fast path, used in the majority of cases. It would be faster here
+  // (saving one register due to CSE) to instead test
+  //
+  // m_current_free_start + length <= m_current_free_end
+  //
+  // but it would invoke undefined behavior, and in particular be prone
+  // to wraparound on 32-bit platforms.
+  if (static_cast<size_t>(m_current_free_end - m_current_free_start) >=
+      length) {
+    ret = m_current_free_start;
+    m_current_free_start += length;
+    return ret;
+  }
+
+  ret = AllocSlow(length);
+  assert(m_allocated_size >= old_alloc_size);
+  if (allocCBFunc && (m_allocated_size - old_alloc_size))
+    allocCBFunc(
+        m_psi_key, m_allocated_size - old_alloc_size,
+        ((reinterpret_cast<unsigned long>(this) >> PQ_MEMORY_USED_BUCKET) &
+         0xf));
+
+  return ret;
 }
 
 void *MEM_ROOT::AllocSlow(size_t length) {
@@ -166,6 +203,11 @@ void MEM_ROOT::Clear() {
   DBUG_TRACE;
   DBUG_PRINT("enter", ("root: %p", this));
 
+  if (freeCBFunc && m_allocated_size)
+    freeCBFunc(
+        m_psi_key, m_allocated_size,
+        (reinterpret_cast<unsigned long>(this) >> PQ_MEMORY_USED_BUCKET) & 0xf);
+
   // Already cleared, or memset() to zero, so just ignore.
   if (m_current_block == nullptr) return;
 
@@ -188,6 +230,8 @@ void MEM_ROOT::ClearForReuse() {
     return;
   }
 
+  size_t old_alloc_size = m_allocated_size;
+
   // Already cleared, or memset() to zero, so just ignore.
   if (m_current_block == nullptr) return;
 
@@ -197,6 +241,11 @@ void MEM_ROOT::ClearForReuse() {
   Block *start = m_current_block->prev;
   m_current_block->prev = nullptr;
   m_allocated_size = m_current_free_end - m_current_free_start;
+
+  if (freeCBFunc && (old_alloc_size - m_allocated_size))
+    freeCBFunc(
+        m_psi_key, old_alloc_size - m_allocated_size,
+        (reinterpret_cast<uintptr_t>(this) >> PQ_MEMORY_USED_BUCKET) & 0xf);
 
   FreeBlocks(start);
 }

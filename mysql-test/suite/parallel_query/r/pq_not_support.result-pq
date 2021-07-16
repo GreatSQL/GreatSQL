@@ -1,0 +1,10 @@
+CREATE TABLE t0 ( col1 INT NOT NULL, col2 INT ) ENGINE=InnoDB;
+insert into t0 values(0,1),(1,2),(2,3);
+CREATE TABLE t1 (col3 DECIMAL(35,0) DEFAULT NULL, col1 INT NOT NULL, col2 INT NOT NULL DEFAULT '0', PRIMARY KEY (col1)) ENGINE=MyISAM;
+REPLACE INTO t1 ( col1,col2) SELECT col1,col2 FROM t0;
+select * from t1;
+col3	col1	col2
+NULL	0	1
+NULL	1	2
+NULL	2	3
+drop table t0, t1;

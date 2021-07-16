@@ -1,4 +1,6 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -631,22 +633,24 @@ bool Item_sum::has_aggregate_ref_in_group_by(uchar *) {
   return aggr_query_block != nullptr && aggr_query_block->group_fix_field;
 }
 
-Field *Item_sum::create_tmp_field(bool, TABLE *table) {
+Field *Item_sum::create_tmp_field(bool, TABLE *table, MEM_ROOT *root) {
   DBUG_TRACE;
   Field *field;
+  MEM_ROOT *pq_check_root = root ? root : *THR_MALLOC;
+
   switch (result_type()) {
     case REAL_RESULT:
-      field = new (*THR_MALLOC) Field_double(
+      field = new (pq_check_root) Field_double(
           max_length, is_nullable(), item_name.ptr(), decimals, false, true);
       break;
     case INT_RESULT:
-      field = new (*THR_MALLOC) Field_longlong(max_length, is_nullable(),
-                                               item_name.ptr(), unsigned_flag);
+      field = new (pq_check_root) Field_longlong(
+          max_length, is_nullable(), item_name.ptr(), unsigned_flag);
       break;
     case STRING_RESULT:
       return make_string_field(table);
     case DECIMAL_RESULT:
-      field = Field_new_decimal::create_from_item(this);
+      field = Field_new_decimal::create_from_item(this, root);
       break;
     case ROW_RESULT:
     default:
@@ -1732,14 +1736,17 @@ bool Item_sum_hybrid::setup_hybrid(Item *item, Item *value_arg) {
   return false;
 }
 
-Field *Item_sum_hybrid::create_tmp_field(bool group, TABLE *table) {
+Field *Item_sum_hybrid::create_tmp_field(bool group, TABLE *table,
+                                         MEM_ROOT *root) {
   DBUG_TRACE;
   Field *field;
+  MEM_ROOT *pq_check_root = root ? root : *THR_MALLOC;
+
   if (args[0]->type() == Item::FIELD_ITEM) {
     field = down_cast<Item_field *>(args[0])->field;
 
     field = create_tmp_field_from_field(current_thd, field, item_name.ptr(),
-                                        table, nullptr);
+                                        table, nullptr, root);
     if (field == nullptr) return nullptr;
     field->clear_flag(NOT_NULL_FLAG);
     field->orig_table_name = nullptr;
@@ -1753,22 +1760,22 @@ Field *Item_sum_hybrid::create_tmp_field(bool group, TABLE *table) {
   */
   switch (args[0]->data_type()) {
     case MYSQL_TYPE_DATE:
-      field = new (*THR_MALLOC) Field_newdate(is_nullable(), item_name.ptr());
+      field = new (pq_check_root) Field_newdate(is_nullable(), item_name.ptr());
       break;
     case MYSQL_TYPE_TIME:
-      field = new (*THR_MALLOC)
+      field = new (pq_check_root)
           Field_timef(is_nullable(), item_name.ptr(), decimals);
       break;
     case MYSQL_TYPE_TIMESTAMP:
-      field = new (*THR_MALLOC)
+      field = new (pq_check_root)
           Field_timestampf(is_nullable(), item_name.ptr(), decimals);
       break;
     case MYSQL_TYPE_DATETIME:
-      field = new (*THR_MALLOC)
+      field = new (pq_check_root)
           Field_datetimef(is_nullable(), item_name.ptr(), decimals);
       break;
     default:
-      return Item_sum::create_tmp_field(group, table);
+      return Item_sum::create_tmp_field(group, table, root);
   }
   if (field) field->init(table);
   return field;
@@ -2073,6 +2080,10 @@ double Aggregator_simple::arg_val_real() {
   return item_sum->args[0]->val_real();
 }
 
+longlong Aggregator_simple::arg_val_int() {
+  return item_sum->args[0]->val_int();
+}
+
 bool Aggregator_simple::arg_is_null(bool use_null_value) {
   Item **item = item_sum->args;
   const uint item_count = item_sum->arg_count;
@@ -2096,6 +2107,11 @@ my_decimal *Aggregator_distinct::arg_val_decimal(my_decimal *value) {
 double Aggregator_distinct::arg_val_real() {
   return use_distinct_values ? table->field[0]->val_real()
                              : item_sum->args[0]->val_real();
+}
+
+longlong Aggregator_distinct::arg_val_int() {
+  return use_distinct_values ? table->field[0]->val_int()
+                             : item_sum->args[0]->val_int();
 }
 
 bool Aggregator_distinct::arg_is_null(bool use_null_value) {
@@ -2124,7 +2140,7 @@ bool Item_sum_count::add() {
   if (aggr->arg_is_null(false)) {
     return current_thd->is_error();
   }
-  count++;
+  count += is_fake ? args[0]->val_int() : 1;
   return current_thd->is_error();
 }
 
@@ -2169,6 +2185,27 @@ void Item_sum_count::cleanup() {
 bool Item_sum_avg::resolve_type(THD *thd) {
   if (Item_sum_sum::resolve_type(thd)) return true;
 
+  /**
+   * for the rewritten Item_sum_avg, we should keep the same precision as that
+   * of Item_sum_sum. For the case of "3.1415926", we obtain
+   *   precision = len(31415926) = 8;
+   *   decimals = len(1315926) = 7;
+   *   max_length = len(3.1415926 + signed_flag) = 9;
+   *   if scale == 2: scale(3.1415926) = 3.14
+   */
+  if (pq_avg_type == PQ_WORKER || pq_avg_type == PQ_LEADER) {
+    prec_increment = 0;
+    if (hybrid_type == DECIMAL_RESULT) {
+      f_precision = args[0]->decimal_precision() + DECIMAL_LONGLONG_DIGITS;
+      decimals = args[0]->decimals;
+      max_length = my_decimal_precision_to_length_no_truncation(
+          f_precision, decimals, unsigned_flag);
+      f_scale = args[0]->decimals;
+      dec_bin_size = my_decimal_get_binary_size(f_precision, f_scale);
+    }
+    return false;
+  }
+
   set_nullable(true);
   null_value = true;
   prec_increment = thd->variables.div_precincrement;
@@ -2194,28 +2231,33 @@ bool Item_sum_avg::resolve_type(THD *thd) {
 
 Item *Item_sum_avg::copy_or_same(THD *thd) {
   DBUG_TRACE;
-  Item *result =
+  Item_sum_avg *result =
       m_is_window_function ? this : new (thd->mem_root) Item_sum_avg(thd, this);
+  if (!result) return result;
+  result->pq_avg_type = pq_avg_type;
   return result;
 }
 
-Field *Item_sum_avg::create_tmp_field(bool group, TABLE *table) {
+Field *Item_sum_avg::create_tmp_field(bool group, TABLE *table,
+                                      MEM_ROOT *root) {
   DBUG_TRACE;
   Field *field;
+  MEM_ROOT *pq_check_root = root ? root : *THR_MALLOC;
+
   if (group) {
     /*
       We must store both value and counter in the temporary table in one field.
       The easiest way is to do this is to store both value in a string
       and unpack on access.
     */
-    field = new (*THR_MALLOC) Field_string(
+    field = new (pq_check_root) Field_string(
         ((hybrid_type == DECIMAL_RESULT) ? dec_bin_size : sizeof(double)) +
             sizeof(longlong),
         false, item_name.ptr(), &my_charset_bin);
   } else if (hybrid_type == DECIMAL_RESULT)
     field = Field_new_decimal::create_from_item(this);
   else
-    field = new (*THR_MALLOC) Field_double(
+    field = new (pq_check_root) Field_double(
         max_length, is_nullable(), item_name.ptr(), decimals, false, true);
   if (field) field->init(table);
   return field;
@@ -2226,7 +2268,17 @@ void Item_sum_avg::clear() { Item_sum_sum::clear(); }
 bool Item_sum_avg::add() {
   assert(!m_is_window_function);
   if (Item_sum_sum::add()) return true;
-  if (!aggr->arg_is_null(true)) m_count++;
+  if (!aggr->arg_is_null(true)) {
+    if (pq_avg_type == PQ_REBUILD) {
+      uint32 extra_len;
+      auto val = args[0]->val_extra((uint32 *)&extra_len);
+      if (val != nullptr) {
+        m_count += uint8korr(val);
+      }
+    } else {
+      m_count++;
+    }
+  }
   return false;
 }
 
@@ -2250,6 +2302,9 @@ double Item_sum_avg::val_real() {
     if (!m_count) {
       null_value = true;
       return 0.0;
+    }
+    if (pq_avg_type == PQ_WORKER) {
+      return Item_sum_sum::val_real();
     }
     return Item_sum_sum::val_real() / ulonglong2double(m_count);
   }
@@ -2333,11 +2388,20 @@ my_decimal *Item_sum_avg::val_decimal(my_decimal *val) {
       return result;
     }
 
+    if (pq_avg_type == PQ_WORKER) {
+      return (dec_buffs + curr_dec_buff);
+    }
+
     sum_dec = dec_buffs + curr_dec_buff;
     int2my_decimal(E_DEC_FATAL_ERROR, m_count, false, &cnt);
     my_decimal_div(E_DEC_FATAL_ERROR, val, sum_dec, &cnt, prec_increment);
     return val;
   }
+}
+
+const uchar *Item_sum_avg::val_extra(uint32 *len) {
+  *len = pq_extra_len(false);
+  return (const uchar *)(&m_count);
 }
 
 String *Item_sum_avg::val_str(String *str) {
@@ -2571,20 +2635,23 @@ Item *Item_sum_variance::copy_or_same(THD *thd) {
   If we're grouping, then we need some space to serialize variables into, to
   pass around.
 */
-Field *Item_sum_variance::create_tmp_field(bool group, TABLE *table) {
+Field *Item_sum_variance::create_tmp_field(bool group, TABLE *table,
+                                           MEM_ROOT *root) {
   DBUG_TRACE;
   Field *field;
+  MEM_ROOT *pq_check_root = root ? root : *THR_MALLOC;
+
   if (group) {
     /*
       We must store both value and counter in the temporary table in one field.
       The easiest way is to do this is to store both value in a string
       and unpack on access.
     */
-    field =
-        new (*THR_MALLOC) Field_string(sizeof(double) * 2 + sizeof(longlong),
-                                       false, item_name.ptr(), &my_charset_bin);
+    field = new (pq_check_root)
+        Field_string(sizeof(double) * 2 + sizeof(longlong), false,
+                     item_name.ptr(), &my_charset_bin);
   } else
-    field = new (*THR_MALLOC) Field_double(
+    field = new (pq_check_root) Field_double(
         max_length, is_nullable(), item_name.ptr(), decimals, false, true);
 
   if (field != nullptr) field->init(table);
@@ -3305,7 +3372,8 @@ void Item_sum_count::reset_field() {
   longlong nr = 0;
   assert(aggr->Aggrtype() != Aggregator::DISTINCT_AGGREGATOR);
 
-  if (!args[0]->is_nullable() || !args[0]->is_null()) nr = 1;
+  if (!args[0]->is_nullable() || !args[0]->is_null())
+    nr = is_fake ? args[0]->val_int() : 1;
   int8store(result_field->field_ptr(), nr);
 }
 
@@ -3318,8 +3386,15 @@ void Item_sum_avg::reset_field() {
     if (args[0]->null_value) {
       arg_dec = &decimal_zero;
       tmp = 0;
-    } else
-      tmp = 1;
+    } else {
+      uint32 extra_len;
+      if (pq_avg_type == PQ_REBUILD &&
+          args[0]->val_extra(&extra_len) != nullptr) {
+        tmp = sint8korr(args[0]->val_extra(&extra_len));
+      } else {
+        tmp = 1;
+      }
+    }
     my_decimal2binary(E_DEC_FATAL_ERROR, arg_dec, res, f_precision, f_scale);
     res += dec_bin_size;
     int8store(res, tmp);
@@ -3329,7 +3404,14 @@ void Item_sum_avg::reset_field() {
     if (args[0]->null_value)
       memset(res, 0, sizeof(double) + sizeof(longlong));
     else {
-      longlong tmp = 1;
+      longlong tmp;
+      uint32 extra_len;
+      if (pq_avg_type == PQ_REBUILD &&
+          args[0]->val_extra(&extra_len) != nullptr) {
+        tmp = sint8korr(args[0]->val_extra(&extra_len));
+      } else {
+        tmp = 1;
+      }
       float8store(res, nr);
       res += sizeof(double);
       int8store(res, tmp);
@@ -3405,13 +3487,14 @@ void Item_sum_count::update_field() {
   uchar *res = result_field->field_ptr();
 
   nr = sint8korr(res);
-  if (!args[0]->is_nullable() || !args[0]->is_null()) nr++;
+  if (!args[0]->is_nullable() || !args[0]->is_null())
+    nr += is_fake ? args[0]->val_int() : 1;
   int8store(res, nr);
 }
 
 void Item_sum_avg::update_field() {
   DBUG_TRACE;
-  longlong field_count;
+  ulonglong field_count;
   uchar *res = result_field->field_ptr();
 
   assert(aggr->Aggrtype() != Aggregator::DISTINCT_AGGREGATOR);
@@ -3421,12 +3504,19 @@ void Item_sum_avg::update_field() {
     if (!args[0]->null_value) {
       binary2my_decimal(E_DEC_FATAL_ERROR, res, dec_buffs + 1, f_precision,
                         f_scale);
-      field_count = sint8korr(res + dec_bin_size);
+      field_count = uint8korr(res + dec_bin_size);
       my_decimal_add(E_DEC_FATAL_ERROR, dec_buffs, arg_val, dec_buffs + 1);
       my_decimal2binary(E_DEC_FATAL_ERROR, dec_buffs, res, f_precision,
                         f_scale);
       res += dec_bin_size;
-      field_count++;
+      if (pq_avg_type == PQ_REBUILD) {
+        uint32 extra_len;
+        if (args[0]->val_extra(&extra_len) != nullptr) {
+          field_count += uint8korr(args[0]->val_extra(&extra_len));
+        }
+      } else {
+        field_count++;
+      }
       int8store(res, field_count);
     }
   } else {
@@ -3439,7 +3529,14 @@ void Item_sum_avg::update_field() {
       old_nr += nr;
       float8store(res, old_nr);
       res += sizeof(double);
-      field_count++;
+      if (pq_avg_type == PQ_REBUILD) {
+        uint32 extra_len;
+        if (args[0]->val_extra(&extra_len) != nullptr) {
+          field_count += sint8korr(args[0]->val_extra(&extra_len));
+        }
+      } else {
+        field_count++;
+      }
       int8store(res, field_count);
     }
   }
@@ -3574,6 +3671,8 @@ Item_avg_field::Item_avg_field(Item_result res_type, Item_sum_avg *item) {
   field = item->get_result_field();
   set_nullable(true);
   hybrid_type = res_type;
+  avg_item = item;
+  pq_avg_type = item->pq_avg_type;
   set_data_type(hybrid_type == DECIMAL_RESULT ? MYSQL_TYPE_NEWDECIMAL
                                               : MYSQL_TYPE_DOUBLE);
   prec_increment = item->prec_increment;
@@ -3595,6 +3694,10 @@ double Item_avg_field::val_real() {
   res = (field->field_ptr() + sizeof(double));
   count = sint8korr(res);
 
+  if (pq_avg_type == PQ_WORKER) {
+    return nr;
+  }
+
   if ((null_value = !count)) return 0.0;
   return nr / (double)count;
 }
@@ -3606,12 +3709,24 @@ my_decimal *Item_avg_field::val_decimal(my_decimal *dec_buf) {
   if ((null_value = !count)) return nullptr;
 
   my_decimal dec_count, dec_field;
+
+  if (pq_avg_type == PQ_WORKER) {
+    binary2my_decimal(E_DEC_FATAL_ERROR, field->ptr, dec_buf, f_precision,
+                      f_scale);
+    return dec_buf;
+  }
+
   binary2my_decimal(E_DEC_FATAL_ERROR, field->field_ptr(), &dec_field,
                     f_precision, f_scale);
   int2my_decimal(E_DEC_FATAL_ERROR, count, false, &dec_count);
   my_decimal_div(E_DEC_FATAL_ERROR, dec_buf, &dec_field, &dec_count,
                  prec_increment);
   return dec_buf;
+}
+
+const uchar *Item_avg_field::val_extra(uint32 *len) {
+  *len = pq_extra_len(false);
+  return (field->ptr + field->pack_length() - *len);
 }
 
 String *Item_avg_field::val_str(String *str) {
@@ -4218,8 +4333,10 @@ void Item_func_group_concat::cleanup() {
   row_count = 0;
 }
 
-Field *Item_func_group_concat::make_string_field(TABLE *table_arg) const {
+Field *Item_func_group_concat::make_string_field(TABLE *table_arg,
+                                                 MEM_ROOT *root) const {
   Field *field;
+  MEM_ROOT *pq_check_root = root ? root : *THR_MALLOC;
   assert(collation.collation);
   /*
     Use mbminlen to determine maximum number of characters.
@@ -4233,11 +4350,11 @@ Field *Item_func_group_concat::make_string_field(TABLE *table_arg) const {
   const uint32 max_characters =
       group_concat_max_len / collation.collation->mbminlen;
   if (max_characters > CONVERT_IF_BIGGER_TO_BLOB)
-    field = new (*THR_MALLOC)
+    field = new (pq_check_root)
         Field_blob(max_characters * collation.collation->mbmaxlen,
                    is_nullable(), item_name.ptr(), collation.collation, true);
   else
-    field = new (*THR_MALLOC) Field_varstring(
+    field = new (pq_check_root) Field_varstring(
         max_characters * collation.collation->mbmaxlen, is_nullable(),
         item_name.ptr(), table_arg->s, collation.collation);
 
@@ -6131,6 +6248,10 @@ void Item_func_grouping::update_used_tables() {
       current_thd->lex->current_query_block()->all_tables_map();
 }
 
+bool need_extra(Item_sum *ref_item) {
+  return ref_item->sum_func() == Item_sum::AVG_FUNC;
+}
+
 inline Item *Item_rollup_sum_switcher::current_arg() const {
   assert(m_current_rollup_level >= 0 && m_current_rollup_level < m_num_levels);
   return args[m_current_rollup_level];
@@ -6196,8 +6317,9 @@ void Item_rollup_sum_switcher::print(const THD *thd, String *str,
   }
 }
 
-Field *Item_rollup_sum_switcher::create_tmp_field(bool group, TABLE *table) {
-  return master()->create_tmp_field(group, table);
+Field *Item_rollup_sum_switcher::create_tmp_field(bool group, TABLE *table,
+                                                  MEM_ROOT *root) {
+  return master()->create_tmp_field(group, table, root);
 }
 
 void Item_rollup_sum_switcher::clear() {

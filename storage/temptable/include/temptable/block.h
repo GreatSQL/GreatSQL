@@ -1,4 +1,6 @@
-/* Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -371,13 +373,15 @@ inline size_t Block::deallocate(Chunk chunk, size_t chunk_size) noexcept {
 
 inline void Block::destroy() noexcept {
   assert(!is_empty());
-  assert(Header::number_of_used_chunks() == 0);
-  DBUG_PRINT("temptable_allocator",
-             ("destroying the block: (%s)", to_string().c_str()));
+  // PQ worker thread could quit early
+  if (Header::number_of_used_chunks() == 0) {
+    DBUG_PRINT("temptable_allocator",
+               ("destroying the block: (%s)", to_string().c_str()));
 
-  deallocate_from(Header::memory_source_type(), Header::block_size(),
-                  Header::block_address());
-  Header::reset();
+    deallocate_from(Header::memory_source_type(), Header::block_size(),
+                    Header::block_address());
+    Header::reset();
+  }
 }
 
 inline bool Block::is_empty() const {

@@ -1,0 +1,32 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+set @saved_autocommit = @@autocommit;
+SET session autocommit=0;
+
+CREATE TABLE t1 (f1 INT) ENGINE="InnoDB";
+
+SELECT 1  FROM DUAL;
+SELECT f1 FROM t1;
+
+UNLOCK TABLES;
+LOCK TABLES t1 WRITE;
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+
+explain SELECT f1 FROM t1;
+SELECT f1 FROM t1;
+
+COMMIT;
+
+UNLOCK TABLES;
+
+SET session autocommit = @saved_autocommit;
+drop table t1;

@@ -1,4 +1,6 @@
-/* Copyright (c) 2006, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2006, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -53,6 +55,8 @@ class Filesort {
   THD *m_thd;
   /// The tables we are sorting.
   Mem_root_array<TABLE *> tables;
+  ///  List of expressions to order the table by
+  ORDER *m_order;
   /// If true, do not free the filesort buffers (use if you expect to sort many
   /// times, like in an uncacheable subquery).
   const bool keep_buffers;
@@ -96,10 +100,10 @@ class Filesort {
   /// circumstances (see NewWeedoutAccessPathForTables()).
   void clear_addon_fields();
 
- private:
   /* Prepare ORDER BY list for sorting. */
   uint make_sortorder(ORDER *order, bool unwrap_rollup);
 
+ private:
   uint m_sort_order_length;
 };
 

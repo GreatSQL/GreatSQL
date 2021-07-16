@@ -1,7 +1,9 @@
 #ifndef SQL_ITEM_REGEXP_FUNC_H_
 #define SQL_ITEM_REGEXP_FUNC_H_
 
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -263,6 +265,8 @@ class Item_func_regexp_instr : public Item_func_regexp {
   bool get_time(MYSQL_TIME *t) override { return get_time_from_int(t); }
   /// @}
 
+  Item *pq_clone(THD *thd, Query_block *select) override;
+
  protected:
   int pos_arg_pos() const override { return 2; }
   int occ_arg_pos() const override { return 3; }
@@ -306,6 +310,8 @@ class Item_func_regexp_like : public Item_func_regexp {
 
   bool get_time(MYSQL_TIME *t) override { return get_time_from_int(t); }
   /// @}
+
+  Item *pq_clone(THD *thd, Query_block *select) override;
 
  protected:
   int pos_arg_pos() const override { return -1; }

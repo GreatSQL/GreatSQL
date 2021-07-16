@@ -1,0 +1,130 @@
+CREATE TABLE t1(id int, name varchar(10), primary key(id));
+INSERT INTO t1 VALUES(1,'AAAA');
+INSERT INTO t1 VALUES(2,'BBBB');
+INSERT INTO t1 VALUES(3,'CCCC');
+EXPLAIN SELECT * FROM t1 WHERE id > 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	2	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`name` AS `name` from `test`.`t1` where (`test`.`t1`.`id` > 1)
+SELECT * FROM t1 WHERE id > 1;
+id	name
+2	BBBB
+3	CCCC
+SET session debug="+d, pq_clone_error1";
+SELECT * FROM t1 WHERE id > 1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SET session debug="-d, pq_clone_error1";
+SELECT LOCATE("A", name, 2) FROM t1;
+LOCATE("A", name, 2)
+2
+0
+0
+set @saved_parallel_max_threads = @@parallel_max_threads;
+SET GLOBAL parallel_max_threads = 5;
+CREATE PROCEDURE pro_insert(cnt int)
+BEGIN
+DECLARE i int DEFAULT 0;
+START TRANSACTION;
+WHILE i<cnt
+DO
+INSERT INTO t1 VALUES(i+4,'Tilay');
+set i=i+1;
+end WHILE;
+COMMIT;
+end//
+CALL pro_insert(20000);
+set session parallel_queue_timeout=1;
+SELECT sum(id) from t1;;
+set session parallel_queue_timeout=1;
+SELECT sum(id) from t1;;
+sum(id)
+200070006
+----con2 parallel query-----
+sum(id)
+200070006
+SET debug="+d,pq_gather_error1";
+SELECT sum(id) from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SET debug="-d,pq_gather_error1";
+SET debug="+d,pq_gather_error2";
+SELECT sum(id) from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SET debug="-d,pq_gather_error2";
+SET debug="+d,pq_gather_error3";
+SELECT sum(id) from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SET debug="-d,pq_gather_error3";
+SET debug="+d,skip_pq_clone_check";
+SET debug="+d,simulate_item_clone_attr_copy_error";
+SELECT id from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SELECT HEX(LTRIM(name)) from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SELECT sum(id+id) from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SET debug="-d,simulate_item_clone_attr_copy_error";
+SET debug="+d,simulate_item_clone_error";
+SELECT id from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SELECT HEX(LTRIM(name)) from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SELECT sum(id+id) from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SET debug="-d,simulate_item_clone_error";
+SET debug="+d,simulate_no_item_copy_function";
+SELECT id from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SELECT HEX(LTRIM(name)) from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SELECT sum(id+id) from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SET debug="-d,simulate_no_item_copy_function";
+SET debug="+d,simulate_item_type_mismatch";
+SELECT id from t1;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SET debug="-d,simulate_item_type_mismatch";
+SET debug="+d,simulate_item_rebuild_attr_copy_error";
+SELECT count(id) from t1 group by name;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SET debug="-d,simulate_item_rebuild_attr_copy_error";
+SET debug="+d,simulate_item_rebuild_error";
+SELECT count(id) from t1 group by name;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SET debug="-d,simulate_item_rebuild_error";
+SET debug="+d,simulate_no_item_rebuild_function";
+SELECT count(id) from t1 group by name;
+ERROR HY000: Failed to parallel execute. this SQL is not supported.
+SET debug="-d,simulate_no_item_rebuild_function";
+SET debug="-d,skip_pq_clone_check";
+SET GLOBAL parallel_max_threads = @saved_parallel_max_threads;
+SET debug="";
+DROP PROCEDURE pro_insert;
+DROP TABLE t1;
+CREATE TABLE t1 (i INT, d1 DECIMAL(9,2), d2 DECIMAL(9,2));
+INSERT INTO t1 VALUES (1, 101.40, 21.40), (1, -80.00, 0.00),
+(2, 0.00, 0.00), (2, -13.20, 0.00), (2, 59.60, 46.40),
+(2, 30.40, 30.40), (3, 37.00, 7.40), (3, -29.60, 0.00),
+(4, 60.00, 15.40), (4, -10.60, 0.00), (4, -34.00, 0.00),
+(5, 33.00, 0.00), (5, -25.80, 0.00), (5, 0.00, 7.20),
+(6, 0.00, 0.00), (6, -51.40, 0.00);
+SELECT i, d1 AS a, d2 AS b FROM t1 HAVING a <> b;
+i	a	b
+1	101.40	21.40
+1	-80.00	0.00
+2	-13.20	0.00
+2	59.60	46.40
+3	37.00	7.40
+3	-29.60	0.00
+4	60.00	15.40
+4	-10.60	0.00
+4	-34.00	0.00
+5	33.00	0.00
+5	-25.80	0.00
+5	0.00	7.20
+6	-51.40	0.00
+SELECT i, SUM(d1) AS a, SUM(d2) AS b FROM t1 GROUP BY i HAVING a <> b;
+i	a	b
+6	-51.40	0.00
+drop table t1;

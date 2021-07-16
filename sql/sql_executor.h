@@ -1,7 +1,9 @@
 #ifndef SQL_EXECUTOR_INCLUDED
 #define SQL_EXECUTOR_INCLUDED
 
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,6 +41,7 @@
 #include "my_compiler.h"
 #include "my_inttypes.h"
 #include "my_table_map.h"
+#include "sql/query_result.h"
 #include "sql/row_iterator.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_opt_exec_shared.h"  // QEP_shared_owner
@@ -256,11 +259,16 @@ bool make_group_fields(JOIN *main_join, JOIN *curr_join);
 bool check_unique_constraint(TABLE *table);
 ulonglong unique_hash(const Field *field, ulonglong *hash);
 
+class Gather_operator;
 class QEP_TAB : public QEP_shared_owner {
  public:
   QEP_TAB()
       : QEP_shared_owner(),
+        gather(NULL),
+        do_parallel_scan(false),
         table_ref(nullptr),
+        pos(0),
+        pq_cond(nullptr),
         flush_weedout_table(nullptr),
         check_weed_out_table(nullptr),
         firstmatch_return(NO_PLAN_IDX),
@@ -275,6 +283,7 @@ class QEP_TAB : public QEP_shared_owner {
         ref_item_slice(REF_SLICE_SAVED_BASE),
         m_condition_optim(nullptr),
         m_quick_optim(nullptr),
+        m_old_quick_optim(nullptr),
         m_keyread_optim(false),
         m_reversed_access(false),
         lateral_derived_tables_depend_on_me(0) {}
@@ -282,13 +291,16 @@ class QEP_TAB : public QEP_shared_owner {
   /// Initializes the object from a JOIN_TAB
   void init(JOIN_TAB *jt);
   // Cleans up.
-  void cleanup();
+  void cleanup(bool is_free = true);
 
   // Getters and setters
 
   Item *condition_optim() const { return m_condition_optim; }
   QUICK_SELECT_I *quick_optim() const { return m_quick_optim; }
   void set_quick_optim() { m_quick_optim = quick(); }
+
+  QUICK_SELECT_I *old_quick_optim() const { return m_old_quick_optim; }
+  void set_old_quick_optim() { m_old_quick_optim = quick(); }
   void set_condition_optim() { m_condition_optim = condition(); }
   bool keyread_optim() const { return m_keyread_optim; }
   void set_keyread_optim() {
@@ -301,6 +313,7 @@ class QEP_TAB : public QEP_shared_owner {
     m_qs->set_table(t);
     if (t) t->reginfo.qep_tab = this;
   }
+  void set_old_table(TABLE *t) { m_qs->set_old_table(t); }
 
   /// @returns semijoin strategy for this table.
   uint get_sj_strategy() const;
@@ -323,6 +336,7 @@ class QEP_TAB : public QEP_shared_owner {
   */
   void init_join_cache(JOIN_TAB *join_tab);
 
+  bool pq_copy(THD *thd, QEP_TAB *qep_tab);
   /**
      @returns query block id for an inner table of materialized semi-join, and
               0 for all other tables.
@@ -363,8 +377,18 @@ class QEP_TAB : public QEP_shared_owner {
   bool pfs_batch_update(const JOIN *join) const;
 
  public:
+  Gather_operator *gather;
+  bool do_parallel_scan;
+
   /// Pointer to table reference
   TABLE_LIST *table_ref;
+  uint pos;  // position in qep_tab array
+
+  bool has_pq_cond{false};
+  Item *pq_cond;
+
+  LEX_CSTRING *table_name{nullptr};
+  LEX_CSTRING *db{nullptr};
 
   /* Variables for semi-join duplicate elimination */
   SJ_TMP_TABLE *flush_weedout_table;
@@ -478,6 +502,7 @@ class QEP_TAB : public QEP_shared_owner {
      LOCK_query_plan mutex.
   */
   QUICK_SELECT_I *m_quick_optim;
+  QUICK_SELECT_I *m_old_quick_optim;
 
   /**
      True if only index is going to be read for this table. This is the
@@ -548,7 +573,8 @@ struct PendingCondition {
 
 unique_ptr_destroy_only<RowIterator> PossiblyAttachFilterIterator(
     unique_ptr_destroy_only<RowIterator> iterator,
-    const std::vector<Item *> &conditions, THD *thd);
+    const std::vector<Item *> &conditions, THD *thd,
+    table_map *conditions_depend_on_outer_tables);
 
 void SplitConditions(Item *condition, QEP_TAB *current_table,
                      std::vector<Item *> *predicates_below_join,

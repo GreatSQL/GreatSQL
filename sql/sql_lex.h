@@ -1,4 +1,6 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -337,6 +339,7 @@ class Table_ident {
 
 using List_item = mem_root_deque<Item *>;
 using Group_list_ptrs = Mem_root_array<ORDER *>;
+using PQ_Group_list_ptrs = Mem_root_array<ORDER *>;
 
 /**
   Structure to hold parameters for CHANGE MASTER, START SLAVE, and STOP SLAVE.
@@ -642,6 +645,16 @@ class Query_expression {
   /// The first query block in this query expression.
   Query_block *slave;
 
+ public:
+  /**
+    An iterator you can read from to get all records for this query.
+
+    May be nullptr even after create_access_paths(), or in the case of an
+    unfinished materialization (see optimize()).
+   */
+  unique_ptr_destroy_only<RowIterator> m_root_iterator;
+  AccessPath *m_root_access_path = nullptr;
+
  private:
   /**
     Marker for subqueries in WHERE, HAVING, ORDER BY, GROUP BY and
@@ -668,15 +681,6 @@ class Query_expression {
   Query_result *m_query_result;
 
   /**
-    An iterator you can read from to get all records for this query.
-
-    May be nullptr even after create_access_paths(), or in the case of an
-    unfinished materialization (see optimize()).
-   */
-  unique_ptr_destroy_only<RowIterator> m_root_iterator;
-  AccessPath *m_root_access_path = nullptr;
-
-  /**
     If there is an unfinished materialization (see optimize()),
     contains one element for each query block in this query expression.
    */
@@ -695,13 +699,13 @@ class Query_expression {
   Mem_root_array<MaterializePathParameters::QueryBlock> setup_materialization(
       THD *thd, TABLE *dst_table, bool union_distinct_only);
 
+ public:
   /**
     Convert the executor structures to a set of access paths, storing the result
     in m_root_access_path.
    */
   void create_access_paths(THD *thd);
 
- public:
   /**
     result of this query can't be cached, bit field, can be :
       UNCACHEABLE_DEPENDENT
@@ -880,6 +884,7 @@ class Query_expression {
 
   /// Set new query result object for this query expression
   void set_query_result(Query_result *res) { m_query_result = res; }
+  void set_slave(Query_block *select_lex) { slave = select_lex; }
 
   /**
     Whether there is a chance that optimize() is capable of materializing
@@ -1087,6 +1092,7 @@ enum class enum_explain_type {
   EXPLAIN_UNION,
   EXPLAIN_UNION_RESULT,
   EXPLAIN_MATERIALIZED,
+  EXPLAIN_GATHER,
   // Total:
   EXPLAIN_total  ///< fake type, total number of all valid types
 
@@ -1181,6 +1187,7 @@ class Query_block {
 
   TABLE_LIST *find_table_by_name(const Table_ident *ident);
 
+  void set_master_unit(Query_expression *unit) { master = unit; }
   /**
     @return true  If STRAIGHT_JOIN applies to all tables.
     @return false Else.
@@ -1782,6 +1789,14 @@ class Query_block {
 
   bool walk(Item_processor processor, enum_walk walk, uchar *arg);
 
+  bool pq_check_table_list();
+
+  bool suite_for_parallel_query(THD *thd);
+
+  /// Helper for fix_prepare_information()
+  void fix_prepare_information_for_order(THD *thd, SQL_I_List<ORDER> *list,
+                                         Group_list_ptrs **list_ptrs);
+
   bool add_tables(THD *thd, const Mem_root_array<Table_ident *> *tables,
                   ulong table_options, thr_lock_type lock_type,
                   enum_mdl_type mdl_type);
@@ -1875,6 +1890,19 @@ class Query_block {
   */
   SQL_I_List<ORDER> group_list{};
   Group_list_ptrs *group_list_ptrs{nullptr};
+
+  /*
+   * the backup of group_list/order_list before optimization, which is used
+   * to generate worker's group_list/order_list.
+   */
+  PQ_Group_list_ptrs *saved_group_list_ptrs{nullptr};
+  PQ_Group_list_ptrs *saved_order_list_ptrs{nullptr};
+
+  /**
+  Windows function maybe be optimized, so we save this value to determine
+  whether support parallel query.
+*/
+  uint saved_windows_elements{0};
 
   // Used so that AggregateIterator knows which items to signal when the rollup
   // level changes. Obviously only used in the presence of rollup.
@@ -2177,6 +2205,7 @@ class Query_block {
   Item *resolve_rollup_item(THD *thd, Item *item);
   bool resolve_rollup(THD *thd);
 
+ public:
   bool setup_wild(THD *thd);
   bool setup_order_final(THD *thd);
   bool setup_group(THD *thd);
@@ -2184,6 +2213,8 @@ class Query_block {
                          Query_block *removed_query_block);
   void remove_redundant_subquery_clauses(THD *thd,
                                          int hidden_group_field_count);
+
+ private:
   void repoint_contexts_of_join_nests(mem_root_deque<TABLE_LIST *> join_list);
   void empty_order_list(Query_block *sl);
   bool setup_join_cond(THD *thd, mem_root_deque<TABLE_LIST *> *tables,
@@ -2233,10 +2264,6 @@ class Query_block {
   // Delete unused columns from merged derived tables
   void delete_unused_merged_columns(mem_root_deque<TABLE_LIST *> *tables);
 
-  /// Helper for fix_prepare_information()
-  void fix_prepare_information_for_order(THD *thd, SQL_I_List<ORDER> *list,
-                                         Group_list_ptrs **list_ptrs);
-
   bool prepare_values(THD *thd);
   bool check_only_full_group_by(THD *thd);
   bool is_row_count_valid_for_semi_join();
@@ -2251,9 +2278,6 @@ class Query_block {
     Template parameter is "true": no need to run DTORs on pointers.
   */
   Mem_root_array<Item_exists_subselect *> *sj_candidates{nullptr};
-
-  /// How many expressions are part of the order by but not select list.
-  int hidden_order_field_count{0};
 
   /**
     Intrusive double-linked list of all query blocks within the same
@@ -2279,6 +2303,8 @@ class Query_block {
     should not be modified after resolving is done.
   */
   ulonglong m_base_options{0};
+
+ public:
   /**
     Active options. Derived from base options, modifiers added during
     resolving and values from session variable option_bits. Since the latter
@@ -2286,6 +2312,13 @@ class Query_block {
   */
   ulonglong m_active_options{0};
 
+  /// Number of GROUP BY expressions added to all_fields
+  int hidden_group_field_count;
+
+  /// How many expressions are part of the order by but not select list.
+  int hidden_order_field_count{0};
+
+ private:
   TABLE_LIST *resolve_nest{
       nullptr};  ///< Used when resolving outer join condition
 
@@ -2301,9 +2334,6 @@ class Query_block {
 
   /// Condition to be evaluated on grouped rows after grouping.
   Item *m_having_cond;
-
-  /// Number of GROUP BY expressions added to all_fields
-  int hidden_group_field_count;
 
   /**
     True if query block has semi-join nests merged into it. Notice that this
@@ -2734,8 +2764,8 @@ class Query_tables_list {
     @retval false if the statement is not marked as unsafe.
     @retval true if it is.
   */
-  inline bool is_stmt_unsafe(enum_binlog_stmt_unsafe unsafe_type) const
-      noexcept {
+  inline bool is_stmt_unsafe(
+      enum_binlog_stmt_unsafe unsafe_type) const noexcept {
     return ((binlog_stmt_flags & (1U << unsafe_type)) != 0);
   }
 
@@ -3914,6 +3944,7 @@ struct LEX : public Query_tables_list {
   bool has_udf() const { return m_has_udf; }
   st_parsing_options parsing_options;
   Alter_info *alter_info;
+  bool in_execute_ps{false};
   /* Prepared statements SQL syntax:*/
   LEX_CSTRING prepared_stmt_name; /* Statement name (in all queries) */
   /*

@@ -1,0 +1,15 @@
+# Tests in this file are disabled for --pq test.
+main.ssl_crl                                      : BUG#111 skip example
+main.log_options_cmdline                          : BUG#111 skip example
+main.ssl_ca                                       : BUG#111 skip example
+main.myisam_explain_json_non_select_none          : BUG#111 skip example
+auth_sec.server_withssl_client_withssl            : BUG#111 skip example
+main.innodb_explain_json_non_select_none          : BUG#111 skip example
+innodb.innodb_buffer_pool_resize                  : BUG#111 skip example
+main.myisam_explain_json_non_select_all           : BUG#111 skip example
+main.ssl_crl_clients_valid                        : BUG#111 skip example
+main.ssl_crl_crlpath                              : BUG#111 skip example
+main.file_contents                                : BUG#111 skip example
+main.read_only_ddl                                : BUG#111 skip example
+main.log_buffered-big                             : BUG#111 skip example
+main.innodb_explain_json_non_select_all           : BUG#111 skip example

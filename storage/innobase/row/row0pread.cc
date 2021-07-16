@@ -1,6 +1,8 @@
 /*****************************************************************************
 
-Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2021, Huawei Technologies Co., Ltd.
+Copyright (c) 2021, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -37,12 +39,23 @@ Created 2018-01-27 by Sunny Bains */
 #include "row0mysql.h"
 #include "row0pread.h"
 #include "row0row.h"
+#include "row0sel.h"
 #include "row0vers.h"
 #include "ut0new.h"
 
 #ifdef UNIV_PFS_THREAD
 mysql_pfs_key_t parallel_read_thread_key;
 #endif /* UNIV_PFS_THREAD */
+
+ICP_RESULT row_search_idx_cond_check(
+    byte *mysql_rec,          /*!< out: record
+                              in MySQL format (invalid unless
+                              prebuilt->idx_cond == true and
+                              we return ICP_MATCH) */
+    row_prebuilt_t *prebuilt, /*!< in/out: prebuilt struct
+                              for the table handle */
+    const rec_t *rec,         /*!< in: InnoDB record */
+    const ulint *offsets);    /*!< in: rec_get_offsets() */
 
 std::atomic_size_t Parallel_reader::s_active_threads{};
 
@@ -86,7 +99,11 @@ Parallel_reader::Scan_ctx::Iter::~Iter() {
   m_heap = nullptr;
 }
 
-Parallel_reader::Ctx::~Ctx() {}
+Parallel_reader::Ctx::~Ctx() {
+  if (m_blob_heap) mem_heap_free(m_blob_heap);
+
+  if (m_heap) mem_heap_free(m_heap);
+}
 
 Parallel_reader::Scan_ctx::~Scan_ctx() {}
 
@@ -221,11 +238,15 @@ class PCursor {
   /** Check if there are threads waiting on the index latch. Yield the latch
   so that other threads can progress. */
   void yield();
+  void yield_prev();
 
   /** Move to the next block.
   @param[in]  index  Index being traversed.
   @return DB_SUCCESS or error code. */
   dberr_t move_to_next_block(dict_index_t *index)
+      MY_ATTRIBUTE((warn_unused_result));
+
+  dberr_t move_to_prev_block(dict_index_t *index)
       MY_ATTRIBUTE((warn_unused_result));
 
   /** Restore the cursor position. */
@@ -241,7 +262,8 @@ class PCursor {
       }
     } else {
       ut_ad(relative == BTR_PCUR_AFTER ||
-            relative == BTR_PCUR_AFTER_LAST_IN_TREE);
+            relative == BTR_PCUR_AFTER_LAST_IN_TREE ||
+            relative == BTR_PCUR_BEFORE);
     }
   }
 
@@ -296,6 +318,35 @@ void PCursor::yield() {
   }
 }
 
+void PCursor::yield_prev() {
+  /* We should always yield on a block boundary. */
+  ut_ad(m_pcur->is_before_first_on_page());
+
+  /* Store the cursor position on the first user record on the page. */
+  m_pcur->move_to_next_on_page();
+
+  m_pcur->store_position(m_mtr);
+
+  m_mtr->commit();
+
+  /* Yield so that another thread can proceed. */
+  std::this_thread::yield();
+
+  m_mtr->start();
+
+  m_mtr->set_log_mode(MTR_LOG_NO_REDO);
+
+  /* Restore position on the record, or its predecessor if the record
+  was purged meanwhile. */
+
+  restore_position();
+
+  if (!m_pcur->is_before_first_on_page()) {
+    /* Move to the successor of the saved record. */
+    m_pcur->move_to_prev_on_page();
+  }
+}
+
 dberr_t PCursor::move_to_next_block(dict_index_t *index) {
   ut_ad(m_pcur->is_after_last_on_page());
 
@@ -346,6 +397,45 @@ dberr_t PCursor::move_to_next_block(dict_index_t *index) {
   return (DB_SUCCESS);
 }
 
+dberr_t PCursor::move_to_prev_block(dict_index_t *index) {
+  ut_ad(m_pcur->is_before_first_on_page());
+
+  if (rw_lock_get_waiters(dict_index_get_lock(index))) {
+    /* There are waiters on the index tree lock. Store and restore
+    the cursor position, and yield so that scanning a large table
+    will not starve other threads. */
+
+    yield_prev();
+
+    /* It's possible that the restore places the cursor in the middle of
+    the block. We need to account for that too. */
+
+    if (m_pcur->is_on_user_rec()) {
+      return (DB_SUCCESS);
+    }
+  }
+
+  auto cur = m_pcur->get_page_cur();
+
+  auto prev_page_no = btr_page_get_prev(page_cur_get_page(cur), m_mtr);
+
+  if (prev_page_no == FIL_NULL) {
+    m_mtr->commit();
+
+    return (DB_END_OF_INDEX);
+  }
+
+  m_pcur->move_backward_from_page(m_mtr);
+
+  /* Skip the supremum record. */
+  page_cur_move_to_prev(cur);
+
+  /* Page can't be empty unless it is a root page. */
+  ut_ad(!page_cur_is_before_first(cur));
+
+  return (DB_SUCCESS);
+}
+
 bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
                                                  ulint *&offsets,
                                                  mem_heap_t *&heap,
@@ -385,8 +475,6 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
       }
     } else {
       /* Secondary index scan not supported yet. */
-      ut_error;
-
       auto max_trx_id = page_get_max_trx_id(page_align(rec));
 
       ut_ad(max_trx_id > 0);
@@ -405,10 +493,139 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
     return (false);
   }
 
-  ut_ad(!m_trx || m_trx->isolation_level == TRX_ISO_READ_UNCOMMITTED ||
-        !rec_offs_any_null_extern(rec, offsets));
-
   return (true);
+}
+
+dberr_t Parallel_reader::Scan_ctx::find_visible_record(
+    byte *buf, const rec_t *&rec, const rec_t *&clust_rec, ulint *&offsets,
+    ulint *&clust_offsets, mem_heap_t *&heap, mtr_t *mtr,
+    row_prebuilt_t *prebuilt) {
+  const auto table_name = m_config.m_index->table->name;
+  ut_ad(m_trx->read_view == nullptr || MVCC::is_view_active(m_trx->read_view));
+  if (prebuilt != nullptr) {
+    prebuilt->pq_requires_clust_rec = false;
+  }
+  if (m_trx->read_view != nullptr) {
+    auto view = m_trx->read_view;
+
+    if (m_config.m_index->is_clustered()) {
+      trx_id_t rec_trx_id;
+
+      if (m_config.m_index->trx_id_offset > 0) {
+        rec_trx_id = trx_read_trx_id(rec + m_config.m_index->trx_id_offset);
+      } else {
+        rec_trx_id = row_get_rec_trx_id(rec, m_config.m_index, offsets);
+      }
+
+      if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
+          !view->changes_visible(rec_trx_id, table_name)) {
+        rec_t *old_vers = nullptr;
+
+        row_vers_build_for_consistent_read(rec, mtr, m_config.m_index, &offsets,
+                                           view, &heap, heap, &old_vers,
+                                           nullptr, nullptr);
+
+        rec = old_vers;
+        if (rec == nullptr) {
+          return DB_NOT_FOUND;
+        }
+      }
+    } else {
+      /* Secondary index scan not supported yet. */
+      auto max_trx_id = page_get_max_trx_id(page_align(rec));
+      ut_ad(max_trx_id > 0);
+
+      if (!view->sees(max_trx_id) ||
+          (prebuilt && prebuilt->need_to_access_clustered)) {
+        if (prebuilt) {
+          if (prebuilt->idx_cond) {
+            switch (row_search_idx_cond_check(buf, prebuilt, rec, offsets)) {
+              case ICP_NO_MATCH:
+                return DB_NOT_FOUND;
+              case ICP_OUT_OF_RANGE:
+                return DB_END_OF_RANGE;
+              case ICP_MATCH:
+                break;
+            }
+          }
+          if (prebuilt->sel_graph == nullptr) row_prebuild_sel_graph(prebuilt);
+
+          Row_sel_get_clust_rec_for_mysql row_sel_get_clust_rec_for_mysql;
+          que_thr_t *thr = que_fork_get_first_thr(prebuilt->sel_graph);
+
+          prebuilt->pq_requires_clust_rec = true;
+          int err = row_sel_get_clust_rec_for_mysql(
+              prebuilt, m_config.m_index, rec, thr, &clust_rec, &clust_offsets,
+              &heap, NULL, mtr, nullptr);
+
+          if (err != DB_SUCCESS)
+            return DB_NOT_FOUND;
+          else {
+            if (clust_rec == NULL) {
+              /* The record did not exist in the read view */
+              ut_ad(prebuilt->select_lock_type == LOCK_NONE);
+
+              return DB_NOT_FOUND;
+            } else if (rec_get_deleted_flag(clust_rec, m_config.m_is_compact)) {
+              /* The record is delete marked: we can skip it */
+              return DB_NOT_FOUND;
+            } else {
+              return DB_SUCCESS;
+            }
+          }
+        } else
+          return DB_NOT_FOUND;
+      }
+    }
+  } else if (srv_read_only_mode && /** innodb_read_only */
+             (prebuilt &&
+              prebuilt->need_to_access_clustered && /** secondary index and
+                                                       non-covered index */
+              !m_config.m_index->is_clustered())) {
+    if (prebuilt->idx_cond) {
+      switch (row_search_idx_cond_check(buf, prebuilt, rec, offsets)) {
+        case ICP_NO_MATCH:
+          return DB_NOT_FOUND;
+        case ICP_OUT_OF_RANGE:
+          return DB_END_OF_RANGE;
+        case ICP_MATCH:
+          break;
+      }
+    }
+
+    if (prebuilt->sel_graph == nullptr) row_prebuild_sel_graph(prebuilt);
+
+    que_thr_t *thr = que_fork_get_first_thr(prebuilt->sel_graph);
+    prebuilt->pq_requires_clust_rec = true;
+    Row_sel_get_clust_rec_for_mysql row_sel_get_clust_rec_for_mysql;
+    int err = row_sel_get_clust_rec_for_mysql(prebuilt, m_config.m_index, rec,
+                                              thr, &clust_rec, &clust_offsets,
+                                              &heap, NULL, mtr, nullptr);
+
+    if (err != DB_SUCCESS)
+      return DB_NOT_FOUND;
+    else {
+      if (clust_rec == NULL) {
+        /* The record did not exist in the read view */
+        ut_ad(prebuilt->select_lock_type == LOCK_NONE);
+
+        return DB_NOT_FOUND;
+      } else if (rec_get_deleted_flag(clust_rec, m_config.m_is_compact)) {
+        /* The record is delete marked: we can skip it */
+        return DB_NOT_FOUND;
+      } else {
+        return DB_SUCCESS;
+      }
+    }
+  }
+
+  if (rec_get_deleted_flag(rec, m_config.m_is_compact)) {
+    /* This record was deleted in the latest committed version, or it was
+    deleted and then reinserted-by-update before purge kicked in. Skip it. */
+    return DB_NOT_FOUND;
+  }
+
+  return DB_SUCCESS;
 }
 
 void Parallel_reader::Scan_ctx::copy_row(const rec_t *rec, Iter *iter) const {
@@ -502,6 +719,148 @@ bool Parallel_reader::Ctx::move_to_next_node(PCursor *pcursor, mtr_t *mtr) {
   ut_ad(!page_cur_is_before_first(cur));
 
   return (true);
+}
+
+dberr_t Parallel_reader::Ctx::read_record(uchar *buf,
+                                          row_prebuilt_t *prebuilt) {
+  mtr_t mtr;
+  btr_pcur_t *pcur;
+
+  dberr_t err{DB_SUCCESS};
+  dberr_t err1{DB_SUCCESS};
+  int ret{0};
+  const rec_t *clust_rec = nullptr;
+  const rec_t *rec = nullptr;
+  const rec_t *result_rec = nullptr;
+  ulint *offsets = offsets_;
+  ulint *clust_offsets = clust_offsets_;
+
+  if (start_read) {
+    rec_offs_init(offsets_);
+    rec_offs_init(clust_offsets_);
+    start_read = false;
+  }
+
+  mtr.start();
+  mtr.set_log_mode(MTR_LOG_NO_REDO);
+
+  auto &from =
+      m_scan_ctx->m_config.m_pq_reverse_scan ? m_range.second : m_range.first;
+  pcur = from->m_pcur;
+
+  PCursor pcursor(pcur, &mtr, m_scan_ctx->m_config.m_read_level);
+  pcursor.restore_position();
+
+  const auto &end_tuple = m_scan_ctx->m_config.m_pq_reverse_scan
+                              ? m_range.first->m_tuple
+                              : m_range.second->m_tuple;
+  auto index = m_scan_ctx->m_config.m_index;
+  auto cur = pcur->get_page_cur();
+  dict_index_t *clust_index = index->table->first_index();
+
+  if (m_blob_heap == nullptr) m_blob_heap = mem_heap_create(srv_page_size);
+  if (m_heap == nullptr) m_heap = mem_heap_create(srv_page_size / 4);
+
+  if (!m_scan_ctx->m_config.m_pq_reverse_scan && page_cur_is_after_last(cur)) {
+    // pcur point to last record, move to next block
+    mem_heap_empty(m_heap);
+    offsets = offsets_;
+    rec_offs_init(offsets_);
+
+    err = pcursor.move_to_next_block(index);
+    if (err != DB_SUCCESS) {
+      ut_a(!mtr.is_active());
+      return err;
+    }
+    ut_ad(!page_cur_is_before_first(cur));
+  } else if (m_scan_ctx->m_config.m_pq_reverse_scan &&
+             page_cur_is_before_first(cur)) {
+    // pcur point to first record, move to prev block
+    mem_heap_empty(m_heap);
+    offsets = offsets_;
+    rec_offs_init(offsets_);
+
+    err = pcursor.move_to_prev_block(index);
+    if (err != DB_SUCCESS) {
+      ut_a(!mtr.is_active());
+      return err;
+    }
+    ut_ad(!page_cur_is_after_last(cur));
+  }
+
+  // 1. read record
+  rec = page_cur_get_rec(cur);
+  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &m_heap);
+  clust_offsets =
+      rec_get_offsets(rec, index, clust_offsets, ULINT_UNDEFINED, &m_heap);
+
+  // 2. find visible version record
+  err1 = m_scan_ctx->find_visible_record(buf, rec, clust_rec, offsets,
+                                         clust_offsets, m_heap, &mtr, prebuilt);
+
+  if (err1 == DB_END_OF_RANGE) {
+    err = DB_END_OF_RANGE;
+    goto func_exit;
+  }
+
+  if (err1 != DB_NOT_FOUND) {
+    // 3. check range boundary
+    m_block = page_cur_get_block(cur);
+    if (rec != nullptr && end_tuple != nullptr) {
+      if (!m_scan_ctx->m_config.m_index->is_clustered() &&
+          prebuilt->need_to_access_clustered)
+        ret = ((dtuple_t *)end_tuple)
+                  ->compare(clust_rec, index, clust_index, clust_offsets);
+      else
+        ret = end_tuple->compare(rec, index, offsets);
+
+      /* Note: The range creation doesn't use MVCC. Therefore it's possible
+      that the range boundary entry could have been deleted. */
+      if ((!m_scan_ctx->m_config.m_pq_reverse_scan && ret <= 0) ||
+          (m_scan_ctx->m_config.m_pq_reverse_scan && ret >= 0)) {
+        m_scan_ctx->m_reader->ctx_completed_inc();
+        err = DB_END_OF_RANGE;
+        goto func_exit;
+      }
+    }
+
+    // 4. convert record to mysql format
+    if (prebuilt->pq_requires_clust_rec) {
+      result_rec = clust_rec;
+      if (!row_sel_store_mysql_rec(buf, prebuilt, clust_rec, nullptr, true,
+                                   clust_index, prebuilt->index, clust_offsets,
+                                   false, nullptr, m_blob_heap))
+        err = DB_ERROR;
+    } else {
+      result_rec = rec;
+      if (!row_sel_store_mysql_rec(buf, prebuilt, rec, nullptr,
+                                   m_scan_ctx->m_config.m_index->is_clustered(),
+                                   index, prebuilt->index, offsets, false,
+                                   nullptr, m_blob_heap))
+        err = DB_ERROR;
+    }
+    if (prebuilt->clust_index_was_generated) {
+      pq_row_sel_store_row_id_to_prebuilt(
+          prebuilt, result_rec, result_rec == rec ? index : clust_index,
+          result_rec == rec ? offsets : clust_offsets);
+    }
+  } else {
+    err = DB_NOT_FOUND;
+    goto next_record;
+  }
+
+next_record:
+  if (!m_scan_ctx->m_config.m_pq_reverse_scan)
+    page_cur_move_to_next(cur);
+  else
+    page_cur_move_to_prev(cur);
+
+func_exit:
+  pcur->store_position(&mtr);
+  ut_a(mtr.is_active());
+  mtr.commit();
+
+  return err;
 }
 
 dberr_t Parallel_reader::Ctx::traverse() {
@@ -637,13 +996,21 @@ std::shared_ptr<Parallel_reader::Ctx> Parallel_reader::dequeue() {
     return (nullptr);
   }
 
-  auto ctx = m_ctxs.front();
-  m_ctxs.pop_front();
+  std::shared_ptr<Parallel_reader::Ctx> ctx{};
+  if (!m_pq_reverse_scan) {
+    ctx = m_ctxs.front();
+    m_ctxs.pop_front();
+  } else {
+    ctx = m_ctxs.back();
+    m_ctxs.pop_back();
+  }
 
   mutex_exit(&m_mutex);
 
   return (ctx);
 }
+
+void Parallel_reader::pq_set_reverse_scan() { m_pq_reverse_scan = true; }
 
 bool Parallel_reader::is_queue_empty() const {
   mutex_enter(&m_mutex);
@@ -742,6 +1109,56 @@ void Parallel_reader::worker(Parallel_reader::Thread_ctx *thread_ctx) {
   }
 
   ut_a(is_error_set() || (m_n_completed == m_ctx_id && is_queue_empty()));
+}
+
+void Parallel_reader::ctx_completed_inc() {
+  m_n_completed.fetch_add(1, std::memory_order_relaxed);
+}
+
+void Parallel_reader::pq_set_worker_done() {
+  work_done.store(true, std::memory_order_relaxed);
+}
+
+void Parallel_reader::pq_wakeup_workers() {
+  pq_set_worker_done();
+  os_event_set(m_event);
+}
+
+dberr_t Parallel_reader::dispatch_ctx(row_prebuilt_t *prebuilt) {
+  dberr_t err{DB_SUCCESS};
+
+  for (;;) {
+    int64_t sig_count = os_event_reset(m_event);
+
+    auto ctx = dequeue();
+    bool done = work_done.load(std::memory_order_relaxed);
+
+    if (ctx == nullptr) {
+      prebuilt->ctx = nullptr;
+      if (is_ctx_over() || done) {
+        /* Wakeup other worker threads before exiting */
+        os_event_set(m_event);
+        ut_a(is_queue_empty());
+        return DB_END_OF_INDEX;
+      } else {
+        /* wait for other worker */
+        constexpr auto FOREVER = OS_SYNC_INFINITE_TIME;
+        os_event_wait_time_low(m_event, FOREVER, sig_count);
+      }
+    } else {
+      if (ctx->m_split) {
+        err = ctx->split();
+        /* Tell the other threads that there is work to do. */
+        os_event_set(m_event);
+        ctx_completed_inc();
+      } else {
+        prebuilt->ctx = ctx;
+        break;
+      }
+    }
+  }
+
+  return err;
 }
 
 page_no_t Parallel_reader::Scan_ctx::search(const buf_block_t *block,
@@ -849,6 +1266,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(const Scan_range &scan_range,
   ut_ad(index_s_own());
   ut_a(max_threads() > 0);
   ut_a(page_no != FIL_NULL);
+  if (m_config.m_range_errno) return (DB_SUCCESS);
 
   /* Do a breadth first traversal of the B+Tree using recursion. We want to
   set up the scan ranges in one pass. This guarantees that the tree structure
@@ -883,7 +1301,8 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(const Scan_range &scan_range,
   auto start = scan_range.m_start;
 
   if (start != nullptr) {
-    page_cur_search(block, index, start, PAGE_CUR_LE, &page_cursor);
+    auto mode = PAGE_CUR_LE;
+    page_cur_search(block, index, start, mode, &page_cursor);
 
     if (page_cur_is_after_last(&page_cursor)) {
       return (DB_SUCCESS);
@@ -917,7 +1336,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(const Scan_range &scan_range,
 
     const auto end = scan_range.m_end;
 
-    if (end != nullptr && end->compare(rec, index, offsets) <= 0) {
+    if (end != nullptr && end->compare(rec, index, offsets) < 0) {
       break;
     }
 
@@ -1011,14 +1430,28 @@ dberr_t Parallel_reader::Scan_ctx::partition(
   err = create_ranges(scan_range, m_config.m_index->page, 0, split_level,
                       ranges, &mtr);
 
-  if (err == DB_SUCCESS && scan_range.m_end != nullptr && !ranges.empty()) {
+  if (m_config.m_pq_reverse_scan && !ranges.empty()) {
     auto &iter = ranges.back().second;
+    auto block = m_config.m_pcur->get_block();
+    page_id_t page_id(m_config.m_index->space, block->get_page_no());
+    auto s_block MY_ATTRIBUTE((unused)) =
+        block_get_s_latched(page_id, &mtr, __LINE__);
+    assert(block == s_block);
 
+    auto page_cursor = m_config.m_pcur->get_page_cur();
+    page_cursor->index = m_config.m_index;
+    iter = create_persistent_cursor(*page_cursor, &mtr);
+
+    /* deep copy of start of first ctx */
+    if (scan_range.m_start == nullptr) {
+      auto &first_iter = ranges.front().first;
+      first_iter = std::make_shared<Iter>();
+    }
+  } else if (scan_range.m_end != nullptr && !ranges.empty()) {
+    auto &iter = ranges.back().second;
     ut_a(iter->m_heap == nullptr);
-
     iter->m_heap = mem_heap_create(sizeof(btr_pcur_t) + (srv_page_size / 16));
-
-    iter->m_tuple = dtuple_copy(scan_range.m_end, iter->m_heap);
+    iter->m_tuple = pq_dtuple_copy(scan_range.m_end, iter->m_heap);
 
     /* Do a deep copy. */
     for (size_t i = 0; i < dtuple_get_n_fields(iter->m_tuple); ++i) {
@@ -1050,6 +1483,7 @@ dberr_t Parallel_reader::Scan_ctx::create_context(const Range &range,
     return (DB_OUT_OF_MEMORY);
   } else {
     ctx->m_split = split;
+    ctx->reader = m_reader;
     m_reader->enqueue(ctx);
   }
 
@@ -1068,6 +1502,10 @@ dberr_t Parallel_reader::Scan_ctx::create_contexts(const Ranges &ranges) {
     /* If the tree is not very deep then don't split. For smaller tables
     it is more expensive to split because we end up traversing more blocks*/
     split_point = max_threads();
+  }
+
+  if (ranges.size() > split_point) {
+    m_reader->m_need_change_dop = false;
   }
 
   size_t i{};
@@ -1191,7 +1629,7 @@ dberr_t Parallel_reader::run(size_t n_threads) {
 
 dberr_t Parallel_reader::add_scan(trx_t *trx,
                                   const Parallel_reader::Config &config,
-                                  Parallel_reader::F &&f) {
+                                  Parallel_reader::F &&f, bool split) {
   // clang-format off
 
   auto scan_ctx = std::shared_ptr<Scan_ctx>(

@@ -1,4 +1,6 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -180,6 +182,7 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
   if (is_table_value_constructor) return prepare_values(thd);
 
   Query_expression *const unit = master_query_expression();
+  if (has_windows()) saved_windows_elements = m_windows.elements;
 
   if (!top_join_list.empty()) propagate_nullability(&top_join_list, false);
 
@@ -580,6 +583,14 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
   if (olap == ROLLUP_TYPE && resolve_rollup_wfs(thd))
     return true; /* purecov: inspected */
 
+  if (suite_for_parallel_query(thd)) {
+    if (group_list.elements)
+      fix_prepare_information_for_order(thd, &group_list,
+                                        &saved_group_list_ptrs);
+    if (order_list.elements)
+      fix_prepare_information_for_order(thd, &order_list,
+                                        &saved_order_list_ptrs);
+  }
   assert(!thd->is_error());
   return false;
 }
@@ -4271,11 +4282,12 @@ bool find_order_in_list(THD *thd, Ref_item_array ref_item_array,
     if (((is_group_field || is_window_order) &&
          order_item_type == Item::FIELD_ITEM) ||
         order_item_type == Item::REF_ITEM) {
-      from_field = find_field_in_tables(thd, (Item_ident *)order_item, tables,
-                                        nullptr, &view_ref, IGNORE_ERRORS, true,
-                                        // view_ref is a local variable, so
-                                        // don't record a change to roll back:
-                                        false);
+      from_field =
+          find_field_in_tables(thd, (Item_ident *)order_item, tables, nullptr,
+                               &view_ref, IGNORE_ERRORS, !thd->pq_leader,
+                               // view_ref is a local variable, so
+                               // don't record a change to roll back:
+                               false);
       if (thd->is_error()) return true;
 
       if (!from_field) from_field = not_found_field;

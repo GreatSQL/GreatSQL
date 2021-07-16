@@ -1,4 +1,6 @@
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1344,13 +1346,11 @@ void Item_num_op::set_numeric_type(void) {
     hybrid_type = INT_RESULT;
     result_precision();
   }
-  DBUG_PRINT("info", ("Type: %s", (hybrid_type == REAL_RESULT
-                                       ? "REAL_RESULT"
-                                       : hybrid_type == DECIMAL_RESULT
-                                             ? "DECIMAL_RESULT"
-                                             : hybrid_type == INT_RESULT
-                                                   ? "INT_RESULT"
-                                                   : "--ILLEGAL!!!--")));
+  DBUG_PRINT("info",
+             ("Type: %s", (hybrid_type == REAL_RESULT      ? "REAL_RESULT"
+                           : hybrid_type == DECIMAL_RESULT ? "DECIMAL_RESULT"
+                           : hybrid_type == INT_RESULT     ? "INT_RESULT"
+                                                       : "--ILLEGAL!!!--")));
 }
 
 /**
@@ -1380,13 +1380,11 @@ void Item_func_num1::set_numeric_type() {
     default:
       assert(0);
   }
-  DBUG_PRINT("info", ("Type: %s", (hybrid_type == REAL_RESULT
-                                       ? "REAL_RESULT"
-                                       : hybrid_type == DECIMAL_RESULT
-                                             ? "DECIMAL_RESULT"
-                                             : hybrid_type == INT_RESULT
-                                                   ? "INT_RESULT"
-                                                   : "--ILLEGAL!!!--")));
+  DBUG_PRINT("info",
+             ("Type: %s", (hybrid_type == REAL_RESULT      ? "REAL_RESULT"
+                           : hybrid_type == DECIMAL_RESULT ? "DECIMAL_RESULT"
+                           : hybrid_type == INT_RESULT     ? "INT_RESULT"
+                                                       : "--ILLEGAL!!!--")));
 }
 
 void Item_func_num1::fix_num_length_and_dec() {
@@ -3099,13 +3097,11 @@ bool Item_func_int_val::resolve_type_inner(THD *) {
     default:
       assert(0);
   }
-  DBUG_PRINT("info", ("Type: %s", (hybrid_type == REAL_RESULT
-                                       ? "REAL_RESULT"
-                                       : hybrid_type == DECIMAL_RESULT
-                                             ? "DECIMAL_RESULT"
-                                             : hybrid_type == INT_RESULT
-                                                   ? "INT_RESULT"
-                                                   : "--ILLEGAL!!!--")));
+  DBUG_PRINT("info",
+             ("Type: %s", (hybrid_type == REAL_RESULT      ? "REAL_RESULT"
+                           : hybrid_type == DECIMAL_RESULT ? "DECIMAL_RESULT"
+                           : hybrid_type == INT_RESULT     ? "INT_RESULT"
+                                                       : "--ILLEGAL!!!--")));
 
   return false;
 }
@@ -6558,10 +6554,12 @@ static int get_var_with_binlog(THD *thd, enum_sql_command sql_command,
   Binlog_user_var_event *user_var_event;
   user_var_entry *var_entry;
 
+  /* obtain user variables from leader thread */
+  THD *entry_thd = thd->is_worker() ? thd->pq_leader : thd;
   /* Protects thd->user_vars. */
-  mysql_mutex_lock(&thd->LOCK_thd_data);
-  var_entry = get_variable(thd, name, nullptr);
-  mysql_mutex_unlock(&thd->LOCK_thd_data);
+  mysql_mutex_lock(&entry_thd->LOCK_thd_data);
+  var_entry = get_variable(entry_thd, name, NULL);
+  mysql_mutex_unlock(&entry_thd->LOCK_thd_data);
 
   *out_entry = var_entry;
 
@@ -6846,6 +6844,30 @@ bool Item_func_get_user_var::set_value(THD *thd, sp_rcontext * /*ctx*/,
   */
   return (!suv || suv->fix_fields(thd, it) || suv->check(false) ||
           suv->update());
+}
+
+bool Item_func_get_user_var::pq_copy_from(THD *thd, Query_block *select,
+                                          Item *item) {
+  if (Item_var_func::pq_copy_from(thd, select, this)) {
+    return true;
+  }
+  Item_func_get_user_var *orig_item =
+      dynamic_cast<Item_func_get_user_var *>(item);
+  assert(orig_item);
+
+  // obtain var_entry from leader
+#ifndef NDEBUG
+  THD *entry_thd = thd->pq_leader;
+  assert(entry_thd);
+  mysql_mutex_lock(&entry_thd->LOCK_thd_data);
+  var_entry = get_variable(entry_thd, name, NULL);
+  mysql_mutex_unlock(&entry_thd->LOCK_thd_data);
+  assert(var_entry && orig_item->var_entry);
+#endif
+  if (orig_item != nullptr) {
+    m_cached_result_type = orig_item->m_cached_result_type;
+  }
+  return false;
 }
 
 bool Item_user_var_as_out_param::fix_fields(THD *thd, Item **ref) {
@@ -8259,12 +8281,11 @@ bool Item_func_sp::fix_fields(THD *thd, Item **ref) {
     if (args[0]->data_type() == MYSQL_TYPE_INVALID) {
       sp_variable *var = sp_ctx->find_variable(i);
       if (args[0]->propagate_type(
-              thd,
-              is_numeric_type(var->type)
-                  ? Type_properties(var->type, var->field_def.is_unsigned)
-                  : is_string_type(var->type)
-                        ? Type_properties(var->type, var->field_def.charset)
-                        : Type_properties(var->type)))
+              thd, is_numeric_type(var->type)
+                       ? Type_properties(var->type, var->field_def.is_unsigned)
+                   : is_string_type(var->type)
+                       ? Type_properties(var->type, var->field_def.charset)
+                       : Type_properties(var->type)))
         return true;
     }
   }
@@ -8476,7 +8497,7 @@ static bool check_table_and_trigger_access(Item **args, bool check_trigger_acl,
   // Don't show compression dictionary tables in "SHOW TABLES"
   if (compression_dict::is_hardcoded(dd::String_type(sch_name),
                                      dd::String_type(tbl_name))) {
-	  return false;
+    return false;
   }
 
   // Skip INFORMATION_SCHEMA database

@@ -1,7 +1,9 @@
 #ifndef TABLE_INCLUDED
 #define TABLE_INCLUDED
 
-/* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -108,6 +110,7 @@ struct TABLE;
 struct TABLE_LIST;
 struct TABLE_SHARE;
 struct handlerton;
+struct Field_raw_data;
 typedef int8 plan_idx;
 
 namespace dd {
@@ -280,7 +283,6 @@ struct ORDER {
 
   ORDER *next{nullptr};
 
- protected:
   /**
     The initial ordering expression. Usually substituted during resolving
     and must not be used during optimization and execution.
@@ -2141,6 +2143,9 @@ struct TABLE {
   bool should_binlog_drop_if_temp_flag{false};
 
  public:
+  /** copy table property from orig table */
+  bool pq_copy(THD *thd, void *select, TABLE *orig);
+
   /**
     Does this table have any columns that can be updated using partial update
     in the current row?
@@ -3462,7 +3467,6 @@ struct TABLE_LIST {
   */
   Table_function *table_function{nullptr};
 
- private:
   /**
      This field is set to non-null for derived tables and views. It points
      to the Query_expression representing the derived table/view.
@@ -3470,7 +3474,7 @@ struct TABLE_LIST {
      @verbatim SELECT * FROM (SELECT a FROM t1) b @endverbatim
   */
   Query_expression *derived{nullptr}; /* Query_expression of derived table */
-
+ private:
   /// If non-NULL, the CTE which this table is derived from.
   Common_table_expr *m_common_table_expr{nullptr};
   /**

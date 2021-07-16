@@ -1,4 +1,6 @@
-/* Copyright (c) 1999, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 1999, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, Huawei Technologies Co., Ltd.
+   Copyright (c) 2021, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2903,6 +2905,11 @@ int mysql_execute_command(THD *thd, bool first_level) {
     return 1;
   }
 
+  if (!thd->no_pq && thd->variables.force_parallel_execute && !thd->pq_dop) {
+    thd->pq_dop = thd->variables.parallel_default_dop;
+    thd->m_suite_for_pq = true;
+  }
+
   thd->work_part_info = nullptr;
 
   if (thd->optimizer_switch_flag(OPTIMIZER_SWITCH_SUBQUERY_TO_DERIVED))
@@ -4675,6 +4682,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
       assert(lex->m_sql_cmd != nullptr);
 
       res = lex->m_sql_cmd->execute(thd);
+      thd = current_thd;
 
       break;
     }
@@ -5121,6 +5129,9 @@ void THD::reset_for_next_command() {
     a grant/revoke or flush.
   */
   thd->security_context()->checkout_access_maps();
+
+  thd->parallel_exec = false;
+
 #ifndef NDEBUG
   thd->set_tmp_table_seq_id(1);
 #endif
@@ -5271,6 +5282,7 @@ void dispatch_sql_command(THD *thd, Parser_state *parser_state,
               thd, &src_res_grp, &dest_res_grp, &ticket, &cur_ticket);
 
           error = mysql_execute_command(thd, true);
+          thd = current_thd;
 
           if (switched)
             mgr_ptr->restore_original_resource_group(thd, src_res_grp,
