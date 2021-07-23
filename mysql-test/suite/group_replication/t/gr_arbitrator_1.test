@@ -1,0 +1,61 @@
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_server_count= 3
+--source include/group_replication.inc
+
+--echo # Start group replication
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--source include/start_and_bootstrap_group_replication.inc
+--let $uuid_1=`SELECT @@server_uuid`
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--source include/start_group_replication.inc
+--let $uuid_2=`SELECT @@server_uuid`
+--let $rpl_connection_name= server3
+--source include/rpl_connection.inc
+
+set sql_log_bin=off;
+call mtr.add_suppression("Fatal error when arbitrator is alone");
+call mtr.add_suppression("The server was automatically set into read only mode after an error was detected");
+call mtr.add_suppression("While leaving the group due to a stop");
+call mtr.add_suppression("Members removed from the group");
+call mtr.add_suppression("Skipping leave operation");
+call mtr.add_suppression("Error connecting to all peers");
+call mtr.add_suppression("Timeout on wait for view after joining group");
+set sql_log_bin=on;
+
+--source include/start_group_replication.inc
+--let $uuid_3=`SELECT @@server_uuid`
+--sorted_result
+--replace_result $uuid_1 uuid_1 $uuid_2 uuid_2 $uuid_3 uuid_3 $SERVER_MYPORT_1 port_1 $SERVER_MYPORT_2 port_2 $SERVER_MYPORT_3 port_3
+SELECT member_id, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+
+--echo # stop one normal node
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+
+--sleep 3
+
+--let $rpl_connection_name= server3
+--source include/rpl_connection.inc
+--sorted_result
+--replace_result $uuid_1 uuid_1 $uuid_2 uuid_2 $uuid_3 uuid_3 $SERVER_MYPORT_1 port_1 $SERVER_MYPORT_2 port_2 $SERVER_MYPORT_3 port_3
+SELECT member_id, member_port, member_state, member_role  FROM performance_schema.replication_group_members;
+
+--echo # stop all normal node
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+
+--sleep 3
+
+--let $rpl_connection_name= server3
+--source include/rpl_connection.inc
+--sorted_result
+--replace_result $uuid_1 uuid_1 $uuid_2 uuid_2 $uuid_3 uuid_3 $SERVER_MYPORT_1 port_1 $SERVER_MYPORT_2 port_2 $SERVER_MYPORT_3 port_3
+SELECT member_id, member_port, member_state, member_role  FROM performance_schema.replication_group_members;
+
+
+--source include/group_replication_end.inc

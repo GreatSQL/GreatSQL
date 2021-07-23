@@ -1,4 +1,5 @@
 /* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1247,9 +1248,12 @@ bool Sql_cmd_xa_prepare::execute(THD *thd) {
   bool st = trans_xa_prepare(thd);
 
   if (!st) {
-    if (!thd->is_engine_ha_data_detached() ||
-        !(st = applier_reset_xa_trans(thd)))
+    if (!thd->is_engine_ha_data_detached()) {
       my_ok(thd);
+    } else if (!(st = applier_reset_xa_trans(thd))) {
+      trans_track_end_trx(thd);
+      my_ok(thd);
+    }
   }
 
   return st;

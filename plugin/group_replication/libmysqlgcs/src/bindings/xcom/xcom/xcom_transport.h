@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -226,7 +226,8 @@ int get_ip_and_port(char *address, char ip[IP_MAX_SIZE], xcom_port *port);
 int is_new_node_eligible_for_ipv6(xcom_proto incoming_proto,
                                   const site_def *current_site_def);
 
-void update_zone_id_for_consensus(const char *ip, int zone_id);
+void update_zone_id_for_consensus(const char *ip, int zone_id,
+                                  bool zone_id_sync_mode);
 
 #define INITIAL_CONNECT_WAIT 0.1
 #define MAX_CONNECT_WAIT 1.0

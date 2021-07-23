@@ -1,4 +1,5 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -760,6 +761,9 @@ int Certification_handler::log_view_change_event_in_order(
   if (unlikely(view_change_event_id == "-1")) return 0;
 
   if (first_log_attempt) {
+    LogPluginErrMsg(
+        INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+        "before getting certification info in log_view_change_event_in_order");
     std::map<std::string, std::string> cert_info;
     cert_module->get_certification_info(&cert_info);
     size_t event_size = 0;
@@ -777,6 +781,9 @@ int Certification_handler::log_view_change_event_in_order(
           "Certification information is too large for transmission.";
       vchange_event->set_certification_info(&cert_info, &event_size);
     }
+    LogPluginErrMsg(
+        INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+        "after setting certification info in log_view_change_event_in_order");
   }
 
   // Assure the last known local transaction was already executed

@@ -1,4 +1,5 @@
 /* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -249,6 +250,7 @@ app_data_ptr init_config_with_group(app_data *a, node_list *nl, cargo_type type,
 app_data_ptr init_set_event_horizon_msg(app_data *a, uint32_t group_id,
                                         xcom_event_horizon event_horizon);
 app_data_ptr init_set_cache_size_msg(app_data *a, uint64_t cache_limit);
+app_data_ptr init_set_flp_timeout_msg(app_data *a, uint64_t flp_timeout);
 app_data_ptr init_get_event_horizon_msg(app_data *a, uint32_t group_id);
 app_data_ptr init_app_msg(app_data *a, char *payload, u_int payload_size);
 app_data_ptr init_terminate_command(app_data *a);

@@ -1,4 +1,5 @@
 /* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,6 +30,7 @@
 
 /* Reasonable initial cache limit */
 #define DEFAULT_CACHE_LIMIT 1000000000ULL
+#define DEFAULT_FLP_TIMEOUT 5
 
 cfg_app_xcom_st *the_app_xcom_cfg = NULL;
 
@@ -38,6 +40,7 @@ void init_cfg_app_xcom() {
 
   the_app_xcom_cfg->m_poll_spin_loops = 0;
   the_app_xcom_cfg->m_cache_limit = DEFAULT_CACHE_LIMIT;
+  the_app_xcom_cfg->m_flp_timeout = DEFAULT_FLP_TIMEOUT;
   the_app_xcom_cfg->identity = NULL;
 }
 

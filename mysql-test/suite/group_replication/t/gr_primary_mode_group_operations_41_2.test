@@ -70,6 +70,9 @@ INSERT INTO t1 VALUES (1);
 --let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE State = 'debug sync point: now'
 --source include/wait_condition.inc
 
+--disable_query_log
+SET SESSION transaction_isolation = 'SERIALIZABLE';
+--enable_query_log
 BEGIN;
 INSERT INTO t1 VALUES (2);
 

@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -53,6 +53,7 @@
 #include "xcom/task_os.h"
 #include "xcom/x_platform.h"
 #include "xcom/xcom_base.h"
+#include "xcom/xcom_cfg.h"
 #include "xcom/xcom_common.h"
 #include "xcom/xcom_detector.h"
 #include "xcom/xcom_memory.h"
@@ -179,6 +180,7 @@ int flush_srv_buf(server *s, int64_t *ret) {
       /* UNLOCK_FD(s->fd, 'w'); */
       if (sent <= 0) {
         shutdown_connection(&s->con);
+        s->unreachable = DIRECT_ABORT_CONN;
       }
       TASK_RETURN(sent);
     }
@@ -311,6 +313,7 @@ static int _send_msg(server *s, pax_msg *p, node_no to, int64_t *ret) {
         /* UNLOCK_FD(s->con.fd, 'w'); */
         if (sent <= 0) {
           shutdown_connection(&s->con);
+          s->unreachable = DIRECT_ABORT_CONN;
         }
         TASK_RETURN(sent);
       }
@@ -567,6 +570,7 @@ static server *mksrv(char *srv, xcom_port port) {
   s->srv = srv;
   s->port = port;
   s->zone_id = 0;
+  s->zone_id_sync_mode = true;
   reset_connection(&s->con);
   s->active = 0.0;
   s->detected = 0.0;
@@ -850,18 +854,29 @@ bool check_tcp_connection_valid(int fd, int *same_ip) {
   return result;
 }
 
+static double getusec() {
+  struct timeval tp;
+  gettimeofday(&tp, NULL);
+  double sec = tp.tv_sec * 1000000 + (1.0 * tp.tv_usec);
+  return sec;
+}
+
 /* Try to connect to another node */
 static int dial(server *s) {
   DECL_ENV
   int dummy;
   int same_ip;
+  double utime;
   END_ENV;
 
   TASK_BEGIN
   IFDBG(D_NONE, FN; STRLIT(" dial "); NPUT(get_nodeno(get_site_def()), u);
         STRLIT(s->srv); NDBG(s->port, u));
   reset_connection(&s->con);
+  G_INFO("dial for server:%s, port:%d", s->srv, (int)s->port);
+  ep->utime = getusec();
   TASK_CALL(connect_tcp(s->srv, s->port, &s->con.fd));
+  s->conn_rtt = (getusec() - ep->utime) / 1000000;
   if (s->con.fd < 0) {
     IFDBG(D_NONE, FN; STRLIT("could not dial "); STRLIT(s->srv);
           NDBG(s->port, u););
@@ -879,8 +894,9 @@ static int dial(server *s) {
     }
 #endif
     set_connected(&s->con, CON_FD);
+    G_INFO("set connection CON_FD in dial for fd:%d", s->con.fd);
     alive(s);
-    update_detected(get_site_def_rw());
+    update_detected(get_site_def_rw(), s->conn_rtt);
   }
   FINALLY
   TASK_END;
@@ -1011,6 +1027,7 @@ int send_to_others(site_def const *s, pax_msg *p, const char *dbg) {
 int send_to_someone(site_def const *s, pax_msg *p,
                     const char *dbg MY_ATTRIBUTE((unused))) {
   int retval = 0;
+  int silent = DEFAULT_DETECTOR_LIVE_TIMEOUT;
   static node_no i = 0;
   node_no prev = 0;
 #ifdef MAXACCEPT
@@ -1022,13 +1039,15 @@ int send_to_someone(site_def const *s, pax_msg *p,
 #endif
   /* IFDBG(D_NONE, FN; NDBG(max,u); NDBG(s->maxnodes,u)); */
   assert(max > 0);
+  if (the_app_xcom_cfg) {
+    silent = the_app_xcom_cfg->m_flp_timeout;
+  }
   prev = i % max;
   i = (i + 1) % max;
   while (i != prev) {
     /* IFDBG(D_NONE, FN; NDBG(i,u); NDBG(prev,u)); */
-    if (i != s->nodeno &&
-        !may_be_dead(s->detected, i, task_now(), DEFAULT_SILENT,
-                     s->servers[i]->unreachable)) {
+    if (i != s->nodeno && !may_be_dead(s->detected, i, task_now(), silent,
+                                       s->servers[i]->unreachable)) {
       IFDBG(D_NONE, FN; STRLIT(dbg); NDBG(i, u); NDBG(max, u); PTREXP(p));
       retval = _send_server_msg(s, i, p);
       break;
@@ -1240,7 +1259,10 @@ int read_msg(connection_descriptor *rfd, pax_msg *p, server *s, int64_t *ret) {
                     string_arg("incoming connection will use protcol version"));
           add_event(EVENT_DUMP_PAD,
                     string_arg(xcom_proto_to_str(rfd->x_proto))););
-      if (rfd->x_proto > my_xcom_version) TASK_FAIL;
+      if (rfd->x_proto > my_xcom_version) {
+        G_INFO("x_proto:%d, my_xcom_version:%d", rfd->x_proto, my_xcom_version);
+        TASK_FAIL;
+      }
       if (is_new_node_eligible_for_ipv6(ep->x_version, get_site_def())) {
         G_WARNING(
             "Incoming node is not eligible to enter the group due to lack "
@@ -1250,6 +1272,7 @@ int read_msg(connection_descriptor *rfd, pax_msg *p, server *s, int64_t *ret) {
         TASK_FAIL;
       }
       set_connected(rfd, CON_PROTO);
+      G_INFO("read_msg sets CON_PROTO for fd:%d", rfd->fd);
       TASK_CALL(send_proto(rfd, rfd->x_proto, x_version_reply, ep->tag, ret));
     } else if (ep->x_type == x_version_reply) {
       /* Mark connection with negotiated protocol version */
@@ -1264,10 +1287,16 @@ int read_msg(connection_descriptor *rfd, pax_msg *p, server *s, int64_t *ret) {
                     0, string_arg("peer connection will use protcol version"));
                 add_event(EVENT_DUMP_PAD,
                           string_arg(xcom_proto_to_str(rfd->x_proto))););
-        if (rfd->x_proto > my_xcom_version || rfd->x_proto == x_unknown_proto)
+        if (rfd->x_proto > my_xcom_version || rfd->x_proto == x_unknown_proto) {
+          G_INFO("task failed because not compatitable");
           TASK_FAIL;
+        }
 
         set_connected(rfd, CON_PROTO);
+        G_INFO("read_msg sets CON_PROTO for fd:%d in mark, tag:%u", rfd->fd,
+               ep->tag);
+      } else {
+        G_INFO("send tag:%u is not equal to tag:%u", rfd->snd_tag, ep->tag);
       }
     }
   } while (ep->x_type != x_normal);
@@ -1276,6 +1305,8 @@ int read_msg(connection_descriptor *rfd, pax_msg *p, server *s, int64_t *ret) {
   assert(check_protoversion(ep->x_version, rfd->x_proto));
 #endif
   if (!check_protoversion(ep->x_version, rfd->x_proto)) {
+    G_INFO("check_protoversion is failed, x_version:%d, x_proto:%d",
+           ep->x_version, rfd->x_proto);
     TASK_FAIL;
   }
 
@@ -1284,6 +1315,7 @@ int read_msg(connection_descriptor *rfd, pax_msg *p, server *s, int64_t *ret) {
   /* Allocate buffer space for message */
   ep->bytes = (char *)calloc((size_t)1, (size_t)ep->msgsize);
   if (!ep->bytes) {
+    G_INFO("calloc failed, msgsize:%ld", (size_t)ep->msgsize);
     TASK_FAIL;
   }
 
@@ -1300,6 +1332,7 @@ int read_msg(connection_descriptor *rfd, pax_msg *p, server *s, int64_t *ret) {
   /* Deallocate buffer */
   X_FREE(ep->bytes);
   if (ep->n <= 0 || !deserialize_ok) {
+    G_INFO("task failed, ep->n:%ld", ep->n);
     IFDBG(D_NONE, FN; NDBG(rfd->fd, d); NDBG64(ep->n); NDBG(deserialize_ok, d));
     TASK_FAIL;
   }
@@ -1365,6 +1398,7 @@ int buffered_read_msg(connection_descriptor *rfd, srv_buf *buf, pax_msg *p,
       }
 
       set_connected(rfd, CON_PROTO);
+      G_INFO("buffered_read_msg sets CON_PROTO for fd:%d", rfd->fd);
       TASK_CALL(send_proto(rfd, rfd->x_proto, x_version_reply, ep->tag, ret));
     } else if (ep->x_type == x_version_reply) {
       /* Mark connection with negotiated protocol version */
@@ -1381,6 +1415,7 @@ int buffered_read_msg(connection_descriptor *rfd, srv_buf *buf, pax_msg *p,
           TASK_FAIL;
 
         set_connected(rfd, CON_PROTO);
+        G_INFO("buffered_read_msg set CON_PROTO for fd:%d in mark", rfd->fd);
       }
     }
   } while (ep->x_type != x_normal);
@@ -1571,6 +1606,7 @@ int sender_task(task_arg arg) {
                   EVENT_DUMP_PAD, string_arg(pax_op_to_str(ep->link->p->op))););
         } else {
           set_connected(&ep->s->con, CON_FD);
+          G_INFO("sender_task sets CON_PROTO for fd:%d", ep->s->con.fd);
           /* Send protocol negotiation request */
           do {
             TASK_CALL(send_proto(&ep->s->con, my_xcom_version, x_version_req,
@@ -1580,8 +1616,8 @@ int sender_task(task_arg arg) {
             }
             ep->tag = incr_tag(ep->tag);
           } while (ret_code < 0);
-          G_DEBUG("sent negotiation request for protocol %d fd %d",
-                  my_xcom_version, ep->s->con.fd);
+          G_INFO("sent negotiation request for protocol version:%d and fd:%d",
+                 my_xcom_version, ep->s->con.fd);
           ADD_DBG(
               D_TRANSPORT,
               add_event(EVENT_DUMP_PAD,
@@ -1594,9 +1630,13 @@ int sender_task(task_arg arg) {
           while (!proto_done(&ep->s->con)) {
             TASK_DELAY(0.1);
             if (!is_connected(&ep->s->con)) {
+              G_INFO(
+                  "leave the proto_done checking while not connected for fd:%d",
+                  ep->s->con.fd);
               goto next;
             }
           }
+          G_INFO("proto is done for fd:%d", ep->s->con.fd);
           ADD_DBG(
               D_TRANSPORT,
               add_event(EVENT_DUMP_PAD, string_arg("will use protocol"));
@@ -1784,8 +1824,10 @@ int tcp_reaper_task(task_arg arg MY_ATTRIBUTE((unused))) {
       double now = task_now();
       for (i = 0; i < maxservers; i++) {
         server *s = all_servers[i];
-        if (s && s->con.fd != -1 && (s->active + 10.0) < now) {
+        if (s && s->con.fd != -1 && (s->active + 300.0) < now) {
+          G_WARNING("write timeout in xcom and shutdown connection");
           shutdown_connection(&s->con);
+          s->unreachable = DIRECT_ABORT_CONN;
         }
       }
     }
@@ -1817,6 +1859,9 @@ void ssl_shutdown_con(connection_descriptor *con) {
 #endif
 
 void close_connection(connection_descriptor *con) {
+  if (con->fd > 0) {
+    G_INFO("set CON_NULL for fd:%d in close_connection", con->fd);
+  }
   shut_close_socket(&con->fd);
   set_connected(con, CON_NULL);
 }
@@ -1832,6 +1877,9 @@ void shutdown_connection(connection_descriptor *con) {
 }
 
 void reset_connection(connection_descriptor *con) {
+  if (con->fd > 0) {
+    G_INFO("set CON_NULL for fd:%d in reset_connection", con->fd);
+  }
   con->fd = -1;
 #ifndef XCOM_WITHOUT_OPENSSL
   con->ssl_fd = 0;
@@ -1967,7 +2015,8 @@ static int match_address(parse_buf *p) {
     return match_ipv4_or_name(p);
 }
 
-void update_zone_id_for_consensus(const char *ip, int zone_id) {
+void update_zone_id_for_consensus(const char *ip, int zone_id,
+                                  bool zone_id_sync_mode) {
   int i;
   for (i = 0; i < maxservers; i++) {
     if (strcmp(all_servers[i]->srv, ip) == 0) {
@@ -1976,6 +2025,7 @@ void update_zone_id_for_consensus(const char *ip, int zone_id) {
        *
        */
       all_servers[i]->zone_id = zone_id;
+      all_servers[i]->zone_id_sync_mode = zone_id_sync_mode;
     }
   }
 }

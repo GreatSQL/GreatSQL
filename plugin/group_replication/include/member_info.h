@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -148,8 +148,14 @@ class Group_member_info : public Plugin_gcs_message {
     // Length of the payload item: 1 bytes
     PIT_FAST_MODE = 22,
 
+    // Length of the payload item: 1 bytes
+    PIT_ZONE_ID_SYNC_MODE = 23,
+
+    // Length of the member gtid item: 1 bytes
+    PIT_MEMBER_GTID_MODE = 24,
+
     // No valid type codes can appear after this one.
-    PIT_MAX = 23
+    PIT_MAX = 25
   };
 
   /*
@@ -175,6 +181,7 @@ class Group_member_info : public Plugin_gcs_message {
   typedef enum {
     MEMBER_ROLE_PRIMARY = 1,
     MEMBER_ROLE_SECONDARY,
+    MEMBER_ROLE_ARBITRATOR,
     MEMBER_ROLE_END
   } Group_member_role;
 
@@ -204,21 +211,20 @@ class Group_member_info : public Plugin_gcs_message {
     @param[in] recovery_endpoints_arg                 recovery endpoints
     advertised
    */
-  Group_member_info(const char *hostname_arg, uint port_arg,
-                    const char *uuid_arg, int write_set_extraction_algorithm,
-                    const std::string &gcs_member_id_arg,
-                    Group_member_info::Group_member_status status_arg,
-                    Member_version &member_version_arg,
-                    ulonglong gtid_assignment_block_size_arg,
-                    Group_member_info::Group_member_role role_arg,
-                    bool in_single_primary_mode,
-                    bool has_enforces_update_everywhere_checks,
-                    uint member_weight_arg, uint lower_case_table_names_arg,
-                    bool default_table_encryption_arg,
-                    const char *recovery_endpoints_arg, int zone_id_arg,
-                    int single_primary_fast_mode_arg,
-                    PSI_mutex_key psi_mutex_key_arg =
-                        key_GR_LOCK_group_member_info_update_lock);
+  Group_member_info(
+      const char *hostname_arg, uint port_arg, const char *uuid_arg,
+      int write_set_extraction_algorithm, const std::string &gcs_member_id_arg,
+      Group_member_info::Group_member_status status_arg,
+      Member_version &member_version_arg,
+      ulonglong gtid_assignment_block_size_arg,
+      Group_member_info::Group_member_role role_arg,
+      bool in_single_primary_mode, bool has_enforces_update_everywhere_checks,
+      uint member_weight_arg, uint lower_case_table_names_arg,
+      bool default_table_encryption_arg, const char *recovery_endpoints_arg,
+      int zone_id_arg, bool zone_id_sync_mode_arg,
+      int single_primary_fast_mode_arg, int single_primary_election_mode_arg,
+      PSI_mutex_key psi_mutex_key_arg =
+          key_GR_LOCK_group_member_info_update_lock);
 
   /**
     Copy constructor
@@ -280,7 +286,8 @@ class Group_member_info : public Plugin_gcs_message {
               uint member_weight_arg, uint lower_case_table_names_arg,
               bool default_table_encryption_arg,
               const char *recovery_endpoints_arg, int zone_id_arg,
-              int single_primary_fast_mode_arg);
+              bool zone_id_sync_mode_arg, int single_primary_fast_mode_arg,
+              int single_primary_election_mode_arg);
 
   /**
     Update Group_member_info.
@@ -456,6 +463,12 @@ class Group_member_info : public Plugin_gcs_message {
   static bool comparator_group_member_weight(Group_member_info *m1,
                                              Group_member_info *m2);
 
+  static bool comparator_group_member_executed_gtid_first(
+      Group_member_info *m1, Group_member_info *m2);
+
+  static bool comparator_group_member_weight_first(Group_member_info *m1,
+                                                   Group_member_info *m2);
+
   /**
     Return true if member version is higher than other member version
    */
@@ -470,6 +483,16 @@ class Group_member_info : public Plugin_gcs_message {
     Return true if member weight is higher than other member weight
    */
   bool has_greater_weight(Group_member_info *other);
+  /**
+    Return true if member gtid is higher than other member gtid
+   */
+  bool has_greater_executed_gtid(Group_member_info *other);
+
+  bool has_greater_weight_and_executed_gtid(Group_member_info *other);
+
+  int compare_gtid(Group_member_info *other);
+
+  int compare_weight(Group_member_info *other);
 
   /**
     Redefinition of operate ==, which operate upon the uuid
@@ -495,6 +518,8 @@ class Group_member_info : public Plugin_gcs_message {
     Return true if this is single primary fast mode
   */
   int in_single_primary_fast_mode();
+
+  int in_single_primary_election_mode();
 
   /**
     Update this member conflict detection to true
@@ -559,6 +584,8 @@ class Group_member_info : public Plugin_gcs_message {
 
   int get_zone_id();
   void set_zone_id(int id);
+  bool get_zone_id_sync_mode();
+  void set_zone_id_sync_mode(bool mode);
 
  protected:
   void encode_payload(std::vector<unsigned char> *buffer) const override;
@@ -603,7 +630,9 @@ class Group_member_info : public Plugin_gcs_message {
   bool primary_election_running;
   std::string recovery_endpoints;
   int zone_id;
+  bool zone_id_sync_mode;
   int single_primary_fast_mode;
+  int single_primary_election_mode;
 #ifndef NDEBUG
  public:
   bool skip_encode_default_table_encryption;

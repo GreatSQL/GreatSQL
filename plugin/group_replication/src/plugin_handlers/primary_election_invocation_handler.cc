@@ -1,4 +1,5 @@
 /* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -126,6 +127,19 @@ int Primary_election_handler::execute_primary_election(
       // user
       LogPluginErr(WARNING_LEVEL,
                    ER_GRP_RPL_NO_SUITABLE_PRIMARY_MEM); /* purecov: inspected */
+      if (is_arbitrator_role()) {
+        std::string err_msg;
+        err_msg.assign("arbitrators could not live without a primary node.");
+        kill_transactions_and_leave_on_election_error(err_msg);
+        goto end;
+      }
+    } else {
+      if (is_arbitrator_role()) {
+        std::string err_msg;
+        err_msg.assign("arbitrator could not be alone.");
+        kill_transactions_and_leave_on_election_error(err_msg);
+        goto end;
+      }
     }
     group_events_observation_manager->after_primary_election(
         "", false, mode, PRIMARY_ELECTION_NO_CANDIDATES_ERROR);
@@ -405,7 +419,10 @@ bool Primary_election_handler::pick_primary_member(
         assert(member_info);
         if (member_info && member_info->get_recovery_status() ==
                                Group_member_info::MEMBER_ONLINE)
-          the_primary = member_info;
+          if (member_info->get_role() !=
+              Group_member_info::MEMBER_ROLE_ARBITRATOR) {
+            the_primary = member_info;
+          }
       }
     }
   }
@@ -490,12 +507,25 @@ void sort_members_for_election(
   Member_version lowest_version = first_member->get_member_version();
 
   // sort only lower version members as they only will be needed to pick leader
-  if (lowest_version >= PRIMARY_ELECTION_MEMBER_WEIGHT_VERSION)
-    std::sort(all_members_info->begin(), lowest_version_end,
-              Group_member_info::comparator_group_member_weight);
-  else
+  if (lowest_version >= PRIMARY_ELECTION_MEMBER_WEIGHT_VERSION) {
+    ulong primary_election_mode = get_single_primary_election_mode_var();
+    if (primary_election_mode != PEM_WEIGHT_ONLY) {
+      if (primary_election_mode == PEM_GTID_FIRST) {
+        std::sort(
+            all_members_info->begin(), lowest_version_end,
+            Group_member_info::comparator_group_member_executed_gtid_first);
+      } else {
+        std::sort(all_members_info->begin(), lowest_version_end,
+                  Group_member_info::comparator_group_member_weight_first);
+      }
+    } else {
+      std::sort(all_members_info->begin(), lowest_version_end,
+                Group_member_info::comparator_group_member_weight);
+    }
+  } else {
     std::sort(all_members_info->begin(), lowest_version_end,
               Group_member_info::comparator_group_member_uuid);
+  }
 }
 
 void Primary_election_handler::notify_election_running() {

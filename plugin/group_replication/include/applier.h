@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -289,6 +289,7 @@ class Applier_module_interface {
   virtual int wait_for_applier_complete_suspension(
       bool *abort_flag, bool wait_for_execution = true) = 0;
   virtual void awake_applier_module() = 0;
+  virtual void tell_applier_abandon_queue() = 0;
   virtual void interrupt_applier_suspension_wait() = 0;
   virtual int wait_for_applier_event_execution(
       double timeout, bool check_and_purge_partial_transactions) = 0;
@@ -620,6 +621,12 @@ class Applier_module : public Applier_module_interface {
     mysql_cond_broadcast(&suspend_cond);
   }
 
+  void tell_applier_abandon_queue() override {
+    mysql_mutex_lock(&suspend_lock);
+    abort_after_suspended = true;
+    mysql_mutex_unlock(&suspend_lock);
+  }
+
   /**
    Waits for the applier to suspend and apply all the transactions previous to
    the suspend request.
@@ -888,6 +895,7 @@ class Applier_module : public Applier_module_interface {
     mysql_mutex_lock(&suspend_lock);
 
     suspended = true;
+    abort_after_suspended = false;
     stage_handler.set_stage(info_GR_STAGE_module_suspending.m_key, __FILE__,
                             __LINE__, 0, 0);
 
@@ -958,6 +966,7 @@ class Applier_module : public Applier_module_interface {
   mysql_cond_t suspend_cond;
   /* Suspend flag that informs if the applier is suspended */
   bool suspended;
+  bool abort_after_suspended;
   /* Suspend wait flag used when waiting for the applier to suspend */
   bool waiting_for_applier_suspension;
 

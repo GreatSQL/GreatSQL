@@ -1,4 +1,5 @@
 %/* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+%   Copyright (c) 2022, GreatDB Software Co., Ltd
 %
 %   This program is free software; you can redistribute it and/or modify
 %   it under the terms of the GNU General Public License, version 2.0,
@@ -120,7 +121,8 @@ enum cargo_type {
   get_event_horizon_type = 21,
   set_event_horizon_type = 22,
   get_synode_app_data_type = 23,
-  convert_into_local_server_type = 24
+  convert_into_local_server_type = 24,
+  set_flp_timeout = 51
 };
 
 enum recover_action {
@@ -317,6 +319,8 @@ union app_u switch(cargo_type c_t){
    synode_no_array synodes;
  case convert_into_local_server_type:
    void;
+ case set_flp_timeout:
+   uint64_t flp_timeout;
  default:
    void;
 };

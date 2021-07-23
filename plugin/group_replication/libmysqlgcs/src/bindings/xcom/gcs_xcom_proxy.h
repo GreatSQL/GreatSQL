@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -231,6 +232,8 @@ class Gcs_xcom_proxy {
              process our request, failure means it wont.
   */
   virtual bool xcom_client_set_cache_size(uint64_t size) = 0;
+
+  virtual bool xcom_client_set_flp_timeout(uint64_t timeout) = 0;
 
   /**
     This member function is responsible for pushing data into consensus on
@@ -705,6 +708,8 @@ class Gcs_xcom_proxy {
   */
   virtual bool xcom_set_cache_size(uint64_t size) = 0;
 
+  virtual bool xcom_set_flp_timeout(uint64_t timeout) = 0;
+
   /**
     Function to force the set of nodes in XCOM's configuration.
 
@@ -831,6 +836,7 @@ class Gcs_xcom_proxy_base : public Gcs_xcom_proxy {
       const std::unordered_set<Gcs_xcom_synode> &synode_set,
       synode_app_data_array &reply) override;
   bool xcom_set_cache_size(uint64_t size) override;
+  bool xcom_set_flp_timeout(uint64_t timeout) override;
   bool xcom_force_nodes(Gcs_xcom_nodes &nodes, uint32_t group_id_hash) override;
 
  private:
@@ -873,6 +879,7 @@ class Gcs_xcom_proxy_impl : public Gcs_xcom_proxy_base {
                                        synode_app_data_array &reply) override;
 
   bool xcom_client_set_cache_size(uint64_t size) override;
+  bool xcom_client_set_flp_timeout(uint64_t timeout) override;
   bool xcom_client_boot(node_list *nl, uint32_t group_id) override;
   connection_descriptor *xcom_client_open_connection(std::string,
                                                      xcom_port port) override;
@@ -1021,6 +1028,8 @@ class Gcs_xcom_app_cfg {
     @param size the maximum size of the cache.
    */
   void set_xcom_cache_size(uint64_t size);
+
+  void set_xcom_flp_timeout(uint64_t timeout);
 
   /**
    Configures XCom with its unique instance identifier, i.e. its (address,

@@ -37,7 +37,7 @@ SET GLOBAL group_replication_bootstrap_group= ON;
 CREATE TABLE grvars (id INT PRIMARY KEY AUTO_INCREMENT, varname VARCHAR(64), varvalue VARCHAR(256));
 INSERT INTO grvars (varname, varvalue)
  SELECT * FROM performance_schema.global_variables
- WHERE VARIABLE_NAME LIKE '%group_replication%'
+ WHERE VARIABLE_NAME LIKE '%group_replication%' and VARIABLE_NAME NOT LIKE '%group_replication_arbitrator%'
  ORDER BY VARIABLE_NAME;
 
 --let $countvars= `SELECT COUNT(*) FROM grvars;`

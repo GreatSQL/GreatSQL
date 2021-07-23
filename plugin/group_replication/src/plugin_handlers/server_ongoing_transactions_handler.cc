@@ -1,4 +1,5 @@
 /* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -60,8 +61,8 @@ bool Server_ongoing_transactions_handler::get_server_running_transactions(
       reinterpret_cast<SERVICE_TYPE(mysql_ongoing_transactions_query) *>(
           generic_service);
   if (generic_service)
-    return server_transaction_service->get_ongoing_server_transactions(ids,
-                                                                       size);
+    return server_transaction_service
+        ->get_group_replication_waitting_transactions(ids, size);
   else
     return true; /* purecov: inspected */
 }

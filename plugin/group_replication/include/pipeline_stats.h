@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -668,9 +668,11 @@ class Flow_control_module {
   int64 m_wait_counter;
   int64 m_leave_counter;
   ulonglong m_last_cert_database_size;
+  int32 m_last_cert_queue_size;
   int m_current_wait_msec;
   int m_flow_control_need_refreshed;
   int m_flow_control_flag;
+  int m_fast_flow_control_mode;
   int m_max_wait_time;
 
   Flow_control_module_info m_info;

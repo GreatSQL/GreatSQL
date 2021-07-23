@@ -1,4 +1,5 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -850,6 +851,7 @@ Transaction_state_tracker::Transaction_state_tracker() {
   tx_curr_state = tx_reported_state = TX_EMPTY;
   tx_read_flags = TX_READ_INHERIT;
   tx_isol_level = TX_ISOL_INHERIT;
+  tx_table_flag = TX_TABLE_NONE;
 }
 
 /**
@@ -1264,7 +1266,8 @@ void Transaction_state_tracker::add_trx_state(THD *thd, uint add) {
     Only flag state when in transaction or LOCK TABLES is added.
   */
   if ((tx_curr_state & (TX_EXPLICIT | TX_IMPLICIT)) ||
-      (add & TX_LOCKED_TABLES) || (add == TX_STMT_DML))
+      (add & TX_LOCKED_TABLES) || (add == TX_STMT_DML) ||
+      (add == TX_BEFORE_COMMIT))
     tx_curr_state |= add;
 
   update_change_flags(thd);
@@ -1312,6 +1315,15 @@ void Transaction_state_tracker::set_isol_level(THD *thd,
     tx_changed |= TX_CHG_CHISTICS;
     mark_as_changed(thd, nullptr);
   }
+}
+
+void Transaction_state_tracker::add_trx_table_flag(
+    enum enum_tx_table_flag flag) {
+  tx_table_flag |= flag;
+}
+
+void Transaction_state_tracker::clear_trx_table_flag() {
+  tx_table_flag = TX_TABLE_NONE;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

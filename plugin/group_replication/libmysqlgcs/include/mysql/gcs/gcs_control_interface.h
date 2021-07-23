@@ -1,4 +1,5 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -205,6 +206,11 @@ class Gcs_control_interface {
               GCS_NOK otherwise.
   */
   virtual enum_gcs_error set_xcom_cache_size(uint64_t size) = 0;
+
+  /**
+    Sets a new value for the xcom flp timeout of the XCom communication.
+  */
+  virtual enum_gcs_error set_xcom_flp_timeout(uint64_t timeout) = 0;
 
   virtual ~Gcs_control_interface() {}
 };

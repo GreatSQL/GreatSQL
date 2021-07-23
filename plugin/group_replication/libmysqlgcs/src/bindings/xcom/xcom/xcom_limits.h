@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +26,7 @@
 
 #define NSERVERS 100
 #define MAX_CONNECT_FAIL_TIMES 3
+#define DIRECT_ABORT_CONN -1
 #define MAXBLOB 10000000
 #define MAXNAME 1024
 #define MAX_SYNODE_ARRAY 1024

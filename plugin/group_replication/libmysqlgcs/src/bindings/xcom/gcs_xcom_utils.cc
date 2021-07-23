@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -58,10 +58,15 @@ static const uint64_t JOIN_SLEEP_TIME = 5;
 */
 static const uint64_t DEFAULT_XCOM_MAX_CACHE_SIZE = 1073741824;
 
+static const uint64_t DEFAULT_XCOM_FLP_TIMEOUT = 5;
+
 /*
   Min value for the maximum size of the XCom cache.
 */
 static const uint64_t MIN_XCOM_MAX_CACHE_SIZE = 134217728;
+
+static const uint64_t MIN_XCOM_FLP_TIMEOUT = 3;
+static const uint64_t MAX_XCOM_FLP_TIMEOUT = 60;
 
 Gcs_xcom_utils::~Gcs_xcom_utils() {}
 
@@ -123,9 +128,9 @@ uint32_t Gcs_xcom_utils::mhash(const unsigned char *buf, size_t length) {
   return sum;
 }
 
-void Gcs_xcom_utils::update_zone_id_for_paxos_node(const char *ip,
-                                                   int zone_id) {
-  update_zone_id_for_consensus(ip, zone_id);
+void Gcs_xcom_utils::update_zone_id_for_paxos_node(const char *ip, int zone_id,
+                                                   bool zone_id_sync_mode) {
+  update_zone_id_for_consensus(ip, zone_id, zone_id_sync_mode);
 }
 
 int Gcs_xcom_utils::init_net() { return ::init_net(); }
@@ -173,6 +178,8 @@ void fix_parameters_syntax(Gcs_interface_parameters &interface_params) {
       interface_params.get_parameter("fragmentation_threshold"));
   std::string *xcom_cache_size_str = const_cast<std::string *>(
       interface_params.get_parameter("xcom_cache_size"));
+  std::string *xcom_flp_timeout_str = const_cast<std::string *>(
+      interface_params.get_parameter("xcom_flp_timeout"));
 
   // sets the default value for compression (ON by default)
   if (!compression_str) {
@@ -257,6 +264,12 @@ void fix_parameters_syntax(Gcs_interface_parameters &interface_params) {
   if (!xcom_cache_size_str) {
     interface_params.add_parameter("xcom_cache_size",
                                    std::to_string(DEFAULT_XCOM_MAX_CACHE_SIZE));
+  }
+
+  // sets the default XCom flp timeout
+  if (!xcom_flp_timeout_str) {
+    interface_params.add_parameter("xcom_flp_timeout",
+                                   std::to_string(DEFAULT_XCOM_FLP_TIMEOUT));
   }
 }
 
@@ -355,6 +368,8 @@ bool is_parameters_syntax_correct(
       interface_params.get_parameter("fragmentation");
   const std::string *xcom_cache_size_str =
       interface_params.get_parameter("xcom_cache_size");
+  const std::string *xcom_flp_timeout_str =
+      interface_params.get_parameter("xcom_flp_timeout");
 
   /*
     -----------------------------------------------------
@@ -598,6 +613,26 @@ bool is_parameters_syntax_correct(
        errno == ERANGE)) {
     MYSQL_GCS_LOG_ERROR("The xcom_cache_size parameter ("
                         << xcom_cache_size_str->c_str() << ") is not valid.")
+    error = GCS_NOK;
+    goto end;
+  }
+
+  // Validate XCom flp timeout
+  errno = 0;
+  if (xcom_flp_timeout_str != nullptr &&
+      // Verify if the input value is a valid number
+      (xcom_flp_timeout_str->size() == 0 || !is_number(*xcom_flp_timeout_str) ||
+       // Check that it is not lower than the min value allowed for the var
+       strtoull(xcom_flp_timeout_str->c_str(), nullptr, 10) <
+           MIN_XCOM_FLP_TIMEOUT ||
+       // Check that it is not higher than the max value allowed
+       strtoull(xcom_flp_timeout_str->c_str(), nullptr, 10) >
+           MAX_XCOM_FLP_TIMEOUT ||
+       // Check that it is within the range of values allowed for the var type.
+       // This is need in addition to the check above because of overflows.
+       errno == ERANGE)) {
+    MYSQL_GCS_LOG_ERROR("The xcom_flp_timeout parameter ("
+                        << xcom_flp_timeout_str->c_str() << ") is not valid.")
     error = GCS_NOK;
     goto end;
   }

@@ -58,6 +58,9 @@ set session sql_log_bin=1;
 CREATE TABLE test.t1 (a INT PRIMARY KEY);
 --source include/rpl_sync.inc
 
+--disable_query_log
+SET SESSION transaction_isolation = 'SERIALIZABLE';
+--enable_query_log
 BEGIN;
 INSERT INTO t1 VALUES (1);
 

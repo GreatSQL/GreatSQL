@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -845,6 +846,9 @@ int Session_plugin_thread::launch_session_thread(void *plugin_pointer_var,
                            get_connection_attrib(), launch_handler_thread,
                            (void *)this))) {
     mysql_mutex_unlock(&m_run_lock); /* purecov: inspected */
+    LogPluginErrMsg(WARNING_LEVEL, ER_LOG_PRINTF_MSG,
+                    "Increase the number of threads that could be "
+                    "created(nproc for Linux) and restart MySQL.");
     return 1;                        /* purecov: inspected */
   }
   m_session_thread_state.set_created();

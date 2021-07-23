@@ -1,0 +1,191 @@
+--source include/have_debug.inc
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_group_replication_single_primary_mode=1
+--source include/group_replication.inc
+
+# Boostrap start GR on server1 (Primary)
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--source include/start_and_bootstrap_group_replication.inc
+
+# Start GR on server2 (Secondary)
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--source include/start_group_replication.inc
+
+connect (conn1_1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn1_2,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn2_1,127.0.0.1,root,,test,$SERVER_MYPORT_2,);
+connect (conn2_2,127.0.0.1,root,,test,$SERVER_MYPORT_2,);
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+CREATE TABLE t1 (c11 INT PRIMARY KEY, c12 INT);
+CREATE TABLE t2 (c21 INT PRIMARY KEY, c22 INT, CONSTRAINT c23 FOREIGN KEY (c22) REFERENCES t1 (c11) ON DELETE CASCADE ON UPDATE CASCADE);
+INSERT INTO t1 VALUES (1,1),(2,2);
+
+# case 0: test change primary node will not wait when normal trx active
+--echo [connect conn1_1]
+connection conn1_1;
+BEGIN;
+SELECT * FROM t1;
+INSERT INTO t1 VALUES (3,3);
+
+--echo [connect conn2_1]
+connection conn2_1;
+DO group_replication_set_as_primary(@@server_uuid);
+
+--echo [connect conn1_1]
+connection conn1_1;
+--error ER_OPTION_PREVENTS_STATEMENT
+COMMIT;
+--echo ## change back for next test
+DO group_replication_set_as_primary(@@server_uuid);
+
+
+# case 1: test change primary node will wait SERIALIZABLE trx
+--echo [connect conn1_1]
+connection conn1_1;
+SET @old_iso=@@transaction_isolation;
+SET SESSION transaction_isolation = 'SERIALIZABLE';
+BEGIN;
+INSERT INTO t1 VALUES (4,4);
+
+--echo [connect conn2_1]
+connection conn2_1;
+send DO group_replication_set_as_primary(@@server_uuid);
+
+sleep 2;
+--echo [connect conn1_2]
+connection conn1_2;
+--sorted_result
+--replace_result $SERVER_MYPORT_1 port_1 $SERVER_MYPORT_2 port_2
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+SELECT @@super_read_only;
+
+--echo [connect conn2_2]
+connection conn2_2;
+--sorted_result
+--replace_result $SERVER_MYPORT_1 port_1 $SERVER_MYPORT_2 port_2
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+SELECT @@super_read_only;
+
+--echo [connect conn1_1]
+connection conn1_1;
+COMMIT;
+
+--echo [connect conn2_1]
+connection conn2_1;
+reap;
+--sorted_result
+--replace_result $SERVER_MYPORT_1 port_1 $SERVER_MYPORT_2 port_2
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+
+--echo [connect conn1_1]
+connection conn1_1;
+SET @@transaction_isolation=@old_iso;
+--echo ## change back for next test
+DO group_replication_set_as_primary(@@server_uuid);
+
+# case 2: test change primary node will wait when trx committing
+--echo [connect conn1_1]
+connection conn1_1;
+SET debug='+d,wait_before_commit';
+BEGIN;
+INSERT INTO t1 VALUES (5,5);
+send COMMIT;
+--echo [connect conn1_2]
+connection conn1_2;
+SET debug_sync='now WAIT_FOR reach_sync';
+
+--echo [connect conn2_1]
+connection conn2_1;
+send DO group_replication_set_as_primary(@@server_uuid);
+
+sleep 2;
+--echo [connect conn1_2]
+connection conn1_2;
+--sorted_result
+--replace_result $SERVER_MYPORT_1 port_1 $SERVER_MYPORT_2 port_2
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+SELECT @@super_read_only;
+
+--echo [connect conn2_2]
+connection conn2_2;
+--sorted_result
+--replace_result $SERVER_MYPORT_1 port_1 $SERVER_MYPORT_2 port_2
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+SELECT @@super_read_only;
+
+--echo [connect conn1_2]
+connection conn1_2;
+SET debug_sync='now SIGNAL end_sync';
+--echo [connect conn1_1]
+connection conn1_1;
+reap;
+
+--echo [connect conn2_1]
+connection conn2_1;
+reap;
+--sorted_result
+--replace_result $SERVER_MYPORT_1 port_1 $SERVER_MYPORT_2 port_2
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+
+--echo [connect conn1_1]
+connection conn1_1;
+SET debug='-d,wait_before_commit';
+SET @@transaction_isolation=@old_iso;
+--echo ## change back for next test
+DO group_replication_set_as_primary(@@server_uuid);
+
+# case 3: test change primary node will wait for cascade table
+--echo [connect conn1_1]
+connection conn1_1;
+BEGIN;
+INSERT INTO t1 VALUES (6,6);
+INSERT INTO t2 VALUES (1,1);
+
+--echo [connect conn2_1]
+connection conn2_1;
+send DO group_replication_set_as_primary(@@server_uuid);
+
+sleep 2;
+--echo [connect conn1_2]
+connection conn1_2;
+--sorted_result
+--replace_result $SERVER_MYPORT_1 port_1 $SERVER_MYPORT_2 port_2
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+SELECT @@super_read_only;
+
+--echo [connect conn2_2]
+connection conn2_2;
+--sorted_result
+--replace_result $SERVER_MYPORT_1 port_1 $SERVER_MYPORT_2 port_2
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+SELECT @@super_read_only;
+
+--echo [connect conn1_1]
+connection conn1_1;
+COMMIT;
+
+--echo [connect conn2_1]
+connection conn2_1;
+reap;
+--sorted_result
+--replace_result $SERVER_MYPORT_1 port_1 $SERVER_MYPORT_2 port_2
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+
+--echo [connect conn1_1]
+connection conn1_1;
+SET @@transaction_isolation=@old_iso;
+--echo ## change back for next test
+DO group_replication_set_as_primary(@@server_uuid);
+
+
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+DROP TABLE t2;
+DROP TABLE t1;
+--source include/group_replication_end.inc

@@ -483,6 +483,7 @@ mkdir debug
   cd debug
   # Attempt to remove any optimisation flags from the debug build
   optflags=$(echo "%{optflags}" | sed -e 's/-O2 / /' -e 's/-Wp,-D_FORTIFY_SOURCE=2/ -Wno-missing-field-initializers -Wno-error /')
+  optflags=$(echo $optflags | sed -e 's/-specs=\/usr\/lib\/rpm\/redhat\/redhat-hardened-cc1 -specs=\/usr\/lib\/rpm\/redhat\/redhat-annobin-cc1/ /')
   cmake3 ../%{src_dir} \
            -DBUILD_CONFIG=mysql_release \
            -DINSTALL_LAYOUT=RPM \
@@ -534,8 +535,8 @@ mkdir release
            -DINSTALL_LAYOUT=RPM \
            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
            -DWITH_BOOST=.. \
-           -DCMAKE_C_FLAGS="%{optflags}" \
-           -DCMAKE_CXX_FLAGS="%{optflags}" \
+           -DCMAKE_C_FLAGS="$optflags" \
+           -DCMAKE_CXX_FLAGS="$optflags" \
 %if 0%{?systemd}
            -DWITH_SYSTEMD=1 \
 %endif
@@ -766,9 +767,9 @@ if [ ! -d %{_datadir}/mysql ] && [ ! -L %{_datadir}/mysql ]; then
     ln -s %{_datadir}/greatsql %{_datadir}/mysql
 fi
 
-%post -n greatsql-shared -p /sbin/ldconfig
+%post -n greatsql-shared 
 
-%postun -n greatsql-shared -p /sbin/ldconfig
+%postun -n greatsql-shared 
 
 #%if 0%{?compatlib}
 #%if 0%{?rhel} > 6

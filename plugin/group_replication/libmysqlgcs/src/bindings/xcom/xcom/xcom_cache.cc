@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -332,6 +332,12 @@ static inline int can_deallocate(lru_machine *link_iter) {
 
   /* If we have no site, or site was just installed, refuse deallocation */
   if (site == 0) return 0;
+
+  ulong basic_timeout = DEFAULT_DETECTOR_LIVE_TIMEOUT;
+  if (the_app_xcom_cfg) {
+    basic_timeout = the_app_xcom_cfg->m_flp_timeout;
+  }
+
   /*
           With the patch that was put in to ensure that nodes always see  a
           global  view  message when it joins, the node that joins may need
@@ -342,14 +348,14 @@ static inline int can_deallocate(lru_machine *link_iter) {
           past that point. This test effectively stops  garbage  collection
           of  old  messages until the joining node has got a chance to tell
           the others about its low water mark. If  it  has  not  done  that
-          within  DEFAULT_DETECTOR_LIVE_TIMEOUT,  it will be considered dead by
+          within flp timeout,  it will be considered dead by
           the other nodes anyway, and expelled.
   */
-  if ((site->install_time + DEFAULT_DETECTOR_LIVE_TIMEOUT) > task_now())
-    return 0;
+  if ((site->install_time + basic_timeout) > task_now()) return 0;
   if (dealloc_site == 0) /* Synode does not match any site, OK to deallocate */
     return 1;
-  delivered_msg = get_min_delivered_msg(site);
+
+  delivered_msg = get_min_delivered_msg(site, basic_timeout);
   if (synode_eq(delivered_msg,
                 null_synode)) /* Missing info from some node, not OK */
     return 0;

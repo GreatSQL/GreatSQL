@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -848,8 +848,45 @@ void Plugin_gcs_events_handler::handle_leader_election_if_needed(
     is stopping that will always result in a plugin restart.
   */
   if (election_mode == DEAD_OLD_PRIMARY &&
-      !local_member_info->in_primary_mode())
+      !local_member_info->in_primary_mode()) {
+    if (is_arbitrator_role()) {
+      std::vector<Group_member_info *> *all_members_info =
+          group_member_mgr->get_all_members();
+      bool group_valid = false;
+      if (all_members_info->size() > 1) {
+        std::vector<Group_member_info *>::iterator it;
+        for (it = all_members_info->begin(); it != all_members_info->end();
+             it++) {
+          if ((*it)->get_role() != Group_member_info::MEMBER_ROLE_ARBITRATOR) {
+            group_valid = true;
+            break;
+          }
+        }
+      }
+
+      if (!group_valid) {
+        std::string exit_state_action_abort_log_message(
+            "Fatal error when arbitrator is alone.");
+        LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_PRIMARY_ELECTION_PROCESS_ERROR,
+                     exit_state_action_abort_log_message.c_str());
+
+        leave_group_on_failure::mask leave_actions;
+        leave_actions.set(leave_group_on_failure::STOP_APPLIER, true);
+        leave_actions.set(leave_group_on_failure::HANDLE_EXIT_STATE_ACTION,
+                          true);
+        leave_group_on_failure::leave(
+            leave_actions, 0, PSESSION_INIT_THREAD, nullptr,
+            exit_state_action_abort_log_message.c_str());
+      }
+      std::vector<Group_member_info *>::iterator it;
+      for (it = all_members_info->begin(); it != all_members_info->end();
+           it++) {
+        delete (*it);
+      }
+      delete all_members_info;
+    }
     return;
+  }
 
   primary_election_handler->execute_primary_election(
       suggested_primary, election_mode, &m_notification_ctx);
@@ -878,7 +915,9 @@ int Plugin_gcs_events_handler::update_group_info_manager(
            to_update_it++) {
         std::string host = (*to_update_it)->get_hostname();
         int zone_id = (*to_update_it)->get_zone_id();
-        plugin_update_zone_id_for_communication_node(host.c_str(), zone_id);
+        bool zone_id_sync_mode = (*to_update_it)->get_zone_id_sync_mode();
+        plugin_update_zone_id_for_communication_node(host.c_str(), zone_id,
+                                                     zone_id_sync_mode);
       }
     }
 
@@ -1545,15 +1584,20 @@ int Plugin_gcs_events_handler::compare_member_transaction_sets() const {
         /* purecov: end */
       }
     } else {
-      if (group_set.add_gtid_text(member_exec_set_str.c_str()) !=
-              RETURN_STATUS_OK ||
-          group_set.add_gtid_text(applier_ret_set_str.c_str()) !=
-              RETURN_STATUS_OK) {
-        /* purecov: begin inspected */
-        LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_LOCAL_GTID_SETS_PROCESS_ERROR);
-        result = -1;
-        goto cleaning;
-        /* purecov: end */
+      Group_member_info::Group_member_status status =
+          (*all_members_it)->get_recovery_status();
+      if (status == Group_member_info::MEMBER_ONLINE ||
+          status == Group_member_info::MEMBER_IN_RECOVERY) {
+        if (group_set.add_gtid_text(member_exec_set_str.c_str()) !=
+                RETURN_STATUS_OK ||
+            group_set.add_gtid_text(applier_ret_set_str.c_str()) !=
+                RETURN_STATUS_OK) {
+          /* purecov: begin inspected */
+          LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_LOCAL_GTID_SETS_PROCESS_ERROR);
+          result = -1;
+          goto cleaning;
+          /* purecov: end */
+        }
       }
     }
   }
@@ -1676,6 +1720,30 @@ int Plugin_gcs_events_handler::compare_member_option_compatibility() const {
       }
     }
 
+    if (local_member_info->in_single_primary_election_mode() !=
+        (*all_members_it)->in_single_primary_election_mode()) {
+      if (local_member_info->in_single_primary_election_mode() ||
+          (*all_members_it)->in_single_primary_election_mode()) {
+        result = 1;
+        LogPluginErr(ERROR_LEVEL,
+                     ER_GRP_RPL_PRIMARY_ELECTION_MODE_NOT_COMPATIBLE,
+                     get_single_primary_election_mode_string(
+                         local_member_info->in_single_primary_election_mode()),
+                     get_single_primary_election_mode_string(
+                         (*all_members_it)->in_single_primary_election_mode()));
+        goto cleaning;
+      }
+    }
+
+    if (local_member_info->get_zone_id_sync_mode() !=
+        (*all_members_it)->get_zone_id_sync_mode()) {
+      result = 1;
+      LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_ZONE_ID_SYNC_MODE_NOT_COMPATIBLE,
+                   local_member_info->get_zone_id_sync_mode(),
+                   (*all_members_it)->get_zone_id_sync_mode());
+      goto cleaning;
+    }
+
     if ((*all_members_it)->get_lower_case_table_names() !=
             DEFAULT_NOT_RECEIVED_LOWER_CASE_TABLE_NAMES &&
         local_member_info->get_lower_case_table_names() !=
@@ -1750,22 +1818,25 @@ void Plugin_gcs_events_handler::disable_read_mode_for_compatible_members(
    * member will continue to be writable even in ERROR state. So lock protects
    * from this situation. */
   MUTEX_LOCK(lock, group_member_mgr->get_update_lock());
-  if (local_member_info->get_recovery_status() ==
-          Group_member_info::MEMBER_ONLINE &&
-      (force_check || *joiner_compatibility_status != COMPATIBLE)) {
-    *joiner_compatibility_status =
-        Compatibility_module::check_version_incompatibility(
-            local_member_info->get_member_version(), lowest_version);
-    /* Some lower version left the group, now this member is new lowest
-     * version. */
-    if ((!local_member_info->in_primary_mode() &&
-         *joiner_compatibility_status == COMPATIBLE) ||
-        (local_member_info->in_primary_mode() &&
-         local_member_info->get_role() ==
-             Group_member_info::MEMBER_ROLE_PRIMARY)) {
-      if (disable_server_read_mode(PSESSION_DEDICATED_THREAD)) {
-        LogPluginErr(WARNING_LEVEL,
-                     ER_GRP_RPL_DISABLE_SRV_READ_MODE_RESTRICTED);
+  if (local_member_info->get_role() !=
+      Group_member_info::MEMBER_ROLE_ARBITRATOR) {
+    if (local_member_info->get_recovery_status() ==
+            Group_member_info::MEMBER_ONLINE &&
+        (force_check || *joiner_compatibility_status != COMPATIBLE)) {
+      *joiner_compatibility_status =
+          Compatibility_module::check_version_incompatibility(
+              local_member_info->get_member_version(), lowest_version);
+      /* Some lower version left the group, now this member is new lowest
+       * version. */
+      if ((!local_member_info->in_primary_mode() &&
+           *joiner_compatibility_status == COMPATIBLE) ||
+          (local_member_info->in_primary_mode() &&
+           local_member_info->get_role() ==
+               Group_member_info::MEMBER_ROLE_PRIMARY)) {
+        if (disable_server_read_mode(PSESSION_DEDICATED_THREAD)) {
+          LogPluginErr(WARNING_LEVEL,
+                       ER_GRP_RPL_DISABLE_SRV_READ_MODE_RESTRICTED);
+        }
       }
     }
   }

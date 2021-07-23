@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -222,6 +222,11 @@ enum_gcs_error Gcs_xcom_control::set_xcom_cache_size(uint64_t size) {
       "with value %luu.",
       size);
   bool const success = m_xcom_proxy->xcom_set_cache_size(size);
+  return success ? GCS_OK : GCS_NOK;
+}
+
+enum_gcs_error Gcs_xcom_control::set_xcom_flp_timeout(uint64_t timeout) {
+  bool const success = m_xcom_proxy->xcom_set_flp_timeout(timeout);
   return success ? GCS_OK : GCS_NOK;
 }
 
@@ -1826,10 +1831,18 @@ void Gcs_xcom_control::set_peer_nodes(
     std::vector<Gcs_xcom_node_address *> &xcom_peers) {
   clear_peer_nodes();
 
+  std::set<std::pair<std::string, xcom_port>> peers;
   std::vector<Gcs_xcom_node_address *>::iterator it;
   for (it = xcom_peers.begin(); it != xcom_peers.end(); ++it) {
-    m_initial_peers.push_back(
-        new Gcs_xcom_node_address((*it)->get_member_address()));
+    auto node_peer = new Gcs_xcom_node_address((*it)->get_member_address());
+    auto ip_port_peer = std::make_pair(node_peer->get_member_ip(),
+                                       node_peer->get_member_port());
+    if (peers.count(ip_port_peer)) {
+      delete node_peer;
+    } else {
+      m_initial_peers.push_back(node_peer);
+      peers.insert(ip_port_peer);
+    }
   }
 }
 

@@ -1,4 +1,5 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -236,25 +237,27 @@ int Recovery_module::recovery_thread_handle() {
 
   /* Step 1 */
 
-  // wait for the appliers suspension
-  error =
-      applier_module->wait_for_applier_complete_suspension(&recovery_aborted);
+  if (!is_arbitrator_role()) {
+    // wait for the appliers suspension
+    error =
+        applier_module->wait_for_applier_complete_suspension(&recovery_aborted);
 
-  // If the applier is already stopped then something went wrong and we are
-  // already leaving the group
-  if (error == APPLIER_THREAD_ABORTED) {
-    /* purecov: begin inspected */
-    error = 0;
-    recovery_aborted = true;
-    goto cleanup;
-    /* purecov: end */
-  }
+    // If the applier is already stopped then something went wrong and we are
+    // already leaving the group
+    if (error == APPLIER_THREAD_ABORTED) {
+      /* purecov: begin inspected */
+      error = 0;
+      recovery_aborted = true;
+      goto cleanup;
+      /* purecov: end */
+    }
 
-  if (!recovery_aborted && error) {
-    /* purecov: begin inspected */
-    LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_UNABLE_TO_EVALUATE_APPLIER_STATUS);
-    goto cleanup;
-    /* purecov: end */
+    if (!recovery_aborted && error) {
+      /* purecov: begin inspected */
+      LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_UNABLE_TO_EVALUATE_APPLIER_STATUS);
+      goto cleanup;
+      /* purecov: end */
+    }
   }
 
 #ifndef NDEBUG
@@ -272,6 +275,12 @@ int Recovery_module::recovery_thread_handle() {
   /* Step 2 */
 
   if (number_of_members == 1) {
+    if (is_arbitrator_role()) {
+      LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_NO_SUITABLE_PRIMARY_MEM);
+      error = 1;
+      goto cleanup;
+    }
+
     if (!recovery_aborted) {
       LogPluginErr(INFORMATION_LEVEL, ER_GRP_RPL_ONLY_ONE_SERVER_ALIVE);
     }
@@ -280,12 +289,13 @@ int Recovery_module::recovery_thread_handle() {
 
   /* Step 3 */
 
-  m_state_transfer_return =
-      recovery_state_transfer.state_transfer(stage_handler);
-  error = m_state_transfer_return;
-
-  stage_handler.set_stage(info_GR_STAGE_module_executing.m_key, __FILE__,
-                          __LINE__, 0, 0);
+  if (!is_arbitrator_role()) {
+    m_state_transfer_return =
+        recovery_state_transfer.state_transfer(stage_handler);
+    error = m_state_transfer_return;
+    stage_handler.set_stage(info_GR_STAGE_module_executing.m_key, __FILE__,
+                            __LINE__, 0, 0);
+  }
 
 #ifndef NDEBUG
   DBUG_EXECUTE_IF("recovery_thread_wait_before_finish", {
@@ -295,6 +305,9 @@ int Recovery_module::recovery_thread_handle() {
 #endif  // NDEBUG
 
   if (error) {
+    LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                    "tell applier to abandom queue for error:%d", error);
+    applier_module->tell_applier_abandon_queue();
     goto cleanup;
   }
 
@@ -307,9 +320,17 @@ single_member_online:
     as that would lead to the certification and execution of transactions on
     the wrong context.
   */
-  if (!recovery_aborted) applier_module->awake_applier_module();
+  if (!recovery_aborted) {
+    applier_module->awake_applier_module();
+  } else {
+    LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                    "tell applier to abandom queue");
+    applier_module->tell_applier_abandon_queue();
+  }
 
-  error = wait_for_applier_module_recovery();
+  if (!is_arbitrator_role()) {
+    error = wait_for_applier_module_recovery();
+  }
 
 cleanup:
 

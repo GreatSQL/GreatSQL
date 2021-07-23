@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -584,6 +584,32 @@ class Wait_ticket {
     }
 
     mysql_mutex_unlock(&lock);
+    return error;
+  }
+
+  /**
+    unregister ticket
+    @param       key                   The key that identifies the ticket
+    @retval 0         success
+    @retval !=0       (key doesn't exist)
+  */
+  int unregisterTicket(const K &key) {
+    int error = 0;
+
+    mysql_mutex_lock(&lock);
+    typename std::map<K, CountDownLatch *>::iterator it = map.find(key);
+    if (it == map.end())
+      error = 1;
+    else {
+      it->second->countDown();
+      if (it->second->getCount() == 0) {
+        CountDownLatch *cdl = it->second;
+        delete cdl;
+        map.erase(it);
+      }
+    }
+    mysql_mutex_unlock(&lock);
+
     return error;
   }
 

@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1171,7 +1172,24 @@ int init_recovery(Master_info *mi) {
   /* Set the recovery_parallel_workers to 0 if Auto Position is enabled. */
   bool is_gtid_with_autopos_on =
       (global_gtid_mode.get() == Gtid_mode::ON) && mi->is_auto_position();
-  if (is_gtid_with_autopos_on) rli->recovery_parallel_workers = 0;
+  if (is_gtid_with_autopos_on) {
+    rli->recovery_parallel_workers = 0;
+  } else {
+    /* In order to avoid dead for empty channel */
+    if (mi == channel_map.get_default_channel_mi()) {
+      for (auto it : channel_map) {
+        Master_info *tmp_mi = it.second;
+        if (tmp_mi != nullptr && tmp_mi != mi) {
+          Relay_log_info *tmp_rli = tmp_mi->rli;
+          if (channel_map.is_group_replication_channel_name(
+                  tmp_rli->get_channel(), true)) {
+            rli->recovery_parallel_workers = 0;
+            break;
+          }
+        }
+      }
+    }
+  }
 
   if (rli->recovery_parallel_workers) {
     /*

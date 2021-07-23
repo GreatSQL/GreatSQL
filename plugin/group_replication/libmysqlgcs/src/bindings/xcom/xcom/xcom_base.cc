@@ -1,5 +1,5 @@
 /* Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -361,7 +361,7 @@ static unsigned short oom_abort = 0;
 long xcom_unique_long(void);
 
 static double wakeup_delay_for_perf(double old);
-static double wakeup_delay(double old);
+static double wakeup_delay(const site_def *site, double old);
 static void note_snapshot(node_no node);
 
 /* Task types */
@@ -718,6 +718,7 @@ static inline int majority(bit_set const *nodeset, site_def const *s, int all,
   node_no ok = 0;
   node_no i = 0;
   int retval = 0;
+  int silent = DEFAULT_DETECTOR_LIVE_TIMEOUT;
   double sec = task_now();
   node_no max = max_check(s);
   int zone_hit[MAX_ZONE_NUM];
@@ -728,20 +729,26 @@ static inline int majority(bit_set const *nodeset, site_def const *s, int all,
     zone_ack_hit[i] = 0;
   }
 
+  if (the_app_xcom_cfg) {
+    silent = the_app_xcom_cfg->m_flp_timeout;
+  }
+
   /* IFDBG(D_NONE, FN; NDBG(max,lu); NDBG(all,d); NDBG(delay,d); NDBG(force,d));
    */
 
   /* Count nodes that has answered */
   for (i = 0; i < max; i++) {
-    zone_hit[s->servers[i]->zone_id]++;
+    int zone_id = s->servers[i]->zone_id;
+    bool zone_sync_mode = s->servers[i]->zone_id_sync_mode;
+    if (zone_sync_mode) zone_hit[zone_id]++;
     if (BIT_ISSET(i, nodeset)) {
       ok++;
-      zone_ack_hit[s->servers[i]->zone_id]++;
+      if (zone_sync_mode) zone_ack_hit[zone_id]++;
     }
 #ifdef WAIT_FOR_ALL_FIRST
     else {
       if (all) return 0; /* Delay until all nodes have answered */
-      if (delay && !may_be_dead(s->detected, i, sec, DEFAULT_SILENT,
+      if (delay && !may_be_dead(s->detected, i, sec, silent,
                                 s->servers[i]->unreachable)) {
         return 0; /* Delay until all live nodes have answered */
       }
@@ -780,7 +787,7 @@ static inline int majority(bit_set const *nodeset, site_def const *s, int all,
     if (retval) {
       int zone_num = 0, zone_ack_num = 0;
       for (i = 0; i < max; i++) {
-        if (may_be_dead(s->detected, i, sec, DEFAULT_SILENT,
+        if (may_be_dead(s->detected, i, sec, silent,
                         s->servers[i]->unreachable)) {
           continue;
         }
@@ -1620,6 +1627,8 @@ void site_install_action(site_def *site, cargo_type operation) {
   IFDBG(D_BUG, FN; COPY_AND_FREE_GOUT(dbg_site_def(site)));
   set_group(get_group_id(site));
   if (get_maxnodes(get_site_def())) {
+    G_INFO("update_servers is called, max nodes:%u",
+           get_maxnodes(get_site_def()));
     update_servers(site, operation);
   }
   site->install_time = task_now();
@@ -1654,6 +1663,7 @@ static site_def *create_site_def_with_start(app_data_ptr a, synode_no start) {
 static site_def *install_ng_with_start(app_data_ptr a, synode_no start) {
   if (a) {
     site_def *site = create_site_def_with_start(a, start);
+    G_INFO("install_ng_with_start calls site_install_action");
     site_install_action(site, a->body.c_t);
     return site;
   }
@@ -1860,6 +1870,7 @@ static int proposer_task(task_arg arg) {
   double start_propose;
   double start_push;
   double delay;
+  ulong basic_timeout;
   site_def const *site;
   size_t size;
   size_t nr_batched_app_data;
@@ -1878,6 +1889,7 @@ static int proposer_task(task_arg arg) {
   ep->site = 0;
   ep->size = 0;
   ep->nr_batched_app_data = 0;
+  ep->basic_timeout = DEFAULT_DETECTOR_LIVE_TIMEOUT;
 
   IFDBG(D_NONE, FN; NDBG(ep->self, d); NDBG(task_now(), f));
 
@@ -1964,14 +1976,17 @@ static int proposer_task(task_arg arg) {
       while (/* ! ep->client_msg->p->force_delivery &&  */ too_far(
           incr_msgno(ep->msgno))) { /* Too far ahead of executor */
         TIMED_TASK_WAIT(&exec_wait, 1.0);
+        if (the_app_xcom_cfg) {
+          ep->basic_timeout = the_app_xcom_cfg->m_flp_timeout;
+        }
         IFDBG(D_NONE, FN; SYCEXP(ep->msgno); TIMECEXP(ep->start_propose);
               TIMECEXP(ep->client_msg->p->a->expiry_time); TIMECEXP(task_now());
 
-              NDBG(enough_live_nodes(ep->site), d));
+              NDBG(enough_live_nodes(ep->site, ep->basic_timeout), d));
 #ifdef DELIVERY_TIMEOUT
         if ((ep->start_propose + ep->client_msg->p->a->expiry_time) <
                 task_now() &&
-            !enough_live_nodes(ep->site)) {
+            !enough_live_nodes(ep->site, ep->basic_timeout)) {
           /* Give up */
           DBGOUT_ASSERT(check_lsn(ep->client_msg->p->a), STRLIT("NULL lsn"));
           IFDBG(D_NONE, FN; STRLIT("timeout -> delivery_failure"));
@@ -2055,7 +2070,8 @@ static int proposer_task(task_arg arg) {
 
       while (!finished(ep->p)) { /* Try to get a value accepted */
         /* We will wake up periodically, and whenever a message arrives */
-        TIMED_TASK_WAIT(&ep->p->rv, ep->delay = wakeup_delay(ep->delay));
+        TIMED_TASK_WAIT(&ep->p->rv,
+                        ep->delay = wakeup_delay(ep->site, ep->delay));
         if (!synode_eq(ep->msgno, ep->p->synode) ||
             ep->p->proposer.msg == NULL) {
           IFDBG(D_NONE, FN; STRLIT("detected stolen state machine, retry"););
@@ -2091,7 +2107,8 @@ static int proposer_task(task_arg arg) {
             GOTO(next);
           }
 #endif
-          if ((ep->start_push + ep->delay) <= now) {
+          /* Retry pushing if the accumulative delay is more than one second */
+          if ((ep->start_push + 1.0) <= now) {
             PAX_MSG_SANITY_CHECK(ep->p->proposer.msg);
             IFDBG(D_NONE, FN; STRLIT("retry pushing "); SYCEXP(ep->msgno));
             IFDBG(D_NONE, FN;
@@ -2163,8 +2180,12 @@ static bool constexpr should_ignore_forced_config_or_view(
 
 static node_no leader(site_def const *s) {
   node_no leader = 0;
+  int silent = DEFAULT_DETECTOR_LIVE_TIMEOUT;
+  if (the_app_xcom_cfg) {
+    silent = the_app_xcom_cfg->m_flp_timeout;
+  }
   for (leader = 0; leader < get_maxnodes(s); leader++) {
-    if (!may_be_dead(s->detected, leader, task_now(), DEFAULT_SILENT,
+    if (!may_be_dead(s->detected, leader, task_now(), silent,
                      s->servers[leader]->unreachable))
       return leader;
   }
@@ -2285,6 +2306,7 @@ int get_xcom_message(pax_machine **p, synode_no msgno, int n) {
   DECL_ENV
   unsigned int wait;
   double delay;
+  int silent;
   site_def const *site;
   END_ENV;
 
@@ -2294,6 +2316,7 @@ int get_xcom_message(pax_machine **p, synode_no msgno, int n) {
   ep->delay = 0.0;
   *p = force_get_cache(msgno);
   ep->site = NULL;
+  ep->silent = DEFAULT_DETECTOR_LIVE_TIMEOUT;
 
   dump_debug_exec_state();
   while (!finished(*p)) {
@@ -2306,10 +2329,13 @@ int get_xcom_message(pax_machine **p, synode_no msgno, int n) {
     }
     IFDBG(D_NONE, FN; STRLIT(" not finished "); SYCEXP(msgno); PTREXP(*p);
           NDBG(ep->wait, u); SYCEXP(msgno));
+    if (the_app_xcom_cfg) {
+      ep->silent = the_app_xcom_cfg->m_flp_timeout;
+    }
     if (get_maxnodes(ep->site) > 1 && iamthegreatest(ep->site) &&
         ep->site->global_node_set.node_set_val &&
         !ep->site->global_node_set.node_set_val[msgno.node] &&
-        may_be_dead(ep->site->detected, msgno.node, task_now(), DEFAULT_SILENT,
+        may_be_dead(ep->site->detected, msgno.node, task_now(), silent,
                     ep->site->servers[msgno.node]->unreachable)) {
       propose_missing_values(n);
     } else {
@@ -2674,6 +2700,7 @@ site_def *handle_add_node(app_data_ptr a) {
                  a->body.app_u_u.nodes.node_list_val, site);
     site->start = getstart(a);
     site->boot_key = a->app_key;
+    G_INFO("handle_add_node calls site_install_action");
     site_install_action(site, a->body.c_t);
     return site;
   }
@@ -2766,6 +2793,10 @@ static bool_t are_there_dead_nodes_in_new_config(app_data_ptr a) {
     u_int nr_nodes_to_add = a->body.app_u_u.nodes.node_list_len;
     node_address *nodes_to_change = a->body.app_u_u.nodes.node_list_val;
     uint32_t i;
+    int silent = DEFAULT_DETECTOR_LIVE_TIMEOUT;
+    if (the_app_xcom_cfg) {
+      silent = the_app_xcom_cfg->m_flp_timeout;
+    }
     G_DEBUG("Checking for dead nodes in Forced Configuration")
     for (i = 0; i < nr_nodes_to_add; i++) {
       node_no node = find_nodeno(get_site_def(), nodes_to_change[i].address);
@@ -2782,8 +2813,7 @@ static bool_t are_there_dead_nodes_in_new_config(app_data_ptr a) {
         return TRUE;
       }
 
-      if (may_be_dead(get_site_def()->detected, node, task_now(),
-                      DEFAULT_SILENT,
+      if (may_be_dead(get_site_def()->detected, node, task_now(), silent,
                       get_site_def()->servers[node]->unreachable)) {
         G_ERROR(
             "%s is suspected to be failed."
@@ -2860,6 +2890,7 @@ site_def *handle_remove_node(app_data_ptr a) {
                   a->body.app_u_u.nodes.node_list_val, site);
   site->start = getstart(a);
   site->boot_key = a->app_key;
+  G_INFO("handle_remove_node calls site_install_action");
   site_install_action(site, a->body.c_t);
   return site;
 }
@@ -2902,6 +2933,7 @@ static void log_ignored_forced_config(app_data_ptr a,
     case remove_reset_type:
     case reset_type:
     case set_cache_limit:
+    case set_flp_timeout:
     case view_msg:
     case x_terminate_and_exit:
     case xcom_boot_type:
@@ -3525,23 +3557,27 @@ static int sweeper_task(task_arg arg MY_ATTRIBUTE((unused))) {
   TASK_END;
 }
 
-static double wakeup_delay(double old) {
+static double wakeup_delay(const site_def *site, double old) {
   double retval = 0.0;
   if (0.0 == old) {
-    double m = median_time();
-    if (m == 0.0 || m > 0.3) m = 0.1;
-    retval = 0.1 + 5.0 * m + m * xcom_drand48();
+    retval = 0.001 + site->max_conn_rtt;
   } else {
-    retval = old * 1.4142136; /* Exponential backoff */
+    retval = old * 1.4; /* Exponential backoff */
   }
 
   {
-#ifdef EXECUTOR_TASK_AGGRESSIVE_NO_OP
-    double const maximum_threshold = 1.0;
-#else
-    double const maximum_threshold = 3.0;
-#endif /* EXECUTOR_TASK_AGGRESSIVE_NO_OP */
-    while (retval > maximum_threshold) retval /= 1.31415926;
+    double const minimum_threshold = 0.005;
+    double maximum_threshold = 0.500;
+    double candidate_threshold = site->max_conn_rtt * 10;
+    if (candidate_threshold < minimum_threshold) {
+      candidate_threshold = minimum_threshold;
+    }
+
+    if (candidate_threshold < maximum_threshold) {
+      maximum_threshold = candidate_threshold;
+    }
+
+    while (retval > maximum_threshold) retval /= 1.3;
   }
   /* IFDBG(D_NONE, FN; NDBG(retval,d)); */
   return retval;
@@ -4141,6 +4177,7 @@ void handle_learn(site_def const *site, pax_machine *p, pax_msg *m) {
     if (m->a && m->a->body.c_t == unified_boot_type) {
       IFDBG(D_NONE, FN; STRLIT("Got unified_boot "); SYCEXP(p->synode);
             SYCEXP(m->synode););
+      G_INFO("x_fsm_net_boot is set in handle_learn");
       XCOM_FSM(x_fsm_net_boot, void_arg(m->a));
     }
     /* See if someone is forcing a new config */
@@ -4261,7 +4298,7 @@ static inline void handle_boot(site_def const *site, linkage *reply_queue,
                                pax_msg *p) {
   /* This should never be TRUE, but validate it instead of asserting. */
   if (site == NULL || site->nodes.node_list_len < 1) {
-    G_DEBUG(
+    G_INFO(
         "handle_boot: Received an unexpected need_boot_op when site == NULL or "
         "site->nodes.node_list_len < 1");
     return;
@@ -4270,7 +4307,7 @@ static inline void handle_boot(site_def const *site, linkage *reply_queue,
   if (ALWAYS_HANDLE_NEED_BOOT || should_handle_need_boot(site, p)) {
     handle_need_snapshot(reply_queue, p);
   } else {
-    G_DEBUG(
+    G_INFO(
         "Ignoring a need_boot_op message from an XCom incarnation that does "
         "not belong to the group.");
   }
@@ -4367,6 +4404,7 @@ int pre_process_incoming_ping(site_def const *site, pax_msg const *pm,
       if (is_connected(&site->servers[pm->from]->con) &&
           site->servers[pm->from]->number_of_pings_received ==
               PINGS_GATHERED_BEFORE_CONNECTION_SHUTDOWN) {
+        site->servers[pm->from]->unreachable = DIRECT_ABORT_CONN;
         shutdown_connection(&site->servers[pm->from]->con);
         G_WARNING(
             "Shutting down an outgoing connection. This happens because "
@@ -4385,7 +4423,9 @@ int pre_process_incoming_ping(site_def const *site, pax_msg const *pm,
 static double sent_alive = 0.0;
 static inline void handle_alive(site_def const *site, linkage *reply_queue,
                                 pax_msg *pm) {
-  pre_process_incoming_ping(site, pm, client_boot_done, task_now());
+  if (pre_process_incoming_ping(site, pm, client_boot_done, task_now())) {
+    return;
+  }
 
   if (client_boot_done || !(task_now() - sent_alive > 1.0)) /* Already done? */
     return;
@@ -4821,6 +4861,18 @@ pax_msg *dispatch_op(site_def const *site, pax_msg *p, linkage *reply_queue) {
         SEND_REPLY;
         break;
       }
+      if (p->a && (p->a->body.c_t == set_flp_timeout)) {
+        CREATE_REPLY(p);
+        if (the_app_xcom_cfg) {
+          the_app_xcom_cfg->m_flp_timeout = p->a->body.app_u_u.flp_timeout;
+          reply->cli_err = REQUEST_OK;
+        } else {
+          reply->cli_err = REQUEST_FAIL;
+        }
+        reply->op = xcom_client_reply;
+        SEND_REPLY;
+        break;
+      }
       if (p->a && (p->a->body.c_t == x_terminate_and_exit)) {
         /* purecov: begin deadcode */
         CREATE_REPLY(p);
@@ -4866,6 +4918,7 @@ pax_msg *dispatch_op(site_def const *site, pax_msg *p, linkage *reply_queue) {
         IFDBG(D_NONE, FN;
               COPY_AND_FREE_GOUT(dbg_list(&p->a->body.app_u_u.nodes)););
         IFDBG(D_NONE, STRLIT("handle_client_msg "); NDBG(p->a->group_id, x));
+        G_INFO("x_fsm_net_boot is set in dispatch_op");
         XCOM_FSM(x_fsm_net_boot, void_arg(p->a));
       }
       if (p->a && p->a->body.c_t == add_node_type) {
@@ -5177,6 +5230,10 @@ static bool_t should_poll_cache(pax_op op) {
   return TRUE;
 }
 
+static int msdiff(double current, double time) {
+  return (int)(1000.5 * (current - time));
+}
+
 int acceptor_learner_task(task_arg arg) {
   DECL_ENV
   connection_descriptor rfd;
@@ -5189,7 +5246,9 @@ int acceptor_learner_task(task_arg arg) {
   int errors;
   server *srv;
   site_def const *site;
-  int behind;
+  int behind, time_diff;
+  int loop_counter;
+  double last_record_time;
   END_ENV;
 
   TASK_BEGIN
@@ -5253,7 +5312,10 @@ int acceptor_learner_task(task_arg arg) {
   }
 #endif
   set_connected(&ep->rfd, CON_FD);
+  G_INFO("set fd:%d connected", ep->rfd.fd)
   link_init(&ep->reply_queue, TYPE_HASH("msg_link"));
+  ep->last_record_time = task_now();
+  ep->loop_counter = 0;
 
 again:
   while (!xcom_shutdown) {
@@ -5280,6 +5342,7 @@ again:
       delete_pax_msg(ep->p);
       ep->p = NULL;
       TASK_YIELD;
+      ep->last_record_time = task_now();
       continue;
     }
     if (n <= 0) {
@@ -5446,7 +5509,22 @@ again:
         }
       }
     }
-    /* TASK_YIELD; */
+
+    ep->loop_counter++;
+    ep->time_diff = msdiff(task_now(), ep->last_record_time);
+    if (ep->time_diff >= 10) {
+      TASK_YIELD;
+      ep->last_record_time = task_now();
+      ep->loop_counter = 0;
+    } else {
+      if (ep->time_diff == 0) {
+        if (ep->loop_counter == 10) {
+          /* update time */
+          (void)seconds();
+          ep->loop_counter = 0;
+        }
+      }
+    }
   }
 
   FINALLY
@@ -5513,6 +5591,7 @@ int reply_handler_task(task_arg arg) {
       ep->reply->refcnt = 1; /* Refcnt from other end is void here */
       if (n <= 0) {
         shutdown_connection(&ep->s->con);
+        ep->s->unreachable = DIRECT_ABORT_CONN;
         continue;
       }
       receive_bytes[ep->reply->op] += (uint64_t)n + MSG_HDR_SIZE;
@@ -5541,6 +5620,7 @@ int reply_handler_task(task_arg arg) {
         /* Wake senders waiting to connect, since new node has appeared */
         wakeup_sender();
       } else {
+        G_INFO("we should not process the incoming need_boot_op message");
         ep->s->invalid = 1;
       }
     } else {
@@ -5573,6 +5653,13 @@ static inline void xcom_sleep(unsigned int seconds) {
 }
 /* purecov: end */
 
+static uint64_t get_time_usec() {
+  struct timeval tp;
+  gettimeofday(&tp, NULL);
+  uint64_t sec = tp.tv_sec * 1000000 + tp.tv_usec;
+  return sec;
+}
+
 /*
  * Get a unique long as the basis for XCom group id creation.
  *
@@ -5587,7 +5674,7 @@ long xcom_unique_long(void) {
   _time64(&ltime);
   return (long)(ltime ^ GetCurrentProcessId());
 #else
-  return gethostid() ^ getpid();
+  return (long)(get_time_usec() ^ getpid());
 #endif
 }
 
@@ -5644,6 +5731,13 @@ app_data_ptr init_set_cache_size_msg(app_data *a, uint64_t cache_limit) {
   init_app_data(a);
   a->body.c_t = set_cache_limit;
   a->body.app_u_u.cache_limit = cache_limit;
+  return a;
+}
+
+app_data_ptr init_set_flp_timeout_msg(app_data *a, uint64_t flp_timeout) {
+  init_app_data(a);
+  a->body.c_t = set_flp_timeout;
+  a->body.app_u_u.flp_timeout = flp_timeout;
   return a;
 }
 
@@ -6019,6 +6113,7 @@ static int xcom_fsm_init(xcom_actions action, task_arg fsmargs,
   (void)action;
   (void)fsmargs;
   IFDBG(D_NONE, FN;);
+  G_INFO("Init xcom thread");
   /* Initialize basic xcom data */
   xcom_thread_init();
   SET_X_FSM_STATE(xcom_fsm_start_enter);
@@ -6056,6 +6151,7 @@ static int handle_fsm_net_boot(task_arg fsmargs, xcom_fsm_state *ctxt,
       set_executed_msg(start);
     }
     pop_dbg();
+    G_INFO("handle_fsm_net_boot calls xcom_fsm_run_enter");
     SET_X_FSM_STATE(xcom_fsm_run_enter);
     cont = 1;
   }
@@ -6084,6 +6180,7 @@ static int handle_fsm_snapshot(task_arg fsmargs, xcom_fsm_state *ctxt) {
   /* Do not bother to wait for more snapshots, just handle it and
   enter run state */
   pop_dbg();
+  G_INFO("handle_fsm_snapshot calls xcom_fsm_run_enter");
   SET_X_FSM_STATE(xcom_fsm_run_enter);
   return 1;
 }
@@ -6114,7 +6211,7 @@ static void handle_fsm_exit() {
   IFDBG(D_NONE, FN; STRLIT("shutting down"));
   xcom_shutdown = 1;
   start_config = null_synode;
-  G_DEBUG("Exiting xcom thread");
+  G_INFO("Exiting xcom thread");
 }
 
 /* start state */
@@ -6268,6 +6365,7 @@ static int xcom_fsm_recover_wait(xcom_actions action, task_arg fsmargs,
      * recovery_end_cb to rendezvous with the recovery manager */
     if (recovery_end_cb) recovery_end_cb();
     pop_dbg();
+    G_INFO("xcom_fsm_recover_wait calls xcom_fsm_run_enter");
     SET_X_FSM_STATE(xcom_fsm_run_enter);
     return 1;
   }
@@ -6299,6 +6397,7 @@ static int xcom_fsm_run_enter(xcom_actions action, task_arg fsmargs,
   stop_x_timer();
   if (xcom_run_cb) xcom_run_cb(0);
   client_boot_done = 1;
+  G_INFO("set client_boot_done true");
   netboot_ok = 1;
   set_proposer_startpoint();
   create_proposers();
@@ -6385,8 +6484,8 @@ static int xcom_fsm_run(xcom_actions action, task_arg fsmargs,
 xcom_fsm_state *xcom_fsm_impl(xcom_actions action, task_arg fsmargs) {
   static xcom_fsm_state ctxt = X_FSM_STATE(xcom_fsm_init);
 
-  G_DEBUG("%f pid %d xcom_id %x state %s action %s", seconds(), xpid(),
-          get_my_xcom_id(), ctxt.state_name, xcom_actions_name[action]);
+  G_INFO("%f pid %d xcom_id %x state %s action %s", seconds(), xpid(),
+         get_my_xcom_id(), ctxt.state_name, xcom_actions_name[action]);
   ADD_DBG(D_FSM, add_event(EVENT_DUMP_PAD, string_arg("state"));
           add_event(EVENT_DUMP_PAD, string_arg(ctxt.state_name));
           add_event(EVENT_DUMP_PAD, string_arg("action"));
@@ -6692,7 +6791,7 @@ end:
 
 static int timed_connect(int fd, struct sockaddr *sock_addr,
                          socklen_t sock_size) {
-  return timed_connect_msec(fd, sock_addr, sock_size, 10000);
+  return timed_connect_msec(fd, sock_addr, sock_size, 3000);
 }
 
 /* purecov: begin deadcode */
@@ -6715,7 +6814,7 @@ static connection_descriptor *connect_xcom(char const *server, xcom_port port) {
   char buf[SYS_STRERROR_SIZE];
 
   IFDBG(D_NONE, FN; STREXP(server); NEXP(port, d));
-  G_DEBUG("connecting to %s %d", server, port);
+  G_INFO("connecting to %s %d", server, port);
 
   {
     struct addrinfo *addr = NULL, *from_ns = NULL;
@@ -6831,7 +6930,7 @@ static connection_descriptor *connect_xcom(char const *server, xcom_port port) {
 #ifndef XCOM_WITHOUT_OPENSSL
       if (use_ssl && xcom_use_ssl()) {
         SSL *ssl = SSL_new(client_ctx);
-        G_DEBUG("Trying to connect using SSL.")
+        G_INFO("Trying to connect using SSL.")
         SSL_set_fd(ssl, fd.val);
 
         ERR_clear_error();
@@ -6867,12 +6966,13 @@ static connection_descriptor *connect_xcom(char const *server, xcom_port port) {
 
         cd = new_connection(fd.val, ssl);
         set_connected(cd, CON_FD);
-        G_DEBUG("Success connecting using SSL.")
+        G_INFO("Success connecting using SSL for fd:%d", fd.val)
 
         goto end;
       } else {
         cd = new_connection(fd.val, 0);
         set_connected(cd, CON_FD);
+        G_INFO("Success connecting for fd:%d", fd.val)
 
         goto end;
       }
@@ -6880,6 +6980,7 @@ static connection_descriptor *connect_xcom(char const *server, xcom_port port) {
       {
         cd = new_connection(fd.val);
         set_connected(cd, CON_FD);
+        G_INFO("Success connecting for fd:%d", fd.val)
 
         goto end;
       }
@@ -7097,6 +7198,7 @@ int64_t xcom_send_client_app_data(connection_descriptor *fd, app_data_ptr a,
           NDBG(x_proto, u); STRLIT(xcom_proto_to_str(x_proto)));
     fd->x_proto = x_proto;
     set_connected(fd, CON_PROTO);
+    G_INFO("xcom_send_client_app_data sets CON_PROTO for fd:%d", fd->fd)
   }
   msg->a = a;
   msg->to = VOID_NODE_NO;
@@ -7161,6 +7263,7 @@ int64_t xcom_client_send_die(connection_descriptor *fd) {
           NDBG(x_proto, u); STRLIT(xcom_proto_to_str(x_proto)));
     fd->x_proto = x_proto;
     set_connected(fd, CON_PROTO);
+    G_INFO("xcom_client_send_die sets CON_PROTO for fd:%d", fd->fd)
   }
   init_app_data(&a);
   a.body.c_t = app_type;

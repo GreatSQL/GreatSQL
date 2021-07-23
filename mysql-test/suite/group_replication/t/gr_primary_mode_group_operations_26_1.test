@@ -186,6 +186,9 @@ CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY , b INT);
 --echo
 --echo # 2.3. Begin a transaction on server1
 
+--disable_query_log
+SET SESSION transaction_isolation = 'SERIALIZABLE';
+--enable_query_log
 BEGIN;
 INSERT INTO test.t1 (b) VALUES (1);
 

@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -312,6 +312,16 @@ class Gcs_operations {
   enum enum_gcs_error set_xcom_cache_size(uint64_t new_size);
 
   /**
+    Requests GCS to change the flp timeout of the XCom communication.
+
+    @param new_timeout The new flp timeout of the XCom communication.
+
+    @retval GCS_OK if request successfully scheduled
+    @retval GCS_NOK if GCS is unable to schedule the request
+  */
+  enum enum_gcs_error set_xcom_flp_timeout(uint64_t new_timeout);
+
+  /**
    * @return the communication engine being used
    */
   static const std::string &get_gcs_engine();
@@ -324,7 +334,8 @@ class Gcs_operations {
   */
   bool is_initialized();
 
-  void update_zone_id_through_gcs(const char *ip, int zone_id);
+  void update_zone_id_through_gcs(const char *ip, int zone_id,
+                                  bool zone_id_sync_mode);
 
  private:
   /**

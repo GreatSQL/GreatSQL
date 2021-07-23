@@ -1,4 +1,5 @@
 /* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -582,6 +583,14 @@ int Trans_delegate::before_commit(THD *thd, bool all,
       (all || !thd->get_transaction()->is_active(Transaction_ctx::SESSION));
   if (is_real_trans) param.flags |= TRANS_IS_REAL_TRANS;
 
+  TX_TRACKER_GET(tst);
+  tst->add_trx_state(thd, TX_BEFORE_COMMIT);
+
+  DBUG_EXECUTE_IF("wait_before_commit", {
+    const char action[] = "now SIGNAL reach_sync WAIT_FOR end_sync";
+    assert(!debug_sync_set_action(thd, STRING_WITH_LEN(action)));
+  };);
+
   int ret = 0;
   FOREACH_OBSERVER(ret, before_commit, (&param));
   plugin_foreach(thd, se_before_commit, MYSQL_STORAGE_ENGINE_PLUGIN, &param);
@@ -793,6 +802,9 @@ int Trans_delegate::after_commit(THD *thd, bool all) {
   int ret = 0;
   FOREACH_OBSERVER(ret, after_commit, (&param));
   plugin_foreach(thd, se_after_commit, MYSQL_STORAGE_ENGINE_PLUGIN, &param);
+
+  TX_TRACKER_GET(tst);
+  tst->clear_trx_state(thd, TX_BEFORE_COMMIT);
   return ret;
 }
 

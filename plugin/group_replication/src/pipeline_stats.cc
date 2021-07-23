@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -717,8 +717,15 @@ Flow_control_module::Flow_control_module()
                   &m_flow_control_cond);
   m_wait_counter = 0;
   m_leave_counter = 0;
-  m_current_wait_msec = 10;
+  if (local_member_info && local_member_info->in_single_primary_fast_mode()) {
+    m_current_wait_msec = 1;
+    m_fast_flow_control_mode = 1;
+  } else {
+    m_fast_flow_control_mode = 0;
+    m_current_wait_msec = 10;
+  }
   m_last_cert_database_size = 0;
+  m_last_cert_queue_size = 0;
   m_flow_control_need_refreshed = 0;
   m_flow_control_flag = 0;
   m_max_wait_time = FLOW_CONTROL_MAX_WAIT_TIME;
@@ -748,46 +755,87 @@ void Flow_control_module::flow_control_step(
   }
 
   if (fcm == FCM_QUOTA) {
-    Certifier_interface *cert_interface =
-        (applier_module && applier_module->get_certification_handler())
-            ? applier_module->get_certification_handler()->get_certifier()
-            : nullptr;
-    if (cert_interface) {
-      ulonglong size = cert_interface->get_certification_info_size();
-
-      double estimated_replay_time =
-          cert_interface->get_certification_estimated_replay_time();
-      int max_wait_time = get_flow_control_max_wait_time_var() * 1000;
+    if (m_fast_flow_control_mode) {
+      m_flow_control_module_info_lock->rdlock();
+      bool need_flow_control = false;
+      Flow_control_module_info::iterator it = m_info.begin();
+      while (it != m_info.end()) {
+        if (it->second.get_transactions_waiting_certification() >
+            get_flow_control_certifier_threshold_var()) {
+          need_flow_control = true;
+          if (it->second.get_transactions_waiting_certification() >
+              m_last_cert_queue_size) {
+            if (m_last_cert_queue_size) {
+              m_current_wait_msec++;
+              if (m_current_wait_msec > 1000) {
+                m_current_wait_msec = 1000;
+              }
+            }
+            m_last_cert_queue_size =
+                it->second.get_transactions_waiting_certification();
+          }
+          break;
+        }
+        ++it;
+      }
+      m_flow_control_module_info_lock->unlock();
 
       mysql_mutex_lock(&m_flow_control_lock);
-      if (estimated_replay_time < get_flow_control_replay_lag_behind_var()) {
+      if (need_flow_control) {
+        m_flow_control_flag = 1;
+      } else {
         if (m_wait_counter != m_leave_counter) {
           mysql_cond_broadcast(&m_flow_control_cond);
-          m_current_wait_msec = 10;
-          m_flow_control_need_refreshed = 0;
-          m_max_wait_time = max_wait_time;
           m_flow_control_flag = 1;
         } else {
           m_flow_control_flag = 0;
         }
+        m_current_wait_msec = 1;
+      }
+      mysql_mutex_unlock(&m_flow_control_lock);
+
+    } else {
+      Certifier_interface *cert_interface =
+          (applier_module && applier_module->get_certification_handler())
+              ? applier_module->get_certification_handler()->get_certifier()
+              : nullptr;
+      if (cert_interface) {
+        ulonglong size = cert_interface->get_certification_info_size();
+
+        double estimated_replay_time =
+            cert_interface->get_certification_estimated_replay_time();
+        int max_wait_time = get_flow_control_max_wait_time_var() * 1000;
+
+        mysql_mutex_lock(&m_flow_control_lock);
+        if (estimated_replay_time < get_flow_control_replay_lag_behind_var()) {
+          if (m_wait_counter != m_leave_counter) {
+            mysql_cond_broadcast(&m_flow_control_cond);
+            m_current_wait_msec = 10;
+            m_flow_control_need_refreshed = 0;
+            m_max_wait_time = max_wait_time;
+            m_flow_control_flag = 1;
+          } else {
+            m_flow_control_flag = 0;
+          }
+        } else {
+          m_flow_control_flag = 1;
+          double added = cert_interface->get_certification_add_velocity();
+          double deleted = cert_interface->get_certification_delete_velocity();
+          if (added > deleted) {
+            m_flow_control_need_refreshed = 1;
+          }
+
+          if (max_wait_time > FLOW_CONTROL_MAX_WAIT_TIME &&
+              max_wait_time > m_max_wait_time) {
+            m_max_wait_time = max_wait_time;
+          }
+        }
+        m_last_cert_database_size = size;
+
+        mysql_mutex_unlock(&m_flow_control_lock);
       } else {
         m_flow_control_flag = 1;
-        double added = cert_interface->get_certification_add_velocity();
-        double deleted = cert_interface->get_certification_delete_velocity();
-        if (added > deleted) {
-          m_flow_control_need_refreshed = 1;
-        }
-
-        if (max_wait_time > FLOW_CONTROL_MAX_WAIT_TIME &&
-            max_wait_time > m_max_wait_time) {
-          m_max_wait_time = max_wait_time;
-        }
       }
-      m_last_cert_database_size = size;
-
-      mysql_mutex_unlock(&m_flow_control_lock);
-    } else {
-      m_flow_control_flag = 1;
     }
   } else {
     m_flow_control_flag = 0;
@@ -867,47 +915,63 @@ bool Flow_control_module::check_still_waiting() {
 int32 Flow_control_module::do_wait() {
   DBUG_TRACE;
 
-  if (m_flow_control_flag &&
-      (m_last_cert_database_size > FLOW_CONTROL_LOWER_THRESHOLD ||
-       check_still_waiting())) {
-    struct timespec delay;
-    /* 10ms as the first wait time */
-    set_timespec_nsec(&delay, m_current_wait_msec * 1000000ULL);
+  if (m_flow_control_flag) {
+    if (m_fast_flow_control_mode) {
+      struct timespec delay;
+      set_timespec_nsec(&delay, m_current_wait_msec * 1000000ULL);
 
-    mysql_mutex_lock(&m_flow_control_lock);
-    m_wait_counter = m_wait_counter + 1;
-    if (m_flow_control_need_refreshed) {
-      m_flow_control_need_refreshed = 0;
-      if (m_last_cert_database_size > FLOW_CONTROL_LOWER_THRESHOLD) {
-        int added = 0;
-        if (m_last_cert_database_size < FLOW_CONTROL_LOW_THRESHOLD) {
-          added = FLOW_CONTROL_ADD_LEVEL1_WAIT_TIME;
-        } else if (m_last_cert_database_size < FLOW_CONTROL_MID_THRESHOLD) {
-          added = FLOW_CONTROL_ADD_LEVEL2_WAIT_TIME;
-        } else if (m_last_cert_database_size < FLOW_CONTROL_HIGH_THRESHOLD) {
-          added = FLOW_CONTROL_ADD_LEVEL3_WAIT_TIME;
-        } else if (m_last_cert_database_size < FLOW_CONTROL_HIGHER_THRESHOLD) {
-          added = FLOW_CONTROL_ADD_LEVEL4_WAIT_TIME;
-        } else if (m_last_cert_database_size <
-                   FLOW_CONTROL_MUCH_HIGHER_THRESHOLD) {
-          added = FLOW_CONTROL_ADD_LEVEL5_WAIT_TIME;
-        } else if (m_last_cert_database_size <
-                   FLOW_CONTROL_DANGEROUS_THRESHOLD) {
-          added = FLOW_CONTROL_ADD_LEVEL6_WAIT_TIME;
-        } else {
-          added = FLOW_CONTROL_ADD_LEVEL7_WAIT_TIME;
+      mysql_mutex_lock(&m_flow_control_lock);
+      m_wait_counter = m_wait_counter + 1;
+      mysql_cond_timedwait(&m_flow_control_cond, &m_flow_control_lock, &delay);
+      m_leave_counter = m_leave_counter + 1;
+      mysql_mutex_unlock(&m_flow_control_lock);
+
+    } else {
+      if ((m_last_cert_database_size > FLOW_CONTROL_LOWER_THRESHOLD ||
+           check_still_waiting())) {
+        struct timespec delay;
+        /* 10ms as the first wait time */
+        set_timespec_nsec(&delay, m_current_wait_msec * 1000000ULL);
+
+        mysql_mutex_lock(&m_flow_control_lock);
+        m_wait_counter = m_wait_counter + 1;
+        if (m_flow_control_need_refreshed) {
+          m_flow_control_need_refreshed = 0;
+          if (m_last_cert_database_size > FLOW_CONTROL_LOWER_THRESHOLD) {
+            int added = 0;
+            if (m_last_cert_database_size < FLOW_CONTROL_LOW_THRESHOLD) {
+              added = FLOW_CONTROL_ADD_LEVEL1_WAIT_TIME;
+            } else if (m_last_cert_database_size < FLOW_CONTROL_MID_THRESHOLD) {
+              added = FLOW_CONTROL_ADD_LEVEL2_WAIT_TIME;
+            } else if (m_last_cert_database_size <
+                       FLOW_CONTROL_HIGH_THRESHOLD) {
+              added = FLOW_CONTROL_ADD_LEVEL3_WAIT_TIME;
+            } else if (m_last_cert_database_size <
+                       FLOW_CONTROL_HIGHER_THRESHOLD) {
+              added = FLOW_CONTROL_ADD_LEVEL4_WAIT_TIME;
+            } else if (m_last_cert_database_size <
+                       FLOW_CONTROL_MUCH_HIGHER_THRESHOLD) {
+              added = FLOW_CONTROL_ADD_LEVEL5_WAIT_TIME;
+            } else if (m_last_cert_database_size <
+                       FLOW_CONTROL_DANGEROUS_THRESHOLD) {
+              added = FLOW_CONTROL_ADD_LEVEL6_WAIT_TIME;
+            } else {
+              added = FLOW_CONTROL_ADD_LEVEL7_WAIT_TIME;
+            }
+
+            m_current_wait_msec = m_current_wait_msec + added;
+
+            if (m_current_wait_msec > m_max_wait_time) {
+              m_current_wait_msec = m_max_wait_time;
+            }
+          }
         }
-
-        m_current_wait_msec = m_current_wait_msec + added;
-
-        if (m_current_wait_msec > m_max_wait_time) {
-          m_current_wait_msec = m_max_wait_time;
-        }
+        mysql_cond_timedwait(&m_flow_control_cond, &m_flow_control_lock,
+                             &delay);
+        m_leave_counter = m_leave_counter + 1;
+        mysql_mutex_unlock(&m_flow_control_lock);
       }
     }
-    mysql_cond_timedwait(&m_flow_control_cond, &m_flow_control_lock, &delay);
-    m_leave_counter = m_leave_counter + 1;
-    mysql_mutex_unlock(&m_flow_control_lock);
   }
 
   return 0;

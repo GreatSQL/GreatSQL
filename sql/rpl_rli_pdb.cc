@@ -1,4 +1,5 @@
 /* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1882,6 +1883,51 @@ std::tuple<bool, bool, uint> Slave_worker::check_and_report_end_of_retries(
   return std::make_tuple(false, silent, error);
 }
 
+bool Slave_worker::retry_referenced_transaction(uint start_relay_number,
+                                                my_off_t start_relay_pos,
+                                                uint end_relay_number,
+                                                my_off_t end_relay_pos) {
+  THD *thd = info_thd;
+
+  DBUG_TRACE;
+
+  if (slave_trans_retries == 0) return true;
+
+  do {
+    if (trans_retries >= slave_trans_retries) {
+      thd->fatal_error();
+      c_rli->report(ERROR_LEVEL,
+                    thd->is_error() ? thd->get_stmt_da()->mysql_errno() : 0,
+                    "worker thread retried referenced transaction %lu time(s) "
+                    "in vain, giving up. Consider raising the value of "
+                    "the slave_transaction_retries variable.",
+                    trans_retries);
+      return true;
+    }
+
+    trans_retries++;
+
+    if (current_thd->rli_slave->is_processing_trx()) {
+      // if the error code is zero, we get the top of the error stack
+      uint transient_error = thd->get_stmt_da()->mysql_errno();
+      current_thd->rli_slave->retried_processing(
+          transient_error, ER_THD_NONCONST(thd, transient_error),
+          trans_retries);
+    }
+
+    mysql_mutex_lock(&c_rli->data_lock);
+    c_rli->retried_trans++;
+    mysql_mutex_unlock(&c_rli->data_lock);
+
+    cleanup_context(thd, true);
+    reset_commit_order_deadlock();
+    worker_sleep(min<ulong>(trans_retries, MAX_SLAVE_REFERENCE_RETRY_PAUSE));
+
+  } while (read_and_apply_events(start_relay_number, start_relay_pos,
+                                 end_relay_number, end_relay_pos));
+  return false;
+}
+
 bool Slave_worker::retry_transaction(uint start_relay_number,
                                      my_off_t start_relay_pos,
                                      uint end_relay_number,
@@ -2549,11 +2595,20 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
     set_timespec_nsec(&worker->ts_exec[1], 0);  // pre-exec
     worker->stats_exec_time +=
         diff_timespec(&worker->ts_exec[1], &worker->ts_exec[0]);
-    if (error || worker->found_commit_order_deadlock()) {
-      error = worker->retry_transaction(start_relay_number, start_relay_pos,
-                                        job_item->relay_number,
-                                        job_item->relay_pos);
+
+    if (error == HA_ERR_NO_REFERENCED_ROW ||
+        error == HA_ERR_ROW_IS_REFERENCED) {
+      error = worker->retry_referenced_transaction(
+          start_relay_number, start_relay_pos, job_item->relay_number,
+          job_item->relay_pos);
       if (error) goto err;
+    } else {
+      if (error || worker->found_commit_order_deadlock()) {
+        error = worker->retry_transaction(start_relay_number, start_relay_pos,
+                                          job_item->relay_number,
+                                          job_item->relay_pos);
+        if (error) goto err;
+      }
     }
     /*
       p-event or any other event of B-free (malformed) group can

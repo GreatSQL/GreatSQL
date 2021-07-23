@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -579,6 +580,8 @@ class Gcs_xcom_control : public Gcs_control_interface {
               GCS_NOK otherwise.
   */
   enum_gcs_error set_xcom_cache_size(uint64_t size) override;
+
+  enum_gcs_error set_xcom_flp_timeout(uint64_t timeout) override;
 
   /**
     Notify that the current member has left the group and whether it left

@@ -1,5 +1,5 @@
 /* Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -559,6 +559,11 @@ int Transaction_consistency_manager::handle_remote_prepare(
       return 0;
     }
 
+    if (is_arbitrator_role()) {
+      m_map_lock->unlock();
+      return 0;
+    }
+
     DBUG_EXECUTE_IF(
         "group_replication_before_commit_wait_recovery_message_applied", {
           const char act[] =
@@ -770,6 +775,11 @@ int Transaction_consistency_manager::transaction_begin_sync_before_execution(
     /* purecov: begin inspected */
     LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_SEND_TRX_SYNC_BEFORE_EXECUTION_FAILED,
                  thread_id);
+    if (transactions_latch->unregisterTicket(thread_id)) {
+      LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                      "unregisterTicket failed for before, thread id:%d",
+                      (int)thread_id);
+    }
     return ER_GRP_TRX_CONSISTENCY_BEFORE;
     /* purecov: end */
   }

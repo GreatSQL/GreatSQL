@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,6 +30,7 @@
 #include "my_dbug.h"
 
 #include "plugin/group_replication/include/plugin_constants.h"
+#include "sql/rpl_gtid.h"
 
 using std::map;
 using std::string;
@@ -46,7 +47,8 @@ Group_member_info::Group_member_info(
     bool has_enforces_update_everywhere_checks, uint member_weight_arg,
     uint lower_case_table_names_arg, bool default_table_encryption_arg,
     const char *recovery_endpoints_arg, int zone_id_arg,
-    int single_primary_fast_mode_arg, PSI_mutex_key psi_mutex_key_arg)
+    bool zone_id_sync_mode_arg, int single_primary_fast_mode_arg,
+    int single_primary_election_mode_arg, PSI_mutex_key psi_mutex_key_arg)
     : Plugin_gcs_message(CT_MEMBER_INFO_MESSAGE),
       hostname(hostname_arg),
       port(port_arg),
@@ -66,7 +68,9 @@ Group_member_info::Group_member_info(
       recovery_endpoints(recovery_endpoints_arg ? recovery_endpoints_arg
                                                 : "DEFAULT"),
       zone_id(zone_id_arg),
+      zone_id_sync_mode(zone_id_sync_mode_arg),
       single_primary_fast_mode(single_primary_fast_mode_arg),
+      single_primary_election_mode(single_primary_election_mode_arg),
 #ifndef NDEBUG
       skip_encode_default_table_encryption(false),
 #endif
@@ -108,7 +112,9 @@ Group_member_info::Group_member_info(Group_member_info &other)
       primary_election_running(other.is_primary_election_running()),
       recovery_endpoints(other.get_recovery_endpoints()),
       zone_id(other.get_zone_id()),
+      zone_id_sync_mode(other.get_zone_id_sync_mode()),
       single_primary_fast_mode(other.in_single_primary_fast_mode()),
+      single_primary_election_mode(other.in_single_primary_election_mode()),
 #ifndef NDEBUG
       skip_encode_default_table_encryption(false),
 #endif
@@ -131,7 +137,9 @@ Group_member_info::Group_member_info(const uchar *data, size_t len,
       primary_election_running(false),
       recovery_endpoints("DEFAULT"),
       zone_id(0),
+      zone_id_sync_mode(true),
       single_primary_fast_mode(0),
+      single_primary_election_mode(0),
 #ifndef NDEBUG
       skip_encode_default_table_encryption(false),
 #endif
@@ -157,7 +165,8 @@ void Group_member_info::update(
     bool has_enforces_update_everywhere_checks, uint member_weight_arg,
     uint lower_case_table_names_arg, bool default_table_encryption_arg,
     const char *recovery_endpoints_arg, int zone_id_arg,
-    int single_primary_fast_mode_arg) {
+    bool zone_id_sync_mode_arg, int single_primary_fast_mode_arg,
+    int single_primary_election_mode_arg) {
   MUTEX_LOCK(lock, &update_lock);
 
   hostname.assign(hostname_arg);
@@ -175,12 +184,14 @@ void Group_member_info::update(
   group_action_running = false;
   primary_election_running = false;
   zone_id = zone_id_arg;
+  zone_id_sync_mode = zone_id_sync_mode_arg;
   if (in_single_primary_mode) {
     single_primary_fast_mode = single_primary_fast_mode_arg;
   } else {
     single_primary_fast_mode = 0;
   }
 
+  single_primary_election_mode = single_primary_election_mode_arg;
   executed_gtid_set.clear();
   purged_gtid_set.clear();
   retrieved_gtid_set.clear();
@@ -214,7 +225,8 @@ void Group_member_info::update(Group_member_info &other) {
       other.get_member_weight(), other.get_lower_case_table_names(),
       other.get_default_table_encryption(),
       other.get_recovery_endpoints().c_str(), other.get_zone_id(),
-      other.in_single_primary_fast_mode());
+      other.get_zone_id_sync_mode(), other.in_single_primary_fast_mode(),
+      other.in_single_primary_election_mode());
 }
 
 /*
@@ -310,10 +322,14 @@ void Group_member_info::encode_payload(
   encode_payload_item_string(buffer, PIT_RECOVERY_ENDPOINTS,
                              recovery_endpoints.c_str(),
                              recovery_endpoints.length());
-  char zone_id_aux = zone_id;
-  encode_payload_item_char(buffer, PIT_ZONE_ID, zone_id_aux);
+  encode_payload_item_char(buffer, PIT_ZONE_ID, zone_id);
 
   encode_payload_item_char(buffer, PIT_FAST_MODE, single_primary_fast_mode);
+
+  encode_payload_item_char(buffer, PIT_ZONE_ID_SYNC_MODE, zone_id_sync_mode);
+
+  encode_payload_item_char(buffer, PIT_MEMBER_GTID_MODE,
+                           single_primary_election_mode);
 }
 
 void Group_member_info::decode_payload(const unsigned char *buffer,
@@ -468,6 +484,20 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
           single_primary_fast_mode = fast_mode;
         }
         break;
+      case PIT_ZONE_ID_SYNC_MODE:
+        if (slider + payload_item_length <= end) {
+          unsigned char zone_id_sync_mode_value = *slider;
+          slider += payload_item_length;
+          zone_id_sync_mode = (bool)zone_id_sync_mode_value;
+        }
+        break;
+      case PIT_MEMBER_GTID_MODE:
+        if (slider + payload_item_length <= end) {
+          int single_primary_election_mode_aux = *slider;
+          slider += payload_item_length;
+          single_primary_election_mode = single_primary_election_mode_aux;
+        }
+        break;
     }
   }
 }
@@ -506,6 +536,9 @@ const char *Group_member_info::get_member_role_string() {
   */
   if (status != MEMBER_ONLINE && status != MEMBER_IN_RECOVERY) return "";
 
+  if (role == Group_member_info::MEMBER_ROLE_ARBITRATOR) {
+    return "ARBITRATOR";
+  }
   if (!in_primary_mode_internal() ||
       role == Group_member_info::MEMBER_ROLE_PRIMARY)
     return "PRIMARY";
@@ -610,6 +643,11 @@ int Group_member_info::in_single_primary_fast_mode() {
   return single_primary_fast_mode;
 }
 
+int Group_member_info::in_single_primary_election_mode() {
+  MUTEX_LOCK(lock, &update_lock);
+  return single_primary_election_mode;
+}
+
 bool Group_member_info::has_enforces_update_everywhere_checks() {
   MUTEX_LOCK(lock, &update_lock);
   return configuration_flags & CNF_ENFORCE_UPDATE_EVERYWHERE_CHECKS_F;
@@ -695,6 +733,16 @@ void Group_member_info::set_zone_id(int id) {
   zone_id = id;
 }
 
+bool Group_member_info::get_zone_id_sync_mode() {
+  MUTEX_LOCK(lock, &update_lock);
+  return zone_id_sync_mode;
+}
+
+void Group_member_info::set_zone_id_sync_mode(bool mode) {
+  MUTEX_LOCK(lock, &update_lock);
+  zone_id_sync_mode = mode;
+}
+
 bool Group_member_info::operator==(Group_member_info &other) {
   MUTEX_LOCK(lock, &update_lock);
   return uuid.compare(other.get_uuid()) == 0;
@@ -778,6 +826,16 @@ bool Group_member_info::comparator_group_member_weight(Group_member_info *m1,
   return m1->has_greater_weight(m2);
 }
 
+bool Group_member_info::comparator_group_member_executed_gtid_first(
+    Group_member_info *m1, Group_member_info *m2) {
+  return m1->has_greater_executed_gtid(m2);
+}
+
+bool Group_member_info::comparator_group_member_weight_first(
+    Group_member_info *m1, Group_member_info *m2) {
+  return m1->has_greater_weight_and_executed_gtid(m2);
+}
+
 bool Group_member_info::has_greater_version(Group_member_info *other) {
   MUTEX_LOCK(lock, &update_lock);
   if (*member_version > *(other->member_version)) return true;
@@ -794,14 +852,84 @@ bool Group_member_info::has_lower_uuid(Group_member_info *other) {
   return has_lower_uuid_internal(other);
 }
 
+int Group_member_info::compare_gtid(Group_member_info *other) {
+  int valid = 1;
+  Sid_map member_sid_map(nullptr);
+  Sid_map other_sid_map(nullptr);
+  Gtid_set member_set(&member_sid_map, nullptr);
+  Gtid_set other_set(&other_sid_map, nullptr);
+
+  std::string other_executed_gtid_set = other->get_gtid_executed();
+
+  const char *member_gtid_executed = executed_gtid_set.c_str();
+  const char *other_gtid_executed = other_executed_gtid_set.c_str();
+
+  if (member_set.add_gtid_text(member_gtid_executed) != RETURN_STATUS_OK ||
+      other_set.add_gtid_text(other_gtid_executed) != RETURN_STATUS_OK) {
+    valid = 0;
+  }
+
+  if (valid) {
+    if (!other_set.is_equals(&member_set)) {
+      if (other_set.is_subset(&member_set)) {
+        return 1;
+      } else {
+        return -1;
+      }
+    }
+  }
+
+  return 0;
+}
+
+int Group_member_info::compare_weight(Group_member_info *other) {
+  if (member_weight > other->get_member_weight()) return 1;
+  if (member_weight == other->get_member_weight()) return 0;
+  return -1;
+}
+
+bool Group_member_info::has_greater_executed_gtid(Group_member_info *other) {
+  MUTEX_LOCK(lock, &update_lock);
+
+  int result = compare_gtid(other);
+  if (result != 0) {
+    return result == 1 ? true : false;
+  }
+
+  result = compare_weight(other);
+  if (result != 0) {
+    return result == 1 ? true : false;
+  }
+
+  return has_lower_uuid_internal(other);
+}
+
+bool Group_member_info::has_greater_weight_and_executed_gtid(
+    Group_member_info *other) {
+  MUTEX_LOCK(lock, &update_lock);
+
+  int result = compare_weight(other);
+  if (result != 0) {
+    return result == 1 ? true : false;
+  }
+
+  result = compare_gtid(other);
+  if (result != 0) {
+    return result == 1 ? true : false;
+  }
+
+  return has_lower_uuid_internal(other);
+}
+
 bool Group_member_info::has_greater_weight(Group_member_info *other) {
   MUTEX_LOCK(lock, &update_lock);
-  if (member_weight > other->get_member_weight()) return true;
 
-  if (member_weight == other->get_member_weight())
-    return has_lower_uuid_internal(other);
+  int result = compare_weight(other);
+  if (result != 0) {
+    return result == 1 ? true : false;
+  }
 
-  return false;
+  return has_lower_uuid_internal(other);
 }
 
 Group_member_info_manager::Group_member_info_manager(
@@ -830,7 +958,8 @@ size_t Group_member_info_manager::get_number_of_members_online() {
 
   for (auto it = members->begin(); it != members->end(); it++) {
     if ((*it).second->get_recovery_status() ==
-        Group_member_info::MEMBER_ONLINE) {
+            Group_member_info::MEMBER_ONLINE &&
+        (*it).second->get_role() != Group_member_info::MEMBER_ROLE_ARBITRATOR) {
       number++;
     }
   }
@@ -1000,6 +1129,8 @@ std::list<Gcs_member_identifier>
        it != members->end(); it++) {
     if ((*it).second->get_recovery_status() ==
             Group_member_info::MEMBER_ONLINE &&
+        ((*it).second->get_role() !=
+         Group_member_info::MEMBER_ROLE_ARBITRATOR) &&
         !((*it).second->get_gcs_member_id() == exclude_member)) {
       online_members->push_back((*it).second->get_gcs_member_id());
     }
@@ -1140,6 +1271,11 @@ void Group_member_info_manager::update_group_primary_roles(
   mysql_mutex_lock(&update_lock);
 
   for (std::pair<const string, Group_member_info *> &member_info : *members) {
+    if (member_info.second->get_role() ==
+        Group_member_info::MEMBER_ROLE_ARBITRATOR) {
+      continue;
+    }
+
     Group_member_info::Group_member_role new_role =
         (member_info.second->get_uuid() == uuid)
             ? Group_member_info::MEMBER_ROLE_PRIMARY

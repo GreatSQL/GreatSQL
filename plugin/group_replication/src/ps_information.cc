@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -123,8 +123,7 @@ bool get_group_members_info(
 bool get_group_member_stats(
     uint index, const GROUP_REPLICATION_GROUP_MEMBER_STATS_CALLBACKS &callbacks,
     Group_member_info_manager_interface *group_member_manager,
-    Applier_module *applier_module, Gcs_operations *gcs_module,
-    char *channel_name) {
+    Gcs_operations *gcs_module, char *channel_name) {
   if (channel_name != nullptr) {
     callbacks.set_channel_name(callbacks.context, *channel_name,
                                strlen(channel_name));
@@ -178,13 +177,15 @@ bool get_group_member_stats(
     assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
   });
   // Check if the group replication has started and a valid certifier exists
-  MUTEX_LOCK(lock, get_plugin_running_lock());
+  MUTEX_LOCK(lock, get_plugin_applier_module_lock());
   Pipeline_member_stats *pipeline_stats = nullptr;
   bool ret = (!get_plugin_is_stopping() && applier_module != nullptr);
   DBUG_SIGNAL_WAIT_FOR(
       current_thd, "group_replication_status_when_terminal_applier",
       "reach_get_member_status_sync", "end_get_member_status_sync");
   ret = ret && plugin_is_group_replication_running();
+  DBUG_SIGNAL_WAIT_FOR(current_thd, "group_replication_stats_when_rejoin",
+                       "reach_rejoin_stats_sync", "end_rejoin_stats_sync");
   ret =
       ret &&
       (pipeline_stats =

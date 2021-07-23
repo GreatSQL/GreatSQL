@@ -43,7 +43,7 @@ REVOKE SUPER, SYSTEM_VARIABLES_ADMIN, SESSION_VARIABLES_ADMIN, GROUP_REPLICATION
 CREATE TABLE gr_vars (id INT PRIMARY KEY AUTO_INCREMENT, var_name VARCHAR(64), var_value VARCHAR(256));
 INSERT INTO gr_vars (var_name, var_value)
  SELECT * FROM performance_schema.global_variables
- WHERE VARIABLE_NAME LIKE '%group_replication%'
+ WHERE VARIABLE_NAME LIKE '%group_replication%' and VARIABLE_NAME NOT LIKE '%group_replication_arbitrator%'
  ORDER BY VARIABLE_NAME;
 
 --let $count_vars= `SELECT COUNT(*) FROM gr_vars;`

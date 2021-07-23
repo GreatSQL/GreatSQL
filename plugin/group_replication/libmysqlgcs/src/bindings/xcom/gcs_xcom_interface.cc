@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -875,6 +875,8 @@ bool Gcs_xcom_interface::initialize_xcom(
       interface_params.get_parameter("ip_allowlist");
   const std::string *xcom_cache_size_str =
       interface_params.get_parameter("xcom_cache_size");
+  const std::string *xcom_flp_timeout_str =
+      interface_params.get_parameter("xcom_flp_timeout");
 
   set_xcom_group_information(*group_name);
 
@@ -904,6 +906,14 @@ bool Gcs_xcom_interface::initialize_xcom(
         (uint64_t)atoll(xcom_cache_size_str->c_str()));
     MYSQL_GCS_LOG_DEBUG("Configured XCom cache size: %s",
                         xcom_cache_size_str->c_str());
+  }
+
+  // configure flp timeout
+  if (xcom_flp_timeout_str != nullptr) {
+    m_gcs_xcom_app_cfg.set_xcom_flp_timeout(
+        (uint64_t)atoll(xcom_flp_timeout_str->c_str()));
+    MYSQL_GCS_LOG_DEBUG("Configured XCom flp timeout: %s",
+                        xcom_flp_timeout_str->c_str());
   }
 
   // configure allowlist
@@ -1251,8 +1261,9 @@ Gcs_ip_allowlist &Gcs_xcom_interface::get_ip_allowlist() {
 }
 
 void Gcs_xcom_interface::update_zone_id_for_xcom_node(const char *ip,
-                                                      int zone_id) {
-  Gcs_xcom_utils::update_zone_id_for_paxos_node(ip, zone_id);
+                                                      int zone_id,
+                                                      bool zone_id_sync_mode) {
+  Gcs_xcom_utils::update_zone_id_for_paxos_node(ip, zone_id, zone_id_sync_mode);
 }
 
 void cb_xcom_receive_data(synode_no message_id, node_set nodes, u_int size,

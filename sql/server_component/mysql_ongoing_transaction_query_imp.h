@@ -1,4 +1,5 @@
 /* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -43,6 +44,10 @@ class mysql_ongoing_transactions_query_imp {
     @return false if everything when fine, true in case of failure
   */
   static DEFINE_BOOL_METHOD(get_ongoing_server_transactions,
+                            (unsigned long **thread_ids,
+                             unsigned long *length));
+
+  static DEFINE_BOOL_METHOD(get_group_replication_waitting_transactions,
                             (unsigned long **thread_ids,
                              unsigned long *length));
 };

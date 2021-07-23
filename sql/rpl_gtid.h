@@ -1,4 +1,5 @@
 /* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1647,6 +1648,8 @@ class Gtid_set {
     return (is_subset(super) && !equals(super));
   }
 
+  bool is_equals(const Gtid_set *super) const { return equals(super); }
+
   /**
     Returns true if this Gtid_set is a subset of the given gtid_set
     on the given superset_sidno and subset_sidno.
@@ -3162,6 +3165,23 @@ class Gtid_state {
     in gtid_executed table.
   */
   const Gtid_set *get_executed_gtids() const { return &executed_gtids; }
+
+  void add_to_gtid_executed(rpl_sidno sidno, rpl_gno gno) {
+    global_sid_lock->wrlock();
+    executed_gtids._add_gtid(sidno, gno);
+    global_sid_lock->unlock();
+  }
+
+  int add_text_to_gtid_executed(const char *text) {
+    global_sid_lock->wrlock();
+    if (executed_gtids.add_gtid_text(text) != RETURN_STATUS_OK) {
+      global_sid_lock->unlock();
+      return RETURN_STATUS_UNREPORTED_ERROR;
+    }
+    global_sid_lock->unlock();
+    return RETURN_STATUS_OK;
+  }
+
   /*
     Return a pointer to the Gtid_set that contains the stored gtids
     only in gtid_executed table, not in binlog files.

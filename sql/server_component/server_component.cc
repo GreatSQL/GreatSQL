@@ -1,4 +1,5 @@
 /* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -285,8 +286,10 @@ mysql_security_context_imp::get,
     mysql_security_context_imp::set END_SERVICE_IMPLEMENTATION();
 
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_ongoing_transactions_query)
-mysql_ongoing_transactions_query_imp::get_ongoing_server_transactions
-END_SERVICE_IMPLEMENTATION();
+mysql_ongoing_transactions_query_imp::get_ongoing_server_transactions,
+    mysql_ongoing_transactions_query_imp::
+        get_group_replication_waitting_transactions
+        END_SERVICE_IMPLEMENTATION();
 
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, host_application_signal)
 mysql_component_host_application_signal_imp::signal

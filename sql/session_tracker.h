@@ -2,6 +2,7 @@
 #define SESSION_TRACKER_INCLUDED
 
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -209,7 +210,8 @@ enum enum_tx_state {
   TX_RESULT_SET = 128,     ///< result-set was sent
   TX_WITH_SNAPSHOT = 256,  ///< WITH CONSISTENT SNAPSHOT was used
   TX_LOCKED_TABLES = 512,  ///< LOCK TABLES is active
-  TX_STMT_DML = 1024       ///< a DML statement (known before data is accessed)
+  TX_STMT_DML = 1024,      ///< a DML statement (known before data is accessed)
+  TX_BEFORE_COMMIT = 2048
 };
 
 /**
@@ -230,6 +232,11 @@ enum enum_tx_isol_level {
   TX_ISOL_COMMITTED = 2,
   TX_ISOL_REPEATABLE = 3,
   TX_ISOL_SERIALIZABLE = 4
+};
+
+enum enum_tx_table_flag {
+  TX_TABLE_NONE = 0,
+  TX_TABLE_CASCADE = 1,
 };
 
 /**
@@ -267,6 +274,14 @@ class Transaction_state_tracker : public State_tracker {
   /** Get (possibly still incomplete) state */
   uint get_trx_state() const { return tx_curr_state; }
 
+  /** Get isolation level */
+  enum enum_tx_isol_level get_trx_iso_level() const { return tx_isol_level; }
+
+  /** Get table flag */
+  void add_trx_table_flag(enum enum_tx_table_flag flag);
+  void clear_trx_table_flag();
+  uint get_trx_table_flag() const { return tx_table_flag; }
+
  private:
   enum enum_tx_changed {
     TX_CHG_NONE = 0,     ///< no changes from previous stmt
@@ -285,6 +300,9 @@ class Transaction_state_tracker : public State_tracker {
 
   /**  isolation level */
   enum enum_tx_isol_level tx_isol_level;
+
+  /** table flag */
+  uint tx_table_flag;
 
   void reset();
 

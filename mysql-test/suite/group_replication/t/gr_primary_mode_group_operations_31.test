@@ -49,6 +49,9 @@ CREATE TABLE test.t1 (a INT PRIMARY KEY);
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
 
+--disable_query_log
+SET SESSION transaction_isolation = 'SERIALIZABLE';
+--enable_query_log
 BEGIN;
 INSERT INTO t1 VALUES(1);
 

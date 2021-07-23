@@ -586,7 +586,7 @@ build_rpm(){
         source /opt/rh/devtoolset-8/enable
     elif [ "${RHEL}" -lt 8 ]; then
         source /opt/rh/devtoolset-10/enable
-    else
+    elif [ -f "/opt/rh/gcc-toolset-10/enable" ]; then
         source /opt/rh/gcc-toolset-10/enable
     fi
     build_mecab_lib
@@ -597,7 +597,7 @@ build_rpm(){
         source /opt/rh/devtoolset-8/enable
     elif [ "${RHEL}" -lt 8 ]; then
         source /opt/rh/devtoolset-10/enable
-    else
+    elif [ -f "/opt/rh/gcc-toolset-10/enable" ]; then
         source /opt/rh/gcc-toolset-10/enable
     fi
     #
@@ -758,7 +758,7 @@ build_tarball(){
           source /opt/rh/devtoolset-8/enable
       elif [ "${RHEL}" -lt 8 ]; then
           source /opt/rh/devtoolset-10/enable
-      else
+      elif [ -f "/opt/rh/gcc-toolset-10/enable" ]; then
           source /opt/rh/gcc-toolset-10/enable
       fi
     fi
@@ -773,8 +773,18 @@ build_tarball(){
     #TMPREL=$(echo ${TARFILE}| awk -F '-' '{print $4}')
     #RELEASE=${TMPREL%.tar.gz}
     #
-    export CFLAGS=$(rpm --eval %{optflags} | sed -e "s|march=i386|march=i686|g")
-    export CXXFLAGS="${CFLAGS}"
+    if [ -f /etc/redhat-release ]; then
+      RHEL=$(rpm --eval %rhel)
+      if [ "${RHEL}" -lt 8 ]; then
+        export CFLAGS=$(rpm --eval %{optflags} | sed -e "s|march=i386|march=i686|g")
+        export CXXFLAGS="${CFLAGS}"
+      elif [ ${ARCH} = aarch64 ]; then
+        echo # do nothing
+      else
+        export CFLAGS=$(rpm --eval %{optflags} | sed -e "s|march=i386|march=i686|g")
+        export CXXFLAGS="${CFLAGS}"
+      fi
+    fi
 
     build_mecab_lib
     build_mecab_dict

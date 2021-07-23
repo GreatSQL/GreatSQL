@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -94,6 +94,12 @@ enum enum_mgr_fast_mode_type {
   MGR_FAST_MODE_WITHOUT_PARALLEL_REPLAY
 };
 
+enum Primary_election_mode {
+  PEM_WEIGHT_ONLY = 0,
+  PEM_GTID_FIRST,
+  PEM_WEIGHT_FIRST
+};
+
 /**
   This struct provides a namespace for the GR layer components.
 */
@@ -183,6 +189,7 @@ extern SERVICE_TYPE_NO_CONST(mysql_runtime_error) * mysql_runtime_error_service;
 bool server_engine_initialized();
 void *get_plugin_pointer();
 mysql_mutex_t *get_plugin_running_lock();
+mysql_mutex_t *get_plugin_applier_module_lock();
 Plugin_waitlock *get_plugin_online_lock();
 int initialize_plugin_and_join(enum_plugin_con_isolation sql_api_isolation,
                                Delayed_initialization_thread *delayed_init_thd);
@@ -193,6 +200,7 @@ int terminate_plugin_modules(gr_modules::mask modules_to_terminate,
 void register_server_reset_master();
 bool get_allow_local_lower_version_join();
 ulong get_transaction_size_limit();
+ulong get_request_time_threshold();
 bool is_plugin_waiting_to_set_server_read_mode();
 bool check_async_channel_running_on_secondary();
 void set_enforce_update_everywhere_checks(bool option);
@@ -227,6 +235,8 @@ bool get_majority_after_mode_var();
 const char *get_group_name_var();
 ulong get_exit_state_action_var();
 ulong get_flow_control_mode_var();
+ulong get_single_primary_election_mode_var();
+const char *get_single_primary_election_mode_string(int index);
 long get_flow_control_certifier_threshold_var();
 long get_flow_control_applier_threshold_var();
 long get_flow_control_replay_lag_behind_var();
@@ -242,6 +252,7 @@ int get_broadcast_gtid_executed_period_var();
 ulong get_components_stop_timeout_var();
 void set_error_state_due_to_error_during_autorejoin();
 bool get_error_state_due_to_error_during_autorejoin();
+bool is_arbitrator_role();
 
 // Plugin public methods
 int plugin_group_replication_init(MYSQL_PLUGIN plugin_info);
@@ -263,7 +274,8 @@ bool plugin_get_group_member_stats(
     uint index,
     const GROUP_REPLICATION_GROUP_MEMBER_STATS_CALLBACKS &callbacks);
 uint plugin_get_group_members_number();
-void plugin_update_zone_id_for_communication_node(const char *ip, int zone_id);
+void plugin_update_zone_id_for_communication_node(const char *ip, int zone_id,
+                                                  bool zone_id_sync_mode);
 
 /**
   Method to set retrieved certification info from a recovery channel extracted

@@ -1,4 +1,5 @@
 /* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -38,6 +39,8 @@ typedef struct cfg_app_xcom {
    cache size limit and interval
   */
   uint64_t m_cache_limit;
+
+  uint64_t m_flp_timeout;
 
   /*
    The (address, incarnation) pair that uniquely identifies this XCom instance.

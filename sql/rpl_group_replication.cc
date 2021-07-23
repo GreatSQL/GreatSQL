@@ -1,4 +1,5 @@
 /* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -492,6 +493,17 @@ void get_server_startup_prerequirements(Trans_context_info &requirements) {
   requirements.lower_case_table_names = lower_case_table_names;
   requirements.default_table_encryption =
       global_system_variables.default_table_encryption;
+}
+
+void add_to_gtid_executed(rpl_sidno sidno, rpl_gno gno) {
+  gtid_state->add_to_gtid_executed(sidno, gno);
+}
+
+int add_text_to_gtid_executed(const char *text) {
+  if (gtid_state->add_text_to_gtid_executed(text) != RETURN_STATUS_OK) {
+    return -1;
+  }
+  return 0;
 }
 
 bool get_server_encoded_gtid_executed(uchar **encoded_gtid_executed,

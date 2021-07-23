@@ -86,7 +86,7 @@ SET @@GLOBAL.group_replication_communication_max_message_size= default;
 --let $saved_gr_advertise_recovery_endpoints = `SELECT @@GLOBAL.group_replication_advertise_recovery_endpoints;`
 
 # Total number of GR variables.
---let $total_gr_vars= 64
+--let $total_gr_vars= 69
 
 --echo #
 --echo # Test Unit#1

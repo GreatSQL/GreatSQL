@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -130,6 +131,18 @@ bool Gcs_xcom_proxy_impl::xcom_client_get_synode_app_data(
 bool Gcs_xcom_proxy_impl::xcom_client_set_cache_size(uint64_t size) {
   app_data_ptr data = new_app_data();
   data = init_set_cache_size_msg(data, size);
+  /* Takes ownership of data. */
+  bool const successful = xcom_input_try_push(data);
+  if (!successful) {
+    MYSQL_GCS_LOG_DEBUG(
+        "xcom_client_set_cache_size: Failed to push into XCom.");
+  }
+  return successful;
+}
+
+bool Gcs_xcom_proxy_impl::xcom_client_set_flp_timeout(uint64_t timeout) {
+  app_data_ptr data = new_app_data();
+  data = init_set_flp_timeout_msg(data, timeout);
   /* Takes ownership of data. */
   bool const successful = xcom_input_try_push(data);
   if (!successful) {
@@ -547,6 +560,10 @@ void Gcs_xcom_app_cfg::set_xcom_cache_size(uint64_t size) {
   if (the_app_xcom_cfg) the_app_xcom_cfg->m_cache_limit = size;
 }
 
+void Gcs_xcom_app_cfg::set_xcom_flp_timeout(uint64_t timeout) {
+  if (the_app_xcom_cfg) the_app_xcom_cfg->m_flp_timeout = timeout;
+}
+
 bool Gcs_xcom_app_cfg::set_identity(node_address *identity) {
   bool constexpr kError = true;
   bool constexpr kSuccess = false;
@@ -698,6 +715,10 @@ end:
 bool Gcs_xcom_proxy_base::xcom_set_cache_size(uint64_t size) {
   MYSQL_GCS_LOG_DEBUG("Reconfiguring cache size limit to %luu", size);
   return xcom_client_set_cache_size(size);
+}
+
+bool Gcs_xcom_proxy_base::xcom_set_flp_timeout(uint64_t timeout) {
+  return xcom_client_set_flp_timeout(timeout);
 }
 
 bool Gcs_xcom_proxy_base::xcom_force_nodes(Gcs_xcom_nodes &nodes,

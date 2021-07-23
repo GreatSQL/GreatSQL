@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -274,7 +274,15 @@ bool Applier_module::apply_action_packet(Action_packet *action_packet) {
   // packet to signal the applier to suspend
   if (action == SUSPENSION_PACKET) {
     suspend_applier_module();
-    return false;
+    if (abort_after_suspended) {
+      LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                      "abort queue after suspended");
+      return true;
+    } else {
+      LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                      "continue to process queue after suspended");
+      return false;
+    }
   }
 
   if (action == CHECKPOINT_PACKET) {
@@ -369,9 +377,15 @@ int Applier_module::apply_data_packet(Data_packet *data_packet,
           new std::list<Gcs_member_identifier>(*data_packet->m_online_members);
     }
 
+    enum_group_replication_consistency_level consistency_level =
+        data_packet->m_consistency_level;
+    if (is_arbitrator_role()) {
+      consistency_level = GROUP_REPLICATION_CONSISTENCY_EVENTUAL;
+    }
+
     Pipeline_event *pevent =
         new Pipeline_event(new_packet, fde_evt, UNDEFINED_EVENT_MODIFIER,
-                           data_packet->m_consistency_level, online_members);
+                           consistency_level, online_members);
     error = inject_event_into_pipeline(pevent, cont);
 
     delete pevent;
@@ -745,6 +759,8 @@ int Applier_module::initialize_applier_thread() {
   if ((mysql_thread_create(key_GR_THD_applier_module_receiver, &applier_pthd,
                            get_connection_attrib(), launch_handler_thread,
                            (void *)this))) {
+    /* applier_thread_is_exiting should be set true to avoid dead loop */
+    applier_thread_is_exiting = true;
     applier_thd_state.set_terminated();
     mysql_mutex_unlock(&run_lock); /* purecov: inspected */
     return 1;                      /* purecov: inspected */
@@ -1097,7 +1113,7 @@ Pipeline_member_stats *Applier_module::get_local_pipeline_stats() {
 
   MUTEX_LOCK(guard, &run_lock);
   Pipeline_member_stats *stats = nullptr;
-  auto cert = applier_module->get_certification_handler();
+  auto cert = get_certification_handler();
   auto cert_module = (cert ? cert->get_certifier() : nullptr);
   if (cert_module) {
     stats = new Pipeline_member_stats(

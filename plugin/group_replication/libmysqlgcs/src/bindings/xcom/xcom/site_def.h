@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -51,11 +52,11 @@ site_def const *find_site_def(synode_no synode);
 site_def *find_site_def_rw(synode_no synode);
 site_def const *find_next_site_def(synode_no synode);
 node_set detector_node_set(site_def const *site);
-int enough_live_nodes(site_def *site);
+int enough_live_nodes(site_def *site, ulong timeout);
 void import_config(gcs_snapshot *gcs_snap);
 gcs_snapshot *export_config();
 void get_all_site_defs(site_def ***s, uint32_t *n);
-synode_no get_min_delivered_msg(site_def const *s);
+synode_no get_min_delivered_msg(site_def const *s, ulong timeout);
 void update_delivered(site_def *s, node_no node, synode_no msgno);
 synode_no config_max_boot_key(gcs_snapshot const *gcs_snap);
 synode_no get_highest_boot_key(gcs_snapshot *gcs_snap);

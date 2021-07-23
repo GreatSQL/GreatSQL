@@ -1,5 +1,5 @@
 /* Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1112,6 +1112,7 @@ void set_should_exit_getter(should_exit_getter x) { get_should_exit = x; }
 static double idle_time = 0.0;
 void task_loop() {
   task_env *t = 0;
+  int running_task_counter;
   /* While there are tasks */
   for (;;) {
     /* check forced exit callback */
@@ -1119,6 +1120,7 @@ void task_loop() {
       terminate_and_exit();
     }
 
+    running_task_counter = active_tasks;
     t = first_runnable();
     /* While runnable tasks */
     while (runnable_tasks()) {
@@ -1141,6 +1143,11 @@ void task_loop() {
             t->terminate = TERMINATED;
             task_unref(t);
             stack = NULL;
+          }
+          running_task_counter--;
+          /* break the while loop in order to avoid starvation */
+          if (running_task_counter <= 0) {
+            break;
           }
         }
       }

@@ -89,10 +89,11 @@ if test "x$TARGET" == "x"
 then
     if test "x$(uname -m)" != "xx86_64"
     then
+      if test "x$(uname -m 2)" != "xaarch64" then
         TARGET='--target i686'
         TARGET_CFLAGS='-m32 -march=i686'
+      fi
     fi
-
 fi
 
 SOURCEDIR="$(cd $(dirname "$0"); cd ..; pwd)"

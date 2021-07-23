@@ -1,4 +1,5 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -109,8 +110,12 @@ int Applier_handler::stop_applier_thread() {
 int Applier_handler::handle_event(Pipeline_event *event, Continuation *cont) {
   DBUG_TRACE;
   int error = 0;
-
   Data_packet *p = nullptr;
+
+  if (is_arbitrator_role()) {
+    goto end;
+  }
+
   error = event->get_Packet(&p);
   DBUG_EXECUTE_IF("applier_handler_force_error_on_pipeline", error = 1;);
   if (error || (p == nullptr)) {
@@ -153,10 +158,14 @@ int Applier_handler::handle_action(Pipeline_action *action) {
 
   switch (action_type) {
     case HANDLER_START_ACTION:
-      error = start_applier_thread();
+      if (!is_arbitrator_role()) {
+        error = start_applier_thread();
+      }
       break;
     case HANDLER_STOP_ACTION:
-      error = stop_applier_thread();
+      if (!is_arbitrator_role()) {
+        error = stop_applier_thread();
+      }
       break;
     case HANDLER_APPLIER_CONF_ACTION: {
       Handler_applier_configuration_action *conf_action =

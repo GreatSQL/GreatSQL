@@ -1,4 +1,5 @@
 /* Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,12 +24,18 @@
 #include <sql/current_thd.h>
 #include <sql/mysqld_thd_manager.h>
 #include <sql/sql_lex.h>
+#include "mysql/plugin.h"
 #include "mysql_ongoing_transaction_query_imp.h"
 #include "sql/sql_class.h"  // THD
 
+#define ALL_ACTIVE_TRX 0
+#define COMMITTING_TRX 1
+#define ISO_SERIALIZABLE_TRX 2
+#define CASCADE_TABLE_TRX 4
+
 class Get_running_transactions : public Do_THD_Impl {
  public:
-  Get_running_transactions() {}
+  Get_running_transactions(int trx_mode) : m_trx_mode(trx_mode) {}
 
   /*
    This method relies on the assumption that a thread running query will either
@@ -59,8 +66,33 @@ class Get_running_transactions : public Do_THD_Impl {
           no query is set on that THD, either.
     */
 
-    if ((tst->get_trx_state() & (TX_EXPLICIT | TX_STMT_DML)) > 0)
+    bool chosen = false;
+    if (!(tst->get_trx_state() & (TX_EXPLICIT | TX_STMT_DML))) {
+      return;
+    }
+
+    if (m_trx_mode == ALL_ACTIVE_TRX) {
+      chosen = true;
+    }
+    if (m_trx_mode & COMMITTING_TRX) {
+      if (tst->get_trx_state() & (TX_BEFORE_COMMIT)) {
+        chosen = true;
+      }
+    }
+    if (m_trx_mode & ISO_SERIALIZABLE_TRX) {
+      auto iso = thd_tx_isolation(thd);
+      if (iso == ISO_SERIALIZABLE) {
+        chosen = true;
+      }
+    }
+    if (m_trx_mode & CASCADE_TABLE_TRX) {
+      if (tst->get_trx_table_flag() & (TX_TABLE_CASCADE)) {
+        chosen = true;
+      }
+    }
+    if (chosen) {
       thread_ids.push_back(thd->thread_id());
+    }
   }
 
   ulong get_transaction_number() { return thread_ids.size(); }
@@ -80,12 +112,23 @@ class Get_running_transactions : public Do_THD_Impl {
  private:
   /* Status of all threads are summed into this. */
   std::vector<my_thread_id> thread_ids;
+  int m_trx_mode;
 };
 
 DEFINE_BOOL_METHOD(
     mysql_ongoing_transactions_query_imp::get_ongoing_server_transactions,
     (unsigned long **thread_ids, unsigned long *lenght)) {
-  Get_running_transactions trx_counter;
+  Get_running_transactions trx_counter(ALL_ACTIVE_TRX);
+  Global_THD_manager::get_instance()->do_for_all_thd(&trx_counter);
+  trx_counter.fill_transaction_ids(thread_ids);
+  *lenght = trx_counter.get_transaction_number();
+  return false;
+}
+DEFINE_BOOL_METHOD(mysql_ongoing_transactions_query_imp::
+                       get_group_replication_waitting_transactions,
+                   (unsigned long **thread_ids, unsigned long *lenght)) {
+  Get_running_transactions trx_counter(COMMITTING_TRX | ISO_SERIALIZABLE_TRX |
+                                       CASCADE_TABLE_TRX);
   Global_THD_manager::get_instance()->do_for_all_thd(&trx_counter);
   trx_counter.fill_transaction_ids(thread_ids);
   *lenght = trx_counter.get_transaction_number();

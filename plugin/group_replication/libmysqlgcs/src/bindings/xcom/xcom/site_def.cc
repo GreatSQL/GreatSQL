@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -321,6 +321,7 @@ void init_site_def(u_int n, node_address *names, site_def *site) {
   set_node_set(&site->local_node_set); /* Assume everyone is there */
   assert(site->local_node_set.node_set_len == _get_maxnodes(site));
   site->detector_updated = 0;
+  site->max_conn_rtt = 0;
   site->x_proto = my_xcom_version;
   /* Inherit latest configuration's event horizon or fallback to default */
   latest_config = get_site_def();
@@ -440,6 +441,7 @@ void import_config(gcs_snapshot *gcs_snap) {
         assert(cp->event_horizon);
         site->event_horizon = cp->event_horizon;
         copy_node_set(&cp->global_node_set, &site->global_node_set);
+        G_INFO("import_config calls site_install_action");
         site_install_action(site, app_type);
       }
     }
@@ -496,16 +498,16 @@ gcs_snapshot *export_config() {
 
 /* Return the global minimum delivered message number, based on incoming gossip
  */
-synode_no get_min_delivered_msg(site_def const *s) {
+synode_no get_min_delivered_msg(site_def const *s, ulong basic_timeout) {
   u_int i;
   synode_no retval = null_synode;
   int init = 1;
   double current = task_now();
   for (i = 0; i < s->nodes.node_list_len; i++) {
-    double timeout = DEFAULT_DETECTOR_LIVE_TIMEOUT;
+    ulong timeout = basic_timeout;
     double diff = current - s->servers[i]->large_transfer_detected;
-    if (diff < DEFAULT_SILENT) {
-      timeout = MAX_DETECTOR_LIVE_TIMEOUT;
+    if (diff < basic_timeout) {
+      timeout = timeout << 1;
     }
     if (s->servers[i]->detected + timeout > task_now()) {
       if (init) {

@@ -1,5 +1,5 @@
 /* Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2021, GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -42,6 +42,7 @@ struct plugin_local_variables {
   mysql_mutex_t plugin_running_mutex;
   mysql_mutex_t plugin_online_mutex;
   mysql_mutex_t plugin_modules_termination_mutex;
+  mysql_mutex_t plugin_applier_module_mutex;
   mysql_cond_t plugin_online_condition;
   Plugin_waitlock *online_wait_mutex;
   Checkable_rwlock *plugin_stop_lock;
@@ -223,15 +224,28 @@ struct plugin_options_variables {
 #define MAX_MESSAGE_CACHE_SIZE ULONG_MAX
   ulong message_cache_size_var;
 
+#define DEFAULT_FLP_TIMEOUT 5
+#define MIN_FLP_TIMEOUT 3
+#define MAX_FLP_TIMEOUT 60
+  ulong communication_flp_timeout_var;
+
   bool single_primary_mode_var;
   bool enforce_update_everywhere_checks_var;
+  bool arbitrator_role_var;
   bool majority_after_mode_var;
   int single_primary_fast_mode_var;
+
+  const char *single_primary_election_mode_values[4] = {
+      "WEIGHT_ONLY", "GTID_FIRST", "WEIGHT_FIRST", (const char *)nullptr};
+  TYPELIB single_primary_election_mode_typelib_t = {
+      3, "primary_election_mode_typelib_t", single_primary_election_mode_values,
+      nullptr};
 
   const char *flow_control_mode_values[3] = {"DISABLED", "QUOTA",
                                              (const char *)nullptr};
   TYPELIB flow_control_mode_typelib_t = {2, "flow_control_mode_typelib_t",
                                          flow_control_mode_values, nullptr};
+
   ulong flow_control_mode_var;
 #define DEFAULT_FLOW_CONTROL_THRESHOLD 25000
 #define MAX_FLOW_CONTROL_THRESHOLD INT_MAX32
@@ -248,6 +262,7 @@ struct plugin_options_variables {
 #define MIN_TRANSACTION_SIZE_LIMIT 0
   /** Base variable that feeds the value to an atomic variable */
   ulong transaction_size_limit_base_var;
+  ulong request_time_threshold_var;
   std::atomic<ulong> transaction_size_limit_var;
 
   char *communication_debug_options_var;
@@ -261,6 +276,7 @@ struct plugin_options_variables {
   uint autorejoin_tries_var;
 
   uint zone_id_var;
+  bool zone_id_sync_mode_var;
 
   ulong timeout_on_unreachable_var;
 
@@ -277,6 +293,7 @@ struct plugin_options_variables {
   int flow_control_hold_percent_var;
   int flow_control_release_percent_var;
   int broadcast_gtid_executed_period_var;
+  ulong single_primary_election_mode_var;
 
   ulonglong clone_threshold_var;
 

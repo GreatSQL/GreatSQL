@@ -1,4 +1,5 @@
 /* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -864,6 +865,10 @@ class Slave_worker : public Relay_log_info {
   */
   bool retry_transaction(uint start_relay_number, my_off_t start_relay_pos,
                          uint end_relay_number, my_off_t end_relay_pos);
+  bool retry_referenced_transaction(uint start_relay_number,
+                                    my_off_t start_relay_pos,
+                                    uint end_relay_number,
+                                    my_off_t end_relay_pos);
 
   bool set_info_search_keys(Rpl_info_handler *to) override;
 
