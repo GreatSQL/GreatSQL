@@ -1,4 +1,5 @@
 # Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2021, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -134,7 +135,7 @@ MACRO(GET_PACKAGE_FILE_NAME Var)
   IF(WITH_NDBCLUSTER)
     SET(package_name "mysql${PRODUCT_TAG}-${MYSQL_CLUSTER_VERSION}-${SYSTEM_NAME_AND_PROCESSOR}")
   ELSE()
-    SET(package_name "percona-server${PRODUCT_TAG}-${VERSION}-${SYSTEM_NAME_AND_PROCESSOR}")
+    SET(package_name "greatsql${PRODUCT_TAG}-${VERSION}-${SYSTEM_NAME_AND_PROCESSOR}")
   ENDIF()
 
   MESSAGE(STATUS "Packaging as: ${package_name}")
@@ -153,20 +154,20 @@ IF(NOT CPACK_PACKAGE_FILE_NAME)
 ENDIF()
 
 IF(NOT CPACK_SOURCE_PACKAGE_FILE_NAME)
-  SET(CPACK_SOURCE_PACKAGE_FILE_NAME "percona-server-${VERSION}")
+  SET(CPACK_SOURCE_PACKAGE_FILE_NAME "greatsql-${VERSION}")
   IF(WITH_NDBCLUSTER)
-    SET(CPACK_SOURCE_PACKAGE_FILE_NAME "percona-server-mysql-cluster-gpl-${MYSQL_CLUSTER_VERSION}")
-    MESSAGE(STATUS "Percona Server MySQL Cluster package name: ${CPACK_SOURCE_PACKAGE_FILE_NAME}")
+    SET(CPACK_SOURCE_PACKAGE_FILE_NAME "greatsql-server-mysql-cluster-gpl-${MYSQL_CLUSTER_VERSION}")
+    MESSAGE(STATUS "GreatSQL Server MySQL Cluster package name: ${CPACK_SOURCE_PACKAGE_FILE_NAME}")
   ELSE()
   ENDIF()
 ENDIF()
-SET(CPACK_PACKAGE_CONTACT "Percona Engineering <mysql-dev@percona.com>")
-SET(CPACK_PACKAGE_VENDOR "Percon`")
+SET(CPACK_PACKAGE_CONTACT "GreatOpenSource Engineering <support@greatopensource.com>")
+SET(CPACK_PACKAGE_VENDOR "GreatOpenSource")
 SET(CPACK_SOURCE_GENERATOR "TGZ")
 INCLUDE(cpack_source_ignore_files)
 
 # Defintions for windows version resources
-SET(PRODUCTNAME "Percona Server")
+SET(PRODUCTNAME "GreatSQL")
 SET(COMPANYNAME ${CPACK_PACKAGE_VENDOR})
 
 STRING(TIMESTAMP MYSQL_COPYRIGHT_YEAR "%Y")
