@@ -41,6 +41,9 @@
 #ifdef HAVE_GRP_H
 #include <grp.h>
 #endif
+#ifdef PR_SET_DUMPABLE
+#include <sys/prctl.h>
+#endif
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
 #endif

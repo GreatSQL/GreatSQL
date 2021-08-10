@@ -1347,10 +1347,10 @@ int main(int argc,char *argv[])
 #endif
 
 
-  put_info("Welcome to the MySQL monitor.  Commands end with ; or \\g.",
+  put_info("Welcome to the GreatSQL monitor.  Commands end with ; or \\g.",
 	   INFO_INFO);
   my_snprintf((char*) glob_buffer.ptr(), glob_buffer.alloced_length(),
-	   "Your MySQL connection id is %lu\nServer version: %s\n",
+	   "Your GreatSQL connection id is %lu\nServer version: %s\n",
 	   mysql_thread_id(&mysql), server_version_string(&mysql));
   put_info((char*) glob_buffer.ptr(),INFO_INFO);
 

@@ -1,0 +1,493 @@
+--- client/base/CMakeLists.txt	2016-03-09 09:25:21.000000000 +0100
++++ client/base/CMakeLists.txt	2016-03-09 11:44:10.259330311 +0100
+@@ -61,7 +61,7 @@
+   COMPILE_FLAGS -isystem ${BOOST_PATCHES_DIR} -isystem ${BOOST_INCLUDE_DIR}
+ )
+ 
+-TARGET_LINK_LIBRARIES(client_base perconaserverclient)
++TARGET_LINK_LIBRARIES(client_base mysqlclient)
+ 
+ # Do not build library unless it is needed by some other target.
+ SET_PROPERTY(TARGET client_base PROPERTY EXCLUDE_FROM_ALL TRUE)
+--- client/CMakeLists.txt	2016-03-09 09:25:21.000000000 +0100
++++ client/CMakeLists.txt	2016-03-09 11:41:15.159325622 +0100
+@@ -48,7 +48,7 @@
+ 
+ ADD_DEFINITIONS(${SSL_DEFINES})
+ MYSQL_ADD_EXECUTABLE(mysql completion_hash.cc mysql.cc readline.cc ../sql-common/sql_string.cc)
+-TARGET_LINK_LIBRARIES(mysql perconaserverclient)
++TARGET_LINK_LIBRARIES(mysql mysqlclient)
+ IF(UNIX)
+   TARGET_LINK_LIBRARIES(mysql ${MY_READLINE_LIBRARY})
+ ENDIF(UNIX)
+@@ -57,58 +57,58 @@
+   MYSQL_ADD_EXECUTABLE(mysql_upgrade
+     upgrade/program.cc
+   )
+-TARGET_LINK_LIBRARIES(mysql_upgrade perconaserverclient client_base mysqlcheck_core)
++TARGET_LINK_LIBRARIES(mysql_upgrade mysqlclient client_base mysqlcheck_core)
+ ADD_DEPENDENCIES(mysql_upgrade GenFixPrivs GenSysSchema)
+ ENDIF()
+ 
+ MYSQL_ADD_EXECUTABLE(mysqltest mysqltest.cc COMPONENT Test)
+ SET_SOURCE_FILES_PROPERTIES(mysqltest.cc PROPERTIES COMPILE_FLAGS "-DTHREADS")
+-TARGET_LINK_LIBRARIES(mysqltest perconaserverclient regex)
++TARGET_LINK_LIBRARIES(mysqltest mysqlclient regex)
+ ADD_DEPENDENCIES(mysqltest GenError)
+ 
+ ADD_CONVENIENCE_LIBRARY(mysqlcheck_core check/mysqlcheck_core.cc)
+-TARGET_LINK_LIBRARIES(mysqlcheck_core perconaserverclient)
++TARGET_LINK_LIBRARIES(mysqlcheck_core mysqlclient)
+ 
+ MYSQL_ADD_EXECUTABLE(mysqlcheck check/mysqlcheck.cc)
+ TARGET_LINK_LIBRARIES(mysqlcheck mysqlcheck_core)
+ 
+ MYSQL_ADD_EXECUTABLE(mysqldump mysqldump.c ../sql-common/my_user.c)
+-TARGET_LINK_LIBRARIES(mysqldump perconaserverclient)
++TARGET_LINK_LIBRARIES(mysqldump mysqlclient)
+ 
+ MYSQL_ADD_EXECUTABLE(mysqlimport mysqlimport.c)
+ SET_SOURCE_FILES_PROPERTIES(mysqlimport.c PROPERTIES COMPILE_FLAGS "-DTHREADS")
+-TARGET_LINK_LIBRARIES(mysqlimport perconaserverclient)
++TARGET_LINK_LIBRARIES(mysqlimport mysqlclient)
+ 
+ MYSQL_ADD_EXECUTABLE(mysqlshow mysqlshow.c)
+-TARGET_LINK_LIBRARIES(mysqlshow perconaserverclient)
++TARGET_LINK_LIBRARIES(mysqlshow mysqlclient)
+ 
+ MYSQL_ADD_EXECUTABLE(mysql_plugin mysql_plugin.c)
+-TARGET_LINK_LIBRARIES(mysql_plugin perconaserverclient)
++TARGET_LINK_LIBRARIES(mysql_plugin mysqlclient)
+ 
+ MYSQL_ADD_EXECUTABLE(mysqlbinlog mysqlbinlog.cc)
+ ADD_COMPILE_FLAGS(
+   mysqlbinlog.cc
+   COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/sql" "-DHAVE_REPLICATION" "-DDISABLE_PSI_MUTEX"
+ )
+-TARGET_LINK_LIBRARIES(mysqlbinlog perconaserverclient binlogevents_static)
++TARGET_LINK_LIBRARIES(mysqlbinlog mysqlclient binlogevents_static)
+ 
+ MYSQL_ADD_EXECUTABLE(mysqladmin mysqladmin.cc)
+-TARGET_LINK_LIBRARIES(mysqladmin perconaserverclient)
++TARGET_LINK_LIBRARIES(mysqladmin mysqlclient)
+ 
+ MYSQL_ADD_EXECUTABLE(mysqlslap mysqlslap.cc)
+ SET_SOURCE_FILES_PROPERTIES(mysqlslap.cc PROPERTIES COMPILE_FLAGS "-DTHREADS")
+-TARGET_LINK_LIBRARIES(mysqlslap perconaserverclient)
++TARGET_LINK_LIBRARIES(mysqlslap mysqlclient)
+ 
+ MYSQL_ADD_EXECUTABLE(mysql_config_editor mysql_config_editor.cc)
+-TARGET_LINK_LIBRARIES(mysql_config_editor ${FORCE_SSL_SOLARIS} perconaserverclient)
++TARGET_LINK_LIBRARIES(mysql_config_editor ${FORCE_SSL_SOLARIS} mysqlclient)
+ 
+ MYSQL_ADD_EXECUTABLE(mysql_secure_installation mysql_secure_installation.cc)
+-TARGET_LINK_LIBRARIES(mysql_secure_installation perconaserverclient)
++TARGET_LINK_LIBRARIES(mysql_secure_installation mysqlclient)
+ 
+ IF(UNIX AND NOT WITHOUT_SERVER)
+   MYSQL_ADD_EXECUTABLE(mysql_install_db
+     mysql_install_db.cc auth_utils.cc path.cc logger.cc)
+-  TARGET_LINK_LIBRARIES(mysql_install_db ${FORCE_SSL_SOLARIS} perconaserverclient)
++  TARGET_LINK_LIBRARIES(mysql_install_db ${FORCE_SSL_SOLARIS} mysqlclient)
+   ADD_COMPILE_FLAGS(
+     auth_utils.cc mysql_install_db.cc
+     COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/sql/auth"
+--- cmake/libutils.cmake	2016-03-09 09:25:21.000000000 +0100
++++ cmake/libutils.cmake	2016-03-09 11:41:15.159325622 +0100
+@@ -28,8 +28,8 @@
+ # excessive recompiles.
+ 
+ # Except for convenience libraries, this file provides macros to merge static 
+-# libraries (we need it for perconaserverclient) and to create shared library out of 
+-# convenience libraries(again, for perconaserverclient)
++# libraries (we need it for mysqlclient) and to create shared library out of 
++# convenience libraries(again, for mysqlclient)
+ 
+ # Important global flags 
+ # - WITH_PIC : If set, it is assumed that everything is compiled as position
+--- include/mysql.h	2016-03-09 09:25:21.000000000 +0100
++++ include/mysql.h	2016-03-09 11:41:15.159325622 +0100
+@@ -27,7 +27,7 @@
+ 
+ /*
+   This file defines the client API to MySQL and also the ABI of the
+-  dynamically linked libperconaserverclient.
++  dynamically linked libmysqlclient.
+ 
+   The ABI should never be changed in a released product of MySQL,
+   thus you need to take great care when changing the file. In case
+@@ -347,12 +347,12 @@ void STDCALL mysql_server_end(void);
+ 
+ /*
+   mysql_server_init/end need to be called when using libmysqld or
+-  libperconaserverclient (exactly, mysql_server_init() is called by
++  libmysqlclient (exactly, mysql_server_init() is called by
+   mysql_init() so you don't need to call it explicitely; but you need to call
+   mysql_server_end() to free memory). The names are a bit misleading
+   (mysql_SERVER* to be used when using libmysqlCLIENT). So we add more general
+   names which suit well whether you're using libmysqld or
+-  libperconaserverclient. We intend to promote these aliases over the
++  libmysqlclient. We intend to promote these aliases over the
+   mysql_server* ones.
+ */
+ #define mysql_library_init mysql_server_init
+--- libmysql/CMakeLists.txt	2016-03-09 09:25:21.000000000 +0100
++++ libmysql/CMakeLists.txt	2016-03-09 11:41:15.159325622 +0100
+@@ -265,13 +265,13 @@ ENDIF()
+ MESSAGE(STATUS "Creating LDAP authentication SASL client library.")
+ ADD_SUBDIRECTORY(authentication_ldap)
+   
+-# Merge several convenience libraries into one big perconaserverclient
+-MERGE_CONVENIENCE_LIBRARIES(perconaserverclient ${LIBS_TO_MERGE} COMPONENT Development)
+-TARGET_LINK_LIBRARIES(perconaserverclient ${LIBS_TO_LINK})
++# Merge several convenience libraries into one big mysqlclient
++MERGE_CONVENIENCE_LIBRARIES(mysqlclient ${LIBS_TO_MERGE} COMPONENT Development)
++TARGET_LINK_LIBRARIES(mysqlclient ${LIBS_TO_LINK})
+ 
+ # Visual Studio users need debug  static library for debug projects
+ IF(MSVC)
+-  INSTALL_DEBUG_TARGET(perconaserverclient DESTINATION ${INSTALL_LIBDIR}/debug)
++  INSTALL_DEBUG_TARGET(mysqlclient DESTINATION ${INSTALL_LIBDIR}/debug)
+ 
+   INSTALL_DEBUG_TARGET(auth_win_client DESTINATION ${INSTALL_LIBDIR}/debug)
+   INSTALL_DEBUG_TARGET(clientlib DESTINATION ${INSTALL_LIBDIR}/debug)
+@@ -308,7 +308,7 @@ IF(CMAKE_SYSTEM_NAME MATCHES "SunOS" AND DEFINED ENV{PB2WORKDIR})
+ ENDIF()
+ 
+ IF(NOT DISABLE_SHARED)
+-  # Merge several convenience libraries into one big perconaserverclient
++  # Merge several convenience libraries into one big mysqlclient
+   # and link them together into shared library.
+   MERGE_LIBRARIES_SHARED(libmysql ${LIBS_TO_MERGE}
+     EXPORTS ${CLIENT_API_FUNCTIONS} ${CLIENT_API_FUNCTIONS_UNDOCUMENTED}
+@@ -322,9 +322,9 @@ IF(NOT DISABLE_SHARED)
+       SET(OS_SHARED_LIB_VERSION
+         "${SHARED_LIB_MAJOR_VERSION}.${SHARED_LIB_MINOR_VERSION}.${SHARED_LIB_PATCH_VERSION}")
+     ENDIF()
+-    # Name of shared library is perconaserverclient on Unix
++    # Name of shared library is mysqlclient on Unix
+     SET_TARGET_PROPERTIES(libmysql PROPERTIES 
+-      OUTPUT_NAME perconaserverclient
++      OUTPUT_NAME mysqlclient
+       VERSION "${OS_SHARED_LIB_VERSION}" 
+       SOVERSION "${SHARED_LIB_MAJOR_VERSION}")
+     CONFIGURE_FILE(libmysql.ver.in ${CMAKE_CURRENT_BINARY_DIR}/libmysql.ver)
+@@ -353,8 +353,8 @@ IF(NOT DISABLE_SHARED)
+         PROPERTIES LINK_FLAGS "${libmysql_link_flags}")
+     ENDIF() 
+     # clean direct output needs to be set several targets have the same name
+-    #(perconaserverclient in this case)
+-    SET_TARGET_PROPERTIES(perconaserverclient PROPERTIES CLEAN_DIRECT_OUTPUT 1)
++    #(mysqlclient in this case)
++    SET_TARGET_PROPERTIES(mysqlclient PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+     SET_TARGET_PROPERTIES(libmysql PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+ 
+   ENDIF()
+--- libmysql/libmysql.map	2016-03-09 09:25:21.000000000 +0100
++++ libmysql/libmysql.map	2016-03-09 11:41:15.159325622 +0100
+@@ -1,5 +1,5 @@
+ # symbols exported from mysql 5.1
+-libperconaserverclient_16 {
++libmysqlclient_16 {
+   global:
+ 	_fini;
+ 	_init;
+@@ -124,7 +124,7 @@ libperconaserverclient_16 {
+ 	*;
+ };
+ # symbols added in mysql 5.5
+-libperconaserverclient_18 {
++libmysqlclient_18 {
+   global:
+ 	mysql_client_find_plugin;
+ 	mysql_client_register_plugin;
+@@ -136,7 +136,7 @@ libperconaserverclient_18 {
+ # Ideally the following symbols wouldn't be exported, but various applications
+ # require them.  We limit the namespace damage by prefixing mysql_
+ # (see mysql-dubious-exports.patch), which means the symbols are not present
+-# in libperconaserverclient_16.
++# in libmysqlclient_16.
+ #
+ # mysql-connector-odbc requires these
+ 	mysql_default_charset_info;
+@@ -149,7 +149,7 @@ libperconaserverclient_18 {
+ 	my_net_read;
+ };
+ # symbols added in mysql 5.6
+-libperconaserverclient_18_1 {
++libmysqlclient_18_1 {
+   global:
+ 	get_tty_password;
+ };
+--- libmysql/libmysql.ver.in	2016-03-09 09:25:21.000000000 +0100
++++ libmysql/libmysql.ver.in	2016-03-09 11:41:15.159325622 +0100
+@@ -13,9 +13,8 @@
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
+ 
+-
+-libperconaserverclient_@SHARED_LIB_MAJOR_VERSION@.0
++libmysqlclient_@SHARED_LIB_MAJOR_VERSION@.0
+ { global: ${CLIENT_API_FUNCTIONS};${CLIENT_API_FUNCTIONS_UNDOCUMENTED_20_0}; local: *; };
+
+-libperconaserverclient_@SHARED_LIB_MAJOR_VERSION@.3
+-{ ${CLIENT_API_FUNCTIONS_UNDOCUMENTED_20_3}; } libperconaserverclient_@SHARED_LIB_MAJOR_VERSION@.0;
++libmysqlclient_@SHARED_LIB_MAJOR_VERSION@.@SHARED_LIB_MINOR_VERSION@
++{ ${CLIENT_API_FUNCTIONS_UNDOCUMENTED_20_3}; } libmysqlclient_@SHARED_LIB_MAJOR_VERSION@.0;
+--- plugin/percona-pam-for-mysql/CMakeLists.txt	2016-03-09 09:25:25.000000000 +0100
++++ plugin/percona-pam-for-mysql/CMakeLists.txt	2016-03-09 11:41:15.163325622 +0100
+@@ -37,7 +37,7 @@ IF(HAVE_PAM AND HAVE_GETPWNAM_R AND HAVE_GETGRGID_R AND HAVE_DLFCN_H)
+   MYSQL_ADD_PLUGIN(dialog
+                    src/dialog.c
+                    ../../client/get_password.c
+-                   LINK_LIBRARIES perconaserverclient
++                   LINK_LIBRARIES mysqlclient
+                    MODULE_ONLY)
+ 
+   IF(UNIX)
+--- scripts/CMakeLists.txt	2016-03-09 09:25:25.000000000 +0100
++++ scripts/CMakeLists.txt	2016-03-09 11:41:15.163325622 +0100
+@@ -305,7 +305,7 @@ ELSE()
+ ENDIF()
+ 
+ # Use cmake variables to inspect dependencies for 
+-# perconaserverclient library (add -l stuff)
++# mysqlclient library (add -l stuff)
+ SET(CLIENT_LIBS "")
+ SET(LIBS "")
+ 
+@@ -343,7 +343,7 @@ MACRO(EXTRACT_LINK_LIBRARIES target var)
+   STRING(REGEX REPLACE "[ ]+$" "" ${var} "${${var}}")
+ ENDMACRO()
+ 
+-EXTRACT_LINK_LIBRARIES(perconaserverclient CLIENT_LIBS)
++EXTRACT_LINK_LIBRARIES(mysqlclient CLIENT_LIBS)
+ IF(SOLARIS AND CMAKE_C_FLAGS MATCHES "-xatomic=gcc")
+   STRING_APPEND(CLIENT_LIBS " -xatomic=gcc")
+ ENDIF()
+@@ -356,8 +356,8 @@ IF(WITH_EMBEDDED_SERVER)
+ ENDIF()
+ 
+ IF(MSVC)
+-  GET_TARGET_PROPERTY(LIBMYSQL_OS_SHLIB_VERSION perconaserverclient VERSION)
+-  GET_TARGET_PROPERTY(LIBMYSQL_OS_OUTPUT_NAME perconaserverclient OUTPUT_NAME)
++  GET_TARGET_PROPERTY(LIBMYSQL_OS_SHLIB_VERSION mysqlclient VERSION)
++  GET_TARGET_PROPERTY(LIBMYSQL_OS_OUTPUT_NAME mysqlclient OUTPUT_NAME)
+ ELSE()
+   GET_TARGET_PROPERTY(LIBMYSQL_OS_SHLIB_VERSION libmysql VERSION)
+   GET_TARGET_PROPERTY(LIBMYSQL_OS_OUTPUT_NAME libmysql OUTPUT_NAME)
+--- sql/auth/password.c	2016-03-09 09:25:25.000000000 +0100
++++ sql/auth/password.c	2016-03-09 11:41:15.163325622 +0100
+@@ -29,7 +29,7 @@
+   The password is saved (in user.password) by using the PASSWORD() function in
+   mysql.
+ 
+-  This is .c file because it's used in libperconaserverclient, which is entirely in C.
++  This is .c file because it's used in libmysqlclient, which is entirely in C.
+   (we need it to be portable to a variety of systems).
+   Example:
+     update user set password=PASSWORD("hello") where user="test"
+--- storage/ndb/ndbapi-examples/mgmapi_logevent/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/mgmapi_logevent/Makefile	2016-03-09 11:41:15.163325622 +0100
+@@ -29,7 +29,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(OBJS): $(SRCS)
+ 	$(CXX) $(CFLAGS) -I$(TOP_SRCDIR)/include -I$(INCLUDE_DIR) -I$(INCLUDE_DIR)/mgmapi  -I$(INCLUDE_DIR)/ndbapi $(SRCS)
+--- storage/ndb/ndbapi-examples/mgmapi_logevent2/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/mgmapi_logevent2/Makefile	2016-03-09 11:41:15.163325622 +0100
+@@ -29,7 +29,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(OBJS): $(SRCS)
+ 	$(CXX) $(CFLAGS) -I$(TOP_SRCDIR)/include -I$(INCLUDE_DIR) -I$(INCLUDE_DIR)/mgmapi  -I$(INCLUDE_DIR)/ndbapi $(SRCS)
+--- storage/ndb/ndbapi-examples/ndbapi_async/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/ndbapi_async/Makefile	2016-03-09 11:41:15.163325622 +0100
+@@ -29,7 +29,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(TARGET).o: $(SRCS)
+ 	$(CXX) $(CFLAGS) -I$(INCLUDE_DIR)/include -I$(INCLUDE_DIR)/storage/ndb/include -I$(INCLUDE_DIR)/storage/ndb/include/ndbapi $(SRCS)
+--- storage/ndb/ndbapi-examples/ndbapi_async1/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/ndbapi_async1/Makefile	2016-03-09 11:41:15.167325622 +0100
+@@ -28,7 +28,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(TARGET).o: $(SRCS)
+ 	$(CXX) $(CFLAGS) -I$(TOP_SRCDIR)/include -I$(INCLUDE_DIR) -I$(INCLUDE_DIR)/ndbapi $(SRCS)
+--- storage/ndb/ndbapi-examples/ndbapi_blob/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/ndbapi_blob/Makefile	2016-03-09 11:41:15.167325622 +0100
+@@ -29,7 +29,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(TARGET).o: $(SRCS)
+ 	$(CXX) $(CFLAGS) -I$(INCLUDE_DIR)/include -I$(INCLUDE_DIR)/storage/ndb/include -I$(INCLUDE_DIR)/storage/ndb/include/ndbapi $(SRCS)
+--- storage/ndb/ndbapi-examples/ndbapi_blob_ndbrecord/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/ndbapi_blob_ndbrecord/Makefile	2016-03-09 11:41:15.167325622 +0100
+@@ -29,7 +29,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(OBJS): $(SRCS)
+ 	$(CXX) $(CFLAGS) -I$(INCLUDE_DIR)/include -I$(INCLUDE_DIR)/storage/ndb/include -I$(INCLUDE_DIR)/storage/ndb/include/ndbapi $(SRCS)
+--- storage/ndb/ndbapi-examples/ndbapi_event/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/ndbapi_event/Makefile	2016-03-09 11:41:15.167325622 +0100
+@@ -29,7 +29,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(TARGET).o: $(SRCS) Makefile
+ 	$(CXX) $(CFLAGS) $(DEBUG) -I$(INCLUDE_DIR) -I$(INCLUDE_DIR)/ndbapi -I$(TOP_SRCDIR)/include $(SRCS)
+--- storage/ndb/ndbapi-examples/ndbapi_recattr_vs_record/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/ndbapi_recattr_vs_record/Makefile	2016-03-09 11:41:15.167325622 +0100
+@@ -29,7 +29,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(OBJS): $(SRCS)
+ 	$(CXX) $(CFLAGS) -I$(INCLUDE_DIR)/include -I$(INCLUDE_DIR)/storage/ndb/include -I$(INCLUDE_DIR)/storage/ndb/include/ndbapi $(SRCS)
+--- storage/ndb/ndbapi-examples/ndbapi_retries/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/ndbapi_retries/Makefile	2016-03-09 11:41:15.167325622 +0100
+@@ -28,7 +28,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(TARGET).o: $(SRCS)
+ 	$(CXX) $(CFLAGS)  -I$(TOP_SRCDIR)/include -I$(INCLUDE_DIR) -I$(INCLUDE_DIR)/ndbapi $(SRCS)
+--- storage/ndb/ndbapi-examples/ndbapi_scan/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/ndbapi_scan/Makefile	2016-03-09 11:41:15.167325622 +0100
+@@ -29,7 +29,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(TARGET).o: $(SRCS)
+ 	$(CXX) $(CFLAGS) -I$(INCLUDE_DIR)/include -I$(INCLUDE_DIR)/storage/ndb/include -I$(INCLUDE_DIR)/storage/ndb/include/ndbapi $(SRCS)
+--- storage/ndb/ndbapi-examples/ndbapi_simple/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/ndbapi_simple/Makefile	2016-03-09 11:41:15.167325622 +0100
+@@ -29,7 +29,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(TARGET).o: $(SRCS)
+ 	$(CXX) $(CFLAGS) -I$(TOP_SRCDIR)/include -I$(INCLUDE_DIR) -I$(INCLUDE_DIR)/ndbapi $(SRCS)
+--- storage/ndb/ndbapi-examples/ndbapi_simple_dual/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/ndbapi_simple_dual/Makefile	2016-03-09 11:41:15.167325622 +0100
+@@ -29,7 +29,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(OBJS): $(SRCS)
+ 	$(CXX) $(CFLAGS) -I$(TOP_SRCDIR)/include -I$(INCLUDE_DIR) -I$(INCLUDE_DIR)/ndbapi $(SRCS)
+--- storage/ndb/ndbapi-examples/ndbapi_simple_index/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/ndbapi_simple_index/Makefile	2016-03-09 11:41:15.167325622 +0100
+@@ -29,7 +29,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(OBJS): $(SRCS)
+ 	$(CXX) $(CFLAGS) -I$(INCLUDE_DIR)/include -I$(INCLUDE_DIR)/storage/ndb/include -I$(INCLUDE_DIR)/storage/ndb/include/ndbapi $(SRCS)
+--- storage/ndb/ndbapi-examples/ndbapi_s_i_ndbrecord/Makefile	2016-03-09 09:25:26.000000000 +0100
++++ storage/ndb/ndbapi-examples/ndbapi_s_i_ndbrecord/Makefile	2016-03-09 11:41:15.167325622 +0100
+@@ -29,7 +29,7 @@ LIB_DIR = -L$(TOP_SRCDIR)/storage/ndb/sr
+ SYS_LIB = 
+ 
+ $(TARGET): $(OBJS)
+-	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lperconaserverclient_r $(SYS_LIB) -o $(TARGET)
++	$(CXX) $(CXXFLAGS) $(LFLAGS) $(LIB_DIR) $(OBJS) -lndbclient -lmysqlclient_r $(SYS_LIB) -o $(TARGET)
+ 
+ $(OBJS): $(SRCS)
+ 	$(CXX) $(CFLAGS) -I$(INCLUDE_DIR)/include -I$(INCLUDE_DIR)/storage/ndb/include -I$(INCLUDE_DIR)/storage/ndb/include/ndbapi $(SRCS)
+--- storage/ndb/test/run-test/CMakeLists.txt	2016-03-09 09:25:27.000000000 +0100
++++ storage/ndb/test/run-test/CMakeLists.txt	2016-03-09 11:41:15.167325622 +0100
+@@ -41,7 +41,7 @@ ENDIF()
+ ADD_EXECUTABLE(atrt main.cpp setup.cpp files.cpp db.cpp command.cpp)
+ IF(WIN32)
+   # All clients will need auth_win_client
+-  TARGET_LINK_LIBRARIES(atrt ndbNDBT ndbclient_static perconaserverclient)
++  TARGET_LINK_LIBRARIES(atrt ndbNDBT ndbclient_static mysqlclient)
+ ELSE()
+   # Linking with mysqlclient may fail on macOS, so link individual libs instead.
+   TARGET_LINK_LIBRARIES(atrt ndbNDBT ndbclient_static
+--- testclients/CMakeLists.txt	2016-03-09 09:25:27.000000000 +0100
++++ testclients/CMakeLists.txt	2016-03-09 11:41:15.167325622 +0100
+@@ -25,12 +25,12 @@ ADD_DEFINITIONS("-DMYSQL_CLIENT")
+ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include)
+ 
+ ADD_EXECUTABLE(mysql_client_test mysql_client_test.c)
+-TARGET_LINK_LIBRARIES(mysql_client_test perconaserverclient)
++TARGET_LINK_LIBRARIES(mysql_client_test mysqlclient)
+ SET_TARGET_PROPERTIES(mysql_client_test PROPERTIES LINKER_LANGUAGE CXX)
+ 
+ IF(WITH_UNIT_TESTS)
+   ADD_EXECUTABLE(bug25714 bug25714.c)
+-  TARGET_LINK_LIBRARIES(bug25714 perconaserverclient)
++  TARGET_LINK_LIBRARIES(bug25714 mysqlclient)
+   SET_TARGET_PROPERTIES(bug25714 PROPERTIES LINKER_LANGUAGE CXX)
+ ENDIF()
+ 
+--- rapid/plugin/x/CMakeLists.txt
++++ rapid/plugin/x/CMakeLists.txt
+@@ -220,7 +220,7 @@
+       "NGS_DISABLE_LOGGING;USE_MYSQLX_FULL_PROTO")
+   ENDIF()
+ 
+-  TARGET_LINK_LIBRARIES(mysqlxtest mysys strings ${FORCE_SSL_SOLARIS} perconaserverclient)
++  TARGET_LINK_LIBRARIES(mysqlxtest mysys strings ${FORCE_SSL_SOLARIS} mysqlclient)
+   TARGET_LINK_LIBRARIES(mysqlxtest ${PROTOBUF_LIBRARY})
+ 
+   IF(INSTALL_MYSQLTESTDIR)
+--- rapid/unittest/gunit/xplugin/CMakeLists.txt
++++ rapid/unittest/gunit/xplugin/CMakeLists.txt
+@@ -159,7 +159,7 @@
+   gmock
+   mysqlservices
+   ${FORCE_SSL_SOLARIS}
+-  perconaserverclient
++  mysqlclient
+   ${LIBEVENT_LIBRARIES}
+   ${CMAKE_THREAD_LIBS_INIT}
+   ${PROTOBUF_LIBRARY}

@@ -1,4 +1,5 @@
 # Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+# Copyright (c) 2021, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -123,7 +124,7 @@ IF(NOT VERSION)
     STRING(REGEX REPLACE "^.*-ndb-" "" NDBVERSION "${VERSION}")
     SET(package_name "mysql-cluster${PRODUCT_TAG}-${NDBVERSION}-${SYSTEM_NAME_AND_PROCESSOR}")
   ELSE()
-    SET(package_name "percona-server${PRODUCT_TAG}-${VERSION}-${SYSTEM_NAME_AND_PROCESSOR}")
+    SET(package_name "greatsql${PRODUCT_TAG}-${VERSION}-${SYSTEM_NAME_AND_PROCESSOR}")
   ENDIF()
 
   MESSAGE(STATUS "Packaging as: ${package_name}")
@@ -135,3 +136,55 @@ IF(NOT VERSION)
   STRING(TOLOWER ${package_name} package_name)
   SET(${Var} ${package_name})
 ENDMACRO()
+
+
+IF(NOT CPACK_PACKAGE_FILE_NAME)
+  GET_PACKAGE_FILE_NAME(CPACK_PACKAGE_FILE_NAME)
+ENDIF()
+
+IF(NOT CPACK_SOURCE_PACKAGE_FILE_NAME)
+  SET(CPACK_SOURCE_PACKAGE_FILE_NAME "greatsql-${VERSION}")
+  IF(WITH_NDBCLUSTER)
+    SET(CPACK_SOURCE_PACKAGE_FILE_NAME "greatsql-server-mysql-cluster-gpl-${MYSQL_CLUSTER_VERSION}")
+    MESSAGE(STATUS "GreatSQL Server MySQL Cluster package name: ${CPACK_SOURCE_PACKAGE_FILE_NAME}")
+  ELSE()
+  ENDIF()
+ENDIF()
+SET(CPACK_PACKAGE_CONTACT "GreatOpenSource Engineering <support@greatopensource.com>")
+SET(CPACK_PACKAGE_VENDOR "GreatOpenSource")
+SET(CPACK_SOURCE_GENERATOR "TGZ")
+INCLUDE(cpack_source_ignore_files)
+
+# Defintions for windows version resources
+SET(PRODUCTNAME "GreatSQL")
+SET(COMPANYNAME ${CPACK_PACKAGE_VENDOR})
+
+STRING(TIMESTAMP MYSQL_COPYRIGHT_YEAR "%Y")
+
+# Add version information to the exe and dll files
+# Refer to http://msdn.microsoft.com/en-us/library/aa381058(VS.85).aspx
+# for more info.
+IF(MSVC)
+  GET_FILENAME_COMPONENT(MYSQL_CMAKE_SCRIPT_DIR ${CMAKE_CURRENT_LIST_FILE} PATH)
+
+  SET(FILETYPE VFT_APP)
+  CONFIGURE_FILE(${MYSQL_CMAKE_SCRIPT_DIR}/versioninfo.rc.in
+    ${CMAKE_BINARY_DIR}/versioninfo_exe.rc)
+
+  SET(FILETYPE VFT_DLL)
+  CONFIGURE_FILE(${MYSQL_CMAKE_SCRIPT_DIR}/versioninfo.rc.in
+    ${CMAKE_BINARY_DIR}/versioninfo_dll.rc)
+
+  FUNCTION(ADD_VERSION_INFO target target_type sources_var)
+    IF("${target_type}" MATCHES "SHARED" OR "${target_type}" MATCHES "MODULE")
+      SET(rcfile ${CMAKE_BINARY_DIR}/versioninfo_dll.rc)
+    ELSEIF("${target_type}" MATCHES "EXE")
+      SET(rcfile ${CMAKE_BINARY_DIR}/versioninfo_exe.rc)
+    ENDIF()
+    SET(${sources_var} ${${sources_var}} ${rcfile} PARENT_SCOPE)
+  ENDFUNCTION()
+
+ELSE()
+  FUNCTION(ADD_VERSION_INFO)
+  ENDFUNCTION()
+ENDIF()
