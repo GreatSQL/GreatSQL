@@ -2,7 +2,7 @@
 
 --- 
 
-GreatSQL is a MySQL branch originated from GreatOpensource.
+GreatSQL is a MySQL branch originated from GreatDB.
 It is based on the MySQL official release and has many performance and reliability enhancements, especially around MGR.
 It can be used as a free, fully compatible, enhanced and open source drop-in replacement for MySQL.
 
