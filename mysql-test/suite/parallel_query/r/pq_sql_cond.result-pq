@@ -1,0 +1,21 @@
+CREATE TABLE t1 (a enum ('aac','aab','aaa') not null);
+INSERT INTO t1 VALUES ('aaa'),('aab'),('aac');
+explain SELECT a, CAST(a AS CHAR(3)) FROM t1 ORDER BY CAST(a AS CHAR(2)), a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,cast(`test`.`t1`.`a` as char(3) charset utf8mb4) AS `CAST(a AS CHAR(3))` from `test`.`t1` order by `cast(t1.a as char(2) charset utf8mb4)`,`test`.`t1`.`a`
+SELECT a, CAST(a AS CHAR(3)) FROM t1 ORDER BY CAST(a AS CHAR(2)), a;
+a	CAST(a AS CHAR(3))
+aac	aac
+aab	aab
+aaa	aaa
+Warnings:
+Warning	1292	Truncated incorrect CHAR(2) value: 'aaa'
+Warning	1292	Truncated incorrect CHAR(2) value: 'aab'
+Warning	1292	Truncated incorrect CHAR(2) value: 'aac'
+Warning	1292	Truncated incorrect CHAR(2) value: 'aac'
+Warning	1292	Truncated incorrect CHAR(2) value: 'aab'
+Warning	1292	Truncated incorrect CHAR(2) value: 'aaa'
+drop table t1;

@@ -1,0 +1,8 @@
+#
+# BUG#11764570 NDB_ERROR_REPORTER ONLY COLLECTS LOGS MATCHING NAME NDB_*.
+#
+Make sure that ndb_mgmd creates ndb_<nodeid>_cluster.log file
+Make sure that ndb_mgmd does _not_ create logger.log file
+Bug32045786
+MySQL Cluster Management Server
+ ERROR    -- Mgmd node is started on port that is already in use. Attempt to bind '*:NDB_MGMD_PORT' failed with error: ERROR_CODE ERROR_MESSAGE

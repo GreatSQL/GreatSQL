@@ -1,0 +1,45 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+# normal data 
+create table t1( 
+ a int NOT NULL,  
+ b varchar(50) 
+) ENGINE=Innodb DEFAULT CHARSET=utf8mb4;   
+
+insert into t1 values (2, 'mysql'), (1, NULL), (0, 'hwsql'); 
+select * from t1; 
+
+
+# blob 
+drop table if exists `t1`;  
+SET NAMES utf8mb4;
+SET collation_connection='gb18030_chinese_ci';
+CREATE TABLE t1(C VARCHAR(100) CHARACTER SET gb18030, KEY(c(20)));
+INSERT INTO t1 VALUES(0xD2A3CFEBB9ABE8AAB5B1C4EAA3ACD0A1C7C7B3F5BCDEC1CBA3ACD0DBD7CBD3A2B7A2A1A3);
+INSERT INTO t1 VALUES(0xD3F0C9C8C2DABDEDA3ACCCB8D0A6BCE4A1A2E9C9E9D6BBD2B7C9D1CCC3F0A1A3);
+INSERT INTO t1 VALUES(0xB9CAB9FAC9F1D3CEA3ACB6E0C7E9D3A6D0A6CED2A1A2D4E7C9FABBAAB7A2A1A3);
+INSERT INTO t1 VALUES(0xC8CBBCE4C8E7C3CEA3ACD2BBE9D7BBB9F5AABDADD4C2A1A3);
+SELECT c, HEX(c), CONVERT(c USING utf8mb4) FROM t1;
+
+# json 
+drop table if exists `t1`;  
+create table t1 (
+  id int, 
+	a varchar(100), 
+	b varchar(512), 
+	c JSON, 
+	d geometry) Engine = InnoDB DEFAULT CHARSET=utf8mb4;
+	
+insert into t1 values (1, 'hello', 'At the time of granting a lock to a transaction', '{"NAME": "Brett", "email": "brett@xxx.com"}', ST_GeomFromText('point(108.9498710632 34.2588125935)'));
+insert into t1 values (2, 'Dependencies', 'these dependencies can be quite complex', '{"time":"2015-01-01 13:00:00","ip":"192.168.1.1","result":"fail"}', ST_GeomFromText('point(108.9465236664 34.2598766768)')); 
+insert into t1 values (null, 'At the time of granting', 'the database are equally popular', '{"time":"2015-10-07 06:44:00","ip":"192.168.1.0","result":"success"}', ST_GeomFromText('point(108.9477252960 34.2590342786)')); 
+insert into t1 values (4, 'Not all objects in the database', 'Locks are the most commonly used mechanism', '{"NAME": "Brett", "email": "126@xxx.com"}',null);
+insert into t1 values (6, 'transaction', null, null,  ST_GeomFromText('point(108.9443349838 34.2595663206)')); 
+
+select * from t1;
+select id, a, b from t1; 
+select id, b, c from t1;
+select b, d from t1;
+select a, d from t1; 
+
+drop table t1; 

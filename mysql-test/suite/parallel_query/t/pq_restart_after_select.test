@@ -1,0 +1,14 @@
+#
+# Describe:
+# Previously, encountered various cores after restarting the database 
+# after parallel queries because some resources were not released.
+# The purpose of this test case is to guard this scenario.
+#
+
+create table t(id int);
+insert into t values(1),(2),(3),(4),(5);
+select * from t;
+drop table t;
+
+--let $wait_counter= 10000
+--source include/restart_mysqld.inc

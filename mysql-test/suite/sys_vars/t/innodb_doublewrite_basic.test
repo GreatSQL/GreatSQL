@@ -1,0 +1,47 @@
+SELECT COUNT(@@GLOBAL.innodb_doublewrite);
+--echo 1 Expected
+
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET @@GLOBAL.innodb_doublewrite=off;
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET @@GLOBAL.innodb_doublewrite=on;
+
+SELECT COUNT(@@GLOBAL.innodb_doublewrite);
+--echo 1 Expected
+
+
+--disable_warnings
+SELECT IF(@@GLOBAL.innodb_doublewrite, "ON", "OFF") = VARIABLE_VALUE
+FROM performance_schema.global_variables
+WHERE VARIABLE_NAME='innodb_doublewrite';
+--enable_warnings
+--echo 1 Expected
+
+SELECT COUNT(@@GLOBAL.innodb_doublewrite);
+--echo 1 Expected
+
+--disable_warnings
+SELECT COUNT(VARIABLE_VALUE)
+FROM performance_schema.global_variables 
+WHERE VARIABLE_NAME='innodb_doublewrite';
+--enable_warnings
+--echo 1 Expected
+
+SELECT @@innodb_doublewrite = @@GLOBAL.innodb_doublewrite;
+--echo 1 Expected
+
+
+SELECT COUNT(@@innodb_doublewrite);
+--echo 1 Expected
+
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT COUNT(@@local.innodb_doublewrite);
+--echo Expected error 'Variable is a GLOBAL variable'
+
+--Error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT COUNT(@@SESSION.innodb_doublewrite);
+--echo Expected error 'Variable is a GLOBAL variable'
+
+SELECT COUNT(@@GLOBAL.innodb_doublewrite);
+--echo 1 Expected
+

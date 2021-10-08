@@ -1,0 +1,16 @@
+# Tests in this file are disabled for ASAN runs in pushbuild.
+# This is in addition to tests disabled by normal disabled.def files
+parallel_query.pq_demon                           : BUG#194 skip example
+innodb.lock_contention                            : BUG#000 DEBUG_SYNC
+perfschema.table_aggregate_hist_2u_2t             : BUG#245 PFS
+perfschema.table_aggregate_global_4u_3t           : BUG#245 PFS
+perfschema.misc                                   : BUG#245 PFS
+perfschema.table_aggregate_global_2u_2t           : BUG#245 PFS
+main.events_1                                     : BUG#255 EVENT DATETIME
+main.range_with_memory_limit                      : BUG#258 ANALYZE_TABLE
+main.filesort_debug                               : BUG#254 DEBUG_SYNC
+main.events_bugs                                  : Bug#39863 events_bugs
+main.events_1                                     : BUG#255 EVENT DATETIME
+main.kill_debug                                   : BUG#291 issue-291 DEBUG_EXE
+main.mysql_client_test                            : BUG#293 issue-293 PTHREAD_JOIN
+perfschema.idx_compare_ees_by_thread_by_error     : BUG#294 issue-294 PFS

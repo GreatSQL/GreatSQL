@@ -1,0 +1,75 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+## explain other connection
+
+set @saved_debug_pq_worker_stall = @@debug_pq_worker_stall;
+set @saved_pq_memory_limit = @@parallel_memory_limit;
+
+create table t1(id int, a varchar(10));
+
+--disable_query_log
+ let $loop=1000;
+ while($loop)
+ {
+  eval insert into t1 values($loop, 'aa');
+  dec $loop;
+ }
+--enable_query_log
+
+set global debug_pq_worker_stall = true;
+
+connect (con1, localhost, root);
+
+--connection con1
+select @@force_parallel_execute;
+let $qid= `SELECT CONNECTION_ID()`;
+
+--send select sum(id) from t1;
+
+--connection default
+
+--sleep 1
+show status like "PQ_threads_running";
+--replace_regex /[0-9]/#/
+show status like "PQ_memory_used";
+show status like "PQ_memory_refused";
+
+--replace_regex /[0-9]+/#/
+--eval EXPLAIN FOR CONNECTION $qid;
+
+## 40960 is less than memory used by connection conn1
+set global parallel_memory_limit=40960;
+explain select sum(id) from t1;
+
+set global debug_pq_worker_stall = false;
+
+connection con1;
+--reap
+
+--sleep 1
+show status like "PQ_threads_running";
+show status like "PQ_memory_used";
+show status like "PQ_memory_refused";
+
+connection default;
+set global debug_pq_worker_stall = @saved_debug_pq_worker_stall;
+set global parallel_memory_limit = @saved_pq_memory_limit;
+
+drop table t1;
+
+## coredump of main.parser ##
+CREATE TABLE t1 (i INT);
+
+SELECT 1 FROM t1 INTO @var17727401;
+SELECT 1 FROM DUAL INTO @var17727401;
+SELECT 1 INTO @var17727401;
+
+SELECT 1 INTO @var17727401 FROM t1;
+SELECT 1 INTO @var17727401 FROM DUAL;
+
+SELECT 1 INTO @var17727401 FROM t1 WHERE 1 GROUP BY 1 HAVING 1 ORDER BY 1 LIMIT 1;
+SELECT 1 FROM t1 WHERE 1 GROUP BY 1 HAVING 1 ORDER BY 1 LIMIT 1 INTO @var17727401;
+
+SELECT 1 FROM t1 UNION SELECT 1 FROM t1 INTO @var17727401;
+
+drop table t1;

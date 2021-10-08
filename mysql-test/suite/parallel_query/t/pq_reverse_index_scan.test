@@ -1,0 +1,23 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+create database pq_test;
+use pq_test;
+
+create table t1 (a int, key(a desc));
+insert into t1 values(1),(2),(3),(4),(5),(6),(7);
+
+ANALYZE TABLE t1;
+
+explain select a from t1;
+select a from t1;
+
+explain select a from t1 order by a;
+select a from t1 order by a;
+
+explain select a from t1 order by a desc;
+select a from t1 order by a desc;
+
+drop table pq_test.t1;
+drop database pq_test;
+

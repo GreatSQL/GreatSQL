@@ -1,0 +1,11 @@
+create table t(id int);
+insert into t values(1),(2),(3),(4),(5);
+select * from t;
+id
+1
+2
+3
+4
+5
+drop table t;
+# restart

@@ -1,0 +1,40 @@
+set @saved_autocommit = @@autocommit;
+SET session autocommit=0;
+CREATE TABLE t1 (f1 INT) ENGINE="InnoDB";
+SELECT 1  FROM DUAL;
+1
+1
+SELECT f1 FROM t1;
+f1
+UNLOCK TABLES;
+LOCK TABLES t1 WRITE;
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+INSERT INTO t1 VALUES (2);
+explain SELECT f1 FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`f1` AS `f1` from `test`.`t1`
+SELECT f1 FROM t1;
+f1
+2
+2
+2
+2
+2
+2
+2
+2
+2
+COMMIT;
+UNLOCK TABLES;
+SET session autocommit = @saved_autocommit;
+drop table t1;

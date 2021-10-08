@@ -1,0 +1,5 @@
+--let $engine= innodb
+--let $handler_support= 1
+--let $tmp_table_support= 1
+--let $for_export_support= 1
+--source include/backup_locks.inc

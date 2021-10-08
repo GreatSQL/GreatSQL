@@ -1,0 +1,168 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+create database pq_test;
+use pq_test;
+
+## Bug#13737949: CRASH IN HA_PARTITION::INDEX_INIT ##
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+CREATE TABLE t1
+(a INT,
+ b INT,
+ PRIMARY KEY (a))
+ENGINE = InnoDB;
+START TRANSACTION WITH CONSISTENT SNAPSHOT;
+--echo # con1
+--connect (con1, localhost, root,,)
+use pq_test;
+
+ALTER TABLE t1 ADD INDEX idx1 (b);
+--connection default
+--echo # con default
+--error ER_TABLE_DEF_CHANGED
+SELECT b FROM t1 WHERE b = 0;
+--error ER_TABLE_DEF_CHANGED
+SELECT b FROM t1 WHERE b = 0;
+--error ER_TABLE_DEF_CHANGED
+SELECT * FROM t1;
+--disconnect con1
+
+drop table pq_test.t1;
+
+--connection default
+create table t1(a int) charset utf8mb4;
+show create table t1;
+insert into t1 values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+create table t2(a int);
+insert into t2 select A.a + 10*(B.a + 10*C.a) from t1 A, t1 B, t1 C;
+
+
+create table t3 (
+  a char(8) not null, b char(8) not null, filler char(200),
+  key(a)
+);
+insert into t3 select @a:=concat('c-', 1000+ A.a, '=w'), @a, 'filler' from t2 A;
+insert into t3 select concat('c-', 1000+A.a, '=w'), concat('c-', 2000+A.a, '=w'),
+                      'filler-1' from t2 A;
+insert into t3 select concat('c-', 1000+A.a, '=w'), concat('c-', 3000+A.a, '=w'),
+                      'filler-2' from t2 A;
+
+# Test empty result set
+select a,filler from t3 where a >= 'c-9011=w';
+
+# Ok, t3.ref_length=6, limit is 64 => 10 elements fit into the buffer
+# Test the cases when buffer gets exhausted at different points in source
+# intervals:
+
+# 1. Split is in the middle of the range
+--sorted_result
+select a,filler from t3 where a >= 'c-1011=w' and a <= 'c-1015=w';
+set optimizer_switch='mrr=on,mrr_cost_based=off';
+select a,filler from t3 where a >= 'c-9011=w';
+
+drop table pq_test.t1;
+set optimizer_switch='mrr=on,mrr_cost_based=on';
+create table t1 (a int, key (a));
+insert into t1 values (NULL), (0), (1), (2), (3), (4), (5), (6), (7), (8), (9),
+(10), (11), (12), (13), (14), (15), (16), (17), (18), (19);
+analyze table t1;
+
+explain select * from t1 where not(a < 5 or a > 15);
+select * from t1 where not(a < 5 or a > 15);
+
+explain select * from t1 where a = 2 or not(a < 10);
+select * from t1 where a = 2 or not(a < 10);
+
+explain select * from t1 where a = 7 or not(a < 15 and a > 5);
+select * from t1 where a = 7 or not(a < 15 and a > 5);
+
+delete from t1 where a > 3;
+select a from t1;
+
+analyze table t1;
+
+explain select * from t1 force index(a) where not(a >0 and a < 1);
+select * from t1 force index(a) where not(a >0 and a < 1);
+
+select * from t1 where a < 3;
+select * from t1 where a is null;
+
+drop table pq_test.t1;
+create table t1 (id int, id2 int, index (id));
+insert into t1 values(2,2);
+analyze table t1;
+select * from t1 where id is null or id > 1;
+
+insert into t1 values(null,2);
+select * from t1;
+select * from t1 where id is null or id > 1;
+
+
+drop table pq_test.t1;
+create table t1 (v varchar(10), c char(10), t text, key(v), key(c), key(t(10)))
+stats_persistent=0;
+
+insert into t1 values(concat(char(ascii('a')+1),' '),concat(char(ascii('a')+1),' '),concat(char(ascii('a')+1),' '));
+insert into t1 values(concat(char(ascii('a')),' '),concat(char(ascii('a')),' '),concat(char(ascii('a')),' '));
+insert into t1 values(concat(char(ascii('a')+1),'  '),concat(char(ascii('a')+1),'  '),concat(char(ascii('a')+1),'  '));
+insert into t1 values(concat(char(ascii('a')),'  '),concat(char(ascii('a')),'  '),concat(char(ascii('a')),'  '));
+
+select * from t1;
+
+alter table t1 add key(v);
+alter table t1 modify v varchar(300), drop key v, drop key v_2, add key v (v);
+select count(*) from t1 where v like 'a%';
+select count(*) from t1 where v like 'a %';
+alter table t1 drop key v, add key v (v(30));
+#select count(*) from t1 where v like 'a%';
+#select count(*) from t1 where v like 'a %';
+select 1 from t1 where v like 'a%';
+select 1 from t1 where v like 'a %';
+drop table pq_test.t1;
+
+set names utf8mb4;
+--disable_warnings
+eval create table t1 (
+  a int primary key,
+  b varchar(6),
+  index b3(b(3))
+) engine=innodb character set=utf8mb4;
+--enable_warnings
+insert into t1 values(1,'foo'),(2,'foobar');
+--sorted_result
+select * from t1 where b like 'foob%';
+drop table pq_test.t1;
+CREATE TABLE t1 (
+  a char(255) DEFAULT '',
+  KEY(a(10))
+) ENGINE=innodb DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+INSERT INTO t1 VALUES ('KÃ¤li KÃ¤li 2-4');
+SELECT * FROM t1 WHERE a LIKE 'KÃ¤li KÃ¤li 2%';
+INSERT INTO t1 VALUES ('KÃ¤li KÃ¤li 2-4');
+SELECT * FROM t1 WHERE a LIKE 'KÃ¤li KÃ¤li 2%';
+
+drop table pq_test.t1;
+SET time_zone='+00:00';
+CREATE TABLE t1 (a DECIMAL(20,7));
+INSERT INTO t1 VALUES
+(2147483647.999999),
+(2147483647.9999990),
+(2147483647.9999991),
+(2147483647.9999992),
+(2147483647.9999993),
+(2147483647.9999994),
+(2147483647.9999995),
+(2147483647.9999996),
+(2147483647.9999997),
+(2147483647.9999998),
+(2147483647.9999999);
+SELECT a, FROM_UNIXTIME(a) FROM t1;
+
+
+drop table pq_test.t1;
+drop table pq_test.t2;
+drop table pq_test.t3;
+drop database pq_test;

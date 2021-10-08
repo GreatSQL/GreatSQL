@@ -1,0 +1,22 @@
+CREATE TABLE t1 (i INT, j INT, INDEX (i), INDEX (j));
+INSERT INTO t1 (i,j) VALUES (1,1);
+SELECT * FROM t1 WHERE i<3;
+i	j
+1	1
+SET force_parallel_execute=0;
+SELECT * FROM t1 WHERE i<3;
+i	j
+1	1
+DROP TABLE t1;
+CREATE TABLE t1 (pk INT PRIMARY KEY AUTO_INCREMENT, i INT, j INT, INDEX (i), INDEX (j));
+INSERT INTO t1 (i,j) VALUES (1,1);
+SELECT * FROM t1 WHERE i<3 and j < 4;
+pk	i	j
+1	1	1
+DROP TABLE t1;
+CREATE TABLE t1 (i INT, j INT, PRIMARY KEY (i), INDEX (j));
+INSERT INTO t1 (i,j) VALUES (1,1);
+SELECT * FROM t1 WHERE j<3;
+i	j
+1	1
+DROP TABLE t1;
