@@ -60,7 +60,7 @@ Now you can start GreatSQL.
 
 # Change logs
 ---
-- [GreatSQL Update Notes 8.0.25(2021-8-26)](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/relnotes/changes-greatsql-8-0-25-20210826.md)
+- [Changes in GreatSQL 8.0.25 (2021-8-26)](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/relnotes/changes-greatsql-8-0-25-20210826.md)
 
 
 
