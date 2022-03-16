@@ -525,15 +525,19 @@ void pq_free_gather(Gather_operator *gather) {
   THD *saved_thd = current_thd;
   gather->m_table->file->ha_index_or_rnd_end();
 
-  // explain format=tree called make_pq_worker_plan, hence
+  // explain format=tree / analyze called make_pq_worker_plan, hence
   // need to free worker join/thd
   for (uint i = 0; i < gather->m_dop; i++) {
     if (gather->m_workers[i]->thd_worker) {
-      gather->m_workers[i]->thd_worker->store_globals();
-      pq_free_join(gather->m_workers[i]
-                       ->thd_worker->lex->unit->first_query_block()
-                       ->join);
-      pq_free_thd(gather->m_workers[i]->thd_worker);
+      THD *worker_thd = gather->m_workers[i]->thd_worker;
+      worker_thd->store_globals();
+      if (worker_thd->lex->is_explain_analyze) {
+        // Join is freed in the cleanup function
+        worker_thd->lex->unit->cleanup(worker_thd, true);
+      } else {
+        pq_free_join(worker_thd->lex->unit->first_query_block()->join);
+      }
+      pq_free_thd(worker_thd);
     }
   }
 
@@ -839,11 +843,6 @@ void *pq_worker_exec(void *arg) {
   mngr->signal_status(thd, PQ_worker_state::READY);
   join->query_expression()->ExecuteIteratorQuery(thd);
 
-  if (thd->lex->is_explain_analyze && mngr->m_id == 0) {
-    mngr->m_gather->iterator.reset(new PQExplainIterator());
-    mngr->m_gather->iterator->copy(join->query_expression()->root_iterator());
-  }
-
   if (join->thd->is_error() || join->thd->pq_error ||
       DBUG_EVALUATE_IF("pq_worker_error3", true, false)) {
     goto err;
@@ -874,7 +873,7 @@ err:
   }
 
   if (thd) {
-    thd->lex->unit->cleanup(thd, true);
+    thd->lex->unit->cleanup(thd, thd->lex->is_explain_analyze ? false : true);
   }
 
   /* s3: collect error message */
@@ -896,8 +895,12 @@ err:
       }
     }
     mysql_mutex_unlock(stmt_lock);
-    pq_free_thd(thd);
-    thd = NULL;
+    // For explain analyze, we can't free worker THD until leader thread finish
+    // explaining.
+    if (!thd->lex->is_explain_analyze) {
+      pq_free_thd(thd);
+      thd = NULL;
+    }
   }
 
 #ifndef NDEBUG
