@@ -1057,6 +1057,7 @@ do
   fi
 
 
+  sleep 10
   # sanity check if time reading is sane and there's sleep
   if test $end_time -gt 0 -a $have_sleep -gt 0
   then

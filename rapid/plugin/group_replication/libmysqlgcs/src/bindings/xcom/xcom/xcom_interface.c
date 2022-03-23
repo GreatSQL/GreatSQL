@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -77,58 +78,51 @@ void set_xcom_logger(xcom_logger x)
 
 void	deliver_to_app(pax_machine *pma, app_data_ptr app, delivery_status app_status)
 {
-	site_def const * site = 0;
+  site_def *site = 0;
 
-	DBGOUT(FN; PTREXP(pma); PTREXP(app); NDBG(app_status, d);
-	    COPY_AND_FREE_GOUT(dbg_app_data(app)));
-	if (pma)
-		site = find_site_def(pma->synode);
-	else
-		site = get_site_def();
-	while (app) {
-		DBGOUT(FN; STREXP(cargo_type_to_str(app->body.c_t)));
-		if (app->body.c_t == app_type) { /* Decode application data */
-			if (app_status == delivery_ok) {
-				char	*copy = malloc(app->body.app_u_u.data.data_len);
-				if (copy == NULL && app->body.app_u_u.data.data_len != 0)
-				{
-					app->body.app_u_u.data.data_len = 0;
-					G_ERROR("Unable to allocate memory for the received message.");
-				}
-				else
-					memcpy(copy, app->body.app_u_u.data.data_val, app->body.app_u_u.data.data_len);
-				ADD_EVENTS(
-					add_synode_event(pma->synode);
-				);
+  DBGOUT(FN; PTREXP(pma); PTREXP(app); NDBG(app_status, d);
+         COPY_AND_FREE_GOUT(dbg_app_data(app)));
+  if (pma)
+    site = find_site_def(pma->synode);
+  else
+    site = get_site_def();
+  while (app) {
+    DBGOUT(FN; STREXP(cargo_type_to_str(app->body.c_t)));
+    if (app->body.c_t == app_type) { /* Decode application data */
+      if (app_status == delivery_ok) {
+        char *copy = malloc(app->body.app_u_u.data.data_len);
+        if (copy == NULL && app->body.app_u_u.data.data_len != 0) {
+          app->body.app_u_u.data.data_len = 0;
+          G_ERROR("Unable to allocate memory for the received message.");
+        } else
+          memcpy(copy, app->body.app_u_u.data.data_val,
+                 app->body.app_u_u.data.data_len);
+        ADD_EVENTS(add_synode_event(pma->synode););
 
-				xcom_receive_data(pma->synode, detector_node_set(site), app->body.app_u_u.data.data_len,
-				    copy);
-			}
-			else {
-				G_TRACE("Data message was not delivered.");
-			}
-		}
-		else if (app_status == delivery_ok) {
-			G_ERROR("Data message has wrong type %s ", cargo_type_to_str(app->body.c_t));
-		}
-		app = app->next;
-	}
+        xcom_receive_data(pma->synode, detector_node_set(site),
+                          app->body.app_u_u.data.data_len, copy);
+      } else {
+        G_TRACE("Data message was not delivered.");
+      }
+    } else if (app_status == delivery_ok) {
+      G_ERROR("Data message has wrong type %s ",
+              cargo_type_to_str(app->body.c_t));
+    }
+    app = app->next;
+  }
 }
 
 /**
    Deliver a view message
 */
 
-void deliver_view_msg(site_def const *site)
-{
+void deliver_view_msg(site_def *site) {
   if (site) {
     xcom_receive_local_view(site->start, detector_node_set(site));
   }
 }
 
-
-void deliver_global_view_msg(site_def const * site,  synode_no message_id)
-{
+void deliver_global_view_msg(site_def *site, synode_no message_id) {
   if (site) {
     xcom_receive_global_view(site->start, message_id, clone_node_set(site->global_node_set));
   }

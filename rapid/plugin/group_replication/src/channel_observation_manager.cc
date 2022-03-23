@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,31 +28,27 @@
 
 Channel_state_observer::~Channel_state_observer() {}
 
-Channel_observation_manager::
-Channel_observation_manager(MYSQL_PLUGIN plugin_info)
-  :group_replication_plugin_info(plugin_info)
-{
-  channel_list_lock= new Checkable_rwlock(
+Channel_observation_manager::Channel_observation_manager(
+    MYSQL_PLUGIN plugin_info)
+    : group_replication_plugin_info(plugin_info) {
+  channel_list_lock = new Checkable_rwlock(
 #ifdef HAVE_PSI_INTERFACE
-                                          key_GR_LOCK_channel_observation_list
+      key_GR_LOCK_channel_observation_list
 #endif
-                                         );
+  );
 
-  server_channel_state_observers= binlog_IO_observer;
+  server_channel_state_observers = binlog_IO_observer;
   register_binlog_relay_io_observer(&server_channel_state_observers,
                                     group_replication_plugin_info);
 }
 
 Channel_observation_manager::~Channel_observation_manager()
 {
-  if(!channel_observers.empty())
-  {
+  if (!channel_observers.empty()) {
     /* purecov: begin inspected */
-    std::list<Channel_state_observer*>::const_iterator obs_iterator;
+    std::list<Channel_state_observer *>::const_iterator obs_iterator;
     for (obs_iterator = channel_observers.begin();
-         obs_iterator != channel_observers.end();
-         ++obs_iterator)
-    {
+         obs_iterator != channel_observers.end(); ++obs_iterator) {
       delete (*obs_iterator);
     }
     channel_observers.clear();
@@ -63,9 +60,8 @@ Channel_observation_manager::~Channel_observation_manager()
   delete channel_list_lock;
 }
 
-std::list<Channel_state_observer*>*
-Channel_observation_manager::get_channel_state_observers()
-{
+std::list<Channel_state_observer *> *
+Channel_observation_manager::get_channel_state_observers() {
   DBUG_ENTER("Channel_observation_manager::get_channel_state_observers");
 #ifndef NDEBUG
   channel_list_lock->assert_some_lock();

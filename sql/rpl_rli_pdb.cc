@@ -2436,7 +2436,7 @@ bool append_item_to_jobs(slave_job_item *job_item,
     thd->EXIT_COND(&old_stage);
     if (thd->killed)
       return true;
-    if (rli->wq_size_waits_cnt % 10 == 1)
+    if (rli->wq_size_waits_cnt % 100 == 1)
       sql_print_information("Multi-threaded slave: Coordinator has waited "
                             "%lu times hitting slave_pending_jobs_size_max; "
                             "current event size = %zu.",

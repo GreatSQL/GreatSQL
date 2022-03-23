@@ -91,10 +91,6 @@ INSERT INTO t2 VALUES (1);
 --let $rpl_connection_name= server2
 --source include/rpl_connection.inc
 
- # Wait for the the 2 transaction to be in the queue
- --let $wait_condition= SELECT count_transactions_in_queue=2 FROM performance_schema.replication_group_member_stats
- --source include/wait_condition.inc
-
 --echo #
 --echo # Unlock table t1, state transfer will end on server 2.
 --echo # Everything in the queue is certified

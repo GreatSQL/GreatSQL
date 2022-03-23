@@ -211,16 +211,6 @@ LOCK TABLE t2 READ;
 INSERT INTO t2 VALUES (1);
 
 --echo #
---echo # Wait for the transactions to be cached on server 2
---echo #
-
---connection server2
---echo server2
-
---let $wait_condition= SELECT COUNT_TRANSACTIONS_IN_QUEUE=2 FROM performance_schema.replication_group_member_stats;
---source include/wait_condition.inc
-
---echo #
 --echo # UnLock table t1: First phase of recovery can carry on.
 --echo # Member 2 is still recovering as it can't apply cached data
 --echo #

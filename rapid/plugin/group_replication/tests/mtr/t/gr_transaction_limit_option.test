@@ -10,9 +10,9 @@
 --source ../inc/group_replication.inc
 
 SET @group_replication_transaction_size_limit_save= @@GLOBAL.group_replication_transaction_size_limit;
---let $group_replication_transaction_size_limit_max = 2147483647
+--let $group_replication_transaction_size_limit_max = 150000000
 --let $group_replication_transaction_size_limit_min = 0
---let $group_replication_transaction_size_limit_default = 0
+--let $group_replication_transaction_size_limit_default = 150000000
 ################################################################################
 --echo
 --echo ## 1. Test group_replication_transaction_size_limit option.
@@ -24,24 +24,24 @@ SET GLOBAL group_replication_transaction_size_limit= "";
 SET GLOBAL group_replication_transaction_size_limit= "ABC";
 
 --disable_warnings
-SET GLOBAL group_replication_transaction_size_limit= 2147483648;
+SET GLOBAL group_replication_transaction_size_limit= 150000000;
 --let $assert_text= group_replication_transaction_size_limit is max
 --let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_max
 --source include/assert.inc
 
 SET GLOBAL group_replication_transaction_size_limit= -1;
 --let $assert_text= group_replication_transaction_size_limit is min
---let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_min
+--let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_max
 --source include/assert.inc
 
-SET GLOBAL group_replication_transaction_size_limit= 3000000000;
+SET GLOBAL group_replication_transaction_size_limit= 600000000;
 --let $assert_text= group_replication_transaction_size_limit is max
 --let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_max
 --source include/assert.inc
 
 SET GLOBAL group_replication_transaction_size_limit= -2;
 --let $assert_text= group_replication_transaction_size_limit is min
---let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_min
+--let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_max
 --source include/assert.inc
 --enable_warnings
 
@@ -53,7 +53,7 @@ SET GLOBAL group_replication_transaction_size_limit= 1;
 
 SET GLOBAL group_replication_transaction_size_limit= 0;
 --let $assert_text= group_replication_transaction_size_limit is correct
---let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = 0
+--let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_max
 --source include/assert.inc
 
 SET GLOBAL group_replication_transaction_size_limit= 1024;
@@ -61,9 +61,9 @@ SET GLOBAL group_replication_transaction_size_limit= 1024;
 --let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = 1024
 --source include/assert.inc
 
-SET GLOBAL group_replication_transaction_size_limit= 2147483647;
+SET GLOBAL group_replication_transaction_size_limit= 150000000;
 --let $assert_text= group_replication_transaction_size_limit is correct
---let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = 2147483647
+--let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = 150000000
 --source include/assert.inc
 
 # Reset value to default for further testing
@@ -85,24 +85,24 @@ SET GLOBAL group_replication_transaction_size_limit= "";
 SET GLOBAL group_replication_transaction_size_limit= "ABC";
 
 --disable_warnings
-SET GLOBAL group_replication_transaction_size_limit= 2147483648;
+SET GLOBAL group_replication_transaction_size_limit= 150000000;
 --let $assert_text= group_replication_transaction_size_limit is max
 --let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_max
 --source include/assert.inc
 
 SET GLOBAL group_replication_transaction_size_limit= -1;
 --let $assert_text= group_replication_transaction_size_limit is min
---let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_min
+--let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_max
 --source include/assert.inc
 
-SET GLOBAL group_replication_transaction_size_limit= 3000000000;
+SET GLOBAL group_replication_transaction_size_limit= 600000000;
 --let $assert_text= group_replication_transaction_size_limit is max
 --let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_max
 --source include/assert.inc
 
 SET GLOBAL group_replication_transaction_size_limit= -2;
 --let $assert_text= group_replication_transaction_size_limit is min
---let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_min
+--let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_max
 --source include/assert.inc
 --enable_warnings
 
@@ -112,14 +112,14 @@ SET GLOBAL group_replication_transaction_size_limit= 1024;
 --let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = 1024
 --source include/assert.inc
 
-SET GLOBAL group_replication_transaction_size_limit= 2147483647;
+SET GLOBAL group_replication_transaction_size_limit= 150000000;
 --let $assert_text= group_replication_transaction_size_limit is correct
---let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = 2147483647
+--let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = 150000000
 --source include/assert.inc
 
 SET GLOBAL group_replication_transaction_size_limit= 0;
 --let $assert_text= group_replication_transaction_size_limit is correct
---let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = 0
+--let $assert_cond= [SELECT @@GLOBAL.group_replication_transaction_size_limit] = $group_replication_transaction_size_limit_max
 --source include/assert.inc
 
 ################################################################################

@@ -1,4 +1,5 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -85,8 +86,10 @@ public:
   void on_view_changed(const Gcs_view &new_view,
                        const Exchanged_data &exchanged_data) const;
   Gcs_message_data* get_exchangeable_data() const;
-  void on_suspicions(const std::vector<Gcs_member_identifier>& members,
-                     const std::vector<Gcs_member_identifier>& unreachable) const;
+  void
+  on_suspicions(const std::vector<Gcs_member_identifier> &members,
+                const std::vector<Gcs_member_identifier *> &left_members,
+                const std::vector<Gcs_member_identifier> &unreachable) const;
 
   /**
     Sets the component stop timeout.

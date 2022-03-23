@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,7 +40,7 @@ involved. However, for the time being, proposing a no_op for an instance
 will not mark it as busy. This may change in the future, so a safe upper
 limit on the number of nodes marked as busy is event_horizon * NSERVERS.
 */
-#define CACHED 50000
+#define CACHED 250000
 
 #define is_cached(x) (hash_get(x) != NULL)
 

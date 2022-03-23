@@ -42,7 +42,6 @@
 #define VALUE_LENGTH_BUFFER_SIZE 24
 #define NAME_READ_BUFFER_SIZE 1024
 #define HASH_STRING_SEPARATOR "½"
-#define COLLATION_CONVERSION_ALGORITHM 1
 
 const char *transaction_write_set_hashing_algorithms[]=
 {
@@ -558,11 +557,6 @@ static void debug_check_for_write_sets(std::vector<std::string> &key_list_to_has
   Function to generate the hash of the string passed to this function.
 
   @param[in] pke - the string to be hashed.
-  @param[in] collation_conversion_algorithm - algorithm used for the conversion
-                                              0 - converted using without
-                                                  collation support algorithm
-                                              1 - converted using with collation
-                                                  support conversion algorithm
 
   @param[in] thd - THD object pointing to current thread.
   @param[in] write_sets - list of all write sets
@@ -570,18 +564,17 @@ static void debug_check_for_write_sets(std::vector<std::string> &key_list_to_has
   @return true if a problem occurred on generation or write set tracking.
 */
 
-static bool generate_hash_pke(const std::string &pke, uint collation_conversion_algorithm, THD* thd
+static bool generate_hash_pke(const std::string &pke, THD *thd
 #ifndef NDEBUG
-                              , std::vector<std::string> &write_sets
-                              , std::vector<uint64> &hash_list
+                              ,
+                              std::vector<std::string> &write_sets,
+                              std::vector<uint64> &hash_list
 #endif
-)
-{
+) {
   assert(thd->variables.transaction_write_set_extraction !=
          HASH_ALGORITHM_OFF);
 
-  size_t length= (COLLATION_CONVERSION_ALGORITHM == collation_conversion_algorithm) ?
-                   pke.size() : strlen(pke.c_str());
+  size_t length = pke.size();
   uint64 hash= calc_hash<const char *>(thd->variables.transaction_write_set_extraction,
                                        pke.c_str(), length);
   if (thd->get_transaction()->get_transaction_write_set_ctx()->add_write_set(hash))
@@ -594,7 +587,6 @@ static bool generate_hash_pke(const std::string &pke, uint collation_conversion_
 
   return false;
 }
-
 
 bool add_pke(TABLE *table, THD *thd, const uchar *record)
 {
@@ -698,9 +690,6 @@ bool add_pke(TABLE *table, THD *thd, const uchar *record)
         generate first the collation and reuse the buffer without the need to
         resize for the raw.
       */
-      for (int collation_conversion_algorithm= COLLATION_CONVERSION_ALGORITHM;
-           collation_conversion_algorithm >= 0;
-           collation_conversion_algorithm--)
       {
         pke.clear();
         pke.append(table->key_info[key_number].name);
@@ -724,18 +713,9 @@ bool add_pke(TABLE *table, THD *thd, const uchar *record)
           field->move_field_offset(ptrdiff);
 
           // convert using collation support conversion algorithm
-          if (COLLATION_CONVERSION_ALGORITHM == collation_conversion_algorithm)
-          {
-            const CHARSET_INFO* cs= table->field[index-1]->charset();
-            length= cs->coll->strnxfrmlen(cs,
-                                       table->field[index-1]->pack_length());
-          }
-          // convert using without collation support algorithm
-          else
-          {
-            table->field[index-1]->val_str(&row_data);
-            length= row_data.length();
-          }
+          const CHARSET_INFO *cs = table->field[index - 1]->charset();
+          length =
+              cs->coll->strnxfrmlen(cs, table->field[index - 1]->pack_length());
 
           if (pk_value_size < length+1)
           {
@@ -745,21 +725,12 @@ bool add_pke(TABLE *table, THD *thd, const uchar *record)
                                          MYF(MY_ZEROFILL));
           }
 
-          // convert using collation support conversion algorithm
-          if (COLLATION_CONVERSION_ALGORITHM == collation_conversion_algorithm)
-          {
-            /*
-              convert to normalized string and store so that it can be
-              sorted using binary comparison functions like memcmp.
-            */
-            table->field[index-1]->make_sort_key((uchar*)pk_value, length);
-            pk_value[length]= 0;
-          }
-          // convert using without collation support algorithm
-          else
-          {
-            strmake(pk_value, row_data.c_ptr_safe(), length);
-          }
+          /*
+            convert to normalized string and store so that it can be
+            sorted using binary comparison functions like memcmp.
+          */
+          table->field[index - 1]->make_sort_key((uchar *)pk_value, length);
+          pk_value[length] = 0;
 
           pke.append(pk_value, length);
           pke.append(HASH_STRING_SEPARATOR);
@@ -779,12 +750,12 @@ bool add_pke(TABLE *table, THD *thd, const uchar *record)
         */
         if (i == table->key_info[key_number].user_defined_key_parts)
         {
-          if (generate_hash_pke(pke, collation_conversion_algorithm, thd
+          if (generate_hash_pke(pke, thd
 #ifndef NDEBUG
-                            , write_sets, hash_list
+                                ,
+                                write_sets, hash_list
 #endif
-          ))
-          {
+                                )) {
             return true;
           }
           writeset_hashes_added++;
@@ -840,26 +811,13 @@ bool add_pke(TABLE *table, THD *thd, const uchar *record)
               foreign_key_map.find(table->s->field[i]->field_name);
           if (foreign_key_map.end() != it)
           {
-            for (int collation_conversion_algorithm= COLLATION_CONVERSION_ALGORITHM;
-                 collation_conversion_algorithm >= 0;
-                 collation_conversion_algorithm--)
             {
               std::string pke_prefix= it->second;
               size_t length= 0;
 
-              // convert using collation support conversion algorithm
-              if (COLLATION_CONVERSION_ALGORITHM == collation_conversion_algorithm)
-              {
-                const CHARSET_INFO* cs= table->field[i]->charset();
-                length= cs->coll->strnxfrmlen(cs,
-                                         table->field[i]->pack_length());
-              }
-              // convert using without collation support algorithm
-              else
-              {
-                table->field[i]->val_str(&row_data);
-                length= row_data.length();
-              }
+              const CHARSET_INFO *cs = table->field[i]->charset();
+              length =
+                  cs->coll->strnxfrmlen(cs, table->field[i]->pack_length());
 
               if (pk_value_size < length+1)
               {
@@ -869,21 +827,12 @@ bool add_pke(TABLE *table, THD *thd, const uchar *record)
                                              MYF(MY_ZEROFILL));
               }
 
-              // convert using collation support conversion algorithm
-              if (COLLATION_CONVERSION_ALGORITHM == collation_conversion_algorithm)
-              {
-                /*
-                  convert to normalized string and store so that it can be
-                  sorted using binary comparison functions like memcmp.
-                */
-                table->field[i]->make_sort_key((uchar*)pk_value, length);
-                pk_value[length]= 0;
-              }
-              // convert using without collation support algorithm
-              else
-              {
-                strmake(pk_value, row_data.c_ptr_safe(), length);
-              }
+              /*
+                 convert to normalized string and store so that it can be
+                 sorted using binary comparison functions like memcmp.
+               */
+              table->field[i]->make_sort_key((uchar *)pk_value, length);
+              pk_value[length] = 0;
 
               pke_prefix.append(pk_value, length);
               pke_prefix.append(HASH_STRING_SEPARATOR);
@@ -891,12 +840,12 @@ bool add_pke(TABLE *table, THD *thd, const uchar *record)
                                          &value_length_buffer[VALUE_LENGTH_BUFFER_SIZE-1]);
               pke_prefix.append(value_length);
 
-              if (generate_hash_pke(pke_prefix, collation_conversion_algorithm, thd
+              if (generate_hash_pke(pke_prefix, thd
 #ifndef NDEBUG
-                                , write_sets, hash_list
+                                    ,
+                                    write_sets, hash_list
 #endif
-              ))
-              {
+                                    )) {
                 return true;
               }
               writeset_hashes_added++;

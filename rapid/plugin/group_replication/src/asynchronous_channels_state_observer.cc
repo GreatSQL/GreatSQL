@@ -1,4 +1,5 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -36,13 +37,11 @@ thread_start(Binlog_relay_IO_param* param)
   if (plugin_is_group_replication_running() &&
       strcmp(param->channel_name, "group_replication_recovery") != 0 &&
       strcmp(param->channel_name, "group_replication_applier") != 0 &&
-      group_member_mgr)
-  {
+      group_member_mgr) {
     std::string m_uuid;
     group_member_mgr->get_primary_member_uuid(m_uuid);
 
-    if (m_uuid == "UNDEFINED")
-    {
+    if (m_uuid == "UNDEFINED") {
       log_message(MY_ERROR_LEVEL, "Can't start slave IO THREAD when group"
                                   " replication is running with single"
                                   " primary-mode and the primary member is"
@@ -50,8 +49,7 @@ thread_start(Binlog_relay_IO_param* param)
       return 1;
     }
 
-    if (m_uuid != local_member_info->get_uuid())
-    {
+    if (m_uuid != local_member_info->get_uuid()) {
       log_message(MY_ERROR_LEVEL, "Can't start slave IO THREAD when group"
                                   " replication is running with single"
                                   " primary-mode on a secondary member.");
@@ -75,13 +73,11 @@ applier_start(Binlog_relay_IO_param *param)
   if (plugin_is_group_replication_running() &&
       strcmp(param->channel_name, "group_replication_recovery") != 0 &&
       strcmp(param->channel_name, "group_replication_applier") != 0 &&
-      group_member_mgr)
-  {
+      group_member_mgr) {
     std::string m_uuid;
     group_member_mgr->get_primary_member_uuid(m_uuid);
 
-    if (m_uuid == "UNDEFINED")
-    {
+    if (m_uuid == "UNDEFINED") {
       log_message(MY_ERROR_LEVEL, "Can't start slave SQL THREAD when group"
                                   " replication is running with single"
                                   " primary-mode and the primary member is"
@@ -89,8 +85,7 @@ applier_start(Binlog_relay_IO_param *param)
       return 1;
     }
 
-    if (m_uuid != local_member_info->get_uuid())
-    {
+    if (m_uuid != local_member_info->get_uuid()) {
       log_message(MY_ERROR_LEVEL, "Can't start slave SQL THREAD when group"
                                   " replication is running with single"
                                   " primary-mode on a secondary member.");
@@ -107,28 +102,19 @@ applier_stop(Binlog_relay_IO_param *param, bool aborted)
   return 0;
 }
 
-int Asynchronous_channels_state_observer::
-before_request_transmit(Binlog_relay_IO_param*,
-                        uint32)
-{
+int Asynchronous_channels_state_observer::before_request_transmit(
+    Binlog_relay_IO_param *, uint32) {
   return 0;
 }
 
-int Asynchronous_channels_state_observer::
-after_read_event(Binlog_relay_IO_param*,
-                 const char*, unsigned long,
-                 const char**,
-                 unsigned long*)
-{
+int Asynchronous_channels_state_observer::after_read_event(
+    Binlog_relay_IO_param *, const char *, unsigned long, const char **,
+    unsigned long *) {
   return 0;
 }
 
-int Asynchronous_channels_state_observer::
-after_queue_event(Binlog_relay_IO_param*,
-                  const char*,
-                  unsigned long,
-                  uint32)
-{
+int Asynchronous_channels_state_observer::after_queue_event(
+    Binlog_relay_IO_param *, const char *, unsigned long, uint32) {
   return 0;
 }
 

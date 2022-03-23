@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,20 +25,12 @@
 
 Member_version::Member_version(unsigned int version)
 {
-  this->version= version;
+  this->version = version;
 }
 
-uint32
-Member_version::get_version() const
-{
-  return this->version;
-}
+uint32 Member_version::get_version() const { return this->version; }
 
-uint32
-Member_version::get_major_version() const
-{
-  return this->version >> 16;
-}
+uint32 Member_version::get_major_version() const { return this->version >> 16; }
 
 uint32
 Member_version::get_minor_version() const
@@ -63,28 +56,19 @@ Member_version::operator <(const Member_version &other) const
   if (*this == other)
     return false;
 
-  if (get_major_version() < other.get_major_version())
-  {
+  if (get_major_version() < other.get_major_version()) {
     return true;
-  }
-  else if (get_major_version() > other.get_major_version())
-  {
+  } else if (get_major_version() > other.get_major_version()) {
     return false;
-  }
-  else //major version are the same
+  } else // major version are the same
   {
-    if (get_minor_version() < other.get_minor_version())
-    {
+    if (get_minor_version() < other.get_minor_version()) {
       return true;
-    }
-    else if (get_minor_version() > other.get_minor_version())
-    {
+    } else if (get_minor_version() > other.get_minor_version()) {
       return false;
-    }
-    else //minor version are the same
+    } else // minor version are the same
     {
-      if (get_patch_version() < other.get_patch_version())
-      {
+      if (get_patch_version() < other.get_patch_version()) {
         return true;
       }
     }

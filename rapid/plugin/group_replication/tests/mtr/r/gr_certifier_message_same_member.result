@@ -21,8 +21,6 @@ include/rpl_sync.inc
 # Transactions_committed_all_members has 1 transaction from when server 2 joined
 # No more info should have been received.
 include/assert.inc [Transactions committed on all members should only contain 1 transaction]
-# Asserting that the warning was indeed thrown.
-Occurrences of 'Therefore discarding the second message' in the input file: 1
 INSERT INTO t1 VALUES(1);
 # Checking that the garbage collection is working fine.
 SET @@GLOBAL.DEBUG= @debug_save;

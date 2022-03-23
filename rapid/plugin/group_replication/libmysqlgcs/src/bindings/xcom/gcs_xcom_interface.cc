@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -92,8 +93,7 @@ void      cb_xcom_expel(int status);
 
 synode_no cb_xcom_get_app_snap(blob *gcs_snap);
 void      cb_xcom_handle_app_snap(blob *gcs_snap);
-int       cb_xcom_socket_accept(int fd, site_def const *xcom_config);
-
+int cb_xcom_socket_accept(int fd, site_def *xcom_config);
 
 // XCom logging callback
 void cb_xcom_logger(int level, const char *message);
@@ -1079,7 +1079,7 @@ Gcs_xcom_interface::get_ip_whitelist()
 void cb_xcom_receive_data(synode_no message_id, node_set nodes, u_int size,
                           char *data)
 {
-  const site_def *site= find_site_def(message_id);
+  site_def *site = find_site_def(message_id);
 
   if (site->nodeno == VOID_NODE_NO)
   {
@@ -1269,7 +1269,7 @@ void do_cb_xcom_receive_data(synode_no message_id, Gcs_xcom_nodes *xcom_nodes,
 
 void cb_xcom_receive_global_view(synode_no config_id, synode_no message_id, node_set nodes)
 {
-  const site_def *site= find_site_def(message_id);
+  site_def *site = find_site_def(message_id);
 
   if (site->nodeno == VOID_NODE_NO)
   {
@@ -1401,7 +1401,7 @@ int cb_xcom_match_port(xcom_port if_port)
 
 void cb_xcom_receive_local_view(synode_no message_id, node_set nodes)
 {
-  const site_def *site= find_site_def(message_id);
+  site_def *site = find_site_def(message_id);
   if (site->nodeno == VOID_NODE_NO)
   {
     free_node_set(&nodes);
@@ -1528,9 +1528,7 @@ void cb_xcom_logger(int level, const char *message)
   Gcs_logger::get_logger()->log_event((gcs_log_level_t) level, message);
 }
 
-
-int cb_xcom_socket_accept(int fd, site_def const *xcom_config)
-{
+int cb_xcom_socket_accept(int fd, site_def *xcom_config) {
   Gcs_xcom_interface *intf=
     static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
 

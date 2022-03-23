@@ -10,11 +10,11 @@ SET GLOBAL group_replication_transaction_size_limit= "";
 ERROR 42000: Incorrect argument type to variable 'group_replication_transaction_size_limit'
 SET GLOBAL group_replication_transaction_size_limit= "ABC";
 ERROR 42000: Incorrect argument type to variable 'group_replication_transaction_size_limit'
-SET GLOBAL group_replication_transaction_size_limit= 2147483648;
+SET GLOBAL group_replication_transaction_size_limit= 150000000;
 include/assert.inc [group_replication_transaction_size_limit is max]
 SET GLOBAL group_replication_transaction_size_limit= -1;
 include/assert.inc [group_replication_transaction_size_limit is min]
-SET GLOBAL group_replication_transaction_size_limit= 3000000000;
+SET GLOBAL group_replication_transaction_size_limit= 600000000;
 include/assert.inc [group_replication_transaction_size_limit is max]
 SET GLOBAL group_replication_transaction_size_limit= -2;
 include/assert.inc [group_replication_transaction_size_limit is min]
@@ -24,7 +24,7 @@ SET GLOBAL group_replication_transaction_size_limit= 0;
 include/assert.inc [group_replication_transaction_size_limit is correct]
 SET GLOBAL group_replication_transaction_size_limit= 1024;
 include/assert.inc [group_replication_transaction_size_limit is correct]
-SET GLOBAL group_replication_transaction_size_limit= 2147483647;
+SET GLOBAL group_replication_transaction_size_limit= 150000000;
 include/assert.inc [group_replication_transaction_size_limit is correct]
 SET GLOBAL group_replication_transaction_size_limit= default;
 include/assert.inc [group_replication_transaction_size_limit is correct]
@@ -36,17 +36,17 @@ SET GLOBAL group_replication_transaction_size_limit= "";
 ERROR 42000: Incorrect argument type to variable 'group_replication_transaction_size_limit'
 SET GLOBAL group_replication_transaction_size_limit= "ABC";
 ERROR 42000: Incorrect argument type to variable 'group_replication_transaction_size_limit'
-SET GLOBAL group_replication_transaction_size_limit= 2147483648;
+SET GLOBAL group_replication_transaction_size_limit= 150000000;
 include/assert.inc [group_replication_transaction_size_limit is max]
 SET GLOBAL group_replication_transaction_size_limit= -1;
 include/assert.inc [group_replication_transaction_size_limit is min]
-SET GLOBAL group_replication_transaction_size_limit= 3000000000;
+SET GLOBAL group_replication_transaction_size_limit= 600000000;
 include/assert.inc [group_replication_transaction_size_limit is max]
 SET GLOBAL group_replication_transaction_size_limit= -2;
 include/assert.inc [group_replication_transaction_size_limit is min]
 SET GLOBAL group_replication_transaction_size_limit= 1024;
 include/assert.inc [group_replication_transaction_size_limit is correct]
-SET GLOBAL group_replication_transaction_size_limit= 2147483647;
+SET GLOBAL group_replication_transaction_size_limit= 150000000;
 include/assert.inc [group_replication_transaction_size_limit is correct]
 SET GLOBAL group_replication_transaction_size_limit= 0;
 include/assert.inc [group_replication_transaction_size_limit is correct]

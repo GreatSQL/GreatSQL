@@ -1,4 +1,5 @@
-/* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -111,6 +112,7 @@ void register_server_reset_master();
 bool get_allow_local_lower_version_join();
 bool get_allow_local_disjoint_gtids_join();
 ulong get_transaction_size_limit();
+ulong get_request_time_threshold();
 bool is_plugin_waiting_to_set_server_read_mode();
 
 //Plugin public methods

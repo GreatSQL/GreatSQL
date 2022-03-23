@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,23 +24,23 @@
 #include "sql_service_context_base.h"
 
 const st_command_service_cbs Sql_service_context_base::sql_service_callbacks = {
-  &Sql_service_context_base::sql_start_result_metadata,
-  &Sql_service_context_base::sql_field_metadata,
-  &Sql_service_context_base::sql_end_result_metadata,
-  &Sql_service_context_base::sql_start_row,
-  &Sql_service_context_base::sql_end_row,
-  &Sql_service_context_base::sql_abort_row,
-  &Sql_service_context_base::sql_get_client_capabilities,
-  &Sql_service_context_base::sql_get_null,
-  &Sql_service_context_base::sql_get_integer,
-  &Sql_service_context_base::sql_get_longlong,
-  &Sql_service_context_base::sql_get_decimal,
-  &Sql_service_context_base::sql_get_double,
-  &Sql_service_context_base::sql_get_date,
-  &Sql_service_context_base::sql_get_time,
-  &Sql_service_context_base::sql_get_datetime,
-  &Sql_service_context_base::sql_get_string,
-  &Sql_service_context_base::sql_handle_ok,
-  &Sql_service_context_base::sql_handle_error,
-  &Sql_service_context_base::sql_shutdown,
+    &Sql_service_context_base::sql_start_result_metadata,
+    &Sql_service_context_base::sql_field_metadata,
+    &Sql_service_context_base::sql_end_result_metadata,
+    &Sql_service_context_base::sql_start_row,
+    &Sql_service_context_base::sql_end_row,
+    &Sql_service_context_base::sql_abort_row,
+    &Sql_service_context_base::sql_get_client_capabilities,
+    &Sql_service_context_base::sql_get_null,
+    &Sql_service_context_base::sql_get_integer,
+    &Sql_service_context_base::sql_get_longlong,
+    &Sql_service_context_base::sql_get_decimal,
+    &Sql_service_context_base::sql_get_double,
+    &Sql_service_context_base::sql_get_date,
+    &Sql_service_context_base::sql_get_time,
+    &Sql_service_context_base::sql_get_datetime,
+    &Sql_service_context_base::sql_get_string,
+    &Sql_service_context_base::sql_handle_ok,
+    &Sql_service_context_base::sql_handle_error,
+    &Sql_service_context_base::sql_shutdown,
 };

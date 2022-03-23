@@ -31,10 +31,10 @@ include/rpl_gr_wait_for_number_of_members.inc
 include/rpl_gr_wait_for_number_of_members.inc
 include/rpl_gr_wait_for_number_of_members.inc
 SELECT * FROM performance_schema.replication_group_members;
-CHANNEL_NAME	MEMBER_ID	MEMBER_HOST	MEMBER_PORT	MEMBER_STATE
-group_replication_applier	MEMBER_ID	MEMBER_HOST	MEMBER_PORT	ONLINE
-group_replication_applier	MEMBER_ID	MEMBER_HOST	MEMBER_PORT	ONLINE
-group_replication_applier	MEMBER_ID	MEMBER_HOST	MEMBER_PORT	ONLINE
+CHANNEL_NAME	MEMBER_ID	MEMBER_HOST	MEMBER_PORT	MEMBER_STATE	MEMBER_ROLE
+group_replication_applier	MEMBER_ID	MEMBER_HOST	MEMBER_PORT	ONLINE	PRIMARY
+group_replication_applier	MEMBER_ID	MEMBER_HOST	MEMBER_PORT	ONLINE	PRIMARY
+group_replication_applier	MEMBER_ID	MEMBER_HOST	MEMBER_PORT	ONLINE	PRIMARY
 
 ###########################################################
 # 5. Two members on group.

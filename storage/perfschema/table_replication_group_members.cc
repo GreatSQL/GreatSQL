@@ -93,42 +93,44 @@ static void set_member_state(void* const context, const char& value,
   memcpy(row->member_state, &value, length);
 }
 
+static void set_member_role(void *const context, const char *value,
+                            size_t length) {
+  struct st_row_group_members *row =
+      static_cast<struct st_row_group_members *>(context);
+  const size_t max = NAME_LEN;
+  length = std::min(length, max);
+
+  row->member_role_length = length;
+  memcpy(row->member_role, value, length);
+}
 
 THR_LOCK table_replication_group_members::m_table_lock;
 
 /* Numbers in varchar count utf8 characters. */
-static const TABLE_FIELD_TYPE field_types[]=
-{
-  {
-    {C_STRING_WITH_LEN("CHANNEL_NAME")},
-    {C_STRING_WITH_LEN("char(64)")},
-    {NULL, 0}
-  },
-  {
-    {C_STRING_WITH_LEN("MEMBER_ID")},
-    {C_STRING_WITH_LEN("char(36)")},
-    {NULL, 0}
-  },
-  {
-    {C_STRING_WITH_LEN("MEMBER_HOST")},
-    {C_STRING_WITH_LEN("char(60)")},
-    {NULL, 0}
-  },
-  {
-    {C_STRING_WITH_LEN("MEMBER_PORT")},
-    {C_STRING_WITH_LEN("int(11)")},
-    {NULL, 0}
-  },
-  {
-    {C_STRING_WITH_LEN("MEMBER_STATE")},
-    {C_STRING_WITH_LEN("char(64)")},
-    {NULL, 0}
-  }
+static const TABLE_FIELD_TYPE field_types[] = {
+    {{C_STRING_WITH_LEN("CHANNEL_NAME")},
+     {C_STRING_WITH_LEN("char(64)")},
+     {NULL, 0}},
+    {{C_STRING_WITH_LEN("MEMBER_ID")},
+     {C_STRING_WITH_LEN("char(36)")},
+     {NULL, 0}},
+    {{C_STRING_WITH_LEN("MEMBER_HOST")},
+     {C_STRING_WITH_LEN("char(60)")},
+     {NULL, 0}},
+    {{C_STRING_WITH_LEN("MEMBER_PORT")},
+     {C_STRING_WITH_LEN("int(11)")},
+     {NULL, 0}},
+    {{C_STRING_WITH_LEN("MEMBER_STATE")},
+     {C_STRING_WITH_LEN("char(64)")},
+     {NULL, 0}},
+    {{C_STRING_WITH_LEN("MEMBER_ROLE")},
+     {C_STRING_WITH_LEN("char(64)")},
+     {NULL, 0}}
+
 };
 
 TABLE_FIELD_DEF
-table_replication_group_members::m_field_def=
-{ 5, field_types };
+table_replication_group_members::m_field_def = {6, field_types};
 
 PFS_engine_table_share
 table_replication_group_members::m_share=
@@ -209,16 +211,13 @@ void table_replication_group_members::make_row(uint index)
   m_row.member_host_length= 0;
   m_row.member_port= 0;
   m_row.member_state_length= 0;
+  m_row.member_role_length = 0;
 
   // Set callbacks on GROUP_REPLICATION_GROUP_MEMBERS_CALLBACKS.
-  const GROUP_REPLICATION_GROUP_MEMBERS_CALLBACKS callbacks=
-  {
-    &m_row,
-    &set_channel_name,
-    &set_member_id,
-    &set_member_host,
-    &set_member_port,
-    &set_member_state,
+  const GROUP_REPLICATION_GROUP_MEMBERS_CALLBACKS callbacks = {
+      &m_row,           &set_channel_name, &set_member_id,   &set_member_host,
+      &set_member_port, &set_member_state, &set_member_role,
+
   };
 
   // Query plugin and let callbacks do their job.
@@ -271,6 +270,9 @@ int table_replication_group_members::read_row_values(TABLE *table,
         break;
       case 4: /** member_state */
         set_field_char_utf8(f, m_row.member_state, m_row.member_state_length);
+        break;
+      case 5: /** member_role */
+        set_field_char_utf8(f, m_row.member_role, m_row.member_role_length);
         break;
       default:
         assert(false);

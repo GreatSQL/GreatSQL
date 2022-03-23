@@ -1,4 +1,5 @@
-/* Copyright (c) 2012, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -598,7 +599,7 @@ extern task_env *wait_io(task_env *t, int fd, int op);
 extern result	con_read(connection_descriptor const *rfd, void *buf, int n);
 extern result	con_write(connection_descriptor const *wfd, void *buf, int n);
 extern result set_nodelay(int fd);
-
+extern bool_t retrieve_addr_from_fd(int fd, bool_t client, char *ip, int *port);
 
 /* Use SSL ? */
 void xcom_enable_ssl();

@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -111,9 +112,9 @@ int read_msg(connection_descriptor *rfd, pax_msg *p, server *s, int64_t *ret);
 
 int	send_to_acceptors(pax_msg *p, const char *dbg);
 int	send_to_all(pax_msg *p, const char *dbg);
-int	send_to_all_site(site_def const *s, pax_msg *p, const char *dbg);
-int	send_to_others(site_def const *s, pax_msg *p, const char *dbg);
-int	send_to_someone(site_def const *s, pax_msg *p, const char *dbg);
+int send_to_all_site(site_def *s, pax_msg *p, const char *dbg);
+int send_to_others(site_def *s, pax_msg *p, const char *dbg);
+int send_to_someone(site_def *s, pax_msg *p, const char *dbg);
 
 int	sender_task(task_arg arg);
 int	local_sender_task(task_arg arg);
@@ -130,11 +131,12 @@ void init_xcom_transport(xcom_port listen_port);
 void reset_srv_buf(srv_buf *sb);
 char	*xcom_get_name(char *a);
 xcom_port xcom_get_port(char *a);
-int	send_server_msg(site_def const *s, node_no i, pax_msg *p);
-double server_active(site_def const *s, node_no i);
+int send_server_msg(site_def *s, node_no i, pax_msg *p);
+double server_active(site_def *s, node_no i);
 void update_servers(site_def *s, cargo_type operation);
 void garbage_collect_servers();
 int	client_task(task_arg arg);
+bool_t check_tcp_connection_valid(int fd, int *same_ip);
 int	send_msg(server *s, node_no from, node_no to, uint32_t group_id, pax_msg *p);
 /**
   Updates timestamp of server.
@@ -143,8 +145,7 @@ int	send_msg(server *s, node_no from, node_no to, uint32_t group_id, pax_msg *p)
 */
 void server_detected(server *s);
 
-void invalidate_servers(const site_def* old_site_def,
-                        const site_def* new_site_def);
+void invalidate_servers(site_def *old_site_def, site_def *new_site_def);
 
 void shutdown_connection(connection_descriptor *con);
 void reset_connection(connection_descriptor *con);
@@ -173,7 +174,7 @@ xcom_proto read_protoversion(unsigned char *p);
 int serialize_msg(pax_msg *p, xcom_proto x_proto, uint32_t *buflen, char **buf);
 int deserialize_msg(pax_msg *p, xcom_proto x_proto,  char *buf,
                     uint32_t buflen);
-xcom_proto common_xcom_version(site_def const *site);
+xcom_proto common_xcom_version(site_def *site);
 xcom_proto get_latest_common_proto();
 xcom_proto set_latest_common_proto(xcom_proto x_proto);
 

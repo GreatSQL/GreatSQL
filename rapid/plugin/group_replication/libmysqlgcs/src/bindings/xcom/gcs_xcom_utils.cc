@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -583,12 +584,9 @@ Gcs_xcom_proxy_impl::~Gcs_xcom_proxy_impl()
   delete m_socket_util;
 }
 
-
-site_def const *Gcs_xcom_proxy_impl::find_site_def(synode_no synode)
-{
+site_def *Gcs_xcom_proxy_impl::find_site_def(synode_no synode) {
   return ::find_site_def(synode);
 }
-
 
 Gcs_xcom_proxy_impl::Xcom_handler::Xcom_handler()
   :m_lock(), m_fd(NULL)
@@ -898,10 +896,9 @@ Gcs_xcom_proxy_impl::xcom_client_force_config(node_list *nl,
   return res;
 }
 
-Gcs_xcom_nodes::Gcs_xcom_nodes(const site_def *site, node_set &nodes)
-  : m_node_no(site->nodeno), m_addresses(), m_uuids(), m_statuses(),
-    m_size(nodes.node_set_len)
-{
+Gcs_xcom_nodes::Gcs_xcom_nodes(site_def *site, node_set &nodes)
+    : m_node_no(site->nodeno), m_addresses(), m_uuids(), m_statuses(),
+      m_size(nodes.node_set_len) {
   Gcs_uuid uuid;
   for (unsigned int i= 0; i < nodes.node_set_len; ++i)
   {
@@ -922,7 +919,6 @@ Gcs_xcom_nodes::Gcs_xcom_nodes(const site_def *site, node_set &nodes)
   assert(m_size == m_addresses.size());
   assert(m_size == m_statuses.size());
 }
-
 
 Gcs_xcom_nodes::Gcs_xcom_nodes()
   : m_node_no(0), m_addresses(), m_uuids(), m_statuses(),

@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -42,9 +43,11 @@ struct site_def {
 	node_set global_node_set;	/* The global view */
 	node_set local_node_set;	/* The local view */
 	int detector_updated;		/* Has detector state been updated? */
-	xcom_proto x_proto;
+        int large_content_detected;     /* Has detector state been updated? */
+        xcom_proto x_proto;
 	synode_no delivered_msg[NSERVERS];
 	double install_time;
+        double max_conn_rtt;
 };
 typedef struct site_def site_def;
 

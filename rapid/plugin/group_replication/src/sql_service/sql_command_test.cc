@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -47,16 +48,16 @@
 void check_sql_command_create(Sql_service_interface *srvi)
 {
   Sql_resultset rset;
-  int srv_err= srvi->execute_query("CREATE TABLE test.t1 (i INT PRIMARY KEY NOT NULL);");
-  if (srv_err == 0)
-  {
+  int srv_err =
+      srvi->execute_query("CREATE TABLE test.t1 (i INT PRIMARY KEY NOT NULL);");
+  if (srv_err == 0) {
     srvi->execute_query("SHOW TABLES IN test;", &rset);
-    std::string str= "t1";
+    std::string str = "t1";
     assert(rset.getString(0) == str);
-  }
-  else
-  {
-    log_message(MY_ERROR_LEVEL, "query execution resulted in failure. errno: %d", srv_err); /* purecov: inspected */
+  } else {
+    log_message(MY_ERROR_LEVEL,
+                "query execution resulted in failure. errno: %d",
+                srv_err); /* purecov: inspected */
   }
 }
 
@@ -64,28 +65,26 @@ void check_sql_command_insert(Sql_service_interface *srvi)
 {
   Sql_resultset rset;
   int srv_err;
-  srv_err= srvi->execute_query("INSERT INTO test.t1 VALUES(1);");
-  srv_err= srvi->execute_query("INSERT INTO test.t1 VALUES(2);");
-  srv_err= srvi->execute_query("INSERT INTO test.t1 VALUES(3);");
-  if (srv_err == 0)
-  {
+  srv_err = srvi->execute_query("INSERT INTO test.t1 VALUES(1);");
+  srv_err = srvi->execute_query("INSERT INTO test.t1 VALUES(2);");
+  srv_err = srvi->execute_query("INSERT INTO test.t1 VALUES(3);");
+  if (srv_err == 0) {
     srvi->execute_query("SELECT * FROM test.t1", &rset);
-    uint i= 0;
-    std::vector<std::string > insert_values;
+    uint i = 0;
+    std::vector<std::string> insert_values;
     insert_values.push_back("1");
     insert_values.push_back("2");
     insert_values.push_back("3");
     assert(rset.get_rows() == 3);
-    while (i < rset.get_rows())
-    {
+    while (i < rset.get_rows()) {
       assert(rset.getString(0) == insert_values[i]);
       rset.next();
       i++;
     }
-  }
-  else
-  {
-    log_message(MY_ERROR_LEVEL, "query execution resulted in failure. errno: %d", srv_err); /* purecov: inspected */
+  } else {
+    log_message(MY_ERROR_LEVEL,
+                "query execution resulted in failure. errno: %d",
+                srv_err); /* purecov: inspected */
   }
 }
 
@@ -94,28 +93,26 @@ void check_sql_command_update(Sql_service_interface *srvi)
 {
   Sql_resultset rset;
   int srv_err;
-  srv_err= srvi->execute_query("UPDATE test.t1 SET i=4 WHERE i=1;");
-  srv_err= srvi->execute_query("UPDATE test.t1 SET i=5 WHERE i=2;");
-  srv_err= srvi->execute_query("UPDATE test.t1 SET i=6 WHERE i=3;");
-  if (srv_err == 0)
-  {
+  srv_err = srvi->execute_query("UPDATE test.t1 SET i=4 WHERE i=1;");
+  srv_err = srvi->execute_query("UPDATE test.t1 SET i=5 WHERE i=2;");
+  srv_err = srvi->execute_query("UPDATE test.t1 SET i=6 WHERE i=3;");
+  if (srv_err == 0) {
     srvi->execute_query("SELECT * FROM test.t1", &rset);
-    uint i= 0;
+    uint i = 0;
     std::vector<std::string> update_values;
     update_values.push_back("4");
     update_values.push_back("5");
     update_values.push_back("6");
     assert(rset.get_rows() == 3);
-    while (i < rset.get_rows())
-    {
+    while (i < rset.get_rows()) {
       assert(rset.getString(0) == update_values[i]);
       rset.next();
       i++;
     }
-  }
-  else
-  {
-    log_message(MY_ERROR_LEVEL, "query execution resulted in failure. errno: %d", srv_err); /* purecov: inspected */
+  } else {
+    log_message(MY_ERROR_LEVEL,
+                "query execution resulted in failure. errno: %d",
+                srv_err); /* purecov: inspected */
   }
 }
 
@@ -123,34 +120,32 @@ void check_sql_command_update(Sql_service_interface *srvi)
 void check_sql_command_drop(Sql_service_interface *srvi)
 {
   Sql_resultset rset;
-  int srv_err= srvi->execute_query("DROP TABLE test.t1;");
-  if (srv_err == 0)
-  {
+  int srv_err = srvi->execute_query("DROP TABLE test.t1;");
+  if (srv_err == 0) {
     srvi->execute_query("SELECT TABLES IN test", &rset);
-    std::string str= "t1";
+    std::string str = "t1";
     assert(rset.get_rows() == 0);
-  }
-  else
-  {
-    log_message(MY_ERROR_LEVEL, "query execution resulted in failure. errno: %d", srv_err); /* purecov: inspected */
+  } else {
+    log_message(MY_ERROR_LEVEL,
+                "query execution resulted in failure. errno: %d",
+                srv_err); /* purecov: inspected */
   }
 }
 
 int sql_command_check()
 {
-  int error=1;
-  Sql_service_interface *srvi= new Sql_service_interface();
+  int error = 1;
+  Sql_service_interface *srvi = new Sql_service_interface();
 
-  if (srvi == NULL)
-  {
+  if (srvi == NULL) {
     /* purecov: begin inspected */
     log_message(MY_ERROR_LEVEL, "Unable to create a session for executing the"
-                " queries on the server");
+                                " queries on the server");
     return error;
     /* purecov: end */
   }
 
-  error= srvi->open_session();
+  error = srvi->open_session();
   assert(!error);
 
   /* Case 1 */

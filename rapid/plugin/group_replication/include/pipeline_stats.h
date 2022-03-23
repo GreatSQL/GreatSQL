@@ -1,4 +1,5 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,6 +31,22 @@
 #include "gcs_plugin_messages.h"
 #include "plugin_psi.h"
 
+#define FLOW_CONTROL_LOWER_THRESHOLD 65536
+#define FLOW_CONTROL_LOW_THRESHOLD 131072
+#define FLOW_CONTROL_MID_THRESHOLD 1048576
+#define FLOW_CONTROL_HIGH_THRESHOLD 10485760
+#define FLOW_CONTROL_HIGHER_THRESHOLD 41943040
+#define FLOW_CONTROL_MUCH_HIGHER_THRESHOLD 104857600
+#define FLOW_CONTROL_DANGEROUS_THRESHOLD 209715200
+
+#define FLOW_CONTROL_MAX_WAIT_TIME 3600000
+#define FLOW_CONTROL_ADD_LEVEL7_WAIT_TIME 300000
+#define FLOW_CONTROL_ADD_LEVEL6_WAIT_TIME 60000
+#define FLOW_CONTROL_ADD_LEVEL5_WAIT_TIME 5000
+#define FLOW_CONTROL_ADD_LEVEL4_WAIT_TIME 500
+#define FLOW_CONTROL_ADD_LEVEL3_WAIT_TIME 50
+#define FLOW_CONTROL_ADD_LEVEL2_WAIT_TIME 20
+#define FLOW_CONTROL_ADD_LEVEL1_WAIT_TIME 10
 
 /**
   Flow control modes:
@@ -41,8 +58,13 @@ enum Flow_control_mode
   FCM_DISABLED= 0,
   FCM_QUOTA
 };
-extern ulong flow_control_mode_var;
 
+#define MAX_FLOW_CONTROL_REPLAY_LAG_BEHIND 86400
+#define MAX_FLOW_CONTROL_WAIT_TIME 86400
+
+extern ulong flow_control_mode_var;
+extern ulong flow_control_replay_lag_behind_var;
+extern ulong flow_control_max_wait_time_var;
 
 /**
   Flow control queue threshold for certifier and for applier.
@@ -457,8 +479,19 @@ public:
   int32 do_wait();
 
 private:
+  bool check_still_waiting();
+
+private:
   mysql_mutex_t m_flow_control_lock;
   mysql_cond_t  m_flow_control_cond;
+
+  int64 m_wait_counter;
+  int64 m_leave_counter;
+  ulonglong m_last_cert_database_size;
+  int m_current_wait_msec;
+  int m_flow_control_need_refreshed;
+  int m_flow_control_flag;
+  int m_max_wait_time;
 
   Flow_control_module_info m_info;
 

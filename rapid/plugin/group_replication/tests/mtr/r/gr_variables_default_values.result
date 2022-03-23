@@ -25,9 +25,9 @@ include/stop_group_replication.inc
 #
 # Test Unit#1
 # Set global group replication variables to default.
-# Curently there are 36 group replication variables.
+# Curently there are 39 group replication variables.
 #
-include/assert.inc [There are 36 GR variables at present.]
+include/assert.inc [There are 39 GR variables at present.]
 SET @@GLOBAL.group_replication_auto_increment_increment= default;
 ERROR 42000: Variable 'group_replication_auto_increment_increment' can't be set to the value of 'DEFAULT'
 SET @@GLOBAL.group_replication_compression_threshold= default;
@@ -99,7 +99,7 @@ include/assert.inc [Default group_replication_recovery_ssl_verify_server_cert is
 include/assert.inc [Default group_replication_recovery_use_ssl is OFF/0]
 include/assert.inc [Default group_replication_ssl_mode is DISABLED]
 include/assert.inc [Default group_replication_start_on_boot is ON/1]
-include/assert.inc [Default group_replication_transaction_size_limit is 0]
+include/assert.inc [Default group_replication_transaction_size_limit is 150000000]
 include/assert.inc [Default group_replication_unreachable_majority_timeout is 0]
 include/assert.inc [Default group_replication_member_weight is 50]
 include/assert.inc [Default group_replication_exit_state_action is READ_ONLY]

@@ -1,4 +1,5 @@
-/* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -57,12 +58,18 @@ typedef struct st_group_replication_connection_status_callbacks
 */
 typedef struct st_group_replication_group_members_callbacks
 {
-  void* const context;
-  void (*set_channel_name)(void* const context, const char& value, size_t length);
-  void (*set_member_id)(void* const context, const char& value, size_t length);
-  void (*set_member_host)(void* const context, const char& value, size_t length);
-  void (*set_member_port)(void* const context, unsigned int value);
-  void (*set_member_state)(void* const context, const char& value, size_t length);
+  void *const context;
+  void (*set_channel_name)(void *const context, const char &value,
+                           size_t length);
+  void (*set_member_id)(void *const context, const char &value, size_t length);
+  void (*set_member_host)(void *const context, const char &value,
+                          size_t length);
+  void (*set_member_port)(void *const context, unsigned int value);
+  void (*set_member_state)(void *const context, const char &value,
+                           size_t length);
+  void (*set_member_role)(void *const context, const char *value,
+                          size_t length);
+
 } GROUP_REPLICATION_GROUP_MEMBERS_CALLBACKS;
 
 /*

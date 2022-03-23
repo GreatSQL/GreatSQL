@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -368,8 +369,7 @@ public:
                                         const char *cipher,
                                         const char *tls_version)= 0;
 
-
-  virtual site_def const *find_site_def(synode_no synode)= 0;
+  virtual site_def *find_site_def(synode_no synode) = 0;
 
   /**
     This member function boots XCom.
@@ -643,7 +643,7 @@ public:
                                const char *ca_file, const char *ca_path,
                                const char *crl_file, const char *crl_path,
                                const char *cipher, const char *tls_version);
-  site_def const *find_site_def(synode_no synode);
+  site_def *find_site_def(synode_no synode);
 
   bool xcom_open_handlers(std::string saddr, xcom_port port);
   bool xcom_close_handlers();
@@ -775,8 +775,7 @@ public:
     statuses.
   */
 
-  explicit Gcs_xcom_nodes(const site_def *site, node_set &nodes);
-
+  explicit Gcs_xcom_nodes(site_def *site, node_set &nodes);
 
   /**
     Empty constructor.

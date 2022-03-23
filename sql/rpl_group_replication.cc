@@ -380,7 +380,6 @@ bool get_server_encoded_gtid_executed(uchar **encoded_gtid_executed,
   return false;
 }
 
-#if !defined(NDEBUG)
 char* encoded_gtid_set_to_string(uchar *encoded_gtid_set,
                                  size_t length)
 {
@@ -396,7 +395,6 @@ char* encoded_gtid_set_to_string(uchar *encoded_gtid_set,
   set.to_string(&buf);
   return buf;
 }
-#endif
 
 
 void global_thd_manager_add_thd(THD *thd)

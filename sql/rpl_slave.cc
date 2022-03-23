@@ -96,7 +96,7 @@ const char *relay_log_basename= 0;
   of Relay_log_info::gaq (see @c slave_start_workers()).
   It can be set to any value in [1, ULONG_MAX - 1] range.
 */
-const ulong mts_slave_worker_queue_len_max= 16384;
+const ulong mts_slave_worker_queue_len_max = 16384 << 6;
 
 /*
   Statistics go to the error log every # of seconds when --log-warnings > 1
@@ -1148,8 +1148,25 @@ int init_recovery(Master_info* mi, const char** errmsg)
         mi->is_auto_position())
            ? true
            : false);
-  if (is_gtid_with_autopos_on)
+  if (is_gtid_with_autopos_on) {
     rli->recovery_parallel_workers = 0;
+  } else {
+    /* In order to avoid dead for empty channel */
+    if (mi == channel_map.get_default_channel_mi()) {
+      for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
+           it++) {
+        Master_info *tmp_mi = it->second;
+        if (tmp_mi != NULL && tmp_mi != mi) {
+          Relay_log_info *tmp_rli = tmp_mi->rli;
+          if (channel_map.is_group_replication_channel_name(
+                  tmp_rli->get_channel(), true)) {
+            rli->recovery_parallel_workers = 0;
+            break;
+          }
+        }
+      }
+    }
+  }
 
   if (rli->recovery_parallel_workers)
   {

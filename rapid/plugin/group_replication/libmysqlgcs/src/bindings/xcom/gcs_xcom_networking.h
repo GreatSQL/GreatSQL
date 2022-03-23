@@ -1,4 +1,5 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -238,8 +239,8 @@ public:
 
    @return true if the ip should be blocked, false otherwise.
    */
-  bool shall_block(const std::string& ip_addr,
-                   site_def const *xcom_config= NULL) const;
+  bool shall_block(const std::string &ip_addr,
+                   site_def *xcom_config = NULL) const;
 
   /**
    This member function SHALL return true if the IP of the given file descriptor
@@ -250,7 +251,7 @@ public:
 
    @return true if the ip should be blocked, false otherwise.
    */
-  bool shall_block(int fd, site_def const *xcom_config= NULL) const;
+  bool shall_block(int fd, site_def *xcom_config = NULL) const;
 
   /**
    This member function gets the textual representation of the list as
@@ -267,12 +268,11 @@ public:
   std::string to_string() const;
 
 private:
-  bool do_check_block(struct sockaddr_storage *sa,
-                      site_def const *xcom_config) const;
+  bool do_check_block(struct sockaddr_storage *sa, site_def *xcom_config) const;
   bool do_check_block_whitelist(
     std::vector<unsigned char> const& incoming_octets) const;
-  bool do_check_block_xcom(std::vector<unsigned char> const& incoming_octets,
-                           site_def const *xcom_config) const;
+  bool do_check_block_xcom(std::vector<unsigned char> const &incoming_octets,
+                           site_def *xcom_config) const;
   bool add_address(std::string addr, std::string mask);
 
 private:

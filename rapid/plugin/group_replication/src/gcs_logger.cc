@@ -1,4 +1,5 @@
-/* Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,30 +36,27 @@ enum_gcs_error Gcs_gr_logger_impl::finalize()
   DBUG_RETURN(GCS_OK);
 }
 
-void Gcs_gr_logger_impl::log_event(gcs_log_level_t level,
-                                   const char *message)
-{
+void Gcs_gr_logger_impl::log_event(gcs_log_level_t level, const char *message) {
   DBUG_ENTER("Gcs_gr_logger_impl::log_event");
 
-  switch (level)
-  {
-    case GCS_TRACE:
-    case GCS_DEBUG:
-    case GCS_INFO:
-      log_message(MY_INFORMATION_LEVEL, message);
-      break;
+  switch (level) {
+  case GCS_TRACE:
+  case GCS_DEBUG:
+  case GCS_INFO:
+    log_message(MY_INFORMATION_LEVEL, message);
+    break;
 
-    case GCS_WARN:
-      log_message(MY_WARNING_LEVEL, message);
-      break;
+  case GCS_WARN:
+    log_message(MY_WARNING_LEVEL, message);
+    break;
 
-    case GCS_ERROR:
-    case GCS_FATAL:
-      log_message(MY_ERROR_LEVEL, message);
-      break;
+  case GCS_ERROR:
+  case GCS_FATAL:
+    log_message(MY_ERROR_LEVEL, message);
+    break;
 
-    default:
-      assert(0); /* purecov: inspected */
+  default:
+    assert(0); /* purecov: inspected */
   }
 
   DBUG_VOID_RETURN;

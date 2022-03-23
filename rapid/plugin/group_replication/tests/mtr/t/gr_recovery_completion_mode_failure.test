@@ -104,9 +104,6 @@ INSERT INTO t2 VALUES (1);
 --connection server2
 --echo server2
 
---let $wait_condition= SELECT COUNT_TRANSACTIONS_IN_QUEUE=2 FROM performance_schema.replication_group_member_stats;
---source include/wait_condition.inc
-
 --echo #
 --echo # Stop the group replication applier thread during recovery.
 --echo #

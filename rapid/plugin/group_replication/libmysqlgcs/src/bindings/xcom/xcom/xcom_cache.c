@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -63,18 +64,16 @@ static synode_no last_removed_cache;
 
 int	was_removed_from_cache(synode_no x)
 {
-	ADD_EVENTS(
-	    add_event(string_arg("x "));
-	    add_synode_event(x);
-	    add_event(string_arg("last_removed_cache "));
-	    add_synode_event(last_removed_cache);
-	);
-	/*
-	What to do with requests from nodes that have a different group ID?
-	Should we just ignore them, as we do with the current code,
-	or should we do something about it?
-	*/
-	return last_removed_cache.group_id == x.group_id && !synode_gt(x, last_removed_cache);
+  ADD_EVENTS(add_event(string_arg("x ")); add_synode_event(x);
+             add_event(string_arg("last_removed_cache "));
+             add_synode_event(last_removed_cache););
+  /*
+     What to do with requests from nodes that have a different group ID?
+     Should we just ignore them, as we do with the current code,
+     or should we do something about it?
+   */
+  return last_removed_cache.group_id == x.group_id &&
+         !synode_gt(x, last_removed_cache);
 }
 
 #define BUCKETS (CACHED)
@@ -88,7 +87,7 @@ static pax_machine *init_pax_machine(pax_machine *p, lru_machine *lru, synode_no
 
 static void hash_init()
 {
-  unsigned int	i = 0;
+  unsigned int i = 0;
   for (i = 0; i < BUCKETS; i++) {
     link_init(&pax_hash[i], type_hash("pax_machine"));
   }
@@ -96,118 +95,87 @@ static void hash_init()
 
 extern void hexdump(void *p, long length);
 
-#if 0
-#define FNVSTART 0x811c9dc5
-
-/* Fowler-Noll-Vo type multiplicative hash */
-static uint32_t fnv_hash(unsigned char *buf, size_t length, uint32_t sum)
-{
-  size_t i = 0;
-  for (i = 0; i < length; i++) {
-    sum = sum * (uint32_t)0x01000193 ^ (uint32_t)buf[i];
-  }
-  return sum;
-}
-
 static unsigned int	synode_hash(synode_no synode)
 {
   /* Need to hash three fields separately, since struct may contain padding with
      undefined values */
-  return fnv_hash((unsigned char *) & synode.node, sizeof(synode.node),
-                  fnv_hash((unsigned char *) & synode.group_id, sizeof(synode.group_id),
-                           fnv_hash((unsigned char *) & synode.msgno, sizeof(synode.msgno), FNVSTART)))
-
-    % BUCKETS;
+  return (unsigned int)(4711 * synode.node + 5 * synode.group_id +
+                        synode.msgno) %
+         BUCKETS;
 }
-#else
-static unsigned int	synode_hash(synode_no synode)
-{
-  /* Need to hash three fields separately, since struct may contain padding with
-     undefined values */
-	return (unsigned int)
-	  (4711 * synode.node + 5 * synode.group_id + synode.msgno) % BUCKETS;
-}
-
-#endif
 
 static pax_machine *hash_in(pax_machine *p)
 {
-  MAY_DBG(FN; PTREXP(p);
-  SYCEXP(p->synode);
-  );
+  MAY_DBG(FN; PTREXP(p); SYCEXP(p->synode););
   link_into(&p->hash_link, &pax_hash[synode_hash(p->synode)]);
   return p;
 }
 
 static pax_machine *hash_out(pax_machine *p)
 {
-  MAY_DBG(FN; PTREXP(p);
-  SYCEXP(p->synode);
-  );
-  return (pax_machine * )link_out(&p->hash_link);
+  MAY_DBG(FN; PTREXP(p); SYCEXP(p->synode););
+  return (pax_machine *)link_out(&p->hash_link);
 }
 
 pax_machine *hash_get(synode_no synode)
 {
   /* static pax_machine *cached_machine = NULL; */
-  linkage * bucket = &pax_hash[synode_hash(synode)];
+  linkage *bucket = &pax_hash[synode_hash(synode)];
 
   /* if(cached_machine && synode_eq(synode, cached_machine->synode)) */
   /*   return cached_machine; */
 
-  FWD_ITER(bucket, pax_machine,
-           if (synode_eq(link_iter->synode, synode)){
-             /* cached_machine = link_iter; */
-             return link_iter;
-           }
-           )
-    ;
+  FWD_ITER(
+      bucket, pax_machine, if (synode_eq(link_iter->synode, synode)) {
+        /* cached_machine = link_iter; */
+        return link_iter;
+      });
   return NULL;
 }
 
 #if 0
 static int	is_noop(synode_no synode)
 {
-  if (is_cached(synode)) {
-    pax_machine * m = get_cache(synode);
-    return m->learner.msg && m->learner.msg->msg_type == no_op;
-  } else {
-    return 0;
-  }
+	if (is_cached(synode)) {
+		pax_machine * m = get_cache(synode);
+		return m->learner.msg && m->learner.msg->msg_type == no_op;
+	} else {
+		return 0;
+	}
 }
 #endif
 
 /*
-Get a machine for (re)use.
-The machines are statically allocated, and organized in two lists.
-probation_lru is the free list.
-protected_lru tracks the machines that are currently in the cache in
-lest recently used order.
-*/
+   Get a machine for (re)use.
+   The machines are statically allocated, and organized in two lists.
+   probation_lru is the free list.
+   protected_lru tracks the machines that are currently in the cache in
+   lest recently used order.
+ */
 static lru_machine *lru_get()
 {
 	lru_machine * retval = NULL;
 	if (!link_empty(&probation_lru)) {
 		retval = (lru_machine * ) link_first(&probation_lru);
 	} else {
-	/* Find the first non-busy instance in the LRU */
-	FWD_ITER(&protected_lru, lru_machine,
-		if (!is_busy_machine(&link_iter->pax)) {
-			retval = link_iter;
-			/* Since this machine is in in the cache, we need to update
-			last_removed_cache */
-			last_removed_cache = retval->pax.synode;
-			break;
-		}
-	)
-	}
+          /* Find the first non-busy instance in the LRU */
+          FWD_ITER(
+              &protected_lru, lru_machine,
+              if (!is_busy_machine(&link_iter->pax)) {
+                retval = link_iter;
+                /* Since this machine is in in the cache, we need to update
+                   last_removed_cache */
+                last_removed_cache = retval->pax.synode;
+                break;
+              })
+        }
 	assert(retval && !is_busy_machine(&retval->pax));
 	return retval;
 }
 
 static lru_machine *lru_touch_hit(pax_machine *p)
 {
-  lru_machine * lru = p->lru;
+  lru_machine *lru = p->lru;
   link_into(link_out(&lru->lru_link), &protected_lru);
   return lru;
 }
@@ -216,12 +184,12 @@ static lru_machine *lru_touch_hit(pax_machine *p)
 /* Initialize the message cache */
 void init_cache()
 {
-  unsigned int	i = 0;
+  unsigned int i = 0;
   link_init(&protected_lru, type_hash("lru_machine"));
   link_init(&probation_lru, type_hash("lru_machine"));
   hash_init();
   for (i = 0; i < CACHED; i++) {
-    lru_machine * l = &cache[i];
+    lru_machine *l = &cache[i];
     link_init(&l->lru_link, type_hash("lru_machine"));
     link_into(&l->lru_link, &probation_lru);
     init_pax_machine(&l->pax, l, null_synode);
@@ -232,32 +200,29 @@ void init_cache()
 
 void deinit_cache()
 {
-  int i= 0;
+  int i = 0;
   /*
-    We reset the memory structures before claiming back memory.
-    Since deiniting the cache happens rarely - mostly when the
-    XCom thread terminates we are ok with doing it like this,
-    i.e., at the cost an additional loop and potential extra
-    allocations - before deallocating.
+     We reset the memory structures before claiming back memory.
+     Since deiniting the cache happens rarely - mostly when the
+     XCom thread terminates we are ok with doing it like this,
+     i.e., at the cost an additional loop and potential extra
+     allocations - before deallocating.
 
-    We do this to not clutter the execution flow and improve
-    readability and maintaintability by keeping the source code
-    for the deactivation routine simple and straightforward.
-  */
+     We do this to not clutter the execution flow and improve
+     readability and maintaintability by keeping the source code
+     for the deactivation routine simple and straightforward.
+   */
   init_cache();
-  for (i= 0; i < CACHED; i++)
-  {
-    lru_machine *l= &cache[i];
-    pax_machine *p= &l->pax;
-    if (p->proposer.prep_nodeset)
-    {
+  for (i = 0; i < CACHED; i++) {
+    lru_machine *l = &cache[i];
+    pax_machine *p = &l->pax;
+    if (p->proposer.prep_nodeset) {
       free_bit_set(p->proposer.prep_nodeset);
-      p->proposer.prep_nodeset= NULL;
+      p->proposer.prep_nodeset = NULL;
     }
-    if (p->proposer.prop_nodeset)
-    {
+    if (p->proposer.prop_nodeset) {
       free_bit_set(p->proposer.prop_nodeset);
-      p->proposer.prop_nodeset= NULL;
+      p->proposer.prop_nodeset = NULL;
     }
   }
 }
@@ -266,19 +231,17 @@ void deinit_cache()
 
 pax_machine *get_cache_no_touch(synode_no synode)
 {
-  pax_machine * retval = hash_get(synode);
+  pax_machine *retval = hash_get(synode);
   /* DBGOUT(FN; SYCEXP(synode); STREXP(task_name())); */
   MAY_DBG(FN; SYCEXP(synode); PTREXP(retval));
   if (!retval) {
-    lru_machine * l = lru_get(); /* Need to know when it is safe to re-use... */
-    MAY_DBG(FN; PTREXP(l);
-    COPY_AND_FREE_GOUT(dbg_pax_machine(&l->pax));
-    );
+    lru_machine *l = lru_get(); /* Need to know when it is safe to re-use... */
+    MAY_DBG(FN; PTREXP(l); COPY_AND_FREE_GOUT(dbg_pax_machine(&l->pax)););
     /*     assert(l->pax.synode > log_tail); */
 
-    retval = hash_out(&l->pax); /* Remove from hash table */
+    retval = hash_out(&l->pax);          /* Remove from hash table */
     init_pax_machine(retval, l, synode); /* Initialize */
-    hash_in(retval);            /* Insert in hash table again */
+    hash_in(retval);                     /* Insert in hash table again */
   }
   MAY_DBG(FN; SYCEXP(synode); PTREXP(retval));
   return retval;
@@ -286,7 +249,7 @@ pax_machine *get_cache_no_touch(synode_no synode)
 
 pax_machine *get_cache(synode_no synode)
 {
-  pax_machine * retval = get_cache_no_touch(synode);
+  pax_machine *retval = get_cache_no_touch(synode);
   lru_touch_hit(retval); /* Insert in protected_lru */
   MAY_DBG(FN; SYCEXP(synode); PTREXP(retval));
   return retval;
@@ -295,26 +258,26 @@ pax_machine *get_cache(synode_no synode)
 static inline int can_deallocate(lru_machine *link_iter)
 {
 	synode_no delivered_msg;
-	site_def const *site = get_site_def();
-	site_def const *dealloc_site = find_site_def(link_iter->pax.synode);
+        site_def *site = get_site_def();
+        site_def *dealloc_site = find_site_def(link_iter->pax.synode);
 
-	/* If we have no site, or site was just installed, refuse deallocation */
+        /* If we have no site, or site was just installed, refuse deallocation */
 	if(site == 0)
 		return 0;
-	/*
-		With the patch that was put in to ensure that nodes always see  a
-		global  view  message when it joins, the node that joins may need
-		messages which are significantly behind the point where the  node
-		joins  (effectively starting with the latest config). So there is
-		a very real risk that a node which joined might find  that  those
-		messages had been removed, since all the other nodes had executed
-		past that point. This test effectively stops  garbage  collection
-		of  old  messages until the joining node has got a chance to tell
-		the others about its low water mark. If  it  has  not  done  that
-		within  DETECTOR_LIVE_TIMEOUT,  it will be considered dead by the
-		other nodes anyway, and expelled.
-	*/
-	if((site->install_time + DETECTOR_LIVE_TIMEOUT) > task_now())
+        /*
+           With the patch that was put in to ensure that nodes always see  a
+           global  view  message when it joins, the node that joins may need
+           messages which are significantly behind the point where the  node
+           joins  (effectively starting with the latest config). So there is
+           a very real risk that a node which joined might find  that  those
+           messages had been removed, since all the other nodes had executed
+           past that point. This test effectively stops  garbage  collection
+           of  old  messages until the joining node has got a chance to tell
+           the others about its low water mark. If  it  has  not  done  that
+           within  DETECTOR_LIVE_TIMEOUT,  it will be considered dead by the
+           other nodes anyway, and expelled.
+         */
+        if((site->install_time + DETECTOR_LIVE_TIMEOUT) > task_now())
 		return 0;
 	if(dealloc_site == 0)/* Synode does not match any site, OK to deallocate */
 		return 1;
@@ -326,24 +289,23 @@ static inline int can_deallocate(lru_machine *link_iter)
 }
 
 /*
-	Loop through the LRU (protected_lru) and deallocate objects until the size of
-	the cache is below the limit.
-	The freshly initialized objects are put into the probation_lru, so we can always start
-	scanning at the end of protected_lru.
-	lru_get will always look in probation_lru first.
-*/
+   Loop through the LRU (protected_lru) and deallocate objects until the size of
+   the cache is below the limit.
+   The freshly initialized objects are put into the probation_lru, so we can
+   always start scanning at the end of protected_lru. lru_get will always look
+   in probation_lru first.
+ */
 void shrink_cache()
 {
-	FWD_ITER(&protected_lru, lru_machine,
-	if ( above_cache_limit() &&  can_deallocate(link_iter)) {
-	    last_removed_cache = link_iter->pax.synode;
-		hash_out(&link_iter->pax); /* Remove from hash table */
-		link_into(link_out(&link_iter->lru_link), &probation_lru); /* Put in probation lru */
-		init_pax_machine(&link_iter->pax, link_iter, null_synode);
-	} else {
-		return;
-	}
-	);
+  FWD_ITER(
+      &protected_lru, lru_machine,
+      if (above_cache_limit() && can_deallocate(link_iter)) {
+        last_removed_cache = link_iter->pax.synode;
+        hash_out(&link_iter->pax); /* Remove from hash table */
+        link_into(link_out(&link_iter->lru_link),
+                  &probation_lru); /* Put in probation lru */
+        init_pax_machine(&link_iter->pax, link_iter, null_synode);
+      } else { return; });
 }
 
 void xcom_cache_var_init()
@@ -385,21 +347,15 @@ static pax_machine *init_pax_machine(pax_machine *p, lru_machine *lru, synode_no
 
 int	lock_pax_machine(pax_machine *p)
 {
-  int	old = p->lock;
+  int old = p->lock;
   if (!p->lock)
     p->lock = 1;
   return old;
 }
 
-void unlock_pax_machine(pax_machine *p)
-{
-  p->lock = 0;
-}
+void unlock_pax_machine(pax_machine *p) { p->lock = 0; }
 
-int	is_busy_machine(pax_machine *p)
-{
-  return p->lock;
-}
+int is_busy_machine(pax_machine *p) { return p->lock; }
 
 /* purecov: begin deadcode */
 /* Debug nodesets of Paxos instance */
@@ -443,78 +399,74 @@ char *dbg_pax_machine(pax_machine *p)
 /* purecov: end */
 
 /*
-  Return the size of a pax_msg. Counts only the pax_msg struct itself
-  and the size of the app_data.
-*/
+   Return the size of a pax_msg. Counts only the pax_msg struct itself
+   and the size of the app_data.
+ */
 static inline size_t get_app_msg_size(pax_msg const *p)
 {
-       if(!p)
-               return (size_t) 0;
-       else
-               return sizeof(pax_msg) + app_data_list_size(p->a);
+  if (!p)
+    return (size_t)0;
+  else
+    return sizeof(pax_msg) + app_data_list_size(p->a);
 }
 
 /*
-  Return the size of the messages referenced by a pax_machine.
-  The pax_machine itself is statically allocated, so we do
-  not count this when computing the cache size.
-*/
+   Return the size of the messages referenced by a pax_machine.
+   The pax_machine itself is statically allocated, so we do
+   not count this when computing the cache size.
+ */
 size_t pax_machine_size(pax_machine const *p)
 {
-       size_t size = get_app_msg_size(p->proposer.msg);
+  size_t size = get_app_msg_size(p->proposer.msg);
 
-       if (p->acceptor.msg && p->proposer.msg != p->acceptor.msg)
-               size += get_app_msg_size(p->acceptor.msg);
+  if (p->acceptor.msg && p->proposer.msg != p->acceptor.msg)
+    size += get_app_msg_size(p->acceptor.msg);
 
-       if (p->learner.msg && p->acceptor.msg != p->learner.msg && p->proposer.msg != p->learner.msg)
-               size += get_app_msg_size(p->learner.msg);
-       return size;
+  if (p->learner.msg && p->acceptor.msg != p->learner.msg &&
+      p->proposer.msg != p->learner.msg)
+    size += get_app_msg_size(p->learner.msg);
+  return size;
 }
 
 static size_t cache_size = 0;
 
 /* The cache itself is statically allocated, set size of dynamically allocted data to 0 */
-void init_cache_size()
-{
-       cache_size = 0;
-}
+void init_cache_size() { cache_size = 0; }
 
 /* Add to cache size */
 size_t add_cache_size(size_t x)
 {
-       cache_size += x;
-       if (DBG_CACHE_SIZE && x)
-       {
-         G_DEBUG("%f %s:%d cache_size %lu x %lu", seconds(), __FILE__, __LINE__,
-                 (long unsigned int)cache_size, (long unsigned int)x);
-       }
-       return cache_size;
+  cache_size += x;
+  if (DBG_CACHE_SIZE && x) {
+    G_DEBUG("%f %s:%d cache_size %lu x %lu", seconds(), __FILE__, __LINE__,
+            (long unsigned int)cache_size, (long unsigned int)x);
+  }
+  return cache_size;
 }
 
 /* Subtract from cache size */
 size_t sub_cache_size(size_t x)
 {
-       cache_size -= x;
-       if (DBG_CACHE_SIZE && x)
-       {
-         G_DEBUG("%f %s:%d cache_size %lu x %lu", seconds(), __FILE__, __LINE__,
-                 (long unsigned int)cache_size, (long unsigned int)x);
-       }
-       return cache_size;
+  cache_size -= x;
+  if (DBG_CACHE_SIZE && x) {
+    G_DEBUG("%f %s:%d cache_size %lu x %lu", seconds(), __FILE__, __LINE__,
+            (long unsigned int)cache_size, (long unsigned int)x);
+  }
+  return cache_size;
 }
 
 /* See if cache is above limit */
 int    above_cache_limit()
 {
-       return  the_app_xcom_cfg && cache_size > the_app_xcom_cfg->cache_limit ;
+  return the_app_xcom_cfg && cache_size > the_app_xcom_cfg->cache_limit;
 }
 
 /* If cfg object exits, set max cache size */
 size_t set_max_cache_size(size_t x)
 {
-       if (the_app_xcom_cfg)
-               return the_app_xcom_cfg->cache_limit = x;
-       else
-               return 0;
+  if (the_app_xcom_cfg)
+    return the_app_xcom_cfg->cache_limit = x;
+  else
+    return 0;
 }
 /* }}} */

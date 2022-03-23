@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,10 +23,9 @@
 
 #include "recovery_channel_state_observer.h"
 
-Recovery_channel_state_observer::
-Recovery_channel_state_observer(Recovery_state_transfer* recovery_state_transfer)
-  :recovery_state_transfer(recovery_state_transfer)
-{}
+Recovery_channel_state_observer::Recovery_channel_state_observer(
+    Recovery_state_transfer *recovery_state_transfer)
+    : recovery_state_transfer(recovery_state_transfer) {}
 
 int Recovery_channel_state_observer::
 thread_start(Binlog_relay_IO_param *param)
@@ -52,28 +52,20 @@ applier_stop(Binlog_relay_IO_param *param, bool aborted)
   return 0;
 }
 
-int Recovery_channel_state_observer::
-before_request_transmit(Binlog_relay_IO_param *param,
-                        uint32 flags)
-{
+int Recovery_channel_state_observer::before_request_transmit(
+    Binlog_relay_IO_param *param, uint32 flags) {
   return 0;
 }
 
-int Recovery_channel_state_observer::
-after_read_event(Binlog_relay_IO_param *param,
-                 const char *packet, unsigned long len,
-                 const char **event_buf,
-                 unsigned long *event_len)
-{
+int Recovery_channel_state_observer::after_read_event(
+    Binlog_relay_IO_param *param, const char *packet, unsigned long len,
+    const char **event_buf, unsigned long *event_len) {
   return 0;
 }
 
-int Recovery_channel_state_observer::
-after_queue_event(Binlog_relay_IO_param *param,
-                  const char *event_buf,
-                  unsigned long event_len,
-                  uint32 flags)
-{
+int Recovery_channel_state_observer::after_queue_event(
+    Binlog_relay_IO_param *param, const char *event_buf,
+    unsigned long event_len, uint32 flags) {
   return 0;
 }
 

@@ -148,10 +148,6 @@ SET GTID_NEXT= 'AUTOMATIC';
 --connection server2
 --echo server2
 
---echo [ The value of Count_Transactions_in_queue must be 3 when the applier has not processed the transaction queue ]
---let $wait_condition= SELECT Count_Transactions_in_queue = 3 from performance_schema.replication_group_member_stats;
---source include/wait_condition.inc
-
 --connection server1
 --echo server1
 
@@ -180,16 +176,6 @@ START SLAVE SQL_THREAD FOR CHANNEL "group_replication_applier";
 --let $negatively_certified= query_get_value(SELECT Count_conflicts_detected from performance_schema.replication_group_member_stats, Count_conflicts_detected, 1)
 --let $assert_text= The value of Count_conflicts_detected should be 0 after starting group replication
 --let $assert_cond= "$negatively_certified" = 0
---source include/assert.inc
-
---let $certification_db_size= query_get_value(SELECT Count_Transactions_rows_validating from performance_schema.replication_group_member_stats, Count_Transactions_rows_validating, 1)
---let $assert_text= The value of Count_Transactions_rows_validating should be 6 after starting group replication
---let $assert_cond= "$certification_db_size" = 6
---source include/assert.inc
-
---let $stable_set= query_get_value(SELECT Transactions_committed_all_members from performance_schema.replication_group_member_stats, Transactions_committed_all_members, 1)
---let $assert_text= The value of Transactions_committed_all_members should have server 1 GTIDs before server2 start
---let $assert_cond= "$stable_set" = "8a84f397-aaa4-18df-89ab-c70aa9823561:1-5"
 --source include/assert.inc
 
 --let $last_certified_transaction= query_get_value(SELECT Last_Conflict_free_transaction from performance_schema.replication_group_member_stats, Last_Conflict_free_transaction, 1)

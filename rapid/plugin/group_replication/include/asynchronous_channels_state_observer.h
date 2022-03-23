@@ -1,4 +1,5 @@
-/* Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2021, 2022, GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -43,24 +44,19 @@ public:
   int applier_stop(Binlog_relay_IO_param *param, bool aborted);
 
   /** Observer for when a new transmission from a another server is requested */
-  int before_request_transmit(Binlog_relay_IO_param *param,
-                              uint32 flags);
+  int before_request_transmit(Binlog_relay_IO_param *param, uint32 flags);
 
   /** Observer for whenever a event is read by the receiver thread*/
-  int after_read_event(Binlog_relay_IO_param *param,
-                       const char *packet, unsigned long len,
-                       const char **event_buf,
+  int after_read_event(Binlog_relay_IO_param *param, const char *packet,
+                       unsigned long len, const char **event_buf,
                        unsigned long *event_len);
 
   /** Observer for whenever a event is queued by the receiver thread*/
-  int after_queue_event(Binlog_relay_IO_param *param,
-                        const char *event_buf,
-                        unsigned long event_len,
-                        uint32 flags);
+  int after_queue_event(Binlog_relay_IO_param *param, const char *event_buf,
+                        unsigned long event_len, uint32 flags);
 
   /** Observer for whenever a reset slave is executed */
   int after_reset_slave(Binlog_relay_IO_param *param);
-
 };
 
 #endif /* SINGLE_PRIMARY_CHANNEL_STATE_OBSERVER_INCLUDE */
