@@ -67,8 +67,8 @@ Now you can start GreatSQL.
 # Change logs
 ---
 ## GreatSQL 8.0
+- [Changes in GreatSQL 8.0.25-16(2022-5-16)](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/relnotes/changes-greatsql-8-0-25-16-20220516.md)
 - [Changes in GreatSQL 8.0.25-15(2021-8-26)](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/relnotes/changes-greatsql-8-0-25-20210826.md)
-- [Changes in GreatSQL 8.0.25-16(2022-5-16)](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/relnotes/changes-greatsql-8-0-25-16-20210516.md)
 
 ## GreatSQL 5.7
 - [Changes in GreatSQL 5.7.36-39(2022-4-7)](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/relnotes/changes-greatsql-5-7-36-39-20210407.md)
