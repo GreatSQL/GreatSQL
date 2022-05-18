@@ -12,8 +12,12 @@ GreatSQL is completely free and compatible with MySQL or Percona Server.
 
 # Download GreatSQL
 ---
+## GreatSQL 8.0
+- [GreatSQL 8.0.25-16](https://github.com/GreatSQL/GreatSQL/releases/tag/GreatSQL-8.0.25-16)
+- [GreatSQL 8.0.25-15](https://github.com/GreatSQL/GreatSQL/releases/tag/GreatSQL-8.0.25-15)
 
-[Download GreatSQL](https://github.com/GreatSQL/GreatSQL/releases)
+## GreatSQL 5.7
+- [GreatSQL 5.7.36-39](https://github.com/GreatSQL/GreatSQL/releases/tag/GreatSQL-5.7.36-39)
 
 
 # New features
@@ -53,16 +57,21 @@ Load the libjemalloc library, and confirm whether it already exists
         libjemalloc.so (libc6,x86-64) => /usr/local/lib64/libjemalloc.so
 ```
 
-For my.cnf configuration file, please refer to [this sample](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/docs/my.cnf-example).
-
 Now you can start GreatSQL.
 
+# my.cnf examples
+- [my.cnf for GreatSQL 8.0.25-16](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/docs/my.cnf-example-greatsql-8.0.25-16)
+- [my.cnf for GreatSQL 8.0.25-15](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/docs/my.cnf-example-greatsql-8.0.25-15)
+- [my.cnf for GreatSQL 5.7.36](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/docs/my.cnf-example-greatsql-5.7.36)
 
 # Change logs
 ---
-- [GreatSQL Update Notes 8.0.25(2021-8-26)](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/relnotes/changes-greatsql-8-0-25-20210826.md)
+## GreatSQL 8.0
+- [Changes in GreatSQL 8.0.25-15(2021-8-26)](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/relnotes/changes-greatsql-8-0-25-20210826.md)
+- [Changes in GreatSQL 8.0.25-16(2022-5-16)](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/relnotes/changes-greatsql-8-0-25-16-20210516.md)
 
-
+## GreatSQL 5.7
+- [Changes in GreatSQL 5.7.36-39(2022-4-7)](https://github.com/GreatSQL/GreatSQL-Doc/blob/main/relnotes/changes-greatsql-5-7-36-39-20210407.md)
 
 # Documentation
 ---
