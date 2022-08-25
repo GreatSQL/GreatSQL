@@ -1,3 +1,12 @@
+> English| [中文](./README_zh.md)
+
+[![](https://img.shields.io/badge/Roadmap-Website-orange.svg)](https://greatsql.cn/)
+[![](https://img.shields.io/badge/Roadmap-Forum-orange.svg)](https://greatsql.cn/forum.php)
+[![](https://img.shields.io/badge/Content-Blog-blue.svg)](https://greatsql.cn/home.php?mod=space&uid=10&do=blog&view=me&from=space)
+[![](https://img.shields.io/badge/release-8.0.25-16-brightgreen.svg)](https://gitee.com/GreatSQL/GreatSQL/releases/tag/GreatSQL-8.0.25-16)
+
+
+
 # About GreatSQL
 ---
 
