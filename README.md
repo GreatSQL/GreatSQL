@@ -3,7 +3,7 @@
 [![](https://img.shields.io/badge/GreatSQL-Website-orange.svg)](https://greatsql.cn/)
 [![](https://img.shields.io/badge/GreatSQL-Forum-brightgreen.svg)](https://greatsql.cn/forum.php)
 [![](https://img.shields.io/badge/GreatSQL-Blog-brightgreen.svg)](https://greatsql.cn/home.php?mod=space&uid=10&do=blog&view=me&from=space)
-[![](https://img.shields.io/badge/License-GNU-blue.svg)](https://gitee.com/GreatSQL/GreatSQL/blob/master/LICENSE)
+[![](https://img.shields.io/badge/License-GPL_v2.0-blue.svg)](https://gitee.com/GreatSQL/GreatSQL/blob/master/LICENSE)
 [![](https://img.shields.io/badge/release-8.0.25_16-blue.svg)](https://gitee.com/GreatSQL/GreatSQL/releases/tag/GreatSQL-8.0.25-16)
 
 
