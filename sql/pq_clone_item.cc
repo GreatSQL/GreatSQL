@@ -154,6 +154,7 @@ bool Item::pq_copy_from(THD *thd MY_ATTRIBUTE((unused)),
   m_nullable = item->is_nullable();
   null_value = item->null_value;
   str_value = item->str_value;
+  hidden = item->hidden;
 
 #ifndef NDEBUG
   contextualized = item->contextualized;

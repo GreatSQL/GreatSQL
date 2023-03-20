@@ -1767,7 +1767,7 @@ void THD::change_item_tree(Item **place, Item *new_value) {
                         place, *place, new_value));
     nocheck_register_item_tree_change(place, new_value);
   }
-  if (new_value != nullptr) {
+  if (new_value != nullptr && new_value != *place) {
     new_value->origin_item = *place;
   }
   *place = new_value;

@@ -13,7 +13,7 @@ And if u download an packaged source code of greatsql which does not contain any
 ```
 export MAKE_JFLAG=-j$your_processors
 mkdir -p workdir
-cp $your_path/greatsql-8.0.25-15.tar.gz workdir/
+cp $your_path/greatsql-8.0.25-17.tar.gz workdir/
 bash -xe ./percona-server-8.0_builder.sh --builddir=`pwd`/workdir --get_sources=0  --install_deps=1 --with_ssl=1 --build_tarball=0 --build_src_rpm=1  --build_rpm=1 --no_git_info=1
 ``` 
 
