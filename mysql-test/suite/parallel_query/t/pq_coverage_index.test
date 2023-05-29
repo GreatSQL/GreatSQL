@@ -1,0 +1,64 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+create database pq_test;
+use pq_test;
+
+-- disable_query_log
+SET @transaction_isolation_orig = @@transaction_isolation;
+SET @innodb_file_per_table_orig = @@innodb_file_per_table;
+# The flag innodb_change_buffering_debug is only available in debug builds.
+# It instructs InnoDB to try to evict pages from the buffer pool when
+# change buffering is possible, so that the change buffer will be used
+# whenever possible.
+-- error 0,ER_UNKNOWN_SYSTEM_VARIABLE
+SET @innodb_change_buffering_debug_orig = @@innodb_change_buffering_debug;
+-- error 0,ER_UNKNOWN_SYSTEM_VARIABLE
+SET GLOBAL innodb_change_buffering_debug = 1;
+-- enable_query_log
+
+SET GLOBAL transaction_isolation='REPEATABLE-READ';
+SET GLOBAL innodb_file_per_table=on;
+
+CREATE TABLE bug56680(
+       a INT AUTO_INCREMENT PRIMARY KEY,
+       b CHAR(1),
+       c INT,
+       INDEX(b))
+ENGINE=InnoDB STATS_PERSISTENT=0;
+
+INSERT INTO bug56680 VALUES(0,'x',1);
+BEGIN;
+SELECT b FROM bug56680;
+
+connect (con1,localhost,root,,);
+connection con1;
+use pq_test;
+BEGIN;
+UPDATE bug56680 SET b='X';
+
+connection default;
+# This should return the last committed value 'x', but would return 'X'
+# due to a bug in row_search_for_mysql().
+SELECT b FROM bug56680;
+# This would always return the last committed value 'x'.
+SELECT * FROM bug56680;
+
+connection con1;
+ROLLBACK;
+disconnect con1;
+
+connection default;
+
+SELECT b FROM bug56680;
+COMMIT;
+
+-- disable_query_log
+SET GLOBAL transaction_isolation = @transaction_isolation_orig;
+SET GLOBAL innodb_file_per_table = @innodb_file_per_table_orig;
+-- error 0, ER_UNKNOWN_SYSTEM_VARIABLE
+SET GLOBAL innodb_change_buffering_debug = @innodb_change_buffering_debug_orig;
+-- enable_query_log
+
+drop table pq_test.bug56680;
+drop database pq_test;

@@ -1,0 +1,225 @@
+#
+# SELECT INTICAP(...) FROM DUAL;
+#
+SELECT INITCAP("hello world") FROM DUAL;
+INITCAP("hello world")
+Hello World
+SELECT INITCAP('hello world') FROM DUAL;
+INITCAP('hello world')
+Hello World
+SELECT INITCAP('HELLO WORLD') FROM DUAL;
+INITCAP('HELLO WORLD')
+Hello World
+SELECT INITCAP('hah, hello world') FROM DUAL;
+INITCAP('hah, hello world')
+Hah, Hello World
+SELECT INITCAP('$hello world') FROM DUAL;
+INITCAP('$hello world')
+$Hello World
+SELECT INITCAP('!hello world') FROM DUAL;
+INITCAP('!hello world')
+!Hello World
+SELECT INITCAP('你好') FROM DUAL;
+INITCAP('你好')
+你好
+SELECT INITCAP('你好 hello world') FROM DUAL;
+INITCAP('你好 hello world')
+你好 Hello World
+SELECT INITCAP('hello你好world') FROM DUAL;
+INITCAP('hello你好world')
+Hello你好World
+SELECT INITCAP('123') FROM DUAL;
+INITCAP('123')
+123
+SELECT INITCAP('123hello') FROM DUAL;
+INITCAP('123hello')
+123hello
+SELECT INITCAP('hello$world') FROM DUAL;
+INITCAP('hello$world')
+Hello$World
+SELECT INITCAP('Hello-world') FROM DUAL;
+INITCAP('Hello-world')
+Hello-World
+SELECT INITCAP('hello123world') FROM DUAL;
+INITCAP('hello123world')
+Hello123world
+SELECT INITCAP('\1hello world') FROM DUAL;
+INITCAP('\1hello world')
+1hello World
+SELECT INITCAP('\nhello world') FROM DUAL;
+INITCAP('\nhello world')
+
+Hello World
+SELECT INITCAP('\\hello world') FROM DUAL;
+INITCAP('\\hello world')
+\Hello World
+SELECT INITCAP('\)hello world') FROM DUAL;
+INITCAP('\)hello world')
+)Hello World
+SELECT INITCAP('hello\1world') FROM DUAL;
+INITCAP('hello\1world')
+Hello1world
+SELECT INITCAP('hello\nworld') FROM DUAL;
+INITCAP('hello\nworld')
+Hello
+World
+SELECT INITCAP('hello\\world') FROM DUAL;
+INITCAP('hello\\world')
+Hello\World
+SELECT INITCAP('hello\)world') FROM DUAL;
+INITCAP('hello\)world')
+Hello)World
+SELECT INITCAP('NULL') FROM DUAL;
+INITCAP('NULL')
+Null
+SELECT INITCAP('') FROM DUAL;
+INITCAP('')
+
+SELECT INITCAP(NULL) FROM DUAL;
+INITCAP(NULL)
+NULL
+SELECT INITCAP('NULL') FROM DUAL;
+INITCAP('NULL')
+Null
+SELECT INITCAP('àabcd abÀcd abcdÀ') FROM DUAL;
+INITCAP('àabcd abÀcd abcdÀ')
+Àabcd Abàcd Abcdà
+select UPPER('αβγλλ'), INITCAP('αβγ ABC λλ我?βαγ'), INITCAP('αβγABC') FROM DUAL;
+UPPER('αβγλλ')	INITCAP('αβγ ABC λλ我?βαγ')	INITCAP('αβγABC')
+ΑΒΓΛΛ	Αβγ Abc Λλ我?Βαγ	Αβγabc
+SELECT INITCAP('hello', 'world') FROM DUAL;
+ERROR 42000: Incorrect parameter count in the call to native function 'INITCAP'
+#
+# NULL
+#
+SELECT INITCAP(''),NVL(INITCAP(''),'空'),INITCAP(NULL), NVL(INITCAP(NULL),'空') FROM DUAL;
+INITCAP('')	NVL(INITCAP(''),'空')	INITCAP(NULL)	NVL(INITCAP(NULL),'空')
+		NULL	空
+SELECT 1 FROM DUAL WHERE INITCAP('') IS NULL;
+1
+SELECT 1 FROM DUAL WHERE INITCAP(NULL) IS NULL;
+1
+1
+SELECT INITCAP('') IS NULL FROM DUAL;
+INITCAP('') IS NULL
+0
+SELECT INITCAP(NULL) IS NULL FROM DUAL;
+INITCAP(NULL) IS NULL
+1
+SET @@SESSION.SQL_MODE=(SELECT CONCAT(@@SESSION.SQL_MODE, ',PIPES_AS_CONCAT'));
+SELECT INITCAP(NULL) || INITCAP(NULL) FROM DUAL;
+INITCAP(NULL) || INITCAP(NULL)
+NULL
+SELECT INITCAP('') || INITCAP('') FROM DUAL;
+INITCAP('') || INITCAP('')
+
+#
+# PROCEDURE
+#
+CREATE PROCEDURE p1(IN v1 VARCHAR(255))
+BEGIN
+DECLARE v2 varchar(255);
+SELECT INITCAP(v1);
+SET v2 = INITCAP(v1);
+SELECT v2;
+END;//
+CALL p1('àabcd abÀcd abcdÀ');
+INITCAP(v1)
+Àabcd Abàcd Abcdà
+v2
+Àabcd Abàcd Abcdà
+CALL p1('àabcd abÀcd abcdÀ');
+INITCAP(v1)
+Àabcd Abàcd Abcdà
+v2
+Àabcd Abàcd Abcdà
+DROP PROCEDURE p1;
+#
+# TABLE
+#
+CREATE TABLE test_initcap(c1 varchar(128) DEFAULT (INITCAP('àabcd abÀcd abcdÀ')));
+INSERT INTO test_initcap VALUES(INITCAP('àabcd abÀcd abcdÀ'));
+INSERT INTO test_initcap VALUES();
+SELECT c1 FROM test_initcap;
+c1
+Àabcd Abàcd Abcdà
+Àabcd Abàcd Abcdà
+DROP TABLE test_initcap;
+#
+# SUBQUERY
+#
+SELECT * FROM (SELECT INITCAP('hello world') FROM DUAL);
+INITCAP('hello world')
+Hello World
+SELECT * FROM (SELECT INITCAP('1a1bbb') FROM DUAL);
+INITCAP('1a1bbb')
+1a1bbb
+SELECT * FROM (SELECT INITCAP('\nhello world') FROM DUAL);
+INITCAP('\nhello world')
+
+Hello World
+SELECT * FROM (SELECT INITCAP('hello\nworld') FROM DUAL);
+INITCAP('hello\nworld')
+Hello
+World
+SELECT * FROM (SELECT INITCAP('\1hello world') FROM DUAL);
+INITCAP('\1hello world')
+1hello World
+SELECT * FROM (SELECT INITCAP('hello你好world') FROM DUAL);
+INITCAP('hello你好world')
+Hello你好World
+SELECT * FROM (SELECT INITCAP('αβγ ABC λλ我?βαγ') FROM DUAL);
+INITCAP('αβγ ABC λλ我?βαγ')
+Αβγ Abc Λλ我?Βαγ
+#
+# GROUP BY/ORDER BY
+#
+CREATE TABLE test_initcap(c1 varchar(128));
+INSERT INTO test_initcap VALUES('hello world');
+INSERT INTO test_initcap VALUES('Hello world');
+INSERT INTO test_initcap VALUES('hEllo world');
+INSERT INTO test_initcap VALUES('heLlo world');
+INSERT INTO test_initcap VALUES('helLo world');
+INSERT INTO test_initcap VALUES('hellO world');
+INSERT INTO test_initcap VALUES('hello World');
+INSERT INTO test_initcap VALUES('hello wOrld');
+INSERT INTO test_initcap VALUES('hello woRld');
+INSERT INTO test_initcap VALUES('hello worLd');
+INSERT INTO test_initcap VALUES('hello worlD');
+INSERT INTO test_initcap VALUES('goodbye world');
+INSERT INTO test_initcap VALUES('1a1bbb');
+INSERT INTO test_initcap VALUES('hello\nworld');
+INSERT INTO test_initcap VALUES('\1hello world');
+INSERT INTO test_initcap VALUES('hello你好world');
+INSERT INTO test_initcap VALUES('αβγ ABC λλ我?βαγ');
+SELECT * FROM test_initcap ORDER BY INITCAP(c1) ASC;
+c1
+1a1bbb
+1hello world
+goodbye world
+hello
+world
+hello world
+Hello world
+hEllo world
+heLlo world
+helLo world
+hellO world
+hello World
+hello wOrld
+hello woRld
+hello worLd
+hello worlD
+hello你好world
+αβγ ABC λλ我?βαγ
+SELECT INITCAP(c1), COUNT(c1) FROM test_initcap GROUP BY INITCAP(c1);
+INITCAP(c1)	COUNT(c1)
+Hello World	11
+Goodbye World	1
+1a1bbb	1
+Hello
+World	1
+1hello World	1
+Hello你好World	1
+Αβγ Abc Λλ我?Βαγ	1
+DROP TABLE test_initcap;

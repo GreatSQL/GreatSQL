@@ -1,0 +1,178 @@
+# Test remote clone with encrypt
+
+--let $HOST = 127.0.0.1
+--let $PORT =`select @@port`
+--let $USER = root
+--let remote_clone = 1
+
+# Test clone with concurrent DML
+
+--source include/have_log_bin.inc
+
+--source include/have_innodb_default_undo_tablespaces.inc
+--source ../include/clone_connection_begin.inc
+
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/data_new
+--source include/count_sessions.inc
+
+## Install plugin
+
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+## Create test schema
+--source ../include/create_schema.inc
+
+
+## Execute Clone while concurrent DMLs are in progress
+--let num_rows = 10
+
+# Insert rows
+--eval call execute_dml(0, 0, $num_rows, $num_rows, 10, 0)
+
+--echo # In connection default - Cloning database
+--connection clone_conn_1
+
+--echo # enable encryption function
+--replace_result $MYSQL_TEST_DIR MYSQL_TEST_DIR
+--eval set global clone_encrypt_key_path= '$MYSQL_TEST_DIR/std_data/mysql_clone_key'
+
+--source ../include/clone_command.inc
+--echo # In connection default - Finished Cloning
+
+show variables like 'clone_autotune_concurrency';
+
+--echo # In connection default
+connection default;
+
+--source include/wait_until_count_sessions.inc
+--exec $MYSQL_DECRYPT --clone-decrypt --clone-decrypt-key=$MYSQL_TEST_DIR/std_data/mysql_clone_key --clone-decrypt-dir=$CLONE_DATADIR/ --remove-original=true >> /tmp/null
+
+--echo # Restart cloned database
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+--let restart_parameters="restart: --datadir=$CLONE_DATADIR"
+--source include/restart_mysqld.inc
+
+select STATE, ERROR_NO, length(BINLOG_FILE) > 0, length(GTID_EXECUTED) > 0,
+(BINLOG_POSITION > 0) from performance_schema.clone_status;
+
+# Execute procedure to delete all rows and insert
+call execute_dml(3, 0, 1, 1, 1, 0);
+--eval call execute_dml(0, 0, $num_rows, $num_rows, 10, 0)
+
+# Check table in cloned database
+SHOW CREATE TABLE t1;
+SELECT count(*) from t1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1 LIMIT 10;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1 DESC LIMIT 10;
+
+SHOW CREATE TABLE t2;
+SELECT count(*) from t2;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1 LIMIT 10;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1 DESC LIMIT 10;
+
+#Cleanup
+if (!$clone_remote_replace) {
+--let restart_parameters="restart:"
+--source include/restart_mysqld.inc
+}
+--connection default
+--source ../include/drop_schema.inc
+
+if (!$clone_remote_replace) {
+--force-rmdir $CLONE_DATADIR
+}
+
+# Clean recipient by cloning the cleaned up donor
+--source ../include/clone_connection_end.inc
+
+UNINSTALL PLUGIN clone;
+
+
+# Test local clone with encrypt
+
+--let $USER = root
+--let remote_clone = 0
+
+# Test clone with concurrent DML
+
+--source include/have_log_bin.inc
+
+--source include/have_innodb_default_undo_tablespaces.inc
+--source ../include/clone_connection_begin.inc
+
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/data_new
+--source include/count_sessions.inc
+
+## Install plugin
+
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+## Create test schema
+--source ../include/create_schema.inc
+
+
+## Execute Clone while concurrent DMLs are in progress
+--let num_rows = 10
+
+# Insert rows
+--eval call execute_dml(0, 0, $num_rows, $num_rows, 10, 0)
+
+--echo # In connection default - Cloning database
+--connection clone_conn_1
+
+--echo # enable encryption function
+--replace_result $MYSQL_TEST_DIR MYSQL_TEST_DIR
+--eval set global clone_encrypt_key_path= '$MYSQL_TEST_DIR/std_data/mysql_clone_key'
+
+--source ../include/clone_command.inc
+--echo # In connection default - Finished Cloning
+
+show variables like 'clone_autotune_concurrency';
+
+--echo # In connection default
+connection default;
+
+--source include/wait_until_count_sessions.inc
+--exec $MYSQL_DECRYPT --clone-decrypt --clone-decrypt-key=$MYSQL_TEST_DIR/std_data/mysql_clone_key --clone-decrypt-dir=$CLONE_DATADIR/ --remove-original=true >> /tmp/null
+
+--echo # Restart cloned database
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+--let restart_parameters="restart: --datadir=$CLONE_DATADIR"
+--source include/restart_mysqld.inc
+
+select STATE, ERROR_NO, length(BINLOG_FILE) > 0, length(GTID_EXECUTED) > 0,
+(BINLOG_POSITION > 0) from performance_schema.clone_status;
+
+# Execute procedure to delete all rows and insert
+call execute_dml(3, 0, 1, 1, 1, 0);
+--eval call execute_dml(0, 0, $num_rows, $num_rows, 10, 0)
+
+# Check table in cloned database
+SHOW CREATE TABLE t1;
+SELECT count(*) from t1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1 LIMIT 10;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1 DESC LIMIT 10;
+
+SHOW CREATE TABLE t2;
+SELECT count(*) from t2;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1 LIMIT 10;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1 DESC LIMIT 10;
+
+#Cleanup
+if (!$clone_remote_replace) {
+--let restart_parameters="restart:"
+--source include/restart_mysqld.inc
+}
+--connection default
+--source ../include/drop_schema.inc
+
+if (!$clone_remote_replace) {
+--force-rmdir $CLONE_DATADIR
+}
+
+# Clean recipient by cloning the cleaned up donor
+--source ../include/clone_connection_end.inc
+
+UNINSTALL PLUGIN clone;

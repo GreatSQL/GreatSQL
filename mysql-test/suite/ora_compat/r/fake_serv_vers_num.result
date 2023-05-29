@@ -1,0 +1,17 @@
+select @@version;
+@@version
+9.0.32-23
+select version();
+version()
+9.0.32-23
+select * from sys.version;
+sys_version	mysql_version
+2.1.2	9.0.32-23
+select @@innodb_version;
+@@innodb_version
+9.0.32-23
+show variables like '%fake_serv_vers_num%';
+Variable_name	Value
+select @@fake_serv_vers_num;
+ERROR HY000: Unknown system variable 'fake_serv_vers_num'
+"TODO: test server's Greeting package"

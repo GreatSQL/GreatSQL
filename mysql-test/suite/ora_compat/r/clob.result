@@ -1,0 +1,7 @@
+create table t1(a int, b clob, primary key(a));
+set group_concat_max_len = 20000000;
+insert into t1 values (1, repeat(concat('A', cast(char(0) as binary), 'B'), 40000));
+select a, char_length(b) from t1;
+a	char_length(b)
+1	120000
+drop table t1;

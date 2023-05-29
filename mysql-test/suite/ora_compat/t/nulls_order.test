@@ -1,0 +1,125 @@
+
+create table p (population int, nation char(20), city char(20));
+insert into p values (null, 'China','');
+insert into p values (1500, 'China','Shanghai');
+insert into p values (500, 'China','Beijing');
+insert into p values (1000, 'USA','New York');
+insert into p values (500, 'USA','Boston');
+insert into p values (null, 'Japan','');
+
+CREATE TABLE `test1` (
+  `id` int NOT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  `test_dec` decimal(10,5) DEFAULT NULL,
+  `test_blob` blob,
+  `c5` varchar(255) NOT NULL,
+  `c6` timestamp NULL DEFAULT NULL,
+  `c7` char(255) DEFAULT NULL,
+  `c8` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO `test1` VALUES (1, '1', 11.32000, NULL, 'c5', NULL, 'c71', NULL);
+INSERT INTO `test1` VALUES (2, '2', 22.24500, NULL, '', '2022-03-17 16:08:57', NULL, 'c82');
+INSERT INTO `test1` VALUES (3, '3', 3.00000, NULL, '', '2022-03-17 16:04:15', NULL, NULL);
+INSERT INTO `test1` VALUES (4, '3', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (5, '', 0, NULL, '', '2022-03-09 16:04:19', NULL, NULL);
+INSERT INTO `test1` VALUES (6, '', NULL, NULL, '', NULL, NULL, '1');
+INSERT INTO `test1` VALUES (7, '20', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (8, '8', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (9, NULL, NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (10, NULL, NULL, NULL, 'c510', NULL, '', '');
+
+set sql_mode=default;
+select name,c5,'my' from test1 order by name;
+select name,c5,'my desc' from test1 order by name desc;
+select name,c5,'my nf' from test1 order by name nulls first;
+select name,c5,'my nl' from test1 order by name nulls last;
+select name,c5,'my desc nf' from test1 order by name desc nulls first;
+select name,c5,'my desc nl' from test1 order by name desc nulls last;
+
+set sql_mode=oracle;
+select name,c5,'ora' from test1 order by name;
+select name,c5,'ora desc' from test1 order by name desc;
+select name,c5,'ora nf' from test1 order by name nulls first;
+select name,c5,'ora nl' from test1 order by name nulls last;
+select name,c5,'ora desc nf' from test1 order by name desc nulls first;
+select name,c5,'ora desc nl' from test1 order by name desc nulls last;
+
+set sql_mode=default;
+select name,c5,'my' from test1 order by name,c5;
+select name,c5,'my desc' from test1 order by name,c5 desc;
+select name,c5,'my nf' from test1 order by name nulls first,c5 nulls first;
+select name,c5,'my nl' from test1 order by name nulls last,c5 nulls last;
+select name,c5,'my desc nf' from test1 order by name desc nulls first,c5 desc nulls first;
+select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls last;
+
+set sql_mode=oracle;
+select name,c5,'ora' from test1 order by name;
+select name,c5,'ora desc' from test1 order by name,c5 desc;
+select name,c5,'ora nf' from test1 order by name nulls first,c5 nulls first;
+select name,c5,'ora nl' from test1 order by name nulls last,c5 nulls last;
+select name,c5,'ora desc nf' from test1 order by name nulls first,c5 desc nulls first;
+select name,c5,'ora desc nl' from test1 order by name nulls last,c5 desc nulls last;
+
+set sql_mode=default;
+set sql_mode=concat(@@sql_mode, ',EMPTYSTRING_EQUAL_NULL');
+
+--enable_warnings
+echo # explain
+explain select 1;
+explain select name,c5,'my' from test1 order by name;
+explain select name,c5,'my desc' from test1 order by name desc;
+explain select name,c5,'my nf' from test1 order by name nulls first;
+explain select name,c5,'my nl' from test1 order by name nulls last;
+explain select name,c5,'my desc nf' from test1 order by name desc nulls first;
+explain select name,c5,'my desc nl' from test1 order by name desc nulls last;
+explain select name,c5,'my' from test1 order by name,c5;
+explain select name,c5,'my desc' from test1 order by name,c5 desc;
+explain select name,c5,'my nf' from test1 order by name nulls first,c5 nulls last;
+explain select name,c5,'my nl' from test1 order by name nulls last,c5 nulls first;
+explain select name,c5,'my desc nf' from test1 order by name desc nulls first,c5 desc nulls last;
+explain select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls first;
+
+--echo # index scan check
+create index i1 on test1 (name,c5);
+create index i1 on p (nation,city);
+select name,c5,'my' from test1 order by name;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select name,c5,'my' from test1 order by name;
+select name,c5,'my desc' from test1 order by name desc;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select name,c5,'my desc' from test1 order by name desc;
+select name,c5,'my nf' from test1 order by name nulls first;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select name,c5,'my nf' from test1 order by name nulls first;
+select name,c5,'my nl' from test1 order by name nulls last;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select name,c5,'my nl' from test1 order by name nulls last;
+select name,c5,'my desc nf' from test1 order by name desc nulls first;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select name,c5,'my desc nf' from test1 order by name desc nulls first;
+select name,c5,'my desc nl' from test1 order by name desc nulls last;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select name,c5,'my desc nl' from test1 order by name desc nulls last;
+select name,c5,'my' from test1 order by name,c5;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select name,c5,'my' from test1 order by name,c5;
+select name,c5,'my desc' from test1 order by name,c5 desc;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select name,c5,'my desc' from test1 order by name,c5 desc;
+select name,c5,'my nf' from test1 order by name nulls first,c5 nulls last;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select name,c5,'my nf' from test1 order by name nulls first,c5 nulls last;
+select name,c5,'my nl' from test1 order by name nulls last,c5 nulls first;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select name,c5,'my nl' from test1 order by name nulls last,c5 nulls first;
+select name,c5,'my desc nf' from test1 order by name desc nulls first,c5 desc nulls last;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select name,c5,'my desc nf' from test1 order by name desc nulls first,c5 desc nulls last;
+select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls first;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls first;
+
+drop table test1;
+drop table p;

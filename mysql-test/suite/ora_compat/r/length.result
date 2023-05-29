@@ -1,0 +1,50 @@
+DROP TABLE IF EXISTS t1;
+DROP PROCEDURE IF EXISTS p1;
+create table t1 (id int,a char(10));
+insert into t1 values (1,'ABC123万AH');
+insert into t1 values (2,'');
+set sql_mode='';
+select length(a) from t1;
+length(a)
+11
+0
+select length(a) a from t1 union select 'x' a from t1;
+a
+11
+0
+x
+set sql_mode='oracle';
+select length(a) from t1;
+length(a)
+9
+NULL
+select length(a) a from t1 union select 'x' a from t1;
+a
+9
+NULL
+x
+drop table t1;
+set sql_mode='';
+select 'a' union SELECT length('ABC123万AH');
+a
+a
+11
+SELECT length('树a''在');
+length('树a''在')
+8
+set sql_mode='oracle';
+select 'a' union SELECT length('ABC123万AH');
+a
+a
+9
+SELECT length('树a''在');
+length('树a''在')
+4
+set sql_mode='';
+CREATE PROCEDURE p1(a varchar(255))
+SET @query = length(a);
+CALL p1('ABC123万AH');
+SELECT @query;
+@query
+11
+DROP PROCEDURE p1;

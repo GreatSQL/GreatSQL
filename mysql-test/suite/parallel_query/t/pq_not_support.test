@@ -1,0 +1,51 @@
+# this test case include sql that cannot run parallelly
+
+--source include/pq_test.inc
+
+CREATE TABLE t0 ( col1 INT NOT NULL, col2 INT ) ENGINE=InnoDB;
+insert into t0 values(0,1),(1,2),(2,3);
+CREATE TABLE t1 (col3 DECIMAL(35,0) DEFAULT NULL, col1 INT NOT NULL, col2 INT NOT NULL DEFAULT '0', PRIMARY KEY (col1)) ENGINE=MyISAM;
+REPLACE INTO t1 ( col1,col2) SELECT col1,col2 FROM t0;
+select * from t1;
+drop table t0, t1;
+--disable_warnings
+drop database if exists pq_bit_database;
+--enable_warnings
+create database pq_bit_database;
+use pq_bit_database;
+
+CREATE TABLE t1 (a char(1), b VARBINARY(1)) ENGINE=InnoDB;
+INSERT INTO t1 VALUES ('a', null);
+INSERT INTO t1 VALUES ('a', null);
+INSERT INTO t1 VALUES ('b', null);
+INSERT INTO t1 VALUES ('b', 0x12);
+INSERT INTO t1 VALUES ('c', 0x12);
+INSERT INTO t1 VALUES ('b', 0x02);
+INSERT INTO t1 VALUES ('c', 0x40);
+ANALYZE TABLE t1;
+SET @orig_sql_mode = @@sql_mode;
+set sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
+EXPLAIN SELECT a, BIT_AND(b) FROM t1;
+EXPLAIN SELECT a, BIT_OR(b) FROM t1;
+EXPLAIN SELECT a, BIT_XOR(b) FROM t1;
+EXPLAIN SELECT a, 1 + BIT_AND(b) FROM t1;
+EXPLAIN SELECT a, 1 + BIT_OR(b) FROM t1;
+EXPLAIN SELECT a, 1 + BIT_XOR(b) FROM t1;
+EXPLAIN SELECT a, SUM(b) + BIT_AND(b) FROM t1;
+EXPLAIN SELECT a, SUM(b) + BIT_OR(b) FROM t1;
+EXPLAIN SELECT a, SUM(b) + BIT_XOR(b) FROM t1;
+EXPLAIN SELECT a, 1 + BIT_AND(b) FROM t1 GROUP BY a;
+EXPLAIN SELECT a, 1 + BIT_OR(b) FROM t1 GROUP BY a;
+EXPLAIN SELECT a, 1 + BIT_XOR(b) FROM t1 GROUP BY a;
+EXPLAIN SELECT a, b FROM t1 having BIT_AND(b) > 0;
+EXPLAIN SELECT a, b FROM t1 having BIT_OR(b) > 0;
+EXPLAIN SELECT a, b FROM t1 having BIT_XOR(b) > 0;
+EXPLAIN SELECT a, BIT_AND(b) FROM t1 GROUP BY a ORDER BY BIT_AND(b);
+EXPLAIN SELECT a, BIT_AND(b) FROM t1 GROUP BY a ORDER BY BIT_OR(b);
+EXPLAIN SELECT a, BIT_AND(b) FROM t1 GROUP BY a ORDER BY BIT_XOR(b);
+SELECT a, BIT_AND(b) FROM t1;
+SELECT a, BIT_OR(b) FROM t1;
+SELECT a, BIT_XOR(b) FROM t1;
+DROP TABLE t1;
+SET sql_mode = @orig_sql_mode;
+drop database pq_bit_database;

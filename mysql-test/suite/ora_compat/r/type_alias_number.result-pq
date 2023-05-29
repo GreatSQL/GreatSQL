@@ -1,0 +1,1283 @@
+DROP TABLE IF EXISTS `test1`;
+Warnings:
+Note	1051	Unknown table 'test.test1'
+CREATE TABLE `test1` (
+`c0` int DEFAULT NULL,
+`c1` number DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+show create table test1;
+Table	Create Table
+test1	CREATE TABLE `test1` (
+  `c0` int DEFAULT NULL,
+  `c1` decimal(65,30) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO `test1` VALUES ('1', '2');
+INSERT INTO `test1` VALUES ('2', '3');
+INSERT INTO `test1` VALUES ('3', '1');
+DROP TABLE IF EXISTS `test3`;
+Warnings:
+Note	1051	Unknown table 'test.test3'
+CREATE TABLE `test3` (
+`c0` int DEFAULT NULL,
+`c1` number  ,
+`c2` number   
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+show create table test3;
+Table	Create Table
+test3	CREATE TABLE `test3` (
+  `c0` int DEFAULT NULL,
+  `c1` decimal(65,30) DEFAULT NULL,
+  `c2` decimal(65,30) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE IF EXISTS `test2`;
+Warnings:
+Note	1051	Unknown table 'test.test2'
+CREATE TABLE `test2` (`c0`  number NULL DEFAULT NULL ,`c1`  number(4) NULL DEFAULT NULL ,  `c2`  number(4,2) NULL DEFAULT NULL ,`c3` decimal(4,2) NULL DEFAULT NULL , `c4` number(*,3) NULL DEFAULT NULL , `c5` number(*) NULL DEFAULT NULL) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC;
+show create table test2;
+Table	Create Table
+test2	CREATE TABLE `test2` (
+  `c0` decimal(65,30) DEFAULT NULL,
+  `c1` decimal(4,0) DEFAULT NULL,
+  `c2` decimal(4,2) DEFAULT NULL,
+  `c3` decimal(4,2) DEFAULT NULL,
+  `c4` decimal(38,3) DEFAULT NULL,
+  `c5` decimal(65,30) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
+DROP TABLE IF EXISTS `test_number`;
+Warnings:
+Note	1051	Unknown table 'test.test_number'
+CREATE TABLE `test_number` (`c0`  number DEFAULT NULL ,`c1`  number(4) NULL DEFAULT NULL ,  `c2`  number(4,2) NULL DEFAULT NULL ,`c3` decimal(4,2) NULL DEFAULT NULL , `c4` number(*,3) NULL DEFAULT NULL , `c5` number(*) NULL DEFAULT NULL) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC;
+insert into test_number (c0,c1,c2,c3,c4,c5) values (1234567890,1234,12.666,12.666,12.666,1234567890);
+Warnings:
+Note	1265	Data truncated for column 'c2' at row 1
+Note	1265	Data truncated for column 'c3' at row 1
+show create table test_number;
+Table	Create Table
+test_number	CREATE TABLE `test_number` (
+  `c0` decimal(65,30) DEFAULT NULL,
+  `c1` decimal(4,0) DEFAULT NULL,
+  `c2` decimal(4,2) DEFAULT NULL,
+  `c3` decimal(4,2) DEFAULT NULL,
+  `c4` decimal(38,3) DEFAULT NULL,
+  `c5` decimal(65,30) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
+select c0, c0+1.1 ,c1,c1+1.1,c2,c2+1.1,c3,c3+1.1,c4,c4+1.1,c5,c5+1.1 from test_number;
+c0	c0+1.1	c1	c1+1.1	c2	c2+1.1	c3	c3+1.1	c4	c4+1.1	c5	c5+1.1
+1234567890.000000000000000000000000000000	1234567891.100000000000000000000000000000	1234	1235.1	12.67	13.77	12.67	13.77	12.666	13.766	1234567890.000000000000000000000000000000	1234567891.100000000000000000000000000000
+select c0+1,c0-1,c0*2,c0/2,2/2 from test_number;
+c0+1	c0-1	c0*2	c0/2	2/2
+1234567891.000000000000000000000000000000	1234567889.000000000000000000000000000000	2469135780.000000000000000000000000000000	617283945.000000000000000000000000000000	1.0000
+update test_number set c0=123456 ,c1=12.567 ,c2=12.567,c3=12.567,c4=12.567,c5=123456;
+Warnings:
+Note	1265	Data truncated for column 'c1' at row 1
+Note	1265	Data truncated for column 'c2' at row 1
+Note	1265	Data truncated for column 'c3' at row 1
+select * from test_number;
+c0	c1	c2	c3	c4	c5
+123456.000000000000000000000000000000	13	12.57	12.57	12.567	123456.000000000000000000000000000000
+update test_number set c0=300000000000000000000000000000000000;
+ERROR 22003: Out of range value for column 'c0' at row 1
+update test_number set c0=30000000000000000000000000000000000;
+select c0 from test_number;
+c0
+30000000000000000000000000000000000.000000000000000000000000000000
+update test_number set c0=123456 ,c1=12.567 ,c2=12.567,c3=12.567,c4=12.567,c5=123456;
+Warnings:
+Note	1265	Data truncated for column 'c1' at row 1
+Note	1265	Data truncated for column 'c2' at row 1
+Note	1265	Data truncated for column 'c3' at row 1
+select * from test_number;
+c0	c1	c2	c3	c4	c5
+123456.000000000000000000000000000000	13	12.57	12.57	12.567	123456.000000000000000000000000000000
+select c2,count(*) from test_number group by c2 order by c2;
+c2	count(*)
+12.57	1
+ALTER TABLE `test_number` ADD COLUMN `test_cl` number NOT NULL DEFAULT 123456 COMMENT 'remark';
+ALTER TABLE `test_number` DROP COLUMN `test_cl`;
+ALTER TABLE `test_number` ADD COLUMN `test_cl` number(5,3) NOT NULL DEFAULT 12.666 COMMENT 'remark';
+ALTER TABLE `test_number` DROP COLUMN `test_cl`;
+ALTER TABLE `test_number` ADD COLUMN `test_cl` number(5,3) NOT NULL DEFAULT 12.666 COMMENT 'remark';
+ALTER TABLE `test_number` MODIFY COLUMN `test_cl` number(4,2) NOT NULL DEFAULT 12.66 COMMENT 'remark';
+Warnings:
+Note	1265	Data truncated for column 'test_cl' at row 1
+ALTER TABLE `test_number` MODIFY COLUMN `test_cl` varchar(255) NOT NULL DEFAULT 'varchar_test' COMMENT 'remark' ;
+ALTER TABLE `test_number` DROP COLUMN `test_cl`;
+ALTER TABLE `test_number`
+MODIFY COLUMN `c0`  number NOT NULL FIRST ,
+ADD PRIMARY KEY (`c0`);
+ALTER TABLE `test_number`
+DROP PRIMARY KEY;
+ALTER TABLE `test_number`
+ADD PRIMARY KEY (`c0`, `c1`);
+ALTER TABLE `test_number`
+DROP PRIMARY KEY;
+ALTER TABLE `test_number`
+ADD INDEX `test_index` (`c0`) ;
+ALTER TABLE `test_number`
+ADD INDEX `c1_2` (`c1`) ;
+DROP INDEX test_index ON test_number;
+delete  from test_number;
+ALTER TABLE `test1` ADD INDEX (`c1`);
+ALTER TABLE `test_number` ADD INDEX `test_for` (`c0`) ;
+ALTER TABLE `test_number` ADD CONSTRAINT `test_for` FOREIGN KEY (`c0`) REFERENCES `test1` (`c1`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+insert into test_number (c0,c1,c2,c3,c4,c5) values (2,1234,12.666,12.666,12.666,2);
+Warnings:
+Note	1265	Data truncated for column 'c2' at row 1
+Note	1265	Data truncated for column 'c3' at row 1
+insert into test_number (c0,c1,c2,c3,c4,c5) values (1,1234,12.666,12.666,12.666,1);
+Warnings:
+Note	1265	Data truncated for column 'c2' at row 1
+Note	1265	Data truncated for column 'c3' at row 1
+ALTER TABLE `test_number` DROP FOREIGN KEY `test_for`;
+CREATE TEMPORARY TABLE temp_test (`c0`  number NULL DEFAULT NULL ,`c1`  number(4) NULL DEFAULT NULL ,  `c2`  number(4,2) NULL DEFAULT NULL ,`c3` decimal(4,2) NULL DEFAULT NULL, `c4` number(*,3) NULL DEFAULT NULL, `c5` number(*) NULL DEFAULT NULL );
+insert into temp_test (c0,c1,c2,c3,c4,c5) values (123456,1234,12.666,12.666,12.666,123456);
+Warnings:
+Note	1265	Data truncated for column 'c2' at row 1
+Note	1265	Data truncated for column 'c3' at row 1
+select * from temp_test;
+c0	c1	c2	c3	c4	c5
+123456.000000000000000000000000000000	1234	12.67	12.67	12.666	123456.000000000000000000000000000000
+drop table temp_test;
+select c1,abs(c1),abs(c2) from test_number;
+c1	abs(c1)	abs(c2)
+1234	1234	12.67
+1234	1234	12.67
+select c1,SQRT(c1),SQRT(c2) from test_number;
+c1	SQRT(c1)	SQRT(c2)
+1234	35.12833614050059	3.559494346111537
+1234	35.12833614050059	3.559494346111537
+select c1,MOD(c1,1.5),MOD(c2,1.5) from test_number;
+c1	MOD(c1,1.5)	MOD(c2,1.5)
+1234	1.0	0.67
+1234	1.0	0.67
+select c1,CEIL(c1),CEIL(c2) from test_number;
+c1	CEIL(c1)	CEIL(c2)
+1234	1234	13
+1234	1234	13
+select c1,CEILING(c1),CEILING(c2)  from test_number;
+c1	CEILING(c1)	CEILING(c2)
+1234	1234	13
+1234	1234	13
+select c1,FLOOR(c1),FLOOR(c2) from test_number;
+c1	FLOOR(c1)	FLOOR(c2)
+1234	1234	12
+1234	1234	12
+select c1,RAND(c1),RAND(c2) from test_number;
+c1	RAND(c1)	RAND(c2)
+1234	0.881177173816764	0.40760085024647497
+1234	0.881177173816764	0.40760085024647497
+select c1,ROUND(c1),ROUND(c2) from test_number;
+c1	ROUND(c1)	ROUND(c2)
+1234	1234	13
+1234	1234	13
+select c1,SIGN(c1),SIGN(c2) from test_number;
+c1	SIGN(c1)	SIGN(c2)
+1234	1	1
+1234	1	1
+select c1,POW(c1,2),POW(c2,2) from test_number;
+c1	POW(c1,2)	POW(c2,2)
+1234	1522756	160.5289
+1234	1522756	160.5289
+select c1,POWER(c1,2),POWER(c2,2) from test_number;
+c1	POWER(c1,2)	POWER(c2,2)
+1234	1522756	160.5289
+1234	1522756	160.5289
+select c1,SIN(c1),SIN(c2) from test_number;
+c1	SIN(c1)	SIN(c2)
+1234	0.6019276547624973	0.10344400502455556
+1234	0.6019276547624973	0.10344400502455556
+select c1,ASIN(c1),ASIN(c2) from test_number;
+c1	ASIN(c1)	ASIN(c2)
+1234	NULL	NULL
+1234	NULL	NULL
+select c1,COS(c1),COS(c2) from test_number;
+c1	COS(c1)	COS(c2)
+1234	-0.7985506235875843	0.9946352787954386
+1234	-0.7985506235875843	0.9946352787954386
+select c1,ACOS(c1),ACOS(c2) from test_number;
+c1	ACOS(c1)	ACOS(c2)
+1234	NULL	NULL
+1234	NULL	NULL
+select c1,TAN(c1),TAN(c2) from test_number;
+c1	TAN(c1)	TAN(c2)
+1234	-0.7537751984442329	0.10400194647211015
+1234	-0.7537751984442329	0.10400194647211015
+select c1,ATAN(c1),ATAN(c2) from test_number;
+c1	ATAN(c1)	ATAN(c2)
+1234	1.5699859542008134	1.492033007344783
+1234	1.5699859542008134	1.492033007344783
+select c1,COT(c1),COT(c2) from test_number;
+c1	COT(c1)	COT(c2)
+1234	-1.3266554830458297	9.61520465646445
+1234	-1.3266554830458297	9.61520465646445
+select c1,length(c1) ,length(c2) from test_number;
+c1	length(c1)	length(c2)
+1234	4	5
+1234	4	5
+select c1,CONCAT(c1) ,CONCAT(c2) from test_number;
+c1	CONCAT(c1)	CONCAT(c2)
+1234	1234	12.67
+1234	1234	12.67
+select c1,CONCAT(c1,'2') ,CONCAT(c2,'2') from test_number;
+c1	CONCAT(c1,'2')	CONCAT(c2,'2')
+1234	12342	12.672
+1234	12342	12.672
+select c1,INSERT(c1,1,1,'+') ,INSERT(c2,1,1,'+')  from test_number;
+c1	INSERT(c1,1,1,'+')	INSERT(c2,1,1,'+')
+1234	+234	+2.67
+1234	+234	+2.67
+select c1,LOWER(c1) ,LOWER(c2) from test_number;
+c1	LOWER(c1)	LOWER(c2)
+1234	1234	12.67
+1234	1234	12.67
+select c1,UPPER(c1) ,UPPER(c2) from test_number;
+c1	UPPER(c1)	UPPER(c2)
+1234	1234	12.67
+1234	1234	12.67
+select c1,LEFT(c1,1) ,LEFT(c2,1) from test_number;
+c1	LEFT(c1,1)	LEFT(c2,1)
+1234	1	1
+1234	1	1
+select c1,RIGHT(c1,1) ,RIGHT(c2,1) from test_number;
+c1	RIGHT(c1,1)	RIGHT(c2,1)
+1234	4	7
+1234	4	7
+select c1,TRIM(c1) ,TRIM(c2) from test_number;
+c1	TRIM(c1)	TRIM(c2)
+1234	1234	12.67
+1234	1234	12.67
+select c1,REPLACE(c1,'-','+') ,REPLACE(c2,'-','+') from test_number;
+c1	REPLACE(c1,'-','+')	REPLACE(c2,'-','+')
+1234	1234	12.67
+1234	1234	12.67
+select c1,SUBSTRING(c1,2) ,SUBSTRING(c2,2) from test_number;
+c1	SUBSTRING(c1,2)	SUBSTRING(c2,2)
+1234	234	2.67
+1234	234	2.67
+select c1,REVERSE(c1) ,REVERSE(c2) from test_number;
+c1	REVERSE(c1)	REVERSE(c2)
+1234	4321	76.21
+1234	4321	76.21
+select MAX(c1) from test_number;
+MAX(c1)
+1234
+select MIN(c1) from test_number;
+MIN(c1)
+1234
+select COUNT(c1) from test_number;
+COUNT(c1)
+2
+select sum(c1),sum(c2) from test_number;
+sum(c1)	sum(c2)
+2468	25.34
+select AVG(c1),AVG(c2) from test_number;
+AVG(c1)	AVG(c2)
+1234.0000	12.670000
+select least(c0,c1) from test_number ;
+least(c0,c1)
+2.000000000000000000000000000000
+1.000000000000000000000000000000
+SELECT CAST(c3 AS number(4,2)) - 2.0 from test_number where c0 <= 2;
+CAST(c3 AS number(4,2)) - 2.0
+10.67
+10.67
+SELECT CAST(c2 AS decimal(4,2)) - 2.0 from test_number where c0 <= 2;
+CAST(c2 AS decimal(4,2)) - 2.0
+10.67
+10.67
+SELECT CAST(c2 AS decimal) - 2.0 from test_number where c0 <= 2;
+CAST(c2 AS decimal) - 2.0
+11.0
+11.0
+SELECT CAST(c3 AS number) - 2.0 from test_number where c0 <= 2;
+CAST(c3 AS number) - 2.0
+10.670000000000000000000000000000
+10.670000000000000000000000000000
+SELECT CONVERT(c2 , decimal) - 2.0 from test_number where c0 <= 2;
+CONVERT(c2 , decimal) - 2.0
+11.0
+11.0
+SELECT CONVERT(c2 , number(4,2)) - 2.0 from test_number where c0 <= 2;
+CONVERT(c2 , number(4,2)) - 2.0
+10.67
+10.67
+SELECT CONVERT(c2 , number) - 2.0 from test_number where c0 <= 2;
+CONVERT(c2 , number) - 2.0
+10.670000000000000000000000000000
+10.670000000000000000000000000000
+select c1,c2 ,IF(c1>0,'Y','N'),IF(c2>0,'Y','N') from test_number;
+c1	c2	IF(c1>0,'Y','N')	IF(c2>0,'Y','N')
+1234	12.67	Y	Y
+1234	12.67	Y	Y
+select c1,c2 ,IFNULL(c1,'Y'),IFNULL(c2,'Y') from test_number;
+c1	c2	IFNULL(c1,'Y')	IFNULL(c2,'Y')
+1234	12.67	1234	12.67
+1234	12.67	1234	12.67
+SELECT CASE c1 WHEN -2 THEN 'c1<0' WHEN 2 THEN 'c1>0' ELSE 'other' END AS C1,CASE c2 WHEN -2 THEN 'c2<0' WHEN 2 THEN 'c2>0' ELSE 'other' END AS C2 from test_number;
+C1	C2
+other	other
+other	other
+select c2 from test_number union select c1 from test1;
+c2
+12.670000000000000000000000000000
+1.000000000000000000000000000000
+2.000000000000000000000000000000
+3.000000000000000000000000000000
+select distinct c3 ,c0 from test_number;
+c3	c0
+12.67	2.000000000000000000000000000000
+12.67	1.000000000000000000000000000000
+select * from test_number t  join test1 t1  on t.c0 = t1.c0;
+c0	c1	c2	c3	c4	c5	c0	c1
+1.000000000000000000000000000000	1234	12.67	12.67	12.666	1.000000000000000000000000000000	1	2.000000000000000000000000000000
+2.000000000000000000000000000000	1234	12.67	12.67	12.666	2.000000000000000000000000000000	2	3.000000000000000000000000000000
+select * from test_number t  inner join test1 t1  on t.c0 = t1.c0;
+c0	c1	c2	c3	c4	c5	c0	c1
+1.000000000000000000000000000000	1234	12.67	12.67	12.666	1.000000000000000000000000000000	1	2.000000000000000000000000000000
+2.000000000000000000000000000000	1234	12.67	12.67	12.666	2.000000000000000000000000000000	2	3.000000000000000000000000000000
+select * from test_number t  cross join test1 t1  on t.c0 = t1.c0;
+c0	c1	c2	c3	c4	c5	c0	c1
+1.000000000000000000000000000000	1234	12.67	12.67	12.666	1.000000000000000000000000000000	1	2.000000000000000000000000000000
+2.000000000000000000000000000000	1234	12.67	12.67	12.666	2.000000000000000000000000000000	2	3.000000000000000000000000000000
+select * from test_number t  straight_join test1 t1  on t.c0 = t1.c0;
+c0	c1	c2	c3	c4	c5	c0	c1
+1.000000000000000000000000000000	1234	12.67	12.67	12.666	1.000000000000000000000000000000	1	2.000000000000000000000000000000
+2.000000000000000000000000000000	1234	12.67	12.67	12.666	2.000000000000000000000000000000	2	3.000000000000000000000000000000
+select * from test_number t left join  test1 t1  on t.c0 = t1.c0;
+c0	c1	c2	c3	c4	c5	c0	c1
+2.000000000000000000000000000000	1234	12.67	12.67	12.666	2.000000000000000000000000000000	2	3.000000000000000000000000000000
+1.000000000000000000000000000000	1234	12.67	12.67	12.666	1.000000000000000000000000000000	1	2.000000000000000000000000000000
+select * from test_number t right join  test1 t1  on t.c0 = t1.c0;
+c0	c1	c2	c3	c4	c5	c0	c1
+1.000000000000000000000000000000	1234	12.67	12.67	12.666	1.000000000000000000000000000000	1	2.000000000000000000000000000000
+2.000000000000000000000000000000	1234	12.67	12.67	12.666	2.000000000000000000000000000000	2	3.000000000000000000000000000000
+NULL	NULL	NULL	NULL	NULL	NULL	3	1.000000000000000000000000000000
+insert into test2 select * from test_number;
+DROP TABLE IF EXISTS `test2`;
+select c1 from test_number where c1 not in (1,2,3);
+c1
+1234
+1234
+select c1 from test_number where c1  in (1,2,3);
+c1
+DESCRIBE test_number;
+Field	Type	Null	Key	Default	Extra
+c0	decimal(65,30)	NO	MUL	NULL	
+c1	decimal(4,0)	NO	MUL	NULL	
+c2	decimal(4,2)	YES		NULL	
+c3	decimal(4,2)	YES		NULL	
+c4	decimal(38,3)	YES		NULL	
+c5	decimal(65,30)	YES		NULL	
+handler test_number open;
+handler test_number read first;
+c0	c1	c2	c3	c4	c5
+2.000000000000000000000000000000	1234	12.67	12.67	12.666	2.000000000000000000000000000000
+handler test_number read c1_2 first;
+c0	c1	c2	c3	c4	c5
+2.000000000000000000000000000000	1234	12.67	12.67	12.666	2.000000000000000000000000000000
+handler test_number  close;
+DROP INDEX c1_2 ON test_number;
+replace into test_number(c0,c1,c2) values(4,5,2);
+ALTER TABLE `test_number`
+ADD INDEX `test_index` (`c0`) ;
+Warnings:
+Warning	1831	Duplicate index 'test_index' defined on the table 'test.test_number'. This is deprecated and will be disallowed in a future release.
+explain  select * from test_number force index(test_index) where c0 >0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	test_number	NULL	range	test_index	test_index	30	NULL	3	100.00	Using index condition
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test_number`.`c0` AS `c0`,`test`.`test_number`.`c1` AS `c1`,`test`.`test_number`.`c2` AS `c2`,`test`.`test_number`.`c3` AS `c3`,`test`.`test_number`.`c4` AS `c4`,`test`.`test_number`.`c5` AS `c5` from `test`.`test_number` FORCE INDEX (`test_index`) where (`test`.`test_number`.`c0` > 0.000000000000000000000000000000)
+SELECT * FROM test_number WHERE c0 = (SELECT c0 FROM test1 where c0=1);
+c0	c1	c2	c3	c4	c5
+1.000000000000000000000000000000	1234	12.67	12.67	12.666	1.000000000000000000000000000000
+START TRANSACTION;
+delete from test_number;
+select * from test_number;
+c0	c1	c2	c3	c4	c5
+ROLLBACK;
+COMMIT;
+create view  test_number1  as  select * from test_number;
+select * from  test_number1;
+c0	c1	c2	c3	c4	c5
+2.000000000000000000000000000000	1234	12.67	12.67	12.666	2.000000000000000000000000000000
+1.000000000000000000000000000000	1234	12.67	12.67	12.666	1.000000000000000000000000000000
+4.000000000000000000000000000000	5	2.00	NULL	NULL	NULL
+drop view test_number1;
+CREATE FUNCTION f1(a int, b number(5), c number(5,4) ,d number) RETURNS number(6,3) BEGIN RETURN a * b + c +d;
+END//
+CREATE FUNCTION f2(a int, b decimal(5), c decimal(5,4) ,d decimal) RETURNS decimal(6,3) BEGIN RETURN a * b + c +d;
+END//
+CREATE FUNCTION f3(a int, b number(5), c number(5,4) ,d number, e number(*,3)) RETURNS number(*,3) BEGIN RETURN a * b + c +d + e;
+END//
+CREATE FUNCTION f4(a int, b number(5), c number(5,4) ,d number(*)) RETURNS number(6,3) BEGIN RETURN a * b + c +d;
+END//
+select f1(1.01,2.512,3.513,4.231);
+f1(1.01,2.512,3.513,4.231)
+10.744
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+select f2(1.01,2.512,3.513,4.231);
+f2(1.01,2.512,3.513,4.231)
+10.513
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+Note	1265	Data truncated for column 'd' at row 1
+select f3(1.01,2.512,3.513,4.231,5.515);
+f3(1.01,2.512,3.513,4.231,5.515)
+16.259
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+select f4(1.01,2.512,3.513,4.231);
+f4(1.01,2.512,3.513,4.231)
+10.744
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+CREATE PROCEDURE p1 (a int, b number(5), c number(5,4) ,d number)
+BEGIN
+SELECT a * b + c +d;
+SELECT f1(a,b,c,d);
+END//
+CREATE PROCEDURE p2 (a int, b decimal(5), c decimal(5,4) ,d decimal)
+BEGIN
+SELECT a * b + c +d;
+SELECT f2(a,b,c,d);
+END//
+CREATE PROCEDURE p3 (a int, b decimal(5), c decimal(5,4) ,d decimal, e number(*,3))
+BEGIN
+SELECT a * b + c +d+e;
+SELECT f3(a,b,c,d,e);
+END//
+CREATE PROCEDURE p4 (a int, b number(5), c number(5,4) ,d number(*))
+BEGIN
+SELECT a * b + c +d;
+SELECT f1(a,b,c,d);
+END//
+call p1(1.01,2.512,3.513,4.231);
+a * b + c +d
+10.744000000000000000000000000000
+f1(a,b,c,d)
+10.744
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+call p2(1.01,2.512,3.513,4.231);
+a * b + c +d
+10.5130
+f2(a,b,c,d)
+10.513
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+Note	1265	Data truncated for column 'd' at row 1
+call p3(1.01,2.512,3.513,4.231,5.515);
+a * b + c +d+e
+16.0280
+f3(a,b,c,d,e)
+16.028
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+Note	1265	Data truncated for column 'd' at row 1
+call p4(1.01,2.512,3.513,4.231);
+a * b + c +d
+10.744000000000000000000000000000
+f1(a,b,c,d)
+10.744
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+drop function f1;
+drop function f2;
+drop function f3;
+drop function f4;
+drop PROCEDURE p1;
+drop PROCEDURE p2;
+drop PROCEDURE p3;
+drop PROCEDURE p4;
+CREATE PROCEDURE p1 (x number)
+BEGIN
+DECLARE xname VARCHAR(5) DEFAULT 'bob';
+DECLARE pc0 number;
+DECLARE pc1 number(5);
+DECLARE pc2 number(4,2);
+DECLARE pc3 decimal(4,2);
+SELECT c0,c1,c2,c3 INTO pc0,pc1,pc2,pc3 
+FROM test_number WHERE c0 = x;
+SELECT pc0,pc1,pc2,pc3 ;
+END//
+call p1(2);
+pc0	pc1	pc2	pc3
+2.000000000000000000000000000000	1234	12.67	12.67
+drop PROCEDURE p1;
+CREATE PROCEDURE p1 (x number(*,3))
+BEGIN
+DECLARE xname VARCHAR(5) DEFAULT 'bob';
+DECLARE pc4 number(*,3);
+SELECT c4 INTO pc4
+FROM test_number WHERE c0 = x;
+SELECT pc4 ;
+END//
+call p1(2);
+pc4
+12.666
+call p1(2);
+pc4
+12.666
+drop PROCEDURE p1;
+CREATE PROCEDURE p1 (x number(*))
+BEGIN
+DECLARE xname VARCHAR(5) DEFAULT 'bob';
+DECLARE pc5 number(*);
+SELECT c5 INTO pc5
+FROM test_number WHERE c0 = x;
+SELECT pc5 ;
+END//
+call p1(2);
+pc5
+2.000000000000000000000000000000
+call p1(2);
+pc5
+2.000000000000000000000000000000
+drop PROCEDURE p1;
+CREATE PROCEDURE p2(x number)
+BEGIN
+DECLARE done INT DEFAULT 0;
+DECLARE pc0 number;
+DECLARE pc1 number(5);
+DECLARE pc2 number(4,2);
+DECLARE pc3 decimal(4,2);
+DECLARE cur1 CURSOR FOR SELECT c0,c1,c2,c3 FROM test_number where c0=x;
+DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET done = 1;
+OPEN cur1;
+REPEAT
+FETCH cur1 INTO pc0, pc1,pc2,pc3;
+IF NOT done THEN
+INSERT INTO test1 VALUES (pc0,pc1);
+INSERT INTO test1 VALUES (pc0,pc3);
+select * from test1;
+END IF;
+UNTIL done END REPEAT;
+CLOSE cur1;
+END//
+call p2(2);
+c0	c1
+1	2.000000000000000000000000000000
+2	3.000000000000000000000000000000
+3	1.000000000000000000000000000000
+2	1234.000000000000000000000000000000
+2	12.670000000000000000000000000000
+drop PROCEDURE p2;
+CREATE PROCEDURE p2(x number(*,3))
+BEGIN
+DECLARE done INT DEFAULT 0;
+DECLARE pc0 number;
+DECLARE pc4 number(*,3);
+DECLARE cur1 CURSOR FOR SELECT c0,c4 FROM test_number where c0=x;
+DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET done = 1;
+OPEN cur1;
+REPEAT
+FETCH cur1 INTO pc0, pc4;
+IF NOT done THEN
+INSERT INTO test1 VALUES (pc0, pc4);
+select * from test1;
+END IF;
+UNTIL done END REPEAT;
+CLOSE cur1;
+END//
+call p2(2);
+c0	c1
+1	2.000000000000000000000000000000
+2	3.000000000000000000000000000000
+3	1.000000000000000000000000000000
+2	1234.000000000000000000000000000000
+2	12.670000000000000000000000000000
+2	12.666000000000000000000000000000
+call p2(2);
+c0	c1
+1	2.000000000000000000000000000000
+2	3.000000000000000000000000000000
+3	1.000000000000000000000000000000
+2	1234.000000000000000000000000000000
+2	12.670000000000000000000000000000
+2	12.666000000000000000000000000000
+2	12.666000000000000000000000000000
+drop PROCEDURE p2;
+CREATE PROCEDURE p2(x number(*))
+BEGIN
+DECLARE done INT DEFAULT 0;
+DECLARE pc0 number;
+DECLARE pc5 number(*);
+DECLARE cur1 CURSOR FOR SELECT c0, c5 FROM test_number where c0=x;
+DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET done = 1;
+OPEN cur1;
+REPEAT
+FETCH cur1 INTO pc0, pc5;
+IF NOT done THEN
+INSERT INTO test1 VALUES (pc0, pc5);
+select * from test1;
+END IF;
+UNTIL done END REPEAT;
+CLOSE cur1;
+END//
+call p2(2);
+c0	c1
+1	2.000000000000000000000000000000
+2	3.000000000000000000000000000000
+3	1.000000000000000000000000000000
+2	1234.000000000000000000000000000000
+2	12.670000000000000000000000000000
+2	12.666000000000000000000000000000
+2	12.666000000000000000000000000000
+2	2.000000000000000000000000000000
+call p2(2);
+c0	c1
+1	2.000000000000000000000000000000
+2	3.000000000000000000000000000000
+3	1.000000000000000000000000000000
+2	1234.000000000000000000000000000000
+2	12.670000000000000000000000000000
+2	12.666000000000000000000000000000
+2	12.666000000000000000000000000000
+2	2.000000000000000000000000000000
+2	2.000000000000000000000000000000
+drop PROCEDURE p2;
+CREATE TABLE `test_number1` (
+`c0`  number NOT NULL, 
+`c1`  number(4) NULL DEFAULT NULL ,  
+`c2`  number(4,2) NULL DEFAULT NULL ,
+`c3` decimal(4,2) NULL DEFAULT NULL
+) ENGINE=InnoDB 
+PARTITION BY LINEAR KEY(c0) PARTITIONS 3;
+INSERT INTO test_number1 (c0,c1,c2,c3) WITH RECURSIVE digits(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM digits WHERE i<1000) SELECT FLOOR(RAND()*1000000),FLOOR(RAND()*100),FLOOR(RAND()*100),FLOOR(RAND()*100) FROM digits;
+drop table test_number1;
+drop TRIGGER IF EXISTS test_tri;
+Warnings:
+Note	1360	Trigger does not exist
+CREATE TABLE test_count (acct_num INT, amount number);
+SET @sum=0;
+CREATE TRIGGER test_tri BEFORE INSERT ON test_count FOR EACH ROW SET @sum = @sum + NEW.amount;
+insert into test_count(acct_num,amount) values(1,2);
+SELECT @sum;
+@sum
+2.000000000000000000000000000000
+drop TRIGGER IF EXISTS test_tri;
+SELECT c0,c1 FROM test1;
+c0	c1
+1	2.000000000000000000000000000000
+2	3.000000000000000000000000000000
+3	1.000000000000000000000000000000
+2	1234.000000000000000000000000000000
+2	12.670000000000000000000000000000
+2	12.666000000000000000000000000000
+2	12.666000000000000000000000000000
+2	2.000000000000000000000000000000
+2	2.000000000000000000000000000000
+SELECT c2,c3 FROM test_number;
+c2	c3
+12.67	12.67
+12.67	12.67
+2.00	NULL
+WITH
+cte1 AS (SELECT c0,c1 FROM test1),
+cte2 AS (SELECT c2,c3 FROM test_number)
+SELECT c1,c2 FROM cte1 JOIN cte2 
+WHERE cte1.c1 = cte2.c2;
+c1	c2
+12.670000000000000000000000000000	12.67
+12.670000000000000000000000000000	12.67
+2.000000000000000000000000000000	2.00
+2.000000000000000000000000000000	2.00
+2.000000000000000000000000000000	2.00
+DROP TABLE IF EXISTS `test1`;
+DROP TABLE IF EXISTS `test2`;
+Warnings:
+Note	1051	Unknown table 'test.test2'
+DROP TABLE IF EXISTS `test3`;
+DROP TABLE IF EXISTS `test_number`;
+DROP TABLE IF EXISTS `test_count`;
+set sql_mode = oracle;
+DROP TABLE IF EXISTS `test1`;
+Warnings:
+Note	1051	Unknown table 'test.test1'
+CREATE TABLE `test1` (
+`c0` int DEFAULT NULL,
+`c1` number DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+show create table test1;
+Table	Create Table
+test1	CREATE TABLE "test1" (
+  "c0" int DEFAULT NULL,
+  "c1" decimal(65,30) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO `test1` VALUES ('1', '2');
+INSERT INTO `test1` VALUES ('2', '3');
+INSERT INTO `test1` VALUES ('3', '1');
+DROP TABLE IF EXISTS `test3`;
+Warnings:
+Note	1051	Unknown table 'test.test3'
+CREATE TABLE `test3` (
+`c0` int DEFAULT NULL,
+`c1` number  ,
+`c2` number   
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+show create table test3;
+Table	Create Table
+test3	CREATE TABLE "test3" (
+  "c0" int DEFAULT NULL,
+  "c1" decimal(65,30) DEFAULT NULL,
+  "c2" decimal(65,30) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE IF EXISTS `test2`;
+Warnings:
+Note	1051	Unknown table 'test.test2'
+CREATE TABLE `test2` (`c0`  number NULL DEFAULT NULL ,`c1`  number(4) NULL DEFAULT NULL ,  `c2`  number(4,2) NULL DEFAULT NULL ,`c3` decimal(4,2) NULL DEFAULT NULL , `c4` number(*,3) NULL DEFAULT NULL , `c5` number(*) NULL DEFAULT NULL) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC;
+show create table test2;
+Table	Create Table
+test2	CREATE TABLE "test2" (
+  "c0" decimal(65,30) DEFAULT NULL,
+  "c1" decimal(4,0) DEFAULT NULL,
+  "c2" decimal(4,2) DEFAULT NULL,
+  "c3" decimal(4,2) DEFAULT NULL,
+  "c4" decimal(38,3) DEFAULT NULL,
+  "c5" decimal(65,30) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
+DROP TABLE IF EXISTS `test_number`;
+Warnings:
+Note	1051	Unknown table 'test.test_number'
+CREATE TABLE `test_number` (`c0`  number DEFAULT NULL ,`c1`  number(4) NULL DEFAULT NULL ,  `c2`  number(4,2) NULL DEFAULT NULL ,`c3` decimal(4,2) NULL DEFAULT NULL , `c4` number(*,3) NULL DEFAULT NULL , `c5` number(*) NULL DEFAULT NULL) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC;
+insert into test_number (c0,c1,c2,c3,c4,c5) values (1234567890,1234,12.666,12.666,12.666,1234567890);
+Warnings:
+Note	1265	Data truncated for column 'c2' at row 1
+Note	1265	Data truncated for column 'c3' at row 1
+show create table test_number;
+Table	Create Table
+test_number	CREATE TABLE "test_number" (
+  "c0" decimal(65,30) DEFAULT NULL,
+  "c1" decimal(4,0) DEFAULT NULL,
+  "c2" decimal(4,2) DEFAULT NULL,
+  "c3" decimal(4,2) DEFAULT NULL,
+  "c4" decimal(38,3) DEFAULT NULL,
+  "c5" decimal(65,30) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
+select c0, c0+1.1 ,c1,c1+1.1,c2,c2+1.1,c3,c3+1.1,c4,c4+1.1,c5,c5+1.1 from test_number;
+c0	c0+1.1	c1	c1+1.1	c2	c2+1.1	c3	c3+1.1	c4	c4+1.1	c5	c5+1.1
+1234567890	1234567891.1	1234	1235.1	12.67	13.77	12.67	13.77	12.666	13.766	1234567890	1234567891.1
+select c0+1,c0-1,c0*2,c0/2,2/2 from test_number;
+c0+1	c0-1	c0*2	c0/2	2/2
+1234567891	1234567889	2469135780	617283945	1
+update test_number set c0=123456 ,c1=12.567 ,c2=12.567,c3=12.567,c4=12.567,c5=123456;
+Warnings:
+Note	1265	Data truncated for column 'c1' at row 1
+Note	1265	Data truncated for column 'c2' at row 1
+Note	1265	Data truncated for column 'c3' at row 1
+select * from test_number;
+c0	c1	c2	c3	c4	c5
+123456	13	12.57	12.57	12.567	123456
+update test_number set c0=300000000000000000000000000000000000;
+ERROR 22003: Out of range value for column 'c0' at row 1
+update test_number set c0=30000000000000000000000000000000000;
+select c0 from test_number;
+c0
+30000000000000000000000000000000000
+update test_number set c0=123456 ,c1=12.567 ,c2=12.567,c3=12.567,c4=12.567,c5=123456;
+Warnings:
+Note	1265	Data truncated for column 'c1' at row 1
+Note	1265	Data truncated for column 'c2' at row 1
+Note	1265	Data truncated for column 'c3' at row 1
+select * from test_number;
+c0	c1	c2	c3	c4	c5
+123456	13	12.57	12.57	12.567	123456
+select c2,count(*) from test_number group by c2 order by c2;
+c2	count(*)
+12.57	1
+ALTER TABLE `test_number` ADD COLUMN `test_cl` number NOT NULL DEFAULT 123456 COMMENT 'remark';
+ALTER TABLE `test_number` DROP COLUMN `test_cl`;
+ALTER TABLE `test_number` ADD COLUMN `test_cl` number(5,3) NOT NULL DEFAULT 12.666 COMMENT 'remark';
+ALTER TABLE `test_number` DROP COLUMN `test_cl`;
+ALTER TABLE `test_number` ADD COLUMN `test_cl` number(5,3) NOT NULL DEFAULT 12.666 COMMENT 'remark';
+ALTER TABLE `test_number` MODIFY COLUMN `test_cl` number(4,2) NOT NULL DEFAULT 12.66 COMMENT 'remark';
+Warnings:
+Note	1265	Data truncated for column 'test_cl' at row 1
+ALTER TABLE `test_number` MODIFY COLUMN `test_cl` varchar(255) NOT NULL DEFAULT 'varchar_test' COMMENT 'remark' ;
+ALTER TABLE `test_number` DROP COLUMN `test_cl`;
+ALTER TABLE `test_number`
+MODIFY COLUMN `c0`  number NOT NULL FIRST ,
+ADD PRIMARY KEY (`c0`);
+ALTER TABLE `test_number`
+DROP PRIMARY KEY;
+ALTER TABLE `test_number`
+ADD PRIMARY KEY (`c0`, `c1`);
+ALTER TABLE `test_number`
+DROP PRIMARY KEY;
+ALTER TABLE `test_number`
+ADD INDEX `test_index` (`c0`) ;
+ALTER TABLE `test_number`
+ADD INDEX `c1_2` (`c1`) ;
+DROP INDEX test_index ON test_number;
+delete  from test_number;
+ALTER TABLE `test1` ADD INDEX (`c1`);
+ALTER TABLE `test_number` ADD INDEX `test_for` (`c0`) ;
+ALTER TABLE `test_number` ADD CONSTRAINT `test_for` FOREIGN KEY (`c0`) REFERENCES `test1` (`c1`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+insert into test_number (c0,c1,c2,c3,c4,c5) values (2,1234,12.666,12.666,12.666,2);
+Warnings:
+Note	1265	Data truncated for column 'c2' at row 1
+Note	1265	Data truncated for column 'c3' at row 1
+insert into test_number (c0,c1,c2,c3,c4,c5) values (1,1234,12.666,12.666,12.666,1);
+Warnings:
+Note	1265	Data truncated for column 'c2' at row 1
+Note	1265	Data truncated for column 'c3' at row 1
+ALTER TABLE `test_number` DROP FOREIGN KEY `test_for`;
+CREATE TEMPORARY TABLE temp_test (`c0`  number NULL DEFAULT NULL ,`c1`  number(4) NULL DEFAULT NULL ,  `c2`  number(4,2) NULL DEFAULT NULL ,`c3` decimal(4,2) NULL DEFAULT NULL, `c4` number(*,3) NULL DEFAULT NULL, `c5` number(*) NULL DEFAULT NULL );
+insert into temp_test (c0,c1,c2,c3,c4,c5) values (123456,1234,12.666,12.666,12.666,123456);
+Warnings:
+Note	1265	Data truncated for column 'c2' at row 1
+Note	1265	Data truncated for column 'c3' at row 1
+select * from temp_test;
+c0	c1	c2	c3	c4	c5
+123456	1234	12.67	12.67	12.666	123456
+drop table temp_test;
+select c1,abs(c1),abs(c2) from test_number;
+c1	abs(c1)	abs(c2)
+1234	1234	12.67
+1234	1234	12.67
+select c1,SQRT(c1),SQRT(c2) from test_number;
+c1	SQRT(c1)	SQRT(c2)
+1234	35.12833614050059	3.559494346111537
+1234	35.12833614050059	3.559494346111537
+select c1,MOD(c1,1.5),MOD(c2,1.5) from test_number;
+c1	MOD(c1,1.5)	MOD(c2,1.5)
+1234	1	0.67
+1234	1	0.67
+select c1,CEIL(c1),CEIL(c2) from test_number;
+c1	CEIL(c1)	CEIL(c2)
+1234	1234	13
+1234	1234	13
+select c1,CEILING(c1),CEILING(c2)  from test_number;
+c1	CEILING(c1)	CEILING(c2)
+1234	1234	13
+1234	1234	13
+select c1,FLOOR(c1),FLOOR(c2) from test_number;
+c1	FLOOR(c1)	FLOOR(c2)
+1234	1234	12
+1234	1234	12
+select c1,RAND(c1),RAND(c2) from test_number;
+c1	RAND(c1)	RAND(c2)
+1234	0.881177173816764	0.40760085024647497
+1234	0.881177173816764	0.40760085024647497
+select c1,ROUND(c1),ROUND(c2) from test_number;
+c1	ROUND(c1)	ROUND(c2)
+1234	1234	13
+1234	1234	13
+select c1,SIGN(c1),SIGN(c2) from test_number;
+c1	SIGN(c1)	SIGN(c2)
+1234	1	1
+1234	1	1
+select c1,POW(c1,2),POW(c2,2) from test_number;
+c1	POW(c1,2)	POW(c2,2)
+1234	1522756	160.5289
+1234	1522756	160.5289
+select c1,POWER(c1,2),POWER(c2,2) from test_number;
+c1	POWER(c1,2)	POWER(c2,2)
+1234	1522756	160.5289
+1234	1522756	160.5289
+select c1,SIN(c1),SIN(c2) from test_number;
+c1	SIN(c1)	SIN(c2)
+1234	0.6019276547624973	0.10344400502455556
+1234	0.6019276547624973	0.10344400502455556
+select c1,ASIN(c1),ASIN(c2) from test_number;
+c1	ASIN(c1)	ASIN(c2)
+1234	NULL	NULL
+1234	NULL	NULL
+select c1,COS(c1),COS(c2) from test_number;
+c1	COS(c1)	COS(c2)
+1234	-0.7985506235875843	0.9946352787954386
+1234	-0.7985506235875843	0.9946352787954386
+select c1,ACOS(c1),ACOS(c2) from test_number;
+c1	ACOS(c1)	ACOS(c2)
+1234	NULL	NULL
+1234	NULL	NULL
+select c1,TAN(c1),TAN(c2) from test_number;
+c1	TAN(c1)	TAN(c2)
+1234	-0.7537751984442329	0.10400194647211015
+1234	-0.7537751984442329	0.10400194647211015
+select c1,ATAN(c1),ATAN(c2) from test_number;
+c1	ATAN(c1)	ATAN(c2)
+1234	1.5699859542008134	1.492033007344783
+1234	1.5699859542008134	1.492033007344783
+select c1,COT(c1),COT(c2) from test_number;
+c1	COT(c1)	COT(c2)
+1234	-1.3266554830458297	9.61520465646445
+1234	-1.3266554830458297	9.61520465646445
+select c1,length(c1) ,length(c2) from test_number;
+c1	length(c1)	length(c2)
+1234	4	5
+1234	4	5
+select c1,CONCAT(c1) ,CONCAT(c2) from test_number;
+c1	CONCAT(c1)	CONCAT(c2)
+1234	1234	12.67
+1234	1234	12.67
+select c1,CONCAT(c1,'2') ,CONCAT(c2,'2') from test_number;
+c1	CONCAT(c1,'2')	CONCAT(c2,'2')
+1234	12342	12.672
+1234	12342	12.672
+select c1,INSERT(c1,1,1,'+') ,INSERT(c2,1,1,'+')  from test_number;
+c1	INSERT(c1,1,1,'+')	INSERT(c2,1,1,'+')
+1234	+234	+2.67
+1234	+234	+2.67
+select c1,LOWER(c1) ,LOWER(c2) from test_number;
+c1	LOWER(c1)	LOWER(c2)
+1234	1234	12.67
+1234	1234	12.67
+select c1,UPPER(c1) ,UPPER(c2) from test_number;
+c1	UPPER(c1)	UPPER(c2)
+1234	1234	12.67
+1234	1234	12.67
+select c1,LEFT(c1,1) ,LEFT(c2,1) from test_number;
+c1	LEFT(c1,1)	LEFT(c2,1)
+1234	1	1
+1234	1	1
+select c1,RIGHT(c1,1) ,RIGHT(c2,1) from test_number;
+c1	RIGHT(c1,1)	RIGHT(c2,1)
+1234	4	7
+1234	4	7
+select c1,TRIM(c1) ,TRIM(c2) from test_number;
+c1	TRIM(c1)	TRIM(c2)
+1234	1234	12.67
+1234	1234	12.67
+select c1,REPLACE(c1,'-','+') ,REPLACE(c2,'-','+') from test_number;
+c1	REPLACE(c1,'-','+')	REPLACE(c2,'-','+')
+1234	1234	12.67
+1234	1234	12.67
+select c1,SUBSTRING(c1,2) ,SUBSTRING(c2,2) from test_number;
+c1	SUBSTRING(c1,2)	SUBSTRING(c2,2)
+1234	234	2.67
+1234	234	2.67
+select c1,REVERSE(c1) ,REVERSE(c2) from test_number;
+c1	REVERSE(c1)	REVERSE(c2)
+1234	4321	76.21
+1234	4321	76.21
+select MAX(c1) from test_number;
+MAX(c1)
+1234
+select MIN(c1) from test_number;
+MIN(c1)
+1234
+select COUNT(c1) from test_number;
+COUNT(c1)
+2
+select sum(c1),sum(c2) from test_number;
+sum(c1)	sum(c2)
+2468	25.34
+select AVG(c1),AVG(c2) from test_number;
+AVG(c1)	AVG(c2)
+1234	12.67
+select least(c0,c1) from test_number ;
+least(c0,c1)
+2
+1
+SELECT CAST(c3 AS number(4,2)) - 2.0 from test_number where c0 <= 2;
+CAST(c3 AS number(4,2)) - 2.0
+10.67
+10.67
+SELECT CAST(c2 AS decimal(4,2)) - 2.0 from test_number where c0 <= 2;
+CAST(c2 AS decimal(4,2)) - 2.0
+10.67
+10.67
+SELECT CAST(c2 AS decimal) - 2.0 from test_number where c0 <= 2;
+CAST(c2 AS decimal) - 2.0
+11
+11
+SELECT CAST(c3 AS number) - 2.0 from test_number where c0 <= 2;
+CAST(c3 AS number) - 2.0
+10.67
+10.67
+SELECT CONVERT(c2 , decimal) - 2.0 from test_number where c0 <= 2;
+CONVERT(c2 , decimal) - 2.0
+11
+11
+SELECT CONVERT(c2 , number(4,2)) - 2.0 from test_number where c0 <= 2;
+CONVERT(c2 , number(4,2)) - 2.0
+10.67
+10.67
+SELECT CONVERT(c2 , number) - 2.0 from test_number where c0 <= 2;
+CONVERT(c2 , number) - 2.0
+10.67
+10.67
+select c1,c2 ,IF(c1>0,'Y','N'),IF(c2>0,'Y','N') from test_number;
+c1	c2	IF(c1>0,'Y','N')	IF(c2>0,'Y','N')
+1234	12.67	Y	Y
+1234	12.67	Y	Y
+select c1,c2 ,IFNULL(c1,'Y'),IFNULL(c2,'Y') from test_number;
+c1	c2	IFNULL(c1,'Y')	IFNULL(c2,'Y')
+1234	12.67	1234	12.67
+1234	12.67	1234	12.67
+SELECT CASE c1 WHEN -2 THEN 'c1<0' WHEN 2 THEN 'c1>0' ELSE 'other' END AS C1,CASE c2 WHEN -2 THEN 'c2<0' WHEN 2 THEN 'c2>0' ELSE 'other' END AS C2 from test_number;
+C1	C2
+other	other
+other	other
+select c2 from test_number union select c1 from test1;
+c2
+12.67
+1
+2
+3
+select distinct c3 ,c0 from test_number;
+c3	c0
+12.67	2
+12.67	1
+select * from test_number t  join test1 t1  on t.c0 = t1.c0;
+c0	c1	c2	c3	c4	c5	c0	c1
+1	1234	12.67	12.67	12.666	1	1	2
+2	1234	12.67	12.67	12.666	2	2	3
+select * from test_number t  inner join test1 t1  on t.c0 = t1.c0;
+c0	c1	c2	c3	c4	c5	c0	c1
+1	1234	12.67	12.67	12.666	1	1	2
+2	1234	12.67	12.67	12.666	2	2	3
+select * from test_number t  cross join test1 t1  on t.c0 = t1.c0;
+c0	c1	c2	c3	c4	c5	c0	c1
+1	1234	12.67	12.67	12.666	1	1	2
+2	1234	12.67	12.67	12.666	2	2	3
+select * from test_number t  straight_join test1 t1  on t.c0 = t1.c0;
+c0	c1	c2	c3	c4	c5	c0	c1
+1	1234	12.67	12.67	12.666	1	1	2
+2	1234	12.67	12.67	12.666	2	2	3
+select * from test_number t left join  test1 t1  on t.c0 = t1.c0;
+c0	c1	c2	c3	c4	c5	c0	c1
+2	1234	12.67	12.67	12.666	2	2	3
+1	1234	12.67	12.67	12.666	1	1	2
+select * from test_number t right join  test1 t1  on t.c0 = t1.c0;
+c0	c1	c2	c3	c4	c5	c0	c1
+1	1234	12.67	12.67	12.666	1	1	2
+2	1234	12.67	12.67	12.666	2	2	3
+NULL	NULL	NULL	NULL	NULL	NULL	3	1
+insert into test2 select * from test_number;
+DROP TABLE IF EXISTS `test2`;
+select c1 from test_number where c1 not in (1,2,3);
+c1
+1234
+1234
+select c1 from test_number where c1  in (1,2,3);
+c1
+DESCRIBE test_number;
+Field	Type	Null	Key	Default	Extra
+c0	decimal(65,30)	NO	MUL	NULL	
+c1	decimal(4,0)	NO	MUL	NULL	
+c2	decimal(4,2)	YES		NULL	
+c3	decimal(4,2)	YES		NULL	
+c4	decimal(38,3)	YES		NULL	
+c5	decimal(65,30)	YES		NULL	
+handler test_number open;
+handler test_number read first;
+c0	c1	c2	c3	c4	c5
+2	1234	12.67	12.67	12.666	2
+handler test_number read c1_2 first;
+c0	c1	c2	c3	c4	c5
+2	1234	12.67	12.67	12.666	2
+handler test_number  close;
+DROP INDEX c1_2 ON test_number;
+replace into test_number(c0,c1,c2) values(4,5,2);
+ALTER TABLE `test_number`
+ADD INDEX `test_index` (`c0`) ;
+Warnings:
+Warning	1831	Duplicate index 'test_index' defined on the table 'test.test_number'. This is deprecated and will be disallowed in a future release.
+explain  select * from test_number force index(test_index) where c0 >0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test_number	NULL	range	test_index	test_index	30	NULL	3	100.00	Using index condition
+Warnings:
+Note	1003	/* select#1 */ select "test"."test_number"."c0" AS "c0","test"."test_number"."c1" AS "c1","test"."test_number"."c2" AS "c2","test"."test_number"."c3" AS "c3","test"."test_number"."c4" AS "c4","test"."test_number"."c5" AS "c5" from "test"."test_number" FORCE INDEX ("test_index") where ("test"."test_number"."c0" > 0.000000000000000000000000000000)
+SELECT * FROM test_number WHERE c0 = (SELECT c0 FROM test1 where c0=1);
+c0	c1	c2	c3	c4	c5
+1	1234	12.67	12.67	12.666	1
+START TRANSACTION;
+delete from test_number;
+select * from test_number;
+c0	c1	c2	c3	c4	c5
+ROLLBACK;
+COMMIT;
+create view  test_number1  as  select * from test_number;
+select * from  test_number1;
+c0	c1	c2	c3	c4	c5
+2	1234	12.67	12.67	12.666	2
+1	1234	12.67	12.67	12.666	1
+4	5	2	NULL	NULL	NULL
+drop view test_number1;
+CREATE FUNCTION f1(a int, b number(5), c number(5,4) ,d number) RETURN number(6,3) DETERMINISTIC AS BEGIN RETURN a * b + c +d;
+END//
+CREATE FUNCTION f2(a int, b decimal(5), c decimal(5,4) ,d decimal) RETURN decimal(6,3) DETERMINISTIC AS BEGIN RETURN a * b + c +d;
+END//
+CREATE FUNCTION f3(a int, b number(5), c number(5,4) ,d number, e number(*,3)) RETURN number(*,3) DETERMINISTIC AS BEGIN RETURN a * b + c +d + e;
+END//
+CREATE FUNCTION f4(a int, b number(5), c number(5,4) ,d number(*)) RETURN number(6,3) DETERMINISTIC AS BEGIN RETURN a * b + c +d;
+END//
+select f1(1.01,2.512,3.513,4.231);
+f1(1.01,2.512,3.513,4.231)
+10.744
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+select f2(1.01,2.512,3.513,4.231);
+f2(1.01,2.512,3.513,4.231)
+10.513
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+Note	1265	Data truncated for column 'd' at row 1
+select f3(1.01,2.512,3.513,4.231,5.515);
+f3(1.01,2.512,3.513,4.231,5.515)
+16.259
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+select f4(1.01,2.512,3.513,4.231);
+f4(1.01,2.512,3.513,4.231)
+10.744
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+CREATE PROCEDURE p1 (a int, b number(5), c number(5,4) ,d number)
+AS
+BEGIN
+SELECT a * b + c +d;
+SELECT f1(a,b,c,d);
+END//
+CREATE PROCEDURE p2 (a int, b decimal(5), c decimal(5,4) ,d decimal)
+AS
+BEGIN
+SELECT a * b + c +d;
+SELECT f2(a,b,c,d);
+END//
+CREATE PROCEDURE p3 (a int, b decimal(5), c decimal(5,4) ,d decimal, e number(*,3))
+AS
+BEGIN
+SELECT a * b + c +d+e;
+SELECT f3(a,b,c,d,e);
+END//
+CREATE PROCEDURE p4 (a int, b number(5), c number(5,4) ,d number(*))
+AS
+BEGIN
+SELECT a * b + c +d;
+SELECT f1(a,b,c,d);
+END//
+call p1(1.01,2.512,3.513,4.231);
+a * b + c +d
+10.744
+f1(a,b,c,d)
+10.744
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+call p2(1.01,2.512,3.513,4.231);
+a * b + c +d
+10.513
+f2(a,b,c,d)
+10.513
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+Note	1265	Data truncated for column 'd' at row 1
+call p3(1.01,2.512,3.513,4.231,5.515);
+a * b + c +d+e
+16.028
+f3(a,b,c,d,e)
+16.028
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+Note	1265	Data truncated for column 'd' at row 1
+call p4(1.01,2.512,3.513,4.231);
+a * b + c +d
+10.744
+f1(a,b,c,d)
+10.744
+Warnings:
+Note	1265	Data truncated for column 'b' at row 1
+drop function f1;
+drop function f2;
+drop function f3;
+drop function f4;
+drop PROCEDURE p1;
+drop PROCEDURE p2;
+drop PROCEDURE p3;
+drop PROCEDURE p4;
+CREATE PROCEDURE p1 (x number)
+AS
+xname VARCHAR(5) DEFAULT 'bob';
+pc0 number;
+pc1 number(5);
+pc2 number(4,2);
+pc3 decimal(4,2);
+BEGIN  
+SELECT c0,c1,c2,c3 INTO pc0,pc1,pc2,pc3 
+FROM test_number WHERE c0 = x;
+SELECT pc0,pc1,pc2,pc3 ;
+END//
+call p1(2);
+pc0	pc1	pc2	pc3 
+2	1234	12.67	12.67
+drop PROCEDURE p1;
+CREATE PROCEDURE p1 (x number(*,3))
+AS
+xname VARCHAR(5) DEFAULT 'bob';
+pc4 number(*,3);
+BEGIN
+SELECT c4 INTO pc4
+FROM test_number WHERE c0 = x;
+SELECT pc4 ;
+END//
+call p1(2);
+pc4 
+12.666
+call p1(2);
+pc4 
+12.666
+drop PROCEDURE p1;
+CREATE PROCEDURE p1 (x number(*))
+AS
+xname VARCHAR(5) DEFAULT 'bob';
+pc5 number(*);
+BEGIN  
+SELECT c5 INTO pc5
+FROM test_number WHERE c0 = x;
+SELECT pc5 ;
+END//
+call p1(2);
+pc5 
+2
+call p1(2);
+pc5 
+2
+drop PROCEDURE p1;
+CREATE TABLE `test_number1` (
+`c0`  number NOT NULL, 
+`c1`  number(4) NULL DEFAULT NULL ,  
+`c2`  number(4,2) NULL DEFAULT NULL ,
+`c3` decimal(4,2) NULL DEFAULT NULL
+) ENGINE=InnoDB 
+PARTITION BY LINEAR KEY(c0) PARTITIONS 3;
+INSERT INTO test_number1 (c0,c1,c2,c3) WITH RECURSIVE digits(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM digits WHERE i<1000) SELECT FLOOR(RAND()*1000000),FLOOR(RAND()*100),FLOOR(RAND()*100),FLOOR(RAND()*100) FROM digits;
+drop table test_number1;
+drop TRIGGER IF EXISTS test_tri;
+Warnings:
+Note	1360	Trigger does not exist
+CREATE TABLE test_count (acct_num INT, amount number);
+SET @sum=0;
+CREATE TRIGGER test_tri BEFORE INSERT ON test_count FOR EACH ROW SET @sum = @sum + :NEW.amount;
+insert into test_count(acct_num,amount) values(1,2);
+SELECT @sum;
+@sum
+2
+drop TRIGGER IF EXISTS test_tri;
+SELECT c0,c1 FROM test1;
+c0	c1
+1	2
+2	3
+3	1
+SELECT c2,c3 FROM test_number;
+c2	c3
+12.67	12.67
+12.67	12.67
+2	NULL
+WITH
+cte1 AS (SELECT c0,c1 FROM test1),
+cte2 AS (SELECT c2,c3 FROM test_number)
+SELECT c1,c2 FROM cte1 JOIN cte2 
+WHERE cte1.c1 = cte2.c2;
+c1	c2
+2	2
+DROP TABLE IF EXISTS `test1`;
+DROP TABLE IF EXISTS `test2`;
+Warnings:
+Note	1051	Unknown table 'test.test2'
+DROP TABLE IF EXISTS `test3`;
+DROP TABLE IF EXISTS `test_number`;
+DROP TABLE IF EXISTS `test_count`;

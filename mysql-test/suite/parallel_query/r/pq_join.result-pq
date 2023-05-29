@@ -1,0 +1,274 @@
+drop database if exists pq_database;
+create database pq_database;
+use pq_database;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+create table t1(f1 TIME, f2 VARCHAR(1));
+insert into t1 values('08:35:24', 'X');
+insert into t1 values('14:51:13', 'S');
+insert into t1 values('11:22:33', 'Q');
+create table t2(pk integer);
+insert into t2 values(1);
+insert into t2 values(2);
+insert into t2 (select * from t2);
+insert into t2 (select * from t2);
+insert into t2 (select * from t2);
+insert into t2 (select * from t2);
+insert into t2 (select * from t2);
+insert into t2 (select * from t2);
+insert into t2 (select * from t2);
+insert into t2 (select * from t2);
+insert into t2 (select * from t2);
+insert into t2 (select * from t2);
+insert into t2 (select * from t2);
+insert into t2 (select * from t2);
+insert into t2 (select * from t2);
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+pq_database.t1	analyze	status	OK
+analyze table t2;
+Table	Op	Msg_type	Msg_text
+pq_database.t2	analyze	status	OK
+select * from t1 where exists (select /*+ semijoin(firstmatch)*/ * from t2);
+f1	f2
+08:35:24	X
+14:51:13	S
+11:22:33	Q
+select * from t1 where exists (select /*+ semijoin(DUPSWEEDOUT)*/* from t2);
+f1	f2
+08:35:24	X
+14:51:13	S
+11:22:33	Q
+drop table t1;
+drop table t2;
+CREATE TABLE t1 (a INTEGER NOT NULL, b INT, PRIMARY KEY (a));
+CREATE TABLE t2 (a INTEGER NOT NULL);
+CREATE TABLE t3 (a INTEGER NOT NULL, b INT, key(a));
+INSERT INTO t1 VALUES (1,1), (2,2), (3,3), (4,4);
+set global innodb_limit_optimistic_insert_debug = 3;
+INSERT INTO t2 VALUES (2), (3), (4), (5);
+INSERT INTO t3 VALUES (2,3), (3,4), (4,5), (5,6), (2,7), (3,8), (4,3), (50,4);
+set global innodb_limit_optimistic_insert_debug = 0;
+ANALYZE TABLE t1, t2, t3;
+Table	Op	Msg_type	Msg_text
+pq_database.t1	analyze	status	OK
+pq_database.t2	analyze	status	OK
+pq_database.t3	analyze	status	OK
+explain select /*+ semijoin(@subq1 LOOSESCAN) */ * from t1 where t1.a in (select /*+ QB_NAME(subq1) */ a from t3) and 
+t1.b in (select a from t2);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t3	NULL	index	a	a	4	NULL	8	62.50	Using index; LooseScan
+1	SIMPLE	t1	NULL	eq_ref	PRIMARY	PRIMARY	4	pq_database.t3.a	1	100.00	NULL
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	4	25.00	Using where; FirstMatch(t1); Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select /*+ SEMIJOIN(@`subq1` LOOSESCAN) */ `pq_database`.`t1`.`a` AS `a`,`pq_database`.`t1`.`b` AS `b` from `pq_database`.`t1` semi join (`pq_database`.`t3`) semi join (`pq_database`.`t2`) where ((`pq_database`.`t2`.`a` = `pq_database`.`t1`.`b`) and (`pq_database`.`t1`.`a` = `pq_database`.`t3`.`a`))
+select /*+ semijoin(@subq1 LOOSESCAN) */ * from t1 where t1.a in (select /*+ QB_NAME(subq1) */ a from t3) and 
+t1.b in (select a from t2);
+a	b
+2	2
+3	3
+4	4
+drop table t1;
+drop table t2;
+drop table t3;
+create table t1(a varchar(10), primary key (a));
+create table t2(a varchar(10), b int);
+insert into t1 values('t1');
+set global innodb_limit_optimistic_insert_debug = 3;
+insert into t2 values('t1', 1);
+insert into t2 values('t1', 2);
+insert into t2 values('t1', 3);
+insert into t2 values('t1', 4);
+insert into t2 values('t1', 5);
+insert into t2 values('t1', 6);
+insert into t2 values('t1', 7);
+insert into t2 values('t1', 8);
+insert into t2 values('t1', 9);
+insert into t2 values('t1', 10);
+insert into t2 values('t1', 11);
+insert into t2 values('t1', 12);
+insert into t2 values('t1', 13);
+insert into t2 values('t1', 14);
+insert into t2 values('t1', 15);
+set global innodb_limit_optimistic_insert_debug = 0;
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+pq_database.t1	analyze	status	OK
+analyze table t2;
+Table	Op	Msg_type	Msg_text
+pq_database.t2	analyze	status	OK
+explain select * from t1 left join t2 on t2.a = 't1' and t2.b = 1  where t1.a = 't1';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	42	const	1	100.00	Using index
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	15	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select 't1' AS `a`,`pq_database`.`t2`.`a` AS `a`,`pq_database`.`t2`.`b` AS `b` from `pq_database`.`t1` left join `pq_database`.`t2` on(((`pq_database`.`t2`.`b` = 1) and (`pq_database`.`t2`.`a` = 't1'))) where true
+select * from t1 left join t2 on t2.a = 't1' and t2.b = 1  where t1.a = 't1';
+a	a	b
+t1	t1	1
+explain select * from t1 left join t2 on 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	PRIMARY	42	NULL	1	100.00	Using index
+2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	15	100.00	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select `pq_database`.`t1`.`a` AS `a`,`pq_database`.`t2`.`a` AS `a`,`pq_database`.`t2`.`b` AS `b` from `pq_database`.`t1` left join `pq_database`.`t2` on(true) where true
+select * from t1 left join t2 on 1;
+a	a	b
+t1	t1	15
+t1	t1	14
+t1	t1	13
+t1	t1	12
+t1	t1	11
+t1	t1	10
+t1	t1	9
+t1	t1	8
+t1	t1	7
+t1	t1	6
+t1	t1	5
+t1	t1	4
+t1	t1	3
+t1	t1	2
+t1	t1	1
+drop table t1;
+drop table t2;
+create table t1(a int);
+create table t2(b int, primary key (b));
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t1 values(3);
+insert into t2 values(1);
+insert into t2 values(2);
+insert into t2 values(3);
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+pq_database.t1	analyze	status	OK
+analyze table t2;
+Table	Op	Msg_type	Msg_text
+pq_database.t2	analyze	status	OK
+explain select * from t1 where exists (select /*+ semijoin(firstmatch)*/ * from t2 left join t1 on 1 );
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+2	SIMPLE	t2	NULL	index	NULL	PRIMARY	4	NULL	3	100.00	Using index
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using where; FirstMatch(t1)
+Warnings:
+Note	1003	/* select#1 */ select /*+ SEMIJOIN(@`select#2` FIRSTMATCH) */ `pq_database`.`t1`.`a` AS `a` from `pq_database`.`t1` semi join (`pq_database`.`t2` left join `pq_database`.`t1` on(true)) where true
+select * from t1 where exists (select /*+ semijoin(firstmatch)*/ * from t2 left join t1 on 1);
+a
+1
+2
+3
+drop table t1;
+drop table t2;
+create table t1 (a int, b int, index a (a,b));
+create table t2 (a int, index a (a));
+insert into t1 values (1, 10), (2,20), (3, 30), (4, 40);
+insert into t2 values (2), (3), (4), (5);
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+pq_database.t1	analyze	status	OK
+analyze table t2;
+Table	Op	Msg_type	Msg_text
+pq_database.t2	analyze	status	OK
+explain select * from t2 where t2.a in (select /*+ semijoin(DUPSWEEDOUT)*/  a from t1);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	index	a	a	5	NULL	4	100.00	Using where; Using index
+2	SIMPLE	t1	NULL	ref	a	a	5	pq_database.t2.a	1	100.00	Using index; Start temporary; End temporary
+Warnings:
+Note	1003	/* select#1 */ select /*+ SEMIJOIN(@`select#2` DUPSWEEDOUT) */ `pq_database`.`t2`.`a` AS `a` from `pq_database`.`t2` semi join (`pq_database`.`t1`) where (`pq_database`.`t1`.`a` = `pq_database`.`t2`.`a`)
+select * from t2 where t2.a in (select /*+ semijoin(DUPSWEEDOUT)*/ a from t1);
+a
+2
+3
+4
+drop table t1;
+drop table t2;
+CREATE TABLE t0 (
+int_key int(11) DEFAULT NULL,
+varchar_key varchar(1) DEFAULT NULL,
+varchar_nokey varchar(1) DEFAULT NULL,
+KEY int_key (int_key),
+KEY varchar_key (varchar_key,int_key)
+) charset utf8mb4;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO t0 VALUES
+(1,'m','m'),
+(40,'h','h'),
+(1,'r','r'),
+(1,'h','h'),
+(9,'x','x'),
+(NULL,'q','q'),
+(NULL,'k','k'),
+(7,'l','l'),
+(182,'k','k'),
+(202,'a','a'),
+(7,'x','x'),
+(6,'j','j'),
+(119,'z','z'),
+(4,'d','d'),
+(5,'h','h'),
+(1,'u','u'),
+(3,'q','q'),
+(7,'a','a'),
+(3,'e','e'),
+(6,'l','l');
+CREATE TABLE t1 (
+int_key int(11) DEFAULT NULL,
+varchar_key varchar(1) DEFAULT NULL,
+varchar_nokey varchar(1) DEFAULT NULL,
+KEY int_key (int_key),
+KEY varchar_key (varchar_key,int_key)
+) charset utf8mb4;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO t1 VALUES (7,NULL,NULL),(4,'x','x');
+CREATE TABLE t2 (
+int_key int(11) DEFAULT NULL,
+varchar_key varchar(1) DEFAULT NULL,
+varchar_nokey varchar(1) DEFAULT NULL,
+KEY int_key (int_key),
+KEY varchar_key (varchar_key,int_key)
+) charset utf8mb4;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+INSERT INTO t2 VALUES (123,NULL,NULL);
+analyze table t0;
+Table	Op	Msg_type	Msg_text
+pq_database.t0	analyze	status	OK
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+pq_database.t1	analyze	status	OK
+analyze table t2;
+Table	Op	Msg_type	Msg_text
+pq_database.t2	analyze	status	OK
+EXPLAIN
+SELECT t0.int_key  
+FROM t0, t2
+WHERE t0.varchar_nokey  IN (  
+SELECT /*+ semijoin(LOOSESCAN) */ t1_1 .varchar_key  
+FROM t1 AS t1_1  JOIN t1 AS t1_2 ON t1_1 .int_key  
+);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	index	NULL	int_key	5	NULL	1	100.00	Using index
+2	SIMPLE	t1_1	NULL	index	varchar_key	varchar_key	12	NULL	2	50.00	Using where; Using index; LooseScan
+2	SIMPLE	t1_2	NULL	index	NULL	int_key	5	NULL	2	100.00	Using index; FirstMatch(t1_1)
+2	SIMPLE	t0	NULL	ALL	NULL	NULL	NULL	NULL	20	10.00	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select /*+ SEMIJOIN(@`select#2` LOOSESCAN) */ `pq_database`.`t0`.`int_key` AS `int_key` from `pq_database`.`t0` join `pq_database`.`t2` semi join (`pq_database`.`t1` `t1_1` join `pq_database`.`t1` `t1_2`) where ((`pq_database`.`t0`.`varchar_nokey` = `pq_database`.`t1_1`.`varchar_key`) and (0 <> `pq_database`.`t1_1`.`int_key`))
+SELECT t0.int_key  
+FROM t0, t2
+WHERE t0.varchar_nokey  IN (  
+SELECT /*+ semijoin(LOOSESCAN) */ t1_1 .varchar_key  
+FROM t1 AS t1_1  JOIN t1 AS t1_2 ON t1_1 .int_key  
+);
+int_key
+9
+7
+drop table t0;
+drop table t1;
+drop table t2;
+drop database pq_database;

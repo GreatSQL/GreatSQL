@@ -1,0 +1,69 @@
+CREATE TABLE t1 (iv INT, cv VARCHAR(10), ncv VARCHAR(40) CHARACTER SET UTF8MB4);
+INSERT INTO t1 VALUES (1, '11111', sys_guid());
+INSERT INTO t1 VALUES (2, '22222', sys_guid());
+INSERT INTO t1 VALUES (3, '33333', sys_guid());
+INSERT INTO t1 VALUES (4, '44444', sys_guid());
+INSERT INTO t1 VALUES (5, '55555', sys_guid());
+INSERT INTO t1 VALUES (6, '66666', sys_guid());
+INSERT INTO t1 VALUES (7, '77777', sys_guid());
+# sys_guid 产生32字符，生成的字符唯一，不能有任何相同
+SELECT LENGTH (ncv) FROM t1;
+LENGTH (ncv)
+32
+32
+32
+32
+32
+32
+32
+SELECT COUNT(DISTINCT ncv) FROM t1;
+COUNT(DISTINCT ncv)
+7
+# sys_guid 产生32字符，如：aaaaaaaabbbbccccddddeeeeeeeeeeee,第五段为依据mac生成，相同库必须一致
+select COUNT(DISTINCT SUBSTR(ncv,20)) from t1;
+COUNT(DISTINCT SUBSTR(ncv,20))
+1
+INSERT INTO t1 VALUES (3, 'greatdb', _UTF8MB4 '万里开源');
+select length(sys_guid())=32;
+length(sys_guid())=32
+1
+select 1 from t1 order by sys_guid();
+1
+1
+1
+1
+1
+1
+1
+1
+1
+select iv from(select iv,sys_guid() from t1 group by iv,sys_guid());
+iv
+1
+2
+3
+4
+5
+6
+7
+3
+select iv from(select iv,sys_guid(),GROUP_CONCAT(sys_guid() ORDER BY sys_guid() DESC ) from t1 group by iv,sys_guid() order by iv,sys_guid());
+iv
+1
+2
+3
+3
+4
+5
+6
+7
+select sys_guid() is null,sys_guid() is not null;
+sys_guid() is null	sys_guid() is not null
+0	1
+select count(*) from (select 1 from t1 where sys_guid() is null);
+count(*)
+0
+select count(*) from (select 1 from t1 where sys_guid() is not null);
+count(*)
+8
+DROP TABLE t1;

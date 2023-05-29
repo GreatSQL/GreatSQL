@@ -1,0 +1,202 @@
+
+
+SET SQL_MODE=ORACLE;
+CREATE TABLE t1 (i1 INT, i2 INT) ENGINE=InnoDB;
+
+--echo # unique index in oracle mode, SQL NULL == SQL NULL
+CREATE UNIQUE INDEX t1_i1_i2 ON t1(i1, i2);
+
+INSERT INTO t1 VALUES (1, null);
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (1, null);
+INSERT INTO t1 VALUES (2, null);
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (2, null);
+
+INSERT INTO t1 VALUES (null, 1);
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (null, 1);
+
+INSERT INTO t1 VALUES (null, null);
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (null, null);
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+
+--echo # invisible column
+CREATE TABLE t1 (i1 INT, i2 INT INVISIBLE, vc3 VARCHAR(10)) ENGINE=InnoDB;
+CREATE UNIQUE INDEX t1_i1_vc3 ON t1(i1, vc3);
+CREATE UNIQUE INDEX t1_i1_i2_vc3 ON t1(i1, i2, vc3);
+INSERT INTO t1 VALUES (1, NULL);
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (1, NULL);
+DROP INDEX t1_i1_vc3 ON t1;
+DROP INDEX t1_i1_i2_vc3 ON t1;
+INSERT INTO t1 VALUES (1, NULL);
+--error ER_DUP_ENTRY
+CREATE UNIQUE INDEX t1_i1_vc3 ON t1(i1, vc3);
+--error ER_DUP_ENTRY
+CREATE UNIQUE INDEX t1_i1_i2_vc3 ON t1(i1, i2, vc3);
+DROP TABLE t1;
+
+--echo # generated column
+CREATE TABLE t1 (
+a INT DEFAULT NULL,
+b INT DEFAULT NULL,
+c INT GENERATED ALWAYS AS (SQRT(((a * a ) + (b * b)))) VIRTUAL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE UNIQUE INDEX t1_a_b_c ON t1 (a,b,c);
+INSERT INTO t1 (a, b) VALUES (NULL, NULL);
+--error ER_DUP_ENTRY
+INSERT INTO t1 (a, b) VALUES (NULL, NULL);
+DROP INDEX t1_a_b_c ON t1;
+INSERT INTO t1 (a, b) VALUES (NULL, NULL);
+--error ER_DUP_ENTRY
+CREATE UNIQUE INDEX t1_a_b_c ON t1 (a,b,c);
+DROP TABLE t1;
+
+--echo # drop column
+CREATE TABLE t1 (i1 INT, i2 INT, vc3 VARCHAR(10)) ENGINE=InnoDB;
+CREATE UNIQUE INDEX t1_idx ON t1 (i1, i2, vc3);
+INSERT INTO t1 VALUES (null, 1, null);
+INSERT INTO t1 VALUES (null, 2, null);
+--error ER_DUP_ENTRY
+ALTER TABLE t1 DROP COLUMN i2;
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo # add column
+CREATE TABLE t1 (i1 INT, i2 INT, vc3 VARCHAR(10)) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (null, 1, null);
+INSERT INTO t1 VALUES (null, 2, null);
+ALTER TABLE t1 ADD COLUMN i4 INT ;
+--error ER_DUP_ENTRY
+CREATE UNIQUE INDEX t1_idx ON t1 (i1, vc3, i4);
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo # temporary table
+CREATE TEMPORARY TABLE t1 (i1 INT, i2 INT);
+CREATE UNIQUE INDEX t1_i1_i2 ON t1(i1, i2);
+INSERT INTO t1 VALUES (1, null);
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (1, null);
+DROP INDEX t1_i1_i2 ON t1;
+INSERT INTO t1 VALUES (1, null);
+--error ER_DUP_ENTRY
+CREATE UNIQUE INDEX t1_i1_i2 ON t1(i1, i2);
+DROP TABLE t1;
+
+--echo # implicit multiple indexes
+CREATE TABLE t1 (i1 INT auto_increment, i2 INT, vc3 VARCHAR(10), PRIMARY KEY(i1));
+CREATE UNIQUE INDEX t1_idx ON t1(i2, vc3);
+INSERT INTO t1 VALUES (null, null, null);
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (null, null, null);
+DROP INDEX t1_idx ON t1;
+CREATE UNIQUE INDEX t1_idx ON t1(i2, vc3) INVISIBLE;
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (null, null, null);
+ALTER TABLE t1 ALTER INDEX t1_idx VISIBLE;
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (null, null, null);
+ALTER TABLE t1 RENAME INDEX t1_idx TO t1_idx_n;
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (null, null, null);
+DROP TABLE t1;
+
+
+# duplicate above test for default mode again.
+SET SQL_MODE=DEFAULT;
+CREATE TABLE t1 (i1 INT, i2 INT) ENGINE=InnoDB;
+
+--echo # unique index in default mode, SQL NULL != SQL NULL
+CREATE UNIQUE INDEX t1_i1_i2 ON t1(i1, i2);
+
+INSERT INTO t1 VALUES (1, null);
+INSERT INTO t1 VALUES (1, null);
+INSERT INTO t1 VALUES (2, null);
+INSERT INTO t1 VALUES (2, null);
+
+INSERT INTO t1 VALUES (null, 1);
+INSERT INTO t1 VALUES (null, 1);
+
+INSERT INTO t1 VALUES (null, null);
+INSERT INTO t1 VALUES (null, null);
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+
+--echo # invisible column
+CREATE TABLE t1 (i1 INT, i2 INT INVISIBLE, vc3 VARCHAR(10)) ENGINE=InnoDB;
+CREATE UNIQUE INDEX t1_i1_vc3 ON t1(i1, vc3);
+CREATE UNIQUE INDEX t1_i1_i2_vc3 ON t1(i1, i2, vc3);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t1 VALUES (1, NULL);
+DROP INDEX t1_i1_vc3 ON t1;
+DROP INDEX t1_i1_i2_vc3 ON t1;
+INSERT INTO t1 VALUES (1, NULL);
+CREATE UNIQUE INDEX t1_i1_vc3 ON t1(i1, vc3);
+CREATE UNIQUE INDEX t1_i1_i2_vc3 ON t1(i1, i2, vc3);
+DROP TABLE t1;
+
+--echo # generated column
+CREATE TABLE t1 (
+a INT DEFAULT NULL,
+b INT DEFAULT NULL,
+c INT GENERATED ALWAYS AS (SQRT(((a * a ) + (b * b)))) VIRTUAL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE UNIQUE INDEX t1_a_b_c ON t1 (a,b,c);
+INSERT INTO t1 (a, b) VALUES (NULL, NULL);
+INSERT INTO t1 (a, b) VALUES (NULL, NULL);
+DROP INDEX t1_a_b_c ON t1;
+INSERT INTO t1 (a, b) VALUES (NULL, NULL);
+CREATE UNIQUE INDEX t1_a_b_c ON t1 (a,b,c);
+DROP TABLE t1;
+
+--echo # drop column
+CREATE TABLE t1 (i1 INT, i2 INT, vc3 VARCHAR(10)) ENGINE=InnoDB;
+CREATE UNIQUE INDEX t1_idx ON t1 (i1, i2, vc3);
+INSERT INTO t1 VALUES (null, 1, null);
+INSERT INTO t1 VALUES (null, 2, null);
+ALTER TABLE t1 DROP COLUMN i2;
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo # add column
+CREATE TABLE t1 (i1 INT, i2 INT, vc3 VARCHAR(10)) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (null, 1, null);
+INSERT INTO t1 VALUES (null, 2, null);
+ALTER TABLE t1 ADD COLUMN i4 INT ;
+CREATE UNIQUE INDEX t1_idx ON t1 (i1, vc3, i4);
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo # temporary table
+CREATE TEMPORARY TABLE t1 (i1 INT, i2 INT);
+CREATE UNIQUE INDEX t1_i1_i2 ON t1(i1, i2);
+INSERT INTO t1 VALUES (1, null);
+INSERT INTO t1 VALUES (1, null);
+DROP INDEX t1_i1_i2 ON t1;
+INSERT INTO t1 VALUES (1, null);
+CREATE UNIQUE INDEX t1_i1_i2 ON t1(i1, i2);
+DROP TABLE t1;
+
+--echo # implicit multiple indexes
+CREATE TABLE t1 (i1 INT auto_increment, i2 INT, vc3 VARCHAR(10), PRIMARY KEY(i1));
+CREATE UNIQUE INDEX t1_idx ON t1(i2, vc3);
+INSERT INTO t1 VALUES (null, null, null);
+INSERT INTO t1 VALUES (null, null, null);
+DROP INDEX t1_idx ON t1;
+CREATE UNIQUE INDEX t1_idx ON t1(i2, vc3) INVISIBLE;
+INSERT INTO t1 VALUES (null, null, null);
+ALTER TABLE t1 ALTER INDEX t1_idx VISIBLE;
+INSERT INTO t1 VALUES (null, null, null);
+ALTER TABLE t1 RENAME INDEX t1_idx TO t1_idx_n;
+INSERT INTO t1 VALUES (null, null, null);
+DROP TABLE t1;

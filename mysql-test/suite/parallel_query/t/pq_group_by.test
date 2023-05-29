@@ -1,0 +1,262 @@
+--source include/have_debug.inc
+
+create table t1(a int primary key, b varchar(10), c decimal(5,2), d double);
+
+SELECT COUNT(a) FROM t1; 
+SELECT SUM(a) FROM t1; 
+SELECT AVG(a) FROM t1; 
+
+insert into t1 values (1, 'The', '3.14', '3.14');
+insert into t1 values (2, 'quick', '4.25', '3.14');
+insert into t1 values (3, 'brown', '5.36', '3.14');
+insert into t1 values (4, 'fox', '6.47', '3.14');
+insert into t1 values (5, 'jumps', '3.14', '6.28');
+insert into t1 values (6, 'over', '4.25', '6.28');
+insert into t1 values (7, 'the', '5.36', '6.28');
+insert into t1 values (8, 'lazy', '6.47', '6.28');
+insert into t1 values (9, 'dog', '7.58', '6.28');
+
+select count(*) from t1;
+select count(a) from t1;
+select count(b) from t1;
+select count(c) from t1;
+select count(d) from t1;
+select sum(a) from t1;
+select sum(c) from t1;
+select sum(d) from t1;
+select avg(a) from t1;
+select avg(c) from t1;
+select avg(d) from t1;
+select std(d) from t1;
+select variance(d) from t1;
+
+select sum(a) from t1 where c > 5.0;
+select sum(c) from t1 where a > 5;
+select sum(d) from t1 where c > 5.0;
+select avg(a) from t1 where c > 5.0;
+select avg(c) from t1 where a > 5;
+select avg(d) from t1 where c > 5.0;
+select count(*) from t1 where c > 5.0;
+select count(a) from t1 where a > 5;
+select count(b) from t1 where c > 5.0;
+select count(c) from t1 where d > 6.0;
+select count(d) from t1 where a > 5;
+
+select c,sum(a) from t1 group by(c);
+select b,sum(c) from t1 group by(b);
+select c,sum(d) from t1 group by(c);
+select c,avg(a) from t1 group by(c);
+select b,avg(c) from t1 group by(b);
+select c,avg(d) from t1 group by(c);
+select count(*) from t1 group by(c);
+select count(a) from t1 group by(a);
+select count(b) from t1 group by(c);
+select count(c) from t1 group by(b);
+select count(d) from t1 group by(c);
+
+drop table t1;
+
+--disable_warnings
+
+CREATE TABLE `t2` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `a` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+);
+
+--enable_warnings 
+
+insert into t2 values(1, 'a'), (2, 'b');
+
+select sum(id) from t2 group by id;
+select avg(id) from t2 group by id;
+select count(id) from t2 group by id;
+
+drop table t2;
+
+## sum_max/sum/min ##
+
+create table t1 (a char(2), t timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
+insert into t1 values ('a', '2004-01-01 00:00:00'), ('a', '2004-01-01 01:00:00'), ('b', '2004-02-01 00:00:00');
+
+select max(t) from t1 group by a;
+explain select max(t) from t1 group by a;
+
+select min(t) from t1 group by a;
+explain select min(t) from t1 group by a;
+
+drop table t1;
+
+## optimized with key 
+
+set sql_mode = ''; 
+set big_tables = 1;
+CREATE TABLE t1(
+  id INT AUTO_INCREMENT PRIMARY KEY, 
+  c1 INT NOT NULL, 
+  c2 INT NOT NULL,
+  UNIQUE KEY (c2,c1));
+
+INSERT INTO t1(c1,c2) VALUES (5,1), (4,1), (3,5), (2,3), (1,3);
+
+SELECT * FROM t1 ORDER BY c1;
+SELECT * FROM t1 GROUP BY id ORDER BY c1;
+
+## desc 
+SELECT * FROM t1 GROUP BY id ORDER BY id DESC; 
+
+drop table t1; 
+
+--disable_warnings
+
+CREATE TABLE t1 (
+  spID int(10) unsigned,
+  userID int(10) unsigned,
+  score smallint(5) unsigned,
+  key (spid),
+  key (score)
+);
+
+--enable_warnings 
+
+INSERT INTO t1 VALUES (1,1,1),(2,2,2),(2,1,1),(3,3,3),(4,3,3),(5,3,3),(6,3,3),(7,3,3);
+ANALYZE TABLE t1;
+select userid,count(*) from t1 group by userid order by userid;
+select userid,count(*) from t1 group by userid order by null;
+select userid,count(*) from t1 group by userid order by userid desc;
+select spid,count(*) from t1 group by spid;
+select spid,count(*) from t1 group by spid order by spid;
+select spid,count(*) from t1 group by spid order by spid desc; 
+
+drop table t1;
+
+## optimized-group-by 
+set sql_mode = ''; 
+
+create table t3 (
+ period    int not null,
+ name      char(32) not null,
+ companynr int not null,
+ price     double(11,0),
+ price2     double(11,0),
+ key (period),
+ key (name)
+);
+
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1001,"Iranizes",37,5987435,234724);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1002,"violinist",37,28357832,8723648);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1003,"extramarital",37,39654943,235872);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1004,"spates",78,726498,72987523);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1005,"cloakroom",78,98439034,823742);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1006,"gazer",101,834598,27348324);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1007,"hand",154,983543950,29837423);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1008,"tucked",311,234298,3275892);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1009,"gems",447,2374834,9872392);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1010,"clinker",512,786542,76234234);
+
+create temporary table tmp select * from t3;
+
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+
+alter table t3 add t2nr int not null auto_increment primary key first;
+
+drop table tmp;
+
+select companynr,count(price),sum(price),min(price),max(price),avg(price) from t3 where companynr = 37 
+group by companynr order by companynr  limit 10;
+
+drop table t3; 
+
+## Aggr. limit 
+CREATE TABLE t1 (a int, b int); 
+
+let $1=64;
+--disable_query_log
+
+while($1) 
+{
+    let $2=32;
+	while($2)
+	{
+		eval INSERT INTO t1 VALUES (MOD($1, 23), MOD(133, $2)); 
+		dec $2;
+	}
+	dec $1; 
+}
+
+--enable_query_log
+
+SELECT a, sum(a) FROM t1 GROUP BY a ORDER BY a;
+SELECT a, sum(a) FROM t1 GROUP BY a ORDER BY a desc; 
+SELECT a, sum(a) FROM t1 GROUP BY a ORDER BY a limit 10; 
+SELECT a, sum(a) FROM t1 GROUP BY a ORDER BY a limit 10, 10; 
+
+SELECT b, avg(a) FROM t1 GROUP BY a, b ORDER BY b, NULL limit 10; 
+SELECT b, sum(a) FROM t1 GROUP BY a, b ORDER BY NULL, a, b, NULL, a, NULL; 
+SELECT b, sum(a) FROM t1 GROUP BY a, b ORDER BY NULL, a, b, NULL, a, NULL limit 10, 5; 
+
+DROP TABLE t1; 
+
+## Normal group by
+
+CREATE TABLE t1 (a int, b int);
+
+let $1=64;
+
+--disable_query_log
+
+while($1)
+{
+  let $2=32;
+	while($2)
+	{
+		eval INSERT INTO t1 VALUES (MOD($1, 31), MOD($2, 11));
+		dec $2;
+	}
+	dec $1;
+}
+
+--enable_query_log
+
+## having normal item
+
+SELECT a FROM t1 GROUP BY a ORDER by a Limit 10;
+SELECT a FROM t1 GROUP BY a HAVING a > 1 ORDER by a Limit 10;
+SELECT a FROM t1 GROUP BY a HAVING 1 != 1 AND a > 1 ORDER by a Limit 10;
+SELECT 0 AS x, a FROM t1 GROUP BY x,a HAVING x=1 AND a > 1 ORDER by a Limit 10;
+
+## having item func
+
+SELECT a FROM t1 GROUP BY a HAVING (a % 11) > 1 ORDER by a Limit 10;
+SELECT a, b FROM t1 GROUP BY a, b HAVING a + b > 31 ORDER by a, b Limit 10;
+SELECT a, b FROM t1 GROUP BY a, b HAVING a * b > 61 ORDER by a, b Limit 10, 10;
+SELECT a, b FROM t1 GROUP BY a, b HAVING sin(a % 11) > 0.5 and cos(b % 7) < 0.5 ORDER by a, b Limit 10, 10;
+
+## having aggr
+EXPLAIN SELECT a, sum(b) from t1 GROUP BY a, b HAVING sum(b) > 5 ORDER BY a, b LIMIT 10;
+SELECT a, sum(b) from t1 GROUP BY a, b HAVING sum(b) > 5 ORDER BY a, b LIMIT 10;
+
+EXPLAIN SELECT a, sum(b) from t1 GROUP BY a, b HAVING sum(b) > 5 ORDER BY a, b LIMIT 10;
+SELECT a, b from t1 GROUP BY a, b HAVING avg(b) > 5 ORDER BY a, b LIMIT 10;
+SELECT sum(a), avg(b) from t1 GROUP BY a, b HAVING sum(a) * avg(b) > 25 ORDER BY a, b LIMIT 10;
+
+DROP TABLE t1; 
+
+
+

@@ -1,0 +1,262 @@
+create database pq_test;
+use pq_test;
+create table t1(
+id int primary key auto_increment,
+col1 varchar(100),
+col2 int,
+key idx_col2(col2)
+)engine= innodb;
+show variables like 'force_parallel_execute';
+Variable_name	Value
+force_parallel_execute	ON
+select count(*) from pq_test.t1;
+count(*)
+1000
+select * from pq_test.t1 limit 1;
+id	col1	col2
+1	testtesttesttest	1000
+select * from pq_test.t1 order by id desc limit 1;
+id	col1	col2
+1000	testtesttesttest	1
+select id,col2 from pq_test.t1 force index(idx_col2) where col2 < 300;
+select id,col2 from pq_test.t1 force index(idx_col2) where col2 <= 300;
+select id,col2 from pq_test.t1 force index(idx_col2)  where col2 > 200;
+select id,col2 from pq_test.t1 force index(idx_col2)  where col2 >= 200;
+select id,col2 from pq_test.t1 force index(idx_col2)  where col2 > 100 and col2 < 800;
+select id,col2 from pq_test.t1 force index(idx_col2)  where col2 >= 100 and col2 <= 800;
+select id,col2 from pq_test.t1 force index(idx_col2)  where col2 < 300 or col2 > 500;
+select id,col2 from pq_test.t1 force index(idx_col2) where (col2 > 100 and col2 < 500) or (col2 > 600 and col2 < 900);
+drop table pq_test.t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+create table t1 (
+id  integer,
+id2 integer not null,
+index (id),
+index (id2)
+);
+insert into t1 values(null,null),(1,1);
+Warnings:
+Warning	1048	Column 'id2' cannot be null
+select * from t1 where id <=> null or id > 0;
+id	id2
+NULL	0
+1	1
+drop table t1;
+CREATE TABLE t1 AS
+SELECT 10 AS a, REPEAT('a',20) AS b, REPEAT('a',8) AS c, REPEAT('a',8) AS d;
+ALTER TABLE t1 ADD PRIMARY KEY(a), ADD KEY(b);
+INSERT INTO t1 (a, b) VALUES (1, repeat(0xF1F2,5));
+Warnings:
+Warning	1366	Incorrect string value: '\xF1\xF2\xF1\xF2\xF1\xF2...' for column 'b' at row 1
+INSERT INTO t1 (a, b) VALUES (2, repeat(0xF1F2,10));
+Warnings:
+Warning	1366	Incorrect string value: '\xF1\xF2\xF1\xF2\xF1\xF2...' for column 'b' at row 1
+INSERT INTO t1 (a, b) VALUES (3, repeat(0xF1F2,11));
+Warnings:
+Warning	1366	Incorrect string value: '\xF1\xF2\xF1\xF2\xF1\xF2...' for column 'b' at row 1
+INSERT INTO t1 (a, b) VALUES (4, repeat(0xF1F2,12));
+Warnings:
+Warning	1366	Incorrect string value: '\xF1\xF2\xF1\xF2\xF1\xF2...' for column 'b' at row 1
+SELECT hex(concat(repeat(0xF1F2, 10), '%'));
+hex(concat(repeat(0xF1F2, 10), '%'))
+F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F225
+3 rows expected
+SELECT a, hex(b), c FROM t1 WHERE b LIKE concat(repeat('0xF1F2',10), '%');
+a	hex(b)	c
+drop table t1;
+CREATE TABLE t1 (
+v1 VARCHAR(20) CHARACTER SET utf8 NOT NULL,
+pk INTEGER NOT NULL,
+PRIMARY KEY (pk),
+KEY v1_key (v1(10))
+) ENGINE=InnoDB;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+INSERT INTO t1 VALUES ('ABCDE',19), ('JLVGO',14);
+EXPLAIN SELECT * FROM t1 WHERE t1.v1 < CHAR(127);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	v1_key	v1_key	32	NULL	2	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`v1` AS `v1`,`pq_test`.`t1`.`pk` AS `pk` from `pq_test`.`t1` where (`pq_test`.`t1`.`v1` < <cache>(char(127)))
+EXPLAIN SELECT * FROM t1 WHERE t1.v1 = CHAR(127);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ref	v1_key	v1_key	32	const	1	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`v1` AS `v1`,`pq_test`.`t1`.`pk` AS `pk` from `pq_test`.`t1` where (`pq_test`.`t1`.`v1` = <cache>(char(127)))
+EXPLAIN SELECT * FROM t1 WHERE t1.v1 BETWEEN 'f' AND CHAR(127);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	v1_key	v1_key	32	NULL	1	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`v1` AS `v1`,`pq_test`.`t1`.`pk` AS `pk` from `pq_test`.`t1` where (`pq_test`.`t1`.`v1` between 'f' and <cache>(char(127)))
+SELECT * FROM t1 WHERE t1.v1 < CHAR(127);
+v1	pk
+ABCDE	19
+JLVGO	14
+SELECT * FROM t1 WHERE t1.v1 = CHAR(127);
+v1	pk
+SELECT * FROM t1 WHERE t1.v1 BETWEEN 'f' AND CHAR(127);
+v1	pk
+JLVGO	14
+DROP TABLE t1;
+CREATE TABLE t2 (
+auto int not null auto_increment,
+fld1 int(6) unsigned zerofill DEFAULT '000000' NOT NULL,
+companynr tinyint(2) unsigned zerofill DEFAULT '00' NOT NULL,
+fld3 char(30) DEFAULT '' NOT NULL,
+fld4 char(35) DEFAULT '' NOT NULL,
+fld5 char(35) DEFAULT '' NOT NULL,
+fld6 char(4) DEFAULT '' NOT NULL,
+UNIQUE fld1 (fld1),
+KEY fld3 (fld3),
+PRIMARY KEY (auto)
+) charset utf8mb4;
+fld3
+fld3
+fld3	companynr
+fld3	companynr
+fld3
+yelped
+Wotan
+wallet
+tinily
+teethe
+sumac
+succumbed
+subjective
+Steinberg
+snatching
+fld3
+yelped
+Wotan
+wallet
+tinily
+teethe
+fld3
+sumac
+succumbed
+subjective
+Steinberg
+snatching
+fld3
+fld3
+fld3
+fld3
+fld3
+fld3
+fld3
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+a	filler
+a	filler
+c-1011=w	filler
+c-1011=w	filler-1
+c-1011=w	filler-2
+c-1012=w	filler
+c-1012=w	filler-1
+c-1012=w	filler-2
+c-1013=w	filler
+c-1013=w	filler-1
+c-1013=w	filler-2
+c-1014=w	filler
+c-1014=w	filler-1
+c-1014=w	filler-2
+c-1015=w	filler
+c-1015=w	filler-1
+c-1015=w	filler-2
+a	filler
+c-1011=w	filler
+c-1011=w	filler-1
+c-1011=w	filler-2
+c-1012=w	filler
+c-1012=w	filler-1
+c-1012=w	filler-2
+c-1013=w	filler
+c-1013=w	filler-1
+c-1013=w	filler-2
+c-1014=w	filler
+c-1014=w	filler-1
+c-1014=w	filler-2
+c-1015=w	filler
+c-1015=w	filler-1
+c-1015=w	filler-2
+a	filler
+c-1011=w	filler
+c-1011=w	filler-1
+c-1011=w	filler-2
+c-1012=w	filler
+c-1012=w	filler-1
+c-1012=w	filler-2
+c-1013=w	filler
+c-1013=w	filler-1
+c-1013=w	filler-2
+c-1014=w	filler
+c-1014=w	filler-1
+c-1014=w	filler-2
+c-1015=w	filler
+c-1015=w	filler-1
+c-1015=w	filler-2
+a	filler
+c-1011=w	filler
+c-1011=w	filler-1
+c-1011=w	filler-2
+c-1012=w	filler
+c-1012=w	filler-1
+c-1012=w	filler-2
+c-1013=w	filler
+c-1013=w	filler-1
+c-1013=w	filler-2
+c-1014=w	filler
+c-1014=w	filler-1
+c-1014=w	filler-2
+c-1015=w	filler
+c-1015=w	filler-1
+c-1015=w	filler-2
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+pq_test.t1	analyze	status	OK
+#
+# REF access optimization
+#
+EXPLAIN SELECT count(*) FROM t1 WHERE pk_1 = 3 and f1 = '2000-01-03';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ref	PRIMARY,k1	k1	10	const,const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `pq_test`.`t1` where ((`pq_test`.`t1`.`f1` = TIMESTAMP'2000-01-03 00:00:00') and (`pq_test`.`t1`.`pk_1` = 3))
+FLUSH STATUS;
+SELECT count(*) FROM t1 WHERE pk_1 = 3 and f1 = '2000-01-03';
+count(*)
+2
+EXPLAIN SELECT pk_2 FROM t1 WHERE pk_1 = 3 and f1 = '2000-01-03';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ref	PRIMARY,k1	k1	10	const,const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`pk_2` AS `pk_2` from `pq_test`.`t1` where ((`pq_test`.`t1`.`f1` = TIMESTAMP'2000-01-03 00:00:00') and (`pq_test`.`t1`.`pk_1` = 3))
+FLUSH STATUS;
+SELECT pk_2 FROM t1 WHERE pk_1 = 3 and f1 = '2000-01-03';
+pk_2
+3
+13
+#
+# RANGE access optimization
+#
+EXPLAIN SELECT count(*) FROM t1 WHERE pk_1 BETWEEN 3 AND 5 AND f1 = '2000-01-03';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	PRIMARY,k1	k1	10	NULL	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `pq_test`.`t1` where ((`pq_test`.`t1`.`f1` = TIMESTAMP'2000-01-03 00:00:00') and (`pq_test`.`t1`.`pk_1` between 3 and 5))
+FLUSH STATUS;
+SELECT count(*) FROM t1 WHERE pk_1 BETWEEN 3 AND 5 AND f1 = '2000-01-03';
+count(*)
+6
+drop table t1;
+drop database pq_test;

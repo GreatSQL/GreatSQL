@@ -1,0 +1,163 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+--disable_warnings
+drop database if exists pq_database;
+--enable_warnings
+create database pq_database;
+use pq_database;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+set global innodb_limit_optimistic_insert_debug = 3;
+show variables like "innodb_limit_optimistic_insert_debug";
+
+create table t1 (
+  a int not null,
+  b int not null,
+  c int not null
+) ENGINE=Innodb DEFAULT CHARSET=utf8mb4;
+
+insert into t1 values(1, 2, 3);
+insert into t1 values(1, 5, 5);
+insert into t1 values(1, 2, 4);
+insert into t1 values(2, 4, 2);
+insert into t1 values(2, 1, 3);
+insert into t1 values(3, 5, 1);
+insert into t1 values(3, 2, 3);
+insert into t1 values(3, 2, 4);
+insert into t1 values(4, 6, 8);
+insert into t1 values(5, 8, 6);
+insert into t1 values(5, 3, 9);
+insert into t1 values(6, 9, 2);
+analyze table t1;
+
+# test order by sum 
+explain select a, sum(a) from t1 group by a order by sum(a);
+select a, sum(a) from t1 group by a order by sum(a);
+
+select a, sum(a) from t1 group by a order by sum(b);
+
+select a, sum(a) from t1 group by a order by sum(b) + 2;
+
+select a, sum(a) from t1 group by a order by sum(b) - 2;
+
+select a, sum(a) from t1 group by a order by sum(b) * 2;
+
+select a, sum(a) from t1 group by a order by sum(b) / 2;
+
+select a, sum(a) from t1 group by a order by sum(b + 2), a;
+
+select a, sum(a) from t1 group by a order by sum(b - 2), a;
+
+select a, sum(a) from t1 group by a order by sum(b * 2), a;
+
+select a, sum(a) from t1 group by a order by sum(b / 2), a;
+
+select a, sum(a) from t1 group by a order by sum(b + 2) + sum(a);
+
+# test order by avg 
+select a, avg(a) from t1 group by a order by avg(a);
+
+select a, avg(a) from t1 group by a order by avg(b);
+
+select a, avg(a) from t1 group by a order by avg(b) + 2;
+
+select a, avg(a) from t1 group by a order by avg(b) - 2;
+
+select a, avg(a) from t1 group by a order by avg(b) * 2;
+
+select a, avg(a) from t1 group by a order by avg(b) / 2;
+
+select a, avg(a) from t1 group by a order by avg(b + 2), a;
+
+select a, avg(a) from t1 group by a order by avg(b - 2), a;
+
+select a, avg(a) from t1 group by a order by avg(b * 2), a;
+
+select a, avg(a) from t1 group by a order by avg(b / 2), a;
+
+select a, avg(a) from t1 group by a order by avg(b + 2) + avg(a);
+
+# test order by count 
+select a, count(a) from t1 group by a order by count(a), a;
+
+select a, count(a) from t1 group by a order by count(b), a;
+
+select a, count(a) from t1 group by a order by count(b) + 2, a;
+
+select a, count(a) from t1 group by a order by count(b) - 2, a;
+
+select a, count(a) from t1 group by a order by count(b) * 2, a;
+
+select a, count(a) from t1 group by a order by count(b) / 2, a;
+
+select a, count(a) from t1 group by a order by count(b + 2), a;
+
+select a, count(a) from t1 group by a order by count(b - 2), a;
+
+select a, count(a) from t1 group by a order by count(b * 2), a;
+
+select a, count(a) from t1 group by a order by count(b / 2), a;
+
+select a, count(a) from t1 group by a order by count(b + 2) + count(a), a;
+
+# test order by max 
+select a, max(a) from t1 group by a order by max(a), a;
+
+select a, max(a) from t1 group by a order by max(b), a;
+
+select a, max(a) from t1 group by a order by max(b) + 2, a;
+
+select a, max(a) from t1 group by a order by max(b) - 2, a;
+
+select a, max(a) from t1 group by a order by max(b) * 2, a;
+
+select a, max(a) from t1 group by a order by max(b) / 2, a;
+
+select a, max(a) from t1 group by a order by max(b + 2), a;
+
+select a, max(a) from t1 group by a order by max(b - 2), a;
+
+select a, max(a) from t1 group by a order by max(b * 2), a;
+
+select a, max(a) from t1 group by a order by max(b / 2), a;
+
+select a, max(a) from t1 group by a order by max(b + 2) + max(a), a;
+
+# test order by min 
+select a, min(a) from t1 group by a order by min(a), a;
+
+select a, min(a) from t1 group by a order by min(b), a;
+
+select a, min(a) from t1 group by a order by min(b) + 2, a;
+
+select a, min(a) from t1 group by a order by min(b) - 2, a;
+
+select a, min(a) from t1 group by a order by min(b) * 2, a;
+
+select a, min(a) from t1 group by a order by min(b) / 2, a;
+
+select a, min(a) from t1 group by a order by min(b + 2), a;
+
+select a, min(a) from t1 group by a order by min(b - 2), a;
+
+select a, min(a) from t1 group by a order by min(b * 2), a;
+
+select a, min(a) from t1 group by a order by min(b / 2), a;
+
+select a, min(a) from t1 group by a order by min(b + 2) + min(a), a;
+
+# test order by hybrid aggregation
+select a, sum(a) from t1 group by a order by max(b) + min(c);
+
+select a, sum(a) from t1 group by a order by count(b + 1) + max(c * 2);
+
+
+set global innodb_limit_optimistic_insert_debug = 0;
+show variables like "innodb_limit_optimistic_insert_debug";
+
+drop table t1;
+drop database pq_database;

@@ -1,0 +1,97 @@
+--source include/pq_test.inc
+--disable_warnings
+drop database if exists pq_having_database;
+--enable_warnings
+create database pq_having_database;
+use pq_having_database;
+
+--disable_warnings
+DROP TABLE IF EXISTS `t1`;
+--enable_warnings
+CREATE TABLE `t1`  (
+  `fd1` int NOT NULL,
+  `fd2` int NOT NULL  
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(2, 2);
+INSERT INTO t1 VALUES(3, 3);
+analyze table t1;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having avg(fd1) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having avg(fd1) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having bit_and(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having bit_and(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having bit_or(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having bit_or(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having bit_xor(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having bit_xor(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having count(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having count(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having count(distinct fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having count(distinct fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having group_concat(distinct fd2) is not null;
+select fd1, avg(fd2) from t1 group by fd1 having group_concat(distinct fd2) is not null;
+
+explain select fd1, fd2, avg(fd2) from t1 group by fd1, fd2 having json_arrayagg(fd2);
+select fd1, fd2, avg(fd2) from t1 group by fd1, fd2 having json_arrayagg(fd2);
+
+explain select fd1, avg(fd2) from t1 group by fd1, fd2 having json_object(fd1, fd2) is not null;
+select fd1, avg(fd2) from t1 group by fd1, fd2 having json_object(fd1, fd2) is not null;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having std(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having std(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having stddev(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having stddev(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having stddev_pop(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having stddev_pop(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having stddev_samp(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having stddev_samp(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having max(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having max(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having min(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having min(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having sum(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having sum(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having var_pop(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having var_pop(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having var_samp(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having var_samp(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having variance(fd2) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having variance(fd2) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having max(fd1)/min(fd1) > 0;
+select fd1, avg(fd2) from t1 group by fd1 having max(fd1)/min(fd1) > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having max(fd1) + 1 > 0;
+select fd1, avg(fd2) from t1 group by fd1 having max(fd1) + 1 > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having fd1 + 1 > 0;
+select fd1, avg(fd2) from t1 group by fd1 having fd1 + 1 > 0;
+
+explain select fd1, avg(fd2) from t1 group by fd1 having fd1 > 0;
+select fd1, avg(fd2) from t1 group by fd1 having fd1 > 0;
+
+explain select fd1, avg(fd2), max(fd1) from t1 group by fd1 having fd1 > 0;
+select fd1, avg(fd2), max(fd1) from t1 group by fd1 having fd1 > 0;
+
+explain select fd1, avg(fd2), avg(fd1) as avg  from t1 group by fd1 having avg > 0;
+select fd1, avg(fd2), avg(fd1) as avg from t1 group by fd1 having avg > 0;
+
+drop table t1;
+drop database pq_having_database;

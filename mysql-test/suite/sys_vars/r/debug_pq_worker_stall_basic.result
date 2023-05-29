@@ -1,0 +1,16 @@
+#
+# debug_pq_worker_stall_basic.test
+#
+SELECT @@global.debug_pq_worker_stall;
+@@global.debug_pq_worker_stall
+0
+show variables like '%debug_pq_worker_stall%';
+Variable_name	Value
+debug_pq_worker_stall	OFF
+set debug_pq_worker_stall=1;
+ERROR HY000: Variable 'debug_pq_worker_stall' is a GLOBAL variable and should be set with SET GLOBAL
+set global debug_pq_worker_stall=1;
+SELECT @@global.debug_pq_worker_stall;
+@@global.debug_pq_worker_stall
+1
+set global debug_pq_worker_stall=0;

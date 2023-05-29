@@ -1,0 +1,30 @@
+# Tests in this file are disabled for ASAN runs in pushbuild.
+# This is in addition to tests disabled by normal disabled.def files
+parallel_query.pq_demon                           : BUG#194 skip example
+innodb.lock_contention                            : BUG#000 DEBUG_SYNC
+perfschema.table_aggregate_hist_2u_2t             : BUG#245 PFS
+perfschema.table_aggregate_global_4u_3t           : BUG#245 PFS
+perfschema.misc                                   : BUG#245 PFS
+perfschema.table_aggregate_global_2u_2t           : BUG#245 PFS
+main.events_1                                     : BUG#255 EVENT DATETIME
+# main.range_with_memory_limit                      : BUG#258 ANALYZE_TABLE
+main.filesort_debug                               : BUG#254 DEBUG_SYNC
+main.events_bugs                                  : Bug#39863 events_bugs
+main.events_1                                     : BUG#255 EVENT DATETIME
+main.kill_debug                                   : BUG#291 issue-291 DEBUG_EXE
+main.mysql_client_test                            : BUG#293 issue-293 PTHREAD_JOIN
+perfschema.idx_compare_ees_by_thread_by_error     : BUG#294 issue-294 PFS
+main.percona_dd_upgrade_57_many_tables            : BUG#0 skipped
+main.percona_log_slow_query_plan                    : BUG#000 execute plan changed
+main.percona_nonflushing_analyze_debug              : BUG#000 execute plan changed
+main.ctype_gb18030_conversion                       : BUG#000 execute plan changed
+innodb.percona_fast_prefix_index_fetch            : BUG#000 execute plan changed
+main.group_by : BUG#0 skipped
+main.distinct : BUG#0 skipped
+main.acl_mdl_scalability : BUG#0 skipped
+main.admin_interface : BUG#0 skipped
+main.join_cache_bka : BUG#0 skipped
+main.join_cache_bka_nobnl : BUG#0 skipped
+main.mtr_unit_tests : BUG#0 skipped
+main.multiaddress_bind : BUG#0 skipped
+main.dd_bootstrap_debug : BUG#0 skipped

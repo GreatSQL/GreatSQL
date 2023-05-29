@@ -1,0 +1,85 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+SET @old_lock_wait_timeout=@@lock_wait_timeout;
+SET GLOBAL lock_wait_timeout=10;
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1,1),(2,2);
+include/rpl_sync.inc
+[connection server2]
+include/start_group_replication.inc
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+[connect conn1_1]
+BEGIN;
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+[connect conn1_2]
+SET SESSION innodb_lock_wait_timeout=100000;
+BEGIN;
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+[connect conn1_3]
+SET SESSION innodb_lock_wait_timeout=100000;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+[connect conn1_4]
+STOP GROUP_REPLICATION;
+ERROR HY000: The STOP GROUP_REPLICATION command encountered a failure. Enable super_read_only failed.
+SELECT member_state FROM performance_schema.replication_group_members WHERE member_id=@@server_uuid;
+member_state
+ERROR
+[connect conn1_1]
+ROLLBACK;
+[connect conn1_2]
+COMMIT;
+ERROR HY000: Error on observer while running replication hook 'before_commit'.
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+SELECT @@super_read_only;
+@@super_read_only
+0
+[connect conn1_3]
+ERROR HY000: Error on observer while running replication hook 'before_commit'.
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+SELECT @@super_read_only;
+@@super_read_only
+0
+[connect conn1_4]
+SELECT member_state FROM performance_schema.replication_group_members WHERE member_id=@@server_uuid;
+member_state
+ERROR
+START GROUP_REPLICATION;
+ERROR HY000: The START GROUP_REPLICATION command failed since the group is already running.
+SELECT member_state FROM performance_schema.replication_group_members WHERE member_id=@@server_uuid;
+member_state
+ERROR
+STOP GROUP_REPLICATION;
+SELECT @@super_read_only;
+@@super_read_only
+1
+SELECT member_state FROM performance_schema.replication_group_members WHERE member_id=@@server_uuid;
+member_state
+OFFLINE
+include/start_group_replication.inc
+[connection server2]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+DROP TABLE t1;
+include/rpl_sync.inc
+[connection server1]
+SET GLOBAL lock_wait_timeout=@old_lock_wait_timeout;
+SHOW TABLES;
+Tables_in_test
+include/group_replication_end.inc

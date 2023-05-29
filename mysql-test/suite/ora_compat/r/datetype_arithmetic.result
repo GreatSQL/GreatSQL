@@ -1,0 +1,98 @@
+set sql_mode='oracle';
+set timestamp=1;
+select sysdate +1 from dual;
+sysdate +1
+1970-01-02 03:00:01.000000
+select to_date('2021-08-23','yyyy-mm-dd') +1 from dual;
+to_date('2021-08-23','yyyy-mm-dd') +1
+2021-08-24 00:00:00
+select to_date('2021-08-23','yyyy-mm-dd') -1 from dual;
+to_date('2021-08-23','yyyy-mm-dd') -1
+2021-08-22 00:00:00
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') +1.5 from dual;
+to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') +1.5
+2021-08-24 12:00:00
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') -1.5 from dual;
+to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') -1.5
+2021-08-21 12:00:00
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') + CAST(1.5 as double) from dual;
+to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') + CAST(1.5 as double)
+2021-08-24 12:00:00
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') - CAST(1.5 as double) from dual;
+to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') - CAST(1.5 as double)
+2021-08-21 12:00:00
+SELECT 1 as res FROM dual
+WHERE  to_date('00:00:00','HH24:MI:SS') + 0.33334  = to_date('00:00:00','HH24:MI:SS') + 0.33335 ;
+res
+1
+SELECT 1 as res FROM dual
+WHERE  to_date('00:00:00','HH24:MI:SS') + 0.33333  = to_date('00:00:00','HH24:MI:SS') + 0.33334 ;
+res
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') * 2 from dual;
+ERROR 42000: in oracle_mode: DATETIME * LONGLONG not allowed
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') / 2 from dual;
+ERROR 42000: in oracle_mode: DATETIME / LONGLONG not allowed
+select  1 - to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS')from dual;
+ERROR 42000: in oracle_mode: LONGLONG - DATETIME not allowed
+select to_date('2021-08-23','yyyy-mm-dd')+to_date('2021-08-23','yyyy-mm-dd') from dual;
+ERROR 42000: in oracle_mode: DATETIME + DATETIME not allowed
+select to_date('2021-08-23','yyyy-mm-dd')-to_date('2021-08-23','yyyy-mm-dd') from dual;
+to_date('2021-08-23','yyyy-mm-dd')-to_date('2021-08-23','yyyy-mm-dd')
+0
+select to_date('2021-08-23','yyyy-mm-dd')-to_date('2021-08-22','yyyy-mm-dd') from dual;
+to_date('2021-08-23','yyyy-mm-dd')-to_date('2021-08-22','yyyy-mm-dd')
+1
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') - to_date('2021-08-22 12:10:11','yyyy-mm-dd HH24:MI:SS') from dual;
+to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') - to_date('2021-08-22 12:10:11','yyyy-mm-dd HH24:MI:SS')
+0.49292824074074074
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') - to_date('2021-08-22 12:10:11','yyyy-mm-dd HH24:MI:SS') + to_date('2021-08-22 12:10:11','yyyy-mm-dd HH24:MI:SS') from dual;
+to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') - to_date('2021-08-22 12:10:11','yyyy-mm-dd HH24:MI:SS') + to_date('2021-08-22 12:10:11','yyyy-mm-dd HH24:MI:SS')
+2021-08-23 00:00:00
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') - to_date('2021-08-22 12:00:00','yyyy-mm-dd HH24:MI:SS');
+to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') - to_date('2021-08-22 12:00:00','yyyy-mm-dd HH24:MI:SS')
+0.5
+create table test_date (id serial, n double, c datetime, unique(n,c));
+set timestamp = 1630047721;
+INSERT INTO test_date(n,c) VALUES (1, null);
+INSERT INTO test_date(n,c) VALUES (null, to_date('23:59:59','HH24:MI:SS') );
+INSERT INTO test_date(n,c) VALUES (1,to_date('23:59:59','HH24:MI:SS') );
+INSERT INTO test_date(n,c) VALUES (-1, to_date('23:59:59','HH24:MI:SS') );
+INSERT INTO test_date(n,c) VALUES (1.2333,to_date('23:59:59','HH24:MI:SS') );
+INSERT INTO test_date(n,c) VALUES (-1.2333,to_date('23:59:59','HH24:MI:SS') );
+select c, n,c+n as sum from test_date order by id;
+c	n	sum
+NULL	1	NULL
+2021-08-01 23:59:59	NULL	NULL
+2021-08-01 23:59:59	1	2021-08-02 23:59:59
+2021-08-01 23:59:59	-1	2021-07-31 23:59:59
+2021-08-01 23:59:59	1.2333	2021-08-03 05:35:56
+2021-08-01 23:59:59	-1.2333	2021-07-31 18:24:02
+select c, cast(n as SIGNED ),c+ cast(n as SIGNED) as sum from test_date order by id;
+c	cast(n as SIGNED )	sum
+NULL	1	NULL
+2021-08-01 23:59:59	NULL	NULL
+2021-08-01 23:59:59	1	2021-08-02 23:59:59
+2021-08-01 23:59:59	-1	2021-07-31 23:59:59
+2021-08-01 23:59:59	1	2021-08-02 23:59:59
+2021-08-01 23:59:59	-1	2021-07-31 23:59:59
+drop table test_date;
+select to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 1;
+to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 1
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0000-01-01 00:00:00' for function to_date
+select to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 0;
+to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 0
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0000-01-01 00:00:00' for function to_date
+select to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 10000000000000000000000000000000000000000000000.0;
+to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 10000000000000000000000000000000000000000000000.0
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0000-01-01 00:00:00' for function to_date
+select to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 1e13;
+to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 1e13
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0000-01-01 00:00:00' for function to_date

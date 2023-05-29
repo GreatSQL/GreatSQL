@@ -1,0 +1,101 @@
+################################################################################
+# Validate that event scheduler is able to automatically drop events during its
+# thread start while Group Replication is running.
+#
+# Test:
+# 0. The test requires two servers: M1 and M2.
+# 1. Test load during truncate
+# 2. Clean up.
+################################################################################
+--source include/have_debug_sync.inc
+--source include/set_privilege_checks_user_as_system_user.inc
+--source include/have_group_replication_plugin.inc
+--let $rpl_group_replication_single_primary_mode=0
+--source include/group_replication.inc
+
+connect (conn1_1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn1_2,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn2,127.0.0.1,root,,test,$SERVER_MYPORT_2,);
+--echo [connect conn1_1]
+--connection conn1_1
+
+--disable_query_log
+SET SESSION sql_log_bin= 0;
+call mtr.add_suppression("[parallel load worker failed]");
+SET SESSION sql_log_bin= 1;
+--enable_query_log
+SELECT @@auto_increment_increment INTO @old_increment;
+SET @@auto_increment_increment = 1;
+SELECT @@auto_increment_offset INTO @old_offset;
+SET @@auto_increment_offset = 1;
+SELECT @@group_replication_consistency INTO @old_replication_consistency;
+set global group_replication_consistency = 'BEFORE';
+
+CREATE TABLE t1 (
+  c1 int auto_increment primary key,
+  c2 int,
+  str1 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('1',512)) NOT NULL,
+  str2 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('2',512)) NOT NULL,
+  str3 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('3',512)) NOT NULL,
+  str4 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('4',512)) NOT NULL
+) engine=InnoDB
+partition by hash(c1) partitions 3;
+
+INSERT INTO t1 (c2) values (1),(2),(3),(4),(5),(6),(7),(8);
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #16
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #32
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #64
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #128
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #256
+SELECT count(*) FROM t1;
+
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' FROM t1;
+TRUNCATE TABLE t1;
+
+SET @@gdb_parallel_load = on;
+SELECT @@gdb_parallel_load_chunk_size INTO @old_chunk_size;
+SET @@gdb_parallel_load_chunk_size = 65536;
+
+SET DEBUG_SYNC = 'gdb_parallel_load_start SIGNAL cond_end WAIT_FOR continue';
+
+--enable_info
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+send_eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' INTO TABLE t1;
+--disable_info
+
+--echo [connect conn1_2]
+--connection conn1_2
+SET DEBUG_SYNC = 'now WAIT_FOR cond_end';
+
+--echo [connect conn2]
+--connection conn2
+TRUNCATE TABLE t1;
+
+--echo [connect conn1_2]
+--connection conn1_2
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+--echo [connect conn1_1]
+--connection conn1_1
+--error ER_GDB_PARALLEL_LOAD
+--reap
+
+##clean up load
+DROP TABLE t1;
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+SET @@auto_increment_increment = @old_increment;
+SET @@auto_increment_offset = @old_offset;
+SET @@gdb_parallel_load = off;
+SET @@gdb_parallel_load_chunk_size = @old_chunk_size;
+set global group_replication_consistency = @old_replication_consistency;
+
+--disconnect conn1_1
+--disconnect conn1_2
+--disconnect conn2
+--echo
+--echo ############################################################
+--echo # 2. Clean up.
+--source include/group_replication_end.inc
+

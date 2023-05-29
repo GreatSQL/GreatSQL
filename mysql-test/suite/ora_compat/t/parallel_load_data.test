@@ -1,0 +1,232 @@
+
+--disable_query_log
+SET SESSION sql_log_bin= 0;
+call mtr.add_suppression("[parallel load worker failed]");
+SET SESSION sql_log_bin= 1;
+--enable_query_log
+SELECT @@auto_increment_increment INTO @old_increment;
+SET @@auto_increment_increment = 1;
+SELECT @@auto_increment_offset INTO @old_offset;
+SET @@auto_increment_offset = 1;
+
+CREATE TABLE t1 (
+  c1 int auto_increment primary key,
+  c2 int,
+  str1 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('1',512)) NOT NULL,
+  str2 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('2',512)) NOT NULL,
+  str3 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('3',512)) NOT NULL,
+  str4 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('4',512)) NOT NULL
+) engine=InnoDB
+partition by hash(c1) partitions 3;
+
+INSERT INTO t1 (c2) values (1),(2),(3),(4),(5),(6),(7),(8);
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #16
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #32
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #64
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #128
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #256
+SELECT count(*) FROM t1;
+
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' FROM t1;
+TRUNCATE TABLE t1;
+
+SET @@gdb_parallel_load = on;
+SELECT @@gdb_parallel_load_chunk_size INTO @old_chunk_size;
+SET @@gdb_parallel_load_chunk_size = 65536;
+--enable_info
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' INTO TABLE t1;
+SELECT COUNT(*) FROM t1;
+--disable_info
+
+--echo
+--echo [## test unreadable char ##]
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
+FIELDS TERMINATED BY 0x01 FROM t1 LIMIT 10;
+TRUNCATE TABLE t1;
+--enable_info
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
+INTO TABLE t1 FIELDS TERMINATED BY 0x01;
+SELECT COUNT(*) FROM t1;
+--disable_info
+
+--echo
+--echo [## test load data into partition ##]
+DROP TABLE t1;
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=InnoDB
+PARTITION BY RANGE(c1) SUBPARTITION BY HASH(c1) SUBPARTITIONS 2
+(PARTITION p1 VALUES LESS THAN(100) (SUBPARTITION s0, SUBPARTITION s1),
+ PARTITION p2 VALUES LESS THAN(200) (SUBPARTITION s2, SUBPARTITION s3));
+INSERT INTO t1 VALUES (1,1),(2,2);
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' FROM t1;
+TRUNCATE TABLE t1;
+--echo [## since insert one row through master session, the errno may not same ##]
+--enable_info
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--error ER_GDB_PARALLEL_LOAD
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(s0);
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--error ER_ROW_DOES_NOT_MATCH_GIVEN_PARTITION_SET
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(s1);
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(s0,s1);
+SELECT COUNT(*) FROM t1;
+TRUNCATE TABLE t1;
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(p1);
+SELECT COUNT(*) FROM t1;
+--disable_info
+--echo [full partitions]
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+INSERT INTO t1 VALUES (101,1),(102,2);
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' FROM t1;
+TRUNCATE TABLE t1;
+--enable_info
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(p1,s2,s3);
+SELECT COUNT(*) FROM t1;
+TRUNCATE TABLE t1;
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(p1,p2);
+SELECT COUNT(*) FROM t1;
+TRUNCATE TABLE t1;
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(s0,s1,s2,s3);
+SELECT COUNT(*) FROM t1;
+--disable_info
+
+--echo
+--echo [## test ignore lines ##]
+TRUNCATE TABLE t1;
+--enable_info
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' INTO TABLE t1 IGNORE 2 ROWS;
+SELECT COUNT(*) FROM t1;
+--disable_info
+
+--echo
+--echo [## test set spec ##]
+TRUNCATE TABLE t1;
+--enable_info
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
+INTO TABLE t1(c1,@var_c2) SET c2 = @var_c2 + 10;
+SELECT * FROM t1 ORDER BY c1;
+--disable_info
+
+--echo
+--echo [## test user var ##]
+TRUNCATE TABLE t1;
+SET @var:=666;
+--enable_info
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
+INTO TABLE t1(c1, @var);
+SELECT * FROM t1 ORDER BY c1;
+--disable_info
+
+--echo
+--echo [## test user sys var ##]
+TRUNCATE TABLE t1;
+SELECT @@auto_increment_increment INTO @old_increment;
+SET @@auto_increment_increment=12345;
+--enable_info
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
+INTO TABLE t1(c1, @dummy) SET c2=@@auto_increment_increment;
+SELECT * FROM t1 ORDER BY c1;
+--disable_info
+SET @@auto_increment_increment=@old_increment;
+
+--echo
+--echo [## test compatible with different time_zone ##]
+DROP TABLE t1;
+CREATE TABLE t1 (c1 int primary key, c2 timestamp) ENGINE=InnoDB;
+SELECT @@time_zone into @old_time_zone;
+SET @@time_zone='+08:00';
+INSERT INTO t1 values (1, '2021-07-23 3:30:00'),(2, '2021-07-23 3:30:00'),(3, '2021-07-23 13:30:00'),(4, '2021-07-23 13:30:00');
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' FROM t1;
+TRUNCATE TABLE t1;
+--enable_info
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' INTO TABLE t1;
+--disable_info
+--sorted_result
+SELECT * FROM t1;
+TRUNCATE TABLE t1;
+SET @@time_zone='+00:00';
+--enable_info
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' INTO TABLE t1;
+--disable_info
+SET @@time_zone='+08:00';
+--sorted_result
+SELECT * FROM t1;
+SET @@time_zone=@old_time_zone;
+
+--echo
+--echo [## test set var hint take effect]
+SET @@gdb_parallel_load = off;
+SET @@gdb_parallel_load_chunk_size = @old_chunk_size;
+DROP TABLE t1;
+CREATE TABLE t1 (
+    c1 int auto_increment primary key,
+    c2 int,
+    str1 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('1',1024)) NOT NULL,
+    str2 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('2',1024)) NOT NULL,
+    str3 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('3',1024)) NOT NULL,
+    str4 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('4',1024)) NOT NULL
+) engine=innodb;
+INSERT INTO t1 (c2) values (1),(2),(3),(4),(5),(6),(7),(8);
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #16
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #32
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #64
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #128
+INSERT INTO t1 (c2) SELECT c2 FROM t1; #256
+SELECT count(*) FROM t1;
+
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' FROM t1;
+TRUNCATE TABLE t1;
+
+--enable_info
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval LOAD /*+ SET_VAR(gdb_parallel_load=ON) SET_VAR(gdb_parallel_load_chunk_size=65536) SET_VAR(gdb_parallel_load_workers=16) */DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' INTO TABLE t1;
+SELECT COUNT(*) FROM t1;
+--disable_info
+
+--echo
+--echo [only support hints about parallel load]
+--error ER_GDB_PARALLEL_LOAD
+LOAD /*+ SET_VAR(auto_increment_increment=2) */DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' INTO TABLE t1;
+
+##clean up
+DROP TABLE t1;
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+SET @@auto_increment_increment = @old_increment;
+SET @@auto_increment_offset = @old_offset;
+SET @@gdb_parallel_load = off;
+SET @@gdb_parallel_load_chunk_size = @old_chunk_size;

@@ -1,0 +1,2123 @@
+set timestamp=1637510400;
+select to_date(concat('15-01-2001',' 2:59:58.999'),
+concat('DD-MM-YYYY',' ','HH24:MI:SS.FF3'));
+to_date(concat('15-01-2001',' 2:59:58.999'),
+concat('DD-MM-YYYY',' ','HH24:MI:SS.FF3'))
+2001-01-15 02:59:58
+select TO_DATE('2004.12.12 22.30.61','YYYY.MM.DD HH24:MI:SS');
+TO_DATE('2004.12.12 22.30.61','YYYY.MM.DD HH24:MI:SS')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2004.12.12 22.30.61' for function to_date
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+create table t1 (date char(60), format char(60) not null);
+insert into t1 values
+('2003-01-02 10:11:12', 'YYYY-MM-DD HH24:MI:SS'),
+('03-01-02 8:11:2.123456', 'YY-MM-DD HH24:MI:SS.FF6'),
+('0003-01-02 8:11:2.123456', 'YYYY-MM-DD HH24:MI:SS.FF6'),
+('03-01-02 8:11:2.123456',   'YYYY-MM-DD HH24:MI:SS.FF6'),
+('2003-01-02 10:11:12 PM', 'YYYY-MM-DD HH12:MI:SS PM'),
+('2003-01-02 01:11:12AM', 'YYYY-MM-DD HH12:MI:SSAM'),
+('2003-01-02 02:11:12 AM', 'YYYY-MM-DD HH12:MI:SS AM'),
+('2003-01-02 11:11:12Pm', 'YYYY-MM-DD HH12:MI:SSPM'),
+('10:20:10', 'HH24:MI:SS'),
+('10:20:10', 'HH12:MI:SS'),
+('10:20:10AM', 'HH12:MI:SSAM'),
+('10:20:10.44AM', 'HH12:MI:SSAM'),
+('15-01-2001 12:59:58', 'DD-MM-YYYY HH24:MI:SS'),
+('15 September 2001', 'DD MONTH YYYY'),
+('15 SEPTEMB 2001', 'DD MONTH YYYY'),
+('15 MAY 2001', 'DD MON YYYY'),
+('Sunday 20 MAY 2001', 'DAY DD MON YYYY'),
+('Sund 20 MAY 2001', 'DAY DD MON YYYY'),
+('15-01-2001', 'DD-MM-YYYY'),
+('15-01-20', 'DD-MM-YY'),
+('15-2001-1', 'DD-YYYY-MM'),
+('2021','YYYY'),
+('202110','YYYYMM'),
+('2010','YYMM'),
+('11','MM'),
+('30','DD'),
+('13','HH24'),
+('11','HH'),
+('12','HH'),
+('12','HH12'),
+('30','MI'),
+('59','SS');
+select date,format,to_date(date, format) as to_date from t1;
+date	format	to_date
+2003-01-02 10:11:12	YYYY-MM-DD HH24:MI:SS	2003-01-02 10:11:12
+03-01-02 8:11:2.123456	YY-MM-DD HH24:MI:SS.FF6	2003-01-02 08:11:02
+0003-01-02 8:11:2.123456	YYYY-MM-DD HH24:MI:SS.FF6	0003-01-02 08:11:02
+03-01-02 8:11:2.123456	YYYY-MM-DD HH24:MI:SS.FF6	0003-01-02 08:11:02
+2003-01-02 10:11:12 PM	YYYY-MM-DD HH12:MI:SS PM	2003-01-02 22:11:12
+2003-01-02 01:11:12AM	YYYY-MM-DD HH12:MI:SSAM	2003-01-02 01:11:12
+2003-01-02 02:11:12 AM	YYYY-MM-DD HH12:MI:SS AM	2003-01-02 02:11:12
+2003-01-02 11:11:12Pm	YYYY-MM-DD HH12:MI:SSPM	2003-01-02 23:11:12
+10:20:10	HH24:MI:SS	2021-11-01 10:20:10
+10:20:10	HH12:MI:SS	2021-11-01 10:20:10
+10:20:10AM	HH12:MI:SSAM	2021-11-01 10:20:10
+10:20:10.44AM	HH12:MI:SSAM	NULL
+15-01-2001 12:59:58	DD-MM-YYYY HH24:MI:SS	2001-01-15 12:59:58
+15 September 2001	DD MONTH YYYY	2001-09-15 00:00:00
+15 SEPTEMB 2001	DD MONTH YYYY	2001-09-15 00:00:00
+15 MAY 2001	DD MON YYYY	2001-05-15 00:00:00
+Sunday 20 MAY 2001	DAY DD MON YYYY	2001-05-20 00:00:00
+Sund 20 MAY 2001	DAY DD MON YYYY	2001-05-20 00:00:00
+15-01-2001	DD-MM-YYYY	2001-01-15 00:00:00
+15-01-20	DD-MM-YY	2020-01-15 00:00:00
+15-2001-1	DD-YYYY-MM	2001-01-15 00:00:00
+2021	YYYY	2021-11-01 00:00:00
+202110	YYYYMM	2021-10-01 00:00:00
+2010	YYMM	2020-10-01 00:00:00
+11	MM	2021-11-01 00:00:00
+30	DD	2021-11-30 00:00:00
+13	HH24	2021-11-01 13:00:00
+11	HH	2021-11-01 11:00:00
+12	HH	2021-11-01 00:00:00
+12	HH12	2021-11-01 00:00:00
+30	MI	2021-11-01 00:30:00
+59	SS	2021-11-01 00:00:59
+Warnings:
+Warning	1411	Incorrect datetime value: '10:20:10.44AM' for function to_date
+select date,format,concat('',to_date(date, format)) as con from t1;
+date	format	con
+2003-01-02 10:11:12	YYYY-MM-DD HH24:MI:SS	2003-01-02 10:11:12
+03-01-02 8:11:2.123456	YY-MM-DD HH24:MI:SS.FF6	2003-01-02 08:11:02
+0003-01-02 8:11:2.123456	YYYY-MM-DD HH24:MI:SS.FF6	0003-01-02 08:11:02
+03-01-02 8:11:2.123456	YYYY-MM-DD HH24:MI:SS.FF6	0003-01-02 08:11:02
+2003-01-02 10:11:12 PM	YYYY-MM-DD HH12:MI:SS PM	2003-01-02 22:11:12
+2003-01-02 01:11:12AM	YYYY-MM-DD HH12:MI:SSAM	2003-01-02 01:11:12
+2003-01-02 02:11:12 AM	YYYY-MM-DD HH12:MI:SS AM	2003-01-02 02:11:12
+2003-01-02 11:11:12Pm	YYYY-MM-DD HH12:MI:SSPM	2003-01-02 23:11:12
+10:20:10	HH24:MI:SS	2021-11-01 10:20:10
+10:20:10	HH12:MI:SS	2021-11-01 10:20:10
+10:20:10AM	HH12:MI:SSAM	2021-11-01 10:20:10
+10:20:10.44AM	HH12:MI:SSAM	NULL
+15-01-2001 12:59:58	DD-MM-YYYY HH24:MI:SS	2001-01-15 12:59:58
+15 September 2001	DD MONTH YYYY	2001-09-15 00:00:00
+15 SEPTEMB 2001	DD MONTH YYYY	2001-09-15 00:00:00
+15 MAY 2001	DD MON YYYY	2001-05-15 00:00:00
+Sunday 20 MAY 2001	DAY DD MON YYYY	2001-05-20 00:00:00
+Sund 20 MAY 2001	DAY DD MON YYYY	2001-05-20 00:00:00
+15-01-2001	DD-MM-YYYY	2001-01-15 00:00:00
+15-01-20	DD-MM-YY	2020-01-15 00:00:00
+15-2001-1	DD-YYYY-MM	2001-01-15 00:00:00
+2021	YYYY	2021-11-01 00:00:00
+202110	YYYYMM	2021-10-01 00:00:00
+2010	YYMM	2020-10-01 00:00:00
+11	MM	2021-11-01 00:00:00
+30	DD	2021-11-30 00:00:00
+13	HH24	2021-11-01 13:00:00
+11	HH	2021-11-01 11:00:00
+12	HH	2021-11-01 00:00:00
+12	HH12	2021-11-01 00:00:00
+30	MI	2021-11-01 00:30:00
+59	SS	2021-11-01 00:00:59
+Warnings:
+Warning	1411	Incorrect datetime value: '10:20:10.44AM' for function to_date
+select date,format,cast(to_date(date, format) as datetime) as datetime from t1;
+date	format	datetime
+2003-01-02 10:11:12	YYYY-MM-DD HH24:MI:SS	2003-01-02 10:11:12
+03-01-02 8:11:2.123456	YY-MM-DD HH24:MI:SS.FF6	2003-01-02 08:11:02
+0003-01-02 8:11:2.123456	YYYY-MM-DD HH24:MI:SS.FF6	0003-01-02 08:11:02
+03-01-02 8:11:2.123456	YYYY-MM-DD HH24:MI:SS.FF6	0003-01-02 08:11:02
+2003-01-02 10:11:12 PM	YYYY-MM-DD HH12:MI:SS PM	2003-01-02 22:11:12
+2003-01-02 01:11:12AM	YYYY-MM-DD HH12:MI:SSAM	2003-01-02 01:11:12
+2003-01-02 02:11:12 AM	YYYY-MM-DD HH12:MI:SS AM	2003-01-02 02:11:12
+2003-01-02 11:11:12Pm	YYYY-MM-DD HH12:MI:SSPM	2003-01-02 23:11:12
+10:20:10	HH24:MI:SS	2021-11-01 10:20:10
+10:20:10	HH12:MI:SS	2021-11-01 10:20:10
+10:20:10AM	HH12:MI:SSAM	2021-11-01 10:20:10
+10:20:10.44AM	HH12:MI:SSAM	NULL
+15-01-2001 12:59:58	DD-MM-YYYY HH24:MI:SS	2001-01-15 12:59:58
+15 September 2001	DD MONTH YYYY	2001-09-15 00:00:00
+15 SEPTEMB 2001	DD MONTH YYYY	2001-09-15 00:00:00
+15 MAY 2001	DD MON YYYY	2001-05-15 00:00:00
+Sunday 20 MAY 2001	DAY DD MON YYYY	2001-05-20 00:00:00
+Sund 20 MAY 2001	DAY DD MON YYYY	2001-05-20 00:00:00
+15-01-2001	DD-MM-YYYY	2001-01-15 00:00:00
+15-01-20	DD-MM-YY	2020-01-15 00:00:00
+15-2001-1	DD-YYYY-MM	2001-01-15 00:00:00
+2021	YYYY	2021-11-01 00:00:00
+202110	YYYYMM	2021-10-01 00:00:00
+2010	YYMM	2020-10-01 00:00:00
+11	MM	2021-11-01 00:00:00
+30	DD	2021-11-30 00:00:00
+13	HH24	2021-11-01 13:00:00
+11	HH	2021-11-01 11:00:00
+12	HH	2021-11-01 00:00:00
+12	HH12	2021-11-01 00:00:00
+30	MI	2021-11-01 00:30:00
+59	SS	2021-11-01 00:00:59
+Warnings:
+Warning	1411	Incorrect datetime value: '10:20:10.44AM' for function to_date
+select date,format,DATE(to_date(date, format)) as date2 from t1;
+date	format	date2
+2003-01-02 10:11:12	YYYY-MM-DD HH24:MI:SS	2003-01-02
+03-01-02 8:11:2.123456	YY-MM-DD HH24:MI:SS.FF6	2003-01-02
+0003-01-02 8:11:2.123456	YYYY-MM-DD HH24:MI:SS.FF6	0003-01-02
+03-01-02 8:11:2.123456	YYYY-MM-DD HH24:MI:SS.FF6	0003-01-02
+2003-01-02 10:11:12 PM	YYYY-MM-DD HH12:MI:SS PM	2003-01-02
+2003-01-02 01:11:12AM	YYYY-MM-DD HH12:MI:SSAM	2003-01-02
+2003-01-02 02:11:12 AM	YYYY-MM-DD HH12:MI:SS AM	2003-01-02
+2003-01-02 11:11:12Pm	YYYY-MM-DD HH12:MI:SSPM	2003-01-02
+10:20:10	HH24:MI:SS	2021-11-01
+10:20:10	HH12:MI:SS	2021-11-01
+10:20:10AM	HH12:MI:SSAM	2021-11-01
+10:20:10.44AM	HH12:MI:SSAM	NULL
+15-01-2001 12:59:58	DD-MM-YYYY HH24:MI:SS	2001-01-15
+15 September 2001	DD MONTH YYYY	2001-09-15
+15 SEPTEMB 2001	DD MONTH YYYY	2001-09-15
+15 MAY 2001	DD MON YYYY	2001-05-15
+Sunday 20 MAY 2001	DAY DD MON YYYY	2001-05-20
+Sund 20 MAY 2001	DAY DD MON YYYY	2001-05-20
+15-01-2001	DD-MM-YYYY	2001-01-15
+15-01-20	DD-MM-YY	2020-01-15
+15-2001-1	DD-YYYY-MM	2001-01-15
+2021	YYYY	2021-11-01
+202110	YYYYMM	2021-10-01
+2010	YYMM	2020-10-01
+11	MM	2021-11-01
+30	DD	2021-11-30
+13	HH24	2021-11-01
+11	HH	2021-11-01
+12	HH	2021-11-01
+12	HH12	2021-11-01
+30	MI	2021-11-01
+59	SS	2021-11-01
+Warnings:
+Warning	1411	Incorrect datetime value: '10:20:10.44AM' for function to_date
+select date,format,TIME(to_date(date, format)) as time from t1;
+date	format	time
+2003-01-02 10:11:12	YYYY-MM-DD HH24:MI:SS	10:11:12
+03-01-02 8:11:2.123456	YY-MM-DD HH24:MI:SS.FF6	08:11:02
+0003-01-02 8:11:2.123456	YYYY-MM-DD HH24:MI:SS.FF6	08:11:02
+03-01-02 8:11:2.123456	YYYY-MM-DD HH24:MI:SS.FF6	08:11:02
+2003-01-02 10:11:12 PM	YYYY-MM-DD HH12:MI:SS PM	22:11:12
+2003-01-02 01:11:12AM	YYYY-MM-DD HH12:MI:SSAM	01:11:12
+2003-01-02 02:11:12 AM	YYYY-MM-DD HH12:MI:SS AM	02:11:12
+2003-01-02 11:11:12Pm	YYYY-MM-DD HH12:MI:SSPM	23:11:12
+10:20:10	HH24:MI:SS	10:20:10
+10:20:10	HH12:MI:SS	10:20:10
+10:20:10AM	HH12:MI:SSAM	10:20:10
+10:20:10.44AM	HH12:MI:SSAM	NULL
+15-01-2001 12:59:58	DD-MM-YYYY HH24:MI:SS	12:59:58
+15 September 2001	DD MONTH YYYY	00:00:00
+15 SEPTEMB 2001	DD MONTH YYYY	00:00:00
+15 MAY 2001	DD MON YYYY	00:00:00
+Sunday 20 MAY 2001	DAY DD MON YYYY	00:00:00
+Sund 20 MAY 2001	DAY DD MON YYYY	00:00:00
+15-01-2001	DD-MM-YYYY	00:00:00
+15-01-20	DD-MM-YY	00:00:00
+15-2001-1	DD-YYYY-MM	00:00:00
+2021	YYYY	00:00:00
+202110	YYYYMM	00:00:00
+2010	YYMM	00:00:00
+11	MM	00:00:00
+30	DD	00:00:00
+13	HH24	13:00:00
+11	HH	11:00:00
+12	HH	00:00:00
+12	HH12	00:00:00
+30	MI	00:30:00
+59	SS	00:00:59
+Warnings:
+Warning	1411	Incorrect datetime value: '10:20:10.44AM' for function to_date
+select date,format,concat(TIME(to_date(date, format))) as time2 from t1;
+date	format	time2
+2003-01-02 10:11:12	YYYY-MM-DD HH24:MI:SS	10:11:12
+03-01-02 8:11:2.123456	YY-MM-DD HH24:MI:SS.FF6	08:11:02
+0003-01-02 8:11:2.123456	YYYY-MM-DD HH24:MI:SS.FF6	08:11:02
+03-01-02 8:11:2.123456	YYYY-MM-DD HH24:MI:SS.FF6	08:11:02
+2003-01-02 10:11:12 PM	YYYY-MM-DD HH12:MI:SS PM	22:11:12
+2003-01-02 01:11:12AM	YYYY-MM-DD HH12:MI:SSAM	01:11:12
+2003-01-02 02:11:12 AM	YYYY-MM-DD HH12:MI:SS AM	02:11:12
+2003-01-02 11:11:12Pm	YYYY-MM-DD HH12:MI:SSPM	23:11:12
+10:20:10	HH24:MI:SS	10:20:10
+10:20:10	HH12:MI:SS	10:20:10
+10:20:10AM	HH12:MI:SSAM	10:20:10
+10:20:10.44AM	HH12:MI:SSAM	NULL
+15-01-2001 12:59:58	DD-MM-YYYY HH24:MI:SS	12:59:58
+15 September 2001	DD MONTH YYYY	00:00:00
+15 SEPTEMB 2001	DD MONTH YYYY	00:00:00
+15 MAY 2001	DD MON YYYY	00:00:00
+Sunday 20 MAY 2001	DAY DD MON YYYY	00:00:00
+Sund 20 MAY 2001	DAY DD MON YYYY	00:00:00
+15-01-2001	DD-MM-YYYY	00:00:00
+15-01-20	DD-MM-YY	00:00:00
+15-2001-1	DD-YYYY-MM	00:00:00
+2021	YYYY	00:00:00
+202110	YYYYMM	00:00:00
+2010	YYMM	00:00:00
+11	MM	00:00:00
+30	DD	00:00:00
+13	HH24	13:00:00
+11	HH	11:00:00
+12	HH	00:00:00
+12	HH12	00:00:00
+30	MI	00:30:00
+59	SS	00:00:59
+Warnings:
+Warning	1411	Incorrect datetime value: '10:20:10.44AM' for function to_date
+select concat('',to_date('8:11:2.123456 03-01-02','HH24:MI:SS YY-MM-DD'));
+concat('',to_date('8:11:2.123456 03-01-02','HH24:MI:SS YY-MM-DD'))
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '8:11:2.123456 03-01-02' for function to_date
+truncate table t1;
+insert into t1 values
+('2003-01-02 10:11:12 PM', 'YYYY-MM-DD HH24:MI:SS PM'),
+('2003-01-02 10:11:12', 'YYYY-MM-DD HH12:MI:SS PM'),
+('2003-01-02 10:11:12AM', 'YYYY-MM-DD HH12:MI:SS AM'),
+('2003-01-02 10:11:12AN', 'YYYY-MM-DD HH12:MI:SSAM'),
+('2003-01-02 10:11:12 PM', 'YY-MM-DD HH24:MI:SS PM'),
+('10:20:10AM', 'HH24:MI:SSAM'),
+('15 Septembei 2001', 'DD MONTH YYYY'),
+('15 Ju 2001', 'DD MONTH YYYY'),
+('Sund 15 MA', 'DAY DD MON YYYY');
+select date,format,to_date(date, format) as to_date from t1;
+date	format	to_date
+2003-01-02 10:11:12 PM	YYYY-MM-DD HH24:MI:SS PM	NULL
+2003-01-02 10:11:12	YYYY-MM-DD HH12:MI:SS PM	2003-01-02 10:11:12
+2003-01-02 10:11:12AM	YYYY-MM-DD HH12:MI:SS AM	2003-01-02 10:11:12
+2003-01-02 10:11:12AN	YYYY-MM-DD HH12:MI:SSAM	NULL
+2003-01-02 10:11:12 PM	YY-MM-DD HH24:MI:SS PM	NULL
+10:20:10AM	HH24:MI:SSAM	NULL
+15 Septembei 2001	DD MONTH YYYY	NULL
+15 Ju 2001	DD MONTH YYYY	NULL
+Sund 15 MA	DAY DD MON YYYY	NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11:12 PM' for function to_date
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11:12AN' for function to_date
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11:12 PM' for function to_date
+Warning	1411	Incorrect datetime value: '10:20:10AM' for function to_date
+Warning	1411	Incorrect datetime value: '15 Septembei 2001' for function to_date
+Warning	1411	Incorrect datetime value: '15 Ju 2001' for function to_date
+Warning	1411	Incorrect datetime value: 'Sund 15 MA' for function to_date
+select date,format,concat(to_date(date, format),'') as con from t1;
+date	format	con
+2003-01-02 10:11:12 PM	YYYY-MM-DD HH24:MI:SS PM	NULL
+2003-01-02 10:11:12	YYYY-MM-DD HH12:MI:SS PM	2003-01-02 10:11:12
+2003-01-02 10:11:12AM	YYYY-MM-DD HH12:MI:SS AM	2003-01-02 10:11:12
+2003-01-02 10:11:12AN	YYYY-MM-DD HH12:MI:SSAM	NULL
+2003-01-02 10:11:12 PM	YY-MM-DD HH24:MI:SS PM	NULL
+10:20:10AM	HH24:MI:SSAM	NULL
+15 Septembei 2001	DD MONTH YYYY	NULL
+15 Ju 2001	DD MONTH YYYY	NULL
+Sund 15 MA	DAY DD MON YYYY	NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11:12 PM' for function to_date
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11:12AN' for function to_date
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11:12 PM' for function to_date
+Warning	1411	Incorrect datetime value: '10:20:10AM' for function to_date
+Warning	1411	Incorrect datetime value: '15 Septembei 2001' for function to_date
+Warning	1411	Incorrect datetime value: '15 Ju 2001' for function to_date
+Warning	1411	Incorrect datetime value: 'Sund 15 MA' for function to_date
+truncate table t1;
+insert into t1 values
+('10:20:10AM', 'HH12:MI:SSAM'),
+('2003-01-02 10:11:12', 'YYYY-MM-DD HH12:MI:SS'),
+('03-01-02 10:11:12 PM', 'YYYY-MM-DD HH12:MI:SS PM');
+select date,format,to_date(date, format) as to_date from t1;
+date	format	to_date
+10:20:10AM	HH12:MI:SSAM	2021-11-01 10:20:10
+2003-01-02 10:11:12	YYYY-MM-DD HH12:MI:SS	2003-01-02 10:11:12
+03-01-02 10:11:12 PM	YYYY-MM-DD HH12:MI:SS PM	0003-01-02 22:11:12
+select date,format,concat(to_date(date, format),'') as con from t1;
+date	format	con
+10:20:10AM	HH12:MI:SSAM	2021-11-01 10:20:10
+2003-01-02 10:11:12	YYYY-MM-DD HH12:MI:SS	2003-01-02 10:11:12
+03-01-02 10:11:12 PM	YYYY-MM-DD HH12:MI:SS PM	0003-01-02 22:11:12
+drop table t1;
+select to_date( 1, NULL );
+to_date( 1, NULL )
+NULL
+select to_date( 1, IF(1=1,NULL,NULL) );
+to_date( 1, IF(1=1,NULL,NULL) )
+NULL
+select to_date( NULL, 1 );
+ERROR HY000: Incorrect string value: 'please check the format string'
+select to_date('04 /30/2004', 'MM /DD/YYYY');
+to_date('04 /30/2004', 'MM /DD/YYYY')
+2004-04-30 00:00:00
+select to_date('04/30 /2004', 'MM /DD /YYYY');
+to_date('04/30 /2004', 'MM /DD /YYYY')
+2004-04-30 00:00:00
+select to_date('04/30/2004 ', 'MM/DD/YYYY ');
+to_date('04/30/2004 ', 'MM/DD/YYYY ')
+2004-04-30 00:00:00
+select to_date('','yyyymmddhh24miss') from dual;
+to_date('','yyyymmddhh24miss')
+NULL
+create table t1(id int primary key, n1 datetime);
+insert into t1 select 1, to_date('','yyyymmddhh24miss') from dual;
+select * from t1;
+id	n1
+1	NULL
+drop table t1;
+select 1 from dual where to_date('','yyyymmdd') is null;
+1
+1
+select 1 from dual where to_date('2021','yyyy') is not null;
+1
+1
+select to_date('2021','yyyy') from dual where to_date('2021','yyyy') < to_date('20211122','yyyymmdd');
+to_date('2021','yyyy')
+2021-11-01 00:00:00
+set sql_mode=1;
+select to_date('202110','yyyymm') from dual;
+to_date('202110','yyyymm')
+2021-10-01 00:00:00
+select to_date('10','mm') from dual;
+to_date('10','mm')
+2021-10-01 00:00:00
+select to_date('20220228','yyyymmdd') from dual;
+to_date('20220228','yyyymmdd')
+2022-02-28 00:00:00
+select to_date('20220229','yyyymmdd') from dual;
+to_date('20220229','yyyymmdd')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '20220229' for function to_date
+select to_date('20220028','yyyymmdd') from dual;
+to_date('20220028','yyyymmdd')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '20220028' for function to_date
+select to_date('20220200','yyyymmdd') from dual;
+to_date('20220200','yyyymmdd')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '20220200' for function to_date
+select to_date('20000229','yyyymmdd') from dual;
+to_date('20000229','yyyymmdd')
+2000-02-29 00:00:00
+select to_date('21000229','yyyymmdd') from dual;
+to_date('21000229','yyyymmdd')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '21000229' for function to_date
+#
+# Asymmetric number of spaces at the end
+#
+select to_date('04/30/2004 ', 'MM/DD/YYYY ');
+to_date('04/30/2004 ', 'MM/DD/YYYY ')
+2004-04-30 00:00:00
+select to_date('04/30/2004 ', 'MM/DD/YYYY  ');
+to_date('04/30/2004 ', 'MM/DD/YYYY  ')
+2004-04-30 00:00:00
+select to_date('04/30/2004  ', 'MM/DD/YYYY ');
+to_date('04/30/2004  ', 'MM/DD/YYYY ')
+2004-04-30 00:00:00
+#
+# D
+#
+SELECT TO_DATE('', 'D') FROM DUAL ;
+TO_DATE('', 'D')
+NULL
+SELECT TO_DATE('0', 'D') FROM DUAL ;
+TO_DATE('0', 'D')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0' for function to_date
+SELECT TO_DATE('8', 'D') FROM DUAL ;
+TO_DATE('8', 'D')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '8' for function to_date
+SELECT to_date('20220801 1', 'YYYYMMDD D') FROM DUAL ;
+to_date('20220801 1', 'YYYYMMDD D')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '20220801 1' for function to_date
+SELECT to_date('20220801 2', 'YYYYMMDD D') FROM DUAL ;
+to_date('20220801 2', 'YYYYMMDD D')
+2022-08-01 00:00:00
+#
+# DDD
+#
+SELECT to_date('', 'DDD') FROM DUAL ;
+to_date('', 'DDD')
+NULL
+SELECT to_date('0', 'DDD') FROM DUAL ;
+to_date('0', 'DDD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0' for function to_date
+SELECT to_date('2022 365', 'YYYY DDD') FROM DUAL ;
+to_date('2022 365', 'YYYY DDD')
+2022-12-31 00:00:00
+SELECT to_date('2022 366', 'YYYY DDD') FROM DUAL ;
+to_date('2022 366', 'YYYY DDD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022 366' for function to_date
+SELECT to_date('2020 366', 'YYYY DDD') FROM DUAL ;
+to_date('2020 366', 'YYYY DDD')
+2020-12-31 00:00:00
+SELECT to_date('2020 367', 'YYYY DDD') FROM DUAL ;
+to_date('2020 367', 'YYYY DDD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2020 367' for function to_date
+SELECT to_date('2022-01-02 1', 'YYYY-MM-DD DDD') FROM DUAL ;
+to_date('2022-01-02 1', 'YYYY-MM-DD DDD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-01-02 1' for function to_date
+SELECT to_date('2022-01-01 1', 'YYYY-MM-DD DDD') FROM DUAL ;
+to_date('2022-01-01 1', 'YYYY-MM-DD DDD')
+2022-01-01 00:00:00
+#
+# A.M. P.M.
+#
+SELECT to_date('2022-01-01 10:11:12 a.m.', 'YYYY-MM-DD HH:MI:SS a.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 a.m.', 'YYYY-MM-DD HH:MI:SS a.m.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 a.m.', 'YYYY-MM-DD HH:MI:SS A.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 a.m.', 'YYYY-MM-DD HH:MI:SS A.M.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 a.m.', 'YYYY-MM-DD HH:MI:SS p.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 a.m.', 'YYYY-MM-DD HH:MI:SS p.m.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 a.m.', 'YYYY-MM-DD HH:MI:SS p.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 a.m.', 'YYYY-MM-DD HH:MI:SS p.M.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 A.m.', 'YYYY-MM-DD HH:MI:SS a.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 A.m.', 'YYYY-MM-DD HH:MI:SS a.m.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 A.m.', 'YYYY-MM-DD HH:MI:SS A.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 A.m.', 'YYYY-MM-DD HH:MI:SS A.M.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 A.m.', 'YYYY-MM-DD HH:MI:SS p.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 A.m.', 'YYYY-MM-DD HH:MI:SS p.m.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 A.m.', 'YYYY-MM-DD HH:MI:SS p.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 A.m.', 'YYYY-MM-DD HH:MI:SS p.M.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 a.M.', 'YYYY-MM-DD HH:MI:SS a.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 a.M.', 'YYYY-MM-DD HH:MI:SS a.m.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 a.M.', 'YYYY-MM-DD HH:MI:SS A.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 a.M.', 'YYYY-MM-DD HH:MI:SS A.M.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 a.M.', 'YYYY-MM-DD HH:MI:SS p.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 a.M.', 'YYYY-MM-DD HH:MI:SS p.m.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 a.M.', 'YYYY-MM-DD HH:MI:SS p.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 a.M.', 'YYYY-MM-DD HH:MI:SS p.M.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 A.M.', 'YYYY-MM-DD HH:MI:SS a.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 A.M.', 'YYYY-MM-DD HH:MI:SS a.m.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 A.M.', 'YYYY-MM-DD HH:MI:SS A.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 A.M.', 'YYYY-MM-DD HH:MI:SS A.M.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 A.M.', 'YYYY-MM-DD HH:MI:SS p.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 A.M.', 'YYYY-MM-DD HH:MI:SS p.m.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 A.M.', 'YYYY-MM-DD HH:MI:SS p.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 A.M.', 'YYYY-MM-DD HH:MI:SS p.M.')
+2022-01-01 10:11:12
+SELECT to_date('2022-01-01 10:11:12 p.m.', 'YYYY-MM-DD HH:MI:SS a.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 p.m.', 'YYYY-MM-DD HH:MI:SS a.m.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 p.m.', 'YYYY-MM-DD HH:MI:SS A.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 p.m.', 'YYYY-MM-DD HH:MI:SS A.M.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 p.m.', 'YYYY-MM-DD HH:MI:SS p.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 p.m.', 'YYYY-MM-DD HH:MI:SS p.m.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 p.m.', 'YYYY-MM-DD HH:MI:SS p.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 p.m.', 'YYYY-MM-DD HH:MI:SS p.M.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 P.m.', 'YYYY-MM-DD HH:MI:SS a.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 P.m.', 'YYYY-MM-DD HH:MI:SS a.m.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 P.m.', 'YYYY-MM-DD HH:MI:SS A.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 P.m.', 'YYYY-MM-DD HH:MI:SS A.M.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 P.m.', 'YYYY-MM-DD HH:MI:SS p.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 P.m.', 'YYYY-MM-DD HH:MI:SS p.m.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 P.m.', 'YYYY-MM-DD HH:MI:SS p.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 P.m.', 'YYYY-MM-DD HH:MI:SS p.M.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 p.M.', 'YYYY-MM-DD HH:MI:SS a.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 p.M.', 'YYYY-MM-DD HH:MI:SS a.m.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 p.M.', 'YYYY-MM-DD HH:MI:SS A.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 p.M.', 'YYYY-MM-DD HH:MI:SS A.M.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 p.M.', 'YYYY-MM-DD HH:MI:SS p.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 p.M.', 'YYYY-MM-DD HH:MI:SS p.m.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 p.M.', 'YYYY-MM-DD HH:MI:SS p.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 p.M.', 'YYYY-MM-DD HH:MI:SS p.M.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 P.M.', 'YYYY-MM-DD HH:MI:SS a.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 P.M.', 'YYYY-MM-DD HH:MI:SS a.m.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 P.M.', 'YYYY-MM-DD HH:MI:SS A.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 P.M.', 'YYYY-MM-DD HH:MI:SS A.M.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 P.M.', 'YYYY-MM-DD HH:MI:SS p.m.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 P.M.', 'YYYY-MM-DD HH:MI:SS p.m.')
+2022-01-01 22:11:12
+SELECT to_date('2022-01-01 10:11:12 P.M.', 'YYYY-MM-DD HH:MI:SS p.M.') FROM DUAL ;
+to_date('2022-01-01 10:11:12 P.M.', 'YYYY-MM-DD HH:MI:SS p.M.')
+2022-01-01 22:11:12
+#
+# - / : ; . ,
+#
+SELECT to_date('2022-08-01', 'YYYY-MM-DD') FROM DUAL ;
+to_date('2022-08-01', 'YYYY-MM-DD')
+2022-08-01 00:00:00
+SELECT to_date('2022-08-01', 'YYYY/MM/DD') FROM DUAL ;
+to_date('2022-08-01', 'YYYY/MM/DD')
+2022-08-01 00:00:00
+SELECT to_date('2022-08-01', 'YYYY:MM:DD') FROM DUAL ;
+to_date('2022-08-01', 'YYYY:MM:DD')
+2022-08-01 00:00:00
+SELECT to_date('2022-08-01', 'YYYY.MM.DD') FROM DUAL ;
+to_date('2022-08-01', 'YYYY.MM.DD')
+2022-08-01 00:00:00
+SELECT to_date('2022-08-01', 'YYYY,MM,DD') FROM DUAL ;
+to_date('2022-08-01', 'YYYY,MM,DD')
+2022-08-01 00:00:00
+SELECT to_date('2022/08/01', 'YYYY/MM/DD') FROM DUAL ;
+to_date('2022/08/01', 'YYYY/MM/DD')
+2022-08-01 00:00:00
+SELECT to_date('2022/08/01', 'YYYY-MM-DD') FROM DUAL ;
+to_date('2022/08/01', 'YYYY-MM-DD')
+2022-08-01 00:00:00
+SELECT to_date('2022/08/01', 'YYYY:MM:DD') FROM DUAL ;
+to_date('2022/08/01', 'YYYY:MM:DD')
+2022-08-01 00:00:00
+SELECT to_date('2022/08/01', 'YYYY.MM.DD') FROM DUAL ;
+to_date('2022/08/01', 'YYYY.MM.DD')
+2022-08-01 00:00:00
+SELECT to_date('2022/08/01', 'YYYY,MM,DD') FROM DUAL ;
+to_date('2022/08/01', 'YYYY,MM,DD')
+2022-08-01 00:00:00
+SELECT to_date('2022:08:01', 'YYYY:MM:DD') FROM DUAL ;
+to_date('2022:08:01', 'YYYY:MM:DD')
+2022-08-01 00:00:00
+SELECT to_date('2022:08:01', 'YYYY-MM-DD') FROM DUAL ;
+to_date('2022:08:01', 'YYYY-MM-DD')
+2022-08-01 00:00:00
+SELECT to_date('2022:08:01', 'YYYY/MM/DD') FROM DUAL ;
+to_date('2022:08:01', 'YYYY/MM/DD')
+2022-08-01 00:00:00
+SELECT to_date('2022:08:01', 'YYYY.MM.DD') FROM DUAL ;
+to_date('2022:08:01', 'YYYY.MM.DD')
+2022-08-01 00:00:00
+SELECT to_date('2022:08:01', 'YYYY,MM,DD') FROM DUAL ;
+to_date('2022:08:01', 'YYYY,MM,DD')
+2022-08-01 00:00:00
+SELECT to_date('2022.08.01', 'YYYY.MM.DD') FROM DUAL ;
+to_date('2022.08.01', 'YYYY.MM.DD')
+2022-08-01 00:00:00
+SELECT to_date('2022.08.01', 'YYYY-MM-DD') FROM DUAL ;
+to_date('2022.08.01', 'YYYY-MM-DD')
+2022-08-01 00:00:00
+SELECT to_date('2022.08.01', 'YYYY/MM/DD') FROM DUAL ;
+to_date('2022.08.01', 'YYYY/MM/DD')
+2022-08-01 00:00:00
+SELECT to_date('2022.08.01', 'YYYY:MM:DD') FROM DUAL ;
+to_date('2022.08.01', 'YYYY:MM:DD')
+2022-08-01 00:00:00
+SELECT to_date('2022.08.01', 'YYYY,MM,DD') FROM DUAL ;
+to_date('2022.08.01', 'YYYY,MM,DD')
+2022-08-01 00:00:00
+SELECT to_date('2022,08,01', 'YYYY,MM,DD') FROM DUAL ;
+to_date('2022,08,01', 'YYYY,MM,DD')
+2022-08-01 00:00:00
+SELECT to_date('2022,08,01', 'YYYY-MM-DD') FROM DUAL ;
+to_date('2022,08,01', 'YYYY-MM-DD')
+2022-08-01 00:00:00
+SELECT to_date('2022,08,01', 'YYYY/MM/DD') FROM DUAL ;
+to_date('2022,08,01', 'YYYY/MM/DD')
+2022-08-01 00:00:00
+SELECT to_date('2022,08,01', 'YYYY:MM:DD') FROM DUAL ;
+to_date('2022,08,01', 'YYYY:MM:DD')
+2022-08-01 00:00:00
+SELECT to_date('2022,08,01', 'YYYY.MM.DD') FROM DUAL ;
+to_date('2022,08,01', 'YYYY.MM.DD')
+2022-08-01 00:00:00
+SELECT to_date('2022,08.01', 'YYYY-MM/DD') FROM DUAL ;
+to_date('2022,08.01', 'YYYY-MM/DD')
+2022-08-01 00:00:00
+SELECT to_date('2022:08/01', 'YYYY-MM.DD') FROM DUAL ;
+to_date('2022:08/01', 'YYYY-MM.DD')
+2022-08-01 00:00:00
+SELECT to_date('2020-12-31-','YYYY-MM-DD---') FROM DUAL ;
+to_date('2020-12-31-','YYYY-MM-DD---')
+2020-12-31 00:00:00
+SELECT to_date('2020-12-31','YYYY-MM---DD') FROM DUAL ;
+to_date('2020-12-31','YYYY-MM---DD')
+2020-12-31 00:00:00
+SELECT to_date('2020-12-31','YYYY---MM---DD') FROM DUAL ;
+to_date('2020-12-31','YYYY---MM---DD')
+2020-12-31 00:00:00
+SELECT to_date('2020-12-31 ','YYYY-MM-DD ') FROM DUAL ;
+to_date('2020-12-31 ','YYYY-MM-DD ')
+2020-12-31 00:00:00
+SELECT to_date('2020-12-31 ','YYYY-MM-DD  ') FROM DUAL ;
+to_date('2020-12-31 ','YYYY-MM-DD  ')
+2020-12-31 00:00:00
+SELECT to_date('2020-12-31  ','YYYY-MM-DD ') FROM DUAL ;
+to_date('2020-12-31  ','YYYY-MM-DD ')
+2020-12-31 00:00:00
+SELECT to_date('2020-12-31  ?','YYYY-MM-DD ') FROM DUAL ;
+to_date('2020-12-31  ?','YYYY-MM-DD ')
+2020-12-31 00:00:00
+SELECT to_date('2020-12 ?31','YYYY-MM DD') FROM DUAL ;
+to_date('2020-12 ?31','YYYY-MM DD')
+2020-12-31 00:00:00
+SELECT to_date('2020-12 ?31','YYYY-MM-DD') FROM DUAL ;
+to_date('2020-12 ?31','YYYY-MM-DD')
+2020-12-31 00:00:00
+SELECT to_date('2020 12-31','YYYYMM-DD') FROM DUAL ;
+to_date('2020 12-31','YYYYMM-DD')
+2020-12-31 00:00:00
+SELECT to_date('2020-12-31 ','YYYYMM-DD') FROM DUAL ;
+to_date('2020-12-31 ','YYYYMM-DD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2020-12-31 ' for function to_date
+#
+# Format matches the end of the date string
+#
+SELECT to_date('20220101 11:22:33', 'YYYYMMDD HH:MI:SS.FF3') FROM DUAL ;
+to_date('20220101 11:22:33', 'YYYYMMDD HH:MI:SS.FF3')
+2022-01-01 11:22:33
+SELECT to_date('2003-01-02 10:11:12.123','YYYY-MM-DD HH12:MI:SS.FF PM') FROM DUAL ;
+to_date('2003-01-02 10:11:12.123','YYYY-MM-DD HH12:MI:SS.FF PM')
+2003-01-02 10:11:12
+SELECT to_date('2003-01-02 10:11+','YYYY-MM-DD HH12:MI PM SS') FROM DUAL ;
+to_date('2003-01-02 10:11+','YYYY-MM-DD HH12:MI PM SS')
+2003-01-02 10:11:00
+SELECT to_date('2003-01-02 10:11:12.123','YYYY-MM-DD HH24:MI:SS.FF PM') FROM DUAL ;
+to_date('2003-01-02 10:11:12.123','YYYY-MM-DD HH24:MI:SS.FF PM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11:12.123' for function to_date
+SELECT to_date('2022', 'YYYYMM') FROM DUAL ;
+to_date('2022', 'YYYYMM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022' for function to_date
+SELECT to_date('202201', 'YYYYMMDD') FROM DUAL ;
+to_date('202201', 'YYYYMMDD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '202201' for function to_date
+SELECT to_date('20220101', 'YYYYMMDD DDD') FROM DUAL ;
+to_date('20220101', 'YYYYMMDD DDD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '20220101' for function to_date
+SELECT to_date('2003-01-02 10:11:12.123AM','YYYY-MM-DD HH12:MI:SS.FF') FROM DUAL ;
+to_date('2003-01-02 10:11:12.123AM','YYYY-MM-DD HH12:MI:SS.FF')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11:12.123AM' for function to_date
+SELECT to_date('2003-01-02 10:11 01','YYYY-MM-DD HH12:MI PM SS') FROM DUAL ;
+to_date('2003-01-02 10:11 01','YYYY-MM-DD HH12:MI PM SS')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11 01' for function to_date
+SELECT to_date('2003-01-02 10:11:12.123','YYYY-MM-DD HH12:MI:SS.FF mon') FROM DUAL ;
+to_date('2003-01-02 10:11:12.123','YYYY-MM-DD HH12:MI:SS.FF mon')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11:12.123' for function to_date
+SELECT to_date('2003-01-02 10:11:12.123','YYYY-MM-DD HH12:MI:SS.FF month') FROM DUAL ;
+to_date('2003-01-02 10:11:12.123','YYYY-MM-DD HH12:MI:SS.FF month')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11:12.123' for function to_date
+SELECT to_date('2003-01-02 10:11:12.123','YYYY-MM-DD HH12:MI:SS.FF day') FROM DUAL ;
+to_date('2003-01-02 10:11:12.123','YYYY-MM-DD HH12:MI:SS.FF day')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11:12.123' for function to_date
+SELECT to_date('2003-01-02 10:11:12.123','YYYY-MM-DD HH12:MI:SS.FF dy') FROM DUAL ;
+to_date('2003-01-02 10:11:12.123','YYYY-MM-DD HH12:MI:SS.FF dy')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2003-01-02 10:11:12.123' for function to_date
+#
+# SSSSS
+#
+SELECT to_date('', 'SSSSS') FROM DUAL ;
+to_date('', 'SSSSS')
+NULL
+SELECT to_date('40333', 'SSSSS') FROM DUAL ;
+to_date('40333', 'SSSSS')
+2021-11-01 11:12:13
+SELECT to_date('1140333', 'HHSSSSS') FROM DUAL ;
+to_date('1140333', 'HHSSSSS')
+2021-11-01 11:12:13
+SELECT to_date('1240333', 'MISSSSS') FROM DUAL ;
+to_date('1240333', 'MISSSSS')
+2021-11-01 11:12:13
+SELECT to_date('4033313', 'SSSSSSS') FROM DUAL ;
+to_date('4033313', 'SSSSSSS')
+2021-11-01 11:12:13
+SELECT to_date('1240333', 'HHSSSSS') FROM DUAL ;
+to_date('1240333', 'HHSSSSS')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '1240333' for function to_date
+SELECT to_date('1340333', 'MISSSSS') FROM DUAL ;
+to_date('1340333', 'MISSSSS')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '1340333' for function to_date
+SELECT to_date('4033314', 'SSSSSSS') FROM DUAL ;
+to_date('4033314', 'SSSSSSS')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '4033314' for function to_date
+#
+# DAY
+#
+SELECT to_date('2022-04-01 FRIDAY', 'YYYY-MM-DD DAY') FROM DUAL ;
+to_date('2022-04-01 FRIDAY', 'YYYY-MM-DD DAY')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 friday', 'YYYY-MM-DD DAY') FROM DUAL ;
+to_date('2022-04-01 friday', 'YYYY-MM-DD DAY')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 Friday', 'YYYY-MM-DD DAY') FROM DUAL ;
+to_date('2022-04-01 Friday', 'YYYY-MM-DD DAY')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 FRiday', 'YYYY-MM-DD DAY') FROM DUAL ;
+to_date('2022-04-01 FRiday', 'YYYY-MM-DD DAY')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 fRiday', 'YYYY-MM-DD DAY') FROM DUAL ;
+to_date('2022-04-01 fRiday', 'YYYY-MM-DD DAY')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 FRIDAY', 'YYYY-MM-DD Day') FROM DUAL ;
+to_date('2022-04-01 FRIDAY', 'YYYY-MM-DD Day')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 friday', 'YYYY-MM-DD Day') FROM DUAL ;
+to_date('2022-04-01 friday', 'YYYY-MM-DD Day')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 Friday', 'YYYY-MM-DD Day') FROM DUAL ;
+to_date('2022-04-01 Friday', 'YYYY-MM-DD Day')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 FRiday', 'YYYY-MM-DD Day') FROM DUAL ;
+to_date('2022-04-01 FRiday', 'YYYY-MM-DD Day')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 fRiday', 'YYYY-MM-DD Day') FROM DUAL ;
+to_date('2022-04-01 fRiday', 'YYYY-MM-DD Day')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 FRIDAY', 'YYYY-MM-DD day') FROM DUAL ;
+to_date('2022-04-01 FRIDAY', 'YYYY-MM-DD day')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 friday', 'YYYY-MM-DD day') FROM DUAL ;
+to_date('2022-04-01 friday', 'YYYY-MM-DD day')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 Friday', 'YYYY-MM-DD day') FROM DUAL ;
+to_date('2022-04-01 Friday', 'YYYY-MM-DD day')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 FRiday', 'YYYY-MM-DD day') FROM DUAL ;
+to_date('2022-04-01 FRiday', 'YYYY-MM-DD day')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 fRiday', 'YYYY-MM-DD day') FROM DUAL ;
+to_date('2022-04-01 fRiday', 'YYYY-MM-DD day')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 FRIDAYA', 'YYYY-MM-DD DAY') FROM DUAL ;
+to_date('2022-04-01 FRIDAYA', 'YYYY-MM-DD DAY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-04-01 FRIDAYA' for function to_date
+SELECT to_date('2022-04-01 MONDAY', 'YYYY-MM-DD DY') FROM DUAL ;
+to_date('2022-04-01 MONDAY', 'YYYY-MM-DD DY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-04-01 MONDAY' for function to_date
+#
+# DY
+#
+SELECT to_date('2022-04-01 FRI', 'YYYY-MM-DD DY') FROM DUAL ;
+to_date('2022-04-01 FRI', 'YYYY-MM-DD DY')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 fri', 'YYYY-MM-DD DY') FROM DUAL ;
+to_date('2022-04-01 fri', 'YYYY-MM-DD DY')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 Fri', 'YYYY-MM-DD DY') FROM DUAL ;
+to_date('2022-04-01 Fri', 'YYYY-MM-DD DY')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 FRi', 'YYYY-MM-DD DY') FROM DUAL ;
+to_date('2022-04-01 FRi', 'YYYY-MM-DD DY')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 fRi', 'YYYY-MM-DD DY') FROM DUAL ;
+to_date('2022-04-01 fRi', 'YYYY-MM-DD DY')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 FRI', 'YYYY-MM-DD Dy') FROM DUAL ;
+to_date('2022-04-01 FRI', 'YYYY-MM-DD Dy')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 fri', 'YYYY-MM-DD Dy') FROM DUAL ;
+to_date('2022-04-01 fri', 'YYYY-MM-DD Dy')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 Fri', 'YYYY-MM-DD Dy') FROM DUAL ;
+to_date('2022-04-01 Fri', 'YYYY-MM-DD Dy')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 FRi', 'YYYY-MM-DD Dy') FROM DUAL ;
+to_date('2022-04-01 FRi', 'YYYY-MM-DD Dy')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 fRi', 'YYYY-MM-DD Dy') FROM DUAL ;
+to_date('2022-04-01 fRi', 'YYYY-MM-DD Dy')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 FRI', 'YYYY-MM-DD dy') FROM DUAL ;
+to_date('2022-04-01 FRI', 'YYYY-MM-DD dy')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 fri', 'YYYY-MM-DD dy') FROM DUAL ;
+to_date('2022-04-01 fri', 'YYYY-MM-DD dy')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 Fri', 'YYYY-MM-DD dy') FROM DUAL ;
+to_date('2022-04-01 Fri', 'YYYY-MM-DD dy')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 FRi', 'YYYY-MM-DD dy') FROM DUAL ;
+to_date('2022-04-01 FRi', 'YYYY-MM-DD dy')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 fRi', 'YYYY-MM-DD dy') FROM DUAL ;
+to_date('2022-04-01 fRi', 'YYYY-MM-DD dy')
+2022-04-01 00:00:00
+SELECT to_date('2022-04-01 FRID', 'YYYY-MM-DD DY') FROM DUAL ;
+to_date('2022-04-01 FRID', 'YYYY-MM-DD DY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-04-01 FRID' for function to_date
+SELECT to_date('2022-04-01 MON', 'YYYY-MM-DD DY') FROM DUAL ;
+to_date('2022-04-01 MON', 'YYYY-MM-DD DY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-04-01 MON' for function to_date
+#
+# J
+#
+SELECT to_date('1', 'J') FROM DUAL ;
+to_date('1', 'J')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '1' for function to_date
+SELECT to_date('2459668', 'J') FROM DUAL ;
+to_date('2459668', 'J')
+2022-03-29 00:00:00
+SELECT TO_DATE('1721057', 'J') FROM DUAL ;
+TO_DATE('1721057', 'J')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '1721057' for function to_date
+SELECT TO_DATE('1721023', 'J') FROM DUAL ;
+TO_DATE('1721023', 'J')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '1721023' for function to_date
+SELECT TO_DATE('1721424', 'J') FROM DUAL ;
+TO_DATE('1721424', 'J')
+0001-01-01 00:00:00
+SELECT to_date('5373484', 'J') FROM DUAL ;
+to_date('5373484', 'J')
+9999-12-31 00:00:00
+SELECT TO_DATE('5373485', 'J') FROM DUAL ;
+TO_DATE('5373485', 'J')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '5373485' for function to_date
+SELECT to_date('356', 'DDD'), to_date('2459936', 'J'), to_date('2022-12-22 356', 'YYYY-MM-DD DDD') , to_date('2022-12-22 2459936', 'YYYY-MM-DD J') FROM DUAL ;
+to_date('356', 'DDD')	to_date('2459936', 'J')	to_date('2022-12-22 356', 'YYYY-MM-DD DDD')	to_date('2022-12-22 2459936', 'YYYY-MM-DD J')
+2021-12-22 00:00:00	2022-12-22 00:00:00	2022-12-22 00:00:00	2022-12-22 00:00:00
+SELECT to_date('2022-12-22 2459937', 'YYYY-MM-DD J') FROM DUAL ;
+to_date('2022-12-22 2459937', 'YYYY-MM-DD J')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-12-22 2459937' for function to_date
+SELECT to_date('0', 'J') FROM DUAL ;
+to_date('0', 'J')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0' for function to_date
+SELECT to_date('5373485', 'J') FROM DUAL ;
+to_date('5373485', 'J')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '5373485' for function to_date
+SELECT to_date('356 2459936', 'DDD J') FROM DUAL;
+to_date('356 2459936', 'DDD J')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '356 2459936' for function to_date
+SELECT to_date('2459936 356', 'J DDD') FROM DUAL;
+to_date('2459936 356', 'J DDD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2459936 356' for function to_date
+#
+# RM
+#
+SELECT to_date('IV', 'RM') FROM DUAL ;
+to_date('IV', 'RM')
+2021-04-01 00:00:00
+SELECT to_date('Iv', 'RM') FROM DUAL ;
+to_date('Iv', 'RM')
+2021-04-01 00:00:00
+SELECT to_date('iv', 'RM') FROM DUAL ;
+to_date('iv', 'RM')
+2021-04-01 00:00:00
+SELECT to_date('iV', 'RM') FROM DUAL ;
+to_date('iV', 'RM')
+2021-04-01 00:00:00
+SELECT to_date('IV', 'rm') FROM DUAL ;
+to_date('IV', 'rm')
+2021-04-01 00:00:00
+SELECT to_date('Iv', 'rm') FROM DUAL ;
+to_date('Iv', 'rm')
+2021-04-01 00:00:00
+SELECT to_date('iv', 'rm') FROM DUAL ;
+to_date('iv', 'rm')
+2021-04-01 00:00:00
+SELECT to_date('iV', 'rm') FROM DUAL ;
+to_date('iV', 'rm')
+2021-04-01 00:00:00
+SELECT to_date('IV', 'Rm') FROM DUAL ;
+to_date('IV', 'Rm')
+2021-04-01 00:00:00
+SELECT to_date('Iv', 'Rm') FROM DUAL ;
+to_date('Iv', 'Rm')
+2021-04-01 00:00:00
+SELECT to_date('iv', 'Rm') FROM DUAL ;
+to_date('iv', 'Rm')
+2021-04-01 00:00:00
+SELECT to_date('iV', 'Rm') FROM DUAL ;
+to_date('iV', 'Rm')
+2021-04-01 00:00:00
+SELECT to_date('IV', 'rM') FROM DUAL ;
+to_date('IV', 'rM')
+2021-04-01 00:00:00
+SELECT to_date('Iv', 'rM') FROM DUAL ;
+to_date('Iv', 'rM')
+2021-04-01 00:00:00
+SELECT to_date('iv', 'rM') FROM DUAL ;
+to_date('iv', 'rM')
+2021-04-01 00:00:00
+SELECT to_date('iV', 'rM') FROM DUAL ;
+to_date('iV', 'rM')
+2021-04-01 00:00:00
+SELECT to_date('356XII', 'DDDRM') FROM DUAL ;
+to_date('356XII', 'DDDRM')
+2021-12-22 00:00:00
+SELECT to_date('2459936XII', 'JRM') FROM DUAL ;
+to_date('2459936XII', 'JRM')
+2022-12-22 00:00:00
+SELECT to_date('2022-04-22 IV', 'YYYY-MM-DD RM') FROM DUAL ;
+to_date('2022-04-22 IV', 'YYYY-MM-DD RM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-04-22 IV' for function to_date
+SELECT to_date('356XI', 'DDDRM') FROM DUAL ;
+to_date('356XI', 'DDDRM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '356XI' for function to_date
+SELECT to_date('2459936XI', 'JRM') FROM DUAL ;
+to_date('2459936XI', 'JRM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2459936XI' for function to_date
+SELECT to_date('I', 'RM') FROM DUAL ;
+to_date('I', 'RM')
+2021-01-01 00:00:00
+SELECT to_date('II', 'RM') FROM DUAL ;
+to_date('II', 'RM')
+2021-02-01 00:00:00
+SELECT to_date('III', 'RM') FROM DUAL ;
+to_date('III', 'RM')
+2021-03-01 00:00:00
+SELECT to_date('IV', 'RM') FROM DUAL ;
+to_date('IV', 'RM')
+2021-04-01 00:00:00
+SELECT to_date('V', 'RM') FROM DUAL ;
+to_date('V', 'RM')
+2021-05-01 00:00:00
+SELECT to_date('VI', 'RM') FROM DUAL ;
+to_date('VI', 'RM')
+2021-06-01 00:00:00
+SELECT to_date('VII', 'RM') FROM DUAL ;
+to_date('VII', 'RM')
+2021-07-01 00:00:00
+SELECT to_date('VIII', 'RM') FROM DUAL ;
+to_date('VIII', 'RM')
+2021-08-01 00:00:00
+SELECT to_date('IX', 'RM') FROM DUAL ;
+to_date('IX', 'RM')
+2021-09-01 00:00:00
+SELECT to_date('X', 'RM') FROM DUAL ;
+to_date('X', 'RM')
+2021-10-01 00:00:00
+SELECT to_date('XI', 'RM') FROM DUAL ;
+to_date('XI', 'RM')
+2021-11-01 00:00:00
+SELECT to_date('XII', 'RM') FROM DUAL ;
+to_date('XII', 'RM')
+2021-12-01 00:00:00
+SELECT to_date('XIII', 'RM') FROM DUAL ;
+to_date('XIII', 'RM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: 'XIII' for function to_date
+#
+# Y,YYY
+#
+SELECT to_date ('2022', 'Y,YYY') FROM DUAL ;
+to_date ('2022', 'Y,YYY')
+2022-11-01 00:00:00
+SELECT to_date ('2,022', 'Y,YYY') FROM DUAL ;
+to_date ('2,022', 'Y,YYY')
+2022-11-01 00:00:00
+SELECT to_date ('20,22', 'Y,YYY') FROM DUAL ;
+to_date ('20,22', 'Y,YYY')
+2022-11-01 00:00:00
+SELECT to_date ('202,2', 'Y,YYY') FROM DUAL ;
+to_date ('202,2', 'Y,YYY')
+2022-11-01 00:00:00
+SELECT to_date ('20,2', 'Y,YYY') FROM DUAL ;
+to_date ('20,2', 'Y,YYY')
+0202-11-01 00:00:00
+SELECT to_date ('2', 'Y,YYY') FROM DUAL ;
+to_date ('2', 'Y,YYY')
+0002-11-01 00:00:00
+SELECT to_date ('22,', 'Y,YYY') FROM DUAL ;
+to_date ('22,', 'Y,YYY')
+0022-11-01 00:00:00
+SELECT to_date ('00011-12', 'Y,YYY,MM') FROM DUAL ;
+to_date ('00011-12', 'Y,YYY,MM')
+0011-12-01 00:00:00
+SELECT to_date ('0001,-12', 'Y,YYY,MM') FROM DUAL ;
+to_date ('0001,-12', 'Y,YYY,MM')
+0001-12-01 00:00:00
+SELECT to_date ('0001,0-12', 'Y,YYY,MM') FROM DUAL ;
+to_date ('0001,0-12', 'Y,YYY,MM')
+0010-12-01 00:00:00
+SELECT to_date ('0001,12', 'Y,YYYMM') FROM DUAL ;
+to_date ('0001,12', 'Y,YYYMM')
+0011-02-01 00:00:00
+SELECT to_date ('0000,12', 'Y,YYYMM') FROM DUAL ;
+to_date ('0000,12', 'Y,YYYMM')
+0001-02-01 00:00:00
+SELECT to_date ('000,1211', 'Y,YYYMM') FROM DUAL ;
+to_date ('000,1211', 'Y,YYYMM')
+0012-11-01 00:00:00
+SELECT to_date ('0001,12', 'Y,YYY') FROM DUAL ;
+to_date ('0001,12', 'Y,YYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0001,12' for function to_date
+SELECT to_date ('000112', 'Y,YYYMM') FROM DUAL ;
+to_date ('000112', 'Y,YYYMM')
+0011-02-01 00:00:00
+SELECT to_date ('00011,2', 'Y,YYYMM') FROM DUAL ;
+to_date ('00011,2', 'Y,YYYMM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '00011,2' for function to_date
+SELECT to_date ('10011', 'Y,YYYMM') FROM DUAL ;
+to_date ('10011', 'Y,YYYMM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '10011' for function to_date
+SELECT to_date ('1001,1', 'Y,YYYMM') FROM DUAL ;
+to_date ('1001,1', 'Y,YYYMM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '1001,1' for function to_date
+SELECT to_date ('2,222-11', 'Y,YYY-MM') FROM DUAL ;
+to_date ('2,222-11', 'Y,YYY-MM')
+2222-11-01 00:00:00
+SELECT to_date ('00,2211', 'Y,YYYMM') FROM DUAL ;
+to_date ('00,2211', 'Y,YYYMM')
+0221-01-01 00:00:00
+SELECT to_date ('01,2211', 'Y,YYYMM') FROM DUAL ;
+to_date ('01,2211', 'Y,YYYMM')
+1221-01-01 00:00:00
+SELECT to_date ('22,2211', 'Y,YYYMM') FROM DUAL ;
+to_date ('22,2211', 'Y,YYYMM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '22,2211' for function to_date
+SELECT to_date ('202-2', 'Y,YYY') FROM DUAL ;
+to_date ('202-2', 'Y,YYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '202-2' for function to_date
+#
+# TH
+#
+SELECT TO_DATE('2012', 'YYYYTH') FROM DUAL;
+TO_DATE('2012', 'YYYYTH')
+2012-11-01 00:00:00
+SELECT TO_DATE('11', 'MMTH') FROM DUAL;
+TO_DATE('11', 'MMTH')
+2021-11-01 00:00:00
+SELECT TO_DATE('11', 'DDTH') FROM DUAL;
+TO_DATE('11', 'DDTH')
+2021-11-11 00:00:00
+SELECT TO_DATE('11', 'HHTH') FROM DUAL;
+TO_DATE('11', 'HHTH')
+2021-11-01 11:00:00
+SELECT TO_DATE('11', 'MITH') FROM DUAL;
+TO_DATE('11', 'MITH')
+2021-11-01 00:11:00
+SELECT TO_DATE('11', 'SSTH') FROM DUAL;
+TO_DATE('11', 'SSTH')
+2021-11-01 00:00:11
+SELECT TO_DATE('2012-03-04 11:12:13', 'YYYYTH-MMTH-DDTH HHTH:MITH:SSTH') FROM DUAL;
+TO_DATE('2012-03-04 11:12:13', 'YYYYTH-MMTH-DDTH HHTH:MITH:SSTH')
+2012-03-04 11:12:13
+#
+# Format code appears twice
+#
+SELECT TO_DATE('2022-2022', 'YYYY-YYYY') FROM DUAL;
+ERROR HY000: Incorrect string value: 'format code appears twice'
+SELECT TO_DATE('11-11', 'MM-MM') FROM DUAL;
+ERROR HY000: Incorrect string value: 'format code appears twice'
+SELECT TO_DATE('11-11', 'DD-DD') FROM DUAL;
+ERROR HY000: Incorrect string value: 'format code appears twice'
+SELECT TO_DATE('11-11', 'HH12-HH12') FROM DUAL;
+ERROR HY000: Incorrect string value: 'format code appears twice'
+SELECT TO_DATE('11-11', 'MI-MI') FROM DUAL;
+ERROR HY000: Incorrect string value: 'format code appears twice'
+SELECT TO_DATE('11-11', 'SS-SS') FROM DUAL;
+ERROR HY000: Incorrect string value: 'format code appears twice'
+SELECT TO_DATE('2022-12-23 17:19:21', 'YYYY-MM-DD HH24:MI:SS') FROM DUAL;
+TO_DATE('2022-12-23 17:19:21', 'YYYY-MM-DD HH24:MI:SS')
+2022-12-23 17:19:21
+SELECT TO_DATE('2022-022', 'YYYY-YYY') FROM DUAL;
+TO_DATE('2022-022', 'YYYY-YYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-022' for function to_date
+SELECT TO_DATE('2022-22', 'YYYY-YY') FROM DUAL;
+TO_DATE('2022-22', 'YYYY-YY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-22' for function to_date
+SELECT TO_DATE('2022-22', 'YYYY-Y') FROM DUAL;
+TO_DATE('2022-22', 'YYYY-Y')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-22' for function to_date
+SELECT TO_DATE('2022-2,022', 'YYYY-Y,YYY') FROM DUAL;
+TO_DATE('2022-2,022', 'YYYY-Y,YYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-2,022' for function to_date
+SELECT TO_DATE('2022-22', 'YYYY-RR') FROM DUAL;
+TO_DATE('2022-22', 'YYYY-RR')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-22' for function to_date
+SELECT TO_DATE('2022-2202', 'YYYY-RRRR') FROM DUAL;
+TO_DATE('2022-2202', 'YYYY-RRRR')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-2202' for function to_date
+SELECT TO_DATE('022-22', 'YYY-YY') FROM DUAL;
+TO_DATE('022-22', 'YYY-YY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '022-22' for function to_date
+SELECT TO_DATE('022-2', 'YYY-Y') FROM DUAL;
+TO_DATE('022-2', 'YYY-Y')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '022-2' for function to_date
+SELECT TO_DATE('022-2,022', 'YYY-Y,YYY') FROM DUAL;
+TO_DATE('022-2,022', 'YYY-Y,YYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '022-2,022' for function to_date
+SELECT TO_DATE('022-22', 'YYY-RR') FROM DUAL;
+TO_DATE('022-22', 'YYY-RR')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '022-22' for function to_date
+SELECT TO_DATE('022-2202', 'YYY-RRRR') FROM DUAL;
+TO_DATE('022-2202', 'YYY-RRRR')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '022-2202' for function to_date
+SELECT TO_DATE('22-2', 'YY-Y') FROM DUAL;
+TO_DATE('22-2', 'YY-Y')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '22-2' for function to_date
+SELECT TO_DATE('22-2,022', 'YY-Y,YYY') FROM DUAL;
+TO_DATE('22-2,022', 'YY-Y,YYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '22-2,022' for function to_date
+SELECT TO_DATE('22-22', 'YY-RR') FROM DUAL;
+TO_DATE('22-22', 'YY-RR')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '22-22' for function to_date
+SELECT TO_DATE('22-2202', 'YY-RRRR') FROM DUAL;
+TO_DATE('22-2202', 'YY-RRRR')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '22-2202' for function to_date
+SELECT TO_DATE('2-2,022', 'Y-Y,YYY') FROM DUAL;
+TO_DATE('2-2,022', 'Y-Y,YYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2-2,022' for function to_date
+SELECT TO_DATE('2-22', 'Y-RR') FROM DUAL;
+TO_DATE('2-22', 'Y-RR')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2-22' for function to_date
+SELECT TO_DATE('2-2202', 'Y-RRRR') FROM DUAL;
+TO_DATE('2-2202', 'Y-RRRR')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2-2202' for function to_date
+SELECT TO_DATE('2022-22', 'RRRR-RR') FROM DUAL;
+TO_DATE('2022-22', 'RRRR-RR')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022-22' for function to_date
+SELECT TO_DATE('05-MAY', 'MM-MONTH') FROM DUAL;
+TO_DATE('05-MAY', 'MM-MONTH')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '05-MAY' for function to_date
+SELECT TO_DATE('05-MAY', 'MM-MON') FROM DUAL;
+TO_DATE('05-MAY', 'MM-MON')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '05-MAY' for function to_date
+SELECT TO_DATE('05-V', 'MM-RM') FROM DUAL;
+TO_DATE('05-V', 'MM-RM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '05-V' for function to_date
+SELECT TO_DATE('MAY-MAY', 'MONTH-MON') FROM DUAL;
+TO_DATE('MAY-MAY', 'MONTH-MON')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: 'MAY-MAY' for function to_date
+SELECT TO_DATE('MAY-V', 'MONTH-RM') FROM DUAL;
+TO_DATE('MAY-V', 'MONTH-RM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: 'MAY-V' for function to_date
+SELECT TO_DATE('MAY-V', 'MON-RM') FROM DUAL;
+TO_DATE('MAY-V', 'MON-RM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: 'MAY-V' for function to_date
+SELECT TO_DATE('11-11', 'HH24-HH12') FROM DUAL;
+TO_DATE('11-11', 'HH24-HH12')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '11-11' for function to_date
+SELECT TO_DATE('11-11', 'HH24-HH') FROM DUAL;
+TO_DATE('11-11', 'HH24-HH')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '11-11' for function to_date
+SELECT TO_DATE('11-11', 'HH12-HH') FROM DUAL;
+TO_DATE('11-11', 'HH12-HH')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '11-11' for function to_date
+#
+# FX FM
+#
+SELECT TO_DATE('22', 'YYYY') FROM DUAL;
+TO_DATE('22', 'YYYY')
+0022-11-01 00:00:00
+SELECT TO_DATE('22', 'FMYYYY') FROM DUAL;
+TO_DATE('22', 'FMYYYY')
+0022-11-01 00:00:00
+SELECT TO_DATE('22', 'FXYYYY') FROM DUAL;
+TO_DATE('22', 'FXYYYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '22' for function to_date
+SELECT TO_DATE('2022', 'FXYYYY') FROM DUAL;
+TO_DATE('2022', 'FXYYYY')
+2022-11-01 00:00:00
+SELECT TO_DATE('2022', 'FXYYYYTH') FROM DUAL;
+TO_DATE('2022', 'FXYYYYTH')
+2022-11-01 00:00:00
+SELECT TO_DATE('22', 'FXFMYYYY') FROM DUAL;
+TO_DATE('22', 'FXFMYYYY')
+0022-11-01 00:00:00
+SELECT TO_DATE('22', 'YYY') FROM DUAL;
+TO_DATE('22', 'YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE('22', 'FMYYY') FROM DUAL;
+TO_DATE('22', 'FMYYY')
+2022-11-01 00:00:00
+SELECT TO_DATE('22', 'FXYYY') FROM DUAL;
+TO_DATE('22', 'FXYYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '22' for function to_date
+SELECT TO_DATE('022', 'FXYYY') FROM DUAL;
+TO_DATE('022', 'FXYYY')
+2022-11-01 00:00:00
+SELECT TO_DATE('22', 'FXFMYYY') FROM DUAL;
+TO_DATE('22', 'FXFMYYY')
+2022-11-01 00:00:00
+SELECT TO_DATE('2', 'YY') FROM DUAL;
+TO_DATE('2', 'YY')
+2002-11-01 00:00:00
+SELECT TO_DATE('2', 'FMYY') FROM DUAL;
+TO_DATE('2', 'FMYY')
+2002-11-01 00:00:00
+SELECT TO_DATE('2', 'FXYY') FROM DUAL;
+TO_DATE('2', 'FXYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function to_date
+SELECT TO_DATE('22', 'FXYY') FROM DUAL;
+TO_DATE('22', 'FXYY')
+2022-11-01 00:00:00
+SELECT TO_DATE('2', 'FXFMYY') FROM DUAL;
+TO_DATE('2', 'FXFMYY')
+2002-11-01 00:00:00
+SELECT TO_DATE('2', 'Y') FROM DUAL;
+TO_DATE('2', 'Y')
+2022-11-01 00:00:00
+SELECT TO_DATE('2', 'FMY') FROM DUAL;
+TO_DATE('2', 'FMY')
+2022-11-01 00:00:00
+SELECT TO_DATE('2', 'FXY') FROM DUAL;
+TO_DATE('2', 'FXY')
+2022-11-01 00:00:00
+SELECT TO_DATE('22', 'FXY') FROM DUAL;
+TO_DATE('22', 'FXY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '22' for function to_date
+SELECT TO_DATE('2', 'FXFMY') FROM DUAL;
+TO_DATE('2', 'FXFMY')
+2022-11-01 00:00:00
+SELECT TO_DATE('2', 'RR') FROM DUAL;
+TO_DATE('2', 'RR')
+2002-11-01 00:00:00
+SELECT TO_DATE('2', 'FMRR') FROM DUAL;
+TO_DATE('2', 'FMRR')
+2002-11-01 00:00:00
+SELECT TO_DATE('2', 'FXRR') FROM DUAL;
+TO_DATE('2', 'FXRR')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function to_date
+SELECT TO_DATE('22', 'FXRR') FROM DUAL;
+TO_DATE('22', 'FXRR')
+2022-11-01 00:00:00
+SELECT TO_DATE('2', 'FXFMRR') FROM DUAL;
+TO_DATE('2', 'FXFMRR')
+2002-11-01 00:00:00
+SELECT TO_DATE('22', 'RRRR') FROM DUAL;
+TO_DATE('22', 'RRRR')
+2022-11-01 00:00:00
+SELECT TO_DATE('22', 'FMRRRR') FROM DUAL;
+TO_DATE('22', 'FMRRRR')
+2022-11-01 00:00:00
+SELECT TO_DATE('22', 'FXRRRR') FROM DUAL;
+TO_DATE('22', 'FXRRRR')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '22' for function to_date
+SELECT TO_DATE('2022', 'FXRRRR') FROM DUAL;
+TO_DATE('2022', 'FXRRRR')
+2022-11-01 00:00:00
+SELECT TO_DATE('2022', 'FXRRRRTH') FROM DUAL;
+TO_DATE('2022', 'FXRRRRTH')
+2022-11-01 00:00:00
+SELECT TO_DATE('22', 'FXFMRRRR') FROM DUAL;
+TO_DATE('22', 'FXFMRRRR')
+2022-11-01 00:00:00
+SELECT TO_DATE('2', 'MM') FROM DUAL;
+TO_DATE('2', 'MM')
+2021-02-01 00:00:00
+SELECT TO_DATE('02', 'MM') FROM DUAL;
+TO_DATE('02', 'MM')
+2021-02-01 00:00:00
+SELECT TO_DATE('2', 'FMMM') FROM DUAL;
+TO_DATE('2', 'FMMM')
+2021-02-01 00:00:00
+SELECT TO_DATE('2', 'FXMM') FROM DUAL;
+TO_DATE('2', 'FXMM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function to_date
+SELECT TO_DATE('02', 'FXMM') FROM DUAL;
+TO_DATE('02', 'FXMM')
+2021-02-01 00:00:00
+SELECT TO_DATE('2', 'FXFMMM') FROM DUAL;
+TO_DATE('2', 'FXFMMM')
+2021-02-01 00:00:00
+SELECT TO_DATE('MAR', 'MONTH') FROM DUAL;
+TO_DATE('MAR', 'MONTH')
+2021-03-01 00:00:00
+SELECT TO_DATE('MAR', 'FMMONTH') FROM DUAL;
+TO_DATE('MAR', 'FMMONTH')
+2021-03-01 00:00:00
+SELECT TO_DATE('MAR', 'FXMONTH') FROM DUAL;
+TO_DATE('MAR', 'FXMONTH')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: 'MAR' for function to_date
+SELECT TO_DATE('MARCH', 'FXMONTH') FROM DUAL;
+TO_DATE('MARCH', 'FXMONTH')
+2021-03-01 00:00:00
+SELECT TO_DATE('MARCH', 'FXmonth') FROM DUAL;
+TO_DATE('MARCH', 'FXmonth')
+2021-03-01 00:00:00
+SELECT TO_DATE('MARCH', 'FXMonth') FROM DUAL;
+TO_DATE('MARCH', 'FXMonth')
+2021-03-01 00:00:00
+SELECT TO_DATE('march', 'FXMONTH') FROM DUAL;
+TO_DATE('march', 'FXMONTH')
+2021-03-01 00:00:00
+SELECT TO_DATE('MAR', 'MON') FROM DUAL;
+TO_DATE('MAR', 'MON')
+2021-03-01 00:00:00
+SELECT TO_DATE('MAR', 'FMMON') FROM DUAL;
+TO_DATE('MAR', 'FMMON')
+2021-03-01 00:00:00
+SELECT TO_DATE('MARTH', 'MON') FROM DUAL;
+TO_DATE('MARTH', 'MON')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: 'MARTH' for function to_date
+SELECT TO_DATE('MARTH', 'FXMON') FROM DUAL;
+TO_DATE('MARTH', 'FXMON')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: 'MARTH' for function to_date
+SELECT TO_DATE('MAR', 'FXMON') FROM DUAL;
+TO_DATE('MAR', 'FXMON')
+2021-03-01 00:00:00
+SELECT TO_DATE('MAR', 'FXmon') FROM DUAL;
+TO_DATE('MAR', 'FXmon')
+2021-03-01 00:00:00
+SELECT TO_DATE('MAR', 'FXMon') FROM DUAL;
+TO_DATE('MAR', 'FXMon')
+2021-03-01 00:00:00
+SELECT TO_DATE('mar', 'FXMON') FROM DUAL;
+TO_DATE('mar', 'FXMON')
+2021-03-01 00:00:00
+SELECT TO_DATE('2', 'D') FROM DUAL;
+TO_DATE('2', 'D')
+2021-11-01 00:00:00
+SELECT TO_DATE('2', 'FMD') FROM DUAL;
+TO_DATE('2', 'FMD')
+2021-11-01 00:00:00
+SELECT TO_DATE('2', 'FXD') FROM DUAL;
+TO_DATE('2', 'FXD')
+2021-11-01 00:00:00
+SELECT TO_DATE('22', 'FXD') FROM DUAL;
+TO_DATE('22', 'FXD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '22' for function to_date
+SELECT TO_DATE('2', 'FXFMD') FROM DUAL;
+TO_DATE('2', 'FXFMD')
+2021-11-01 00:00:00
+SELECT TO_DATE('2', 'DD') FROM DUAL;
+TO_DATE('2', 'DD')
+2021-11-02 00:00:00
+SELECT TO_DATE('2', 'FMDD') FROM DUAL;
+TO_DATE('2', 'FMDD')
+2021-11-02 00:00:00
+SELECT TO_DATE('2', 'FXDD') FROM DUAL;
+TO_DATE('2', 'FXDD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function to_date
+SELECT TO_DATE('02', 'FXDD') FROM DUAL;
+TO_DATE('02', 'FXDD')
+2021-11-02 00:00:00
+SELECT TO_DATE('2', 'FXFMDD') FROM DUAL;
+TO_DATE('2', 'FXFMDD')
+2021-11-02 00:00:00
+SELECT TO_DATE('2', 'HH') FROM DUAL;
+TO_DATE('2', 'HH')
+2021-11-01 02:00:00
+SELECT TO_DATE('2', 'FMHH') FROM DUAL;
+TO_DATE('2', 'FMHH')
+2021-11-01 02:00:00
+SELECT TO_DATE('2', 'FXHH') FROM DUAL;
+TO_DATE('2', 'FXHH')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function to_date
+SELECT TO_DATE('02', 'FXHH') FROM DUAL;
+TO_DATE('02', 'FXHH')
+2021-11-01 02:00:00
+SELECT TO_DATE('2', 'FXFMHH') FROM DUAL;
+TO_DATE('2', 'FXFMHH')
+2021-11-01 02:00:00
+SELECT TO_DATE('2', 'HH12') FROM DUAL;
+TO_DATE('2', 'HH12')
+2021-11-01 02:00:00
+SELECT TO_DATE('2', 'FMHH12') FROM DUAL;
+TO_DATE('2', 'FMHH12')
+2021-11-01 02:00:00
+SELECT TO_DATE('2', 'FXHH12') FROM DUAL;
+TO_DATE('2', 'FXHH12')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function to_date
+SELECT TO_DATE('02', 'FXHH12') FROM DUAL;
+TO_DATE('02', 'FXHH12')
+2021-11-01 02:00:00
+SELECT TO_DATE('2', 'FXFMHH12') FROM DUAL;
+TO_DATE('2', 'FXFMHH12')
+2021-11-01 02:00:00
+SELECT TO_DATE('2', 'HH24') FROM DUAL;
+TO_DATE('2', 'HH24')
+2021-11-01 02:00:00
+SELECT TO_DATE('2', 'FMHH24') FROM DUAL;
+TO_DATE('2', 'FMHH24')
+2021-11-01 02:00:00
+SELECT TO_DATE('2', 'FXHH24') FROM DUAL;
+TO_DATE('2', 'FXHH24')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function to_date
+SELECT TO_DATE('02', 'FXHH24') FROM DUAL;
+TO_DATE('02', 'FXHH24')
+2021-11-01 02:00:00
+SELECT TO_DATE('2', 'FXFMHH24') FROM DUAL;
+TO_DATE('2', 'FXFMHH24')
+2021-11-01 02:00:00
+SELECT TO_DATE('2', 'MI') FROM DUAL;
+TO_DATE('2', 'MI')
+2021-11-01 00:02:00
+SELECT TO_DATE('2', 'FMMI') FROM DUAL;
+TO_DATE('2', 'FMMI')
+2021-11-01 00:02:00
+SELECT TO_DATE('2', 'FXMI') FROM DUAL;
+TO_DATE('2', 'FXMI')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function to_date
+SELECT TO_DATE('02', 'FXMI') FROM DUAL;
+TO_DATE('02', 'FXMI')
+2021-11-01 00:02:00
+SELECT TO_DATE('2', 'FXFMMI') FROM DUAL;
+TO_DATE('2', 'FXFMMI')
+2021-11-01 00:02:00
+SELECT TO_DATE('2', 'SS') FROM DUAL;
+TO_DATE('2', 'SS')
+2021-11-01 00:00:02
+SELECT TO_DATE('2', 'FMSS') FROM DUAL;
+TO_DATE('2', 'FMSS')
+2021-11-01 00:00:02
+SELECT TO_DATE('2', 'FXSS') FROM DUAL;
+TO_DATE('2', 'FXSS')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function to_date
+SELECT TO_DATE('02', 'FXSS') FROM DUAL;
+TO_DATE('02', 'FXSS')
+2021-11-01 00:00:02
+SELECT TO_DATE('2', 'FXFMSS') FROM DUAL;
+TO_DATE('2', 'FXFMSS')
+2021-11-01 00:00:02
+SELECT TO_DATE('11 PM', 'HH12 PM') FROM DUAL ;
+TO_DATE('11 PM', 'HH12 PM')
+2021-11-01 23:00:00
+SELECT TO_DATE('11 P.M.', 'HH12 P.M.') FROM DUAL ;
+TO_DATE('11 P.M.', 'HH12 P.M.')
+2021-11-01 23:00:00
+SELECT TO_DATE('11 PM', 'HH12 AM') FROM DUAL ;
+TO_DATE('11 PM', 'HH12 AM')
+2021-11-01 23:00:00
+SELECT TO_DATE('11 P.M.', 'HH12 A.M.') FROM DUAL ;
+TO_DATE('11 P.M.', 'HH12 A.M.')
+2021-11-01 23:00:00
+SELECT TO_DATE('11 PM', 'HH12 FXAM') FROM DUAL ;
+TO_DATE('11 PM', 'HH12 FXAM')
+2021-11-01 23:00:00
+SELECT TO_DATE('11 P.M.', 'HH12 FXA.M.') FROM DUAL ;
+TO_DATE('11 P.M.', 'HH12 FXA.M.')
+2021-11-01 23:00:00
+SELECT TO_DATE('mon', 'DY') FROM DUAL ;
+TO_DATE('mon', 'DY')
+2021-11-01 00:00:00
+SELECT TO_DATE('mon', 'Dy') FROM DUAL ;
+TO_DATE('mon', 'Dy')
+2021-11-01 00:00:00
+SELECT TO_DATE('mon', 'dy') FROM DUAL ;
+TO_DATE('mon', 'dy')
+2021-11-01 00:00:00
+SELECT TO_DATE('mon', 'FMDY') FROM DUAL ;
+TO_DATE('mon', 'FMDY')
+2021-11-01 00:00:00
+SELECT TO_DATE('mon', 'FXDY') FROM DUAL ;
+TO_DATE('mon', 'FXDY')
+2021-11-01 00:00:00
+SELECT TO_DATE('mon', 'FXFMDY') FROM DUAL ;
+TO_DATE('mon', 'FXFMDY')
+2021-11-01 00:00:00
+SELECT TO_DATE('monday', 'DAY') FROM DUAL ;
+TO_DATE('monday', 'DAY')
+2021-11-01 00:00:00
+SELECT TO_DATE('monday', 'Day') FROM DUAL ;
+TO_DATE('monday', 'Day')
+2021-11-01 00:00:00
+SELECT TO_DATE('monday', 'day') FROM DUAL ;
+TO_DATE('monday', 'day')
+2021-11-01 00:00:00
+SELECT TO_DATE('monday', 'FMDAY') FROM DUAL ;
+TO_DATE('monday', 'FMDAY')
+2021-11-01 00:00:00
+SELECT TO_DATE('monday', 'FXDAY') FROM DUAL ;
+TO_DATE('monday', 'FXDAY')
+2021-11-01 00:00:00
+SELECT TO_DATE('monday', 'FXFMDAY') FROM DUAL ;
+TO_DATE('monday', 'FXFMDAY')
+2021-11-01 00:00:00
+SELECT TO_DATE('2459949', 'J') FROM DUAL ;
+TO_DATE('2459949', 'J')
+2023-01-04 00:00:00
+SELECT TO_DATE('2459949', 'FMJ') FROM DUAL ;
+TO_DATE('2459949', 'FMJ')
+2023-01-04 00:00:00
+SELECT TO_DATE('2459949', 'FXJ') FROM DUAL ;
+TO_DATE('2459949', 'FXJ')
+2023-01-04 00:00:00
+SELECT TO_DATE('2459949', 'FXJ') FROM DUAL ;
+TO_DATE('2459949', 'FXJ')
+2023-01-04 00:00:00
+SELECT TO_DATE('2459949', 'FXFMJ') FROM DUAL ;
+TO_DATE('2459949', 'FXFMJ')
+2023-01-04 00:00:00
+SELECT TO_DATE('9999', 'SSSSS') FROM DUAL ;
+TO_DATE('9999', 'SSSSS')
+2021-11-01 02:46:39
+SELECT TO_DATE('9999', 'FMSSSSS') FROM DUAL ;
+TO_DATE('9999', 'FMSSSSS')
+2021-11-01 02:46:39
+SELECT TO_DATE('9999', 'FXSSSSS') FROM DUAL ;
+TO_DATE('9999', 'FXSSSSS')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '9999' for function to_date
+SELECT TO_DATE('09999', 'FXSSSSS') FROM DUAL ;
+TO_DATE('09999', 'FXSSSSS')
+2021-11-01 02:46:39
+SELECT TO_DATE('9999', 'FXFMSSSSS') FROM DUAL ;
+TO_DATE('9999', 'FXFMSSSSS')
+2021-11-01 02:46:39
+SELECT TO_DATE ('2022', 'Y,YYY') FROM DUAL ;
+TO_DATE ('2022', 'Y,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('2022', 'FMY,YYY') FROM DUAL ;
+TO_DATE ('2022', 'FMY,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('2022', 'FXY,YYY') FROM DUAL ;
+TO_DATE ('2022', 'FXY,YYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2022' for function to_date
+SELECT TO_DATE ('2022', 'FXFMY,YYY') FROM DUAL ;
+TO_DATE ('2022', 'FXFMY,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('2,022', 'Y,YYY') FROM DUAL ;
+TO_DATE ('2,022', 'Y,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('2,022', 'FMY,YYY') FROM DUAL ;
+TO_DATE ('2,022', 'FMY,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('2,022', 'FXY,YYY') FROM DUAL ;
+TO_DATE ('2,022', 'FXY,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('2,022', 'FXFMY,YYY') FROM DUAL ;
+TO_DATE ('2,022', 'FXFMY,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('20,22', 'Y,YYY') FROM DUAL ;
+TO_DATE ('20,22', 'Y,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('20,22', 'FMY,YYY') FROM DUAL ;
+TO_DATE ('20,22', 'FMY,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('20,22', 'FXY,YYY') FROM DUAL ;
+TO_DATE ('20,22', 'FXY,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('20,22', 'FXFMY,YYY') FROM DUAL ;
+TO_DATE ('20,22', 'FXFMY,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('202,2', 'Y,YYY') FROM DUAL ;
+TO_DATE ('202,2', 'Y,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('202,2', 'FMY,YYY') FROM DUAL ;
+TO_DATE ('202,2', 'FMY,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('202,2', 'FXY,YYY') FROM DUAL ;
+TO_DATE ('202,2', 'FXY,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('202,2', 'FXFMY,YYY') FROM DUAL ;
+TO_DATE ('202,2', 'FXFMY,YYY')
+2022-11-01 00:00:00
+SELECT TO_DATE ('20,2', 'Y,YYY') FROM DUAL ;
+TO_DATE ('20,2', 'Y,YYY')
+0202-11-01 00:00:00
+SELECT TO_DATE ('20,2', 'FMY,YYY') FROM DUAL ;
+TO_DATE ('20,2', 'FMY,YYY')
+0202-11-01 00:00:00
+SELECT TO_DATE ('20,2', 'FXY,YYY') FROM DUAL ;
+TO_DATE ('20,2', 'FXY,YYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '20,2' for function to_date
+SELECT TO_DATE ('20,2', 'FXFMY,YYY') FROM DUAL ;
+TO_DATE ('20,2', 'FXFMY,YYY')
+0202-11-01 00:00:00
+SELECT TO_DATE ('2', 'Y,YYY') FROM DUAL ;
+TO_DATE ('2', 'Y,YYY')
+0002-11-01 00:00:00
+SELECT TO_DATE ('2', 'FMY,YYY') FROM DUAL ;
+TO_DATE ('2', 'FMY,YYY')
+0002-11-01 00:00:00
+SELECT TO_DATE ('2', 'FXY,YYY') FROM DUAL ;
+TO_DATE ('2', 'FXY,YYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2' for function to_date
+SELECT TO_DATE ('2', 'FXFMY,YYY') FROM DUAL ;
+TO_DATE ('2', 'FXFMY,YYY')
+0002-11-01 00:00:00
+SELECT TO_DATE ('22,', 'Y,YYY') FROM DUAL ;
+TO_DATE ('22,', 'Y,YYY')
+0022-11-01 00:00:00
+SELECT TO_DATE ('22,', 'FMY,YYY') FROM DUAL ;
+TO_DATE ('22,', 'FMY,YYY')
+0022-11-01 00:00:00
+SELECT TO_DATE ('22,', 'FXY,YYY') FROM DUAL ;
+TO_DATE ('22,', 'FXY,YYY')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '22,' for function to_date
+SELECT TO_DATE ('22,', 'FXFMY,YYY') FROM DUAL ;
+TO_DATE ('22,', 'FXFMY,YYY')
+0022-11-01 00:00:00
+SELECT TO_DATE ('00011-12', 'Y,YYY-MM') FROM DUAL ;
+TO_DATE ('00011-12', 'Y,YYY-MM')
+0011-12-01 00:00:00
+SELECT TO_DATE ('00011-12', 'FMY,YYY-MM') FROM DUAL ;
+TO_DATE ('00011-12', 'FMY,YYY-MM')
+0011-12-01 00:00:00
+SELECT TO_DATE ('00011-12', 'FXY,YYY-MM') FROM DUAL ;
+TO_DATE ('00011-12', 'FXY,YYY-MM')
+0011-12-01 00:00:00
+SELECT TO_DATE ('00011-12', 'FXFMY,YYY-MM') FROM DUAL ;
+TO_DATE ('00011-12', 'FXFMY,YYY-MM')
+0011-12-01 00:00:00
+SELECT TO_DATE ('0001112', 'Y,YYYMM') FROM DUAL ;
+TO_DATE ('0001112', 'Y,YYYMM')
+0011-12-01 00:00:00
+SELECT TO_DATE ('0001112', 'FMY,YYYMM') FROM DUAL ;
+TO_DATE ('0001112', 'FMY,YYYMM')
+0011-12-01 00:00:00
+SELECT TO_DATE ('0001112', 'FXY,YYYMM') FROM DUAL ;
+TO_DATE ('0001112', 'FXY,YYYMM')
+0011-12-01 00:00:00
+SELECT TO_DATE ('0001112', 'FXFMY,YYYMM') FROM DUAL ;
+TO_DATE ('0001112', 'FXFMY,YYYMM')
+0011-12-01 00:00:00
+SELECT TO_DATE ('0001,-12', 'Y,YYY-MM') FROM DUAL ;
+TO_DATE ('0001,-12', 'Y,YYY-MM')
+0001-12-01 00:00:00
+SELECT TO_DATE ('0001,-12', 'FMY,YYY-MM') FROM DUAL ;
+TO_DATE ('0001,-12', 'FMY,YYY-MM')
+0001-12-01 00:00:00
+SELECT TO_DATE ('0001,-12', 'FXY,YYY-MM') FROM DUAL ;
+TO_DATE ('0001,-12', 'FXY,YYY-MM')
+0001-12-01 00:00:00
+SELECT TO_DATE ('0001,-12', 'FXFMY,YYY-MM') FROM DUAL ;
+TO_DATE ('0001,-12', 'FXFMY,YYY-MM')
+0001-12-01 00:00:00
+SELECT TO_DATE ('0001,0-12', 'Y,YYY-MM') FROM DUAL ;
+TO_DATE ('0001,0-12', 'Y,YYY-MM')
+0010-12-01 00:00:00
+SELECT TO_DATE ('0001,0-12', 'FMY,YYY-MM') FROM DUAL ;
+TO_DATE ('0001,0-12', 'FMY,YYY-MM')
+0010-12-01 00:00:00
+SELECT TO_DATE ('0001,0-12', 'FXY,YYY-MM') FROM DUAL ;
+TO_DATE ('0001,0-12', 'FXY,YYY-MM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0001,0-12' for function to_date
+SELECT TO_DATE ('0001,0-12', 'FXFMY,YYY-MM') FROM DUAL ;
+TO_DATE ('0001,0-12', 'FXFMY,YYY-MM')
+0010-12-01 00:00:00
+SELECT TO_DATE ('0001,12', 'Y,YYYMM') FROM DUAL ;
+TO_DATE ('0001,12', 'Y,YYYMM')
+0011-02-01 00:00:00
+SELECT TO_DATE ('0001,12', 'FMY,YYYMM') FROM DUAL ;
+TO_DATE ('0001,12', 'FMY,YYYMM')
+0011-02-01 00:00:00
+SELECT TO_DATE ('0001,12', 'FXY,YYYMM') FROM DUAL ;
+TO_DATE ('0001,12', 'FXY,YYYMM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0001,12' for function to_date
+SELECT TO_DATE ('0001,12', 'FXFMY,YYYMM') FROM DUAL ;
+TO_DATE ('0001,12', 'FXFMY,YYYMM')
+0011-02-01 00:00:00
+SELECT TO_DATE ('0000,12', 'Y,YYYMM') FROM DUAL ;
+TO_DATE ('0000,12', 'Y,YYYMM')
+0001-02-01 00:00:00
+SELECT TO_DATE ('0000,12', 'FMY,YYYMM') FROM DUAL ;
+TO_DATE ('0000,12', 'FMY,YYYMM')
+0001-02-01 00:00:00
+SELECT TO_DATE ('0000,12', 'FXY,YYYMM') FROM DUAL ;
+TO_DATE ('0000,12', 'FXY,YYYMM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '0000,12' for function to_date
+SELECT TO_DATE ('0000,12', 'FXFMY,YYYMM') FROM DUAL ;
+TO_DATE ('0000,12', 'FXFMY,YYYMM')
+0001-02-01 00:00:00
+SELECT TO_DATE ('000,1211', 'Y,YYYMM') FROM DUAL ;
+TO_DATE ('000,1211', 'Y,YYYMM')
+0012-11-01 00:00:00
+SELECT TO_DATE ('000,1211', 'FMY,YYYMM') FROM DUAL ;
+TO_DATE ('000,1211', 'FMY,YYYMM')
+0012-11-01 00:00:00
+SELECT TO_DATE ('000,11-01', 'FXY,YYY-MM') FROM DUAL ;
+TO_DATE ('000,11-01', 'FXY,YYY-MM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '000,11-01' for function to_date
+SELECT TO_DATE ('000,1211', 'FXFMY,YYYMM') FROM DUAL ;
+TO_DATE ('000,1211', 'FXFMY,YYYMM')
+0012-11-01 00:00:00
+SELECT TO_DATE ('000112', 'Y,YYYMM') FROM DUAL ;
+TO_DATE ('000112', 'Y,YYYMM')
+0011-02-01 00:00:00
+SELECT TO_DATE ('000112', 'FMY,YYYMM') FROM DUAL ;
+TO_DATE ('000112', 'FMY,YYYMM')
+0011-02-01 00:00:00
+SELECT TO_DATE ('000112', 'FXY,YYYMM') FROM DUAL ;
+TO_DATE ('000112', 'FXY,YYYMM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '000112' for function to_date
+SELECT TO_DATE ('000112', 'FXFMY,YYYMM') FROM DUAL ;
+TO_DATE ('000112', 'FXFMY,YYYMM')
+0011-02-01 00:00:00
+SELECT TO_DATE ('2,222-11', 'Y,YYY-MM') FROM DUAL ;
+TO_DATE ('2,222-11', 'Y,YYY-MM')
+2222-11-01 00:00:00
+SELECT TO_DATE ('2,222-11', 'FMY,YYY-MM') FROM DUAL ;
+TO_DATE ('2,222-11', 'FMY,YYY-MM')
+2222-11-01 00:00:00
+SELECT TO_DATE ('2,222-11', 'FXY,YYY-MM') FROM DUAL ;
+TO_DATE ('2,222-11', 'FXY,YYY-MM')
+2222-11-01 00:00:00
+SELECT TO_DATE ('2,222-11', 'FXFMY,YYY-MM') FROM DUAL ;
+TO_DATE ('2,222-11', 'FXFMY,YYY-MM')
+2222-11-01 00:00:00
+SELECT TO_DATE ('00,2211', 'Y,YYYMM') FROM DUAL ;
+TO_DATE ('00,2211', 'Y,YYYMM')
+0221-01-01 00:00:00
+SELECT TO_DATE ('00,2211', 'FMY,YYYMM') FROM DUAL ;
+TO_DATE ('00,2211', 'FMY,YYYMM')
+0221-01-01 00:00:00
+SELECT TO_DATE ('00,2211', 'FXY,YYYMM') FROM DUAL ;
+TO_DATE ('00,2211', 'FXY,YYYMM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '00,2211' for function to_date
+SELECT TO_DATE ('00,2211', 'FXFMY,YYYMM') FROM DUAL ;
+TO_DATE ('00,2211', 'FXFMY,YYYMM')
+0221-01-01 00:00:00
+SELECT TO_DATE ('01,2211', 'Y,YYYMM') FROM DUAL ;
+TO_DATE ('01,2211', 'Y,YYYMM')
+1221-01-01 00:00:00
+SELECT TO_DATE ('01,2211', 'FMY,YYYMM') FROM DUAL ;
+TO_DATE ('01,2211', 'FMY,YYYMM')
+1221-01-01 00:00:00
+SELECT TO_DATE ('01,2211', 'FXY,YYYMM') FROM DUAL ;
+TO_DATE ('01,2211', 'FXY,YYYMM')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '01,2211' for function to_date
+SELECT TO_DATE ('01,2211', 'FXFMY,YYYMM') FROM DUAL ;
+TO_DATE ('01,2211', 'FXFMY,YYYMM')
+1221-01-01 00:00:00
+SELECT TO_DATE ('2023-01-04', 'YYYY-MM-DD') FROM DUAL ;
+TO_DATE ('2023-01-04', 'YYYY-MM-DD')
+2023-01-04 00:00:00
+SELECT TO_DATE ('2023/01/04', 'YYYY-MM-DD') FROM DUAL ;
+TO_DATE ('2023/01/04', 'YYYY-MM-DD')
+2023-01-04 00:00:00
+SELECT TO_DATE ('2023/01/04', 'FXYYYY-MM-DD') FROM DUAL ;
+TO_DATE ('2023/01/04', 'FXYYYY-MM-DD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2023/01/04' for function to_date
+SELECT TO_DATE ('2023/01/04', 'FMYYYY-MM-DD') FROM DUAL ;
+TO_DATE ('2023/01/04', 'FMYYYY-MM-DD')
+2023-01-04 00:00:00
+SELECT TO_DATE ('2023/01/04', 'FXFMYYYY-MM-DD') FROM DUAL ;
+TO_DATE ('2023/01/04', 'FXFMYYYY-MM-DD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2023/01/04' for function to_date
+SELECT TO_DATE ('2023-01-04', 'YYYY--MM-DD') FROM DUAL ;
+TO_DATE ('2023-01-04', 'YYYY--MM-DD')
+2023-01-04 00:00:00
+SELECT TO_DATE ('2023-01-04', 'FXYYYY--MM-DD') FROM DUAL ;
+TO_DATE ('2023-01-04', 'FXYYYY--MM-DD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2023-01-04' for function to_date
+SELECT TO_DATE ('  2023-01-04', 'YYYY-MM-DD') FROM DUAL ;
+TO_DATE ('  2023-01-04', 'YYYY-MM-DD')
+2023-01-04 00:00:00
+SELECT TO_DATE ('  2023-01-04', 'FXYYYY-MM-DD') FROM DUAL ;
+TO_DATE ('  2023-01-04', 'FXYYYY-MM-DD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '  2023-01-04' for function to_date
+SELECT TO_DATE ('  2023-01-04', 'FXFMYYYY-MM-DD') FROM DUAL ;
+TO_DATE ('  2023-01-04', 'FXFMYYYY-MM-DD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '  2023-01-04' for function to_date
+SELECT TO_DATE ('  2023-01-04', 'FMFXYYYY-MM-DD') FROM DUAL ;
+TO_DATE ('  2023-01-04', 'FMFXYYYY-MM-DD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '  2023-01-04' for function to_date
+SELECT TO_DATE ('  2023-01-04', 'FMYYYY-FXMM-DD') FROM DUAL ;
+TO_DATE ('  2023-01-04', 'FMYYYY-FXMM-DD')
+2023-01-04 00:00:00
+SELECT TO_DATE ('2023- 01-04', 'YYYY-MM-DD') FROM DUAL ;
+TO_DATE ('2023- 01-04', 'YYYY-MM-DD')
+2023-01-04 00:00:00
+SELECT TO_DATE ('2023- 01-04', 'FMFXYYYY-MM-DD') FROM DUAL ;
+TO_DATE ('2023- 01-04', 'FMFXYYYY-MM-DD')
+NULL
+Warnings:
+Warning	1411	Incorrect datetime value: '2023- 01-04' for function to_date
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+create table t1 (date char(60), format char(60) not null);
+insert into t1 values
+('22-12-21', 'RR-MM-DD'),
+('22-DEC-21', 'RR-MON-DD'),
+('99-12-21', 'RR-MM-DD'),
+('99-DEC-21', 'RR-MON-DD'),
+('22-12-12','RRRR-MM-DD'),
+('99-12-12','RRRR-MM-DD'),
+('49','RR'),
+('51','RR'),
+('49','RRRR'),
+('51','RRRR');
+current year '2022'
+SET timestamp=UNIX_TIMESTAMP('2022-12-22 00:00:00');
+SELECT date,format,to_date(date, format) as to_date from t1;
+date	format	to_date
+22-12-21	RR-MM-DD	2022-12-21 00:00:00
+22-DEC-21	RR-MON-DD	2022-12-21 00:00:00
+99-12-21	RR-MM-DD	1999-12-21 00:00:00
+99-DEC-21	RR-MON-DD	1999-12-21 00:00:00
+22-12-12	RRRR-MM-DD	2022-12-12 00:00:00
+99-12-12	RRRR-MM-DD	1999-12-12 00:00:00
+49	RR	2049-12-01 00:00:00
+51	RR	1951-12-01 00:00:00
+49	RRRR	2049-12-01 00:00:00
+51	RRRR	1951-12-01 00:00:00
+SELECT to_date('221202','RRMMDD');
+to_date('221202','RRMMDD')
+2022-12-02 00:00:00
+SELECT to_date('22JAN02','RRMONDD');
+to_date('22JAN02','RRMONDD')
+2022-01-02 00:00:00
+SELECT to_date('00','RR');
+to_date('00','RR')
+2000-12-01 00:00:00
+SELECT to_date('01','RR');
+to_date('01','RR')
+2001-12-01 00:00:00
+SELECT to_date('99','RR');
+to_date('99','RR')
+1999-12-01 00:00:00
+SELECT TO_DATE('1', 'RRRR') FROM DUAL;
+TO_DATE('1', 'RRRR')
+2001-12-01 00:00:00
+SELECT TO_DATE('022', 'RRRR') FROM DUAL;
+TO_DATE('022', 'RRRR')
+2022-12-01 00:00:00
+SELECT TO_DATE('099', 'RRRR') FROM DUAL;
+TO_DATE('099', 'RRRR')
+1999-12-01 00:00:00
+SELECT TO_DATE('199', 'RRRR') FROM DUAL;
+TO_DATE('199', 'RRRR')
+0199-12-01 00:00:00
+current year '1998'
+set timestamp=UNIX_TIMESTAMP('1998-12-22 00:00:00');
+SELECT date,format,to_date(date, format) as to_date from t1;
+date	format	to_date
+22-12-21	RR-MM-DD	2022-12-21 00:00:00
+22-DEC-21	RR-MON-DD	2022-12-21 00:00:00
+99-12-21	RR-MM-DD	1999-12-21 00:00:00
+99-DEC-21	RR-MON-DD	1999-12-21 00:00:00
+22-12-12	RRRR-MM-DD	2022-12-12 00:00:00
+99-12-12	RRRR-MM-DD	1999-12-12 00:00:00
+49	RR	2049-12-01 00:00:00
+51	RR	1951-12-01 00:00:00
+49	RRRR	2049-12-01 00:00:00
+51	RRRR	1951-12-01 00:00:00
+SELECT to_date('221202','RRMMDD');
+to_date('221202','RRMMDD')
+2022-12-02 00:00:00
+SELECT to_date('22JAN02','RRMONDD');
+to_date('22JAN02','RRMONDD')
+2022-01-02 00:00:00
+SELECT to_date('00','RR');
+to_date('00','RR')
+2000-12-01 00:00:00
+SELECT to_date('01','RR');
+to_date('01','RR')
+2001-12-01 00:00:00
+SELECT to_date('99','RR');
+to_date('99','RR')
+1999-12-01 00:00:00
+SELECT TO_DATE('1', 'RRRR') FROM DUAL;
+TO_DATE('1', 'RRRR')
+2001-12-01 00:00:00
+SELECT TO_DATE('022', 'RRRR') FROM DUAL;
+TO_DATE('022', 'RRRR')
+2022-12-01 00:00:00
+SELECT TO_DATE('099', 'RRRR') FROM DUAL;
+TO_DATE('099', 'RRRR')
+1999-12-01 00:00:00
+SELECT TO_DATE('199', 'RRRR') FROM DUAL;
+TO_DATE('199', 'RRRR')
+0199-12-01 00:00:00
+drop table t1;
+set sql_mode = oracle;
+SELECT TO_DATE('January 15, 1989, 12:00 A.M.','Month dd, YYYY, HH:MI A.M.') - TO_DATE('January 15, 1989, 11:00 A.M.','Month dd, YYYY, HH:MI A.M.') as results FROM DUAL;
+results
+-0.458333333333333333
+SELECT TO_DATE('January 15, 1989, 12:00 A.M.','Month dd, YYYY, HH12:MI A.M.') - TO_DATE('January 15, 1989, 11:00 A.M.','Month dd, YYYY, HH12:MI A.M.') as results FROM DUAL;
+results
+-0.458333333333333333

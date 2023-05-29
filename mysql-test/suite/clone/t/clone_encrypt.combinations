@@ -1,0 +1,12 @@
+[fsync]
+innodb_flush_method=fsync
+innodb_redo_log_capacity=1G
+
+[O_DSYNC]
+innodb_flush_method=O_DSYNC
+innodb_redo_log_capacity=1G
+
+[O_DIRECT]
+innodb_flush_method=O_DIRECT
+innodb_redo_log_capacity=1G
+

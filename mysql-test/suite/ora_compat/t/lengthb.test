@@ -1,0 +1,27 @@
+
+# 'ncv NVARCHAR(10)' triggers warning in 8.0.22.
+# Using VARCHAR(40) CHARACTER SET UTF8MB4 to avoid warning.
+CREATE TABLE t1 (iv INT, cv VARCHAR(10), ncv VARCHAR(40) CHARACTER SET UTF8MB4);
+INSERT INTO t1 VALUES (1, 'a', 'b');
+INSERT INTO t1 VALUES (-1, NULL, NULL);
+
+# n'万里开源' triggers warning in 8.0.22.
+# Specifying UTF8MB4 to avoid warning.
+INSERT INTO t1 VALUES (3, 'greatdb', _UTF8MB4 '万里开源');
+
+# Using HEX() to show the content of the CHAR/VARCHAR
+# LENGTHB() always casts parameter to CHAR, then report the length in bytes
+# of a CHAR data type.
+SELECT iv,LENGTHB(iv),cv,lengthb(cv),ncv,LeNgThB(ncv),HEX(ncv) FROM t1;
+
+SELECT SUBSTR(ncv, 2, 1), LENGTHB(SUBSTR(ncv, 2, 1)), HEX(SUBSTR(ncv, 2, 1)) FROM t1;
+
+# test numeric data type.
+SELECT LENGTHB(-123), LENGTHB(123.5555);
+SELECT LENGTHB(DATE '2021-05-26');
+
+# because of type casting to CHAR, some data type may not be the same as you input.
+# 1.2E+9 will be converted to '1200000000'.
+SELECT LENGTHB(1.2E+9),1.2E+9;
+
+DROP TABLE t1;

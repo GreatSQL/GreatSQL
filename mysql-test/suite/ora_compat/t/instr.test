@@ -1,0 +1,502 @@
+
+# 'ncv NVARCHAR(10)' triggers warning in 8.0.22.
+# Using VARCHAR(40) CHARACTER SET UTF8MB4 to avoid warning.
+set sql_mode='oracle';
+CREATE TABLE t1 (iv INT, cv VARCHAR(10), ncv VARCHAR(40) CHARACTER SET UTF8MB4);
+INSERT INTO t1 VALUES (3, 'l', 'helloworld');
+INSERT INTO t1 VALUES (4, 'lo', 'helloworld');
+INSERT INTO t1 VALUES (6, 'wo', 'helloworld');
+INSERT INTO t1 VALUES (1, '19', '192.168.0.22');
+
+
+# n'万里开源' triggers warning in 8.0.22.
+# Specifying UTF8MB4 to avoid warning.
+INSERT INTO t1 VALUES (5, 'greatdb', _UTF8MB4 '万里开源');
+
+#格式一 instr( string1, string2 )  
+# set sql_mode=''或 set sql_mode='oracle'
+# instr(源字符串, 目标字符串) 
+# instr函数返回要截取的字符串在源字符串中的位置
+
+SELECT iv,instr(ncv,cv) FROM t1;
+
+
+#格式二 instr( string1, string2 [, start_position [, nth_appearance ] ] )   
+#instr(源字符串, 目标字符串, 起始位置, 匹配序号)
+#仅在set sql_mode='oracle'下支持
+#string2 的值要在string1中查找，是从start_position给出的数值（起始位置）开始在string1检索，检索第nth_appearance（几）次出现string2。
+#start_position，nth_appearance未指定，默认为1
+
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+select instr('helloworld','l',2,2,2) from dual;
+# 参数5个时候，提示出错 ERROR 1582 (42000): Incorrect parameter count in the call to native function 'instr'
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+select instr('helloworld') from dual;
+# 参数1个时候，提示出错 ERROR 1582 (42000): Incorrect parameter count in the call to native function 'instr'
+select instr('helloworld','l',2,2) from dual;
+#  --返回结果：4    也就是说：在"helloworld"的第2(e)号位置开始，查找第二次出现的“l”的位置
+select instr('helloworld','l',3,2) from dual; 
+# --返回结果：4    也就是说：在"helloworld"的第3(l)号位置开始，查找第二次出现的“l”的位置
+select instr('helloworld','l',4,2) from dual;
+#  --返回结果：9    也就是说：在"helloworld"的第4(l)号位置开始，查找第二次出现的“l”的位置
+select instr('helloworld','l',-1,1) from dual;
+#  --返回结果：9    也就是说：在"helloworld"的倒数第1(d)号位置开始，往回查找第一次出现的“l”的位置
+select instr('helloworld','l',-2,2) from dual;
+#  --返回结果：4    也就是说：在"helloworld"的倒数第2(l)号位置开始，往回查找第二次出现的“l”的位置
+select instr('helloworld','l',2,3) from dual;
+#  --返回结果：9    也就是说：在"helloworld"的第2(e)号位置开始，查找第三次出现的“l”的位置
+select instr('helloworld','l',-2,3) from dual;
+# --返回结果：3    也就是说：在"helloworld"的倒数第2(l)号位置开始，往回查找第三次出现的“l”的位置
+
+select instr('helloworld','l',2) from dual;
+#  --返回结果：3    在"helloworld"的第2(e)号位置开始，默认查找第1次出现的“l”的位置
+select instr('helloworld','l',4) from dual; 
+# --返回结果：4     在"helloworld"的第3(l)号位置开始，默认查找第1次出现的“l”的位置
+select instr('helloworld','l',5) from dual;
+#  --返回结果：9    也就是说：在"helloworld"的第5(l)号位置开始，默认查找第1次出现的“l”的位置
+
+--error ER_INVALID_PARAMETER_USE
+select instr('thisisatestsentence','t',1,0)  from dual;
+# OUTPUT ERROR
+select instr('thisisatestsentence','t',1,'')  from dual;
+#--返回结果 null
+select instr('thisisatestsentence','t','',1)  from dual;
+#--返回结果 null
+select instr('thisisatestsentence','t','','')  from dual;
+#--返回结果 null
+select instr('thisisatestsentence','','1','1')  from dual;
+#--返回结果 null
+select instr(null,'','1','1')  from dual;
+#--返回结果 null
+select instr('',null,'1','1')  from dual;
+#--返回结果 null
+select instr('','','1','1')  from dual;
+#--返回结果 null
+select instr('','t','1','1')  from dual;
+#--返回结果 null
+select instr('','b')  from dual;
+#--返回结果 null
+select instr('b','')  from dual;
+#--返回结果 null
+
+#test func 用户使用用例
+select substr('192.168.0.22', instr('192.168.0.22', '.', 1, 3) +1) from dual;
+# --返回结果为最后IP第四段数据：22
+
+#test 用例
+select INSTR('中国人中国人中国人中国人', '中', -2, 2),INSTR('中国人中国人中国人中国人', '中', -2),INSTR('Geeksforgeeks', 'e', -2, 2),INSTR('Geeksforgeeks', 'e', -2), INSTR('Geeksforgeeks', 'e', -2,1)from dual;
+# --返回结果为7,10,10,11,11
+
+#test 用例1
+
+SELECT INSTR('中国人中国人中国人中国人', '中', -2) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,1) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,2) from dual;
+# OUTPUT 7
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,3) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,4) from dual;
+# OUTPUT 1
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国人中国人中国人', '中', -4) from dual;
+# OUTPUT 7
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,1) from dual;
+# OUTPUT 7
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,2) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,3) from dual;
+# OUTPUT 1
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,1) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,2) from dual;
+# OUTPUT 7
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,3) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,4) from dual;
+# OUTPUT 1
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4) from dual;
+# OUTPUT 7
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,1) from dual;
+# OUTPUT 7
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,2) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,3) from dual;
+# OUTPUT 1
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,1) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,2) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,3) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2) from dual;
+# OUTPUT 13
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,1) from dual;
+# OUTPUT 13
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,2) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,3) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,4) from dual;
+# OUTPUT 1
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2) from dual;
+# OUTPUT 13
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,1) from dual;
+# OUTPUT 13
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,2) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,3) from dual;
+# OUTPUT 1
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,1) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,2) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,3) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,-100) from dual;
+# OUTPUT error
+SELECT INSTR('Geeksforgeeks', 'e', -2) from dual;
+# OUTPUT 11
+SELECT INSTR('Geeksforgeeks', 'e', -2,1) from dual;
+# OUTPUT 11
+SELECT INSTR('Geeksforgeeks', 'e', -2,2) from dual;
+# OUTPUT 10
+SELECT INSTR('Geeksforgeeks', 'e', -2,3) from dual;
+# OUTPUT 3
+SELECT INSTR('Geeksforgeeks', 'e', -2,4) from dual;
+# OUTPUT 2
+SELECT INSTR('Geeksforgeeks', 'e', -2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('Geeksforgeeks', 'e', -2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('Geeksforgeeks', 'e', -2,-100) from dual;
+# OUTPUT ERROR
+
+#test 用例2
+
+SELECT INSTR('中国人中国人中国人中国人', '中', 2) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,1) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,2) from dual;
+# OUTPUT 7
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,3) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国人中国人中国人', '中', 4) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,1) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,2) from dual;
+# OUTPUT 7
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,3) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,1) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,2) from dual;
+# OUTPUT 7
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,3) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4,1) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4,2) from dual;
+# OUTPUT 7
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4,3) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4,100) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,1) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,2) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,3) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,1) from dual;
+# OUTPUT 4
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,2) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,3) from dual;
+# OUTPUT 13
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,1) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,2) from dual;
+# OUTPUT 13
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,3) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,-100) from dual;
+# OUTPUT error
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,1) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,2) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,3) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,4) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,-100) from dual;
+# OUTPUT error
+SELECT INSTR('Geeksforgeeks', 'e', 2) from dual;
+# OUTPUT 2
+SELECT INSTR('Geeksforgeeks', 'e', 2,1) from dual;
+# OUTPUT 2
+SELECT INSTR('Geeksforgeeks', 'e', 2,2) from dual;
+# OUTPUT 3
+SELECT INSTR('Geeksforgeeks', 'e', 2,3) from dual;
+# OUTPUT 10
+SELECT INSTR('Geeksforgeeks', 'e', 2,4) from dual;
+# OUTPUT 11
+SELECT INSTR('Geeksforgeeks', 'e', 2,5) from dual;
+# OUTPUT 0
+SELECT INSTR('Geeksforgeeks', 'e', 2,100) from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+SELECT INSTR('Geeksforgeeks', 'e', 2,-100) from dual;
+# OUTPUT ERROR
+
+#test 3
+select instr(111,'x',-1) from dual;
+# OUTPUT 0
+select instr('x',111,-1) from dual;
+# OUTPUT 0
+select instr(111,222,-1) from dual;
+# OUTPUT 0
+select instr(222,22,-1) from dual;
+# OUTPUT 2
+
+select instr(-111,'x',-1) from dual;
+# OUTPUT 0
+select instr('x',-111,-1) from dual;
+# OUTPUT 0
+select instr(-111,-222,-1) from dual;
+# OUTPUT 0
+select instr(-222,-22,-1) from dual;
+# OUTPUT 1
+
+select instr(111,'x',1) from dual;
+# OUTPUT 0
+select instr('x',111,1) from dual;
+# OUTPUT 0
+select instr(111,222,1) from dual;
+# OUTPUT 0
+select instr(222,22,1) from dual;
+# OUTPUT 1
+select instr(-111,'x',1) from dual;
+# OUTPUT 0
+select instr('x',-111,1) from dual;
+# OUTPUT 0
+select instr(-111,-222,1) from dual;
+# OUTPUT 0
+select instr(-222,-22,1) from dual;
+# OUTPUT 1
+
+#test case sensitive
+select instr('AAAAAA','a') from dual;
+# OUTPUT 0
+select instr('AAAAAA','A') from dual;
+# OUTPUT 1
+select instr('中国人中国','中国') from dual;
+# OUTPUT 1
+select instr('中国人中国','中国',2,1) from dual;
+# OUTPUT 4
+select instr('中国人中国','中国',2,2) from dual;
+# OUTPUT 0
+select instr('中国人中国','中国',2,3) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人中国aB中国人中国人', '国a', 1,1) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人中国AB人中国aB中国人中国人', '国a', 1,2) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人中国aB中国人中国人', '国B', 1,1) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人中国AB人中国aB中国人中国人', '国a', 1,1) from dual;
+# OUTPUT 10
+SELECT INSTR('中国人111中国1B人中国1B中国人中国人', '中国1B', 1,1) from dual;
+# OUTPUT 7
+SELECT INSTR('中国人111中国1B人中国1b中国人中国人', '中国1B', 11,2) from dual;
+# OUTPUT 0
+SELECT INSTR('中国人111中国1B人中国1b中国人中国人', '中国1b', 1,1) from dual;
+# OUTPUT 12
+SELECT INSTR('中国人111中国1B人中国1B中国人中国人', '中国1B', -1,2) from dual;
+# OUTPUT 7
+
+SELECT INSTR('中国人111中国1B人中国1b中国人中国人', '中国1b', 1,1) from dual
+union
+SELECT INSTR('中国人111中国1B人中国1B中国人中国人', '中国1B', -1,2) from dual;
+
+#modify return same as oracle
+select instr('thisisatestsentence','c',0,1)  from dual;
+# OUTPUT 0
+select instr('thisisatestsentence','c',0)  from dual;
+# OUTPUT 0
+--error ER_INVALID_PARAMETER_USE
+select instr('thisisatestsentence','c',0,0)  from dual;
+# OUTPUT error
+select instr('thisisatestsentence','t',1,'')  from dual;
+# OUTPUT null
+select instr('thisisatestsentence','t','',1)  from dual;
+# OUTPUT null
+select instr('thisisatestsentence','t','','')  from dual;
+# OUTPUT null
+
+#bugfix  instr('xx','') is not null
+select instr('xx','') is null,instr('xx','','') is null,instr('xx','','','') is null from dual;
+
+set sql_mode = '';
+select instr('AAAAAA','a') from dual;
+# OUTPUT 1
+select instr('AAAAAA','A') from dual;
+# OUTPUT 1
+select instr('helloworld','l') from dual;
+#  --返回结果：3    在"helloworld"的第1号位置开始，默认查找第1次出现的“l”的位置
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+select instr('helloworld','l',2) from dual;
+# --返回结果为 ERROR 1582 (42000): Incorrect parameter count in the call to native function 'instr'
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+select instr('helloworld','l',2,2) from dual;
+# --返回结果为 ERROR 1582 (42000): Incorrect parameter count in the call to native function 'instr'
+
+DROP TABLE t1;
+

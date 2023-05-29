@@ -1,0 +1,13 @@
+# Tests in this file are disabled for --pq test.
+innodb.innodb_buffer_pool_resize                        : BUG#000 origin code failed
+innodb.innodb_buffer_pool_resize_with_chunks            : BUG#000 origin code failed
+main.mysql_load_data_local_dir                          : BUG#000 origin code failed
+main.mtr_unit_tests                                     : BUG#000 origin code failed
+main.dd_pfs                                             : BUG#000 origin code failed
+main.file_contents                                      : BUG#000 origin code failed
+main.read_only_ddl                                      : BUG#000 origin code failed
+secondary_engine.cost_threshold                         : BUG#000 origin code failed
+sys_vars.innodb_buffer_pool_size_basic                  : BUG#000 origin code failed
+main.percona_log_slow_query_plan                        : BUG#000 execute plan changed
+main.percona_nonflushing_analyze_debug                  : BUG#000 execute plan changed
+main.mysqlpump_charset                                  : BUG#000

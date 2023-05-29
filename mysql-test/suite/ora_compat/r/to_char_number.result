@@ -1,0 +1,636 @@
+select to_char(148.5,'999.999')from dual ;
+to_char(148.5,'999.999')
+ 148.500
+select to_char(-0.1,'99.99')from dual ;
+to_char(-0.1,'99.99')
+  -.10
+select to_char(-0.1,'FM9.99')from dual ;
+to_char(-0.1,'FM9.99')
+-.1
+select to_char(-0.10,'FM9.99')from dual ;
+to_char(-0.10,'FM9.99')
+-.1
+select to_char(0.1,'0.9')from dual ;
+to_char(0.1,'0.9')
+ 0.1
+select to_char(12,'9990999.9')  from dual ;
+to_char(12,'9990999.9')
+    0012.0
+select to_char(12,'FM9990999.9')        from dual ;
+to_char(12,'FM9990999.9')
+0012.
+select to_char(0.10 ,'FM9.99' ) from dual;
+to_char(0.10 ,'FM9.99' )
+.1
+select to_char(-0.10 ,'FM9.99' ) from dual;
+to_char(-0.10 ,'FM9.99' )
+-.1
+select to_char(-0.10 ,'FM0.00' ) from dual;
+to_char(-0.10 ,'FM0.00' )
+-0.10
+select to_char(-0.10 ,'0.00FM' ) from dual;
+ERROR HY000: Invalid argument error: 0.00FM in function to_char.
+select to_char(12.40,'FM9990999.9')        from dual ;
+to_char(12.40,'FM9990999.9')
+0012.4
+select to_char(12.0,'FM9990999.9')        from dual ;
+to_char(12.0,'FM9990999.9')
+0012.
+select to_char(-1.10000000000,'FM9.99')from dual ;
+to_char(-1.10000000000,'FM9.99')
+-1.1
+select to_char(485,'999')from dual ;
+to_char(485,'999')
+ 485
+select to_char(-485,'999')      from dual ;
+to_char(-485,'999')
+-485
+select to_char(485,'9 9 9')     from dual ;
+ERROR HY000: Invalid argument error: 9 9 9 in function to_char.
+select to_char(1485,'9,999') from dual ;
+to_char(1485,'9,999')
+ 1,485
+select to_char(1485,'9G999')from dual ;
+to_char(1485,'9G999')
+ 1,485
+select to_char(148.5,'999.999') from dual ;
+to_char(148.5,'999.999')
+ 148.500
+select to_char(148.5,'999D99D9') from dual ;
+ERROR HY000: Invalid argument error: 999D99D9 in function to_char.
+select to_char(148.5,'999D999') from dual ;
+to_char(148.5,'999D999')
+ 148.500
+select to_char(3148.5,'9G999D999') from dual ;
+to_char(3148.5,'9G999D999')
+ 3,148.500
+select to_char(-485,'999S')     from dual ;
+to_char(-485,'999S')
+485-
+select to_char(-485,'999MI')from dual ;
+to_char(-485,'999MI')
+485-
+select to_char(485,'999000000MI')from dual ;
+to_char(485,'999000000MI')
+   000485 
+select to_char(-485,'999000000.9MI')from dual ;
+to_char(-485,'999000000.9MI')
+   000485.0-
+select to_char(485,'999MI')     from dual ;
+to_char(485,'999MI')
+485 
+select to_char(-485.6,'999.0MI')from dual ;
+to_char(-485.6,'999.0MI')
+485.6-
+select to_char(-485,'999PR') from dual ;
+to_char(-485,'999PR')
+<485>
+select to_char(-485.4,'999.0PR') from dual ;
+to_char(-485.4,'999.0PR')
+<485.4>
+select to_char(0,'999PR') from dual ;
+to_char(0,'999PR')
+   0 
+select to_char(0,'9$') from dual ;
+to_char(0,'9$')
+ $0
+select to_char(485,'RN') from dual ;
+ERROR HY000: Invalid argument error: RN in function to_char.
+select to_char(485,'FMRN')      from dual ;
+ERROR HY000: Invalid argument error: FMRN in function to_char.
+select to_char(5.2,'FMRN')      from dual ;
+ERROR HY000: Invalid argument error: FMRN in function to_char.
+select to_char(482,'999th')     from dual ;
+ERROR HY000: Invalid argument error: 999th in function to_char.
+select to_char(485, '"Good number:"999')  from dual ;
+ERROR HY000: Invalid argument error: "Good number:"999 in function to_char.
+select to_char(485.8,'"Pre-decimal:"999" Post-decimal:" .999')from dual ;
+ERROR HY000: Invalid argument error: "Pre-decimal:"999" Post-decimal:" .999 in function to_char.
+select to_char(12,'99V999')     from dual ;
+to_char(12,'99V999')
+ 12000
+select to_char(17/3,'9V999999999999999') from dual ;
+to_char(17/3,'9V999999999999999')
+ 5666666666000000
+select to_char(0.1234567898,'9V999999999999999') from dual ;
+to_char(0.1234567898,'9V999999999999999')
+  123456789800000
+select to_char(-0.1234567898,'9V999999999999999S') from dual ;
+to_char(-0.1234567898,'9V999999999999999S')
+ 123456789800000-
+select to_char(12.4,'99V999')from dual ;
+to_char(12.4,'99V999')
+ 12400
+select to_char(12.45, '99V9')from dual ;
+to_char(12.45, '99V9')
+ 125
+SELECT TO_CHAR('01110' + 1) from dual ;
+TO_CHAR('01110' + 1)
+1111
+SELECT to_char(0,'99.99') from dual ;
+to_char(0,'99.99')
+   .00
+SELECT to_char(0,'090V99' ) from dual ;
+to_char(0,'090V99' )
+ 00000
+select to_char(0.1 ,'90.99' ) from dual ;
+to_char(0.1 ,'90.99' )
+  0.10
+select to_char(-0.2 ,'90.99' ) from dual ;
+to_char(-0.2 ,'90.99' )
+ -0.20
+select to_char(1 ,'B9999' ) from dual ;
+to_char(1 ,'B9999' )
+    1
+select to_char(0 ,'B90.99' ) , LENGTH(to_char(0 ,'B90.99' )) from dual ;
+to_char(0 ,'B90.99' )	LENGTH(to_char(0 ,'B90.99' ))
+      	6
+select to_char(123.456 ,'999.999' ) from dual ;
+to_char(123.456 ,'999.999' )
+ 123.456
+select to_char(123.456 ,'FM999.009' ) from dual;
+to_char(123.456 ,'FM999.009' )
+123.456
+select to_char(-123.456 ,'999.999' ) from dual ;
+to_char(-123.456 ,'999.999' )
+-123.456
+select to_char(123.456 ,'FM999.009' ) from dual ;
+to_char(123.456 ,'FM999.009' )
+123.456
+select to_char(123.456 ,'9.9EEEE' ) from dual ;
+to_char(123.456 ,'9.9EEEE' )
+  1.2E+02
+select to_char(1E+123 ,'9.9EEEE' ) from dual ;
+ERROR HY000: Overflow error: number in function to_char.
+select to_char(1/1,'9EEEE') from dual ;
+to_char(1/1,'9EEEE')
+  1E+00
+select to_char(1234567890 ,'9999999999S' ) from dual ;
+to_char(1234567890 ,'9999999999S' )
+1234567890+
+select to_char(1234567890 ,'S9999999999' ) from dual ;
+to_char(1234567890 ,'S9999999999' )
++1234567890
+select to_char(-1234567890 ,'S9999999999' ) from dual ;
+to_char(-1234567890 ,'S9999999999' )
+-1234567890
+select to_char(-01234567890 ,'S09999999999' ) from dual ;
+to_char(-01234567890 ,'S09999999999' )
+-01234567890
+select to_char(-01234567890 ,'S99999999999' ) from dual ;
+to_char(-01234567890 ,'S99999999999' )
+ -1234567890
+select to_char(+1234567890 ,'9999999999S' ) from dual ;
+to_char(+1234567890 ,'9999999999S' )
+1234567890+
+select to_char(-1234567890 ,'9999999999S' ) from dual ;
+to_char(-1234567890 ,'9999999999S' )
+1234567890-
+select to_char(-0 ,'9999999999S' ) from dual ;
+to_char(-0 ,'9999999999S' )
+         0+
+select to_char(+0 ,'9999999999S' ) from dual ;
+to_char(+0 ,'9999999999S' )
+         0+
+select to_char(+1.1 ,'0.0S' ) from dual ;
+to_char(+1.1 ,'0.0S' )
+1.1+
+select to_char(125, '999')from dual ;
+to_char(125, '999')
+ 125
+SELECT to_char(123,'09V99' ) from dual;
+to_char(123,'09V99' )
+#####
+select to_char(148,'00009G9G9G9')from dual ;
+to_char(148,'00009G9G9G9')
+ 00000,1,4,8
+select to_char(111.1 ,'090.990' ) from dual;
+to_char(111.1 ,'090.990' )
+ 111.100
+select to_char(-485,'0999')      from dual ;
+to_char(-485,'0999')
+-0485
+select to_char(123,'Xx' ) from dual;
+to_char(123,'Xx' )
+ 7b
+select to_char(-123,'Xx' ) from dual;
+to_char(-123,'Xx' )
+###
+select to_char(-123.4,'Xxxxx' ) from dual;
+to_char(-123.4,'Xxxxx' )
+######
+select to_char(0.1,'X' ) from dual;
+to_char(0.1,'X' )
+ 0
+select to_char(0,'X' ) from dual;
+to_char(0,'X' )
+ 0
+select to_char(0,'Xx' ) from dual;
+to_char(0,'Xx' )
+  0
+select to_char(0,'xX' ) from dual;
+to_char(0,'xX' )
+  0
+select to_char(0.1,'FMxX' ) from dual;
+to_char(0.1,'FMxX' )
+0
+select to_char(123.4,'Xxxxx.x' ) from dual;
+ERROR HY000: Invalid argument error: Xxxxx.x in function to_char.
+select to_char(123.4,'Xxxxx' ) from dual;
+to_char(123.4,'Xxxxx' )
+    7b
+select to_char(123,'FMXx' ) from dual;
+to_char(123,'FMXx' )
+7b
+select to_char(123,'Xxxxxxxxxxxxxxxxxxxx' ) from dual;
+to_char(123,'Xxxxxxxxxxxxxxxxxxxx' )
+                   7b
+select to_char(123,'XXXX' ) from dual;
+to_char(123,'XXXX' )
+   7B
+select to_char(123,'X' ) from dual;
+to_char(123,'X' )
+##
+select to_char(123,'Xx' ) from dual;
+to_char(123,'Xx' )
+ 7b
+select to_char(123,'0xxxx' ) from dual;
+to_char(123,'0xxxx' )
+ 0007b
+select to_char(123,'000000Xx' ) from dual;
+to_char(123,'000000Xx' )
+ 0000007b
+select to_char(0000123,'0xxxx' ) from dual;
+to_char(0000123,'0xxxx' )
+ 0007b
+select to_char(00001230000000000000,'0xxxx' ) from dual;
+to_char(00001230000000000000,'0xxxx' )
+######
+select to_char(111100000,'9,999,999,999') from dual;
+to_char(111100000,'9,999,999,999')
+   111,100,000
+select to_char(55+1,'99') from dual;
+to_char(55+1,'99')
+ 56
+SELECT TO_CHAR(1234, 'TME') FROM DUAL;
+TO_CHAR(1234, 'TME')
+1.234E+03
+SELECT TO_CHAR(1234, 'TM') FROM DUAL;
+TO_CHAR(1234, 'TM')
+1234
+SELECT TO_CHAR(0, 'TM') FROM DUAL;
+TO_CHAR(0, 'TM')
+0
+SELECT TO_CHAR(0.1, 'TM') FROM DUAL;
+TO_CHAR(0.1, 'TM')
+0.1
+SELECT TO_CHAR(-0.1, 'TM') FROM DUAL;
+TO_CHAR(-0.1, 'TM')
+-0.1
+SELECT TO_CHAR(-01.1, 'TM') FROM DUAL;
+TO_CHAR(-01.1, 'TM')
+-1.1
+SELECT TO_CHAR(-01.10, 'TM') FROM DUAL;
+TO_CHAR(-01.10, 'TM')
+-1.10
+SELECT TO_CHAR(1234.5, 'TM') FROM DUAL;
+TO_CHAR(1234.5, 'TM')
+1234.5
+SELECT TO_CHAR(-1234.5989786876876, 'TM') FROM DUAL;
+TO_CHAR(-1234.5989786876876, 'TM')
+-1234.5989786876876
+SELECT TO_CHAR(1234, 'TME') FROM DUAL;
+TO_CHAR(1234, 'TME')
+1.234E+03
+SELECT TO_CHAR(0, 'TME') FROM DUAL;
+TO_CHAR(0, 'TME')
+0E+00
+SELECT TO_CHAR(0.1, 'TME') FROM DUAL;
+TO_CHAR(0.1, 'TME')
+1E-01
+SELECT TO_CHAR(-0.1, 'TME') FROM DUAL;
+TO_CHAR(-0.1, 'TME')
+-1E-01
+SELECT TO_CHAR(-01.1, 'TME') FROM DUAL;
+TO_CHAR(-01.1, 'TME')
+-1.1E+00
+SELECT TO_CHAR(-01.10, 'TME') FROM DUAL;
+TO_CHAR(-01.10, 'TME')
+-1.1E+00
+SELECT TO_CHAR(1234.5, 'TME') FROM DUAL;
+TO_CHAR(1234.5, 'TME')
+1.2345E+03
+SELECT TO_CHAR(-1234.5989786876876, 'TME') FROM DUAL;
+TO_CHAR(-1234.5989786876876, 'TME')
+-1.234598978687687577E+03
+SELECT TO_CHAR(1234, 'TM9') FROM DUAL;
+TO_CHAR(1234, 'TM9')
+1234
+SELECT TO_CHAR(0, 'TM9') FROM DUAL;
+TO_CHAR(0, 'TM9')
+0
+SELECT TO_CHAR(0.1, 'TM9') FROM DUAL;
+TO_CHAR(0.1, 'TM9')
+0.1
+SELECT TO_CHAR(-0.1, 'TM9') FROM DUAL;
+TO_CHAR(-0.1, 'TM9')
+-0.1
+SELECT TO_CHAR(-01.1, 'TM9') FROM DUAL;
+TO_CHAR(-01.1, 'TM9')
+-1.1
+SELECT TO_CHAR(-01.10, 'TM9') FROM DUAL;
+TO_CHAR(-01.10, 'TM9')
+-1.10
+SELECT TO_CHAR(1234.5, 'TM9') FROM DUAL;
+TO_CHAR(1234.5, 'TM9')
+1234.5
+SELECT TO_CHAR(-1234.5989786876876, 'TM9') FROM DUAL;
+TO_CHAR(-1234.5989786876876, 'TM9')
+-1234.5989786876876
+select to_char(1999.344,'9999.00') from dual;
+to_char(1999.344,'9999.00')
+ 1999.34
+select to_char(1999.344,'9999.99') from dual;
+to_char(1999.344,'9999.99')
+ 1999.34
+select to_char(1999.345,'9999.00') from dual;
+to_char(1999.345,'9999.00')
+ 1999.35
+select to_char(1999.345,'9999.99') from dual;
+to_char(1999.345,'9999.99')
+ 1999.35
+select to_char(-1999.345,'9999.99') from dual;
+to_char(-1999.345,'9999.99')
+-1999.35
+select to_char(-1999.345-1,'9999.99') from dual;
+to_char(-1999.345-1,'9999.99')
+-2000.35
+select to_char(1/3,'9999.99') from dual;
+to_char(1/3,'9999.99')
+     .33
+select to_char(1/10,'0.99') from dual;
+to_char(1/10,'0.99')
+ 0.10
+select to_char(-1/10,'0.99') from dual;
+to_char(-1/10,'0.99')
+-0.10
+select to_char(1234,'9999PR') from dual;
+to_char(1234,'9999PR')
+ 1234 
+select to_char(-1234,'9999PR') from dual;
+to_char(-1234,'9999PR')
+<1234>
+select to_char(-1234.19,'9999PR') from dual;
+to_char(-1234.19,'9999PR')
+<1234>
+select to_char(99,'YYY');
+ERROR HY000: Invalid argument error: YYY in function to_char.
+select to_char(99,'YY');
+ERROR HY000: Invalid argument error: YY in function to_char.
+select to_char(1234.5,'9999PR') from dual;
+to_char(1234.5,'9999PR')
+ 1235 
+select to_char(1999,'B999900000') from dual;
+to_char(1999,'B999900000')
+     01999
+select to_char(0,'9$') from dual ;
+to_char(0,'9$')
+ $0
+select to_char(0,'$0') from dual ;
+to_char(0,'$0')
+ $0
+select to_char(0,'$9') from dual ;
+to_char(0,'$9')
+ $0
+select to_char(0.2,'$9') from dual ;
+to_char(0.2,'$9')
+ $0
+select to_char(1.2,'$9') from dual ;
+to_char(1.2,'$9')
+ $1
+select to_char(-0.2,'$9') from dual ;
+to_char(-0.2,'$9')
+-$0
+select to_char(-1.2,'$9') from dual ;
+to_char(-1.2,'$9')
+-$1
+select to_char(-1,'$9') from dual ;
+to_char(-1,'$9')
+-$1
+select to_char(1,'$9') from dual ;
+to_char(1,'$9')
+ $1
+select to_char(-1543589345843758943,'$9') from dual ;
+to_char(-1543589345843758943,'$9')
+###
+select to_char(145435435435435,'$9') from dual ;
+to_char(145435435435435,'$9')
+###
+select to_char(0,'9') from dual ;
+to_char(0,'9')
+ 0
+select to_char(0.2,'9') from dual ;
+to_char(0.2,'9')
+ 0
+select to_char(1.2,'9') from dual ;
+to_char(1.2,'9')
+ 1
+select to_char(-0.2,'9') from dual ;
+to_char(-0.2,'9')
+-0
+select to_char(-1.2,'9') from dual ;
+to_char(-1.2,'9')
+-1
+select to_char(-1,'9') from dual ;
+to_char(-1,'9')
+-1
+select to_char(1,'9') from dual ;
+to_char(1,'9')
+ 1
+select to_char(-1543589345843758943,'9') from dual ;
+to_char(-1543589345843758943,'9')
+##
+select to_char(145435435435435,'9') from dual ;
+to_char(145435435435435,'9')
+##
+select to_char(0,'0') from dual ;
+to_char(0,'0')
+ 0
+select to_char(2/3,'0') from dual;
+to_char(2/3,'0')
+ 1
+select to_char(0.111,'0') from dual ;
+to_char(0.111,'0')
+ 0
+select to_char(-0.111,'0') from dual ;
+to_char(-0.111,'0')
+-0
+select to_char(09.111,'0') from dual ;
+to_char(09.111,'0')
+ 9
+select to_char(90.111,'00') from dual ;
+to_char(90.111,'00')
+ 90
+select to_char(90.111,'00.000') from dual ;
+to_char(90.111,'00.000')
+ 90.111
+select to_char(900000,'0,00000') from dual;
+to_char(900000,'0,00000')
+ 9,00000
+select to_char(000000,'0,00000') from dual;
+to_char(000000,'0,00000')
+ 0,00000
+select to_char(10.000000,'00.0,00000') from dual;
+ERROR HY000: Invalid argument error: 00.0,00000 in function to_char.
+select to_char(-000000,'0,00000') from dual;
+to_char(-000000,'0,00000')
+ 0,00000
+select to_char(-900000,'0,00000') from dual;
+to_char(-900000,'0,00000')
+-9,00000
+select to_char(-900000.01,'0,00000.00') from dual;
+to_char(-900000.01,'0,00000.00')
+-9,00000.01
+select to_char(900000.01,'0,00000.00') from dual;
+to_char(900000.01,'0,00000.00')
+ 9,00000.01
+select to_char(-00000.01,'0,00000.00') from dual;
+to_char(-00000.01,'0,00000.00')
+-0,00000.01
+select to_char(00000.01,'0,00000.00') from dual;
+to_char(00000.01,'0,00000.00')
+ 0,00000.01
+select to_char(4/3,'9') from dual ;
+to_char(4/3,'9')
+ 1
+select to_char(-0.00000,'0.00000') from dual;
+to_char(-0.00000,'0.00000')
+ 0.00000
+select to_char(-01.00000,'00.00000') from dual;
+to_char(-01.00000,'00.00000')
+-01.00000
+select to_char(90.00000,'00.00000') from dual;
+to_char(90.00000,'00.00000')
+ 90.00000
+select to_char(-90.00000,'00.00000') from dual;
+to_char(-90.00000,'00.00000')
+-90.00000
+select to_char(-90.00012,'00.00000') from dual;
+to_char(-90.00012,'00.00000')
+-90.00012
+select to_char(2/3,'0') from dual ;
+to_char(2/3,'0')
+ 1
+select to_char(1/3,'0') from dual ;
+to_char(1/3,'0')
+ 0
+select to_char(-2/3,'0') from dual ;
+to_char(-2/3,'0')
+-1
+select to_char(0.6,'9') from dual ;
+to_char(0.6,'9')
+ 1
+select to_char(0.5,'9') from dual ;
+to_char(0.5,'9')
+ 1
+select to_char(0.4,'9') from dual ;
+to_char(0.4,'9')
+ 0
+select to_char(0.1,'9D9') from dual;
+to_char(0.1,'9D9')
+  .1
+select to_char(0.1,'0D9') from dual;
+to_char(0.1,'0D9')
+ 0.1
+select to_char(0.0,'0D0') from dual;
+to_char(0.0,'0D0')
+ 0.0
+select to_char(.0,'D0') from dual;
+to_char(.0,'D0')
+ .0
+select to_char(.9,'D0') from dual;
+to_char(.9,'D0')
+ .9
+select to_char(9.,'0D') from dual;
+to_char(9.,'0D')
+ 9.
+select to_char(-9.,'0DS') from dual;
+to_char(-9.,'0DS')
+9.-
+select to_char(9.,'0DS') from dual;
+to_char(9.,'0DS')
+9.+
+select to_char(9.3,'0D9S') from dual;
+to_char(9.3,'0D9S')
+9.3+
+select to_char(-9.3,'0D9S') from dual;
+to_char(-9.3,'0D9S')
+9.3-
+select to_char(17/3,'9S') from dual ;
+to_char(17/3,'9S')
+6+
+select to_char(123324230.1,'999999999D9') from dual;
+to_char(123324230.1,'999999999D9')
+ 123324230.1
+select to_char(123324230.1,'999999000999D9') from dual;
+to_char(123324230.1,'999999000999D9')
+    123324230.1
+select to_char(1/0,'9$') from dual ;
+to_char(1/0,'9$')
+NULL
+Warnings:
+Warning	1365	Division by 0
+select to_char(2/3,'9') from dual ;
+to_char(2/3,'9')
+ 1
+select to_char(1/3,'9') from dual ;
+to_char(1/3,'9')
+ 0
+select to_char(-2/3,'9') from dual ;
+to_char(-2/3,'9')
+-1
+select to_char(2/3) from dual ;
+to_char(2/3)
+0.6667
+select to_char(2/3,'') from dual ;
+to_char(2/3,'')
+#
+select to_char(+-1.1 ,'0.0S' ) from dual ;
+to_char(+-1.1 ,'0.0S' )
+1.1-
+select to_char(-+1.1 ,'0.0S' ) from dual ;
+to_char(-+1.1 ,'0.0S' )
+1.1-
+select to_char(0.,'0D') from dual;
+to_char(0.,'0D')
+ 0.
+select to_char(0.,'9D') from dual;
+to_char(0.,'9D')
+ 0.
+select to_char(0.,'0.') from dual;
+to_char(0.,'0.')
+ 0.
+select to_char(0.,'9.') from dual;
+to_char(0.,'9.')
+ 0.
+select to_char(17/3,'9V999999999999999') from dual ;
+to_char(17/3,'9V999999999999999')
+ 5666666666000000
+select to_char( 0.04, 'FM9.9') from dual;
+to_char( 0.04, 'FM9.9')
+0.
+select to_char(99.999, 'FM999.00') from dual;
+to_char(99.999, 'FM999.00')
+100.00
+select to_char(99.999, 'FM999.99') from dual;
+to_char(99.999, 'FM999.99')
+100.
+select to_char(99.999, 'FM999.90') from dual;
+to_char(99.999, 'FM999.90')
+100.00
+select to_char(99.999, 'FM999.09') from dual;
+to_char(99.999, 'FM999.09')
+100.0
+select to_char(99.99, 'FM9.9') from dual;
+to_char(99.99, 'FM9.9')
+####

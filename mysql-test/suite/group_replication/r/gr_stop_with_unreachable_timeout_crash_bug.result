@@ -1,0 +1,40 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connect conn1_1]
+SET sql_log_bin=off;
+[connect conn1_1]
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+include/rpl_sync.inc
+[connect conn1_1]
+INSERT INTO t1 VALUES (1,1),(2,2);
+BEGIN;
+INSERT INTO t1 VALUES (3, sleep(1000));
+[connect conn1_2]
+SET GLOBAL group_replication_unreachable_majority_timeout=10;
+[connection server2]
+[server2 shutdown]
+[connect conn1_2]
+[connect conn1_3]
+stop group_replication;
+[connect conn1_2]
+SET SESSION group_replication_consistency='EVENTUAL';
+SET @conn_id=conn_id;
+KILL @conn_id;
+[connect conn1_1]
+ERROR HY000: Lost connection to MySQL server during query
+[connect conn1_3]
+SELECT @@super_read_only;
+@@super_read_only
+1
+SET GLOBAL super_read_only=OFF;
+DROP TABLE t1;
+SET GLOBAL group_replication_unreachable_majority_timeout = 0;
+[start server2]
+# restart
+include/rpl_reconnect.inc
+[connection server2]
+DROP TABLE t1;
+include/group_replication_end.inc

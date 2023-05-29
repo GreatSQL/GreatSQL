@@ -1,0 +1,177 @@
+#add_months 
+select add_months('2021-02-07 16:00:00', 1) from dual;
+select add_months('2021-02-07 16:00:00', -1) from dual;
+select add_months('2021-02-07 16:00:00', 10) from dual;
+select add_months('2021-02-07 16:00:00', -10) from dual;
+select add_months('2021-05-31 00:00:00', -1) from dual;
+select add_months('2021-05-31 00:00:00', 1) from dual;
+select add_months('2021-03-31 00:00:00', -1) from dual;
+select add_months('2021-05-31 00:00:00', 2.5) from dual;
+select add_months('2021-05-31 00:00:00', -2.89) from dual;
+
+#months_between
+select months_between('2021-3-21', '2021-1-10') from dual;
+select months_between('2021-1-10', '2021-3-21') from dual;
+select months_between('2020-1-10', '2021-3-21') from dual;
+select months_between('2021-3-21', '2020-1-10') from dual;
+select months_between('2021-3-21', '2020-1-10 00:01:00') from dual;
+select months_between('2021-3-21', '00:01:00') from dual;
+select months_between('2021-3-21', '2aaaa') from dual;
+select months_between('bbbbb', 'aaaaa') from dual;
+select months_between('2021-3-21', 0);
+select months_between('2021-3-21', NULL);
+select months_between('2021-3-21', 16281924723) from dual; 
+select months_between('2021-3-21', -16281924723);
+select months_between('2021-3-21', 2.6);
+
+#greatdb zentao bug #1429
+select months_between('20090228', '20080228') as months from dual;
+select months_between('20090228', '20080229') as months from dual;
+select months_between('20080229', '20070228') as months from dual;
+select months_between('20100327', '20100228') as months from dual;
+select months_between('20100330', '20100228') as months from dual;
+select months_between('20100228', '20100130') as months from dual;
+select months_between('20100228', '20100131') as months from dual;
+select months_between('20100228', '20100127') as months from dual;
+select months_between('20100228', '20100131') as months from dual;
+
+#greatdb zentao #3622 bugfix
+select months_between(to_date('2022-04-30 03:59:00','yyyy-mm-dd hh24:mi:ss'),
+                      to_date('2022-03-30 01:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+
+select months_between(to_date('2022-04-28 23:59:59','yyyy-mm-dd hh24:mi:ss'),
+                      to_date('2022-04-28 01:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+
+select months_between(to_date('2022-04-28 03:00:00','yyyy-mm-dd hh24:mi:ss'),
+                      to_date('2022-04-24 01:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+
+select months_between(to_date('2022-04-28 01:00:00','yyyy-mm-dd hh24:mi:ss'),
+                      to_date('2022-04-24 03:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+
+select months_between(to_date('2022-04-24 03:00:00','yyyy-mm-dd hh24:mi:ss'),
+                      to_date('2022-04-28 01:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+
+select months_between(to_date('2022-04-24 01:00:00','yyyy-mm-dd hh24:mi:ss'),
+                      to_date('2022-04-28 03:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+
+select months_between(to_date('2022-02-28 01:00:00','yyyy-mm-dd hh24:mi:ss'),
+                      to_date('2022-02-24 03:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+
+select MONTHS_BETWEEN(to_date('03-01-02 8:11:12', 'YY-MM-DD HH24:MI:SS'),
+                      to_date('03-01-02 8:11:52', 'YY-MM-DD HH24:MI:SS')) result from dual;
+
+select MONTHS_BETWEEN(to_date('03-01-02 8:11:52', 'YY-MM-DD HH24:MI:SS'),
+                      to_date('03-01-02 8:11:00', 'YY-MM-DD HH24:MI:SS')) result from dual;
+
+#systimestamp
+select strcmp(systimestamp(),concat(current_date()," ",current_time(6)));
+
+select now() - sysdate, sleep(2), UNIX_TIMESTAMP(now()) - UNIX_TIMESTAMP(sysdate);
+
+set sql_mode='oracle';
+set timestamp=1;
+select  now() - sysdate as zero;
+
+select sysdate, sleep(2), sysdate ;
+
+create table t1(col1 int, col2 timestamp(6) default sysdate);
+
+set timestamp=1;
+insert into t1 values(1, systimestamp);
+insert into t1 values(1, systimestamp());
+insert into t1 values(1, systimestamp(0));
+insert into t1 values(1, systimestamp(1));
+insert into t1 values(1, systimestamp(2));
+insert into t1 values(1, systimestamp(3));
+insert into t1 values(1, systimestamp(4));
+insert into t1 values(1, systimestamp(5));
+insert into t1 values(1, systimestamp(6));
+--error ER_TOO_BIG_PRECISION
+insert into t1 values(1, systimestamp(7));
+insert into t1(col1) values(2);
+select * from t1;
+
+drop table t1;
+
+# greatdb zentao bugfix #4255
+create table t1(c1 int default (months_between('20220204','20220203')));
+--replace_regex /cost=\d+.\d+/cost=#/  /rows=\d+/rows=#/
+explain format=tree  SELECT c1 FROM t1 WHERE MONTHS_BETWEEN(c1,'20210201')=1;
+
+drop table t1;
+
+set sql_mode=oracle;
+create table t1(c1 int);
+alter table t1 change column c1  c1 int default (months_between('20210101','20210201'));
+show create table t1;
+
+drop table t1;
+
+# greatdb zentao bugfix #4622
+set sql_mode=oracle;
+create table t1(c1 datetime default(add_months('2022-01-31',1)), c2 int, c3 double, c4 decimal(10,2));
+show create table t1;
+insert into t1 values('2022-02-28 11:00:00', 1, 1.1, 1.1);
+insert into t1 values('2022-02-28 11:00:00', 1, 1.6, 1.6);
+insert into t1 values('2022-02-28 11:00:00', -1, -1.1, -1.1);
+insert into t1 values('2022-02-28 11:00:00', null, null, null);
+insert into t1 values(null, -1, -1.1, -1.1);
+insert into t1 values(null, null, null, null);
+insert into t1 values('2022-02-28 11:00:00', -1, -1.6, -1.6);
+insert into t1 values('2022-04-30 11:00:00', -1, -1.1, -1.1);
+insert into t1 values('2022-04-30 11:00:00',  1,  1.1,  1.1);
+insert into t1 values('2022-04-30 11:00:00',  1024,  1024.45,  1024.45);
+insert into t1 values('2022-04-30 11:00:00', -1024, -1024.45, -1024.45);
+insert into t1 values('2022-07-22 12:34:56', -1, -1.1, -1.1);
+insert into t1 values('2022-07-22 12:34:56',  1,  1.1,  1.1);
+select c1, c2, c3, c4, add_months(c1, c2) v_int, add_months(c1, c3) v_double, add_months(c1, c4) v_decimal
+from t1;
+
+select add_months('2022-02-28','') from dual;
+select add_months('2022-02-28',null) from dual;
+select add_months('2022-02-28','   ') from dual;
+select add_months('2022-02-28','1.1  ') from dual;
+select add_months('2022-02-28','  1.7') from dual;
+select add_months('2022-02-28','  1.1') from dual;
+select add_months('2022-02-28','1.23e-1') from dual;
+
+--error ER_WRONG_ARGUMENTS
+SELECT add_months('2022-02-28', '1.23a') FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT add_months('2022-02-28', 'a1.23') FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT add_months('2022-02-28', '1.23xx') FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT add_months('2022-02-28', sysdate()) FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT add_months('2022-02-28', '1.2  a') FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT add_months('2022-02-28', '  a1.2') FROM dual;
+
+set sql_mode=oracle;
+select c1, c2, c3, c4, add_months(c1, c2) v_int, add_months(c1, c3) v_double, add_months(c1, c4) v_decimal
+from t1 where add_months(c1, c2) is not null;
+select c1, c2, c3, c4, add_months(c1, c2) v_int, add_months(c1, c3) v_double, add_months(c1, c4) v_decimal
+from t1 where add_months(c1, c2) is null;
+drop table t1;
+
+select add_months('2022-02-28','') from dual;
+select add_months('2022-02-28',null) from dual;
+select add_months('2022-02-28','   ') from dual;
+select add_months('2022-02-28','1.1  ') from dual;
+select add_months('2022-02-28','  1.7') from dual;
+select add_months('2022-02-28','  1.1') from dual;
+select add_months('2022-02-28','1.23e-1') from dual;
+
+--error ER_WRONG_ARGUMENTS
+SELECT add_months('2022-02-28', '1.23a') FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT add_months('2022-02-28', 'a1.23') FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT add_months('2022-02-28', '1.23xx') FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT add_months('2022-02-28', sysdate()) FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT add_months('2022-02-28', '1.2  a') FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT add_months('2022-02-28', '  a1.2') FROM dual;

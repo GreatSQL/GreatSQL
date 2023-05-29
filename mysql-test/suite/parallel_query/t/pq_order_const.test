@@ -1,0 +1,80 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+create table t1( 
+ a int NOT NULL,  
+ b varchar(50) 
+) ENGINE=Innodb DEFAULT CHARSET=utf8mb4;   
+
+insert into t1 values (2, 'mysql'), (1, NULL), (0, 'hwsql'); 
+select * from t1; 
+
+# group-by-prue-const 
+
+select 1 from t1 group by 1; 
+select 1+1 as summa from t1 group by summa; 
+select 1+1 as summa from t1 group by 1+2; 
+select 1 from t1 group by "HWSQL"; 
+select 1+1 from t1 group by "HWSQL"; 
+select 1, "HWSQL" from t1 group by 1; 
+select 1, "HWSQL" from t1 group by "HWSQL"; 
+
+# group-by-hybrid-with-other-items 
+
+select a from t1 group by 1; 
+
+set sql_mode=''; 
+select 1, a from t1 group by 1; 
+select 1, a from t1 group by "HWSQL"; 
+select 1+1 as summa, a from t1 group by summa; 
+select 1+1 as summa, a from t1 group by 1+2; 
+select 1+1 as summa, a from t1 group by "HWSQL"; 
+
+
+# order-by-prue-const 
+
+select 1 from t1 order by 1; 
+select 1+1 as summa from t1 order by summa; 
+select 1+1 as summa from t1 order by 1+2; 
+select 1 from t1 order by "HWSQL"; 
+select 1+1 from t1 order by "HWSQL"; 
+select 1, "HWSQL" from t1 order by 1; 
+select 1, "HWSQL" from t1 order by "HWSQL"; 
+
+# order-by-hybrid-with-other-items 
+
+select a from t1 order by 1; 
+select 1, a from t1 order by 1; 
+select 1, a from t1 order by "HWSQL"; 
+select 1+1 as summa, a from t1 order by summa; 
+select 1+1 as summa, a from t1 order by 1+2; 
+select 1+1 as summa, a from t1 order by "HWSQL"; 
+
+
+# group-order-by 
+	
+select sum(a) from t1 group by 1 + 2; 
+select 1, sum(a) from t1 group by 1; 
+select 1, sum(a) from t1 group by 1+2; 
+select 1+1, sum(a) from t1 group by a; 
+
+select 1, sum(a) from t1 group by 1 order by 1; 
+select a, sum(a) from t1 group by a order by 1; 
+select avg(a) from t1 group by b order by 1; 
+select avg(a) from t1 group by b order by a; 
+
+
+# group/order by NULL 
+select 1, a from t1 group by NULL; 
+select 1, a from t1 group by a order by NULL; 
+select 1, a from t1 group by 1 + 1, NULL; 
+select 1, sum(a) from t1 group by 1 order by 1+1, NULL;
+select 1, sum(a) from t1 group by 1+1, NULL order by 1; 
+select 1, sum(a) from t1 group by 1, NULL order by 1+1, 1, NULL; 
+select 1, sum(a) from t1 group by a, NULL order by 1, a, NULL; 
+select 1, sum(a) from t1 group by NULL, a, NULL order by 1, a, NULL, NULL, a; 
+
+drop table t1; 
+
+--let $wait_counter= 10000
+--source include/restart_mysqld.inc

@@ -1,0 +1,142 @@
+set @saved_force_parallel_execute = @@force_parallel_execute;
+set @saved_parallel_cost_threshold = @@parallel_cost_threshold;
+set @saved_parallel_default_dop = @@parallel_default_dop;
+set @saved_parallel_max_threads = @@parallel_max_threads;
+create table t1(id int);
+insert into t1 select 1;
+insert into t1 select id + 1 from t1;
+insert into t1 select id + 1 from t1;
+insert into t1 select id + 1 from t1;
+insert into t1 select id + 1 from t1;
+insert into t1 select id + 1 from t1;
+insert into t1 select id + 1 from t1;
+insert into t1 select id + 1 from t1;
+insert into t1 select id + 1 from t1;
+insert into t1 select id + 1 from t1;
+insert into t1 select id + 1 from t1;
+set session force_parallel_execute = true;
+### test parallel_cost_threadhold
+set session parallel_cost_threshold = 0;
+explain select sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	Parallel execute (3 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+set session parallel_cost_threshold = 99999;
+explain select sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+### test parallel_default_dop
+set session parallel_cost_threshold = 0;
+set session parallel_default_dop=10;
+explain select sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	Parallel execute (3 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+set session parallel_default_dop=2;
+explain select sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	Parallel execute (2 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+set session parallel_default_dop=0;
+explain select sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+### test parallel hint
+set session parallel_default_dop=4;
+set session force_parallel_execute = false;
+explain select sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+explain select/*+ PQ */ sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	Parallel execute (3 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select /*+ PQ(@`select#1`) */ sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+explain select/*+ PQ(10) */ sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	Parallel execute (3 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select /*+ PQ(@`select#1`) */ sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+### test force_parallel query
+set session parallel_default_dop=4;
+set session force_parallel_execute = false;
+explain select sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+set session force_parallel_execute = true;
+explain select sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	Parallel execute (3 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+### test parallel max_threads
+set session force_parallel_execute = true;
+set session parallel_default_dop=4;
+set global parallel_max_threads = 64;
+explain select/*+ PQ(32) */ sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	Parallel execute (3 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select /*+ PQ(@`select#1`) */ sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+set global parallel_max_threads = 16;
+explain select/*+ PQ(32) */ sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select /*+ PQ(@`select#1`) */ sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+set global parallel_max_threads = 64;
+explain select/*+ NO_PQ */ sum(id) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select /*+ NO_PQ(@`select#1`) */ sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+### test parallel queue_timeout
+set global parallel_max_threads=8;
+set global debug_pq_worker_stall = true;
+select/*+ PQ(8) */ sum(id) from t1;;
+show status like "PQ_threads_running";
+Variable_name	Value
+PQ_threads_running	7
+----con2 wait parallel threads 5s-----
+set session parallel_queue_timeout=5000;
+explain select/*+ PQ(8) */ sum(id) from t1;;
+----con3 no wait for parallel threads-----
+set session parallel_queue_timeout=0;
+explain select/*+ PQ(8) */ sum(id) from t1;;
+set global debug_pq_worker_stall = false;
+sum(id)
+6144
+----con2 parallel query-----
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	Parallel execute (3 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select /*+ PQ(@`select#1`) */ sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+----con3 no parallel query-----
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1024	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select /*+ PQ(@`select#1`) */ sum(`test`.`t1`.`id`) AS `sum(id)` from `test`.`t1`
+set session parallel_default_dop = @saved_parallel_default_dop;
+set global parallel_max_threads = @saved_parallel_max_threads;
+set session parallel_cost_threshold = @saved_parallel_cost_threshold;
+set session force_parallel_execute = @saved_force_parallel_execute;
+drop table t1;

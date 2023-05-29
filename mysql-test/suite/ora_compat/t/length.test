@@ -1,0 +1,34 @@
+#
+# Test of problem with translate() and long separators.
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+DROP PROCEDURE IF EXISTS p1;
+--enable_warnings
+
+create table t1 (id int,a char(10));
+insert into t1 values (1,'ABC123万AH');
+insert into t1 values (2,'');
+set sql_mode='';
+select length(a) from t1;
+select length(a) a from t1 union select 'x' a from t1;
+set sql_mode='oracle';
+select length(a) from t1;
+select length(a) a from t1 union select 'x' a from t1;
+drop table t1;
+
+set sql_mode='';
+select 'a' union SELECT length('ABC123万AH');
+SELECT length('树a''在');
+
+set sql_mode='oracle';
+select 'a' union SELECT length('ABC123万AH');
+SELECT length('树a''在');
+
+set sql_mode='';
+CREATE PROCEDURE p1(a varchar(255))
+  SET @query = length(a);
+CALL p1('ABC123万AH');
+SELECT @query;
+DROP PROCEDURE p1;

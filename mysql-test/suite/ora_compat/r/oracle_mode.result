@@ -1,0 +1,118 @@
+set sql_mode="oracle";
+select @@sql_mode;
+@@sql_mode
+PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+select 'test'|| 'test2';
+'test'|| 'test2'
+testtest2
+create table "table" (id int primary key, "char" char);
+drop table "table";
+create table t1(id int);
+select count (*) from t1;
+count (*)
+0
+select to_number('11') || to_number('aa');
+ERROR 22003: NUMBER value is out of range in 'to_number'
+set sql_mode='';
+select count (*) from t1;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '*) from t1' at line 1
+drop table t1;
+set sql_mode=oracle;
+select 1/0;
+ERROR 22012: Division by 0
+set shrink_sql_mode=ERROR_FOR_DIVISION_BY_ZERO;
+select 1/0;
+1/0
+NULL
+show  variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	ERROR_FOR_DIVISION_BY_ZERO
+sql_mode	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION
+"global set sql_mode and then set shrink_sql_mode"
+set global sql_mode=oracle;
+set global shrink_sql_mode=ERROR_FOR_DIVISION_BY_ZERO;
+show global variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	ERROR_FOR_DIVISION_BY_ZERO
+sql_mode	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION
+show global variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	ERROR_FOR_DIVISION_BY_ZERO
+sql_mode	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION
+show variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	ERROR_FOR_DIVISION_BY_ZERO
+sql_mode	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION
+select 1/0;
+1/0
+NULL
+"reset sql_mode"
+set global sql_mode=default;
+set global shrink_sql_mode=default;
+show global variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	
+sql_mode	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+"global set shrink_sql_mode and then set sql_mode  "
+set global sql_mode=oracle;
+set global shrink_sql_mode=ERROR_FOR_DIVISION_BY_ZERO;
+show global variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	ERROR_FOR_DIVISION_BY_ZERO
+sql_mode	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION
+show global variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	ERROR_FOR_DIVISION_BY_ZERO
+sql_mode	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION
+show variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	ERROR_FOR_DIVISION_BY_ZERO
+sql_mode	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION
+select 1/0;
+1/0
+NULL
+"reset sql_mode"
+set global sql_mode=default;
+set global shrink_sql_mode=default;
+show global variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	
+sql_mode	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+set global sql_mode = oracle;
+show global variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	
+sql_mode	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+set persist shrink_sql_mode=ERROR_FOR_DIVISION_BY_ZERO;
+show variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	ERROR_FOR_DIVISION_BY_ZERO
+sql_mode	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION
+show global variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	ERROR_FOR_DIVISION_BY_ZERO
+sql_mode	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION
+SELECT * FROM performance_schema.persisted_variables;
+VARIABLE_NAME	VARIABLE_VALUE
+shrink_sql_mode	ERROR_FOR_DIVISION_BY_ZERO
+# Restart server
+# after restart
+set sql_mode=oracle;
+select 1/0;
+1/0
+NULL
+show variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	ERROR_FOR_DIVISION_BY_ZERO
+sql_mode	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION
+show global variables like '%sql_mode%';
+Variable_name	Value
+shrink_sql_mode	ERROR_FOR_DIVISION_BY_ZERO
+sql_mode	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+set shrink_sql_mode='';
+select 1/0;
+ERROR 22012: Division by 0
+"clean up"
+set global sql_mode=default;
+set global shrink_sql_mode=default;
+RESET PERSIST;

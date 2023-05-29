@@ -1,0 +1,49 @@
+drop table if exists test_to_number;
+CREATE TABLE `test_cast_varcharn` (
+`c0` int NOT NULL AUTO_INCREMENT,
+`c1` date DEFAULT NULL,
+`c2` time DEFAULT NULL,
+`c3` datetime DEFAULT NULL,
+`c4` year DEFAULT NULL,
+`c5` int DEFAULT NULL,
+`c6` decimal(10,6) DEFAULT NULL,
+`c7` double DEFAULT NULL,
+`c8` float DEFAULT NULL,
+`c9` varchar(255) DEFAULT NULL,
+PRIMARY KEY (`c0`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+INSERT INTO `test_cast_varcharn` VALUES ('1', '2021-04-26', '15:36:37', '2021-04-27 15:36:41', '2021', '5', '6.000000', '7.1', '118.169', 'a8.168111');
+INSERT INTO `test_cast_varcharn` VALUES ('2', '2021-04-28', '15:36:37', '2021-04-27 15:36:41', '2021', '6', '7877.126000', '8.1', '119.187', 'a9.16');
+INSERT INTO `test_cast_varcharn` VALUES ('3', '2021-04-29', '15:36:37', '2021-04-27 15:36:41', '2021', '6', '7877.126890', '8.1', '119.187', 'a9.1682');
+INSERT INTO `test_cast_varcharn` VALUES ('4', '2021-04-30', '15:36:37', '2021-04-27 15:36:41', '2021', '6', '7877.126890', '8.1', '119.187', 'a9.168333');
+select c1, cast(c1 as varchar(6) ) from test_cast_varcharn;
+c1	cast(c1 as varchar(6) )
+2021-04-26	2021-0
+2021-04-28	2021-0
+2021-04-29	2021-0
+2021-04-30	2021-0
+select c0, cast(sum(c0) as varchar(12) ) from test_cast_varcharn group by c0;
+c0	cast(sum(c0) as varchar(12) )
+1	1
+2	2
+3	3
+4	4
+select c6, cast(c6 as varchar(6) ) from test_cast_varcharn;
+c6	cast(c6 as varchar(6) )
+6.000000	6.0000
+7877.126000	7877.1
+7877.126890	7877.1
+7877.126890	7877.1
+select c0, cast(sum(c0) as varchar(0) ) from test_cast_varcharn group by c0;
+c0	cast(sum(c0) as varchar(0) )
+1	
+2	
+3	
+4	
+select c0, cast(sum(c0) as varchar() ) from test_cast_varcharn group by c0;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ') ) from test_cast_varcharn group by c0' at line 1
+select c0, cast(sum(c0) as varchar(-1) ) from test_cast_varcharn group by c0;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '-1) ) from test_cast_varcharn group by c0' at line 1
+select c0, cast(sum(c0) as varchar(2222222222222222222222222222222222222222222) ) from test_cast_varcharn group by c0;
+ERROR 42000: Display width out of range for column 'cast as char' (max = 4294967295)
+drop table if exists  test_cast_varcharn;

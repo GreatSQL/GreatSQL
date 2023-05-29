@@ -1,0 +1,968 @@
+SELECT trunc(1.23456789012345678901234567890123456789012345678901234567890123456789012345678901234567890, 100) FROM dual;
+trunc(1.23456789012345678901234567890123456789012345678901234567890123456789012345678901234567890, 100)
+1.234567890123456789012345678901
+SELECT trunc(1.23456789012345678901234567890123456789012345678901234567890123456789012345678901234567890, 30) FROM dual;
+trunc(1.23456789012345678901234567890123456789012345678901234567890123456789012345678901234567890, 30)
+1.234567890123456789012345678901
+SELECT trunc(123456789012345678901234567890123456789012345678901234567890123456789012345678901.123) FROM dual;
+trunc(123456789012345678901234567890123456789012345678901234567890123456789012345678901.123)
+123456789012345678901234567890123456789012345678901234567890123456789012345678901
+SELECT trunc(1234567890123456789012345678901234567890123456789012345678901234567890123456789012.123) FROM dual;
+trunc(1234567890123456789012345678901234567890123456789012345678901234567890123456789012.123)
+99999999999999999999999999999999999999999999999999999999999999999
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: '234567890123456789012345678901234567890123456789012345678901234567890123456789012'
+SELECT trunc(123.456, 1) FROM dual;
+trunc(123.456, 1)
+123.4
+SELECT trunc(123.456, 2) FROM dual;
+trunc(123.456, 2)
+123.45
+SELECT trunc(123.456, 3) FROM dual;
+trunc(123.456, 3)
+123.456
+SELECT trunc(123.456, 4) FROM dual;
+trunc(123.456, 4)
+123.456
+SELECT trunc(123.456, 0) FROM dual;
+trunc(123.456, 0)
+123
+SELECT trunc(123.456, -1) FROM dual;
+trunc(123.456, -1)
+120
+SELECT trunc(123.456, -2) FROM dual;
+trunc(123.456, -2)
+100
+SELECT trunc(123.456, -3) FROM dual;
+trunc(123.456, -3)
+0
+SELECT trunc(123.456, -4) FROM dual;
+trunc(123.456, -4)
+0
+SELECT trunc(.456, 1) FROM dual;
+trunc(.456, 1)
+0.4
+SELECT trunc(.456, 2) FROM dual;
+trunc(.456, 2)
+0.45
+SELECT trunc(.456, 3) FROM dual;
+trunc(.456, 3)
+0.456
+SELECT trunc(123.456) FROM dual;
+trunc(123.456)
+123
+SELECT trunc('123.456') FROM dual;
+trunc('123.456')
+123
+SELECT trunc('123.456', 1) FROM dual;
+trunc('123.456', 1)
+123.4
+SELECT trunc('23.456', -1) FROM dual;
+trunc('23.456', -1)
+20
+create table t1(c1 decimal(65, 30), c2 double);
+insert into t1 values
+(123.456, 1),
+(123.456, 1.1),
+(123.456, 1.6),
+(123.456, -1),
+(123.456, -1.1),
+(123.456, -1.6),
+(123.456, 0),
+(123.456, null),
+(123.456000, 4),
+(123.456000, 5),
+(123.456000, -1),
+(123.456000, -2),
+(-123.40000, 2),
+(-123.40000, -2),
+(-123.402, 2),
+(123.402, 2),
+(1.012345678901234567890123456789,30),
+(1.012345678901234567890123456789,100),
+(1.012345678901234567890123456789,32),
+(null, 1),
+(null, null),
+(1.234,null);
+select c1, c2, trunc(c1, c2) from t1;
+c1	c2	trunc(c1, c2)
+123.456000000000000000000000000000	1	123.4
+123.456000000000000000000000000000	1.1	123.4
+123.456000000000000000000000000000	1.6	123.45
+123.456000000000000000000000000000	-1	120
+123.456000000000000000000000000000	-1.1	120
+123.456000000000000000000000000000	-1.6	100
+123.456000000000000000000000000000	0	123
+123.456000000000000000000000000000	NULL	NULL
+123.456000000000000000000000000000	4	123.456
+123.456000000000000000000000000000	5	123.456
+123.456000000000000000000000000000	-1	120
+123.456000000000000000000000000000	-2	100
+-123.400000000000000000000000000000	2	-123.4
+-123.400000000000000000000000000000	-2	-100
+-123.402000000000000000000000000000	2	-123.4
+123.402000000000000000000000000000	2	123.4
+1.012345678901234567890123456789	30	1.012345678901234567890123456789
+1.012345678901234567890123456789	100	1.012345678901234567890123456789
+1.012345678901234567890123456789	32	1.012345678901234567890123456789
+NULL	1	NULL
+NULL	NULL	NULL
+1.234000000000000000000000000000	NULL	NULL
+drop table t1;
+create table t1(c1 double, c2 int);
+insert into t1 values
+(123.456, 1),
+(123.456, -1),
+(123.456, 0),
+(123.456, null),
+(null, null),
+(null, 1),
+(1.2346E+10, 123),
+(1.2346E+10, -9),
+(-1.2346E+10, 123),
+(-1.2346E+10, -9),
+(-1.2346E-5, 123),
+(1.2346E-5, -123);
+select c1, c2, trunc(c1, c2) from t1;
+c1	c2	trunc(c1, c2)
+123.456	1	123.4
+123.456	-1	120
+123.456	0	123
+123.456	NULL	NULL
+NULL	NULL	NULL
+NULL	1	NULL
+12346000000	123	12346000000
+12346000000	-9	12000000000
+-12346000000	123	-12346000000
+-12346000000	-9	-12000000000
+-0.000012346	123	-0.000012346
+0.000012346	-123	0
+select trunc(c1, c2), trunc(c1, trunc(c1,c2)),
+trunc(trunc(c1,c2), c2), trunc(trunc(c1,c2),trunc(c1,c2)) from t1;
+trunc(c1, c2)	trunc(c1, trunc(c1,c2))	trunc(trunc(c1,c2), c2)	trunc(trunc(c1,c2),trunc(c1,c2))
+123.4	123.456	123.4	123.4
+120	123.456	120	120
+123	123.456	123	123
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
+12346000000	0	12346000000	0
+12000000000	0	12000000000	0
+-12346000000	-12346000000	-12346000000	-12346000000
+-12000000000	-12346000000	-12000000000	-12000000000
+-0.000012346	0	-0.000012346	0
+0	0	0	0
+drop table t1;
+create table t1(c1 varchar(255), c2 varchar(255));
+insert into t1 values
+('123.456', null), (null, null), (null, '1'), ('123.456', null),
+('123.456', '1'),
+('123.456', '1.1'),
+('123.456', '1.6'),
+('123.456', '-1'),
+('123.456', '-1.1'),
+('123.456', '-1.6'),
+('123.456', '0'),
+('-123.456', '-2'),
+('123.456', '-2'),
+('-123.456', '2'),
+('123.456', '2'),
+('-123.456', '-3'),
+('-1.4', '-2'),
+('-1.4', '-1'),
+('',''), ('',1), ('123.456','');
+select c1, c2, trunc(c1, c2) from t1;
+c1	c2	trunc(c1, c2)
+123.456	NULL	NULL
+NULL	NULL	NULL
+NULL	1	NULL
+123.456	NULL	NULL
+123.456	1	123.4
+123.456	1.1	123.4
+123.456	1.6	123.4
+123.456	-1	120
+123.456	-1.1	120
+123.456	-1.6	120
+123.456	0	123
+-123.456	-2	-100
+123.456	-2	100
+-123.456	2	-123.45
+123.456	2	123.45
+-123.456	-3	0
+-1.4	-2	0
+-1.4	-1	0
+		NULL
+	1	NULL
+123.456		NULL
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '1.1'
+Warning	1292	Truncated incorrect INTEGER value: '1.6'
+Warning	1292	Truncated incorrect INTEGER value: '-1.1'
+Warning	1292	Truncated incorrect INTEGER value: '-1.6'
+drop table t1;
+SELECT trunc('2021-10-12', 1) FROM dual;
+ERROR HY000: Incorrect arguments to trunc
+SELECT trunc('2021', 'dd') FROM dual;
+ERROR HY000: Incorrect arguments to trunc
+SELECT trunc('2021-11-12') FROM dual;
+ERROR HY000: Incorrect arguments to trunc
+SELECT trunc('abc', 0) FROM dual;
+ERROR HY000: Incorrect arguments to trunc
+SELECT trunc(' ', '') FROM dual;
+ERROR HY000: Incorrect arguments to trunc
+SELECT trunc('        ', 1) FROM dual;
+ERROR HY000: Incorrect arguments to trunc
+SELECT trunc(1.234, '   ') FROM dual;
+ERROR HY000: Incorrect arguments to trunc
+create table t1 (c_date datetime, format varchar(10) not null);
+insert into t1 values
+('2021-01-02 10:11:12', 'SCC'),    # Century
+('2021-01-02 10:11:12', 'CC'),
+('2021-01-02 10:11:12', 'SYEAR'),  # Year
+('2021-01-02 10:11:12', 'SYYYY'),
+('2021-01-02 10:11:12', 'SYEAR'),
+('2021-01-02 10:11:12', 'YEAR'),
+('2021-01-02 10:11:12', 'YYYY'),
+('2021-01-02 10:11:12', 'YYY'),
+('2021-01-02 10:11:12', 'YY'),
+('2021-01-02 10:11:12', 'Y'),
+('2021-01-02 10:11:12', 'Q'),      # Quarter
+('2021-01-02 10:11:12', 'MONTH'),  # Month
+('2021-01-02 10:11:12', 'MON'),
+('2021-01-02 10:11:12', 'MM'),
+('2021-01-02 10:11:12', 'RM'),
+('2021-01-02 10:11:12', 'DDD'),    # Day
+('2021-01-02 10:11:12', 'DD'),
+('2021-01-02 10:11:12', 'DAY'),    # Closest Sunday
+('2021-01-02 10:11:12', 'DY'),
+('2021-01-02 10:11:12', 'D'),
+('2021-01-02 10:11:12', 'HH'),     #Hours
+('2021-01-02 10:11:12', 'HH12'),
+('2021-01-02 10:11:12', 'HH24'),
+('2021-01-02 10:11:12', 'MI');
+select c_date,format, trunc(c_date, format) as result from t1;
+c_date	format	result
+2021-01-02 10:11:12	SCC	2001-01-01 00:00:00
+2021-01-02 10:11:12	CC	2001-01-01 00:00:00
+2021-01-02 10:11:12	SYEAR	2021-01-01 00:00:00
+2021-01-02 10:11:12	SYYYY	2021-01-01 00:00:00
+2021-01-02 10:11:12	SYEAR	2021-01-01 00:00:00
+2021-01-02 10:11:12	YEAR	2021-01-01 00:00:00
+2021-01-02 10:11:12	YYYY	2021-01-01 00:00:00
+2021-01-02 10:11:12	YYY	2021-01-01 00:00:00
+2021-01-02 10:11:12	YY	2021-01-01 00:00:00
+2021-01-02 10:11:12	Y	2021-01-01 00:00:00
+2021-01-02 10:11:12	Q	2021-01-01 00:00:00
+2021-01-02 10:11:12	MONTH	2021-01-01 00:00:00
+2021-01-02 10:11:12	MON	2021-01-01 00:00:00
+2021-01-02 10:11:12	MM	2021-01-01 00:00:00
+2021-01-02 10:11:12	RM	2021-01-01 00:00:00
+2021-01-02 10:11:12	DDD	2021-01-02 00:00:00
+2021-01-02 10:11:12	DD	2021-01-02 00:00:00
+2021-01-02 10:11:12	DAY	2020-12-27 00:00:00
+2021-01-02 10:11:12	DY	2020-12-27 00:00:00
+2021-01-02 10:11:12	D	2020-12-27 00:00:00
+2021-01-02 10:11:12	HH	2021-01-02 10:00:00
+2021-01-02 10:11:12	HH12	2021-01-02 10:00:00
+2021-01-02 10:11:12	HH24	2021-01-02 10:00:00
+2021-01-02 10:11:12	MI	2021-01-02 10:11:00
+truncate table t1;
+insert into t1 values
+('2021-04-03 12:34:56', 'scc'),
+('2021-04-03 12:34:56', 'cc'),
+('2021-04-03 12:34:56', 'syear'),
+('2021-04-03 12:34:56', 'syyyy'),
+('2021-04-03 12:34:56', 'syear'),
+('2021-04-03 12:34:56', 'year'),
+('2021-04-03 12:34:56', 'yyyy'),
+('2021-04-03 12:34:56', 'yyy'),
+('2021-04-03 12:34:56', 'yy'),
+('2021-04-03 12:34:56', 'y'),
+('2021-04-03 12:34:56', 'q'),
+('2021-04-03 12:34:56', 'month'),
+('2021-04-03 12:34:56', 'mon'),
+('2021-04-03 12:34:56', 'mm'),
+('2021-04-03 12:34:56', 'rm'),
+('2021-04-03 12:34:56', 'ddd'),
+('2021-04-03 12:34:56', 'dd'),
+('2021-04-03 12:34:56', 'day'),
+('2021-04-03 12:34:56', 'dy'),
+('2021-04-03 12:34:56', 'd'),
+('2021-04-03 12:34:56', 'hh'),
+('2021-04-03 12:34:56', 'hh12'),
+('2021-04-03 12:34:56', 'hh24'),
+('2021-04-03 12:34:56', 'mi');
+select c_date,format, trunc(c_date, format) as result from t1;
+c_date	format	result
+2021-04-03 12:34:56	scc	2001-01-01 00:00:00
+2021-04-03 12:34:56	cc	2001-01-01 00:00:00
+2021-04-03 12:34:56	syear	2021-01-01 00:00:00
+2021-04-03 12:34:56	syyyy	2021-01-01 00:00:00
+2021-04-03 12:34:56	syear	2021-01-01 00:00:00
+2021-04-03 12:34:56	year	2021-01-01 00:00:00
+2021-04-03 12:34:56	yyyy	2021-01-01 00:00:00
+2021-04-03 12:34:56	yyy	2021-01-01 00:00:00
+2021-04-03 12:34:56	yy	2021-01-01 00:00:00
+2021-04-03 12:34:56	y	2021-01-01 00:00:00
+2021-04-03 12:34:56	q	2021-04-01 00:00:00
+2021-04-03 12:34:56	month	2021-04-01 00:00:00
+2021-04-03 12:34:56	mon	2021-04-01 00:00:00
+2021-04-03 12:34:56	mm	2021-04-01 00:00:00
+2021-04-03 12:34:56	rm	2021-04-01 00:00:00
+2021-04-03 12:34:56	ddd	2021-04-03 00:00:00
+2021-04-03 12:34:56	dd	2021-04-03 00:00:00
+2021-04-03 12:34:56	day	2021-03-28 00:00:00
+2021-04-03 12:34:56	dy	2021-03-28 00:00:00
+2021-04-03 12:34:56	d	2021-03-28 00:00:00
+2021-04-03 12:34:56	hh	2021-04-03 12:00:00
+2021-04-03 12:34:56	hh12	2021-04-03 12:00:00
+2021-04-03 12:34:56	hh24	2021-04-03 12:00:00
+2021-04-03 12:34:56	mi	2021-04-03 12:34:00
+truncate table t1;
+insert into t1 values
+('2021-01-02 10:11:12', 'YEAR  '),
+('2021-01-02 10:11:12', '  YYYY'),
+('2021-01-02 10:11:12', 'YYYD'),
+('2021-01-02 10:11:12', 'EYYY'),
+('2021-01-02 10:11:12', 'MONTA'),
+('2021-01-02 10:11:12', 'MONAB'),
+('2021-01-02 10:11:12', 'MINUTE'),
+('2021-01-02 10:11:12', 'DDDD'),
+('2021-01-02 10:11:12', 'DC'),
+('2021-01-02 10:11:12', 'DAZ'),
+('2021-01-02 10:11:12', 'HA'),
+('2021-01-02 10:11:12', 'H12'),
+('2021-01-02 10:11:12', 'H24'),
+('2021-01-02 10:11:12', 'MIC');
+select c_date,format, trunc(c_date, format) as result from t1;
+c_date	format	result
+2021-01-02 10:11:12	YEAR  	NULL
+2021-01-02 10:11:12	  YYYY	NULL
+2021-01-02 10:11:12	YYYD	NULL
+2021-01-02 10:11:12	EYYY	NULL
+2021-01-02 10:11:12	MONTA	NULL
+2021-01-02 10:11:12	MONAB	NULL
+2021-01-02 10:11:12	MINUTE	NULL
+2021-01-02 10:11:12	DDDD	NULL
+2021-01-02 10:11:12	DC	NULL
+2021-01-02 10:11:12	DAZ	NULL
+2021-01-02 10:11:12	HA	NULL
+2021-01-02 10:11:12	H12	NULL
+2021-01-02 10:11:12	H24	NULL
+2021-01-02 10:11:12	MIC	NULL
+drop table t1;
+select trunc(to_date('2021-05-06','yyyy-mm-dd')) from dual;
+trunc(to_date('2021-05-06','yyyy-mm-dd'))
+2021-05-06 00:00:00
+select trunc(to_date('2021-03-02 10:11:12','yyyy-mm-dd HH24:MI:SS'), 'YEAR') from dual;
+trunc(to_date('2021-03-02 10:11:12','yyyy-mm-dd HH24:MI:SS'), 'YEAR')
+2021-01-01 00:00:00
+select trunc(to_date('03-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'month') from dual;
+trunc(to_date('03-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'month')
+0003-01-01 00:00:00
+select trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'MI') from dual;
+trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'MI')
+0003-01-02 08:11:00
+select trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'HH') from dual;
+trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'HH')
+0003-01-02 08:00:00
+select trunc(to_date('2003-01-02 23:11:12','yyyy-mm-dd HH24:MI:SS'), 'HH12') from dual;
+trunc(to_date('2003-01-02 23:11:12','yyyy-mm-dd HH24:MI:SS'), 'HH12')
+2003-01-02 23:00:00
+select trunc(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q') from dual;
+trunc(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q')
+1998-01-01 00:00:00
+select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY') from dual;
+trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY')
+1929-12-29 00:00:00
+select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg') from dual;
+trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg')
+NULL
+select trunc('-1.4', '-1') from dual;
+trunc('-1.4', '-1')
+0
+select trunc('-1.4', '-2') from dual;
+trunc('-1.4', '-2')
+0
+set @a=123.456;
+select trunc(@a, @a) from dual;
+trunc(@a, @a)
+123.456
+set @a=123.456000;
+select trunc(@a, 4) from dual;
+trunc(@a, 4)
+123.456
+select trunc(@a, 5) from dual;
+trunc(@a, 5)
+123.456
+set @a=-123.456000;
+select trunc(@a, 4) from dual;
+trunc(@a, 4)
+-123.456
+select trunc(@a, 5) from dual;
+trunc(@a, 5)
+-123.456
+select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH24:MI:SS'),'') from dual;
+trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH24:MI:SS'),'')
+NULL
+select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH24:MI:SS'),null) from dual;
+trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH24:MI:SS'),null)
+NULL
+select trunc(null, 'aaa') from dual;
+trunc(null, 'aaa')
+NULL
+select trunc(null, null) from dual;
+trunc(null, null)
+NULL
+select trunc(123.456, null) from dual;
+trunc(123.456, null)
+NULL
+select trunc(123.456,'') from dual;
+trunc(123.456,'')
+NULL
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: ''
+create procedure p_trunc()
+begin
+SELECT trunc(123.456, 1) FROM dual;
+SELECT trunc(123.456, 2) FROM dual;
+SELECT trunc(123.456, 3) FROM dual;
+SELECT trunc(123.456, 4) FROM dual;
+SELECT trunc(123.456, 0) FROM dual;
+SELECT trunc(123.456, -1) FROM dual;
+SELECT trunc(123.456, -2) FROM dual;
+SELECT trunc(123.456, -3) FROM dual;
+SELECT trunc(123.456, -4) FROM dual;
+SELECT trunc(.456, 1) FROM dual;
+SELECT trunc(.456, 2) FROM dual;
+SELECT trunc(.456, 3) FROM dual;
+select trunc(to_date('2021-05-06','yyyy-mm-dd')) from dual;
+select trunc(to_date('2021-03-02 10:11:12','yyyy-mm-dd HH24:MI:SS'), 'YEAR') from dual;
+select trunc(to_date('03-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'month') from dual;
+select trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'MI') from dual;
+select trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'HH') from dual;
+select trunc(to_date('2003-01-02 23:11:12','yyyy-mm-dd HH24:MI:SS'), 'HH12') from dual;
+select trunc(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q') from dual;
+select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY') from dual;
+select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg') from dual;
+end;//
+call p_trunc//
+trunc(123.456, 1)
+123.4
+trunc(123.456, 2)
+123.45
+trunc(123.456, 3)
+123.456
+trunc(123.456, 4)
+123.456
+trunc(123.456, 0)
+123
+trunc(123.456, -1)
+120
+trunc(123.456, -2)
+100
+trunc(123.456, -3)
+0
+trunc(123.456, -4)
+0
+trunc(.456, 1)
+0.4
+trunc(.456, 2)
+0.45
+trunc(.456, 3)
+0.456
+trunc(to_date('2021-05-06','yyyy-mm-dd'))
+2021-05-06 00:00:00
+trunc(to_date('2021-03-02 10:11:12','yyyy-mm-dd HH24:MI:SS'), 'YEAR')
+2021-01-01 00:00:00
+trunc(to_date('03-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'month')
+0003-01-01 00:00:00
+trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'MI')
+0003-01-02 08:11:00
+trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'HH')
+0003-01-02 08:00:00
+trunc(to_date('2003-01-02 23:11:12','yyyy-mm-dd HH24:MI:SS'), 'HH12')
+2003-01-02 23:00:00
+trunc(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q')
+1998-01-01 00:00:00
+trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY')
+1929-12-29 00:00:00
+trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg')
+NULL
+drop procedure p_trunc//
+set sql_mode=oracle;
+SELECT trunc(123.456, 1) FROM dual;
+trunc(123.456, 1)
+123.4
+SELECT trunc(123.456, 2) FROM dual;
+trunc(123.456, 2)
+123.45
+SELECT trunc(123.456, 3) FROM dual;
+trunc(123.456, 3)
+123.456
+SELECT trunc(123.456, 4) FROM dual;
+trunc(123.456, 4)
+123.456
+SELECT trunc(123.456, 0) FROM dual;
+trunc(123.456, 0)
+123
+SELECT trunc(123.456, -1) FROM dual;
+trunc(123.456, -1)
+120
+SELECT trunc(123.456, -2) FROM dual;
+trunc(123.456, -2)
+100
+SELECT trunc(123.456, -3) FROM dual;
+trunc(123.456, -3)
+0
+SELECT trunc(123.456, -4) FROM dual;
+trunc(123.456, -4)
+0
+SELECT trunc(.456, 1) FROM dual;
+trunc(.456, 1)
+0.4
+SELECT trunc(.456, 2) FROM dual;
+trunc(.456, 2)
+0.45
+SELECT trunc(.456, 3) FROM dual;
+trunc(.456, 3)
+0.456
+select trunc(to_date('2021-05-06','yyyy-mm-dd')) from dual;
+trunc(to_date('2021-05-06','yyyy-mm-dd'))
+2021-05-06 00:00:00
+select trunc(to_date('2021-03-02 10:11:12','yyyy-mm-dd HH24:MI:SS'), 'YEAR') from dual;
+trunc(to_date('2021-03-02 10:11:12','yyyy-mm-dd HH24:MI:SS'), 'YEAR')
+2021-01-01 00:00:00
+select trunc(to_date('03-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'month') from dual;
+trunc(to_date('03-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'month')
+0003-01-01 00:00:00
+select trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'MI') from dual;
+trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'MI')
+0003-01-02 08:11:00
+select trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'HH') from dual;
+trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'HH')
+0003-01-02 08:00:00
+select trunc(to_date('2003-01-02 23:11:12','yyyy-mm-dd HH24:MI:SS'), 'HH12') from dual;
+trunc(to_date('2003-01-02 23:11:12','yyyy-mm-dd HH24:MI:SS'), 'HH12')
+2003-01-02 23:00:00
+select trunc(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q') from dual;
+trunc(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q')
+1998-01-01 00:00:00
+select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY') from dual;
+trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY')
+1929-12-29 00:00:00
+select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg') from dual;
+trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg')
+NULL
+testcases for  Bug#2758
+set timestamp to '2021-12-01 10:00:00'
+set timestamp = 1638324000;
+create table test (c1 datetime);
+insert into test values('2021-11-30');
+insert into test values('2021-12-01');
+insert into test values('2021-12-02');
+set sql_mode=oracle;
+select trunc(sysdate) + 10 from dual;
+trunc(sysdate) + 10
+2021-12-11 00:00:00
+select trunc(sysdate) + 10 from dual;
+trunc(sysdate) + 10
+2021-12-11 00:00:00
+select trunc(now(6)) + 10 from dual;
+trunc(now(6)) + 10
+2021-12-11 00:00:00
+select trunc(now(6)) - 10 from dual;
+trunc(now(6)) - 10
+2021-11-21 00:00:00
+select * from test where trunc(c1) <> c1;
+c1
+select * from test where trunc(sysdate) = c1;
+c1
+2021-12-01 00:00:00
+select * from test where trunc(sysdate) < c1;
+c1
+2021-12-02 00:00:00
+select * from test where trunc(sysdate) > c1;
+c1
+2021-11-30 00:00:00
+select * from test where trunc(sysdate) <> c1;
+c1
+2021-11-30 00:00:00
+2021-12-02 00:00:00
+select * from test where trunc(sysdate+1) = c1;
+c1
+2021-12-02 00:00:00
+select * from test where trunc(sysdate+1) > c1;
+c1
+2021-11-30 00:00:00
+2021-12-01 00:00:00
+select * from test where trunc(sysdate+1) <> c1;
+c1
+2021-11-30 00:00:00
+2021-12-01 00:00:00
+select * from test where trunc(sysdate-1) = c1;
+c1
+2021-11-30 00:00:00
+select * from test where trunc(sysdate-1) > c1;
+c1
+select * from test where trunc(sysdate-1) <> c1;
+c1
+2021-12-01 00:00:00
+2021-12-02 00:00:00
+select * from test where c1 = trunc(sysdate);
+c1
+2021-12-01 00:00:00
+select * from test where c1 > trunc(sysdate);
+c1
+2021-12-02 00:00:00
+select * from test where c1 < trunc(sysdate);
+c1
+2021-11-30 00:00:00
+select * from test where c1 <> trunc(sysdate);
+c1
+2021-11-30 00:00:00
+2021-12-02 00:00:00
+create table t1(userid int, login_time datetime);
+create table t2(id int, name varchar(20));
+insert into t1 values (1, trunc(sysdate));
+insert into t1 values (2, trunc(sysdate+1));
+insert into t1 values (3, trunc(sysdate)+2);
+insert into t2 values (1, 'nathan');
+select userid, login_time from t1
+where userid in (
+select id from t2
+where  trunc(t1.login_time) = '2021-12-02'
+);
+userid	login_time
+update t1 set login_time=trunc(sysdate+10,'DD')
+where userid = 1;
+update t1 set login_time=trunc(sysdate-10,'DD')
+where userid = 2;
+select userid, login_time from t1;
+userid	login_time
+1	2021-12-11 00:00:00
+2	2021-11-21 00:00:00
+3	2021-12-03 00:00:00
+drop table t1, t2;
+set sql_mode=default;
+select * from test where trunc(c1) <> c1;
+c1
+select * from test where trunc(now()) = c1;
+c1
+2021-12-01 00:00:00
+select * from test where trunc(now()) < c1;
+c1
+2021-12-02 00:00:00
+select * from test where trunc(now()) > c1;
+c1
+2021-11-30 00:00:00
+select * from test where trunc(now()) <> c1;
+c1
+2021-11-30 00:00:00
+2021-12-02 00:00:00
+select * from test where trunc(now());
+c1
+2021-11-30 00:00:00
+2021-12-01 00:00:00
+2021-12-02 00:00:00
+select trunc(now()) + 0 from dual;
+trunc(now()) + 0
+20211201000000
+select trunc(now()) + interval 1 day from dual;
+trunc(now()) + interval 1 day
+2021-12-02 00:00:00
+drop table test;
+select trunc(to_date('2023-03-27 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as trunc_iw_date from dual;
+trunc_iw_date
+2023-03-27 00:00:00
+select trunc(to_date('2023-03-28 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as trunc_iw_date from dual;
+trunc_iw_date
+2023-03-27 00:00:00
+select trunc(to_date('2023-03-29 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as trunc_iw_date from dual;
+trunc_iw_date
+2023-03-27 00:00:00
+select trunc(to_date('2023-03-30 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as trunc_iw_date from dual;
+trunc_iw_date
+2023-03-27 00:00:00
+select trunc(to_date('2023-03-31 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as trunc_iw_date from dual;
+trunc_iw_date
+2023-03-27 00:00:00
+select trunc(to_date('2023-04-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as trunc_iw_date from dual;
+trunc_iw_date
+2023-03-27 00:00:00
+select trunc(to_date('2023-04-02 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as trunc_iw_date from dual;
+trunc_iw_date
+2023-03-27 00:00:00
+select trunc(to_date('2023-04-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as trunc_iw_date from dual;
+trunc_iw_date
+2023-04-03 00:00:00
+select trunc(to_date('2017-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as trunc_ww_date from dual;
+trunc_ww_date
+2017-04-02 00:00:00
+select trunc(to_date('2018-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as trunc_ww_date from dual;
+trunc_ww_date
+2018-04-02 00:00:00
+select trunc(to_date('2019-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as trunc_ww_date from dual;
+trunc_ww_date
+2019-04-02 00:00:00
+select trunc(to_date('2020-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as trunc_ww_date from dual;
+trunc_ww_date
+2020-04-08 00:00:00
+select trunc(to_date('2015-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as trunc_ww_date from dual;
+trunc_ww_date
+2015-04-02 00:00:00
+select trunc(to_date('2021-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as trunc_ww_date from dual;
+trunc_ww_date
+2021-04-02 00:00:00
+select trunc(to_date('2022-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as trunc_ww_date from dual;
+trunc_ww_date
+2022-04-02 00:00:00
+select trunc(to_date('2022-04-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as trunc_ww_date from dual;
+trunc_ww_date
+2022-04-02 00:00:00
+select trunc(to_date('2022-04-04 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as trunc_ww_date from dual;
+trunc_ww_date
+2022-04-02 00:00:00
+select trunc(to_date('2022-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as trunc_ww_date from dual;
+trunc_ww_date
+2022-04-02 00:00:00
+select trunc(to_date('2022-04-09 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as trunc_ww_date from dual;
+trunc_ww_date
+2022-04-09 00:00:00
+select to_char(trunc(to_date('2017-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+weekday
+1
+select to_char(trunc(to_date('2018-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+weekday
+2
+select to_char(trunc(to_date('2019-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+weekday
+3
+select to_char(trunc(to_date('2020-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+weekday
+4
+select to_char(trunc(to_date('2015-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+weekday
+5
+select to_char(trunc(to_date('2021-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+weekday
+6
+select to_char(trunc(to_date('2022-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+weekday
+7
+select trunc(to_date('2023-04-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as trunc_w_date from dual;
+trunc_w_date
+2023-04-01 00:00:00
+select trunc(to_date('2023-04-04 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as trunc_w_date from dual;
+trunc_w_date
+2023-04-01 00:00:00
+select trunc(to_date('2023-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as trunc_w_date from dual;
+trunc_w_date
+2023-04-08 00:00:00
+select trunc(to_date('2023-04-09 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as trunc_w_date from dual;
+trunc_w_date
+2023-04-08 00:00:00
+select to_char(trunc(to_date('2023-01-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+weekday
+1
+select to_char(trunc(to_date('2023-05-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+weekday
+2
+select to_char(trunc(to_date('2023-08-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+weekday
+3
+select to_char(trunc(to_date('2023-02-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+weekday
+4
+select to_char(trunc(to_date('2023-06-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+weekday
+5
+select to_char(trunc(to_date('2023-09-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+weekday
+6
+select to_char(trunc(to_date('2023-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+weekday
+7
+select trunc(to_date('2023-01-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as trunc_w_date from dual;
+trunc_w_date
+2023-01-01 00:00:00
+select trunc(to_date('2023-05-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as trunc_w_date from dual;
+trunc_w_date
+2023-05-08 00:00:00
+select trunc(to_date('2023-08-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as trunc_w_date from dual;
+trunc_w_date
+2023-08-08 00:00:00
+select trunc(to_date('2023-02-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as trunc_w_date from dual;
+trunc_w_date
+2023-02-08 00:00:00
+select trunc(to_date('2023-06-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as trunc_w_date from dual;
+trunc_w_date
+2023-06-08 00:00:00
+select trunc(to_date('2021-09-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as trunc_w_date from dual;
+trunc_w_date
+2021-09-08 00:00:00
+select trunc(to_date('2020-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as trunc_w_date from dual;
+trunc_w_date
+2020-04-08 00:00:00
+select trunc(to_date('2010-01-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2008-12-29 00:00:00
+select trunc(to_date('1977-01-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+1975-12-29 00:00:00
+select trunc(to_date('2017-01-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2016-01-04 00:00:00
+select trunc(to_date('2018-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2018-01-01 00:00:00
+select trunc(to_date('2019-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2018-12-31 00:00:00
+select trunc(to_date('2020-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2019-12-30 00:00:00
+select trunc(to_date('2015-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2014-12-29 00:00:00
+select trunc(to_date('2021-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2021-01-04 00:00:00
+select trunc(to_date('2022-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2022-01-03 00:00:00
+select trunc(to_date('2022-12-29 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2022-01-03 00:00:00
+select trunc(to_date('2022-12-30 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2022-01-03 00:00:00
+select trunc(to_date('2022-12-31 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2022-01-03 00:00:00
+select trunc(to_date('2023-01-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2022-01-03 00:00:00
+select trunc(to_date('2023-01-02 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2023-01-02 00:00:00
+select trunc(to_date('2023-01-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2023-01-02 00:00:00
+select trunc(to_date('2023-01-04 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+2023-01-02 00:00:00
+select trunc(to_date('1900-01-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as trunc_iy_date from dual;
+trunc_iy_date
+1900-01-01 00:00:00
+select trunc(date('1582-10-15'),'iy') as trunc_date from dual;
+trunc_date
+1582-01-01 00:00:00
+select trunc(date('1582-10-15'),'iw') as trunc_date from dual;
+trunc_date
+1582-10-01 00:00:00
+select trunc(date('1582-10-15'),'ww') as trunc_date from dual;
+trunc_date
+1582-10-15 00:00:00
+select trunc(date('1582-10-15'),'w')  as trunc_date from dual;
+trunc_date
+1582-10-15 00:00:00
+select trunc(date('1582-10-05'),'iy') as trunc_date from dual;
+trunc_date
+1582-01-01 00:00:00
+select trunc(date('1582-10-05'),'iw') as trunc_date from dual;
+trunc_date
+1582-10-01 00:00:00
+select trunc(date('1582-10-05'),'ww') as trunc_date from dual;
+trunc_date
+1582-10-15 00:00:00
+select trunc(date('1582-10-05'),'w')  as trunc_date from dual;
+trunc_date
+1582-10-15 00:00:00
+select trunc(date('1582-10-04'),'iy') as trunc_date from dual;
+trunc_date
+1582-01-01 00:00:00
+select trunc(date('1582-10-04'),'iw') as trunc_date from dual;
+trunc_date
+1582-10-01 00:00:00
+select trunc(date('1582-10-04'),'ww') as trunc_date from dual;
+trunc_date
+1582-10-01 00:00:00
+select trunc(date('1582-10-04'),'w')  from dual;
+trunc(date('1582-10-04'),'w')
+1582-10-01 00:00:00
+select trunc(date('1582-11-08'),'iy') as trunc_date from dual;
+trunc_date
+1582-01-01 00:00:00
+select trunc(date('1582-11-08'),'iw') as trunc_date from dual;
+trunc_date
+1582-11-08 00:00:00
+select trunc(date('1582-11-08'),'ww') as trunc_date from dual;
+trunc_date
+1582-11-05 00:00:00
+select trunc(date('1582-11-08'),'w')  as trunc_date from dual;
+trunc_date
+1582-11-08 00:00:00
+select trunc(date('0001-01-01'),'ww') as trunc_date from dual;
+trunc_date
+0001-01-01 00:00:00
+select trunc(date('0001-01-01'),'w')  as trunc_date from dual;
+trunc_date
+0001-01-01 00:00:00
+
+=== trunc(date) warnings ===
+select trunc(date('0001-01-01'),'iy') as trunc_date from dual;
+trunc_date
+NULL
+Warnings:
+Warning	1441	Datetime function: trunc field overflow
+select trunc(date('0001-01-01'),'iw') as trunc_date from dual;
+trunc_date
+NULL
+Warnings:
+Warning	1441	Datetime function: trunc field overflow
+select trunc(date('0000-01-10'),'iy') as trunc_date from dual;
+trunc_date
+NULL
+Warnings:
+Warning	1441	Datetime function: trunc field overflow
+select trunc(date('0000-01-10'),'iw') as trunc_date from dual;
+trunc_date
+NULL
+Warnings:
+Warning	1441	Datetime function: trunc field overflow
+select trunc(date('0000-01-10'),'ww') as trunc_date from dual;
+trunc_date
+NULL
+Warnings:
+Warning	1441	Datetime function: trunc field overflow
+select trunc(date('0000-01-10'),'w')  as trunc_date from dual;
+trunc_date
+NULL
+Warnings:
+Warning	1441	Datetime function: trunc field overflow
+select trunc(date('0000-01-10'),'yy') as trunc_date from dual;
+trunc_date
+NULL
+Warnings:
+Warning	1441	Datetime function: trunc field overflow
+select trunc(date('0000-01-10'),'day') as trunc_date from dual;
+trunc_date
+NULL
+Warnings:
+Warning	1441	Datetime function: trunc field overflow
+select trunc(date('0000-01-10'),'dd') as trunc_date from dual;
+trunc_date
+NULL
+Warnings:
+Warning	1441	Datetime function: trunc field overflow
+select trunc(date('0000-01-10'),'hh') as trunc_date from dual;
+trunc_date
+NULL
+Warnings:
+Warning	1441	Datetime function: trunc field overflow
+select trunc(date('0000-01-10'),'mi') as trunc_date from dual;
+trunc_date
+NULL
+Warnings:
+Warning	1441	Datetime function: trunc field overflow

@@ -1,0 +1,88 @@
+--source include/have_group_replication_plugin.inc
+--source include/group_replication.inc
+
+connect (conn1_1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn1_2,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn1_3,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+--echo [connect conn1_1]
+--disable_query_log
+SET sql_log_bin=off;
+call mtr.add_suppression("This member could not reach a majority of the members for more than");
+call mtr.add_suppression("The server was automatically set into read only mode after an error was detected");
+call mtr.add_suppression("Skipping leave operation: concurrent attempt to leave the group is on-going");
+call mtr.add_suppression("Timeout while waiting for the group communication engine to exit");
+call mtr.add_suppression("The member has failed to gracefully leave the group");
+set sql_log_bin=on;
+--enable_query_log
+SET sql_log_bin=off;
+
+--echo [connect conn1_1]
+connection conn1_1;
+--let $conn_id=`SELECT connection_id()`
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+
+--source include/rpl_sync.inc
+
+--echo [connect conn1_1]
+connection conn1_1;
+INSERT INTO t1 VALUES (1,1),(2,2);
+BEGIN;
+send INSERT INTO t1 VALUES (3, sleep(1000));
+
+--echo [connect conn1_2]
+connection conn1_2;
+sleep 1;
+SET GLOBAL group_replication_unreachable_majority_timeout=10;
+
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--echo [server2 shutdown]
+--let $_server_id= `SELECT @@server_id`
+--let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.$_server_id.expect
+--let $mysqld_pid_file=`SELECT @@GLOBAL.pid_file`
+--source include/expect_crash.inc
+exec kill -9 `cat $mysqld_pid_file`;
+
+--echo [connect conn1_2]
+connection conn1_2;
+--let $wait_condition=select count(*)=1 from performance_schema.replication_group_members where member_state='ERROR' and member_id=@@server_uuid
+--source include/wait_condition.inc
+
+--echo [connect conn1_3]
+connection conn1_3;
+send stop group_replication;
+
+--echo [connect conn1_2]
+connection conn1_2;
+sleep 90;
+SET SESSION group_replication_consistency='EVENTUAL';
+--replace_result $conn_id conn_id
+eval SET @conn_id=$conn_id;
+KILL @conn_id;
+
+
+--echo [connect conn1_1]
+connection conn1_1;
+--error 2013
+reap;
+
+
+--echo [connect conn1_3]
+connection conn1_3;
+reap;
+SELECT @@super_read_only;
+SET GLOBAL super_read_only=OFF;
+DROP TABLE t1;
+SET GLOBAL group_replication_unreachable_majority_timeout = 0;
+
+--echo [start server2]
+--source include/start_mysqld.inc
+--let $rpl_server_number= 2
+--source include/rpl_reconnect.inc
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+DROP TABLE t1;
+
+
+--source include/group_replication_end.inc

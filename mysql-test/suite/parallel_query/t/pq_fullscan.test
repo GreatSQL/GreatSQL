@@ -1,0 +1,48 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+create database pq_test;
+use pq_test;
+
+create table t1(
+        id int primary key auto_increment,
+        col1 varchar(100),
+        col2 int,
+        key idx_col2(col2)
+ )engine= innodb;
+
+--disable_query_log
+ let $loop=100;
+ while($loop)
+ {
+  eval insert into pq_test.t1(col1, col2) values(repeat('test', 4), $loop);
+  dec $loop;
+ }
+--enable_query_log
+
+show variables like 'force_parallel_execute';
+select count(*) from pq_test.t1;
+
+select * from pq_test.t1 limit 1;
+
+--disable_result_log
+select * from pq_test.t1;
+--enable_result_log
+
+--disable_result_log
+select id, col2 from pq_test.t1 force index(idx_col2);
+--enable_result_log
+
+SELECT * FROM t1 WHERE id IN (1, 10, 20, 80, 90, 100, 30, 40, 50, 60, 70);
+
+drop table pq_test.t1;
+drop database pq_test;
+
+## typecast ##
+use test;
+
+create table t1( firstname char(20), lastname char(20));
+insert into t1 values ("john","doe"),("John","Doe");
+select * from t1 where firstname='john' and binary 'john' = firstname;
+
+drop table t1;

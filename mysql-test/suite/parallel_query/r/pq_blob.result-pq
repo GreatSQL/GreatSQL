@@ -1,0 +1,27 @@
+create database pq_test;
+use pq_test;
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t2(d varchar(17) PRIMARY KEY) ENGINE=innodb DEFAULT CHARSET=utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+CREATE TABLE t3(a int PRIMARY KEY) ENGINE=innodb;
+INSERT INTO t3 VALUES (22),(44),(33),(55),(66);
+INSERT INTO t2 VALUES ('jejdkrun87'),('adfd72nh9k'), ('adfdpplkeock'),('adfdijnmnb78k'),('adfdijn0loKNHJik');
+CREATE TABLE t1(a int, b blob, c text, d text NOT NULL) ENGINE=innodb DEFAULT CHARSET=utf8 STATS_PERSISTENT=0;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+INSERT INTO t1 SELECT a,LEFT(REPEAT(d,100*a),65535),REPEAT(d,20*a),d FROM t2,t3 order by a, d;
+DROP TABLE t2, t3;
+DELETE FROM t1 WHERE d='null';
+DELETE FROM t1 WHERE a%2;
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+pq_test.t1	check	status	OK
+ALTER TABLE t1 ADD PRIMARY KEY (a,b(255),c(255)), ADD KEY (b(767));
+set force_parallel_execute=1;
+set parallel_cost_threshold=0;
+SELECT COUNT(*) FROM t1 WHERE a=44;
+COUNT(*)
+5
+drop table pq_test.t1;
+drop database pq_test;

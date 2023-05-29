@@ -1,0 +1,136 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+[connection server2]
+include/start_group_replication.inc
+[connection server1]
+CREATE TABLE t1 (c11 INT PRIMARY KEY, c12 INT);
+CREATE TABLE t2 (c21 INT PRIMARY KEY, c22 INT, CONSTRAINT c23 FOREIGN KEY (c22) REFERENCES t1 (c11) ON DELETE CASCADE ON UPDATE CASCADE);
+INSERT INTO t1 VALUES (1,1),(2,2);
+[connect conn1_1]
+BEGIN;
+SELECT * FROM t1;
+c11	c12
+1	1
+2	2
+INSERT INTO t1 VALUES (3,3);
+[connect conn2_1]
+DO group_replication_set_as_primary(@@server_uuid);
+[connect conn1_1]
+COMMIT;
+ERROR HY000: The MySQL server is running with the --super-read-only option so it cannot execute this statement
+## change back for next test
+DO group_replication_set_as_primary(@@server_uuid);
+[connect conn1_1]
+SET @old_iso=@@transaction_isolation;
+SET SESSION transaction_isolation = 'SERIALIZABLE';
+BEGIN;
+INSERT INTO t1 VALUES (4,4);
+[connect conn2_1]
+DO group_replication_set_as_primary(@@server_uuid);
+[connect conn1_2]
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+member_host	member_port	member_state	member_role
+127.0.0.1	port_1	ONLINE	PRIMARY
+127.0.0.1	port_2	ONLINE	SECONDARY
+SELECT @@super_read_only;
+@@super_read_only
+0
+[connect conn2_2]
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+member_host	member_port	member_state	member_role
+127.0.0.1	port_1	ONLINE	PRIMARY
+127.0.0.1	port_2	ONLINE	SECONDARY
+SELECT @@super_read_only;
+@@super_read_only
+1
+[connect conn1_1]
+COMMIT;
+[connect conn2_1]
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+member_host	member_port	member_state	member_role
+127.0.0.1	port_1	ONLINE	SECONDARY
+127.0.0.1	port_2	ONLINE	PRIMARY
+[connect conn1_1]
+SET @@transaction_isolation=@old_iso;
+## change back for next test
+DO group_replication_set_as_primary(@@server_uuid);
+[connect conn1_1]
+SET debug='+d,wait_before_commit';
+BEGIN;
+INSERT INTO t1 VALUES (5,5);
+COMMIT;
+[connect conn1_2]
+SET debug_sync='now WAIT_FOR reach_sync';
+[connect conn2_1]
+DO group_replication_set_as_primary(@@server_uuid);
+[connect conn1_2]
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+member_host	member_port	member_state	member_role
+127.0.0.1	port_1	ONLINE	PRIMARY
+127.0.0.1	port_2	ONLINE	SECONDARY
+SELECT @@super_read_only;
+@@super_read_only
+0
+[connect conn2_2]
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+member_host	member_port	member_state	member_role
+127.0.0.1	port_1	ONLINE	PRIMARY
+127.0.0.1	port_2	ONLINE	SECONDARY
+SELECT @@super_read_only;
+@@super_read_only
+1
+[connect conn1_2]
+SET debug_sync='now SIGNAL end_sync';
+[connect conn1_1]
+[connect conn2_1]
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+member_host	member_port	member_state	member_role
+127.0.0.1	port_1	ONLINE	SECONDARY
+127.0.0.1	port_2	ONLINE	PRIMARY
+[connect conn1_1]
+SET debug='-d,wait_before_commit';
+SET @@transaction_isolation=@old_iso;
+## change back for next test
+DO group_replication_set_as_primary(@@server_uuid);
+[connect conn1_1]
+BEGIN;
+INSERT INTO t1 VALUES (6,6);
+INSERT INTO t2 VALUES (1,1);
+[connect conn2_1]
+DO group_replication_set_as_primary(@@server_uuid);
+[connect conn1_2]
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+member_host	member_port	member_state	member_role
+127.0.0.1	port_1	ONLINE	PRIMARY
+127.0.0.1	port_2	ONLINE	SECONDARY
+SELECT @@super_read_only;
+@@super_read_only
+0
+[connect conn2_2]
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+member_host	member_port	member_state	member_role
+127.0.0.1	port_1	ONLINE	PRIMARY
+127.0.0.1	port_2	ONLINE	SECONDARY
+SELECT @@super_read_only;
+@@super_read_only
+1
+[connect conn1_1]
+COMMIT;
+[connect conn2_1]
+SELECT member_host, member_port, member_state, member_role FROM performance_schema.replication_group_members;
+member_host	member_port	member_state	member_role
+127.0.0.1	port_1	ONLINE	SECONDARY
+127.0.0.1	port_2	ONLINE	PRIMARY
+[connect conn1_1]
+SET @@transaction_isolation=@old_iso;
+## change back for next test
+DO group_replication_set_as_primary(@@server_uuid);
+[connection server1]
+DROP TABLE t2;
+DROP TABLE t1;
+include/group_replication_end.inc

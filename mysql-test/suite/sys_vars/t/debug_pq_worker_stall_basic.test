@@ -1,0 +1,14 @@
+--source include/have_debug.inc
+--echo #
+--echo # debug_pq_worker_stall_basic.test
+--echo #
+
+SELECT @@global.debug_pq_worker_stall;
+show variables like '%debug_pq_worker_stall%';
+
+--error ER_GLOBAL_VARIABLE
+set debug_pq_worker_stall=1;
+
+set global debug_pq_worker_stall=1;
+SELECT @@global.debug_pq_worker_stall;
+set global debug_pq_worker_stall=0;

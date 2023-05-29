@@ -1,0 +1,323 @@
+## Oracle rownum
+
+create table t2(ida int, age int, name varchar(10));
+insert into t2 values(1, 2, 'a');
+insert into t2 values(2, 5, 'b');
+insert into t2 values(NULL, 1, '');
+insert into t2 values(1, 5, 'c');
+insert into t2 values(NULL, NULL, '');
+insert into t2 values(2, 3, 'c');
+insert into t2 values(3, 7, 'ccc');
+insert into t2 values(5, 4, 'd');
+insert into t2 values(9, NULL, 'NULL');
+
+--error 1054
+select t2.rownum from t2;
+--error 1054
+select rownum rn from t2 where rn < 4;
+
+select * from t2;
+select * from t2 where rownum < 4;
+select * from t2 where ida = 2 and rownum < 2;
+
+select * from t2 where rownum >=1;
+select * from t2 where rownum =1;
+select * from t2 where rownum =2;
+select * from t2 where rownum > 1;
+select * from t2 where rownum between 1 and 5;
+select * from t2 where rownum < 4 and rownum > 2;
+select * from t2 where rownum < 4 and rownum >=1;
+select * from t2 where rownum is not null;
+select * from t2 where age < 5 and rownum = 3;
+select * from t2 where age < 5 and rownum+1 < 5;
+select * from t2 where age < 5 and rownum+1 >=2;
+select * from (select * from t2 where rownum <=5 and age < 5) t where rownum < 6;
+select rownum , t2.* from t2 where rownum < 5 and rownum >=1;
+
+## sort operation after rownum, requires temp table before sort.
+select rownum, age from t2 where age < 10 order by ida;
+select rownum, age from t2 where age < 10 order by ida, rownum;
+select ida, age from t2 order by rownum;
+
+
+select * from (select rownum rn, ida from t2 group by ida, rownum) t2 where t2.rn > 2 order by 1;
+select * from (select * from t2 where rownum<6)t  where rownum > 2;
+select * from (select * from t2 where rownum<6)t  where rownum >=1;
+
+select * from t2 where ida < 8 and age < 6 and rownum < 4;
+select * from t2 where rownum < 4 and age < 6 and ida < 8;
+
+select rownum from t2 where rownum < 10 group by rownum having rownum>2;
+select rownum, count(*) from t2 group by ida, rownum;
+select concat(rownum, rownum+1) from t2 where rownum < 5;
+select rownum, if(ida > 3, rownum, rownum), ida from t2;
+select ida, rownum, case ida when 1 then 1 when 2 then rownum else rownum end as c1 from t2;
+select ida, rownum, case ida when 1 then 1 when 2 then rownum else rownum end as c1 from t2 where rownum< ida;
+select ida from t2 order by rownum desc;
+select ida from t2 where rownum < 6 order by rownum desc;
+select rownum+1, ida from t2 order by rownum desc;
+
+select * from (select * from t2 where rownum <=3 ) t where age < 5;
+select * from (select rownum rn, t2.*  from t2) t where age < 5 and t.rn < 4; 
+select * from (select rownum rn , t2.* from t2) t where t.rn < 4;
+
+select * from t2 join t2 t3 on t2.ida = t3.ida and rownum < t2.age;
+select * from t2 join t2 t3 on t2.ida = t3.ida and rownum < 5;
+select * from t2 where rownum < age;
+select rownum, t2.* from t2 where rownum < ida;
+select * from t2 where rownum > ida;
+select * from (select rownum rn , ida from t2) t1 left join t2 on t1.rn = t2.age;
+select * from t2 t1 join t2 on t1.ida = t2.ida and rownum < 4;
+select ida, count(*) from t2 where age < 6 and rownum < 8 group by ida;
+select ida, count(*) from t2 where age < 6 and rownum < 8 group by ida, rownum;
+select * from t2 where concat(rownum, 1) < '2';
+select * from t2 t1 left join t2 on t1.ida = t2.age where (case when rownum < 5 then rownum else 0 end) <  2;
+
+## explain 
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select * from t2 where ida < 8 and age < 6 and rownum < 4;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select * from (select * from t2 where rownum <=3 ) t where age < 5;
+
+## no support.
+--error 1235
+select * from t2 t1 where t1.ida in (select ida from t2 where rownum < t1.age); 
+--error 1235
+select * from t2 t1 where t1.ida in (select ida from t2 where rownum < 5);
+--error 1235
+select * from t2 t1 where ida in (select rownum from t2 where age < t1.age);
+--error 1235
+select * from t2 t1 left join t2 on t1.ida = t2.ida and rownum < 3; 
+--error 1235
+select * from t2 t1 where exists (select rownum from t2);
+--error 1235
+select * from t2 t1 where ida not in (select * from t2 where rownum < 10);
+--error 1242
+select (select rownum from t2 where age = t2.age) from t2 t1;
+
+drop table t2;
+CREATE TABLE t2
+   (EMPNO decimal(4,0),
+	ENAME VARCHAR(30),
+	JOB VARCHAR(30),
+	MGR decimal(4,0),
+	HIREDATE DATE,
+	SAL decimal(7,2),
+	COMM decimal(7,2),
+	DEPTNO decimal(2,0)
+   ) ;
+
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7369,'SMITH','CLERK',7902,to_date('17-Dec-80','DD-MON-RR'),800,null,20);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7499,'ALLEN','SALESMAN',7698,to_date('20-Feb -81','DD-MON-RR'),1600,300,30);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7521,'WARD','SALESMAN',7698,to_date('22-Feb -81','DD-MON-RR'),1250,500,30);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7566,'JONES','MANAGER',7839,to_date('02-Apr -81','DD-MON-RR'),2975,null,20);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7654,'MARTIN','SALESMAN',7698,to_date('28-Sep -81','DD-MON-RR'),1250,1400,30);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7698,'BLAKE','MANAGER',7839,to_date('01-May -81','DD-MON-RR'),2850,null,30);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7782,'CLARK','MANAGER',7839,to_date('09-Jun -81','DD-MON-RR'),2450,null,10);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7788,'test','ANALYST',7566,to_date('19-Apr -87','DD-MON-RR'),3000,null,20);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7839,'KING','PRESIDENT',null,to_date('17-Jan-81','DD-MON-RR'),5000,null,10);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7844,'TURNER','SALESMAN',7698,to_date('08-Sep -81','DD-MON-RR'),1500,0,30);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7876,'ADAMS','CLERK',7788,to_date('23-May -87','DD-MON-RR'),1100,null,20);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7900,'JAMES','CLERK',7698,to_date('03-Dec-81','DD-MON-RR'),950,null,30);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7902,'FORD','ANALYST',7566,to_date('03-Dec-81','DD-MON-RR'),3000,null,20);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7934,'MILLER','CLERK',7782,to_date('23-Jan -82','DD-MON-RR'),1300,null,10);
+
+## bug1607
+select rownum,u.* from (select sal from t2 order by sal desc) u where rownum < 11 ;
+select u.* from (select rownum r,a.* from (select sal from t2 order by sal desc) a ) u where r > 11;
+--replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/
+explain format=tree select rownum,u.* from (select sal from t2 order by sal desc) u where rownum < 11 ;
+--replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/
+explain format=tree select u.* from (select rownum r,a.* from (select sal from t2 order by sal desc) a ) u where r > 11;
+
+## bug2102
+CREATE TABLE `tt1` (
+  `id` int NOT NULL,
+  `name` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`)
+);
+
+CREATE TABLE `t3` (
+  `user_id` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `type` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `price` int DEFAULT NULL,
+  `evaluation` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `buy_time` timestamp(6) NULL DEFAULT NULL
+);
+
+insert into t3 values(1, 'type2', 3, 'school', '2021-9-1');
+insert into t3 values(2, 'type2', 9, 'school_base', '2021-9-3');
+
+insert into tt1 values(1, 'a');
+insert into tt1 values(2, 'b');
+select *, rownum from tt1 info inner join t3 ord on info.id=ord.user_id where rownum<2 and rownum>=1 order by id;
+
+## clean up
+DROP TABLE t2;
+drop table t3;
+drop table tt1;
+
+create table t1(ida int primary key , age int);
+insert into t1 values(1, 2);
+insert into t1 values(2, 3);
+insert into t1 values(3, 4);
+
+create table t2(ida int, age int);
+insert into t2 values(2, 5);
+
+--error 1235
+select * from t2 where t2.ida in (select ida from t1 where rownum < 2);
+--error 1235
+select (select ida from t1 where age = t2.age and rownum <2) a from t2;
+--error 1235
+select (select ida from t1 where rownum < 2 union all select 1 from t1 where t2.age < 7 and rownum < 1) b from t2;
+--error 1235
+select * from t1 where ida = (select ida from t2 where rownum < 2 and age < t1.age);
+
+select (select ida from t1 where rownum = 1) a from t2;
+select (select ida from t1 where age < 5 and rownum < 2) a from t2;
+select (select ida from t1 where rownum < 2 union all select 1 from t1 where rownum < 1) b from t2;
+select (select count(*) from t1 union all select 1 from t1 where rownum < 1) b from t2;
+UPDATE t1 t set t.ida =(select ida+2 from t2 where rownum = 1) where t.ida =3;
+select *  from t1  where ida < (select ida from t2 where rownum = 1);
+select * from t1 where ida = (select ida from t2 where rownum < 2 and age < 10);
+insert into t1(ida, age) values (5,(select ida from t2 where t2.age = 5  and rownum = 1));
+delete from t1  where ida = (select ida from t2 where age < 10 and rownum = 1);
+delete from t1  where ida < (select ida from t2 where rownum = 1);
+select * from t1;
+
+drop table t1, t2;
+
+--echo
+--echo [## bug for order by using handler::position(), if contains rownum_filter]
+create table mk_eipmeans_file_info(
+    eip_id varchar(50) character set utf8mb4 collate utf8mb4_bin not null,
+    file_name varchar(100) character set utf8mb4 collate utf8mb4_bin,
+    eip_date datetime not null,
+    import_date datetime,
+    import_src varchar(10) character set utf8mb4 collate utf8mb4_bin,
+    deal_flag varchar(2) character set utf8mb4 collate utf8mb4_bin,
+    deal_time datetime,
+    is_sendmsg varchar(2) character set utf8mb4 collate utf8mb4_bin,
+    notice_msg varchar(256) character set utf8mb4 collate utf8mb4_bin,
+    check_result varchar(2) character set utf8mb4 collate utf8mb4_bin,
+    file_path text character set utf8mb4 collate utf8mb4_bin,
+    uuid varchar(64) character set utf8mb4 collate utf8mb4_bin not null,
+    busi_type varchar(10) character set utf8mb4 collate utf8mb4_bin,
+    temp_id varchar(10) character set utf8mb4 collate utf8mb4_bin,
+    fail_content longtext collate utf8mb4_bin,
+    means_content longtext collate utf8mb4_bin,
+    primary key(eip_id,import_src,eip_date),
+    key uuid(uuid)
+)default charset=utf8mb4 collate=utf8mb4_bin;
+
+insert into mk_eipmeans_file_info
+(eip_id,import_src,eip_date,uuid,deal_flag,file_path, fail_content, means_content)
+values
+('1001','101',from_unixtime(1640000009), '545ca774-90af-11ec-8547-2cf05daaf22a', '0', '/tmp/1001_101','','aaaaaaaaaa'),
+('1002','102',from_unixtime(1640000001), '545ca774-90af-11ec-8547-2cf05daaf220', '0', '/tmp/1002_102','','aaaaaaaaaa'),
+('1003','103',from_unixtime(1640000002), '545ca774-90af-11ec-8547-2cf05daaf221', '0', '/tmp/1003_103','','aaaaaaaaaa'),
+('1004','104',from_unixtime(1640000003), '545ca774-90af-11ec-8547-2cf05daaf222', '0', '/tmp/1004_104','','aaaaaaaaaa'),
+('1005','105',from_unixtime(1640000004), '545ca774-90af-11ec-8547-2cf05daaf223', '0', '/tmp/1005_105','','aaaaaaaaaa'),
+('1006','106',from_unixtime(1640000008), '545ca774-90af-11ec-8547-2cf05daaf224', '0', '/tmp/1006_106','','aaaaaaaaaa'),
+('1007','107',from_unixtime(1640000007), '545ca774-90af-11ec-8547-2cf05daaf225', '0', '/tmp/1007_107','','aaaaaaaaaa'),
+('1008','108',from_unixtime(1640000006), '545ca774-90af-11ec-8547-2cf05daaf226', '0', '/tmp/1008_108','','aaaaaaaaaa'),
+('1009','109',from_unixtime(1640000005), '545ca774-90af-11ec-8547-2cf05daaf227', '0', '/tmp/1009_109','','aaaaaaaaaa');
+
+--echo [# use blob/text column to trigger call handler::position() and handler::rnd_pos()]
+select uuid,means_content,busi_type,temp_id,eip_id from mk_eipmeans_file_info where deal_flag='0' and rownum < 5 order by eip_date;
+drop table mk_eipmeans_file_info;
+
+#fix bug3594
+create table t1(id int  not null auto_increment primary key, col1 varchar(200));
+insert into t1(col1) values ('test1');
+insert into t1(col1) values ('test2');
+create view v1  as select * from t1 where rownum <=2;
+select * from v1;
+show create view v1;
+
+drop table t1;
+drop view v1;
+
+create table t1(c1 int, c2 int);
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+insert into t1 values(3,3);
+select  rownum, t1.c1 from t1 join t1 t2 on rownum<t1.c1;
+select rownum, t1.c1 from t1 join t1 t2 on t1.c1 = rownum join t1 t3 on t2.c1 = t3.c1;
+select rownum, t1.c1 from t1 join t1 t2 on t1.c1 = rownum join t1 t3 on t2.c1 = t3.c1 where rownum < 3;
+drop table t1;
+
+##fixbug4564
+create table test(id int);
+insert into test values(1),(2),(3);
+delete from test where rownum < 2;
+select * from test;
+delete from test where id = rownum;
+delete from test where id > rownum;
+select * from test;
+
+create table t1(ida int, age int);
+insert into t1 values(1, 2), (2, 5), (3, 4), (4, 7);
+create table t2(id int);
+insert into t2 values(1), (2), (1);
+select * from t1 join  t2 on t1.ida = t2.id and t2.id >= rownum;
+analyze table t1, t2;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree delete t1, t2 from t1 join  t2 on t1.ida = t2.id and t2.id >= rownum;
+delete t1, t2 from t1 join  t2 on t1.ida = t2.id and t2.id >= rownum;
+select * from t1;
+select * from t2;
+
+create table hash1(c1 int primary key, c2 int) partition by hash(c1) partitions 4;
+insert into hash1 values(1,2),(3,4);
+update hash1 set c1=99 where rownum<2;
+
+create table normal(c1 int primary key, c2 int);
+insert into normal values(1,2),(3,4);
+update normal set c1=99 where rownum<2;
+drop table test, t1, t2, hash1, normal;
+
+##fixbug5469, bug5455
+select rownum, rownum+1 from dual;
+select rownum+1, rownum from dual;
+WITH recursive  a as (  SELECT  rownum as  id  FROM dual   UNION  SELECT  rownum  FROM  a  WHERE rownum < 10 ) SELECT * FROM a;
+
+
+##fixbug5958
+create table m1(id int,name varchar(50));
+insert into m1 values(1,10);
+insert into m1 values(1,20);
+insert into m1 values(1,20);
+insert into m1 values(2,20);
+insert into m1 values(3,200);
+insert into m1 values(3,500);
+
+create table m2(id int,name varchar(50));
+insert into m2 values(1,10);
+insert into m2 values(1,100);
+insert into m2 values(1,200);
+insert into m2 values(2,20);
+insert into m2 values(3,200);
+insert into m2 values(3,500);
+SELECT id,max(rownum) FROM m1 group by id;
+SELECT id,max(rownum) FROM m1 where rownum < 3 group by id;
+SELECT id,max(rownum), min(rownum+1) FROM m1 group by id;
+select max(rownum), min(rownum+1) from m1;
+drop table m1, m2;
+
+##bug7317
+CREATE TABLE t_hash (
+c1 int NOT NULL PRIMARY KEY ,
+c2 int
+);
+insert into t_hash values (1, 11);
+insert into t_hash values (2, 999999);
+insert into t_hash  values (3, 22222222);
+insert into t_hash  values (4, 444);
+insert into t_hash values (5, 88);
+(select rownum,c2 from t_hash) intersect (select  rownum,c2 from t_hash);
+(select rownum,c2 from t_hash) intersect (select  rownum,c2 from t_hash where rownum < 3);
+(select rownum,c2 from t_hash) union (select  rownum,c2 from t_hash where rownum < 3);
+(select rownum,c2 from t_hash) except (select  rownum,c2 from t_hash where rownum < 3);
+drop table t_hash;

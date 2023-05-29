@@ -1,0 +1,55 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connect conn1_1]
+SELECT @@auto_increment_increment INTO @old_increment;
+SET @@auto_increment_increment = 1;
+SELECT @@auto_increment_offset INTO @old_offset;
+SET @@auto_increment_offset = 1;
+SELECT @@group_replication_consistency INTO @old_replication_consistency;
+set global group_replication_consistency = 'BEFORE';
+CREATE TABLE t1 (
+c1 int auto_increment primary key,
+c2 int,
+str1 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('1',512)) NOT NULL,
+str2 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('2',512)) NOT NULL,
+str3 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('3',512)) NOT NULL,
+str4 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('4',512)) NOT NULL
+) engine=InnoDB
+partition by hash(c1) partitions 3;
+INSERT INTO t1 (c2) values (1),(2),(3),(4),(5),(6),(7),(8);
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+SELECT count(*) FROM t1;
+count(*)
+256
+SELECT * INTO OUTFILE 'tmp_dir/parallel_load_outfile.txt' FROM t1;
+TRUNCATE TABLE t1;
+SET @@gdb_parallel_load = on;
+SELECT @@gdb_parallel_load_chunk_size INTO @old_chunk_size;
+SET @@gdb_parallel_load_chunk_size = 65536;
+SET DEBUG_SYNC = 'gdb_parallel_load_start SIGNAL cond_end WAIT_FOR continue';
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt' INTO TABLE t1;
+[connect conn1_2]
+SET DEBUG_SYNC = 'now WAIT_FOR cond_end';
+[connect conn2]
+TRUNCATE TABLE t1;
+[connect conn1_2]
+SET DEBUG_SYNC = 'now SIGNAL continue';
+[connect conn1_1]
+ERROR HY000: parallel load data failed, cause worker execute error[Lock wait timeout exceeded; try restarting transaction]
+DROP TABLE t1;
+SET @@auto_increment_increment = @old_increment;
+SET @@auto_increment_offset = @old_offset;
+SET @@gdb_parallel_load = off;
+SET @@gdb_parallel_load_chunk_size = @old_chunk_size;
+set global group_replication_consistency = @old_replication_consistency;
+
+############################################################
+# 2. Clean up.
+include/group_replication_end.inc

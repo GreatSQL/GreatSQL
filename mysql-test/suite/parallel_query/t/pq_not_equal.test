@@ -1,0 +1,30 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+create database pq_test;
+use pq_test;
+
+--disable_warnings
+DROP TABLE IF EXISTS actor;
+--enable_warnings
+
+CREATE TABLE actor (                              
+  actor_id int unsigned NOT NULL AUTO_INCREMENT,  
+  first_name varchar(45) NOT NULL,                
+  last_name varchar(45) NOT NULL,                 
+  is_active bit(1) NOT NULL,                      
+  PRIMARY KEY (actor_id)                          
+);                                                
+                                                  
+INSERT INTO actor VALUES                          
+(NULL,'Victor','Otero',true),                     
+(NULL,'Gonzalo','Crhystens',false),               
+(NULL,'Abraham','Vega',true),                     
+(NULL,'Jennifer','Leon',false),                   
+(NULL,'Jhonny','Test',true);           
+
+SELECT * FROM `actor` WHERE `actor_id` != 1;
+
+drop table pq_test.actor;
+drop database pq_test;
+

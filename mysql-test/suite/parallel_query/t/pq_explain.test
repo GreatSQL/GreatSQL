@@ -1,0 +1,406 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+
+set @saved_force_parallel_execute = @@force_parallel_execute;
+
+## index condition pushdown ##
+
+ CREATE TABLE `cast_info` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `person_id` int(11) NOT NULL,
+  `movie_id` int(11) NOT NULL,
+  `person_role_id` int(11) DEFAULT NULL,
+  `note` varchar(250) DEFAULT NULL,
+  `nr_order` int(11) DEFAULT NULL,
+  `role_id` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `role_id_note` (`role_id`,`note`)
+) ENGINE=InnoDB;
+
+set session force_parallel_execute=0;
+explain SELECT * FROM cast_info WHERE role_id = 1 and note like '%Jaime%';
+
+set session force_parallel_execute=1;
+explain SELECT * FROM cast_info WHERE role_id = 1 and note like '%Jaime%';
+
+drop table cast_info;
+
+## index scan ##
+
+create database pq_test;
+use pq_test;
+
+create table t1(
+        id int primary key auto_increment,
+        col1 varchar(100),
+        col2 int,
+        key idx_col2(col2)
+ )engine= innodb;
+
+--disable_query_log
+ let $loop=10;
+ while($loop)
+ {
+  eval insert into pq_test.t1(col1, col2) values(repeat('test', 4), $loop);
+  dec $loop;
+ }
+--enable_query_log
+
+set session force_parallel_execute = 0;
+explain select count(*) from pq_test.t1;
+
+set session force_parallel_execute = 1;
+explain select count(*) from pq_test.t1;
+
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 limit 1;
+
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 limit 1;
+
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1;
+
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1;
+
+set session force_parallel_execute = 0;
+explain select id, col2 from pq_test.t1 force index(idx_col2);
+
+set session force_parallel_execute = 1;
+explain select id, col2 from pq_test.t1 force index(idx_col2);
+
+## explain other connection
+
+connect (con1, localhost, root);
+
+--connection con1
+
+set session force_parallel_execute = 1;
+let $qid= `SELECT CONNECTION_ID()`;
+
+set DEBUG_SYNC='after_pq_leader_plan SIGNAL ready WAIT_FOR continue';
+--send select * from pq_test.t1 limit 1;
+
+--connection default
+set DEBUG_SYNC='now WAIT_FOR ready';
+
+--replace_regex /[0-9]+/#/
+--eval EXPLAIN FOR CONNECTION $qid;
+set DEBUG_SYNC='now SIGNAL continue';
+
+connection con1;
+reap;
+set DEBUG_SYNC="reset";
+
+connection default;
+set DEBUG_SYNC="reset";
+
+## explain format=tree/json
+
+set session force_parallel_execute = 1;
+explain format=tree select * from pq_test.t1;
+explain format=json select * from pq_test.t1;
+
+set session force_parallel_execute = @saved_force_parallel_execute;
+
+drop table pq_test.t1;
+drop database pq_test;
+
+## ----- range clust ------
+
+create database pq_test;
+use pq_test;
+
+create table t1(
+        id int primary key auto_increment,
+        col1 varchar(100),
+        col2 int,
+        key idx_col2(col2)
+ )engine= innodb;
+
+--disable_query_log
+ let $loop=100;
+ while($loop)
+ {
+  eval insert into pq_test.t1(col1, col2) values(repeat('test', 4), $loop);
+  dec $loop;
+ }
+--enable_query_log
+
+show variables like 'force_parallel_execute';
+select count(*) from pq_test.t1;
+
+select * from pq_test.t1 limit 1;
+select * from pq_test.t1 order by id desc limit 1;
+
+explain select * from pq_test.t1; 
+explain select * from pq_test.t1 for share;
+explain select * from pq_test.t1 for update;
+
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 ignore index(idx_col2) where id < 30;
+
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 ignore index(idx_col2) where id < 30;
+
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 ignore index(idx_col2) where id <= 30;
+
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 ignore index(idx_col2) where id <= 30;
+
+set session force_parallel_execute = 0;
+explain select id from pq_test.t1 ignore index(idx_col2) where id > 20;
+
+set session force_parallel_execute = 1;
+explain select id from pq_test.t1 ignore index(idx_col2) where id > 20;
+
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 ignore index(idx_col2) where id >= 20;
+
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 ignore index(idx_col2)  where id > 10 and id < 80;
+
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 ignore index(idx_col2) where id >= 10 and id <= 80;
+
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 ignore index(idx_col2) where id >= 10 and id <= 80;
+
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 ignore index(idx_col2)  where id < 30 or id > 50;
+
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 ignore index(idx_col2)  where id < 30 or id > 50;
+
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 ignore index(idx_col2)  where (id > 10 and id < 50) or (id > 60 and id < 90);
+
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 ignore index(idx_col2)  where (id > 10 and id < 50) or (id > 60 and id < 90);
+
+set session force_parallel_execute = @saved_force_parallel_execute;
+
+drop table pq_test.t1;
+drop database pq_test;
+
+## range second ## 
+
+create database pq_test;
+use pq_test;
+
+create table t1(
+        id int primary key auto_increment,
+        col1 varchar(100),
+        col2 int,
+        key idx_col2(col2)
+ )engine= innodb;
+
+--disable_query_log
+ let $loop=100;
+ while($loop)
+ {
+  eval insert into pq_test.t1(col1, col2) values(repeat('test', 4), $loop);
+  dec $loop;
+ }
+--enable_query_log
+
+show variables like 'force_parallel_execute';
+select count(*) from pq_test.t1;
+
+select * from pq_test.t1 limit 1;
+select * from pq_test.t1 order by id desc limit 1;
+
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2) where col2 < 30;
+
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2) where col2 < 30;
+
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2) where col2 <= 30;
+
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2) where col2 <= 30;
+
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 > 20;
+
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 > 20;
+
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 >= 20;
+
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 >= 20;
+
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 > 10 and col2 < 80;
+
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 > 10 and col2 < 80;
+
+
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 >= 10 and col2 <= 80;
+
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 >= 10 and col2 <= 80;
+
+
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 < 30 or col2 > 50;
+
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 < 30 or col2 > 50;
+
+
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2) where (col2 > 10 and col2 < 50) or (col2 > 60 and col2 < 90);
+
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2) where (col2 > 10 and col2 < 50) or (col2 > 60 and col2 < 90);
+
+set session force_parallel_execute = @saved_force_parallel_execute;
+
+drop table pq_test.t1;
+drop database pq_test;
+
+## aggr group by ##
+create database pq_test;
+use pq_test;
+
+create table t1(a int primary key, b varchar(10), c decimal(5,2));
+
+insert into t1 values (1, 'The', '3.14');
+insert into t1 values (2, 'quick', '4.25');
+insert into t1 values (3, 'brown', '5.36');
+insert into t1 values (4, 'fox', '6.47');
+insert into t1 values (5, 'jumps', '3.14');
+insert into t1 values (6, 'over', '4.25');
+insert into t1 values (7, 'the', '5.36');
+insert into t1 values (8, 'lazy', '6.47');
+insert into t1 values (9, 'dog', '7.58');
+
+set session force_parallel_execute=0;
+explain select count(*) from t1;
+explain select count(c) from t1;
+explain select sum(a) from t1;
+explain select sum(c) from t1;
+explain select avg(a) from t1;
+explain select avg(c) from t1;
+
+set session force_parallel_execute=1;
+explain select count(*) from t1;
+explain select count(c) from t1;
+explain select sum(a) from t1;
+explain select sum(c) from t1;
+explain select avg(a) from t1;
+explain select avg(c) from t1;
+
+set session force_parallel_execute=0;
+explain select sum(c) from t1 where a > 5;
+explain select sum(a) from t1 where c > 5.0;
+explain select avg(c) from t1 where a > 5;
+explain select avg(a) from t1 where c > 5.0;
+explain select count(*) from t1 where c > 5.0;
+explain select count(c) from t1 where a > 5;
+
+set session force_parallel_execute=1;
+explain select sum(c) from t1 where a > 5;
+explain select sum(a) from t1 where c > 5.0;
+explain select avg(c) from t1 where a > 5;
+explain select avg(a) from t1 where c > 5.0;
+explain select count(*) from t1 where c > 5.0;
+explain select count(c) from t1 where a > 5;
+
+set session force_parallel_execute=0;
+explain select c,sum(a) from t1 group by(c);
+explain select b,sum(c) from t1 group by(b);
+explain select c,avg(a) from t1 group by(c);
+explain select b,avg(c) from t1 group by(b);
+explain select count(*) from t1 group by(c);
+explain select count(c) from t1 group by(b);
+
+set session force_parallel_execute=1;
+explain select c,sum(a) from t1 group by(c);
+explain select b,sum(c) from t1 group by(b);
+explain select c,avg(a) from t1 group by(c);
+explain select b,avg(c) from t1 group by(b);
+explain select count(*) from t1 group by(c);
+explain select count(c) from t1 group by(b);
+
+CREATE TABLE `t2` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `a` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+);
+
+insert into t2 values(1, 'a'), (2, 'b');
+
+set session force_parallel_execute=0;
+explain select sum(id) from t2 group by id;
+explain select avg(id) from t2 group by id;
+explain select count(id) from t2 group by id;
+
+set session force_parallel_execute=1;
+explain select sum(id) from t2 group by id;
+explain select avg(id) from t2 group by id;
+explain select count(id) from t2 group by id;
+
+drop table t1;
+drop table t2;
+
+
+## explain cast ##
+CREATE TABLE t1 (spID int, userID int, date date);
+
+INSERT INTO t1 VALUES (1,1,'1998-01-01');
+INSERT INTO t1 VALUES (2,2,'2001-02-03');
+INSERT INTO t1 VALUES (3,1,'1988-12-20');
+INSERT INTO t1 VALUES (4,2,'1972-12-12');
+
+EXPLAIN SELECT MIN(t1.userID) = MIN(date) FROM t1  GROUP BY userid;
+EXPLAIN SELECT FIRST_VALUE(date) OVER (ORDER BY spID = date) FROM t1;
+EXPLAIN SELECT date, spid = FIRST_VALUE(date) OVER (ORDER BY date ) FROM t1;
+
+--echo #
+--echo # No casts when constants or constant functions are involved
+--echo #
+EXPLAIN SELECT * from t1 WHERE userID = DATE'2012-02-20';
+EXPLAIN SELECT * FROM t1 WHERE date = NULL;
+EXPLAIN SELECT * FROM t1 WHERE date = CAST('20:21:22' AS TIME);
+
+## test other cases for coverage ##
+EXPLAIN SELECT date, to_seconds(date) FROM t1;
+EXPLAIN SELECT date, period_add(concat(year(date), month(date)), 1) FROM t1;
+EXPLAIN SELECT date, period_diff(concat(year(date), month(date)), 197001) FROM t1;
+EXPLAIN SELECT concat(spID, space(2)) FROM t1;
+
+CREATE TABLE t2 (c1 int, c2 varchar(3));
+
+INSERT INTO t2 VALUES (1, 'aaa');
+INSERT INTO t2 VALUES (2, 'bbb');
+INSERT INTO t2 VALUES (3, 'ccc');
+
+EXPLAIN SELECT c2, AES_ENCRYPT(c2, 'a') FROM t2;
+EXPLAIN SELECT c2, BIT_LENGTH(c2) FROM t2;
+EXPLAIN SELECT c1, c2, NULLIF(c1, 1) FROM t2;
+EXPLAIN SELECT c2, compress(c2) FROM t2;
+EXPLAIN SELECT c2, uncompressed_length(c2) FROM t2;
+EXPLAIN SELECT export_set(5, c2, upper(c2)) FROM t2;
+EXPLAIN SELECT export_set(5, c2, upper(c2), ",") FROM t2;
+EXPLAIN SELECT export_set(5, c2, upper(c2), ",", 5) FROM t2;
+EXPLAIN SELECT SHA2(c2, 5) FROM t2;
+EXPLAIN SELECT * FROM t2 WHERE c1 IN (1, 2, 4);
+
+DROP TABLE t1, t2;
+
+
+
+
+set session force_parallel_execute = @saved_force_parallel_execute;
+drop database pq_test;

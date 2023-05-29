@@ -1,0 +1,98 @@
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_group_replication_single_primary_mode=1
+--source include/group_replication.inc
+
+
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--source include/start_and_bootstrap_group_replication.inc
+--disable_query_log
+SET sql_log_bin=off;
+call mtr.add_suppression("On plugin shutdown it was not possible to enable the server read only mode.");
+call mtr.add_suppression("An undefined error was found while broadcasting an internal group member status notification");
+call mtr.add_suppression("Transaction cannot be executed while Group Replication is on ERROR state");
+call mtr.add_suppression("Run function 'before_commit' in plugin 'group_replication' failed");
+set sql_log_bin=on;
+--enable_query_log
+SET @old_lock_wait_timeout=@@lock_wait_timeout;
+SET GLOBAL lock_wait_timeout=10;
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1,1),(2,2);
+--source include/rpl_sync.inc
+
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--source include/start_group_replication.inc
+SELECT * FROM t1;
+
+connect (conn1_1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn1_2,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn1_3,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn1_4,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+--echo [connect conn1_1]
+connection conn1_1;
+BEGIN;
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+
+--echo [connect conn1_2]
+connection conn1_2;
+SET SESSION innodb_lock_wait_timeout=100000;
+BEGIN;
+send UPDATE t1 SET c2=c2+1 WHERE c1=1;
+
+--echo [connect conn1_3]
+connection conn1_3;
+SET SESSION innodb_lock_wait_timeout=100000;
+send UPDATE t1 SET c2=c2+1 WHERE c1=2;
+
+
+--echo [connect conn1_4]
+connection conn1_4;
+--error ER_GROUP_REPLICATION_COMMAND_FAILURE
+STOP GROUP_REPLICATION;
+SELECT member_state FROM performance_schema.replication_group_members WHERE member_id=@@server_uuid;
+
+--echo [connect conn1_1]
+connection conn1_1;
+ROLLBACK;
+
+--echo [connect conn1_2]
+connection conn1_2;
+reap;
+--error ER_RUN_HOOK_ERROR
+COMMIT;
+SELECT * FROM t1;
+SELECT @@super_read_only;
+
+--echo [connect conn1_3]
+connection conn1_3;
+--error ER_RUN_HOOK_ERROR
+reap;
+SELECT * FROM t1;
+SELECT @@super_read_only;
+
+--echo [connect conn1_4]
+connection conn1_4;
+SELECT member_state FROM performance_schema.replication_group_members WHERE member_id=@@server_uuid;
+--error ER_GROUP_REPLICATION_RUNNING
+START GROUP_REPLICATION;
+SELECT member_state FROM performance_schema.replication_group_members WHERE member_id=@@server_uuid;
+STOP GROUP_REPLICATION;
+SELECT @@super_read_only;
+SELECT member_state FROM performance_schema.replication_group_members WHERE member_id=@@server_uuid;
+--source include/start_group_replication.inc
+
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+SELECT * FROM t1;
+DROP TABLE t1;
+--source include/rpl_sync.inc
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+SET GLOBAL lock_wait_timeout=@old_lock_wait_timeout;
+SHOW TABLES;
+--source include/group_replication_end.inc

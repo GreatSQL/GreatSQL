@@ -1,0 +1,238 @@
+--source include/pq_test.inc
+
+#
+# BUG#4579
+#
+
+delimiter |;
+
+create table t3 (f1 int, f2 int)|
+insert into t3 values (1,1)|
+
+--disable_warnings ER_SP_DOES_NOT_EXIST ONCE
+drop procedure if exists bug4579_1|
+create procedure bug4579_1 ()
+begin
+  declare sf1 int;
+
+  select f1 into sf1 from t3 where f1=1 and f2=1;
+  update t3 set f2 = f2 + 1 where f1=1 and f2=1;
+  call bug4579_2();
+end|
+
+--disable_warnings ER_SP_DOES_NOT_EXIST ONCE
+drop procedure if exists bug4579_2|
+create procedure bug4579_2 ()
+begin
+end|
+
+call bug4579_1()|
+call bug4579_1()|
+call bug4579_1()|
+
+drop procedure bug4579_1|
+drop procedure bug4579_2|
+drop table t3|
+
+#
+# Bug#20028 Function with select return no data
+#
+
+--disable_warnings
+drop function if exists func_20028_a|
+drop function if exists func_20028_b|
+drop function if exists func_20028_c|
+drop procedure if exists proc_20028_a|
+drop procedure if exists proc_20028_b|
+drop procedure if exists proc_20028_c|
+drop table if exists table_20028|
+--enable_warnings
+
+create table table_20028 (i int)|
+
+SET @save_sql_mode=@@sql_mode|
+
+SET sql_mode=''|
+
+create function func_20028_a() returns integer
+begin
+  declare temp integer;
+  select i into temp from table_20028 limit 1;
+  return ifnull(temp, 0);
+end|
+
+create function func_20028_b() returns integer
+begin
+  return func_20028_a();
+end|
+
+create function func_20028_c() returns integer
+begin
+  declare div_zero integer;
+  set SQL_MODE='TRADITIONAL';
+  select 1/0 into div_zero;
+  return div_zero;
+end|
+
+create procedure proc_20028_a()
+begin
+  declare temp integer;
+  select i into temp from table_20028 limit 1;
+end|
+
+create procedure proc_20028_b()
+begin
+  call proc_20028_a();
+end|
+
+create procedure proc_20028_c()
+begin
+  declare div_zero integer;
+  set SQL_MODE='TRADITIONAL';
+  select 1/0 into div_zero;
+end|
+
+select func_20028_a()|
+select func_20028_b()|
+--error ER_DIVISION_BY_ZERO
+select func_20028_c()|
+call proc_20028_a()|
+call proc_20028_b()|
+--error ER_DIVISION_BY_ZERO
+call proc_20028_c()|
+
+SET sql_mode='TRADITIONAL'|
+
+drop function func_20028_a|
+drop function func_20028_b|
+drop function func_20028_c|
+drop procedure proc_20028_a|
+drop procedure proc_20028_b|
+drop procedure proc_20028_c|
+
+create function func_20028_a() returns integer
+begin
+  declare temp integer;
+  select i into temp from table_20028 limit 1;
+  return ifnull(temp, 0);
+end|
+
+create function func_20028_b() returns integer
+begin
+  return func_20028_a();
+end|
+
+create function func_20028_c() returns integer
+begin
+  declare div_zero integer;
+  set SQL_MODE='';
+  select 1/0 into div_zero;
+  return div_zero;
+end|
+
+create procedure proc_20028_a()
+begin
+  declare temp integer;
+  select i into temp from table_20028 limit 1;
+end|
+
+create procedure proc_20028_b()
+begin
+  call proc_20028_a();
+end|
+
+create procedure proc_20028_c()
+begin
+  declare div_zero integer;
+  set SQL_MODE='';
+  select 1/0 into div_zero;
+end|
+
+select func_20028_a()|
+select func_20028_b()|
+select func_20028_c()|
+call proc_20028_a()|
+call proc_20028_b()|
+call proc_20028_c()|
+
+SET @@sql_mode=@save_sql_mode|
+
+drop function func_20028_a|
+drop function func_20028_b|
+drop function func_20028_c|
+drop procedure proc_20028_a|
+drop procedure proc_20028_b|
+drop procedure proc_20028_c|
+drop table table_20028|
+
+# Test for bug #6812 "Triggers are not activated for INSERT ... SELECT".
+# (We also check the fact that trigger modifies some field does not affect
+#  value of next record inserted).
+
+create table t1 (i int, j int default 10)|
+create table t2 (i int)|
+insert into t2 values (1), (2)|
+create trigger trg1 before insert on t1 for each row 
+begin
+ if new.i = 1 then
+   set new.j := 1;
+ end if;
+end|
+create trigger trg2 after insert on t1 for each row set @a:= 1|
+set @a:= 0|
+insert into t1 (i) select * from t2|
+select * from t1|
+select @a|
+drop table t1, t2|
+
+delimiter ;|
+
+# Test for bug #17764 "Trigger crashes table"
+#
+# Table was reported as crashed when it was subject table of trigger invoked
+# by insert statement which was executed with enabled bulk insert mode (which
+# is actually set of optimizations enabled by handler::start_bulk_insert())
+# and this trigger also explicitly referenced it.
+# The same problem arose when table to which bulk insert was done was also
+# referenced in function called by insert statement.
+create table t1 (a varchar(64), b int);
+create table t2 like t1;
+create trigger t1_ai after insert on t1 for each row
+  set @a:= (select max(a) from t1);
+insert into t1 (a) values
+  ("Twas"),("brillig"),("and"),("the"),("slithy"),("toves"),
+  ("Did"),("gyre"),("and"),("gimble"),("in"),("the"),("wabe");
+create trigger t2_ai after insert on t2 for each row
+  set @a:= (select max(a) from t2);
+insert into t2 select * from t1;
+load data infile '../../std_data/words.dat' into table t1 (a);
+drop trigger t1_ai;
+drop trigger t2_ai;
+drop table t1,t2;
+#
+
+# Test for bug that the statement "delete t from t" goes through the parallel query process,
+# causing non-execution.
+
+# prepare
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+CREATE TABLE t1 (a int, PRIMARY KEY (a));
+CREATE TABLE t2 (a int, PRIMARY KEY (a)) ENGINE=InnoDB;
+create trigger trg_del_t2 after  delete on t2 for each row
+       insert into t1 values (1);
+insert into t1 values (1);
+insert into t2 values (1),(2);
+
+
+# exec cases A, B - see multi_update.test
+
+# A. send_error() w/o send_eof() branch
+
+--error ER_DUP_ENTRY
+delete t2 from t2;
+
+# cleanup
+DROP TABLE t1;
+DROP TABLE t2;

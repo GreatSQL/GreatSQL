@@ -1,0 +1,241 @@
+SELECT @@auto_increment_increment INTO @old_increment;
+SET @@auto_increment_increment = 1;
+SELECT @@auto_increment_offset INTO @old_offset;
+SET @@auto_increment_offset = 1;
+CREATE TABLE t1 (
+c1 int auto_increment primary key,
+c2 int,
+str1 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('1',512)) NOT NULL,
+str2 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('2',512)) NOT NULL,
+str3 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('3',512)) NOT NULL,
+str4 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('4',512)) NOT NULL
+) engine=InnoDB
+partition by hash(c1) partitions 3;
+INSERT INTO t1 (c2) values (1),(2),(3),(4),(5),(6),(7),(8);
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+SELECT count(*) FROM t1;
+count(*)
+256
+SELECT * INTO OUTFILE 'tmp_dir/parallel_load_outfile.txt' FROM t1;
+TRUNCATE TABLE t1;
+SET @@gdb_parallel_load = on;
+SELECT @@gdb_parallel_load_chunk_size INTO @old_chunk_size;
+SET @@gdb_parallel_load_chunk_size = 65536;
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt' INTO TABLE t1;
+affected rows: 256
+info: Records: 256  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+256
+affected rows: 1
+
+[## test unreadable char ##]
+SELECT * INTO OUTFILE 'tmp_dir/parallel_load_outfile.txt'
+FIELDS TERMINATED BY 0x01 FROM t1 LIMIT 10;
+TRUNCATE TABLE t1;
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
+INTO TABLE t1 FIELDS TERMINATED BY 0x01;
+affected rows: 10
+info: Records: 10  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+10
+affected rows: 1
+
+[## test load data into partition ##]
+DROP TABLE t1;
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=InnoDB
+PARTITION BY RANGE(c1) SUBPARTITION BY HASH(c1) SUBPARTITIONS 2
+(PARTITION p1 VALUES LESS THAN(100) (SUBPARTITION s0, SUBPARTITION s1),
+PARTITION p2 VALUES LESS THAN(200) (SUBPARTITION s2, SUBPARTITION s3));
+INSERT INTO t1 VALUES (1,1),(2,2);
+SELECT * INTO OUTFILE 'tmp_dir/parallel_load_outfile.txt' FROM t1;
+TRUNCATE TABLE t1;
+[## since insert one row through master session, the errno may not same ##]
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(s0);
+ERROR HY000: parallel load data failed, cause worker execute error[Found a row not matching the given partition set]
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(s1);
+ERROR HY000: Found a row not matching the given partition set
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(s0,s1);
+affected rows: 2
+info: Records: 2  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+2
+affected rows: 1
+TRUNCATE TABLE t1;
+affected rows: 0
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(p1);
+affected rows: 2
+info: Records: 2  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+2
+affected rows: 1
+[full partitions]
+INSERT INTO t1 VALUES (101,1),(102,2);
+SELECT * INTO OUTFILE 'tmp_dir/parallel_load_outfile.txt' FROM t1;
+TRUNCATE TABLE t1;
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(p1,s2,s3);
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+4
+affected rows: 1
+TRUNCATE TABLE t1;
+affected rows: 0
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(p1,p2);
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+4
+affected rows: 1
+TRUNCATE TABLE t1;
+affected rows: 0
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
+INTO TABLE t1 PARTITION(s0,s1,s2,s3);
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+4
+affected rows: 1
+
+[## test ignore lines ##]
+TRUNCATE TABLE t1;
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt' INTO TABLE t1 IGNORE 2 ROWS;
+affected rows: 2
+info: Records: 2  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+2
+affected rows: 1
+
+[## test set spec ##]
+TRUNCATE TABLE t1;
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
+INTO TABLE t1(c1,@var_c2) SET c2 = @var_c2 + 10;
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT * FROM t1 ORDER BY c1;
+c1	c2
+1	11
+2	12
+101	11
+102	12
+affected rows: 4
+
+[## test user var ##]
+TRUNCATE TABLE t1;
+SET @var:=666;
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
+INTO TABLE t1(c1, @var);
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT * FROM t1 ORDER BY c1;
+c1	c2
+1	NULL
+2	NULL
+101	NULL
+102	NULL
+affected rows: 4
+
+[## test user sys var ##]
+TRUNCATE TABLE t1;
+SELECT @@auto_increment_increment INTO @old_increment;
+SET @@auto_increment_increment=12345;
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
+INTO TABLE t1(c1, @dummy) SET c2=@@auto_increment_increment;
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT * FROM t1 ORDER BY c1;
+c1	c2
+1	12345
+2	12345
+101	12345
+102	12345
+affected rows: 4
+SET @@auto_increment_increment=@old_increment;
+
+[## test compatible with different time_zone ##]
+DROP TABLE t1;
+CREATE TABLE t1 (c1 int primary key, c2 timestamp) ENGINE=InnoDB;
+SELECT @@time_zone into @old_time_zone;
+SET @@time_zone='+08:00';
+INSERT INTO t1 values (1, '2021-07-23 3:30:00'),(2, '2021-07-23 3:30:00'),(3, '2021-07-23 13:30:00'),(4, '2021-07-23 13:30:00');
+SELECT * INTO OUTFILE 'tmp_dir/parallel_load_outfile.txt' FROM t1;
+TRUNCATE TABLE t1;
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt' INTO TABLE t1;
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT * FROM t1;
+c1	c2
+1	2021-07-23 03:30:00
+2	2021-07-23 03:30:00
+3	2021-07-23 13:30:00
+4	2021-07-23 13:30:00
+TRUNCATE TABLE t1;
+SET @@time_zone='+00:00';
+LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt' INTO TABLE t1;
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+SET @@time_zone='+08:00';
+SELECT * FROM t1;
+c1	c2
+1	2021-07-23 11:30:00
+2	2021-07-23 11:30:00
+3	2021-07-23 21:30:00
+4	2021-07-23 21:30:00
+SET @@time_zone=@old_time_zone;
+
+[## test set var hint take effect]
+SET @@gdb_parallel_load = off;
+SET @@gdb_parallel_load_chunk_size = @old_chunk_size;
+DROP TABLE t1;
+CREATE TABLE t1 (
+c1 int auto_increment primary key,
+c2 int,
+str1 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('1',1024)) NOT NULL,
+str2 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('2',1024)) NOT NULL,
+str3 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('3',1024)) NOT NULL,
+str4 varchar(1024) CHARACTER SET latin1 DEFAULT(repeat('4',1024)) NOT NULL
+) engine=innodb;
+INSERT INTO t1 (c2) values (1),(2),(3),(4),(5),(6),(7),(8);
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+INSERT INTO t1 (c2) SELECT c2 FROM t1;
+SELECT count(*) FROM t1;
+count(*)
+256
+SELECT * INTO OUTFILE 'tmp_dir/parallel_load_outfile.txt' FROM t1;
+TRUNCATE TABLE t1;
+LOAD /*+ SET_VAR(gdb_parallel_load=ON) SET_VAR(gdb_parallel_load_chunk_size=65536) SET_VAR(gdb_parallel_load_workers=16) */DATA INFILE 'tmp_dir/parallel_load_outfile.txt' INTO TABLE t1;
+affected rows: 256
+info: Records: 256  Deleted: 0  Skipped: 0  Warnings: 0
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+256
+affected rows: 1
+
+[only support hints about parallel load]
+LOAD /*+ SET_VAR(auto_increment_increment=2) */DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' INTO TABLE t1;
+ERROR HY000: parallel load data failed, cause only support hints: set_var(gdb_parallel_load[_xxx]=xx)
+DROP TABLE t1;
+SET @@auto_increment_increment = @old_increment;
+SET @@auto_increment_offset = @old_offset;
+SET @@gdb_parallel_load = off;
+SET @@gdb_parallel_load_chunk_size = @old_chunk_size;

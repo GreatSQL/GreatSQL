@@ -1,0 +1,38 @@
+-- source include/pq_test.inc
+
+-- echo # check aggregation when innodb return zero line
+
+CREATE TABLE records_in_range_test (                                          
+        c1 VARCHAR(16),                                                       
+        c2 VARCHAR(512),                                                      
+        PRIMARY KEY (c1)                                                      
+) ENGINE=INNODB;                                                              
+                                                                              
+# Insert some records so that they cannot fit in one page for some page sizes 
+# in order to exercise records_in_range() where 1, 2 or more pages are sampled
+INSERT INTO records_in_range_test VALUES                                      
+('ccc', REPEAT('v', 512)),                                                    
+('kkk01', REPEAT('v', 512)),                                                  
+('kkk02', REPEAT('v', 512)),                                                  
+('kkk03', REPEAT('v', 512)),                                                  
+('kkk04', REPEAT('v', 512)),                                                  
+('kkk05', REPEAT('v', 512)),                                                  
+('kkk06', REPEAT('v', 512)),                                                  
+('kkk07', REPEAT('v', 512)),                                                  
+('kkk08', REPEAT('v', 512)),                                                  
+('mmm', REPEAT('v', 512)),                                                    
+('nnn', REPEAT('v', 512)),                                                    
+('uuu01', REPEAT('v', 512)),                                                  
+('uuu02', REPEAT('v', 512)),                                                  
+('uuu03', REPEAT('v', 512)),                                                  
+('uuu04', REPEAT('v', 512)),                                                  
+('uuu05', REPEAT('v', 512)),                                                  
+('uuu06', REPEAT('v', 512)),                                                  
+('uuu07', REPEAT('v', 512)),                                                  
+('uuu08', REPEAT('v', 512)),                                                  
+('xxx', REPEAT('v', 512));                                                    
+
+SELECT COUNT(*) FROM records_in_range_test WHERE c1 < 'ccc';
+SELECT COUNT(*) FROM records_in_range_test WHERE c1 < 'xxx';
+
+drop table records_in_range_test;

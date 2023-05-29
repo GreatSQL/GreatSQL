@@ -1,0 +1,822 @@
+set @saved_force_parallel_execute = @@force_parallel_execute;
+CREATE TABLE `cast_info` (
+`id` int(11) NOT NULL AUTO_INCREMENT,
+`person_id` int(11) NOT NULL,
+`movie_id` int(11) NOT NULL,
+`person_role_id` int(11) DEFAULT NULL,
+`note` varchar(250) DEFAULT NULL,
+`nr_order` int(11) DEFAULT NULL,
+`role_id` int(11) NOT NULL,
+PRIMARY KEY (`id`),
+KEY `role_id_note` (`role_id`,`note`)
+) ENGINE=InnoDB;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+set session force_parallel_execute=0;
+explain SELECT * FROM cast_info WHERE role_id = 1 and note like '%Jaime%';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	cast_info	NULL	ref	role_id_note	role_id_note	4	const	1	100.00	Using index condition
+Warnings:
+Note	1003	/* select#1 */ select `test`.`cast_info`.`id` AS `id`,`test`.`cast_info`.`person_id` AS `person_id`,`test`.`cast_info`.`movie_id` AS `movie_id`,`test`.`cast_info`.`person_role_id` AS `person_role_id`,`test`.`cast_info`.`note` AS `note`,`test`.`cast_info`.`nr_order` AS `nr_order`,`test`.`cast_info`.`role_id` AS `role_id` from `test`.`cast_info` where ((`test`.`cast_info`.`role_id` = 1) and (`test`.`cast_info`.`note` like '%Jaime%'))
+set session force_parallel_execute=1;
+explain SELECT * FROM cast_info WHERE role_id = 1 and note like '%Jaime%';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Parallel execute (1 workers)
+2	SIMPLE	cast_info	NULL	ref	role_id_note	role_id_note	4	const	1	100.00	Using index condition
+Warnings:
+Note	1003	/* select#1 */ select `test`.`cast_info`.`id` AS `id`,`test`.`cast_info`.`person_id` AS `person_id`,`test`.`cast_info`.`movie_id` AS `movie_id`,`test`.`cast_info`.`person_role_id` AS `person_role_id`,`test`.`cast_info`.`note` AS `note`,`test`.`cast_info`.`nr_order` AS `nr_order`,`test`.`cast_info`.`role_id` AS `role_id` from `test`.`cast_info` where ((`test`.`cast_info`.`role_id` = 1) and (`test`.`cast_info`.`note` like '%Jaime%'))
+drop table cast_info;
+create database pq_test;
+use pq_test;
+create table t1(
+id int primary key auto_increment,
+col1 varchar(100),
+col2 int,
+key idx_col2(col2)
+)engine= innodb;
+set session force_parallel_execute = 0;
+explain select count(*) from pq_test.t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	idx_col2	5	NULL	10	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `pq_test`.`t1`
+set session force_parallel_execute = 1;
+explain select count(*) from pq_test.t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	idx_col2	5	NULL	10	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `pq_test`.`t1`
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 limit 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` limit 1
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 limit 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` limit 1
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1`
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1`
+set session force_parallel_execute = 0;
+explain select id, col2 from pq_test.t1 force index(idx_col2);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	idx_col2	5	NULL	10	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`)
+set session force_parallel_execute = 1;
+explain select id, col2 from pq_test.t1 force index(idx_col2);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	idx_col2	5	NULL	10	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`)
+set session force_parallel_execute = 1;
+set DEBUG_SYNC='after_pq_leader_plan SIGNAL ready WAIT_FOR continue';
+select * from pq_test.t1 limit 1;;
+set DEBUG_SYNC='now WAIT_FOR ready';
+EXPLAIN FOR CONNECTION #;;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	SIMPLE	<gather#>	NULL	ALL	NULL	NULL	NULL	NULL	#	#.#	Parallel execute (# workers)
+#	SIMPLE	t#	NULL	ALL	NULL	NULL	NULL	NULL	#	#.#	NULL
+set DEBUG_SYNC='now SIGNAL continue';
+id	col1	col2
+1	testtesttesttest	10
+set DEBUG_SYNC="reset";
+set DEBUG_SYNC="reset";
+set session force_parallel_execute = 1;
+explain format=tree select * from pq_test.t1;
+EXPLAIN
+-> Parallel scan on <temporary>
+    -> PQblock scan on t1  (cost=1.25 rows=10)
+
+explain format=json select * from pq_test.t1;
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "1.25"
+    },
+    "table": {
+      "table_name": "<gather2>",
+      "access_type": "ALL",
+      "rows_examined_per_scan": 10,
+      "rows_produced_per_join": 10,
+      "filtered": "100.00",
+      "parallel_execute": "1 workers",
+      "cost_info": {
+        "read_cost": "0.25",
+        "eval_cost": "1.00",
+        "prefix_cost": "1.25",
+        "data_read_per_join": "4K"
+      },
+      "used_columns": [
+        "id",
+        "col1",
+        "col2"
+      ],
+      "query_block": {
+        "cost_info": {
+          "query_cost": "1.25"
+        },
+        "table": {
+          "select_id": 2,
+          "table_name": "t1",
+          "access_type": "ALL",
+          "rows_examined_per_scan": 10,
+          "rows_produced_per_join": 10,
+          "filtered": "100.00",
+          "cost_info": {
+            "read_cost": "0.25",
+            "eval_cost": "1.00",
+            "prefix_cost": "1.25",
+            "data_read_per_join": "4K"
+          },
+          "used_columns": [
+            "id",
+            "col1",
+            "col2"
+          ]
+        }
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1`
+set session force_parallel_execute = @saved_force_parallel_execute;
+drop table pq_test.t1;
+drop database pq_test;
+create database pq_test;
+use pq_test;
+create table t1(
+id int primary key auto_increment,
+col1 varchar(100),
+col2 int,
+key idx_col2(col2)
+)engine= innodb;
+show variables like 'force_parallel_execute';
+Variable_name	Value
+force_parallel_execute	ON
+select count(*) from pq_test.t1;
+count(*)
+100
+select * from pq_test.t1 limit 1;
+id	col1	col2
+1	testtesttesttest	100
+select * from pq_test.t1 order by id desc limit 1;
+id	col1	col2
+100	testtesttesttest	1
+explain select * from pq_test.t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1`
+explain select * from pq_test.t1 for share;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1`
+explain select * from pq_test.t1 for update;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1`
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 ignore index(idx_col2) where id < 30;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	29	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where (`pq_test`.`t1`.`id` < 30)
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 ignore index(idx_col2) where id < 30;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	29	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	29	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where (`pq_test`.`t1`.`id` < 30)
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 ignore index(idx_col2) where id <= 30;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	30	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where (`pq_test`.`t1`.`id` <= 30)
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 ignore index(idx_col2) where id <= 30;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	30	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	30	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where (`pq_test`.`t1`.`id` <= 30)
+set session force_parallel_execute = 0;
+explain select id from pq_test.t1 ignore index(idx_col2) where id > 20;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	80	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where (`pq_test`.`t1`.`id` > 20)
+set session force_parallel_execute = 1;
+explain select id from pq_test.t1 ignore index(idx_col2) where id > 20;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	80	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	80	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where (`pq_test`.`t1`.`id` > 20)
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 ignore index(idx_col2) where id >= 20;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	81	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where (`pq_test`.`t1`.`id` >= 20)
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 ignore index(idx_col2)  where id > 10 and id < 80;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	69	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	69	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where ((`pq_test`.`t1`.`id` > 10) and (`pq_test`.`t1`.`id` < 80))
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 ignore index(idx_col2) where id >= 10 and id <= 80;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	71	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where ((`pq_test`.`t1`.`id` >= 10) and (`pq_test`.`t1`.`id` <= 80))
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 ignore index(idx_col2) where id >= 10 and id <= 80;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	71	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	71	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where ((`pq_test`.`t1`.`id` >= 10) and (`pq_test`.`t1`.`id` <= 80))
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 ignore index(idx_col2)  where id < 30 or id > 50;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	79	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where ((`pq_test`.`t1`.`id` < 30) or (`pq_test`.`t1`.`id` > 50))
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 ignore index(idx_col2)  where id < 30 or id > 50;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	79	100.00	Parallel execute (2 workers)
+2	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	79	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where ((`pq_test`.`t1`.`id` < 30) or (`pq_test`.`t1`.`id` > 50))
+set session force_parallel_execute = 0;
+explain select * from pq_test.t1 ignore index(idx_col2)  where (id > 10 and id < 50) or (id > 60 and id < 90);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	68	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where (((`pq_test`.`t1`.`id` > 10) and (`pq_test`.`t1`.`id` < 50)) or ((`pq_test`.`t1`.`id` > 60) and (`pq_test`.`t1`.`id` < 90)))
+set session force_parallel_execute = 1;
+explain select * from pq_test.t1 ignore index(idx_col2)  where (id > 10 and id < 50) or (id > 60 and id < 90);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	68	100.00	Parallel execute (2 workers)
+2	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	68	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col1` AS `col1`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` IGNORE INDEX (`idx_col2`) where (((`pq_test`.`t1`.`id` > 10) and (`pq_test`.`t1`.`id` < 50)) or ((`pq_test`.`t1`.`id` > 60) and (`pq_test`.`t1`.`id` < 90)))
+set session force_parallel_execute = @saved_force_parallel_execute;
+drop table pq_test.t1;
+drop database pq_test;
+create database pq_test;
+use pq_test;
+create table t1(
+id int primary key auto_increment,
+col1 varchar(100),
+col2 int,
+key idx_col2(col2)
+)engine= innodb;
+show variables like 'force_parallel_execute';
+Variable_name	Value
+force_parallel_execute	ON
+select count(*) from pq_test.t1;
+count(*)
+100
+select * from pq_test.t1 limit 1;
+id	col1	col2
+1	testtesttesttest	100
+select * from pq_test.t1 order by id desc limit 1;
+id	col1	col2
+100	testtesttesttest	1
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2) where col2 < 30;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	29	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where (`pq_test`.`t1`.`col2` < 30)
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2) where col2 < 30;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	29	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	29	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where (`pq_test`.`t1`.`col2` < 30)
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2) where col2 <= 30;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	30	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where (`pq_test`.`t1`.`col2` <= 30)
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2) where col2 <= 30;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	30	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	30	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where (`pq_test`.`t1`.`col2` <= 30)
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 > 20;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	80	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where (`pq_test`.`t1`.`col2` > 20)
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 > 20;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	80	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	80	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where (`pq_test`.`t1`.`col2` > 20)
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 >= 20;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	81	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where (`pq_test`.`t1`.`col2` >= 20)
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 >= 20;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	81	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	81	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where (`pq_test`.`t1`.`col2` >= 20)
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 > 10 and col2 < 80;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	69	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where ((`pq_test`.`t1`.`col2` > 10) and (`pq_test`.`t1`.`col2` < 80))
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 > 10 and col2 < 80;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	69	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	69	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where ((`pq_test`.`t1`.`col2` > 10) and (`pq_test`.`t1`.`col2` < 80))
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 >= 10 and col2 <= 80;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	71	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where ((`pq_test`.`t1`.`col2` >= 10) and (`pq_test`.`t1`.`col2` <= 80))
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 >= 10 and col2 <= 80;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	71	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	71	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where ((`pq_test`.`t1`.`col2` >= 10) and (`pq_test`.`t1`.`col2` <= 80))
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 < 30 or col2 > 50;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	79	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where ((`pq_test`.`t1`.`col2` < 30) or (`pq_test`.`t1`.`col2` > 50))
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2)  where col2 < 30 or col2 > 50;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	79	100.00	Parallel execute (2 workers)
+2	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	79	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where ((`pq_test`.`t1`.`col2` < 30) or (`pq_test`.`t1`.`col2` > 50))
+set session force_parallel_execute = 0;
+explain select id,col2 from pq_test.t1 force index(idx_col2) where (col2 > 10 and col2 < 50) or (col2 > 60 and col2 < 90);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	68	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where (((`pq_test`.`t1`.`col2` > 10) and (`pq_test`.`t1`.`col2` < 50)) or ((`pq_test`.`t1`.`col2` > 60) and (`pq_test`.`t1`.`col2` < 90)))
+set session force_parallel_execute = 1;
+explain select id,col2 from pq_test.t1 force index(idx_col2) where (col2 > 10 and col2 < 50) or (col2 > 60 and col2 < 90);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	68	100.00	Parallel execute (2 workers)
+2	SIMPLE	t1	NULL	range	idx_col2	idx_col2	5	NULL	68	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`id` AS `id`,`pq_test`.`t1`.`col2` AS `col2` from `pq_test`.`t1` FORCE INDEX (`idx_col2`) where (((`pq_test`.`t1`.`col2` > 10) and (`pq_test`.`t1`.`col2` < 50)) or ((`pq_test`.`t1`.`col2` > 60) and (`pq_test`.`t1`.`col2` < 90)))
+set session force_parallel_execute = @saved_force_parallel_execute;
+drop table pq_test.t1;
+drop database pq_test;
+create database pq_test;
+use pq_test;
+create table t1(a int primary key, b varchar(10), c decimal(5,2));
+insert into t1 values (1, 'The', '3.14');
+insert into t1 values (2, 'quick', '4.25');
+insert into t1 values (3, 'brown', '5.36');
+insert into t1 values (4, 'fox', '6.47');
+insert into t1 values (5, 'jumps', '3.14');
+insert into t1 values (6, 'over', '4.25');
+insert into t1 values (7, 'the', '5.36');
+insert into t1 values (8, 'lazy', '6.47');
+insert into t1 values (9, 'dog', '7.58');
+set session force_parallel_execute=0;
+explain select count(*) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	PRIMARY	4	NULL	9	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `pq_test`.`t1`
+explain select count(c) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select count(`pq_test`.`t1`.`c`) AS `count(c)` from `pq_test`.`t1`
+explain select sum(a) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	PRIMARY	4	NULL	9	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select sum(`pq_test`.`t1`.`a`) AS `sum(a)` from `pq_test`.`t1`
+explain select sum(c) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select sum(`pq_test`.`t1`.`c`) AS `sum(c)` from `pq_test`.`t1`
+explain select avg(a) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	PRIMARY	4	NULL	9	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select avg(`pq_test`.`t1`.`a`) AS `avg(a)` from `pq_test`.`t1`
+explain select avg(c) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select avg(`pq_test`.`t1`.`c`) AS `avg(c)` from `pq_test`.`t1`
+set session force_parallel_execute=1;
+explain select count(*) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	PRIMARY	4	NULL	9	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `pq_test`.`t1`
+explain select count(c) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select count(`pq_test`.`t1`.`c`) AS `count(c)` from `pq_test`.`t1`
+explain select sum(a) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	PRIMARY	4	NULL	9	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select sum(`pq_test`.`t1`.`a`) AS `sum(a)` from `pq_test`.`t1`
+explain select sum(c) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select sum(`pq_test`.`t1`.`c`) AS `sum(c)` from `pq_test`.`t1`
+explain select avg(a) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	PRIMARY	4	NULL	9	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select avg(`pq_test`.`t1`.`a`) AS `avg(a)` from `pq_test`.`t1`
+explain select avg(c) from t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select avg(`pq_test`.`t1`.`c`) AS `avg(c)` from `pq_test`.`t1`
+set session force_parallel_execute=0;
+explain select sum(c) from t1 where a > 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	4	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select sum(`pq_test`.`t1`.`c`) AS `sum(c)` from `pq_test`.`t1` where (`pq_test`.`t1`.`a` > 5)
+explain select sum(a) from t1 where c > 5.0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select sum(`pq_test`.`t1`.`a`) AS `sum(a)` from `pq_test`.`t1` where (`pq_test`.`t1`.`c` > 5.00)
+explain select avg(c) from t1 where a > 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	4	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select avg(`pq_test`.`t1`.`c`) AS `avg(c)` from `pq_test`.`t1` where (`pq_test`.`t1`.`a` > 5)
+explain select avg(a) from t1 where c > 5.0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select avg(`pq_test`.`t1`.`a`) AS `avg(a)` from `pq_test`.`t1` where (`pq_test`.`t1`.`c` > 5.00)
+explain select count(*) from t1 where c > 5.0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `pq_test`.`t1` where (`pq_test`.`t1`.`c` > 5.00)
+explain select count(c) from t1 where a > 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	4	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(`pq_test`.`t1`.`c`) AS `count(c)` from `pq_test`.`t1` where (`pq_test`.`t1`.`a` > 5)
+set session force_parallel_execute=1;
+explain select sum(c) from t1 where a > 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	4	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select sum(`pq_test`.`t1`.`c`) AS `sum(c)` from `pq_test`.`t1` where (`pq_test`.`t1`.`a` > 5)
+explain select sum(a) from t1 where c > 5.0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	33.33	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select sum(`pq_test`.`t1`.`a`) AS `sum(a)` from `pq_test`.`t1` where (`pq_test`.`t1`.`c` > 5.00)
+explain select avg(c) from t1 where a > 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	4	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select avg(`pq_test`.`t1`.`c`) AS `avg(c)` from `pq_test`.`t1` where (`pq_test`.`t1`.`a` > 5)
+explain select avg(a) from t1 where c > 5.0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	33.33	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select avg(`pq_test`.`t1`.`a`) AS `avg(a)` from `pq_test`.`t1` where (`pq_test`.`t1`.`c` > 5.00)
+explain select count(*) from t1 where c > 5.0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	33.33	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `pq_test`.`t1` where (`pq_test`.`t1`.`c` > 5.00)
+explain select count(c) from t1 where a > 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	4	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(`pq_test`.`t1`.`c`) AS `count(c)` from `pq_test`.`t1` where (`pq_test`.`t1`.`a` > 5)
+set session force_parallel_execute=0;
+explain select c,sum(a) from t1 group by(c);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`c` AS `c`,sum(`pq_test`.`t1`.`a`) AS `sum(a)` from `pq_test`.`t1` group by `pq_test`.`t1`.`c`
+explain select b,sum(c) from t1 group by(b);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`b` AS `b`,sum(`pq_test`.`t1`.`c`) AS `sum(c)` from `pq_test`.`t1` group by `pq_test`.`t1`.`b`
+explain select c,avg(a) from t1 group by(c);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`c` AS `c`,avg(`pq_test`.`t1`.`a`) AS `avg(a)` from `pq_test`.`t1` group by `pq_test`.`t1`.`c`
+explain select b,avg(c) from t1 group by(b);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`b` AS `b`,avg(`pq_test`.`t1`.`c`) AS `avg(c)` from `pq_test`.`t1` group by `pq_test`.`t1`.`b`
+explain select count(*) from t1 group by(c);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `pq_test`.`t1` group by `pq_test`.`t1`.`c`
+explain select count(c) from t1 group by(b);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select count(`pq_test`.`t1`.`c`) AS `count(c)` from `pq_test`.`t1` group by `pq_test`.`t1`.`b`
+set session force_parallel_execute=1;
+explain select c,sum(a) from t1 group by(c);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`c` AS `c`,sum(`pq_test`.`t1`.`a`) AS `sum(a)` from `pq_test`.`t1` group by `pq_test`.`t1`.`c`
+explain select b,sum(c) from t1 group by(b);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`b` AS `b`,sum(`pq_test`.`t1`.`c`) AS `sum(c)` from `pq_test`.`t1` group by `pq_test`.`t1`.`b`
+explain select c,avg(a) from t1 group by(c);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`c` AS `c`,avg(`pq_test`.`t1`.`a`) AS `avg(a)` from `pq_test`.`t1` group by `pq_test`.`t1`.`c`
+explain select b,avg(c) from t1 group by(b);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`b` AS `b`,avg(`pq_test`.`t1`.`c`) AS `avg(c)` from `pq_test`.`t1` group by `pq_test`.`t1`.`b`
+explain select count(*) from t1 group by(c);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `pq_test`.`t1` group by `pq_test`.`t1`.`c`
+explain select count(c) from t1 group by(b);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select count(`pq_test`.`t1`.`c`) AS `count(c)` from `pq_test`.`t1` group by `pq_test`.`t1`.`b`
+CREATE TABLE `t2` (
+`id` int(11) NOT NULL AUTO_INCREMENT,
+`a` varchar(10) DEFAULT NULL,
+PRIMARY KEY (`id`)
+);
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+insert into t2 values(1, 'a'), (2, 'b');
+set session force_parallel_execute=0;
+explain select sum(id) from t2 group by id;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	index	PRIMARY	PRIMARY	4	NULL	2	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select sum(`pq_test`.`t2`.`id`) AS `sum(id)` from `pq_test`.`t2` group by `pq_test`.`t2`.`id`
+explain select avg(id) from t2 group by id;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	index	PRIMARY	PRIMARY	4	NULL	2	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select avg(`pq_test`.`t2`.`id`) AS `avg(id)` from `pq_test`.`t2` group by `pq_test`.`t2`.`id`
+explain select count(id) from t2 group by id;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	index	PRIMARY	PRIMARY	4	NULL	2	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(`pq_test`.`t2`.`id`) AS `count(id)` from `pq_test`.`t2` group by `pq_test`.`t2`.`id`
+set session force_parallel_execute=1;
+explain select sum(id) from t2 group by id;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	index	PRIMARY	PRIMARY	4	NULL	2	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select sum(`pq_test`.`t2`.`id`) AS `sum(id)` from `pq_test`.`t2` group by `pq_test`.`t2`.`id`
+explain select avg(id) from t2 group by id;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	index	PRIMARY	PRIMARY	4	NULL	2	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select avg(`pq_test`.`t2`.`id`) AS `avg(id)` from `pq_test`.`t2` group by `pq_test`.`t2`.`id`
+explain select count(id) from t2 group by id;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	index	PRIMARY	PRIMARY	4	NULL	2	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(`pq_test`.`t2`.`id`) AS `count(id)` from `pq_test`.`t2` group by `pq_test`.`t2`.`id`
+drop table t1;
+drop table t2;
+CREATE TABLE t1 (spID int, userID int, date date);
+INSERT INTO t1 VALUES (1,1,'1998-01-01');
+INSERT INTO t1 VALUES (2,2,'2001-02-03');
+INSERT INTO t1 VALUES (3,1,'1988-12-20');
+INSERT INTO t1 VALUES (4,2,'1972-12-12');
+EXPLAIN SELECT MIN(t1.userID) = MIN(date) FROM t1  GROUP BY userid;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select (cast(min(`min(t1.userID)`) as double) = cast(min(`min(t1.``date``)`) as double)) AS `MIN(t1.userID) = MIN(date)` from `pq_test`.`t1` group by `pq_test`.`t1`.`userID`
+EXPLAIN SELECT FIRST_VALUE(date) OVER (ORDER BY spID = date) FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Using filesort
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select first_value(`pq_test`.`t1`.`date`) OVER (ORDER BY (cast(`pq_test`.`t1`.`spID` as double) = cast(`pq_test`.`t1`.`date` as double)) )  AS `FIRST_VALUE(date) OVER (ORDER BY spID = date)` from `pq_test`.`t1`
+EXPLAIN SELECT date, spid = FIRST_VALUE(date) OVER (ORDER BY date ) FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Using filesort
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`date` AS `date`,(cast(`pq_test`.`t1`.`spid` as double) = cast(first_value(`pq_test`.`t1`.`date`) OVER (ORDER BY `pq_test`.`t1`.`date` )  as double)) AS `spid = FIRST_VALUE(date) OVER (ORDER BY date )` from `pq_test`.`t1`
+#
+# No casts when constants or constant functions are involved
+#
+EXPLAIN SELECT * from t1 WHERE userID = DATE'2012-02-20';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	25.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	25.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`spID` AS `spID`,`pq_test`.`t1`.`userID` AS `userID`,`pq_test`.`t1`.`date` AS `date` from `pq_test`.`t1` where (`pq_test`.`t1`.`userID` = DATE'2012-02-20')
+EXPLAIN SELECT * FROM t1 WHERE date = NULL;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	25.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	25.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`spID` AS `spID`,`pq_test`.`t1`.`userID` AS `userID`,`pq_test`.`t1`.`date` AS `date` from `pq_test`.`t1` where (`pq_test`.`t1`.`date` = NULL)
+EXPLAIN SELECT * FROM t1 WHERE date = CAST('20:21:22' AS TIME);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	25.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	25.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`spID` AS `spID`,`pq_test`.`t1`.`userID` AS `userID`,`pq_test`.`t1`.`date` AS `date` from `pq_test`.`t1` where (`pq_test`.`t1`.`date` = <cache>(cast('20:21:22' as time)))
+EXPLAIN SELECT date, to_seconds(date) FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`date` AS `date`,to_seconds(`pq_test`.`t1`.`date`) AS `to_seconds(date)` from `pq_test`.`t1`
+EXPLAIN SELECT date, period_add(concat(year(date), month(date)), 1) FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`date` AS `date`,period_add(concat(year(`pq_test`.`t1`.`date`),month(`pq_test`.`t1`.`date`)),1) AS `period_add(concat(year(date), month(date)), 1)` from `pq_test`.`t1`
+EXPLAIN SELECT date, period_diff(concat(year(date), month(date)), 197001) FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t1`.`date` AS `date`,period_diff(concat(year(`pq_test`.`t1`.`date`),month(`pq_test`.`t1`.`date`)),197001) AS `period_diff(concat(year(date), month(date)), 197001)` from `pq_test`.`t1`
+EXPLAIN SELECT concat(spID, space(2)) FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select concat(`pq_test`.`t1`.`spID`,space(2)) AS `concat(spID, space(2))` from `pq_test`.`t1`
+CREATE TABLE t2 (c1 int, c2 varchar(3));
+INSERT INTO t2 VALUES (1, 'aaa');
+INSERT INTO t2 VALUES (2, 'bbb');
+INSERT INTO t2 VALUES (3, 'ccc');
+EXPLAIN SELECT c2, AES_ENCRYPT(c2, 'a') FROM t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t2`.`c2` AS `c2`,aes_encrypt(`pq_test`.`t2`.`c2`,'a') AS `AES_ENCRYPT(c2, 'a')` from `pq_test`.`t2`
+EXPLAIN SELECT c2, BIT_LENGTH(c2) FROM t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t2`.`c2` AS `c2`,bit_length(`pq_test`.`t2`.`c2`) AS `BIT_LENGTH(c2)` from `pq_test`.`t2`
+EXPLAIN SELECT c1, c2, NULLIF(c1, 1) FROM t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t2`.`c1` AS `c1`,`pq_test`.`t2`.`c2` AS `c2`,nullif(`pq_test`.`t2`.`c1`,1) AS `NULLIF(c1, 1)` from `pq_test`.`t2`
+EXPLAIN SELECT c2, compress(c2) FROM t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t2`.`c2` AS `c2`,compress(`pq_test`.`t2`.`c2`) AS `compress(c2)` from `pq_test`.`t2`
+EXPLAIN SELECT c2, uncompressed_length(c2) FROM t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t2`.`c2` AS `c2`,uncompressed_length(`pq_test`.`t2`.`c2`) AS `uncompressed_length(c2)` from `pq_test`.`t2`
+EXPLAIN SELECT export_set(5, c2, upper(c2)) FROM t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select export_set(5,`pq_test`.`t2`.`c2`,upper(`pq_test`.`t2`.`c2`)) AS `export_set(5, c2, upper(c2))` from `pq_test`.`t2`
+EXPLAIN SELECT export_set(5, c2, upper(c2), ",") FROM t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select export_set(5,`pq_test`.`t2`.`c2`,upper(`pq_test`.`t2`.`c2`),',') AS `export_set(5, c2, upper(c2), ",")` from `pq_test`.`t2`
+EXPLAIN SELECT export_set(5, c2, upper(c2), ",", 5) FROM t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select export_set(5,`pq_test`.`t2`.`c2`,upper(`pq_test`.`t2`.`c2`),',',5) AS `export_set(5, c2, upper(c2), ",", 5)` from `pq_test`.`t2`
+EXPLAIN SELECT SHA2(c2, 5) FROM t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+Warnings:
+Warning	1583	Incorrect parameters in the call to native function 'sha2'
+Note	1003	/* select#1 */ select sha2(`pq_test`.`t2`.`c2`,5) AS `SHA2(c2, 5)` from `pq_test`.`t2`
+EXPLAIN SELECT * FROM t2 WHERE c1 IN (1, 2, 4);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	50.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	3	50.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_test`.`t2`.`c1` AS `c1`,`pq_test`.`t2`.`c2` AS `c2` from `pq_test`.`t2` where (`pq_test`.`t2`.`c1` in (1,2,4))
+DROP TABLE t1, t2;
+set session force_parallel_execute = @saved_force_parallel_execute;
+drop database pq_test;

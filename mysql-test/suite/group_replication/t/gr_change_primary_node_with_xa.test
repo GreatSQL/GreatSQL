@@ -1,0 +1,51 @@
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_group_replication_single_primary_mode=1
+--source include/group_replication.inc
+
+# Boostrap start GR on server1 (Primary)
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--source include/start_and_bootstrap_group_replication.inc
+
+# Start GR on server2 (Secondary)
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--source include/start_group_replication.inc
+
+connect (conn1_1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn1_2,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn2_1,127.0.0.1,root,,test,$SERVER_MYPORT_2,);
+connect (conn2_2,127.0.0.1,root,,test,$SERVER_MYPORT_2,);
+
+--echo [connect conn1_1]
+connection conn1_1;
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1,1);
+XA START '1';
+INSERT INTO t1 VALUES (2,2);
+XA END '1';
+XA PREPARE '1';
+--echo [disconnect conn1_1]
+disconnect conn1_1;
+
+--echo [connect conn2_1]
+connection conn2_1;
+DO group_replication_set_as_primary(@@server_uuid);
+--let $wait_condition=select count(*)=1 from performance_schema.replication_group_members where member_role='PRIMARY' and member_id=@@server_uuid
+--source include/wait_condition.inc
+SELECT member_role FROM performance_schema.replication_group_members WHERE member_id=@@server_uuid;
+XA RECOVER;
+XA COMMIT '1';
+
+--echo [connect conn1_2]
+connection conn1_2;
+DO group_replication_set_as_primary(@@server_uuid);
+--let $wait_condition=select count(*)=1 from performance_schema.replication_group_members where member_role='PRIMARY' and member_id=@@server_uuid
+--source include/wait_condition.inc
+SELECT member_role FROM performance_schema.replication_group_members WHERE member_id=@@server_uuid;
+XA RECOVER;
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--source include/group_replication_end.inc

@@ -1,0 +1,183 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+--disable_query_log
+CALL mtr.add_suppression("\\[Warning\\] .* worker [0-9]+ has failed to start up*");
+CALL mtr.add_suppression("Make worker plan failed");
+CALL mtr.add_suppression("Create worker tmp tables or make join read info failed");
+CALL mtr.add_suppression("Create worker result mq failed");
+--enable_query_log
+
+create table t1(id int, a varchar(10));
+insert into t1 values(1, 'aa'), (2, 'bb');
+
+set @saved_force_parallel_execute = @@force_parallel_execute; 
+set session force_parallel_execute = 1;
+set session sql_mode = ''; 
+
+--disable_query_log
+let $1=500;  
+while ($1)
+{
+	eval INSERT INTO t1 VALUES (MOD($1, 43), 'cc'); 
+	dec $1;
+}
+--enable_query_log 
+
+set session debug="";
+set session debug="+d, pq_worker_abort1";
+--error ER_PARALLEL_EXEC_ERROR
+select * from t1; 
+show status like "PQ_memory_used";
+
+set session debug="";
+set session debug="+d, pq_worker_abort2";
+--error ER_PARALLEL_EXEC_ERROR
+select a, sum(a) from t1 group by a order by a desc, id;  
+show status like "PQ_memory_used";
+
+set session debug="";
+select a, sum(a) from t1 group by a order by a desc, id;
+show status like "PQ_memory_used";
+
+set @@parallel_default_dop = 8; 
+set session debug="";
+select a, sum(a) from t1 group by a order by a desc, id;   
+
+set session debug="";
+set session debug="+d, pq_worker_error1";
+--error ER_PARALLEL_EXEC_ERROR
+select a, sum(a) from t1 group by a order by a desc, id;  
+
+set session debug="";
+set session debug="+d, pq_worker_error2";
+--error ER_PARALLEL_EXEC_ERROR
+select a, sum(a) from t1 group by a order by a desc, id;   
+
+set session debug="";
+set session debug="+d, pq_worker_error3";
+--error ER_PARALLEL_EXEC_ERROR
+select * from t1 order by id desc, a; 
+
+set session debug="";
+set session debug="+d, pq_worker_error4";
+--error ER_PARALLEL_EXEC_ERROR
+select * from t1 order by id desc, a;
+
+set session debug="";
+set session debug="+d, pq_worker_error5";
+--error ER_PARALLEL_EXEC_ERROR
+select * from t1 order by id desc, a; 
+
+set session debug="";
+set session debug="+d, pq_worker_error6";
+--error ER_PARALLEL_EXEC_ERROR
+select * from t1;
+
+set session debug="";
+set session debug="+d, pq_worker_error7";
+--error ER_PARALLEL_EXEC_ERROR
+select * from t1;
+
+set session debug="";
+set session debug="+d, pq_worker_error8";
+--error ER_PARALLEL_EXEC_ERROR
+select * from t1;
+
+set session debug="";
+set session debug="+d, pq_worker_error9";
+select * from t1 limit 15;
+
+set session debug="";
+set session force_parallel_execute = 0;
+select * from t1 limit 15;
+
+set session force_parallel_execute = 1;
+set @@parallel_default_dop = 8;
+set session debug="";
+select a, sum(a) from t1 group by a order by a desc, id;   
+DROP TABLE t1;
+
+create table t3(
+     a int NOT NULL,
+     b int NOT NULL,
+     c int NOT NULL,
+     primary key (a, b),
+     unique key(c)
+) ENGINE=Innodb DEFAULT CHARSET=utf8mb4;
+
+insert into t3 values (1, 1, 2);
+insert into t3 values (1, 2, 1);
+insert into t3 values (0, 1, 3);
+insert into t3 values (1, 0, 4);
+
+explain select * from t3;
+
+set session debug="";
+set session debug="+d, pq_msort_error1";
+--error ER_PARALLEL_EXEC_ERROR
+select * from t3;
+
+set session debug="";
+set session debug="+d, pq_msort_error2";
+--error ER_PARALLEL_EXEC_ERROR
+select * from t3;
+
+set session debug="";
+set session debug="+d, pq_msort_error3";
+--error ER_PARALLEL_EXEC_ERROR
+select * from t3;
+
+set session debug="";
+set session debug="+d, pq_msort_error4";
+--error ER_PARALLEL_EXEC_ERROR
+select * from t3;
+
+set session debug="";
+set session debug="+d, pq_msort_error5";
+--error ER_STD_BAD_ALLOC_ERROR
+select * from t3 order by a;
+
+DROP TABLE t3;
+
+CREATE TABLE t(a varbinary(10));
+INSERT INTO t VALUES(0xFF00F0F0), (0xF0F0FF);
+INSERT INTO t VALUES(0xFF00F0F0), (0xF0F000);
+
+set session debug="";
+--error ER_INVALID_BITWISE_OPERANDS_SIZE
+SELECT BIT_AND(a) FROM t;
+DROP TABLE t;
+
+# filesort.cc
+create table t1(a int) ;
+insert into t1 values(1),(2),(3);
+
+# Do not mtr.add_suppression here, avoid "Deadlock found ..." messages in log.
+
+--let $force_parallel_execute=`show variables like 'force_parallel_execute'`
+--let $pq_enable = `SELECT SUBSTRING_INDEX('$force_parallel_execute', '	', -1)`
+
+set session debug="";
+# no-parallel
+if($pq_enable != ON)
+{
+  set debug='d,bug19656296';
+}
+
+if($pq_enable == ON)
+{
+  set session debug='+d,ha_pq_next_deadlock';
+}
+
+--error ER_LOCK_DEADLOCK
+select * from t1 order by a;
+drop table t1;
+SET debug= DEFAULT;
+
+
+--let $wait_counter= 10000
+--source include/restart_mysqld.inc
+
+
+

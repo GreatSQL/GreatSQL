@@ -1,0 +1,63 @@
+set sql_mode='oracle';
+
+set timestamp=1;
+select sysdate +1 from dual;
+
+select to_date('2021-08-23','yyyy-mm-dd') +1 from dual;
+
+select to_date('2021-08-23','yyyy-mm-dd') -1 from dual;
+
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') +1.5 from dual;
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') -1.5 from dual;
+
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') + CAST(1.5 as double) from dual;
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') - CAST(1.5 as double) from dual;
+
+SELECT 1 as res FROM dual
+WHERE  to_date('00:00:00','HH24:MI:SS') + 0.33334  = to_date('00:00:00','HH24:MI:SS') + 0.33335 ;
+
+SELECT 1 as res FROM dual
+WHERE  to_date('00:00:00','HH24:MI:SS') + 0.33333  = to_date('00:00:00','HH24:MI:SS') + 0.33334 ;
+
+--error ER_ORACMP_DATE_OP
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') * 2 from dual;
+--error ER_ORACMP_DATE_OP
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') / 2 from dual;
+--error ER_ORACMP_DATE_OP
+select  1 - to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS')from dual;
+
+--error ER_ORACMP_DATE_OP
+select to_date('2021-08-23','yyyy-mm-dd')+to_date('2021-08-23','yyyy-mm-dd') from dual;
+
+select to_date('2021-08-23','yyyy-mm-dd')-to_date('2021-08-23','yyyy-mm-dd') from dual;
+
+select to_date('2021-08-23','yyyy-mm-dd')-to_date('2021-08-22','yyyy-mm-dd') from dual;
+
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') - to_date('2021-08-22 12:10:11','yyyy-mm-dd HH24:MI:SS') from dual;
+
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') - to_date('2021-08-22 12:10:11','yyyy-mm-dd HH24:MI:SS') + to_date('2021-08-22 12:10:11','yyyy-mm-dd HH24:MI:SS') from dual;
+
+select to_date('2021-08-23 00:00:00','yyyy-mm-dd HH24:MI:SS') - to_date('2021-08-22 12:00:00','yyyy-mm-dd HH24:MI:SS');
+
+create table test_date (id serial, n double, c datetime, unique(n,c));
+
+set timestamp = 1630047721;
+INSERT INTO test_date(n,c) VALUES (1, null);
+INSERT INTO test_date(n,c) VALUES (null, to_date('23:59:59','HH24:MI:SS') );
+INSERT INTO test_date(n,c) VALUES (1,to_date('23:59:59','HH24:MI:SS') );
+INSERT INTO test_date(n,c) VALUES (-1, to_date('23:59:59','HH24:MI:SS') );
+INSERT INTO test_date(n,c) VALUES (1.2333,to_date('23:59:59','HH24:MI:SS') );
+INSERT INTO test_date(n,c) VALUES (-1.2333,to_date('23:59:59','HH24:MI:SS') );
+select c, n,c+n as sum from test_date order by id;
+select c, cast(n as SIGNED ),c+ cast(n as SIGNED) as sum from test_date order by id;
+drop table test_date;
+
+
+select to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 1;
+select to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 0;
+
+# double => 1e13
+
+select to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 10000000000000000000000000000000000000000000000.0;
+
+select to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 1e13;

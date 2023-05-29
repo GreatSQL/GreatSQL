@@ -1,0 +1,43 @@
+create database pq_test;
+use pq_test;
+create table t1(
+id int primary key auto_increment,
+col1 varchar(100),
+col2 int,
+key idx_col2(col2)
+)engine= innodb;
+show variables like 'force_parallel_execute';
+Variable_name	Value
+force_parallel_execute	ON
+select count(*) from pq_test.t1;
+count(*)
+100
+select * from pq_test.t1 limit 1;
+id	col1	col2
+1	testtesttesttest	100
+select * from pq_test.t1;
+select id, col2 from pq_test.t1 force index(idx_col2);
+SELECT * FROM t1 WHERE id IN (1, 10, 20, 80, 90, 100, 30, 40, 50, 60, 70);
+id	col1	col2
+1	testtesttesttest	100
+10	testtesttesttest	91
+20	testtesttesttest	81
+30	testtesttesttest	71
+40	testtesttesttest	61
+50	testtesttesttest	51
+60	testtesttesttest	41
+70	testtesttesttest	31
+80	testtesttesttest	21
+90	testtesttesttest	11
+100	testtesttesttest	1
+drop table pq_test.t1;
+drop database pq_test;
+use test;
+create table t1( firstname char(20), lastname char(20));
+insert into t1 values ("john","doe"),("John","Doe");
+select * from t1 where firstname='john' and binary 'john' = firstname;
+firstname	lastname
+john	doe
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
+drop table t1;

@@ -1,0 +1,590 @@
+create table p (population int, nation char(20), city char(20));
+insert into p values (null, 'China','');
+insert into p values (1500, 'China','Shanghai');
+insert into p values (500, 'China','Beijing');
+insert into p values (1000, 'USA','New York');
+insert into p values (500, 'USA','Boston');
+insert into p values (null, 'Japan','');
+CREATE TABLE `test1` (
+`id` int NOT NULL,
+`name` varchar(100) DEFAULT NULL,
+`test_dec` decimal(10,5) DEFAULT NULL,
+`test_blob` blob,
+`c5` varchar(255) NOT NULL,
+`c6` timestamp NULL DEFAULT NULL,
+`c7` char(255) DEFAULT NULL,
+`c8` varchar(255) DEFAULT NULL,
+PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+INSERT INTO `test1` VALUES (1, '1', 11.32000, NULL, 'c5', NULL, 'c71', NULL);
+INSERT INTO `test1` VALUES (2, '2', 22.24500, NULL, '', '2022-03-17 16:08:57', NULL, 'c82');
+INSERT INTO `test1` VALUES (3, '3', 3.00000, NULL, '', '2022-03-17 16:04:15', NULL, NULL);
+INSERT INTO `test1` VALUES (4, '3', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (5, '', 0, NULL, '', '2022-03-09 16:04:19', NULL, NULL);
+INSERT INTO `test1` VALUES (6, '', NULL, NULL, '', NULL, NULL, '1');
+INSERT INTO `test1` VALUES (7, '20', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (8, '8', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (9, NULL, NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (10, NULL, NULL, NULL, 'c510', NULL, '', '');
+set sql_mode=default;
+select name,c5,'my' from test1 order by name;
+name	c5	my
+NULL		my
+NULL	c510	my
+		my
+		my
+1	c5	my
+2		my
+20		my
+3		my
+3		my
+8		my
+select name,c5,'my desc' from test1 order by name desc;
+name	c5	my desc
+8		my desc
+3		my desc
+3		my desc
+20		my desc
+2		my desc
+1	c5	my desc
+		my desc
+		my desc
+NULL		my desc
+NULL	c510	my desc
+select name,c5,'my nf' from test1 order by name nulls first;
+name	c5	my nf
+NULL		my nf
+NULL	c510	my nf
+		my nf
+		my nf
+1	c5	my nf
+2		my nf
+20		my nf
+3		my nf
+3		my nf
+8		my nf
+select name,c5,'my nl' from test1 order by name nulls last;
+name	c5	my nl
+		my nl
+		my nl
+1	c5	my nl
+2		my nl
+20		my nl
+3		my nl
+3		my nl
+8		my nl
+NULL		my nl
+NULL	c510	my nl
+select name,c5,'my desc nf' from test1 order by name desc nulls first;
+name	c5	my desc nf
+NULL		my desc nf
+NULL	c510	my desc nf
+8		my desc nf
+3		my desc nf
+3		my desc nf
+20		my desc nf
+2		my desc nf
+1	c5	my desc nf
+		my desc nf
+		my desc nf
+select name,c5,'my desc nl' from test1 order by name desc nulls last;
+name	c5	my desc nl
+8		my desc nl
+3		my desc nl
+3		my desc nl
+20		my desc nl
+2		my desc nl
+1	c5	my desc nl
+		my desc nl
+		my desc nl
+NULL		my desc nl
+NULL	c510	my desc nl
+set sql_mode=oracle;
+select name,c5,'ora' from test1 order by name;
+name	c5	ora
+NULL		ora
+NULL	c510	ora
+		ora
+		ora
+1	c5	ora
+2		ora
+20		ora
+3		ora
+3		ora
+8		ora
+select name,c5,'ora desc' from test1 order by name desc;
+name	c5	ora desc
+8		ora desc
+3		ora desc
+3		ora desc
+20		ora desc
+2		ora desc
+1	c5	ora desc
+		ora desc
+		ora desc
+NULL		ora desc
+NULL	c510	ora desc
+select name,c5,'ora nf' from test1 order by name nulls first;
+name	c5	ora nf
+NULL		ora nf
+NULL	c510	ora nf
+		ora nf
+		ora nf
+1	c5	ora nf
+2		ora nf
+20		ora nf
+3		ora nf
+3		ora nf
+8		ora nf
+select name,c5,'ora nl' from test1 order by name nulls last;
+name	c5	ora nl
+		ora nl
+		ora nl
+1	c5	ora nl
+2		ora nl
+20		ora nl
+3		ora nl
+3		ora nl
+8		ora nl
+NULL		ora nl
+NULL	c510	ora nl
+select name,c5,'ora desc nf' from test1 order by name desc nulls first;
+name	c5	ora desc nf
+NULL		ora desc nf
+NULL	c510	ora desc nf
+8		ora desc nf
+3		ora desc nf
+3		ora desc nf
+20		ora desc nf
+2		ora desc nf
+1	c5	ora desc nf
+		ora desc nf
+		ora desc nf
+select name,c5,'ora desc nl' from test1 order by name desc nulls last;
+name	c5	ora desc nl
+8		ora desc nl
+3		ora desc nl
+3		ora desc nl
+20		ora desc nl
+2		ora desc nl
+1	c5	ora desc nl
+		ora desc nl
+		ora desc nl
+NULL		ora desc nl
+NULL	c510	ora desc nl
+set sql_mode=default;
+select name,c5,'my' from test1 order by name,c5;
+name	c5	my
+NULL		my
+NULL	c510	my
+		my
+		my
+1	c5	my
+2		my
+20		my
+3		my
+3		my
+8		my
+select name,c5,'my desc' from test1 order by name,c5 desc;
+name	c5	my desc
+NULL	c510	my desc
+NULL		my desc
+		my desc
+		my desc
+1	c5	my desc
+2		my desc
+20		my desc
+3		my desc
+3		my desc
+8		my desc
+select name,c5,'my nf' from test1 order by name nulls first,c5 nulls first;
+name	c5	my nf
+NULL		my nf
+NULL	c510	my nf
+		my nf
+		my nf
+1	c5	my nf
+2		my nf
+20		my nf
+3		my nf
+3		my nf
+8		my nf
+select name,c5,'my nl' from test1 order by name nulls last,c5 nulls last;
+name	c5	my nl
+		my nl
+		my nl
+1	c5	my nl
+2		my nl
+20		my nl
+3		my nl
+3		my nl
+8		my nl
+NULL		my nl
+NULL	c510	my nl
+select name,c5,'my desc nf' from test1 order by name desc nulls first,c5 desc nulls first;
+name	c5	my desc nf
+NULL	c510	my desc nf
+NULL		my desc nf
+8		my desc nf
+3		my desc nf
+3		my desc nf
+20		my desc nf
+2		my desc nf
+1	c5	my desc nf
+		my desc nf
+		my desc nf
+select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls last;
+name	c5	my desc nl
+8		my desc nl
+3		my desc nl
+3		my desc nl
+20		my desc nl
+2		my desc nl
+1	c5	my desc nl
+		my desc nl
+		my desc nl
+NULL	c510	my desc nl
+NULL		my desc nl
+set sql_mode=oracle;
+select name,c5,'ora' from test1 order by name;
+name	c5	ora
+NULL		ora
+NULL	c510	ora
+		ora
+		ora
+1	c5	ora
+2		ora
+20		ora
+3		ora
+3		ora
+8		ora
+select name,c5,'ora desc' from test1 order by name,c5 desc;
+name	c5	ora desc
+NULL	c510	ora desc
+NULL		ora desc
+		ora desc
+		ora desc
+1	c5	ora desc
+2		ora desc
+20		ora desc
+3		ora desc
+3		ora desc
+8		ora desc
+select name,c5,'ora nf' from test1 order by name nulls first,c5 nulls first;
+name	c5	ora nf
+NULL		ora nf
+NULL	c510	ora nf
+		ora nf
+		ora nf
+1	c5	ora nf
+2		ora nf
+20		ora nf
+3		ora nf
+3		ora nf
+8		ora nf
+select name,c5,'ora nl' from test1 order by name nulls last,c5 nulls last;
+name	c5	ora nl
+		ora nl
+		ora nl
+1	c5	ora nl
+2		ora nl
+20		ora nl
+3		ora nl
+3		ora nl
+8		ora nl
+NULL		ora nl
+NULL	c510	ora nl
+select name,c5,'ora desc nf' from test1 order by name nulls first,c5 desc nulls first;
+name	c5	ora desc nf
+NULL	c510	ora desc nf
+NULL		ora desc nf
+		ora desc nf
+		ora desc nf
+1	c5	ora desc nf
+2		ora desc nf
+20		ora desc nf
+3		ora desc nf
+3		ora desc nf
+8		ora desc nf
+select name,c5,'ora desc nl' from test1 order by name nulls last,c5 desc nulls last;
+name	c5	ora desc nl
+		ora desc nl
+		ora desc nl
+1	c5	ora desc nl
+2		ora desc nl
+20		ora desc nl
+3		ora desc nl
+3		ora desc nl
+8		ora desc nl
+NULL	c510	ora desc nl
+NULL		ora desc nl
+set sql_mode=default;
+set sql_mode=concat(@@sql_mode, ',EMPTYSTRING_EQUAL_NULL');
+# explain
+explain select 1
+explain select name,c5,'my' from test1 order by name;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test1`.`name` AS `name`,`test`.`test1`.`c5` AS `c5`,'my' AS `my` from `test`.`test1` order by `test`.`test1`.`name`
+explain select name,c5,'my desc' from test1 order by name desc;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test1`.`name` AS `name`,`test`.`test1`.`c5` AS `c5`,'my desc' AS `my desc` from `test`.`test1` order by `test`.`test1`.`name` desc
+explain select name,c5,'my nf' from test1 order by name nulls first;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test1`.`name` AS `name`,`test`.`test1`.`c5` AS `c5`,'my nf' AS `my nf` from `test`.`test1` order by `test`.`test1`.`name` nulls first
+explain select name,c5,'my nl' from test1 order by name nulls last;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test1`.`name` AS `name`,`test`.`test1`.`c5` AS `c5`,'my nl' AS `my nl` from `test`.`test1` order by `test`.`test1`.`name` nulls last
+explain select name,c5,'my desc nf' from test1 order by name desc nulls first;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test1`.`name` AS `name`,`test`.`test1`.`c5` AS `c5`,'my desc nf' AS `my desc nf` from `test`.`test1` order by `test`.`test1`.`name` desc nulls first
+explain select name,c5,'my desc nl' from test1 order by name desc nulls last;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test1`.`name` AS `name`,`test`.`test1`.`c5` AS `c5`,'my desc nl' AS `my desc nl` from `test`.`test1` order by `test`.`test1`.`name` desc nulls last
+explain select name,c5,'my' from test1 order by name,c5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test1`.`name` AS `name`,`test`.`test1`.`c5` AS `c5`,'my' AS `my` from `test`.`test1` order by `test`.`test1`.`name`,`test`.`test1`.`c5`
+explain select name,c5,'my desc' from test1 order by name,c5 desc;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test1`.`name` AS `name`,`test`.`test1`.`c5` AS `c5`,'my desc' AS `my desc` from `test`.`test1` order by `test`.`test1`.`name`,`test`.`test1`.`c5` desc
+explain select name,c5,'my nf' from test1 order by name nulls first,c5 nulls last;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test1`.`name` AS `name`,`test`.`test1`.`c5` AS `c5`,'my nf' AS `my nf` from `test`.`test1` order by `test`.`test1`.`name` nulls first,`test`.`test1`.`c5` nulls last
+explain select name,c5,'my nl' from test1 order by name nulls last,c5 nulls first;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test1`.`name` AS `name`,`test`.`test1`.`c5` AS `c5`,'my nl' AS `my nl` from `test`.`test1` order by `test`.`test1`.`name` nulls last,`test`.`test1`.`c5` nulls first
+explain select name,c5,'my desc nf' from test1 order by name desc nulls first,c5 desc nulls last;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test1`.`name` AS `name`,`test`.`test1`.`c5` AS `c5`,'my desc nf' AS `my desc nf` from `test`.`test1` order by `test`.`test1`.`name` desc nulls first,`test`.`test1`.`c5` desc nulls last
+explain select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls first;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	test1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`test1`.`name` AS `name`,`test`.`test1`.`c5` AS `c5`,'my desc nl' AS `my desc nl` from `test`.`test1` order by `test`.`test1`.`name` desc nulls last,`test`.`test1`.`c5` desc nulls first
+# index scan check
+create index i1 on test1 (name,c5);
+create index i1 on p (nation,city);
+select name,c5,'my' from test1 order by name;
+name	c5	my
+NULL	NULL	my
+NULL	c510	my
+NULL	NULL	my
+NULL	NULL	my
+1	c5	my
+2	NULL	my
+20	NULL	my
+3	NULL	my
+3	NULL	my
+8	NULL	my
+explain format=tree select name,c5,'my' from test1 order by name;
+EXPLAIN
+-> Index scan on test1 using i1  (cost=*** rows=***)
+
+select name,c5,'my desc' from test1 order by name desc;
+name	c5	my desc
+8	NULL	my desc
+3	NULL	my desc
+3	NULL	my desc
+20	NULL	my desc
+2	NULL	my desc
+1	c5	my desc
+NULL	NULL	my desc
+NULL	NULL	my desc
+NULL	c510	my desc
+NULL	NULL	my desc
+explain format=tree select name,c5,'my desc' from test1 order by name desc;
+EXPLAIN
+-> Index scan on test1 using i1 (reverse)  (cost=*** rows=***)
+
+select name,c5,'my nf' from test1 order by name nulls first;
+name	c5	my nf
+NULL	NULL	my nf
+NULL	c510	my nf
+NULL	NULL	my nf
+NULL	NULL	my nf
+1	c5	my nf
+2	NULL	my nf
+20	NULL	my nf
+3	NULL	my nf
+3	NULL	my nf
+8	NULL	my nf
+explain format=tree select name,c5,'my nf' from test1 order by name nulls first;
+EXPLAIN
+-> Sort: test1.`name`  (cost=*** rows=***)
+    -> Index scan on test1 using i1  (cost=*** rows=***)
+
+select name,c5,'my nl' from test1 order by name nulls last;
+name	c5	my nl
+1	c5	my nl
+2	NULL	my nl
+20	NULL	my nl
+3	NULL	my nl
+3	NULL	my nl
+8	NULL	my nl
+NULL	NULL	my nl
+NULL	c510	my nl
+NULL	NULL	my nl
+NULL	NULL	my nl
+explain format=tree select name,c5,'my nl' from test1 order by name nulls last;
+EXPLAIN
+-> Sort: test1.`name`  (cost=*** rows=***)
+    -> Index scan on test1 using i1  (cost=*** rows=***)
+
+select name,c5,'my desc nf' from test1 order by name desc nulls first;
+name	c5	my desc nf
+NULL	NULL	my desc nf
+NULL	c510	my desc nf
+NULL	NULL	my desc nf
+NULL	NULL	my desc nf
+8	NULL	my desc nf
+3	NULL	my desc nf
+3	NULL	my desc nf
+20	NULL	my desc nf
+2	NULL	my desc nf
+1	c5	my desc nf
+explain format=tree select name,c5,'my desc nf' from test1 order by name desc nulls first;
+EXPLAIN
+-> Sort: test1.`name` DESC  (cost=*** rows=***)
+    -> Index scan on test1 using i1  (cost=*** rows=***)
+
+select name,c5,'my desc nl' from test1 order by name desc nulls last;
+name	c5	my desc nl
+8	NULL	my desc nl
+3	NULL	my desc nl
+3	NULL	my desc nl
+20	NULL	my desc nl
+2	NULL	my desc nl
+1	c5	my desc nl
+NULL	NULL	my desc nl
+NULL	c510	my desc nl
+NULL	NULL	my desc nl
+NULL	NULL	my desc nl
+explain format=tree select name,c5,'my desc nl' from test1 order by name desc nulls last;
+EXPLAIN
+-> Sort: test1.`name` DESC  (cost=*** rows=***)
+    -> Index scan on test1 using i1  (cost=*** rows=***)
+
+select name,c5,'my' from test1 order by name,c5;
+name	c5	my
+NULL	NULL	my
+NULL	c510	my
+NULL	NULL	my
+NULL	NULL	my
+1	c5	my
+2	NULL	my
+20	NULL	my
+3	NULL	my
+3	NULL	my
+8	NULL	my
+explain format=tree select name,c5,'my' from test1 order by name,c5;
+EXPLAIN
+-> Index scan on test1 using i1  (cost=*** rows=***)
+
+select name,c5,'my desc' from test1 order by name,c5 desc;
+name	c5	my desc
+NULL	c510	my desc
+NULL	NULL	my desc
+NULL	NULL	my desc
+NULL	NULL	my desc
+1	c5	my desc
+2	NULL	my desc
+20	NULL	my desc
+3	NULL	my desc
+3	NULL	my desc
+8	NULL	my desc
+explain format=tree select name,c5,'my desc' from test1 order by name,c5 desc;
+EXPLAIN
+-> Sort: test1.`name`, test1.c5 DESC  (cost=*** rows=***)
+    -> Index scan on test1 using i1  (cost=*** rows=***)
+
+select name,c5,'my nf' from test1 order by name nulls first,c5 nulls last;
+name	c5	my nf
+NULL	c510	my nf
+NULL	NULL	my nf
+NULL	NULL	my nf
+NULL	NULL	my nf
+1	c5	my nf
+2	NULL	my nf
+20	NULL	my nf
+3	NULL	my nf
+3	NULL	my nf
+8	NULL	my nf
+explain format=tree select name,c5,'my nf' from test1 order by name nulls first,c5 nulls last;
+EXPLAIN
+-> Sort: test1.`name`, test1.c5  (cost=*** rows=***)
+    -> Index scan on test1 using i1  (cost=*** rows=***)
+
+select name,c5,'my nl' from test1 order by name nulls last,c5 nulls first;
+name	c5	my nl
+1	c5	my nl
+2	NULL	my nl
+20	NULL	my nl
+3	NULL	my nl
+3	NULL	my nl
+8	NULL	my nl
+NULL	NULL	my nl
+NULL	NULL	my nl
+NULL	NULL	my nl
+NULL	c510	my nl
+explain format=tree select name,c5,'my nl' from test1 order by name nulls last,c5 nulls first;
+EXPLAIN
+-> Sort: test1.`name`, test1.c5  (cost=*** rows=***)
+    -> Index scan on test1 using i1  (cost=*** rows=***)
+
+select name,c5,'my desc nf' from test1 order by name desc nulls first,c5 desc nulls last;
+name	c5	my desc nf
+NULL	c510	my desc nf
+NULL	NULL	my desc nf
+NULL	NULL	my desc nf
+NULL	NULL	my desc nf
+8	NULL	my desc nf
+3	NULL	my desc nf
+3	NULL	my desc nf
+20	NULL	my desc nf
+2	NULL	my desc nf
+1	c5	my desc nf
+explain format=tree select name,c5,'my desc nf' from test1 order by name desc nulls first,c5 desc nulls last;
+EXPLAIN
+-> Sort: test1.`name` DESC, test1.c5 DESC  (cost=*** rows=***)
+    -> Index scan on test1 using i1  (cost=*** rows=***)
+
+select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls first;
+name	c5	my desc nl
+8	NULL	my desc nl
+3	NULL	my desc nl
+3	NULL	my desc nl
+20	NULL	my desc nl
+2	NULL	my desc nl
+1	c5	my desc nl
+NULL	NULL	my desc nl
+NULL	NULL	my desc nl
+NULL	NULL	my desc nl
+NULL	c510	my desc nl
+explain format=tree select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls first;
+EXPLAIN
+-> Sort: test1.`name` DESC, test1.c5 DESC  (cost=*** rows=***)
+    -> Index scan on test1 using i1  (cost=*** rows=***)
+
+drop table test1;
+drop table p;

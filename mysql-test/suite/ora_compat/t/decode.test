@@ -1,0 +1,170 @@
+# Testing of DECODE
+# 
+# note: almost all test cases are migrated from CASE, even bug num.
+
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+
+
+select DECODE("b", "a", 1, "b", 2);
+select DECODE("c", "a", 1, "b", 2);
+select DECODE("c", "a", 1, "b", 2, 3);
+select DECODE(BINARY "b", "a", 1, "B", 2, "b", "ok");
+select DECODE("b", "a", 1, "B", 2, "b", "ok");
+select DECODE(concat("a","b"), concat("ab",""), "a", "b", "b");
+select DECODE(1=0, false, "true", "false");
+select DECODE(1, 1, "one", 2, "two", "more");
+explain select DECODE(1, 1, "one", 2, "two", "more");
+select DECODE(2.0, 1, "one", 2.0, "two", "more");
+select DECODE(1, 1, true, 1, false) from dual;
+select DECODE("two", "one", "1", "two", "2") | 0; 
+select DECODE("two","one", 1.00, "two", 2.00) +0.0;
+select DECODE(1/0, "a", "true", "false");
+select DECODE(1/0, "a", "true");
+select DECODE(1/0, "a", "true") | 0;
+select DECODE(1/0, "a", "true") + 0.0;
+select DECODE(1>0, true, "TRUE", "FALSE");
+select DECODE(1<0, false, "TRUE", "FALSE");
+
+#
+# Test GROUP BY on DECODE
+#
+
+create table t1 (a int);
+insert into t1 values(1),(2),(3),(4);
+select decode(a, 1, 2, 2, 3, 0) as fcase, count(*) from t1 group by fcase;
+analyze table t1;
+explain select decode(a, 1, 2, 2, 3, 0) as fcase, count(*) from t1 group by fcase;
+select decode(a, 1, "one", 2, "two", "nothing") as fcase, count(*) from t1 group by fcase;
+drop table t1;
+
+#
+# Test MAX(DECODE(...)) that can return null
+#
+
+create table t1 (`row` int not null, col int not null, val varchar(255) not null);
+insert into t1 values (1,1,'orange'),(1,2,'large'),(2,1,'yellow'),(2,2,'medium'),(3,1,'green'),(3,2,'small');
+select max(decode(col, 1, val, null)) as color from t1 group by `row`;
+drop table t1;
+
+SET NAMES latin1;
+
+#
+# DECODE and argument types/collations aggregation into result 
+#
+CREATE TABLE t1 SELECT 
+ DECODE(1, true, _latin1'a' COLLATE latin1_danish_ci, _latin1'a') AS c1,
+ DECODE(1, true, _latin1'a', _latin1'a' COLLATE latin1_danish_ci) AS c2,
+ DECODE(1, true, 'a', 1) AS c3,
+ DECODE(1, true, 1, 'a') AS c4,
+ DECODE(1, true, 'a', 1.0) AS c5,
+ DECODE(1, true, 1.0, 'a') AS c6,
+ DECODE(1, true, 1, 1.0) AS c7,
+ DECODE(1, true, 1.0, 1) AS c8,
+ DECODE(1, true, 1.0) AS c9,
+ DECODE(1, true, 0.1e1, 0.1) AS c10,
+ DECODE(1, true, 0.1e1, 1) AS c11,
+ DECODE(1, true, 0.1e1, '1') AS c12
+;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--error 1267
+SELECT DECODE(1, true, _latin1'a' COLLATE latin1_danish_ci, _latin1'a' COLLATE latin1_swedish_ci);
+
+--error 1270
+SELECT DECODE(_latin1'a' COLLATE latin1_general_ci, 
+_latin1'a' COLLATE latin1_danish_ci, 1,
+_latin1'a' COLLATE latin1_swedish_ci, 2
+);
+
+SELECT 
+DECODE(_latin1'a' COLLATE latin1_general_ci, _latin1'A', '1', 2),
+DECODE(_latin1'a' COLLATE latin1_bin, _latin1'A', '1', 2),
+DECODE(_latin1'a', _latin1'A' COLLATE latin1_swedish_ci, '1', 2),
+DECODE(_latin1'a', _latin1'A' COLLATE latin1_bin, '1', 2);
+
+# Test for BUG#10151
+SELECT 'decode+union+test'
+UNION 
+SELECT DECODE(LOWER('1'), LOWER('2'), 'BUG', 'nobug');
+
+SELECT DECODE(LOWER('1'), LOWER('2'), 'BUG', 'nobug');
+
+
+#
+#test MIN(DECODE(...))
+#
+
+create table t1(a float, b int default 3);
+insert into t1 (a) values (2), (11), (8);
+select min(a), min(decode(1=1, true, a, NULL)),
+  min(decode(1!=1, true, NULL, a)) 
+from t1 where b=3 group by b;
+drop table t1;
+
+
+#
+# #30782: Truncated UNSIGNED BIGINT columns 
+#
+create table t1 (a int, b bigint unsigned);
+create table t2 (c int);
+insert into t1 (a, b) values (1,4572794622775114594), (2,18196094287899841997),
+  (3,11120436154190595086);
+insert into t2 (c) values (1), (2), (3);
+select t1.a, decode(t1.a, 0, 0, t1.b) d from t1 
+  join t2 on t1.a=t2.c order by d;
+select t1.a, decode(t1.a, 0, 0, t1.b) d from t1 
+  join t2 on t1.a=t2.c where b=11120436154190595086 order by d;
+drop table t1, t2;
+
+#
+# Bug #11764313 57135: CRASH IN ITEM_FUNC_CASE::FIND_ITEM WITH CASE WHEN
+# ELSE CLAUSE
+#
+CREATE TABLE t1(a YEAR);
+SELECT 1 FROM t1 WHERE a=1 AND DECODE(1, a, 1, 1);
+DROP TABLE t1;
+
+SET sql_mode = default;
+CREATE TABLE source(bt INTEGER, bf INTEGER, i8u BIGINT UNSIGNED, i8s BIGINT);
+INSERT INTO source VALUES
+(1,0,0,-9223372036854775808), (1,0,18446744073709551615,9223372036854775807);
+
+CREATE TABLE target
+SELECT DECODE(bt, i8u, i8s) as u,
+       DECODE(bf, i8u, i8s) as s
+FROM source;
+
+SHOW CREATE TABLE target;
+
+SELECT DECODE(bt, true, i8u, i8s) AS u,
+       DECODE(bf, true, i8u, i8s) AS s
+FROM source;
+
+SELECT * FROM target;
+
+DROP TABLE target;
+
+--echo #
+--echo # Test for a memory leak in WL#6570
+--echo #
+
+CREATE TABLE t1 (a VARCHAR(110));
+INSERT INTO t1 VALUES (REPEAT("a",100));
+SELECT (t1.a,t1.a) IN (('a','c'),('a','b')) END FROM t1;
+SELECT DECODE(t1.a, 'a', 'c', 'd') FROM t1;
+DROP TABLE t1;
+DROP TABLE source;
+
+
+--echo #
+--echo # test null in expr.
+--echo #
+SELECT decode(null, 1, 'one', null, 'is_null', 'others');
+SELECT decode(null, null, 'is_null', 2, 'two', 'others');
+SELECT decode(null, 2, 'two', 'others');
+SELECT decode(null, 2, 'two');

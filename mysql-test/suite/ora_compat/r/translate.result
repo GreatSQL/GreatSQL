@@ -1,0 +1,157 @@
+DROP TABLE IF EXISTS t1;
+DROP PROCEDURE IF EXISTS p1;
+create table t1 (a char(10), b char(10), c char(10));
+insert into t1 values ('ABC123万AH', 'A1万', '@里#');
+select * from t1 where translate(A,B,C) = '@BC里23#@H';
+a	b	c
+ABC123万AH	A1万	@里#
+insert into t1 values ('ABC123万AH', 'A1', '@里#');
+select * from t1 where translate(A,B,C) = '@BC里23万@H';
+a	b	c
+ABC123万AH	A1	@里#
+insert into t1 values ('ABC123万AH', 'A1万', '@里');
+select * from t1 where translate(A,B,C) = '@BC里23万@H';
+a	b	c
+ABC123万AH	A1	@里#
+drop table t1;
+select 'a' union SELECT translate('ABC123万AH', 'A1万', '');
+a
+a
+BC23H
+SELECT translate('树a''在','树a''','@');
+translate('树a''在','树a''','@')
+@在
+SELECT translate('树a在','树a','树a');
+translate('树a在','树a','树a')
+树a在
+select 'a' union SELECT translate('ABC123万AH', '', '@里#');
+a
+a
+NULL
+select 'a' union SELECT translate('ABC123万AH', 123, 456);
+a
+a
+ABC456万AH
+select 'a' union SELECT translate('ABC123万AH', 123, -+8);
+a
+a
+ABC-8万AH
+select 'a' union SELECT translate('ABC123321万', 123, 8.0);
+a
+a
+ABC8.00.8万
+select translate((select x from (select 'abc' as x) as t1 ),
+(select y from (select 'b' as y) as t2 ),'#') from (select 1 union select 2 )
+as t3;
+translate((select x from (select 'abc' as x) as t1 ),
+(select y from (select 'b' as y) as t2 ),'#')
+a#c
+a#c
+create table t1(f1 varchar(6)) charset=utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+insert into t1 values ("12ab万");
+select translate(f1, '1a万','$)!') a from t1 union select 'x' a from t1;
+a
+$2)b!
+x
+drop table t1;
+CREATE TABLE t1 (
+a VARCHAR(100) NOT NULL DEFAULT '0',
+b VARCHAR(2) NOT NULL DEFAULT '',
+c VARCHAR(2) NOT NULL DEFAULT '',
+d TEXT NOT NULL,
+PRIMARY KEY (a, b, c),
+KEY (a)
+) DEFAULT CHARSET=utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+INSERT INTO t1 VALUES ('gui_A', 'a', 'b', 'str1'),
+('gui_AB', 'a', 'b', 'str2'), ('gui_ABC', 'a', 'b', 'str3');
+CREATE TABLE t2 (
+a VARCHAR(100) NOT NULL DEFAULT '',
+PRIMARY KEY (a)
+) DEFAULT CHARSET=latin1;
+INSERT INTO t2 VALUES ('A'), ('AB'), ('ABC');
+ANALYZE TABLE t1,t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+SELECT translate(t1.a, t2.a,'$'), t1.d FROM t2 
+LEFT JOIN t1 ON t1.b = 'a' AND t1.c = 'b';
+translate(t1.a, t2.a,'$')	d
+gui_$BC	str3
+gui_$B	str2
+gui_$	str1
+gui_$C	str3
+gui_$	str2
+gui_$	str1
+gui_$	str3
+gui_$	str2
+gui_$	str1
+DROP TABLE t1, t2;
+CREATE PROCEDURE p1(a varchar(255), b varchar(255), c varchar(255))
+SET @query = translate(a, b, c);
+CALL p1('ABC123万AH', 'A1万', '@里#');
+SELECT @query;
+@query
+@BC里23#@H
+DROP PROCEDURE p1;
+CREATE PROCEDURE p1()
+BEGIN
+DECLARE v1 varchar(255);
+DECLARE v2 varchar(255);
+SET v1= 'A1万';
+SET v2= '@里#';
+SET @s = translate('ABC123万AH', v1 , v2);
+SELECT @s;
+END;//
+CALL p1();
+@s
+@BC里23#@H
+CALL p1();
+@s
+@BC里23#@H
+DROP PROCEDURE p1;
+set sql_mode=default;
+select TRANSLATE('10019', 'A0123456789', 'A')  from dual;
+TRANSLATE('10019', 'A0123456789', 'A')
+NULL
+select 1 from dual where  TRANSLATE('10019', 'A0123456789', 'A') ='';
+1
+select 1 from dual where  TRANSLATE('10019', 'A0123456789', 'A') is null;
+1
+1
+select 1 from dual where translate('','','aa') is null;
+1
+1
+select 1 from dual where translate('','','') is null;
+1
+1
+select 1 from dual where translate('aa','','') is null;
+1
+1
+select 1 from dual where translate('','aa','') is null;
+1
+1
+set sql_mode="oracle";
+select TRANSLATE('10019', 'A0123456789', 'A')  from dual;
+TRANSLATE('10019', 'A0123456789', 'A')
+NULL
+select 1 from dual where  TRANSLATE('10019', 'A0123456789', 'A') ='';
+1
+select 1 from dual where  TRANSLATE('10019', 'A0123456789', 'A') is null;
+1
+1
+select 1 from dual where translate('','','aa') is null;
+1
+1
+select 1 from dual where translate('','','') is null;
+1
+1
+select 1 from dual where translate('aa','','') is null;
+1
+1
+select 1 from dual where translate('','aa','') is null;
+1
+1

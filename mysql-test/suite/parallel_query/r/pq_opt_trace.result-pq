@@ -1,0 +1,10 @@
+create table t1(id int, a varchar(10));
+set session optimizer_trace="enabled=on";
+select * from t1 limit 1;
+id	a
+1000	aa
+Select locate("make_parallel_query_plan", trace) > 1 From Information_Schema.Optimizer_Trace;
+locate("make_parallel_query_plan", trace) > 1
+1
+set session optimizer_trace="enabled=on";
+drop table t1;

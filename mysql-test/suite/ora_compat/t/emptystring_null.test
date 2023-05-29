@@ -1,0 +1,792 @@
+DROP TABLE IF EXISTS `test1`;
+CREATE TABLE `test1` (
+  `id` int NOT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  `test_dec` decimal(10,5) DEFAULT NULL,
+  `test_blob` blob,
+  `c5` varchar(255) NOT NULL,
+  `c6` timestamp NULL DEFAULT NULL,
+  `c7` char(255) DEFAULT NULL,
+  `c8` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO `test1` VALUES (1, '1', 11.32000, NULL, 'c5', NULL, 'c71', NULL);
+INSERT INTO `test1` VALUES (2, '2', 22.24500, NULL, '', '2022-03-17 16:08:57', NULL, 'c82');
+INSERT INTO `test1` VALUES (3, '3', 3.00000, NULL, '', '2022-03-17 16:04:15', NULL, NULL);
+INSERT INTO `test1` VALUES (4, '3', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (5, '', NULL, NULL, '', '2022-03-09 16:04:19', NULL, NULL);
+INSERT INTO `test1` VALUES (6, '', NULL, NULL, '', NULL, NULL, '1');
+INSERT INTO `test1` VALUES (7, '20', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (8, '8', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (9, NULL, NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (10, NULL, NULL, NULL, 'c510', NULL, '', '');
+
+DROP TABLE IF EXISTS `test2`;
+CREATE TABLE `test2` (
+  `id` int NOT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  `test_dec` decimal(10,5) DEFAULT NULL,
+  `test_blob` blob,
+  `c5` varchar(255) NOT NULL,
+  `c6` timestamp NULL DEFAULT NULL,
+  `c7` char(255) DEFAULT NULL,
+  `c8` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO `test2` VALUES (10, '1', 11.32000, NULL, 'c5', NULL, 'c71', NULL);
+INSERT INTO `test2` VALUES (10, '2', 22.24500, NULL, '', '2022-03-17 16:08:57', NULL, 'c82');
+INSERT INTO `test2` VALUES (10, '3', 3.00000, NULL, '', '2022-03-17 16:04:15', NULL, NULL);
+INSERT INTO `test2` VALUES (10, '3', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test2` VALUES (20, '', NULL, NULL, '', '2022-03-09 16:04:19', NULL, NULL);
+INSERT INTO `test2` VALUES (20, '', NULL, NULL, '', NULL, NULL, '1');
+INSERT INTO `test2` VALUES (20, '20', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test2` VALUES (30, '8', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test2` VALUES (30, NULL, NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test2` VALUES (40, NULL, NULL, NULL, 'c510', NULL, '', '');
+INSERT INTO `test2` VALUES (40, NULL, NULL, NULL, 'c510', NULL, '', '');
+INSERT INTO `test2` VALUES (50, '', NULL, NULL, '', NULL, NULL, '1');
+INSERT INTO `test2` VALUES (50, '', NULL, NULL, '', NULL, NULL, '1');
+
+CREATE VIEW test_view as select name from test1 group by name;
+
+CREATE TABLE t1 (i1 int, c2 varchar(100) default '', descr VARCHAR(100));
+
+INSERT INTO t1 VALUES (1, '', 'empty string');
+INSERT INTO t1 VALUES (-1, NULL, 'null');
+INSERT INTO t1 VALUES (2, '', 'empty string 2');
+INSERT INTO t1 VALUES (-2, NULL, 'null 2');
+
+CREATE TABLE t2 AS SELECT * FROM t1;
+CREATE INDEX t1_c2 ON t1(c2);
+
+create table lob1 (
+        id int,
+        c2 clob,
+        b3 blob
+);
+insert into lob1 values (0, NULL, NULL);
+insert into lob1 values (1, '', '');
+insert into lob1 values (2, 'a', 'a');
+insert into lob1 values (3, '', '');
+insert into lob1 values (4, 'b', 'b');
+
+create table es1 (
+        id int,
+        e2 enum('N', 'Y'),
+        s3 set(' ', 'a', 'b'),
+        vc4 varchar(100)
+);
+
+insert into es1 values (0, null, null, null);
+insert into es1 values (100, null, 0, null);
+# insert into es1 values (1, '', '', null);
+# insert into es1 values (1, 0, 0, null);
+insert into es1 values (2, 'Y', 'a', null);
+insert into es1 values (103, 'N', 0, null);
+update es1 set vc4=s3;
+
+set timestamp=1648915200;
+
+set @default_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';
+set @default_mode_emptystring_equal_null='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,emptystring_equal_null';
+set @oracle_mode='oracle';
+set @oracle_mode_emptystring_equal_null='oracle,emptystring_equal_null';
+
+set sql_mode=default;
+--echo test ------------------------no emptystring_equal_null mode;--------------------------------
+--disable_warnings
+--echo test Numerical function
+
+select name,abs(name) from test1;
+select name,SQRT(name) from test1;
+select name,MOD(name,1.5) from test1;
+select name,CEIL(name) from test1;
+select name,CEILING(name) from test1;
+select name,FLOOR(name) from test1;
+select name,RAND(name) from test1;
+select name,ROUND(name) from test1;
+select name,SIGN(name) from test1;
+select name,POW(name,2) from test1;
+select name,POWER(name,2) from test1;
+select name,SIN(name) from test1;
+select name,ASIN(name) from test1;
+select name,COS(name) from test1;
+select name,ACOS(name) from test1;
+--replace_column 2 <0>
+select name,TAN(name) from test1;
+--replace_column 2 <0>
+select name,ATAN(name) from test1;
+--error 1690
+select name,COT(name) from test1;
+
+--echo test string function
+
+select name,length(name) from test1;
+select name,CONCAT(name) from test1;
+select name,CONCAT(name,'2') from test1;
+select name,concat(name,'') from test1;
+select concat('a','') from dual;
+select name,INSERT(name,1,1,'+') from test1;
+select name,LOWER(name) from test1;
+select name,UPPER(name) from test1;
+select name,LEFT(name,1) from test1;
+select name,RIGHT(name,1) from test1;
+select name,TRIM(name) from test1;
+select name,REPLACE(name,name,'') from test1;
+select name,SUBSTRING(name,2) from test1;
+select name,REVERSE(name) from test1;
+select space('') from dual;
+
+--echo test date time funciton
+
+select str_to_date(name, '%m/%d/%Y') from test1;
+select date_format(name, '%Y%m%d%H%i%s') from test1;
+select time_to_sec(name) from test1;
+select sec_to_time(name) from test1;
+select makedate(name,31) from test1;
+select maketime(name,15,31) from test1;
+select unix_timestamp(name) from test1;
+select from_unixtime(name) from test1;
+select timestamp(name) from test1;
+set @dt ='';
+select date_add(@dt, interval 1 day);
+select convert_tz(name, '+08:00', '+00:00') from test1;
+select date_sub(name, interval 1 day) from test1;
+select timestampadd(hour, -8, name) from test1;
+
+--echo test oracle mode ||
+
+set sql_mode=oracle;
+select concat('a',null) from dual;
+select concat('a','') from dual;
+select 'a'||null from dual;
+select 'a'||'' from dual;
+set sql_mode=default;
+
+--echo test statistical function
+select MAX(name) from test1;
+select MIN(name) from test1;
+select COUNT(name) from test1;
+select sum(name) from test1;
+select AVG(name) from test1;
+select least(c5,name) from test1 ; 
+
+--echo test CAST
+select CAST(name AS decimal) from test1;
+select to_date(name,'yyyy') from test1;
+select CAST(name AS date) from test1;
+select CAST(name AS time) from test1;
+select CAST(name as binary) from test1;
+--error 3141
+select CAST(name as json) from test1;
+
+--echo test CONVERT
+
+SELECT CONVERT(name , decimal) from test1;
+
+--echo test IF ,IFNULL
+
+select name,IF(name>0,'Y','N') from test1;
+select name,IFNULL(name,'Y') from test1;
+select nullif(null,'') from dual;
+select nvl('',6) from dual;
+select nvl(name,6) from test1;
+select '' is  null from dual;
+select '' is not  null from dual;
+select ''  from dual;
+select name is null from test1;
+select name is not null from test1;
+
+--echo test CASE WHEN THEN
+
+SELECT CASE name WHEN -2 THEN 'name<0' WHEN 2 THEN 'name>0' ELSE 'other' END AS name from test1;
+
+--echo test UNION
+
+select name from test1 union select c5 from test1;
+
+--echo test DISTINCT
+
+select distinct name ,c5 from test1;
+select distinct name,count(name),count(''),count(*) from test1 group by name;
+
+--echo test JOIN
+
+select * from test1 t  join test1 t1  on t.name = t1.name;
+select * from test1 t  inner join test1 t1  on t.name = t1.name;
+select * from test1 t  cross join test1 t1  on t.name = t1.name;
+select * from test1 t  straight_join test1 t1  on t.name = t1.name;
+select * from test1 t left join  test1 t1  on t.name = t1.name;
+select * from test1 t right join  test1 t1  on t.name = t1.name;
+
+--echo test INSERT INTO
+
+--error 1062
+insert into test1 select * from test1;
+
+--echo test IN
+
+select name from test1 where name not in (1,2,3);
+select name from test1 where name  in (1,2,3);
+
+--echo test replace
+
+replace into test1(id,name,test_dec,test_blob,c5,c6) values(8, '', NULL, NULL, '', NULL);
+
+--echo test SUBQUERY
+
+SELECT * FROM test1 WHERE name = (SELECT name FROM test1 where id=5);
+
+--echo test where
+
+select name from test1 where name > '';
+select name from test1 where name = '';
+
+--echo test not null field c5 in where
+
+select * from test1 where c5 is null;
+select * from test1 where c5 is not null;
+
+set sql_mode=default;
+update test1 set c5='' where id=4;
+INSERT INTO `test1` VALUES (11, '', NULL, NULL, '', NULL, NULL, NULL);
+
+--echo test oracmp function
+select name,decode(name, '',1,2),decode(name,null,1,2) from test1;
+select name,c5,decode(name, c5, 'one', 2, 'two', 'other') from test1;
+select name,instr(name,'1') from test1;
+select name,length(name) from test1;
+select name,lengthb(name) from test1;
+explain select name,decode(name, '', 1, 2) from test1;
+show warnings;
+explain select group_concat(name order by id ASC) gc,name from test1 group by name;
+show  warnings;
+select group_concat(name order by id ASC) gc,name from test1 group by name;
+select to_char(name) from test1;
+select to_date(name,'yyyy') from test1;
+select to_number(name,'9999') from test1;
+select to_number(name,'99.009') from test1;
+select to_number(name) from test1;
+select to_timestamp(name,'yy') from test1;
+select translate(name,'','null') from test1;
+select translate(name,'1','=1') from test1;
+select group_concat(name) from test1;
+
+--echo  test group by 
+select name from test1 group by name ;
+select name,c8 from test1 group by name,c8 ;
+select b.name from  (select * from test1) b left join test1 c on b.name=c.name group by b.name;
+select name from (select * from test1 where id>3) b union select name from test1 group by name;
+select * from test_view;
+select c1,ca from (select name c1,  '' ca from test1 group by name) where ca is null;
+
+--echo  test in and not in 
+select name from test1 where name not in (1,2,'');
+select name from test1 where name  in (1,2,null);
+
+--echo  test set variable
+set @a='';
+select @a,name from test1 where name > @a;
+select @a,name from test1 where @a is null;
+
+--echo  test table index field
+select * from t1 where c2 is null;
+select * from t2 where c2 is null;
+select * from t1 where c2 is not null;
+select * from t2 where c2 is not null;
+select i1,c2,descr "off, t1.c2=" from t1 where i1 > -99 and c2='';
+select i1,c2,descr 'off, t2.c2=' from t2 where i1 > -99 and c2='';
+select i1,c2,descr 'off, t1.c2 is null' from t1 where i1 > -99 and c2 is null;
+select i1,c2,descr 'off, t2.c2 is null' from t2 where i1 > -99 and c2 is null;
+
+--echo test emptystring_equal_null change between prepare/execute.
+set sql_mode=@default_mode;
+prepare stmt1 from 'select c2,isnull(c2),''p-off,e-on'' from t1 where c2 is null ';
+
+set sql_mode=@default_mode_emptystring_equal_null;
+execute stmt1;
+select c2,isnull(c2),'e-on' from t1 where c2 is null;
+
+deallocate prepare stmt1;
+
+set sql_mode=@default_mode_emptystring_equal_null;
+prepare stmt1 from 'select c2,isnull(c2),''p-on,e-off'' from t1 where c2 is null '; 
+
+set sql_mode=@default_mode;
+execute stmt1;
+select c2,isnull(c2),'e-off' from t1 where c2 is null;
+
+deallocate prepare stmt1;
+
+set sql_mode=@default_mode_emptystring_equal_null;
+prepare stmt1 from 'select c2,isnull(c2),''p-on,e-on'' from t1 where c2 is null ';
+
+execute stmt1;
+select c2,isnull(c2),'e-on' from t1 where c2 is null;
+
+deallocate prepare stmt1;
+
+--echo test count/min/max
+set sql_mode=@default_mode_emptystring_equal_null;
+select count(''),min(''),max(''),count(null),min(null),max(null) from t1;
+select name,count(name),count(''),count(*) from test1 group by name;
+select '' '';
+
+set sql_mode=@default_mode;
+select count(''),min(''),max(''),count(null),min(null),max(null) from t1;
+select name,count(name),count(''),count(*) from test1 group by name;
+select '' '';
+
+--echo test ------------------------default mode add emptystring_equal_null mode; ---------------------------------
+
+set sql_mode=@default_mode_emptystring_equal_null;
+
+--echo test Numerical function
+
+select name,abs(name) from test1;
+select name,SQRT(name) from test1;
+select name,MOD(name,1.5) from test1;
+select name,CEIL(name) from test1;
+select name,CEILING(name) from test1;
+select name,FLOOR(name) from test1;
+select name,RAND(name) from test1;
+select name,ROUND(name) from test1;
+select name,SIGN(name) from test1;
+select name,POW(name,2) from test1;
+select name,POWER(name,2) from test1;
+select name,SIN(name) from test1;
+select name,ASIN(name) from test1;
+select name,COS(name) from test1;
+select name,ACOS(name) from test1;
+--replace_column 2 <0>
+select name,TAN(name) from test1;
+--replace_column 2 <0>
+select name,ATAN(name) from test1;
+--replace_column 2 <0>
+select name,COT(name) from test1;
+
+--echo test string function
+
+select name,length(name) from test1;
+select name,CONCAT(name) from test1;
+select name,CONCAT(name,'2') from test1;
+select name,concat(name,'') from test1;
+select concat('a','') from dual;
+select name,INSERT(name,1,1,'+') from test1;
+select name,LOWER(name) from test1;
+select name,UPPER(name) from test1;
+select name,LEFT(name,1) from test1;
+select name,RIGHT(name,1) from test1;
+select name,TRIM(name) from test1;
+select name,REPLACE(name,name,'') from test1;
+select name,SUBSTRING(name,2) from test1;
+select name,REVERSE(name) from test1;
+select space('') from dual;
+
+--echo test date time funciton
+
+select str_to_date(name, '%m/%d/%Y') from test1;
+select date_format(name, '%Y%m%d%H%i%s') from test1;
+select time_to_sec(name) from test1;
+select sec_to_time(name) from test1;
+select makedate(name,31) from test1;
+select maketime(name,15,31) from test1;
+select unix_timestamp(name) from test1;
+select from_unixtime(name) from test1;
+select timestamp(name) from test1;
+set @dt ='';
+select date_add(@dt, interval 1 day);
+select convert_tz(name, '+08:00', '+00:00') from test1;
+select date_sub(name, interval 1 day) from test1;
+select timestampadd(hour, -8, name) from test1;
+
+--echo test oracle mode ||
+
+set sql_mode=@oracle_mode_emptystring_equal_null;
+select concat('a',null) from dual;
+select concat('a','') from dual;
+select 'a'||null from dual;
+select 'a'||'' from dual;
+set sql_mode=@default_mode_emptystring_equal_null;
+
+--echo test statistical function
+
+select MAX(name) from test1;
+select MIN(name) from test1;
+select COUNT(name) from test1;
+select sum(name) from test1;
+select AVG(name) from test1;
+select least(c5,name) from test1 ; 
+
+--echo test CAST
+
+SELECT CAST(name AS decimal) from test1;
+select to_date(name,'yyyy') from test1;
+select CAST(name AS date) from test1;
+select CAST(name AS time) from test1;
+select CAST(name as binary) from test1;
+select CAST(name as json) from test1;
+
+--echo test CONVERT
+
+SELECT CONVERT(name , decimal) from test1;
+
+--echo test IF ,IFNULL
+
+select name,IF(name>0,'Y','N') from test1;
+select name,IFNULL(name,'Y') from test1;
+select nullif(null,'') from dual;
+select nvl('',6) from dual;
+select nvl(name,6) from test1;
+select '' is  null from dual;
+select '' is not  null from dual;
+select ''  from dual;
+select name is null from test1;
+select name is not null from test1;
+
+--echo test CASE WHEN THEN
+
+SELECT CASE name WHEN -2 THEN 'name<0' WHEN 2 THEN 'name>0' ELSE 'other' END AS name from test1;
+
+--echo test UNION
+
+select name from test1 union select c5 from test1;
+
+--echo test DISTINCT
+
+select distinct name ,c5 from test1;
+select distinct name,count(name),count(''),count(*) from test1 group by name;
+
+--echo test JOIN
+select * from test1 t  join test1 t1  on t.name = t1.name;
+select * from test1 t  inner join test1 t1  on t.name = t1.name;
+select * from test1 t  cross join test1 t1  on t.name = t1.name;
+select * from test1 t  straight_join test1 t1 on t.name = t1.name;
+select * from test1 t left join  test1 t1  on t.name = t1.name;
+select * from test1 t right join  test1 t1  on t.name = t1.name;
+
+--echo test INSERT INTO
+--error 1062
+insert into test1 select * from test1;
+
+--echo test IN
+
+select name from test1 where name not in (1,2,3);
+select name from test1 where name  in (1,2,3);
+
+--echo test replace
+
+--error 1048
+replace into test1(id,name,test_dec,test_blob,c5,c6) values(8, '', NULL, NULL, '', NULL);
+
+--echo test SUBQUERY
+
+SELECT * FROM test1 WHERE name = (SELECT name FROM test1 where id=5);
+
+--echo test where
+
+select name from test1 where name > '';
+select name from test1 where name = '';
+
+--echo test not null field c5 in where
+
+select * from test1 where c5 is null;
+select * from test1 where c5 is not null;
+
+--error 1048
+update test1 set c5='' where id=4;
+
+--error 1048
+INSERT INTO `test1` VALUES (11, '', NULL, NULL, '', NULL, NULL, NULL);
+
+--echo test oracmp function
+
+select name,decode(name, '',1,2),decode(name,null,1,2) from test1;
+select name,c5,decode(name, c5, 'one', 2, 'two', 'other') from test1;
+select name,instr(name,'1') from test1;
+explain select name,decode(name, '', 1, 2) from test1;
+show warnings;
+explain select group_concat(name order by id ASC) gc,name from test1 group by name;
+show  warnings;
+select group_concat(name order by id ASC) gc,name from test1 group by name;
+select substr(name, -90, 7) from test1;
+select to_char(name) from test1;
+select to_date(name,'yyyy') from test1;
+select to_number(name,'9999') from test1;
+select to_number(name,'99.009') from test1;
+select to_number(name) from test1;
+select to_timestamp(name,'yy') from test1;
+select translate(name,'','null') from test1;
+select translate(name,'1','=1') from test1;
+select group_concat(name) from test1;
+
+--echo  test group by 
+select name from test1 group by name ;
+select name,c8 from test1 group by name,c8 ;
+select b.name from  (select * from test1) b left join test1 c on b.name=c.name group by b.name;
+select name from (select * from test1 where id>3) b union select name from test1 group by name;
+select * from test_view;
+select c1,ca from (select name c1,  '' ca from test1 group by name) where ca is null;
+
+--echo  test in and not in 
+select name from test1 where name not in (1,2,'');
+select name from test1 where name  in (1,2,null);
+
+--echo  test set variable
+set @a='';
+select @a,name from test1 where name > @a;
+select @a,name from test1 where @a is null;
+
+--echo  test table index field
+select * from t1 where c2 is null;
+select * from t2 where c2 is null;
+select * from t1 where c2 is not null;
+select * from t2 where c2 is not null;
+select i1,c2,descr "off, t1.c2=" from t1 where i1 > -99 and c2='';
+select i1,c2,descr 'off, t2.c2=' from t2 where i1 > -99 and c2='';
+select i1,c2,descr 'off, t1.c2 is null' from t1 where i1 > -99 and c2 is null;
+select i1,c2,descr 'off, t2.c2 is null' from t2 where i1 > -99 and c2 is null;
+
+--echo test ------------------------oracle mode add  emptystring_equal_null ---------------------------------
+
+set sql_mode=@oracle_mode_emptystring_equal_null;
+
+--echo test Numerical function
+
+select name,abs(name) from test1;
+select name,SQRT(name) from test1;
+select name,MOD(name,1.5) from test1;
+select name,CEIL(name) from test1;
+select name,CEILING(name) from test1;
+select name,FLOOR(name) from test1;
+select name,RAND(name) from test1;
+select name,ROUND(name) from test1;
+select name,SIGN(name) from test1;
+select name,POW(name,2) from test1;
+select name,POWER(name,2) from test1;
+select name,SIN(name) from test1;
+select name,ASIN(name) from test1;
+select name,COS(name) from test1;
+select name,ACOS(name) from test1;
+--replace_column 2 <0>
+select name,TAN(name) from test1;
+--replace_column 2 <0>
+select name,ATAN(name) from test1;
+--replace_column 2 <0>
+select name,COT(name) from test1;
+
+--echo test string function
+
+select name,length(name) from test1;
+select name,CONCAT(name) from test1;
+select name,CONCAT(name,'2') from test1;
+select name,concat(name,'') from test1;
+select concat('a','') from dual;
+select name,INSERT(name,1,1,'+') from test1;
+select name,LOWER(name) from test1;
+select name,UPPER(name) from test1;
+select name,LEFT(name,1) from test1;
+select name,RIGHT(name,1) from test1;
+select name,TRIM(name) from test1;
+select name,REPLACE(name,name,'') from test1;
+select name,SUBSTRING(name,2) from test1;
+select name,REVERSE(name) from test1;
+select space('') from dual;
+
+--echo test date time funciton
+
+select str_to_date(name, '%m/%d/%Y') from test1;
+select date_format(name, '%Y%m%d%H%i%s') from test1;
+select time_to_sec(name) from test1;
+select sec_to_time(name) from test1;
+select makedate(name,31) from test1;
+select maketime(name,15,31) from test1;
+select unix_timestamp(name) from test1;
+select from_unixtime(name) from test1;
+select timestamp(name) from test1;
+set @dt ='';
+select date_add(@dt, interval 1 day);
+select convert_tz(name, '+08:00', '+00:00') from test1;
+select date_sub(name, interval 1 day) from test1;
+select timestampadd(hour, -8, name) from test1;
+
+--echo test oracle mode ||
+
+select concat('a',null) from dual;
+select concat('a','') from dual;
+select 'a'||null from dual;
+select 'a'||'' from dual;
+
+--echo test statistical function
+
+select MAX(name) from test1;
+select MIN(name) from test1;
+select COUNT(name) from test1;
+select sum(name) from test1;
+select AVG(name) from test1;
+select least(c5,name) from test1 ; 
+
+--echo test CAST
+
+SELECT CAST(name AS decimal) from test1;
+select to_date(name,'yyyy') from test1;
+select CAST(name AS date) from test1;
+select CAST(name AS time) from test1;
+select CAST(name as binary) from test1;
+select CAST(name as json) from test1;
+
+--echo test CONVERT
+
+SELECT CONVERT(name , decimal) from test1;
+
+--echo test IF ,IFNULL
+
+select name,IF(name>0,'Y','N') from test1;
+select name,IFNULL(name,'Y') from test1;
+select nullif(null,'') from dual;
+select nvl('',6) from dual;
+select nvl(name,6) from test1;
+select '' is  null from dual;
+select '' is not  null from dual;
+select ''  from dual;
+select name is null from test1;
+select name is not null from test1;
+
+--echo test CASE WHEN THEN
+
+SELECT CASE name WHEN -2 THEN 'name<0' WHEN 2 THEN 'name>0' ELSE 'other' END AS name from test1;
+
+--echo test UNION
+
+select name from test1 union select c5 from test1;
+
+--echo test DISTINCT
+
+select distinct name ,c5 from test1;
+
+--echo test JOIN
+
+select * from test1 t  join test1 t1  on t.name = t1.name;
+select * from test1 t  inner join test1 t1  on t.name = t1.name;
+select * from test1 t  cross join test1 t1  on t.name = t1.name;
+select * from test1 t  straight_join test1 t1 on t.name = t1.name;
+select * from test1 t left join  test1 t1  on t.name = t1.name;
+select * from test1 t right join  test1 t1  on t.name = t1.name;
+
+--echo test INSERT INTO
+
+--error 1062
+insert into test1 select * from test1;
+
+--echo test IN
+
+select name from test1 where name not in (1,2,3);
+select name from test1 where name  in (1,2,3);
+
+--echo test replace
+
+--error 1048
+replace into test1(id,name,test_dec,test_blob,c5,c6) values(8, '', NULL, NULL, '', NULL);
+
+--echo test SUBQUERY
+
+SELECT * FROM test1 WHERE name = (SELECT name FROM test1 where id=5);
+
+--echo test where
+
+select name from test1 where name > '';
+select name from test1 where name = '';
+
+--echo test not null field c5 in where
+
+select * from test1 where c5 is null;
+select * from test1 where c5 is not null;
+
+--error 1048
+update test1 set c5='' where id=4;
+
+--error 1048
+INSERT INTO `test1` VALUES (11, '', NULL, NULL, '', NULL, NULL, NULL);
+
+--echo test oracmp function
+
+
+select name,c5,decode(name, c5, 'one', 2, 'two', 'other') from test1;
+
+select name,instr(name,'1') from test1;
+select name,length(name) from test1;
+select name,lengthb(name) from test1;
+explain select group_concat(name order by id ASC) gc,name from test1 group by name;
+show  warnings;
+select group_concat(name order by id ASC) gc,name from test1 group by name;
+select substr(name, -90, 7) from test1;
+select to_char(name) from test1;
+select to_date(name,'yyyy') from test1;
+select to_number(name,'9999') from test1;
+select to_number(name,'99.009') from test1;
+select to_number(name) from test1;
+select to_timestamp(name,'yy') from test1;
+select translate(name,'','null') from test1;
+select translate(name,'1','=1') from test1;
+select group_concat(name) from test1;
+
+--echo  test group by 
+select name from test1 group by name ;
+select name,c8 from test1 group by name,c8 ;
+select b.name from  (select * from test1) b left join test1 c on b.name=c.name group by b.name;
+select name from (select * from test1 where id>3) b union select name from test1 group by name;
+select * from test_view;
+
+--echo  test in and not in 
+select name from test1 where name not in (1,2,'');
+select name from test1 where name  in (1,2,null);
+
+--echo  test set variable
+set @a='';
+select @a,name from test1 where name > @a;
+select @a,name from test1 where @a is null;
+
+--echo  test table index field
+select * from t1 where c2 is null;
+select * from t2 where c2 is null;
+select * from t1 where c2 is not null;
+select * from t2 where c2 is not null;
+select i1,c2,descr "on, t1.c2=" from t1 where i1 > -99 and c2='';
+select i1,c2,descr 'on, t2.c2=' from t2 where i1 > -99 and c2='';
+select i1,c2,descr 'on, t1.c2 is null' from t1 where i1 > -99 and c2 is null;
+select i1,c2,descr 'on, t2.c2 is null' from t2 where i1 > -99 and c2 is null;
+
+set sql_mode=default;
+
+--echo current behavior
+create table t3 as select * from t1;
+
+--echo select will output as the data is, no ''/null translation
+select *,'off,select' from t3;
+set sql_mode=@default_mode_emptystring_equal_null;
+select *,'on,select' from t3;
+set sql_mode=@default_mode;
+
+--echo update may do ''/null translation
+set sql_mode=@default_mode_emptystring_equal_null;
+update t3 set c2=c2;
+select *,'on,update c2=c2' from t3;
+set sql_mode=@default_mode;
+
+--echo create table x select * from xxx
+set sql_mode=@default_mode_emptystring_equal_null;
+drop table t3;
+create table t3 as select * from t1;
+select *,'on,create as select' from t3;
+
+--enable_warnings
+
+drop table es1;
+drop table lob1;
+drop table test2;
+drop table test1;
+drop view  test_view;
+drop table t1;
+drop table t2;
+drop table t3;

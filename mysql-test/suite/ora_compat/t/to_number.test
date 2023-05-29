@@ -1,0 +1,730 @@
+#1.table test_to_number
+--disable_warnings
+drop table if exists test_to_number;
+CREATE TABLE `test_to_number` (
+  `c0` int NOT NULL AUTO_INCREMENT,
+  `c1` date DEFAULT NULL,
+  `c2` time DEFAULT NULL,
+  `c3` datetime DEFAULT NULL,
+  `c4` year DEFAULT NULL,
+  `c5` int DEFAULT NULL,
+  `c6` decimal(10,6) DEFAULT NULL,
+  `c7` double DEFAULT NULL,
+  `c8` float DEFAULT NULL,
+  `c9` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`c0`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+#2.insert data
+
+INSERT INTO `test_to_number` VALUES ('1', '2021-04-26', '15:36:37', '2021-04-27 15:36:41', '2021', '5', '6.000000', '7.1', '118.169', 'a8.168111');
+INSERT INTO `test_to_number` VALUES ('2', '2021-04-28', '15:36:37', '2021-04-27 15:36:41', '2021', '6', '7877.126000', '8.1', '119.187', 'a9.16');
+INSERT INTO `test_to_number` VALUES ('3', '2021-04-29', '15:36:37', '2021-04-27 15:36:41', '2021', '6', '7877.126890', '8.1', '119.187', 'a9.1682');
+INSERT INTO `test_to_number` VALUES ('4', '2021-04-30', '15:36:37', '2021-04-27 15:36:41', '2021', '6', '7877.126890', '8.1', '119.187', 'a9.168333');
+
+#3.test to_number
+
+select c7,to_number(c7) from test_to_number;
+
+--error 1690
+select c9,to_number(c9) from test_to_number;
+
+select to_number("12340")+1.1 ,to_number("12345")-1.1,to_number("12345")*2,to_number("12345")/2 ; 
+
+--error 1690
+select to_number(123.456,'999.99');
+
+--error 3047
+select to_number(123.456,'') ;
+
+--error 3047
+select to_number(123.456,'a999.99') ;
+
+--error 1690
+select to_number(123333.456,'999.99') ;
+
+
+--error 1059
+select to_number(12333333333333333333333333333333333333333.456,'999999999999999999999999999999999999999999999999999999999999999999999999999.99') ;   
+
+select to_number(sum(null));
+
+select to_number(null) from dual ;
+
+select to_number('') from dual ;
+
+select to_number(' 1.2') from dual where to_number(null) is null ;
+
+select to_number(' 1.2') from dual where to_number('') is null ;
+
+select to_number(' 1.2 ') from dual where to_number('') is null ;
+
+select to_number(' 1.2') from dual where to_number(' 1.2')=1.2 ;
+
+select to_number(' 1.2 ') from dual where to_number(' 1.2 ')=1.2 ;
+
+select to_number(11.12) from dual where to_number(11.12)=11.122;
+
+select to_number(11.12) from dual where to_number(11.12)=11.12;
+
+select to_number('11.12') from dual where to_number('11.12')=11.122;
+
+select to_number('11.12') from dual where to_number('11.12')=11.12;
+
+--error 1690
+select to_number(' 1.2') from dual where to_number(' ') is null ;
+
+--error 1690
+select to_number(' ') from dual ;
+
+select to_number(' 1.2') from dual where to_number(' 1.2') is null ;
+
+select 'null' from dual where to_number('') is null ;
+
+--error 1690
+select * from test_to_number order by to_number(c9);
+
+--error 1055
+select c9 from test_to_number group by to_number(c9);
+
+select to_number('11.1100') union all select to_number('11.00') ;
+
+select to_number(c6) from test_to_number group by to_number(c6);
+
+select to_number('12345.00') , to_number('12345');
+
+create table `T_UCP_STAFFBASICINFO` (
+        `DLMODULUS` Decimal (6),
+         `DLMODULUS2` Decimal (10,5)
+);
+
+insert into `T_UCP_STAFFBASICINFO` (`DLMODULUS`,`DLMODULUS2`) values('0.00','0.00');
+insert into `T_UCP_STAFFBASICINFO` (`DLMODULUS`,`DLMODULUS2`) values('0','0');
+insert into `T_UCP_STAFFBASICINFO` (`DLMODULUS`,`DLMODULUS2`) values('0.1','0.1');
+insert into `T_UCP_STAFFBASICINFO` (`DLMODULUS`,`DLMODULUS2`) values('1.0','1.0');
+insert into `T_UCP_STAFFBASICINFO` (`DLMODULUS`,`DLMODULUS2`) values('0.01','0.01');
+SELECT DLMODULUS,DLMODULUS2 FROM T_UCP_STAFFBASICINFO;
+
+set sql_mode=oracle;
+
+SELECT DLMODULUS,DLMODULUS2 FROM T_UCP_STAFFBASICINFO;
+
+select to_number(null) from dual where to_number(null) is null ;
+
+select to_number('') from dual where to_number('') is null ;
+
+select to_number(' 1.2') from dual where to_number(' 1.2')=1.2 ;
+
+select to_number('11.1100') union all select to_number('11.00') ;
+
+select to_number(c6) from test_to_number group by to_number(c6);
+
+select to_number('12345.00') , to_number('12345');
+
+--enable_warnings
+drop table if exists test_to_number;
+drop table if exists T_UCP_STAFFBASICINFO;
+
+
+#test to_number FMT ','
+set sql_mode=DEFAULT;
+
+select to_number('1,234.567','9,999.999') FROM dual;
+select to_number('12,34','99,99.99') from dual;
+select to_number('34','99,99.99') from dual;
+select to_number('12,12,12','99,99,99.99') from dual;
+select to_number('34.1','99,99.99') from dual;
+select to_number('12,12,12.01','99,99,99.99') from dual;
+--error 1690
+select to_number('12,12,12.001','99,99,99.99') from dual;
+--error 1690
+select to_number('234','99,99.99') from dual;
+--error 1690
+SELECT to_number('1,234.567','99,99.999') FROM dual;
+--error 1690
+select to_number('1234','99,99.99') from dual;
+--error 1690
+select to_number('34.112','99,99.99') from dual;
+--error 1690
+select to_number('34.112','99,99.99') from dual;
+--error 1690
+select to_number('112,12,12','99,99,99.99') from dual;
+--error 1690
+select to_number('12,12,112','999,999,999.99') from dual;
+--error 1690
+select to_number('112,12','99,99,99.99') from dual;
+
+
+#test to_number FMT '.' decimal point
+SELECT to_number('0.12','0.99') FROM dual;
+SELECT to_number('1.1','0.99') FROM dual;
+--error 1690
+SELECT to_number('1.111','0.99') FROM dual;
+--error 1690
+SELECT to_number('11.11','9.99') FROM dual;
+
+#test to_number FMT  scientific calculation
+SELECT to_number('1.6E+02','9.9EEEE') FROM dual;
+SELECT to_number('1.6E-02','9.9EEEE') FROM dual;
+SELECT to_number('1.6e+02','9.9EEEE') FROM dual;
+SELECT to_number('1.6e-02','9.9EEEE') FROM dual;
+SELECT to_number('1.6','9.9EEEE') FROM dual;
+SELECT to_number('1','9.9EEEE') FROM dual;
+SELECT to_number('-1','9.9EEEE') FROM dual;
+SELECT to_number('0','9.9EEEE') FROM dual;
+SELECT to_number('0.6','9.9EEEE') FROM dual;
+SELECT to_number('.6','9.9EEEE') FROM dual;
+SELECT to_number('-1.0','9.9EEEE') FROM dual;
+SELECT to_number('1E+01', '9.9EEEE') FROM DUAL;
+--error 1690
+SELECT to_number('1.66e+02','9.9EEEE') FROM dual;
+--error 1690
+SELECT to_number('1.6-02','9.9EEEE') FROM dual;
+--error 1690
+SELECT to_number('1.6A-02','9.9EEEE') FROM dual;
+--error 1690
+SELECT to_number('A-E02','9.9EEEE') FROM dual;
+--error 1690
+SELECT to_number('11','99.9EEEE') FROM dual;
+--error 1690
+SELECT to_number('-11','99.9EEEE') FROM dual;
+--error 1690
+SELECT to_number('1.66','9.9EEEE') FROM dual;
+--error 1690
+SELECT to_number('1.66E-02','9.9EEEE') FROM dual;
+
+
+#test to_number FMT hexadecimal
+SELECT to_number('4D2','XXX') FROM dual;
+SELECT to_number('f','XXX') FROM dual;
+SELECT to_number('f1','XXX') FROM dual;
+SELECT to_number('f12','XXX') FROM dual;
+--error 1690
+SELECT to_number('f123','XXX') FROM dual;
+--error 1690
+SELECT to_number('4D2A','XXX') FROM dual;
+--error 1690
+SELECT to_number('fj','XXX') FROM dual;
+--error 1690
+SELECT to_number('jf','XXX') FROM dual;
+
+#bug when table , after null to_number, no value
+
+DROP TABLE IF EXISTS `test1`;
+CREATE TABLE `test1` (
+  `id` int NOT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+INSERT INTO `test1` VALUES (1, '3');
+INSERT INTO `test1` VALUES (2, '20');
+INSERT INTO `test1` VALUES (3, '');
+INSERT INTO `test1` VALUES (4, '21');
+INSERT INTO `test1` VALUES (5, '8');
+
+select name, to_number(name,'9999') from test1;
+select name, to_number(name,'99.009') from test1;
+
+INSERT INTO `test1` VALUES (6, '-1.6e+020');
+INSERT INTO `test1` VALUES (7, ',0,.0');
+INSERT INTO `test1` VALUES (8, '-1.6e+02');
+select name,to_number(name,'9.9EEEE') from test1 where id >5;
+
+DROP TABLE IF EXISTS `test1`;
+
+#bug fix  
+select to_number('-123.456','999.999') FROM dual; 
+select to_number('-1.6e+010','9.9EEEE') FROM dual;
+select to_number(-0.000000,'999.999') FROM dual;
+--error 1690
+select to_number(1234.0100,'999.99') FROM dual;
+select to_number(123.0100,'999.99') FROM dual;
+--error 1690
+select to_number(12340,'9999') FROM dual;
+select to_number(1234.0,'9999.9') FROM dual;
+select to_number(1234.1,'9999.9') FROM dual;
+--error 1690
+select to_number(1234.12,'9999.9') FROM dual;
+select to_number(234.000,'999.99') FROM dual;
+select to_number(123.4560,'999.999') FROM dual;
+select to_number(-100,'999.999') FROM dual;
+select to_number('-123.456','999.999') FROM dual;
+--error 1690
+select to_number(-1.6e+010,'9.9EEEE') FROM dual;
+select to_number('100','9999') FROM dual;
+--error 1690
+select to_number(1234.000,'999.99') FROM dual;
+--error 1690
+select to_number(123.001,'999.99') FROM dual;
+select to_number(1234000,'9999999') FROM dual;
+select to_number(1234.00,'9999') FROM dual;
+--error 1064
+select to_number(1,234.000,'999,999.99') FROM dual;
+select to_number(1234.0,'9999') FROM dual;
+select to_number(1234.000,'9999') FROM dual;
+select to_number(-1234.0,'9999') FROM dual;
+select to_number(-1.00,'9.9EEEE') FROM dual;
+select to_number('-1','9.9EEEE') FROM dual;
+select to_number(-1.00,'9.9EEEE') FROM dual;
+select to_number('-1','9.9EEEE') FROM dual;
+select to_number('1.6e+05','9.999EEEE') FROM dual;
+select to_number('-1.0e+00','9.9EEEE') FROM dual;
+select to_number('-1.10e+00','9.99EEEE') FROM dual;
+select to_number('-1.10e+00','9.999EEEE') FROM dual;
+--error 1690
+select to_number('1.000e+05','9.9EEEE') FROM dual;
+--error 1690
+select to_number(1.000e+05,'9.9EEEE') FROM dual;
+--error 1690
+select to_number('1.66000e+05','9.999EEEE') FROM dual;
+--error 1690
+select to_number('1.6666e+05','9.999EEEE') FROM dual;
+select to_number('1.666e+05','9.999EEEE') FROM dual;
+select to_number(Ascii('A'),'XXXX') FROM dual;
+select to_number(1234,'XXXX') FROM dual;
+--error 1690
+select to_number(123.45601+123.45600,'9999.9999') FROM dual;
+--error 1690
+select to_number(123123.4560,'9999.9999') FROM dual;
+--error 1690
+select to_number(123.456780,'9999.9999') FROM dual;
+SELECT to_number('-1.6e+010','9.9EEEE') FROM dual;
+SELECT to_number('1.6e+010','9.9EEEE') FROM dual;
+SELECT to_number('1.6e+030','9.9EEEE') FROM dual;
+select to_number(0.1000000000,'9.9EEEE') FROM dual;
+select to_number(1.1000000000,'9.9EEEE') FROM dual;
+--error 1690
+select to_number(10.1000000000,'9.9EEEE') FROM dual;
+--error 3047
+SELECT to_number('1e+123', '9.9EEEE') FROM DUAL;
+SELECT to_number('1e+80', '9.9EEEE') FROM DUAL;
+--error 3047
+SELECT to_number('1e+81', '9.9EEEE') FROM DUAL;
+--error 1690
+select to_number(1,'.99') from dual;
+--error 1690
+select to_number(1,'$99') from dual;
+select to_number(1,'9') from dual;
+select to_number(1,nvl(null,'9')) from dual;
+--error 1690
+select to_number(1,'Fm9') from dual;
+select to_number(1,null) from dual;
+select to_number('-f12','XXXXXXXX') FROM dual;
+select to_number('0','99.99') from dual;
+select to_number('1','999.90') from dual;
+--error 1690
+select to_number(-1.1,'99.') FROM dual;
+
+#not support FMT
+--error 1690
+select to_number('0','B90.99') from dual;
+--error 1690
+select to_number('0','B9999') from dual;
+--error 1690
+select to_number(1,'B9999') from dual;
+--error 1690
+select to_number('-121','B999') FROM dual;
+--error 1690
+select to_number('123.456','FM999.009') from dual;
+--error 1690
+SELECT to_number('12454.80', 'FM99999.99') FROM dual;
+--error 3047
+select to_number('123.45','L999.99') from dual;
+--error 3047
+select to_number('123.45','FML999.99') from dual;
+--error 1690
+select to_number('123','999S') from dual;
+--error 1690
+SELECT to_number('12,454.8-', '99G999D9S') FROM dual;
+--error 1690
+select to_number('1-','9999S') FROM dual;
+--error 3047
+select to_number('$10','$99') from dual;
+--error 1690
+select to_number('-1','S9999') FROM dual;
+--error 1690
+select to_number('1,1-','9999MI') FROM dual;
+--error 1690
+select to_number('<1>','9999PR') FROM dual;
+--error 1690
+select to_number(13.0,'9999999999999999V') from dual;
+--error 1690
+select to_number(13000,'99V99') from dual;
+
+#bug fix
+select TO_NUMBER('-100.11', '9G999D99') FROM dual;
+select TO_NUMBER('-100.11', '9,999.99') FROM dual;
+--error 1690
+select TO_NUMBER('+100.11', '9G999D99') FROM dual;
+--error 1690
+select TO_NUMBER('+100.11', '9,999.99') FROM dual;
+select TO_NUMBER('100.11', '9G999D99') FROM dual;
+select TO_NUMBER('100.11', '9,999.99') FROM dual;
+
+#bug fix
+select to_number('-1,1','9G999') FROM dual;
+select to_number('11,1','9,999') FROM dual;
+select to_number(',11,1','9,999') FROM dual;
+select to_number('1,1,11','9,999') FROM dual;
+select to_number('1,111','9,999') FROM dual;
+select to_number('-1,1','9G999') FROM dual;
+select to_number(',0,','9,9') FROM dual;
+select to_number('-0,0,0,','9,0,9.9') FROM dual;
+select to_number(',0,.0','9,9.9') FROM dual;
+--error 1690
+select to_number('111,1','9,999') FROM dual;
+--error 1690
+select to_number(',1111','9,999') FROM dual;
+--error 1690
+select to_number('11,11','9,999') FROM dual;
+#bug fix
+select to_number('1,,1','9999') FROM dual;
+select to_number('1,,,1','9999') FROM dual;
+select to_number('1,,,,1','9999') FROM dual;
+select to_number('1,,1,1,1','9999') FROM dual;
+select to_number('1,1,1,,,,,,,,1','9999') FROM dual;
+select to_number('1,1,,,,,,,,,,1','9999') FROM dual;
+--error 1690
+select to_number('1,1,1,,,1,,,,,1','9999') FROM dual;
+SELECT to_number(',0','9.9EEEE') FROM dual;
+select to_number(',0,.0','9.9EEEE') FROM dual;
+select to_number('-1.6e0000020','9.90EEEE') FROM dual;
+--error 1690
+select to_number('-1.6,e20,,','9.90EEEE') FROM dual;
+set sql_mode = NO_BACKSLASH_ESCAPES;
+--error 1690
+select to_number('-\,0.0','9,9.9') FROM dual;
+set sql_mode=DEFAULT;
+select to_number('-\,0.0','9,9.9') FROM dual;
+
+select to_number(1,'9,,9,9.9') FROM dual;
+select to_number(101,'909.9') FROM dual;
+select to_number('01','909.9') FROM dual;
+select to_number('01','09') from dual;
+select to_number('-001','9099') from dual;
+select to_number('-01','909.9') FROM dual;
+select to_number(-101,'909.9') FROM dual;
+
+--error 1690
+select to_number('1','909.9') FROM dual;
+--error 1690
+select to_number(01,'909.9') FROM dual;
+--error 1690
+select to_number(1,'9,,0,9.9') FROM dual;
+--error 1690
+select to_number('-1','909.9') FROM dual;
+--error 1690
+select to_number(-01,'909.9') FROM dual;
+--error 1690
+select to_number(-1,'9,,0,9.9') FROM dual;
+--error 1690
+select to_number(1+'0.0','9,,0,9.9') FROM dual;
+--error 1690
+select to_number(1,'9,,0,9.9') FROM dual;
+--error 1690
+select to_number('1','09') from dual;
+--error 1690
+select to_number('01','9099') from dual;
+
+select to_number('1,.0','9.9EEEE') FROM dual;
+select to_number('-,1,.0','9.9EEEE') FROM dual;
+
+# not oracle result
+--error 1690
+select to_number(',0.','xxx') FROM dual;
+
+--error 1690
+select to_number('0.','xxx') FROM dual;
+--error 1690
+select to_number('0.1','xxx') FROM dual;
+
+select to_number(',0,','xxx') FROM dual;
+select to_number(',10','xxx') FROM dual;
+select to_number('1,f','xxx') FROM dual;
+--error 1690
+select to_number('-\\\,0\.0','9,9.9') FROM dual;
+--error 1690
+select to_number(''',0.0','9,9.9') FROM dual;
+--error 1690
+select to_number('-1.0','9999') FROM dual;
+--error 1690
+select to_number('-1.0','9,999') FROM dual;
+--error 1690
+select to_number('-1.00','9,999.9') FROM dual;
+select to_number(-1.0,'9999') FROM dual;
+select to_number(-0.000000,'999.999') FROM dual;
+select to_number(-1.0,'9,999') FROM dual;
+select to_number(-1.00,'9,999.9') FROM dual;
+
+DROP TABLE IF EXISTS `test1`;
+CREATE TABLE `test1` (
+  `id` int NOT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  fmt varchar(100) DEFAULT NULL,
+  deci decimal(50,10),
+  floa float(50,8),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+INSERT INTO `test1` VALUES (1, '1,234.567','9,999.999',1234.567, 1234.567);
+INSERT INTO `test1` VALUES (2, '12,12,12','99,99,99.999',121212, 121212);
+INSERT INTO `test1` VALUES (3, '12,12,12.01','99,99,99.999',121212.01, 121212.01);
+INSERT INTO `test1` VALUES (4, '4D2','XXX',4.4, 4.04);
+INSERT INTO `test1` VALUES (5, 'ffff','XXXx',0xffff, 0xffff);
+select floa,to_number(floa,'999999.999999999') from test1;
+select deci, to_number(deci,'999999.999') from test1;
+select name, to_number(name,fmt) from test1;
+
+DROP TABLE IF EXISTS `test1`;
+
+#bug fix support table FMT is null 
+select to_number(-1.6e+020,null) FROM dual;
+select to_number('-1.6e+020 ',null) FROM dual;
+--error 3047
+select to_number(-1.6e+020,'') FROM dual;
+--error 3047
+select to_number('-1.6e+020','') FROM dual;
+
+CREATE TABLE `test1` (
+  `id` int NOT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  fmt varchar(100) DEFAULT NULL,
+  deci decimal(50,10),
+  floa float(50,8),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+INSERT INTO `test1` VALUES (10, null,null,-1610000000, 1610000000);
+INSERT INTO `test1` VALUES (11, '-0.19','9.90EEEE',-0.190, -0.19);
+INSERT INTO `test1` VALUES (12, '-1.6e+020',null,-1610000000, 1610000000);
+select name,to_number(name,fmt) from test1 where id=12;
+
+delete from test1;
+INSERT INTO `test1` VALUES (1, '1,234.567','9,999.999',1234.567, 1234.567);
+INSERT INTO `test1` VALUES (2, '12,12,12','99,99,99.999',-121212, 121212);
+INSERT INTO `test1` VALUES (3, '12,12,12.01','99,99,99.999',121212.01, -121212.01);
+INSERT INTO `test1` VALUES (4, '4D2','XXX',4.4, 4.04);
+INSERT INTO `test1` VALUES (5, 'ffff','XXXx',0xffff, 0xffff);
+INSERT INTO `test1` VALUES (6, '-,0','9.9EEEE',0.1, 0.1);
+INSERT INTO `test1` VALUES (7, '1e+123', '9.9EEEE',123, 123.1);
+select to_number(floa-deci,'999999.999999999999999') from test1;
+select to_number(floa+deci,'999999.999999999999999') from test1;
+
+delete from test1;
+INSERT INTO `test1` VALUES (1, '1,234.567','9,999.999',1234.567, 1234.567);
+INSERT INTO `test1` VALUES (2, '12,12,12','99,99,99.999',-121212, 121212);
+INSERT INTO `test1` VALUES (3, '12,12,12.01','99,99,99.999',121212.01, -121212.01);
+INSERT INTO `test1` VALUES (4, '4D2','XXX',4.4, 4.04);
+INSERT INTO `test1` VALUES (5, 'ffff','XXXx',0xffff, 0xffff);
+INSERT INTO `test1` VALUES (6, '-,0','9.9EEEE',0.1, 0.1);
+INSERT INTO `test1` VALUES (7, '1e+78', '9.9EEEE',123, 123.1);
+INSERT INTO `test1` VALUES (8, '-1.6e+020','9.9EEEE',-1610000000, 1610000000);
+INSERT INTO `test1` VALUES (9, null,'9.9EEEE',-1610000000, 1610000000);
+INSERT INTO `test1` VALUES (10, null,null,-1610000000, 1610000000);
+INSERT INTO `test1` VALUES (11, '-0.19','9.90EEEE',-0.190, -0.19);
+select * from test1 where id=9 and  to_number(name,fmt) is not null ;
+select * from test1 where id=10 and  to_number(name,fmt) is not null ;
+select * from test1 where to_number(name,fmt) is not null ;
+select * from test1 where to_number(name,fmt) is null ;
+select * from test1 order by to_number(name,fmt);
+INSERT INTO `test1` VALUES (12, '-1.6e+020',null,-1610000000, 1610000000);
+INSERT INTO `test1` VALUES (13, '-1.6e+014','9.9EEEE',-1610000000, 1610000000);
+select * from test1 where to_number(name,fmt) is null and id<13;
+select * from test1 where id=12 and  to_number(name,fmt) is  null ;
+select * from test1 where id<13 order by to_number(name,fmt);
+
+DROP TABLE IF EXISTS `test1`;
+
+--error 1690
+select to_number('+12,12,12','99,99,99.99') from dual;
+select to_number('-12,12,12','99,99,99.99') from dual;
+--error 1064
+select to_number(+12,12,12,'99,99,99.99') from dual;
+--error 1064
+select to_number(-12,12,12,'99,99,99.99') from dual;
+--error 1690
+SELECT to_number('+10.12','99.99') FROM dual;
+SELECT to_number('-10.12','99.99') FROM dual;
+SELECT to_number(+10.12,'99.99') FROM dual;
+SELECT to_number(-10.12,'99.99') FROM dual;
+--error 1690
+SELECT to_number('+1.6E+02','9.9EEEE') FROM dual;
+SELECT to_number('-1.6E+02','9.9EEEE') FROM dual;
+--error 1690
+SELECT to_number(+1.6E+02,'9.9EEEE') FROM dual;
+--error 1690
+SELECT to_number(-1.6E+02,'9.9EEEE') FROM dual;
+--error 1690
+SELECT to_number('+f','XXX') FROM dual;
+SELECT to_number('-f','XXX') FROM dual;
+--error 1054
+SELECT to_number(+f,'XXX') FROM dual;
+--error 1054
+SELECT to_number(-f,'XXX') FROM dual;
+
+#bug fix
+--error 3047
+select to_number('19123..','999999.99') FROM dual;
+--error 1690
+select to_number(',, .','999999.99') FROM dual;
+--error 3047
+select to_number(' ','999999.99') FROM dual;
+--error 3047
+select to_number('ab','999999.99') FROM dual;
+--error 3047
+select to_number('$10','$99') from dual;
+--error 1690
+SELECT to_number('e+02','9.99EEEE') FROM dual;
+--error 1690
+SELECT to_number('-e+02','9.99EEEE') FROM dual;
+--error 1690
+SELECT to_number('+e+02','9.99EEEE') FROM dual;
+--error 1690
+SELECT to_number('1.1eee','9.9EEEE') FROM dual;
+--error 1690
+SELECT to_number('+.1e1','9.9EEEE') FROM dual;
+--error 1690
+SELECT to_number('.e','9.9EEEE') FROM dual;
+--error 1690
+SELECT to_number('1.e','9.9EEEE') FROM dual;
+--error 1690
+SELECT to_number('0.e','9.9EEEE') FROM dual;
+
+select to_number('1,9,123','9,9,9,999') FROM dual;
+--error 3047
+select to_number('1,9,123','9,9G9,999') FROM dual;
+--error 3047
+select to_number('1,9,123','9G9,9,999') FROM dual;
+--error 3047
+select to_number('1,9,123','999,9G999') FROM dual;
+SELECT to_number('12,454.80', '99G999D99') FROM dual;
+--error 3047
+SELECT to_number('12,454.80', '99,999D99') FROM dual;
+--error 3047
+SELECT to_number('12,454.80', '99G999.99') FROM dual;
+--error 1690
+SELECT to_number('12G454D80', '99G999D99') FROM dual;
+--error 3047
+SELECT to_number('1,9,123,,,','9,9G9,999,') FROM dual;
+--error 3047
+SELECT to_number('12,454.80', '99,999D99') FROM dual;
+select to_number('-.00','999.99') FROM dual;
+select to_number('-.01','999.99') FROM dual;
+select to_number('-.1','999.99') FROM dual;
+select to_number('.00','9.99') from dual;
+--error 3047
+select to_number('-','999.') FROM dual;
+--error 3047
+select to_number('-','999') FROM dual;
+--error 3047
+select to_number('+','999') FROM dual;
+
+#support left space is not error
+select to_number(to_char(1234.7,'999999990D90'),'9999.99') FROM dual;
+select to_number(TO_CHAR(16,'XXXX'),'XXXX') from dual;
+select to_number('   10','XXXX') from dual;
+select to_number('   10','99') from dual;
+select to_number('   10','9999999999') from dual;
+select to_number(' 1','999999') from dual;
+--error 1690
+select to_number('10    ','XXXX') from dual;
+--error 1690
+select to_number('10    ','99') from dual;
+--error 1690
+select to_number('10        ','9999999') from dual;
+--error 1690
+select to_number('9,,,123,,,','9,9,9,999,') FROM dual;
+--error 1690
+select to_number('1,,1,,1','9,9,9.99') FROM dual;
+select to_number(',123,','9,9,9,999,') FROM dual;
+select to_number(',123','9,9,9,999') FROM dual;
+select to_number('123,','9,9,9,999,') FROM dual;
+select to_number('1,123,','9,9,9,999,') FROM dual;
+select to_number('9,123,,,','9,9,9,999,') FROM dual;
+select to_number('9,123,,,','9,9,9,999') FROM dual;
+select to_number('3,2,,1','9,9,9.99') FROM dual;
+--error 1690
+select to_number('1,,1,,1','9,9,9.99') FROM dual;
+--error 1690
+select to_number('9,,,123,,,','9,9,9,999,') FROM dual;
+--error 1690
+select to_number('1,,,1,,1','9,9,9.99') FROM dual;
+--error 1690
+select to_number('9,,,,123,,,','9,9,9,999,') FROM dual;
+
+--error 1690
+select to_number('10    ','9999999999') from dual;
+--error 1690
+select to_number('1   0','9999999999') from dual;
+--error 1690
+select to_number('10    ','999,9999999') from dual;
+--error 1690
+select to_number('1   0','999,9999999') from dual;
+select to_number('    10','9999999999') from dual;
+select to_number('    10','999,9999999') from dual;
+
+SELECT to_number('1.12','90.99') FROM dual;
+SELECT to_number(1.12,'90.99') FROM dual;
+SELECT to_number(-1.12,'90.99') FROM dual;
+SELECT to_number('01.12','09.99') FROM dual;
+SELECT to_number('-01.12','09.99') FROM dual;
+--error 1690
+SELECT to_number('1.12','09.99') FROM dual;
+--error 1690
+SELECT to_number(1.12,'09.99') FROM dual;
+
+--error 1690
+SELECT to_number(+0.12,'0.99') FROM dual;
+--error 1690
+SELECT to_number(-0.12,'0.99') FROM dual;
+--error 1690
+SELECT to_number(0.12,'0.99') FROM dual;
+--error 1690
+SELECT to_number('+0.12','0.99') FROM dual;
+SELECT to_number('-0.12','0.99') FROM dual;
+SELECT to_number('0.12','0.99') FROM dual;
+SELECT to_number(+1.12,'0.99') FROM dual;
+SELECT to_number(-1.12,'0.99') FROM dual;
+SELECT to_number(1.12,'0.99') FROM dual;
+SELECT to_number(+0.12,'9.99') FROM dual;
+SELECT to_number(-0.12,'9.99') FROM dual;
+SELECT to_number(0.12,'9.99') FROM dual;
+
+#add test case
+DROP TABLE IF EXISTS t1;
+create table t1(
+    id int,
+    c1 char(20),
+    c2 varchar(50),
+    c3 float(15),
+    c4 decimal(15,5),
+    c5 number(15,5)
+) ;
+
+insert into t1 values (1,'000123','1.6E+08',1313.12,1234.567,1234.567);
+insert into t1 values (2,null,'-1.6e+020','-1313.12',-1234.567,'-1234.567');
+insert into t1 values (3,'aaaa',null,'2313',null,null);
+insert into t1 values (4,'0000','1.00E10','-2313',-121212.01,-1610000000);
+insert into t1 values (5,'123000','1,123,1234.1234','1234.00',-0.190, -0.19);
+insert into t1 values (6,'-123000','1,234.5670',null,0.190, 0.19);
+insert into t1 values (7,'1234.00','4Dd2',-121212.12,121212.01,7877.12600);
+insert into t1 values (8,'-1234.00','0xFFFF',0xffff, '1234567890',0xffff);
+
+select id,c4,to_number(cast(c4 as float),'999,99999.999') c5 from t1 where id in(1,2,3,5,6);
+select id,c4,to_number(to_char(c4,'999,99999.999'),'999,99999.999') c5 from t1 where id in(1,2,3,5,6);
+select id,c4,to_number(to_char(c4,'999,99999.999'),'999,99999.999') c4 from t1 where id!=8;
+
+DROP TABLE IF EXISTS t1;
+
+create table t1(
+    id int,
+    c1 char(20)
+) ;
+
+insert into t1 values (1,'000123');
+insert into t1 values (3,'20220902');
+insert into t1 values (4,' 20220902 ');
+
+SELECT to_number(substr(t1.c1, 1, 2)),t1.c1 from t1;
+SELECT C1 from t1;
+
+DROP TABLE IF EXISTS t1;

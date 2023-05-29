@@ -1,0 +1,129 @@
+--source include/not_valgrind.inc
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+set @saved_force_parallel_execute = @@force_parallel_execute;
+set @saved_parallel_cost_threshold = @@parallel_cost_threshold;
+set @saved_parallel_default_dop = @@parallel_default_dop;
+set @saved_parallel_max_threads = @@parallel_max_threads;
+
+create table t1(id int);
+insert into t1 select 1;
+
+let $loop=10;
+while($loop)
+{
+  eval insert into t1 select id + 1 from t1;
+  dec $loop;
+}
+
+set session force_parallel_execute = true;
+
+
+--echo ### test parallel_cost_threadhold
+
+set session parallel_cost_threshold = 0;
+explain select sum(id) from t1;
+
+set session parallel_cost_threshold = 99999;
+explain select sum(id) from t1;
+
+
+--echo ### test parallel_default_dop
+set session parallel_cost_threshold = 0;
+
+set session parallel_default_dop=10;
+explain select sum(id) from t1;
+
+set session parallel_default_dop=2;
+explain select sum(id) from t1;
+
+set session parallel_default_dop=0;
+explain select sum(id) from t1;
+
+
+--echo ### test parallel hint
+set session parallel_default_dop=4;
+
+set session force_parallel_execute = false;
+
+explain select sum(id) from t1;
+explain select/*+ PQ */ sum(id) from t1;
+explain select/*+ PQ(10) */ sum(id) from t1;
+
+
+--echo ### test force_parallel query
+set session parallel_default_dop=4;
+
+set session force_parallel_execute = false;
+explain select sum(id) from t1;
+
+set session force_parallel_execute = true;
+explain select sum(id) from t1;
+
+
+--echo ### test parallel max_threads
+set session force_parallel_execute = true;
+set session parallel_default_dop=4;
+
+set global parallel_max_threads = 64;
+explain select/*+ PQ(32) */ sum(id) from t1;
+
+set global parallel_max_threads = 16;
+explain select/*+ PQ(32) */ sum(id) from t1;
+
+set global parallel_max_threads = 64;
+explain select/*+ NO_PQ */ sum(id) from t1;
+
+--echo ### test parallel queue_timeout
+
+set global parallel_max_threads=8;
+set global debug_pq_worker_stall = true;
+
+connect (con1, localhost, root);
+connect (con2, localhost, root);
+connect (con3, localhost, root);
+
+--connection con1
+--send select/*+ PQ(8) */ sum(id) from t1;
+
+--connection default
+
+--sleep 1
+show status like "PQ_threads_running";
+
+--connection con2
+--echo ----con2 wait parallel threads 5s-----
+set session parallel_queue_timeout=5000;  # 5000ms
+--send explain select/*+ PQ(8) */ sum(id) from t1;
+
+--connection con3
+--echo ----con3 no wait for parallel threads-----
+set session parallel_queue_timeout=0;  # 0ms
+--send explain select/*+ PQ(8) */ sum(id) from t1;
+
+--connection default
+set global debug_pq_worker_stall = false;
+
+--connection con1
+--reap
+
+--connection con2
+--echo ----con2 parallel query-----
+--reap
+
+--connection con3
+--echo ----con3 no parallel query-----
+--reap
+
+disconnect con1;
+disconnect con2;
+disconnect con3;
+
+--connection default
+set session parallel_default_dop = @saved_parallel_default_dop;
+set global parallel_max_threads = @saved_parallel_max_threads;
+set session parallel_cost_threshold = @saved_parallel_cost_threshold;
+set session force_parallel_execute = @saved_force_parallel_execute;
+
+drop table t1;

@@ -1,0 +1,662 @@
+create table t2(ida int, age int, name varchar(10));
+insert into t2 values(1, 2, 'a');
+insert into t2 values(2, 5, 'b');
+insert into t2 values(NULL, 1, '');
+insert into t2 values(1, 5, 'c');
+insert into t2 values(NULL, NULL, '');
+insert into t2 values(2, 3, 'c');
+insert into t2 values(3, 7, 'ccc');
+insert into t2 values(5, 4, 'd');
+insert into t2 values(9, NULL, 'NULL');
+select t2.rownum from t2;
+ERROR 42S22: Unknown column 't2.rownum' in 'field list'
+select rownum rn from t2 where rn < 4;
+ERROR 42S22: Unknown column 'rn' in 'where clause'
+select * from t2;
+ida	age	name
+1	2	a
+2	5	b
+NULL	1	
+1	5	c
+NULL	NULL	
+2	3	c
+3	7	ccc
+5	4	d
+9	NULL	NULL
+select * from t2 where rownum < 4;
+ida	age	name
+1	2	a
+2	5	b
+NULL	1	
+select * from t2 where ida = 2 and rownum < 2;
+ida	age	name
+2	5	b
+select * from t2 where rownum >=1;
+ida	age	name
+1	2	a
+2	5	b
+NULL	1	
+1	5	c
+NULL	NULL	
+2	3	c
+3	7	ccc
+5	4	d
+9	NULL	NULL
+select * from t2 where rownum =1;
+ida	age	name
+1	2	a
+select * from t2 where rownum =2;
+ida	age	name
+select * from t2 where rownum > 1;
+ida	age	name
+select * from t2 where rownum between 1 and 5;
+ida	age	name
+1	2	a
+2	5	b
+NULL	1	
+1	5	c
+NULL	NULL	
+select * from t2 where rownum < 4 and rownum > 2;
+ida	age	name
+select * from t2 where rownum < 4 and rownum >=1;
+ida	age	name
+1	2	a
+2	5	b
+NULL	1	
+select * from t2 where rownum is not null;
+ida	age	name
+1	2	a
+2	5	b
+NULL	1	
+1	5	c
+NULL	NULL	
+2	3	c
+3	7	ccc
+5	4	d
+9	NULL	NULL
+select * from t2 where age < 5 and rownum = 3;
+ida	age	name
+select * from t2 where age < 5 and rownum+1 < 5;
+ida	age	name
+1	2	a
+NULL	1	
+2	3	c
+select * from t2 where age < 5 and rownum+1 >=2;
+ida	age	name
+1	2	a
+NULL	1	
+2	3	c
+5	4	d
+select * from (select * from t2 where rownum <=5 and age < 5) t where rownum < 6;
+ida	age	name
+1	2	a
+NULL	1	
+2	3	c
+5	4	d
+select rownum , t2.* from t2 where rownum < 5 and rownum >=1;
+rownum	ida	age	name
+1	1	2	a
+2	2	5	b
+3	NULL	1	
+4	1	5	c
+select rownum, age from t2 where age < 10 order by ida;
+rownum	age
+3	1
+1	2
+4	5
+2	5
+5	3
+6	7
+7	4
+select rownum, age from t2 where age < 10 order by ida, rownum;
+rownum	age
+3	1
+1	2
+4	5
+2	5
+5	3
+6	7
+7	4
+select ida, age from t2 order by rownum;
+ida	age
+1	2
+2	5
+NULL	1
+1	5
+NULL	NULL
+2	3
+3	7
+5	4
+9	NULL
+select * from (select rownum rn, ida from t2 group by ida, rownum) t2 where t2.rn > 2 order by 1;
+rn	ida
+3	NULL
+4	1
+5	NULL
+6	2
+7	3
+8	5
+9	9
+select * from (select * from t2 where rownum<6)t  where rownum > 2;
+ida	age	name
+select * from (select * from t2 where rownum<6)t  where rownum >=1;
+ida	age	name
+1	2	a
+2	5	b
+NULL	1	
+1	5	c
+NULL	NULL	
+select * from t2 where ida < 8 and age < 6 and rownum < 4;
+ida	age	name
+1	2	a
+2	5	b
+1	5	c
+select * from t2 where rownum < 4 and age < 6 and ida < 8;
+ida	age	name
+1	2	a
+2	5	b
+1	5	c
+select rownum from t2 where rownum < 10 group by rownum having rownum>2;
+rownum
+3
+4
+5
+6
+7
+8
+9
+select rownum, count(*) from t2 group by ida, rownum;
+rownum	count(*)
+1	1
+2	1
+3	1
+4	1
+5	1
+6	1
+7	1
+8	1
+9	1
+select concat(rownum, rownum+1) from t2 where rownum < 5;
+concat(rownum, rownum+1)
+12
+23
+34
+45
+select rownum, if(ida > 3, rownum, rownum), ida from t2;
+rownum	if(ida > 3, rownum, rownum)	ida
+1	1	1
+2	2	2
+3	3	NULL
+4	4	1
+5	5	NULL
+6	6	2
+7	7	3
+8	8	5
+9	9	9
+select ida, rownum, case ida when 1 then 1 when 2 then rownum else rownum end as c1 from t2;
+ida	rownum	c1
+1	1	1
+2	2	2
+NULL	3	3
+1	4	1
+NULL	5	5
+2	6	6
+3	7	7
+5	8	8
+9	9	9
+select ida, rownum, case ida when 1 then 1 when 2 then rownum else rownum end as c1 from t2 where rownum< ida;
+ida	rownum	c1
+2	1	1
+3	2	2
+5	3	3
+9	4	4
+select ida from t2 order by rownum desc;
+ida
+9
+5
+3
+2
+NULL
+1
+NULL
+2
+1
+select ida from t2 where rownum < 6 order by rownum desc;
+ida
+NULL
+1
+NULL
+2
+1
+select rownum+1, ida from t2 order by rownum desc;
+rownum+1	ida
+10	9
+9	5
+8	3
+7	2
+6	NULL
+5	1
+4	NULL
+3	2
+2	1
+select * from (select * from t2 where rownum <=3 ) t where age < 5;
+ida	age	name
+1	2	a
+NULL	1	
+select * from (select rownum rn, t2.*  from t2) t where age < 5 and t.rn < 4;
+rn	ida	age	name
+1	1	2	a
+3	NULL	1	
+select * from (select rownum rn , t2.* from t2) t where t.rn < 4;
+rn	ida	age	name
+1	1	2	a
+2	2	5	b
+3	NULL	1	
+select * from t2 join t2 t3 on t2.ida = t3.ida and rownum < t2.age;
+ida	age	name	ida	age	name
+1	5	c	1	2	a
+2	3	c	2	5	b
+2	5	b	2	5	b
+1	5	c	1	5	c
+3	7	ccc	3	7	ccc
+select * from t2 join t2 t3 on t2.ida = t3.ida and rownum < 5;
+ida	age	name	ida	age	name
+1	5	c	1	2	a
+1	2	a	1	2	a
+2	3	c	2	5	b
+2	5	b	2	5	b
+select * from t2 where rownum < age;
+ida	age	name
+1	2	a
+2	5	b
+1	5	c
+3	7	ccc
+select rownum, t2.* from t2 where rownum < ida;
+rownum	ida	age	name
+1	2	5	b
+2	3	7	ccc
+3	5	4	d
+4	9	NULL	NULL
+select * from t2 where rownum > ida;
+ida	age	name
+select * from (select rownum rn , ida from t2) t1 left join t2 on t1.rn = t2.age;
+rn	ida	ida	age	name
+1	1	NULL	1	
+2	2	1	2	a
+3	NULL	2	3	c
+4	1	5	4	d
+5	NULL	1	5	c
+5	NULL	2	5	b
+6	2	NULL	NULL	NULL
+7	3	3	7	ccc
+8	5	NULL	NULL	NULL
+9	9	NULL	NULL	NULL
+select * from t2 t1 join t2 on t1.ida = t2.ida and rownum < 4;
+ida	age	name	ida	age	name
+1	5	c	1	2	a
+1	2	a	1	2	a
+2	3	c	2	5	b
+select ida, count(*) from t2 where age < 6 and rownum < 8 group by ida;
+ida	count(*)
+1	2
+2	2
+NULL	1
+5	1
+select ida, count(*) from t2 where age < 6 and rownum < 8 group by ida, rownum;
+ida	count(*)
+1	1
+2	1
+NULL	1
+1	1
+2	1
+5	1
+select * from t2 where concat(rownum, 1) < '2';
+ida	age	name
+1	2	a
+select * from t2 t1 left join t2 on t1.ida = t2.age where (case when rownum < 5 then rownum else 0 end) <  2;
+ida	age	name	ida	age	name
+1	2	a	NULL	1	
+explain format=tree select * from t2 where ida < 8 and age < 6 and rownum < 4;
+EXPLAIN
+-> Filter: (rownum < 4)  (cost=*** rows=***)
+    -> Filter: ((t2.ida < 8) and (t2.age < 6))  (cost=*** rows=***)
+        -> Table scan on t2  (cost=*** rows=***)
+
+explain format=tree select * from (select * from t2 where rownum <=3 ) t where age < 5;
+EXPLAIN
+-> Filter: (t.age < 5)  (cost=***..3.51 rows=***)
+    -> Table scan on t  (cost=***..4.66 rows=***)
+        -> Materialize  (cost=***..2.05 rows=***)
+            -> Filter: (rownum <= 3)  (cost=*** rows=***)
+                -> Table scan on t2  (cost=*** rows=***)
+
+select * from t2 t1 where t1.ida in (select ida from t2 where rownum < t1.age);
+ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+select * from t2 t1 where t1.ida in (select ida from t2 where rownum < 5);
+ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+select * from t2 t1 where ida in (select rownum from t2 where age < t1.age);
+ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+select * from t2 t1 left join t2 on t1.ida = t2.ida and rownum < 3;
+ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM occur in outer join on conditions.'
+select * from t2 t1 where exists (select rownum from t2);
+ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+select * from t2 t1 where ida not in (select * from t2 where rownum < 10);
+ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+select (select rownum from t2 where age = t2.age) from t2 t1;
+ERROR 21000: Subquery returns more than 1 row
+drop table t2;
+CREATE TABLE t2
+(EMPNO decimal(4,0),
+ENAME VARCHAR(30),
+JOB VARCHAR(30),
+MGR decimal(4,0),
+HIREDATE DATE,
+SAL decimal(7,2),
+COMM decimal(7,2),
+DEPTNO decimal(2,0)
+) ;
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7369,'SMITH','CLERK',7902,to_date('17-Dec-80','DD-MON-RR'),800,null,20);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7499,'ALLEN','SALESMAN',7698,to_date('20-Feb -81','DD-MON-RR'),1600,300,30);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7521,'WARD','SALESMAN',7698,to_date('22-Feb -81','DD-MON-RR'),1250,500,30);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7566,'JONES','MANAGER',7839,to_date('02-Apr -81','DD-MON-RR'),2975,null,20);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7654,'MARTIN','SALESMAN',7698,to_date('28-Sep -81','DD-MON-RR'),1250,1400,30);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7698,'BLAKE','MANAGER',7839,to_date('01-May -81','DD-MON-RR'),2850,null,30);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7782,'CLARK','MANAGER',7839,to_date('09-Jun -81','DD-MON-RR'),2450,null,10);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7788,'test','ANALYST',7566,to_date('19-Apr -87','DD-MON-RR'),3000,null,20);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7839,'KING','PRESIDENT',null,to_date('17-Jan-81','DD-MON-RR'),5000,null,10);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7844,'TURNER','SALESMAN',7698,to_date('08-Sep -81','DD-MON-RR'),1500,0,30);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7876,'ADAMS','CLERK',7788,to_date('23-May -87','DD-MON-RR'),1100,null,20);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7900,'JAMES','CLERK',7698,to_date('03-Dec-81','DD-MON-RR'),950,null,30);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7902,'FORD','ANALYST',7566,to_date('03-Dec-81','DD-MON-RR'),3000,null,20);
+Insert into t2 (EMPNO,ENAME,JOB,MGR,HIREDATE,SAL,COMM,DEPTNO) values (7934,'MILLER','CLERK',7782,to_date('23-Jan -82','DD-MON-RR'),1300,null,10);
+select rownum,u.* from (select sal from t2 order by sal desc) u where rownum < 11 ;
+rownum	sal
+1	5000.00
+2	3000.00
+3	3000.00
+4	2975.00
+5	2850.00
+6	2450.00
+7	1600.00
+8	1500.00
+9	1300.00
+10	1250.00
+select u.* from (select rownum r,a.* from (select sal from t2 order by sal desc) a ) u where r > 11;
+r	sal
+12	1100.00
+13	950.00
+14	800.00
+explain format=tree select rownum,u.* from (select sal from t2 order by sal desc) u where rownum < 11 ;
+EXPLAIN
+-> Filter: (rownum < 11)  (cost=*** rows=14)
+    -> Table scan on u  (cost=*** rows=14)
+        -> Materialize  (cost=*** rows=14)
+            -> Sort: t2.SAL DESC  (cost=*** rows=14)
+                -> Table scan on t2  (cost=*** rows=14)
+
+explain format=tree select u.* from (select rownum r,a.* from (select sal from t2 order by sal desc) a ) u where r > 11;
+EXPLAIN
+-> Filter: (u.r > 11)  (cost=*** rows=5)
+    -> Table scan on u  (cost=*** rows=14)
+        -> Materialize  (cost=*** rows=14)
+            -> Table scan on a  (cost=*** rows=14)
+                -> Materialize  (cost=*** rows=14)
+                    -> Sort: t2.SAL DESC  (cost=*** rows=14)
+                        -> Table scan on t2  (cost=*** rows=14)
+
+CREATE TABLE `tt1` (
+`id` int NOT NULL,
+`name` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+PRIMARY KEY (`id`)
+);
+CREATE TABLE `t3` (
+`user_id` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+`type` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+`price` int DEFAULT NULL,
+`evaluation` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+`buy_time` timestamp(6) NULL DEFAULT NULL
+);
+insert into t3 values(1, 'type2', 3, 'school', '2021-9-1');
+insert into t3 values(2, 'type2', 9, 'school_base', '2021-9-3');
+insert into tt1 values(1, 'a');
+insert into tt1 values(2, 'b');
+select *, rownum from tt1 info inner join t3 ord on info.id=ord.user_id where rownum<2 and rownum>=1 order by id;
+id	name	user_id	type	price	evaluation	buy_time	rownum
+1	a	1	type2	3	school	2021-09-01 00:00:00.000000	1
+DROP TABLE t2;
+drop table t3;
+drop table tt1;
+create table t1(ida int primary key , age int);
+insert into t1 values(1, 2);
+insert into t1 values(2, 3);
+insert into t1 values(3, 4);
+create table t2(ida int, age int);
+insert into t2 values(2, 5);
+select * from t2 where t2.ida in (select ida from t1 where rownum < 2);
+ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+select (select ida from t1 where age = t2.age and rownum <2) a from t2;
+ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+select (select ida from t1 where rownum < 2 union all select 1 from t1 where t2.age < 7 and rownum < 1) b from t2;
+ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+select * from t1 where ida = (select ida from t2 where rownum < 2 and age < t1.age);
+ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+select (select ida from t1 where rownum = 1) a from t2;
+a
+1
+select (select ida from t1 where age < 5 and rownum < 2) a from t2;
+a
+1
+select (select ida from t1 where rownum < 2 union all select 1 from t1 where rownum < 1) b from t2;
+b
+1
+select (select count(*) from t1 union all select 1 from t1 where rownum < 1) b from t2;
+b
+3
+UPDATE t1 t set t.ida =(select ida+2 from t2 where rownum = 1) where t.ida =3;
+select *  from t1  where ida < (select ida from t2 where rownum = 1);
+ida	age
+1	2
+select * from t1 where ida = (select ida from t2 where rownum < 2 and age < 10);
+ida	age
+2	3
+insert into t1(ida, age) values (5,(select ida from t2 where t2.age = 5  and rownum = 1));
+delete from t1  where ida = (select ida from t2 where age < 10 and rownum = 1);
+delete from t1  where ida < (select ida from t2 where rownum = 1);
+select * from t1;
+ida	age
+4	4
+5	2
+drop table t1, t2;
+
+[## bug for order by using handler::position(), if contains rownum_filter]
+create table mk_eipmeans_file_info(
+eip_id varchar(50) character set utf8mb4 collate utf8mb4_bin not null,
+file_name varchar(100) character set utf8mb4 collate utf8mb4_bin,
+eip_date datetime not null,
+import_date datetime,
+import_src varchar(10) character set utf8mb4 collate utf8mb4_bin,
+deal_flag varchar(2) character set utf8mb4 collate utf8mb4_bin,
+deal_time datetime,
+is_sendmsg varchar(2) character set utf8mb4 collate utf8mb4_bin,
+notice_msg varchar(256) character set utf8mb4 collate utf8mb4_bin,
+check_result varchar(2) character set utf8mb4 collate utf8mb4_bin,
+file_path text character set utf8mb4 collate utf8mb4_bin,
+uuid varchar(64) character set utf8mb4 collate utf8mb4_bin not null,
+busi_type varchar(10) character set utf8mb4 collate utf8mb4_bin,
+temp_id varchar(10) character set utf8mb4 collate utf8mb4_bin,
+fail_content longtext collate utf8mb4_bin,
+means_content longtext collate utf8mb4_bin,
+primary key(eip_id,import_src,eip_date),
+key uuid(uuid)
+)default charset=utf8mb4 collate=utf8mb4_bin;
+insert into mk_eipmeans_file_info
+(eip_id,import_src,eip_date,uuid,deal_flag,file_path, fail_content, means_content)
+values
+('1001','101',from_unixtime(1640000009), '545ca774-90af-11ec-8547-2cf05daaf22a', '0', '/tmp/1001_101','','aaaaaaaaaa'),
+('1002','102',from_unixtime(1640000001), '545ca774-90af-11ec-8547-2cf05daaf220', '0', '/tmp/1002_102','','aaaaaaaaaa'),
+('1003','103',from_unixtime(1640000002), '545ca774-90af-11ec-8547-2cf05daaf221', '0', '/tmp/1003_103','','aaaaaaaaaa'),
+('1004','104',from_unixtime(1640000003), '545ca774-90af-11ec-8547-2cf05daaf222', '0', '/tmp/1004_104','','aaaaaaaaaa'),
+('1005','105',from_unixtime(1640000004), '545ca774-90af-11ec-8547-2cf05daaf223', '0', '/tmp/1005_105','','aaaaaaaaaa'),
+('1006','106',from_unixtime(1640000008), '545ca774-90af-11ec-8547-2cf05daaf224', '0', '/tmp/1006_106','','aaaaaaaaaa'),
+('1007','107',from_unixtime(1640000007), '545ca774-90af-11ec-8547-2cf05daaf225', '0', '/tmp/1007_107','','aaaaaaaaaa'),
+('1008','108',from_unixtime(1640000006), '545ca774-90af-11ec-8547-2cf05daaf226', '0', '/tmp/1008_108','','aaaaaaaaaa'),
+('1009','109',from_unixtime(1640000005), '545ca774-90af-11ec-8547-2cf05daaf227', '0', '/tmp/1009_109','','aaaaaaaaaa');
+[# use blob/text column to trigger call handler::position() and handler::rnd_pos()]
+select uuid,means_content,busi_type,temp_id,eip_id from mk_eipmeans_file_info where deal_flag='0' and rownum < 5 order by eip_date;
+uuid	means_content	busi_type	temp_id	eip_id
+545ca774-90af-11ec-8547-2cf05daaf220	aaaaaaaaaa	NULL	NULL	1002
+545ca774-90af-11ec-8547-2cf05daaf221	aaaaaaaaaa	NULL	NULL	1003
+545ca774-90af-11ec-8547-2cf05daaf222	aaaaaaaaaa	NULL	NULL	1004
+545ca774-90af-11ec-8547-2cf05daaf22a	aaaaaaaaaa	NULL	NULL	1001
+drop table mk_eipmeans_file_info;
+create table t1(id int  not null auto_increment primary key, col1 varchar(200));
+insert into t1(col1) values ('test1');
+insert into t1(col1) values ('test2');
+create view v1  as select * from t1 where rownum <=2;
+select * from v1;
+id	col1
+1	test1
+2	test2
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`id` AS `id`,`t1`.`col1` AS `col1` from `t1` where (rownum <= 2)	utf8mb4	utf8mb4_0900_ai_ci
+drop table t1;
+drop view v1;
+create table t1(c1 int, c2 int);
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+insert into t1 values(3,3);
+select  rownum, t1.c1 from t1 join t1 t2 on rownum<t1.c1;
+rownum	c1
+1	3
+2	3
+select rownum, t1.c1 from t1 join t1 t2 on t1.c1 = rownum join t1 t3 on t2.c1 = t3.c1;
+rownum	c1
+1	1
+2	2
+3	3
+select rownum, t1.c1 from t1 join t1 t2 on t1.c1 = rownum join t1 t3 on t2.c1 = t3.c1 where rownum < 3;
+rownum	c1
+1	1
+2	2
+drop table t1;
+create table test(id int);
+insert into test values(1),(2),(3);
+delete from test where rownum < 2;
+select * from test;
+id
+2
+3
+delete from test where id = rownum;
+delete from test where id > rownum;
+select * from test;
+id
+create table t1(ida int, age int);
+insert into t1 values(1, 2), (2, 5), (3, 4), (4, 7);
+create table t2(id int);
+insert into t2 values(1), (2), (1);
+select * from t1 join  t2 on t1.ida = t2.id and t2.id >= rownum;
+ida	age	id
+1	2	1
+2	5	2
+analyze table t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+explain format=tree delete t1, t2 from t1 join  t2 on t1.ida = t2.id and t2.id >= rownum;
+EXPLAIN
+-> Delete from t1 (buffered), t2 (immediate)  (cost=*** rows=***)
+    -> Nested loop inner join  (cost=*** rows=***)
+        -> Table scan on t2  (cost=*** rows=***)
+        -> Filter: (t2.id >= rownum)  (cost=*** rows=***)
+            -> Filter: (t1.ida = t2.id)  (cost=*** rows=***)
+                -> Table scan on t1  (cost=*** rows=***)
+
+delete t1, t2 from t1 join  t2 on t1.ida = t2.id and t2.id >= rownum;
+select * from t1;
+ida	age
+3	4
+4	7
+select * from t2;
+id
+1
+create table hash1(c1 int primary key, c2 int) partition by hash(c1) partitions 4;
+insert into hash1 values(1,2),(3,4);
+update hash1 set c1=99 where rownum<2;
+create table normal(c1 int primary key, c2 int);
+insert into normal values(1,2),(3,4);
+update normal set c1=99 where rownum<2;
+drop table test, t1, t2, hash1, normal;
+select rownum, rownum+1 from dual;
+rownum	rownum+1
+1	2
+select rownum+1, rownum from dual;
+rownum+1	rownum
+2	1
+WITH recursive  a as (  SELECT  rownum as  id  FROM dual   UNION  SELECT  rownum  FROM  a  WHERE rownum < 10 ) SELECT * FROM a;
+id
+1
+create table m1(id int,name varchar(50));
+insert into m1 values(1,10);
+insert into m1 values(1,20);
+insert into m1 values(1,20);
+insert into m1 values(2,20);
+insert into m1 values(3,200);
+insert into m1 values(3,500);
+create table m2(id int,name varchar(50));
+insert into m2 values(1,10);
+insert into m2 values(1,100);
+insert into m2 values(1,200);
+insert into m2 values(2,20);
+insert into m2 values(3,200);
+insert into m2 values(3,500);
+SELECT id,max(rownum) FROM m1 group by id;
+id	max(rownum)
+1	3
+2	4
+3	6
+SELECT id,max(rownum) FROM m1 where rownum < 3 group by id;
+id	max(rownum)
+1	2
+SELECT id,max(rownum), min(rownum+1) FROM m1 group by id;
+id	max(rownum)	min(rownum+1)
+1	3	2
+2	4	5
+3	6	6
+select max(rownum), min(rownum+1) from m1;
+max(rownum)	min(rownum+1)
+6	2
+drop table m1, m2;
+CREATE TABLE t_hash (
+c1 int NOT NULL PRIMARY KEY ,
+c2 int
+);
+insert into t_hash values (1, 11);
+insert into t_hash values (2, 999999);
+insert into t_hash  values (3, 22222222);
+insert into t_hash  values (4, 444);
+insert into t_hash values (5, 88);
+(select rownum,c2 from t_hash) intersect (select  rownum,c2 from t_hash);
+rownum	c2
+1	11
+2	999999
+3	22222222
+4	444
+5	88
+(select rownum,c2 from t_hash) intersect (select  rownum,c2 from t_hash where rownum < 3);
+rownum	c2
+1	11
+2	999999
+(select rownum,c2 from t_hash) union (select  rownum,c2 from t_hash where rownum < 3);
+rownum	c2
+1	11
+2	999999
+3	22222222
+4	444
+5	88
+(select rownum,c2 from t_hash) except (select  rownum,c2 from t_hash where rownum < 3);
+rownum	c2
+3	22222222
+4	444
+5	88
+drop table t_hash;

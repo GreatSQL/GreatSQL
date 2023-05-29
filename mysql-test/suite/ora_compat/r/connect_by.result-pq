@@ -1,0 +1,711 @@
+set sql_mode=oracle;
+SELECT level FROM dual CONNECT BY level <= 5;
+level
+1
+2
+3
+4
+5
+CREATE TABLE student (
+id       INT,
+name  VARCHAR(10),
+grade INT
+);
+INSERT INTO student VALUES(1, 'John', NULL);
+INSERT INTO student VALUES(2, 'Paul', 1);
+INSERT INTO student VALUES(3, 'Nancy', 1);
+INSERT INTO student VALUES(4, 'Sarah', 3);
+SELECT id, name, grade, level
+FROM student
+CONNECT BY PRIOR id = grade
+ORDER BY id;
+id	name	grade	level
+1	John	NULL	1
+2	Paul	1	1
+2	Paul	1	2
+3	Nancy	1	1
+3	Nancy	1	2
+4	Sarah	3	1
+4	Sarah	3	2
+4	Sarah	3	3
+SELECT DISTINCT id, name, grade
+FROM student
+CONNECT BY PRIOR id = grade
+ORDER BY id;
+id	name	grade
+1	John	NULL
+2	Paul	1
+3	Nancy	1
+4	Sarah	3
+SELECT id, name, grade, level path
+FROM student
+CONNECT BY PRIOR id = grade
+ORDER BY id;
+id	name	grade	path
+1	John	NULL	1
+2	Paul	1	1
+2	Paul	1	2
+3	Nancy	1	1
+3	Nancy	1	2
+4	Sarah	3	1
+4	Sarah	3	2
+4	Sarah	3	3
+SELECT id, name, grade, level  path
+FROM student
+CONNECT BY  id = PRIOR grade
+ORDER BY id;
+id	name	grade	path
+1	John	NULL	1
+1	John	NULL	2
+1	John	NULL	2
+1	John	NULL	3
+2	Paul	1	1
+3	Nancy	1	1
+3	Nancy	1	2
+4	Sarah	3	1
+SELECT id, name, grade, level
+FROM student
+START WITH id > 1
+CONNECT BY  id =  grade
+ORDER BY id;
+id	name	grade	level
+2	Paul	1	1
+3	Nancy	1	1
+4	Sarah	3	1
+SELECT id, name, grade, level
+FROM student t1
+START WITH id > 1
+CONNECT BY  prior t1.id =  t1.grade
+ORDER BY id;
+id	name	grade	level
+2	Paul	1	1
+3	Nancy	1	1
+4	Sarah	3	1
+4	Sarah	3	2
+SELECT t1.id, name, grade, level
+FROM student t1
+START WITH id > 1
+CONNECT BY  prior t1.id =  t1.grade
+ORDER BY id;
+id	name	grade	level
+2	Paul	1	1
+3	Nancy	1	1
+4	Sarah	3	1
+4	Sarah	3	2
+SELECT id, name, grade, level
+FROM student
+CONNECT BY  id =  grade
+START WITH id > 1
+ORDER BY id;
+id	name	grade	level
+2	Paul	1	1
+3	Nancy	1	1
+4	Sarah	3	1
+SELECT id, name, grade, level
+FROM student
+where id > 1
+CONNECT BY  id =  grade
+ORDER BY id;
+id	name	grade	level
+2	Paul	1	1
+3	Nancy	1	1
+4	Sarah	3	1
+SELECT id, name, grade, level
+FROM student
+where id > 1
+start with grade < 3
+CONNECT BY  id =  grade
+ORDER BY id;
+id	name	grade	level
+2	Paul	1	1
+3	Nancy	1	1
+SELECT id, name, grade, level
+FROM student
+start with grade =1
+CONNECT BY  id =  grade
+ORDER BY id;
+id	name	grade	level
+2	Paul	1	1
+3	Nancy	1	1
+SELECT t.id, name, grade, (t.id+1),level
+FROM student t
+start with grade =1
+CONNECT BY  id =  grade
+ORDER BY id;
+id	name	grade	(t.id+1)	level
+2	Paul	1	3	1
+3	Nancy	1	4	1
+SELECT id, name, grade, level FROM student t1 CONNECT BY PRIOR id = grade order by  id desc, level ;
+id	name	grade	level
+4	Sarah	3	1
+4	Sarah	3	2
+4	Sarah	3	3
+3	Nancy	1	1
+3	Nancy	1	2
+2	Paul	1	1
+2	Paul	1	2
+1	John	NULL	1
+SELECT id,name, grade, level FROM student t1 CONNECT BY PRIOR id = grade order by  t1.id desc, level ;
+id	name	grade	level
+4	Sarah	3	1
+4	Sarah	3	2
+4	Sarah	3	3
+3	Nancy	1	1
+3	Nancy	1	2
+2	Paul	1	1
+2	Paul	1	2
+1	John	NULL	1
+SELECT t1.name, grade, level FROM student t1 CONNECT BY PRIOR id = grade order by  id desc, level ;
+name	grade	level
+Sarah	3	1
+Sarah	3	2
+Sarah	3	3
+Nancy	1	1
+Nancy	1	2
+Paul	1	1
+Paul	1	2
+John	NULL	1
+SELECT t1.name, grade, level FROM  student t1 CONNECT BY PRIOR id = grade order by  t1.id , level ;
+name	grade	level
+John	NULL	1
+Paul	1	1
+Paul	1	2
+Nancy	1	1
+Nancy	1	2
+Sarah	3	1
+Sarah	3	2
+Sarah	3	3
+select 1 , 'b' , 'c' from student t1 connect by prior id = grade ;
+1	b	c
+1	b	c
+1	b	c
+1	b	c
+1	b	c
+1	b	c
+1	b	c
+1	b	c
+1	b	c
+SELECT t1.name, grade, level, rownum FROM  student t1 CONNECT BY PRIOR id = grade  ;
+name	grade	level	rownum
+John	NULL	1	1
+Paul	1	1	2
+Nancy	1	1	3
+Sarah	3	1	4
+Paul	1	2	5
+Nancy	1	2	6
+Sarah	3	2	7
+Sarah	3	3	8
+SELECT level, rownum FROM  student t1  where rownum < 3 CONNECT BY PRIOR id = grade  ;
+level	rownum
+1	1
+1	2
+SET @v = 0;
+prepare stmt FROM 'SELECT t1.name, grade, level FROM student t1 CONNECT BY PRIOR id = grade start with id >? ';
+EXECUTE stmt using @v;
+name	grade	level
+John	NULL	1
+Paul	1	1
+Nancy	1	1
+Sarah	3	1
+Paul	1	2
+Nancy	1	2
+Sarah	3	2
+Sarah	3	3
+DEALLOCATE prepare stmt;
+prepare stmt FROM 'SELECT t1.name, grade, level FROM ( select  * from student where id < ? )  t1 CONNECT BY PRIOR id = grade ';
+EXECUTE stmt using @v;
+name	grade	level
+DEALLOCATE prepare stmt;
+SELECT id,PRIOR name, grade, level  path
+FROM student
+CONNECT BY  id = PRIOR grade
+ORDER BY id;
+ERROR 42000: This version of MySQL doesn't yet support ' PRIOR in select list'
+SELECT id,count(id)
+FROM student
+where id > 1
+start with grade < 3
+CONNECT BY  id =  grade
+group by id;
+id	count(id)
+2	1
+3	1
+explain SELECT id, name, grade, level
+FROM student
+CONNECT BY PRIOR id = grade order by id;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	8	100.00	Using filesort
+2	DERIVED	student	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+3	UNION	<connect_derived*>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Recursive
+3	UNION	student	NULL	ALL	NULL	NULL	NULL	NULL	4	25.00	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select "<connect_derived*>"."id" AS "id","<connect_derived*>"."name" AS "name","<connect_derived*>"."grade" AS "grade","<connect_derived*>"."level" AS "level" from (/* select#2 */ select "test"."student"."id" AS "id","test"."student"."name" AS "name","test"."student"."grade" AS "grade","test"."student"."id" AS "dprior_*_id",1 AS "level" from "test"."student" union all /* select#3 */ select "test"."student"."id" AS "id","test"."student"."name" AS "name","test"."student"."grade" AS "grade","test"."student"."id" AS "dprior_*_id",("<connect_derived*>"."level" + 1) from "test"."student" join "" "<connect_derived*>" where ("test"."student"."grade" = "<connect_derived*>"."dprior_*_id")) "<connect_derived*>" order by "<connect_derived*>"."id"
+explain format=tree
+SELECT id, name, grade, level
+FROM student
+CONNECT BY PRIOR id = grade order by id;
+EXPLAIN
+-> Sort: "<connect_derived*>".id  (cost=*** rows=***)
+    -> Table scan on <connect_derived*>  (cost=*** rows=***)
+        -> Materialize recursive CTE <connect_derived*>  (cost=*** rows=***)
+            -> Table scan on student  (cost=*** rows=***)
+            -> Repeat until convergence
+                -> Inner hash join (student.grade = "<connect_derived*>".dprior_*_id)  (cost=*** rows=***)
+                    -> Table scan on student  (cost=*** rows=***)
+                    -> Hash
+                        -> Scan new records on <connect_derived*>  (cost=*** rows=***)
+
+SELECT t1.id, name, grade, t1.level
+FROM student t1
+START WITH id > 1
+CONNECT BY  prior t1.id =  t1.grade
+ORDER BY id;
+ERROR 42S22: Unknown column 't1.level' in 'field list'
+SELECT t1.id, name, grade
+FROM student t1
+START WITH id > 1
+CONNECT BY  prior t2.id =  t1.grade
+ORDER BY id;
+ERROR 42S22: Unknown column 't2.id' in 'field list'
+SELECT t1.id, name, grade
+FROM student t1
+START WITH t2.id > 1
+CONNECT BY  prior id =  t1.grade
+ORDER BY id;
+ERROR 42S22: Unknown column 't2.id' in 'where clause'
+SELECT t1.id, name, grade
+FROM student t1
+CONNECT BY  prior id =  t1.grade
+ORDER BY t2.id;
+ERROR 42S22: Unknown column 't2.id' in 'field list'
+SELECT t2.id, name, grade
+FROM student t1
+CONNECT BY  prior id =  t1.grade
+ORDER BY id;
+ERROR 42S22: Unknown column 't2.id' in 'field list'
+SELECT id, name, grade
+FROM student t1
+where t2.id != 0
+CONNECT BY  prior id =  t1.grade
+ORDER BY id;
+ERROR 42S22: Unknown column 't2.id' in 'field list'
+CREATE TABLE t2 (
+id       INT,
+name  VARCHAR(10),
+grade INT
+);
+SELECT t1.id, name, grade
+FROM student t1,t2
+START WITH id > 1
+CONNECT BY  prior t2.id =  t1.grade
+ORDER BY id;
+ERROR 42000: This version of MySQL doesn't yet support 'more than one table use connect by'
+drop table t2;
+SELECT a.id,name, grade, level FROM student a where a.id > 1  CONNECT BY PRIOR id = grade;
+id	name	grade	level
+2	Paul	1	1
+3	Nancy	1	1
+4	Sarah	3	1
+2	Paul	1	2
+3	Nancy	1	2
+4	Sarah	3	2
+4	Sarah	3	3
+SELECT id,name, grade, level FROM student a where a.id > 1  CONNECT BY PRIOR id = grade;
+id	name	grade	level
+2	Paul	1	1
+3	Nancy	1	1
+4	Sarah	3	1
+2	Paul	1	2
+3	Nancy	1	2
+4	Sarah	3	2
+4	Sarah	3	3
+SELECT * FROM student a where a.id > 1  CONNECT BY PRIOR id = grade;
+id	name	grade
+2	Paul	1
+3	Nancy	1
+4	Sarah	3
+2	Paul	1
+3	Nancy	1
+4	Sarah	3
+4	Sarah	3
+SELECT *,id FROM student a CONNECT BY PRIOR id = grade;
+ERROR 42S21: Duplicate column name 'id'
+SELECT id FROM student a CONNECT BY PRIOR id = grade group by id ;
+id
+1
+2
+3
+4
+SELECT id FROM student a CONNECT BY PRIOR id = grade group by a.id ;
+id
+1
+2
+3
+4
+SELECT id FROM student a CONNECT BY PRIOR id = grade group by t2.id;
+ERROR 42S22: Unknown column 't2.id' in 'field list'
+SELECT id FROM student a CONNECT BY PRIOR id = grade group by a.id having id > 1;
+id
+2
+3
+4
+SELECT id FROM student a CONNECT BY PRIOR id = grade group by a.id having a.id > 1;
+id
+2
+3
+4
+SELECT id FROM student a CONNECT BY PRIOR id = grade group by a.id having b.id > 1;
+ERROR 42S22: Unknown column 'b.id' in 'field list'
+set @a=@@cte_max_recursion_depth;
+SET SESSION cte_max_recursion_depth = 5;
+SELECT t1.name, grade, level FROM  student t1 CONNECT BY level;
+ERROR HY000: Recursive query aborted after 6 iterations. Try increasing @@cte_max_recursion_depth to a larger value.
+SET SESSION cte_max_recursion_depth = @a;
+DROP TABLE student;
+set sql_mode=default;
+DROP TABLE IF EXISTS `t_ucp_authelement`;
+Warnings:
+Note	1051	Unknown table 'test.t_ucp_authelement'
+CREATE TABLE `t_ucp_authelement` (
+`AUTHID` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`MODULEID` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`AUTHCODE` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`SUPERCODE` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`AUTHNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`MENUFLAG` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`DESCRIPTION` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`AUTHTYPE` tinyint DEFAULT '1',
+`REGION` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CREATOR` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CREATEORG` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISPUBLIC` tinyint DEFAULT '1',
+`CREATEDATE` datetime DEFAULT NULL,
+`STATUS` tinyint DEFAULT '1',
+`STATUSDATE` datetime DEFAULT NULL,
+`NOTES` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`RIGHTGROUP` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CREATETYPE` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`DISPLAYNO` int DEFAULT NULL,
+`SYSTEMID` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISDEFORG` tinyint DEFAULT '0',
+`STARTDATE` datetime DEFAULT NULL,
+`ENDDATE` datetime DEFAULT NULL,
+PRIMARY KEY (`AUTHID`)
+);
+DROP TABLE IF EXISTS `t_ucp_orgainfo`;
+Warnings:
+Note	1051	Unknown table 'test.t_ucp_orgainfo'
+CREATE TABLE `t_ucp_orgainfo` (
+`ORGAID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`ORGANAME` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ORGATYPEID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ORGASTATE` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CITYFLAG` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ORGACODE` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`SUPERORGACODE` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ORGADESC` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`PTEAMID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CCFLAG` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`AREACODE` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`MONITORID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`SUPERVISORIDS` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ORDERNUM` int DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT '001',
+`UPDATETIME` datetime DEFAULT CURRENT_TIMESTAMP,
+`BELONGORGA` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ORGALEVEL` tinyint DEFAULT NULL,
+`CREATEDATE` datetime DEFAULT NULL,
+`BEGINDATE` datetime DEFAULT NULL,
+`ENDDATE` datetime DEFAULT NULL,
+`STATUSDATE` datetime DEFAULT NULL,
+`ISCOUNTY` tinyint DEFAULT NULL,
+`ISINNER` tinyint DEFAULT '1',
+`BOSSORGAID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`BOSSSUPERORGAID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`MAXLOGINNUM` int DEFAULT NULL,
+`PARENTID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`OPENPHONE` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ADDRESS` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`POSTALCODE` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CONTACTSTAFFNO` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CONTACTTELNO` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`FAXNO` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`EMAIL` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`OWNERTYPE` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`USERCOUNT` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CANTONTYPE` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`VALIDATEMODE` tinyint DEFAULT '0',
+`AGENTTYPEID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STARLEVEL` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`DISTTYPEID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISCHANNELAUTHFILTER` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT 'N',
+`CHANNELTYPEID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`DEPARTCODE` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISPROVCHAIN` tinyint DEFAULT NULL,
+`CHAINNAME` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`REGION` int DEFAULT NULL,
+`DEALER` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISTERMINALFEEINCOME` tinyint DEFAULT '1',
+`AGENTSTYLE` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`AGENTTYPE` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`REALNAMECODE` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`LSCHANNELID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISECLCBUSINESS` tinyint DEFAULT NULL,
+`ISSTATMOBSELL` varchar(5) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CMIOTFLAG` tinyint DEFAULT NULL,
+`GRPCUSTTYPE` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CONTACTPARTYMEMBERNAME` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CONTACTPARTYMEMBERPHONE` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ORGSUBTYPE` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+KEY `IX_UCP_ORGAINFO_PARENTID` (`PARENTID`));
+DROP TABLE IF EXISTS `t_ucp_putroleuser`;
+Warnings:
+Note	1051	Unknown table 'test.t_ucp_putroleuser'
+CREATE TABLE `t_ucp_putroleuser` (
+`STAFFID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`ROLEID` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`CONDITIONSTR` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+PRIMARY KEY (`ROLEID`,`STAFFID`));
+DROP TABLE IF EXISTS `t_ucp_role`;
+Warnings:
+Note	1051	Unknown table 'test.t_ucp_role'
+CREATE TABLE `t_ucp_role` (
+`ROLEID` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`ROLECODE` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`SUPERCODE` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`ROLENAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`DESCRIPTION` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CTIFLAG` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`CTIROLEID` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CCID` bigint DEFAULT NULL,
+`VDNID` bigint DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISPUBLIC` tinyint DEFAULT '1',
+`CREATOR` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CREATEDATE` datetime DEFAULT NULL,
+`CREATEORG` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STATUS` tinyint DEFAULT NULL,
+`STATUSDATE` datetime DEFAULT NULL,
+`REGION` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ROLETYPE` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`DISPLAYNO` int DEFAULT '99999',
+`WORKSHOPID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISMODIFYCONTROL` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT '0',
+`NOTES` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`REQUIREOP` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`REQUIREORG` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`MANAGEOP` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`MANAGEORG` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+PRIMARY KEY (`ROLEID`));
+DROP TABLE IF EXISTS `t_ucp_roleputauth`;
+Warnings:
+Note	1051	Unknown table 'test.t_ucp_roleputauth'
+CREATE TABLE `t_ucp_roleputauth` (
+`ROLEID` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`MODULEID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`AUTHID` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`CONDITIONSTR` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+PRIMARY KEY (`ROLEID`,`MODULEID`,`AUTHID`));
+DROP TABLE IF EXISTS `t_ucp_staffbasicinfo`;
+Warnings:
+Note	1051	Unknown table 'test.t_ucp_staffbasicinfo'
+CREATE TABLE `t_ucp_staffbasicinfo` (
+`STAFFID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`STAFFNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`STAFFSTATE` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`STAFFIDSTATUS` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`DLEVELID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`DLMODULUS` decimal(4,2) DEFAULT NULL,
+`SECONDPOST` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`DUTYID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`SECONDDUTY` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`PTEAMID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ORGAID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`POSTID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STAFFACCOUNT` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`DISABLEBEGINDATE` datetime DEFAULT NULL,
+`DISABLEENDDATE` datetime DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`PERSONALCFGID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`UPDATETIME` datetime DEFAULT CURRENT_TIMESTAMP,
+`BATCHNO` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STAFFTYPE` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISMANAGER` tinyint DEFAULT NULL,
+`HRSTATUS` tinyint DEFAULT NULL,
+`CREATEDATE` datetime DEFAULT NULL,
+`STATUSDATE` datetime DEFAULT NULL,
+`REMARK` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`REGION` int DEFAULT NULL,
+`BEGINDATE` datetime DEFAULT NULL,
+`ENDDATE` datetime DEFAULT NULL,
+`RELESTAFFID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`WORKEFFICIENCY` int DEFAULT NULL,
+`TELNO` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`LOGINTYPE` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`WORKTYPE` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`AREAID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`EMPLOYEETYPE` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STAFFNUMBER` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STAFFIDUSE` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISADMIN` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`PETNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISMODIFYCONTROL` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT '0',
+`RESPCITYID` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`NOTMODSTATUS` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CURRENTORGAID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CURRENTREGION` int DEFAULT NULL,
+`SALESCENE` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CHANNELTYPE` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`LOGINCHKPHOTO` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT '0',
+`UPLOADPHOTO` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT '0',
+`USERNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+PRIMARY KEY (`STAFFID`));
+DROP TABLE IF EXISTS `t_ucp_staffrole`;
+Warnings:
+Note	1051	Unknown table 'test.t_ucp_staffrole'
+CREATE TABLE `t_ucp_staffrole` (
+`ROLEID` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`STAFFID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`CONDITIONSTR` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STATUS` tinyint DEFAULT '1',
+`STATUSDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`CREATEDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`ORGAID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`BEGINDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`ENDDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`ROAMSTATIONID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT '0',
+`NOTES` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+KEY `IX_UCP_STAFFROLE_STAFF` (`STAFFID`));
+DROP TABLE IF EXISTS `t_ucp_putauth`;
+Warnings:
+Note	1051	Unknown table 'test.t_ucp_putauth'
+CREATE TABLE `t_ucp_putauth` (
+`STAFFID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`MODULEID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`AUTHID` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`CONDITIONSTR` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`BEGINDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`ENDDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+PRIMARY KEY (`STAFFID`,`MODULEID`,`AUTHID`));
+set sql_mode=oracle;
+select * from (select distinct a.authid, a.authcode, a.supercode, a.authname, a.menuflag, a.description, a.moduleid, a.region, a.creator, a.createorg, a.ispublic, a.createdate, a.status, a.statusdate, a.createtype, a.rightgroup, a.displayno, a.systemid from t_ucp_authelement a connect by prior a.supercode = a.authcode start with exists (select authid from ( select b.authid from t_ucp_putauth b where b.staffid = 1 union all select c.authid from t_ucp_roleputauth c, t_ucp_staffrole d where c.roleid = d.roleid and d.staffid = 1 ) where authid = a.authid )) where 1 = 1 and supercode = 2 and status = 1 order by displayno, supercode, authcode;
+authid	authcode	supercode	authname	menuflag	description	moduleid	region	creator	createorg	ispublic	createdate	status	statusdate	createtype	rightgroup	displayno	systemid
+select * from (select distinct a.authid, a.authcode, a.supercode, a.authname, a.menuflag, a.description, a.moduleid, a.region, a.creator, a.createorg, a.ispublic, a.createdate, a.status, a.statusdate, a.createtype, a.rightgroup, a.displayno, a.systemid from t_ucp_authelement a connect by prior a.supercode = a.authcode start with exists (select authid from ( select b.authid from t_ucp_putauth b where b.staffid = 1 union all select c.authid from t_ucp_roleputauth c, t_ucp_staffrole d where c.roleid = d.roleid and d.staffid = 1 ) where authid = a.authid )) where 1 = 1 and supercode = 2 order by displayno, supercode, authcode;
+authid	authcode	supercode	authname	menuflag	description	moduleid	region	creator	createorg	ispublic	createdate	status	statusdate	createtype	rightgroup	displayno	systemid
+select * from (select distinct a.ctiroleid, a.rolename, a.rolecode, a.description, a.ccid, a.roleid, a.supercode, a.vdnid, a.ctiflag, a.roletype, a.displayno, a.status from t_ucp_role a connect by prior a.supercode = a.rolecode start with exists (select b.roleid from t_ucp_putroleuser b where a.roleid = b.roleid and b.staffid = 1)) where 1 = 1 and status = 1 and supercode = 2 order by displayno, rolecode;
+ctiroleid	rolename	rolecode	description	ccid	roleid	supercode	vdnid	ctiflag	roletype	displayno	status
+select * from (select distinct a.ctiroleid, a.rolename, a.rolecode, a.description, a.ccid, a.roleid, a.supercode, a.vdnid, a.ctiflag, a.roletype, a.workshopid, a.displayno from t_ucp_role a connect by prior a.supercode = a.rolecode start with exists (select b.roleid from t_ucp_putroleuser b where a.roleid = b.roleid and b.staffid = 1 )) where 1 = 1 and supercode = 2 order by displayno, rolecode;
+ctiroleid	rolename	rolecode	description	ccid	roleid	supercode	vdnid	ctiflag	roletype	workshopid	displayno
+select * from (select distinct a.ctiroleid, a.rolename, a.rolecode, a.description, a.ccid, a.roleid, a.supercode, a.vdnid, a.ctiflag, a.roletype, a.workshopid, a.displayno from t_ucp_role a connect by prior a.supercode = a.rolecode start with exists (select b.roleid from t_ucp_putroleuser b where a.roleid = b.roleid and b.staffid = 1 )) where 1 = 1 order by displayno, rolecode;
+ctiroleid	rolename	rolecode	description	ccid	roleid	supercode	vdnid	ctiflag	roletype	workshopid	displayno
+select authid, authcode, supercode, authname, menuflag, description, moduleid, region, creator, createorg, ispublic, createdate, status, statusdate, createtype, rightgroup, systemid from t_ucp_authelement start with authid = 11 connect by prior supercode = authcode;
+authid	authcode	supercode	authname	menuflag	description	moduleid	region	creator	createorg	ispublic	createdate	status	statusdate	createtype	rightgroup	systemid
+select ctiroleid, rolename, rolecode, description, ccid, roleid, supercode, vdnid, ctiflag from t_ucp_role start with roleid = 1 connect by prior supercode = rolecode;
+ctiroleid	rolename	rolecode	description	ccid	roleid	supercode	vdnid	ctiflag
+select ctiroleid, rolename, rolecode, description, ccid, roleid, supercode, vdnid, ctiflag from t_ucp_role start with roleid = 1 connect by prior supercode = rolecode;
+ctiroleid	rolename	rolecode	description	ccid	roleid	supercode	vdnid	ctiflag
+select distinct a.orgacode from t_ucp_orgainfo a connect by prior a.superorgacode = a.orgacode start with a.orgacode = 1;
+orgacode
+select distinct a.orgaid from t_ucp_orgainfo a connect by prior a.parentid = a.orgaid start with a.orgaid = 1;
+orgaid
+select distinct t1.staffid, t1.staffname, t1.staffstate, t1.staffidstatus, t1.orgaid, t1.dlevelid, t1.dlmodulus, t1.secondpost, t1.dutyid, t1.secondduty, t1.postid, t1.pteamid, t1.hostedccid, t1.staffaccount, t1.disableenddate, t1.disablebegindate, t1.personalcfgid, t1.batchno, t1.workefficiency, t1.region, t1.stafftype, t1.ismanager, t1.hrstatus, t1.createdate, t1.begindate, t1.enddate, t1.statusdate, t1.remark, t1.relestaffid, t1.telno, t1.logintype, t1.worktype, t1.employeetype, t1.areaid from t_ucp_staffbasicinfo t1, t_ucp_staffrole t2 where t1.orgaid in (select orgaid from (select level aaa, a.orgaid from t_ucp_orgainfo a start with orgaid = (select orgaid from t_ucp_staffbasicinfo where staffid = 1 ) connect by prior parentid = orgaid) t where t.aaa <= 1 ) and t1.staffstate = '1' and t1.staffidstatus = '01' and t2.staffid = t1.staffid and t2.roleid = 1 order by t1.staffid asc;
+staffid	staffname	staffstate	staffidstatus	orgaid	dlevelid	dlmodulus	secondpost	dutyid	secondduty	postid	pteamid	hostedccid	staffaccount	disableenddate	disablebegindate	personalcfgid	batchno	workefficiency	region	stafftype	ismanager	hrstatus	createdate	begindate	enddate	statusdate	remark	relestaffid	telno	logintype	worktype	employeetype	areaid
+select distinct t1.staffid, t1.staffname, t1.staffstate, t1.staffidstatus, t1.orgaid, t1.dlevelid, t1.dlmodulus, t1.secondpost, t1.dutyid, t1.secondduty, t1.postid, t1.pteamid, t1.hostedccid, t1.staffaccount, t1.disableenddate, t1.disablebegindate, t1.personalcfgid, t1.batchno, t1.workefficiency, t1.region, t1.stafftype, t1.ismanager, t1.hrstatus, t1.createdate, t1.begindate, t1.enddate, t1.statusdate, t1.remark, t1.relestaffid, t1.telno, t1.logintype, t1.worktype, t1.employeetype, t1.areaid from t_ucp_staffbasicinfo t1, t_ucp_staffrole t2 where t1.orgaid in (select orgaid from (select level aaa, a.orgaid from t_ucp_orgainfo a start with orgaid = (select orgaid from t_ucp_staffbasicinfo where staffid = 1 ) connect by prior parentid = orgaid) t where t.aaa <= 1 ) and t1.staffstate = '1' and t1.staffidstatus = '01' and t2.staffid = t1.staffid and t2.roleid like 'monitorconfirm%';
+staffid	staffname	staffstate	staffidstatus	orgaid	dlevelid	dlmodulus	secondpost	dutyid	secondduty	postid	pteamid	hostedccid	staffaccount	disableenddate	disablebegindate	personalcfgid	batchno	workefficiency	region	stafftype	ismanager	hrstatus	createdate	begindate	enddate	statusdate	remark	relestaffid	telno	logintype	worktype	employeetype	areaid
+select orgacode, orgadesc, organame, orgatypeid, orgastate, cityflag, pteamid, orgaid, superorgacode, ccflag, areacode, monitorid, maxloginnum, supervisorids, ordernum, belongorga, orgalevel, createdate, begindate, enddate, statusdate, isinner, parentid, openphone, address, postalcode, contactstaffno, contacttelno, faxno, email, ownertype, validatemode, cantontype from t_ucp_orgainfo t start with t.orgaid = 1 connect by prior t.parentid = t.orgaid order by t.orgacode;
+orgacode	orgadesc	organame	orgatypeid	orgastate	cityflag	pteamid	orgaid	superorgacode	ccflag	areacode	monitorid	maxloginnum	supervisorids	ordernum	belongorga	orgalevel	createdate	begindate	enddate	statusdate	isinner	parentid	openphone	address	postalcode	contactstaffno	contacttelno	faxno	email	ownertype	validatemode	cantontype
+select orgacode, orgadesc, organame, orgatypeid, orgastate, cityflag, pteamid, orgaid, superorgacode, ccflag, areacode, monitorid, maxloginnum, supervisorids, ordernum, belongorga, orgalevel, createdate, begindate, enddate, statusdate, isinner, parentid, openphone, address, postalcode, contactstaffno, contacttelno, faxno, email, ownertype, validatemode, cantontype from t_ucp_orgainfo t start with t.orgaid = 1 connect by prior t.parentid = t.orgaid order by t.orgacode;
+orgacode	orgadesc	organame	orgatypeid	orgastate	cityflag	pteamid	orgaid	superorgacode	ccflag	areacode	monitorid	maxloginnum	supervisorids	ordernum	belongorga	orgalevel	createdate	begindate	enddate	statusdate	isinner	parentid	openphone	address	postalcode	contactstaffno	contacttelno	faxno	email	ownertype	validatemode	cantontype
+select t.roleid, b.rolename, t.staffid from t_ucp_staffrole t, t_ucp_role b where t.roleid in (select t.roleid from t_ucp_role t start with t.rolename like '_报表话务员类型%' connect by prior t.rolecode = t.supercode) and t.roleid = b.roleid and translate(t.staffid, 'a0123456789', 'a') is null;
+roleid	rolename	staffid
+drop table t_ucp_authelement,t_ucp_orgainfo,t_ucp_putroleuser,t_ucp_role,t_ucp_roleputauth,t_ucp_staffbasicinfo,t_ucp_staffrole,t_ucp_putauth;
+create table tt1
+(
+id varchar(64),
+pid varchar(64)
+);
+INSERT INTO tt1 VALUES('1',  NULL);
+INSERT INTO tt1 VALUES('2',  '1');
+INSERT INTO tt1 VALUES('3',  '1');
+INSERT INTO tt1 VALUES('4',  '3');
+select * from tt1 aa connect by aa.id = prior aa.pid;
+id	pid
+1	NULL
+2	1
+3	1
+4	3
+1	NULL
+1	NULL
+3	1
+1	NULL
+drop table tt1;
+CREATE TABLE ne_cmd_schema (
+SCHEMA_ID decimal(65,0) NOT NULL,
+ELEMENT_ID decimal(65,0) NOT NULL,
+PARENT_ELEMENT_ID decimal(65,0) NOT NULL,
+ELEMENT_NAME varchar(50) COLLATE utf8mb4_bin NOT NULL,
+ELEMENT_CONSTR varchar(10) COLLATE utf8mb4_bin DEFAULT NULL,
+TYPE varchar(10) COLLATE utf8mb4_bin DEFAULT NULL,
+DATA_TYPE varchar(100) COLLATE utf8mb4_bin DEFAULT NULL ,
+DATA_FORMAT varchar(100) COLLATE utf8mb4_bin DEFAULT NULL,
+DATA_SOURCE_TYPE varchar(100) COLLATE utf8mb4_bin DEFAULT NULL,
+PATH text COLLATE utf8mb4_bin ,
+MAPPING_KEY varchar(50) COLLATE utf8mb4_bin DEFAULT NULL ,
+IS_MAPPING decimal(65,0) DEFAULT NULL ,
+IS_PRIMARY_KEY decimal(65,0) DEFAULT NULL ,
+NE_CMD_TEMPLATE_ID decimal(65,0) NOT NULL,
+ELEMENT_DESC varchar(100) COLLATE utf8mb4_bin DEFAULT NULL,
+DATA_SOURCE varchar(100) COLLATE utf8mb4_bin DEFAULT NULL,
+VARIABLE_NAME varchar(50) COLLATE utf8mb4_bin DEFAULT NULL ,
+VALUE_NAME varchar(30) COLLATE utf8mb4_bin DEFAULT NULL ,
+IS_ENCRYPT varchar(10) COLLATE utf8mb4_bin DEFAULT NULL ,
+PRIMARY KEY (SCHEMA_ID)
+);
+select schema_id,
+element_id,
+parent_element_id,
+element_name,
+element_constr,
+type,
+data_type,
+data_format,
+data_source_type,
+path,
+mapping_key,
+is_mapping,
+is_primary_key,
+ne_cmd_template_id,
+element_desc,
+data_source,
+value_name,
+is_encrypt,
+variable_name
+from (select schema_id,
+element_id,
+parent_element_id,
+element_name,
+element_constr,
+type,
+data_type,
+data_format,
+data_source_type,
+path,
+mapping_key,
+is_mapping,
+is_primary_key,
+ne_cmd_template_id,
+element_desc,
+data_source,
+value_name,
+is_encrypt,
+variable_name
+from ne_cmd_schema a
+where a.NE_CMD_TEMPLATE_ID = '1' ) b CONNECT BY PRIOR b.element_id = b.parent_element_id
+START WITH b.parent_element_id = '0';
+schema_id	element_id	parent_element_id	element_name	element_constr	type	data_type	data_format	data_source_type	path	mapping_key	is_mapping	is_primary_key	ne_cmd_template_id	element_desc	data_source	value_name	is_encrypt	variable_name
+drop table ne_cmd_schema;

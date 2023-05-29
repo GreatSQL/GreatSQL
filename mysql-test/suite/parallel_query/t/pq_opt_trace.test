@@ -1,0 +1,21 @@
+--source include/pq_test.inc
+--source include/have_debug.inc
+
+create table t1(id int, a varchar(10));
+
+--disable_query_log
+ let $loop=1000;
+ while($loop)
+ {
+  eval insert into t1 values($loop, 'aa');
+  dec $loop;
+ }
+--enable_query_log
+
+set session optimizer_trace="enabled=on";
+select * from t1 limit 1;
+
+Select locate("make_parallel_query_plan", trace) > 1 From Information_Schema.Optimizer_Trace;
+
+set session optimizer_trace="enabled=on";
+drop table t1;

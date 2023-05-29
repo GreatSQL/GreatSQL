@@ -1,0 +1,879 @@
+create table t1(a int primary key, b varchar(10), c decimal(5,2), d double);
+SELECT COUNT(a) FROM t1;
+COUNT(a)
+0
+SELECT SUM(a) FROM t1;
+SUM(a)
+NULL
+SELECT AVG(a) FROM t1;
+AVG(a)
+NULL
+insert into t1 values (1, 'The', '3.14', '3.14');
+insert into t1 values (2, 'quick', '4.25', '3.14');
+insert into t1 values (3, 'brown', '5.36', '3.14');
+insert into t1 values (4, 'fox', '6.47', '3.14');
+insert into t1 values (5, 'jumps', '3.14', '6.28');
+insert into t1 values (6, 'over', '4.25', '6.28');
+insert into t1 values (7, 'the', '5.36', '6.28');
+insert into t1 values (8, 'lazy', '6.47', '6.28');
+insert into t1 values (9, 'dog', '7.58', '6.28');
+select count(*) from t1;
+count(*)
+9
+select count(a) from t1;
+count(a)
+9
+select count(b) from t1;
+count(b)
+9
+select count(c) from t1;
+count(c)
+9
+select count(d) from t1;
+count(d)
+9
+select sum(a) from t1;
+sum(a)
+45
+select sum(c) from t1;
+sum(c)
+46.02
+select sum(d) from t1;
+sum(d)
+43.96
+select avg(a) from t1;
+avg(a)
+5.0000
+select avg(c) from t1;
+avg(c)
+5.113333
+select avg(d) from t1;
+avg(d)
+4.884444444444444
+select std(d) from t1;
+std(d)
+1.5602785442998535
+select variance(d) from t1;
+variance(d)
+2.4344691358024697
+select sum(a) from t1 where c > 5.0;
+sum(a)
+31
+select sum(c) from t1 where a > 5;
+sum(c)
+23.66
+select sum(d) from t1 where c > 5.0;
+sum(d)
+25.12
+select avg(a) from t1 where c > 5.0;
+avg(a)
+6.2000
+select avg(c) from t1 where a > 5;
+avg(c)
+5.915000
+select avg(d) from t1 where c > 5.0;
+avg(d)
+5.024
+select count(*) from t1 where c > 5.0;
+count(*)
+5
+select count(a) from t1 where a > 5;
+count(a)
+4
+select count(b) from t1 where c > 5.0;
+count(b)
+5
+select count(c) from t1 where d > 6.0;
+count(c)
+5
+select count(d) from t1 where a > 5;
+count(d)
+4
+select c,sum(a) from t1 group by(c);
+c	sum(a)
+3.14	6
+4.25	8
+5.36	10
+6.47	12
+7.58	9
+select b,sum(c) from t1 group by(b);
+b	sum(c)
+The	8.50
+quick	4.25
+brown	5.36
+fox	6.47
+jumps	3.14
+over	4.25
+lazy	6.47
+dog	7.58
+select c,sum(d) from t1 group by(c);
+c	sum(d)
+3.14	9.42
+4.25	9.42
+5.36	9.42
+6.47	9.42
+7.58	6.28
+select c,avg(a) from t1 group by(c);
+c	avg(a)
+3.14	3.0000
+4.25	4.0000
+5.36	5.0000
+6.47	6.0000
+7.58	9.0000
+select b,avg(c) from t1 group by(b);
+b	avg(c)
+The	4.250000
+quick	4.250000
+brown	5.360000
+fox	6.470000
+jumps	3.140000
+over	4.250000
+lazy	6.470000
+dog	7.580000
+select c,avg(d) from t1 group by(c);
+c	avg(d)
+3.14	4.71
+4.25	4.71
+5.36	4.71
+6.47	4.71
+7.58	6.28
+select count(*) from t1 group by(c);
+count(*)
+2
+2
+2
+2
+1
+select count(a) from t1 group by(a);
+count(a)
+1
+1
+1
+1
+1
+1
+1
+1
+1
+select count(b) from t1 group by(c);
+count(b)
+2
+2
+2
+2
+1
+select count(c) from t1 group by(b);
+count(c)
+2
+1
+1
+1
+1
+1
+1
+1
+select count(d) from t1 group by(c);
+count(d)
+2
+2
+2
+2
+1
+drop table t1;
+CREATE TABLE `t2` (
+`id` int(11) NOT NULL AUTO_INCREMENT,
+`a` varchar(10) DEFAULT NULL,
+PRIMARY KEY (`id`)
+);
+insert into t2 values(1, 'a'), (2, 'b');
+select sum(id) from t2 group by id;
+sum(id)
+1
+2
+select avg(id) from t2 group by id;
+avg(id)
+1.0000
+2.0000
+select count(id) from t2 group by id;
+count(id)
+1
+1
+drop table t2;
+create table t1 (a char(2), t timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
+insert into t1 values ('a', '2004-01-01 00:00:00'), ('a', '2004-01-01 01:00:00'), ('b', '2004-02-01 00:00:00');
+select max(t) from t1 group by a;
+max(t)
+2004-01-01 01:00:00
+2004-02-01 00:00:00
+explain select max(t) from t1 group by a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select max(`test`.`t1`.`t`) AS `max(t)` from `test`.`t1` group by `test`.`t1`.`a`
+select min(t) from t1 group by a;
+min(t)
+2004-01-01 00:00:00
+2004-02-01 00:00:00
+explain select min(t) from t1 group by a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select min(`test`.`t1`.`t`) AS `min(t)` from `test`.`t1` group by `test`.`t1`.`a`
+drop table t1;
+set sql_mode = '';
+set big_tables = 1;
+CREATE TABLE t1(
+id INT AUTO_INCREMENT PRIMARY KEY, 
+c1 INT NOT NULL, 
+c2 INT NOT NULL,
+UNIQUE KEY (c2,c1));
+INSERT INTO t1(c1,c2) VALUES (5,1), (4,1), (3,5), (2,3), (1,3);
+SELECT * FROM t1 ORDER BY c1;
+id	c1	c2
+5	1	3
+4	2	3
+3	3	5
+2	4	1
+1	5	1
+SELECT * FROM t1 GROUP BY id ORDER BY c1;
+id	c1	c2
+5	1	3
+4	2	3
+3	3	5
+2	4	1
+1	5	1
+SELECT * FROM t1 GROUP BY id ORDER BY id DESC;
+id	c1	c2
+5	1	3
+4	2	3
+3	3	5
+2	4	1
+1	5	1
+drop table t1;
+CREATE TABLE t1 (
+spID int(10) unsigned,
+userID int(10) unsigned,
+score smallint(5) unsigned,
+key (spid),
+key (score)
+);
+INSERT INTO t1 VALUES (1,1,1),(2,2,2),(2,1,1),(3,3,3),(4,3,3),(5,3,3),(6,3,3),(7,3,3);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+select userid,count(*) from t1 group by userid order by userid;
+userid	count(*)
+1	2
+2	1
+3	5
+select userid,count(*) from t1 group by userid order by null;
+userid	count(*)
+1	2
+2	1
+3	5
+select userid,count(*) from t1 group by userid order by userid desc;
+userid	count(*)
+3	5
+2	1
+1	2
+select spid,count(*) from t1 group by spid;
+spid	count(*)
+1	1
+2	2
+3	1
+4	1
+5	1
+6	1
+7	1
+select spid,count(*) from t1 group by spid order by spid;
+spid	count(*)
+1	1
+2	2
+3	1
+4	1
+5	1
+6	1
+7	1
+select spid,count(*) from t1 group by spid order by spid desc;
+spid	count(*)
+7	1
+6	1
+5	1
+4	1
+3	1
+2	2
+1	1
+drop table t1;
+set sql_mode = '';
+create table t3 (
+period    int not null,
+name      char(32) not null,
+companynr int not null,
+price     double(11,0),
+price2     double(11,0),
+key (period),
+key (name)
+);
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1001,"Iranizes",37,5987435,234724);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1002,"violinist",37,28357832,8723648);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1003,"extramarital",37,39654943,235872);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1004,"spates",78,726498,72987523);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1005,"cloakroom",78,98439034,823742);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1006,"gazer",101,834598,27348324);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1007,"hand",154,983543950,29837423);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1008,"tucked",311,234298,3275892);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1009,"gems",447,2374834,9872392);
+INSERT INTO t3 (period,name,companynr,price,price2) VALUES (1010,"clinker",512,786542,76234234);
+create temporary table tmp select * from t3;
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+insert into tmp select * from t3;
+insert into t3 select * from tmp;
+alter table t3 add t2nr int not null auto_increment primary key first;
+drop table tmp;
+select companynr,count(price),sum(price),min(price),max(price),avg(price) from t3 where companynr = 37 
+group by companynr order by companynr  limit 10;
+companynr	count(price)	sum(price)	min(price)	max(price)	avg(price)
+37	12543	309394878010	5987435	39654943	24666736.6667
+drop table t3;
+CREATE TABLE t1 (a int, b int);
+SELECT a, sum(a) FROM t1 GROUP BY a ORDER BY a;
+a	sum(a)
+0	0
+1	96
+2	192
+3	288
+4	384
+5	480
+6	576
+7	672
+8	768
+9	864
+10	960
+11	1056
+12	1152
+13	1248
+14	1344
+15	1440
+16	1536
+17	1632
+18	1728
+19	1216
+20	1280
+21	1344
+22	1408
+SELECT a, sum(a) FROM t1 GROUP BY a ORDER BY a desc;
+a	sum(a)
+22	1408
+21	1344
+20	1280
+19	1216
+18	1728
+17	1632
+16	1536
+15	1440
+14	1344
+13	1248
+12	1152
+11	1056
+10	960
+9	864
+8	768
+7	672
+6	576
+5	480
+4	384
+3	288
+2	192
+1	96
+0	0
+SELECT a, sum(a) FROM t1 GROUP BY a ORDER BY a limit 10;
+a	sum(a)
+0	0
+1	96
+2	192
+3	288
+4	384
+5	480
+6	576
+7	672
+8	768
+9	864
+SELECT a, sum(a) FROM t1 GROUP BY a ORDER BY a limit 10, 10;
+a	sum(a)
+10	960
+11	1056
+12	1152
+13	1248
+14	1344
+15	1440
+16	1536
+17	1632
+18	1728
+19	1216
+SELECT b, avg(a) FROM t1 GROUP BY a, b ORDER BY b, NULL limit 10;
+b	avg(a)
+0	0.0000
+0	5.0000
+0	7.0000
+0	4.0000
+0	2.0000
+0	9.0000
+0	3.0000
+0	6.0000
+0	8.0000
+0	1.0000
+SELECT b, sum(a) FROM t1 GROUP BY a, b ORDER BY NULL, a, b, NULL, a, NULL;
+b	sum(a)
+0	0
+1	0
+3	0
+5	0
+7	0
+8	0
+9	0
+13	0
+14	0
+17	0
+18	0
+21	0
+25	0
+0	9
+1	21
+3	12
+5	9
+7	12
+8	3
+9	3
+13	12
+14	3
+17	3
+18	3
+21	3
+25	3
+0	18
+1	42
+3	24
+5	18
+7	24
+8	6
+9	6
+13	24
+14	6
+17	6
+18	6
+21	6
+25	6
+0	27
+1	63
+3	36
+5	27
+7	36
+8	9
+9	9
+13	36
+14	9
+17	9
+18	9
+21	9
+25	9
+0	36
+1	84
+3	48
+5	36
+7	48
+8	12
+9	12
+13	48
+14	12
+17	12
+18	12
+21	12
+25	12
+0	45
+1	105
+3	60
+5	45
+7	60
+8	15
+9	15
+13	60
+14	15
+17	15
+18	15
+21	15
+25	15
+0	54
+1	126
+3	72
+5	54
+7	72
+8	18
+9	18
+13	72
+14	18
+17	18
+18	18
+21	18
+25	18
+0	63
+1	147
+3	84
+5	63
+7	84
+8	21
+9	21
+13	84
+14	21
+17	21
+18	21
+21	21
+25	21
+0	72
+1	168
+3	96
+5	72
+7	96
+8	24
+9	24
+13	96
+14	24
+17	24
+18	24
+21	24
+25	24
+0	81
+1	189
+3	108
+5	81
+7	108
+8	27
+9	27
+13	108
+14	27
+17	27
+18	27
+21	27
+25	27
+0	90
+1	210
+3	120
+5	90
+7	120
+8	30
+9	30
+13	120
+14	30
+17	30
+18	30
+21	30
+25	30
+0	99
+1	231
+3	132
+5	99
+7	132
+8	33
+9	33
+13	132
+14	33
+17	33
+18	33
+21	33
+25	33
+0	108
+1	252
+3	144
+5	108
+7	144
+8	36
+9	36
+13	144
+14	36
+17	36
+18	36
+21	36
+25	36
+0	117
+1	273
+3	156
+5	117
+7	156
+8	39
+9	39
+13	156
+14	39
+17	39
+18	39
+21	39
+25	39
+0	126
+1	294
+3	168
+5	126
+7	168
+8	42
+9	42
+13	168
+14	42
+17	42
+18	42
+21	42
+25	42
+0	135
+1	315
+3	180
+5	135
+7	180
+8	45
+9	45
+13	180
+14	45
+17	45
+18	45
+21	45
+25	45
+0	144
+1	336
+3	192
+5	144
+7	192
+8	48
+9	48
+13	192
+14	48
+17	48
+18	48
+21	48
+25	48
+0	153
+1	357
+3	204
+5	153
+7	204
+8	51
+9	51
+13	204
+14	51
+17	51
+18	51
+21	51
+25	51
+0	162
+1	378
+3	216
+5	162
+7	216
+8	54
+9	54
+13	216
+14	54
+17	54
+18	54
+21	54
+25	54
+0	114
+1	266
+3	152
+5	114
+7	152
+8	38
+9	38
+13	152
+14	38
+17	38
+18	38
+21	38
+25	38
+0	120
+1	280
+3	160
+5	120
+7	160
+8	40
+9	40
+13	160
+14	40
+17	40
+18	40
+21	40
+25	40
+0	126
+1	294
+3	168
+5	126
+7	168
+8	42
+9	42
+13	168
+14	42
+17	42
+18	42
+21	42
+25	42
+0	132
+1	308
+3	176
+5	132
+7	176
+8	44
+9	44
+13	176
+14	44
+17	44
+18	44
+21	44
+25	44
+SELECT b, sum(a) FROM t1 GROUP BY a, b ORDER BY NULL, a, b, NULL, a, NULL limit 10, 5;
+b	sum(a)
+18	0
+21	0
+25	0
+0	9
+1	21
+DROP TABLE t1;
+CREATE TABLE t1 (a int, b int);
+SELECT a FROM t1 GROUP BY a ORDER by a Limit 10;
+a
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+SELECT a FROM t1 GROUP BY a HAVING a > 1 ORDER by a Limit 10;
+a
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+SELECT a FROM t1 GROUP BY a HAVING 1 != 1 AND a > 1 ORDER by a Limit 10;
+a
+SELECT 0 AS x, a FROM t1 GROUP BY x,a HAVING x=1 AND a > 1 ORDER by a Limit 10;
+x	a
+SELECT a FROM t1 GROUP BY a HAVING (a % 11) > 1 ORDER by a Limit 10;
+a
+2
+3
+4
+5
+6
+7
+8
+9
+10
+13
+SELECT a, b FROM t1 GROUP BY a, b HAVING a + b > 31 ORDER by a, b Limit 10;
+a	b
+22	10
+23	9
+23	10
+24	8
+24	9
+24	10
+25	7
+25	8
+25	9
+25	10
+SELECT a, b FROM t1 GROUP BY a, b HAVING a * b > 61 ORDER by a, b Limit 10, 10;
+a	b
+10	8
+10	9
+10	10
+11	6
+11	7
+11	8
+11	9
+11	10
+12	6
+12	7
+SELECT a, b FROM t1 GROUP BY a, b HAVING sin(a % 11) > 0.5 and cos(b % 7) < 0.5 ORDER by a, b Limit 10, 10;
+a	b
+2	9
+2	10
+7	2
+7	3
+7	4
+7	5
+7	9
+7	10
+8	2
+8	3
+EXPLAIN SELECT a, sum(b) from t1 GROUP BY a, b HAVING sum(b) > 5 ORDER BY a, b LIMIT 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	2048	100.00	Using temporary; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,sum(`test`.`t1`.`b`) AS `sum(b)` from `test`.`t1` group by `test`.`t1`.`a`,`test`.`t1`.`b` having (sum(`test`.`t1`.`b`) > 5) order by `test`.`t1`.`a`,`test`.`t1`.`b` limit 10
+SELECT a, sum(b) from t1 GROUP BY a, b HAVING sum(b) > 5 ORDER BY a, b LIMIT 10;
+a	sum(b)
+0	6
+0	12
+0	18
+0	24
+0	30
+0	36
+0	42
+0	48
+0	54
+0	60
+EXPLAIN SELECT a, sum(b) from t1 GROUP BY a, b HAVING sum(b) > 5 ORDER BY a, b LIMIT 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	2048	100.00	Using temporary; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,sum(`test`.`t1`.`b`) AS `sum(b)` from `test`.`t1` group by `test`.`t1`.`a`,`test`.`t1`.`b` having (sum(`test`.`t1`.`b`) > 5) order by `test`.`t1`.`a`,`test`.`t1`.`b` limit 10
+SELECT a, b from t1 GROUP BY a, b HAVING avg(b) > 5 ORDER BY a, b LIMIT 10;
+a	b
+0	6
+0	7
+0	8
+0	9
+0	10
+1	6
+1	7
+1	8
+1	9
+1	10
+SELECT sum(a), avg(b) from t1 GROUP BY a, b HAVING sum(a) * avg(b) > 25 ORDER BY a, b LIMIT 10;
+sum(a)	avg(b)
+9	3.0000
+9	4.0000
+9	5.0000
+9	6.0000
+9	7.0000
+9	8.0000
+9	9.0000
+9	10.0000
+18	2.0000
+18	3.0000
+DROP TABLE t1;

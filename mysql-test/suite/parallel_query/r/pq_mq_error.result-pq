@@ -1,0 +1,58 @@
+create table t1(id int, a varchar(10));
+insert into t1 values(1, 'aa'), (2, 'bb');
+set @saved_force_parallel_execute = @@force_parallel_execute;
+set session force_parallel_execute = 1;
+set session sql_mode = '';
+set session debug="";
+set session debug="+d, pq_mq_error1";
+select * from t1;
+ERROR HY000: Parallel execution error
+show status like "PQ_memory_used";
+Variable_name	Value
+PQ_memory_used	0
+set session debug="";
+set session debug="+d, pq_mq_error2";
+select a, sum(a) from t1 group by a order by a desc, id;
+ERROR HY000: Parallel execution error
+show status like "PQ_memory_used";
+Variable_name	Value
+PQ_memory_used	0
+set session debug="";
+set session debug="+d, pq_mq_error3";
+select a from t1 order by a desc, id;
+ERROR HY000: Memory allocation error:  in function (MQ::receive).
+show status like "PQ_memory_used";
+Variable_name	Value
+PQ_memory_used	0
+set session debug="";
+set session debug="+d, pq_mq_error4";
+select a from t1 order by a desc, id;
+ERROR HY000: Parallel execution error
+show status like "PQ_memory_used";
+Variable_name	Value
+PQ_memory_used	0
+set session debug="";
+set session debug="+d, pq_mq_error5";
+select a from t1 order by a desc, id;
+ERROR HY000: Parallel execution error
+show status like "PQ_memory_used";
+Variable_name	Value
+PQ_memory_used	0
+set session debug="+d, pq_mq_error6";
+select * from t1 limit 20;
+ERROR HY000: Parallel execution error
+show status like "PQ_memory_used";
+Variable_name	Value
+PQ_memory_used	0
+set session debug="";
+select a, sum(a) from t1 group by a order by a desc, id limit 20;
+a	sum(a)
+cc	0
+bb	0
+aa	0
+show status like "PQ_memory_used";
+Variable_name	Value
+PQ_memory_used	0
+drop table t1;
+SET debug= DEFAULT;
+# restart

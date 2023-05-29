@@ -1,0 +1,249 @@
+#test date + - interval
+
+select '2000-01-01 00:00:00' + INTERVAL '80' SECOND   from dual;
+select  INTERVAL '80' SECOND + '2000-01-01 00:00:00'   from dual;
+select '2000-01-01 00:00:00' - INTERVAL '80' SECOND   from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '80' SECOND(2)   from dual;
+select  INTERVAL '80' SECOND(2)  + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00' - INTERVAL '80' SECOND(2)   from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '80' MINUTE   from dual;
+select  INTERVAL '80' MINUTE  + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00' - INTERVAL '80' MINUTE   from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '80' MINUTE(2)   from dual;
+select  INTERVAL '80' MINUTE(2)  + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '80' MINUTE(2)   from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '8' HOUR   from dual;
+select  INTERVAL '8' HOUR  + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '8' HOUR   from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '80' HOUR(2)   from dual;
+select  INTERVAL '80' HOUR(2) + '2000-01-01 00:00:00'  from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '80' HOUR(2)   from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '80' DAY   from dual;
+select  INTERVAL '80' DAY  + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '80' DAY   from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '80' DAY(3)   from dual;
+select  INTERVAL '80' DAY(3)  + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '80' DAY(3)   from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '123' month   from dual;
+select  INTERVAL '123' month  + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '123' month   from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '9600' month(4)   from dual;
+select  INTERVAL '9600' month(4) + '2000-01-01 00:00:00'  from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '9600' month(4)   from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '123' YEAR(3)   from dual;
+select  INTERVAL '123' YEAR(3)  + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00' - INTERVAL '123' YEAR(3)   from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '15:30' MINUTE TO SECOND from dual;
+select  INTERVAL '15:30' MINUTE TO SECOND + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '15:30' MINUTE TO SECOND from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '09:08:07'  HOUR to SECOND from dual;
+select  INTERVAL '09:08:07'  HOUR to SECOND  + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '09:08:07'  HOUR to SECOND from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '09:08:07.666666' HOUR TO SECOND(7) from dual;
+select  INTERVAL '09:08:07.666666' HOUR TO SECOND(7) + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '09:08:07.666666' HOUR TO SECOND(7) from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '09:30' HOUR TO MINUTE from dual;
+select  INTERVAL '09:30' HOUR TO MINUTE + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '09:30' HOUR TO MINUTE from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '09:30' HOUR(2) TO MINUTE from dual;
+select  INTERVAL '09:30' HOUR(2) TO MINUTE  + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '09:30' HOUR(2) TO MINUTE from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '2 1:3:4' DAY to SECOND from dual;
+select  INTERVAL '2 1:3:4' DAY to SECOND + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '2 1:3:4' DAY to SECOND from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '2 1:3:4' DAY(1) to SECOND(1) from dual;
+select  INTERVAL '2 1:3:4' DAY(1) to SECOND(1) + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '2 1:3:4' DAY(1) to SECOND(1) from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '11 10:09' DAY TO MINUTE from dual;
+select  INTERVAL '11 10:09' DAY TO MINUTE + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '11 10:09' DAY TO MINUTE from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '100 10' DAY(3) TO HOUR from dual;
+select  INTERVAL '100 10' DAY(3) TO HOUR + '2000-01-01 00:00:00' from dual;
+select '2000-01-01 00:00:00'  - INTERVAL '100 10' DAY(3) TO HOUR from dual;
+
+select '2000-01-01 00:00:00' + INTERVAL '123-2' YEAR(3) TO MONTH   from dual;
+select  INTERVAL '123-2' YEAR(3) TO MONTH  + '2000-01-01 00:00:00'  from dual;
+select '2000-01-01 00:00:00' - INTERVAL '123-2' YEAR(3) TO MONTH   from dual;
+
+#test sysdate +- INTERVAL
+
+--replace_column 1 #
+select sysdate()  + INTERVAL '80' SECOND   from dual;
+--replace_column 1 #
+select  INTERVAL '80' SECOND + sysdate()    from dual;
+--replace_column 1 #
+select sysdate()  - INTERVAL '80' SECOND   from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '80' SECOND(2)   from dual;
+--replace_column 1 #
+select  INTERVAL '80' SECOND(2)  + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()  - INTERVAL '80' SECOND(2)   from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '80' MINUTE   from dual;
+--replace_column 1 #
+select  INTERVAL '80' MINUTE  + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()  - INTERVAL '80' MINUTE   from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '80' MINUTE(2)   from dual;
+--replace_column 1 #
+select  INTERVAL '80' MINUTE(2)  + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '80' MINUTE(2)   from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '8' HOUR   from dual;
+--replace_column 1 #
+select  INTERVAL '8' HOUR  + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '8' HOUR   from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '80' HOUR(2)   from dual;
+--replace_column 1 #
+select  INTERVAL '80' HOUR(2) + sysdate()   from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '80' HOUR(2)   from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '80' DAY   from dual;
+--replace_column 1 #
+select  INTERVAL '80' DAY  + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '80' DAY   from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '80' DAY(3)   from dual;
+--replace_column 1 #
+select  INTERVAL '80' DAY(3)  + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '80' DAY(3)   from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '123' month   from dual;
+--replace_column 1 #
+select  INTERVAL '123' month  + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '123' month   from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '9600' month(4)   from dual;
+--replace_column 1 #
+select  INTERVAL '9600' month(4) + sysdate()   from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '9600' month(4)   from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '123' YEAR(3)   from dual;
+--replace_column 1 #
+select  INTERVAL '123' YEAR(3)  + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()  - INTERVAL '123' YEAR(3)   from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '15:30' MINUTE TO SECOND from dual;
+--replace_column 1 #
+select  INTERVAL '15:30' MINUTE TO SECOND + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '15:30' MINUTE TO SECOND from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '09:08:07'  HOUR to SECOND from dual;
+--replace_column 1 #
+select  INTERVAL '09:08:07'  HOUR to SECOND  + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '09:08:07'  HOUR to SECOND from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '09:08:07.666666' HOUR TO SECOND(7) from dual;
+--replace_column 1 #
+select  INTERVAL '09:08:07.666666' HOUR TO SECOND(7) + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '09:08:07.666666' HOUR TO SECOND(7) from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '09:30' HOUR TO MINUTE from dual;
+--replace_column 1 #
+select  INTERVAL '09:30' HOUR TO MINUTE + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '09:30' HOUR TO MINUTE from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '09:30' HOUR(2) TO MINUTE from dual;
+--replace_column 1 #
+select  INTERVAL '09:30' HOUR(2) TO MINUTE  + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '09:30' HOUR(2) TO MINUTE from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '2 1:3:4' DAY to SECOND from dual;
+--replace_column 1 #
+select  INTERVAL '2 1:3:4' DAY to SECOND + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '2 1:3:4' DAY to SECOND from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '2 1:3:4' DAY(1) to SECOND(1) from dual;
+--replace_column 1 #
+select  INTERVAL '2 1:3:4' DAY(1) to SECOND(1) + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '2 1:3:4' DAY(1) to SECOND(1) from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '11 10:09' DAY TO MINUTE from dual;
+--replace_column 1 #
+select  INTERVAL '11 10:09' DAY TO MINUTE + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '11 10:09' DAY TO MINUTE from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '100 10' DAY(3) TO HOUR from dual;
+--replace_column 1 #
+select  INTERVAL '100 10' DAY(3) TO HOUR + sysdate()  from dual;
+--replace_column 1 #
+select sysdate()   - INTERVAL '100 10' DAY(3) TO HOUR from dual;
+--replace_column 1 #
+
+select sysdate()  + INTERVAL '123-2' YEAR(3) TO MONTH   from dual;
+--replace_column 1 #
+select  INTERVAL '123-2' YEAR(3) TO MONTH  + sysdate()   from dual;
+--replace_column 1 #
+select sysdate()  - INTERVAL '123-2' YEAR(3) TO MONTH   from dual;
+
+
+#test critical datetime +- INTERVAL
+select '0001-01-01 00:00:00'  - INTERVAL '123-2' YEAR(3) TO MONTH   from dual;
+select '0001-01-01 00:00:00'  - INTERVAL '100 10' DAY(3) TO HOUR from dual;
+
+#test unsuported syntax eg
+--error 1525
+select '0001-01-01 00:00:00'  - INTERVAL '1' YEAR TO YEAR   from dual;
+--error 1525
+select '0001-01-01 00:00:00'  - INTERVAL '1' YEAR TO DAY   from dual;
+--error 1525
+select '0001-01-01 00:00:00'  - INTERVAL '1' YEAR TO MINUTE   from dual;
+--error 1525
+select '0001-01-01 00:00:00'  - INTERVAL '1' HOUR TO HOUR  from dual;

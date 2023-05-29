@@ -1,0 +1,909 @@
+drop database if exists pq_database;
+create database pq_database;
+use pq_database;
+DROP TABLE IF EXISTS `nation`;
+CREATE TABLE `nation`  (
+`n_nationkey` int NOT NULL,
+`N_NAME` char(25) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`N_REGIONKEY` int NOT NULL,
+`N_COMMENT` varchar(152) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+PRIMARY KEY (`n_nationkey`) USING BTREE,
+INDEX `NATION_FK1`(`N_REGIONKEY`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+INSERT INTO nation VALUES(0, 'ALGERIA', 0, 'haggle. carefully final deposits detect slyly agai');
+INSERT INTO nation VALUES(1, 'ARGENTINA', 1, 'al foxes promise slyly according to the regular accounts. bold requests alon');
+INSERT INTO nation VALUES(2, 'BRAZIL', 1, 'y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special');
+INSERT INTO nation VALUES(3, 'CANADA', 1, 'eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold');
+INSERT INTO nation VALUES(18, 'CHINA', 2, 'c dependencies. furiously express notornis sleep slyly regular accounts. ideas sleep. depos');
+INSERT INTO nation VALUES(4, 'EGYPT',  4, 'y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d');
+INSERT INTO nation VALUES(5, 'ETHIOPIA', 0, 'ven packages wake quickly. regu');
+INSERT INTO nation VALUES(6, 'FRANCE', 3, 'refully final requests. regular, ironi');
+INSERT INTO nation VALUES(7, 'GERMANY', 3, 'l platelets. regular accounts x-ray: unusual, regular acco');
+INSERT INTO nation VALUES(8, 'INDIA', 2, 'ss excuses cajole slyly across the packages. deposits print aroun');
+INSERT INTO nation VALUES(9, 'INDONESIA', 2, 'slyly express asymptotes. regular deposits haggle slyly. carefully ironic hockey players sleep blithely. carefull');
+INSERT INTO nation VALUES(10, 'IRAN', 4, 'efully alongside of the slyly final dependencies.');
+INSERT INTO nation VALUES(11, 'IRAQ', 4, 'nic deposits boost atop the quickly final requests? quickly regula');
+INSERT INTO nation VALUES(12, 'JAPAN', 2, 'ously. final, express gifts cajole a');
+INSERT INTO nation VALUES(13, 'JORDAN', 4, 'ic deposits are blithely about the carefully regular pa');
+INSERT INTO nation VALUES(14, 'KENYA', 0, 'pending excuses haggle furiously deposits. pending, express pinto beans wake fluffily past t');
+INSERT INTO nation VALUES(15, 'MOROCCO',0, 'rns. blithely bold courts among the closely regular packages use furiously bold platelets?');
+INSERT INTO nation VALUES(16, 'MOZAMBIQUE', 0, 's. ironic, unusual asymptotes wake blithely r');
+INSERT INTO nation VALUES(17, 'PERU', 1, 'platelets. blithely pending dependencies use fluffily across the even pinto beans. carefully silent accoun');
+INSERT INTO nation VALUES(19, 'ROMANIA', 3, 'ular asymptotes are about the furious multipliers. express dependencies nag above the ironically ironic account');
+INSERT INTO nation VALUES(22, 'RUSSIA', 3, 'requests against the platelets use never according to the quickly regular pint');
+INSERT INTO nation VALUES(20, 'SAUDI ARABIA', 4, 'ts. silent requests haggle. closely express packages sleep across the blithely');
+INSERT INTO nation VALUES(23, 'UNITED KINGDOM', 3, 'eans boost carefully special requests. accounts are. carefull');
+INSERT INTO nation VALUES(24, 'UNITED STATES', 1, 'y final packages. slow foxes cajole quickly. quickly silent platelets breach ironic accounts. unusual pinto be');
+INSERT INTO nation VALUES(21, 'VIETNAM', 2, 'hely enticingly express accounts. even, final');
+DROP TABLE IF EXISTS `supplier`;
+CREATE TABLE `supplier`  (
+`s_suppkey` int NOT NULL,
+`S_NAME` char(25) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`S_ADDRESS` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`S_NATIONKEY` int NOT NULL,
+`S_PHONE` char(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`S_ACCTBAL` decimal(15, 2) NOT NULL,
+`S_COMMENT` varchar(101) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+PRIMARY KEY (`s_suppkey`) USING BTREE,
+INDEX `SUPPLIER_FK1`(`S_NATIONKEY`) USING BTREE,
+CONSTRAINT `supplier_ibfk_1` FOREIGN KEY (`S_NATIONKEY`) REFERENCES `nation` (`n_nationkey`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+CONSTRAINT `supplier_ibfk_2` FOREIGN KEY (`S_NATIONKEY`) REFERENCES `nation` (`n_nationkey`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+CONSTRAINT `supplier_ibfk_3` FOREIGN KEY (`S_NATIONKEY`) REFERENCES `nation` (`n_nationkey`) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+INSERT INTO supplier VALUES	(605, 'Supplier#000000605', 'wdwiNoNT8pVHOTHQ8jhVzaOTkU', 6, '16-835-870-9488', 6071.58,'foxes poach blithely beneath the excuses: ironic multipliers haggle quickly furiously unu');
+INSERT INTO supplier VALUES	(839, 'Supplier#000000839', '1fSx9Sv6LraqnVP3u', 6, '16-845-687-7291',2761.59, 'ess, regular accounts haggle slyly across the carefully');
+INSERT INTO supplier VALUES	(996, 'Supplier#000000996', 'Wx4dQwOAwWjfSCGupfrM', 7, '17-447-811-3282', 6329.90, 'ironic forges cajole blithely agai');
+INSERT INTO supplier VALUES	(741, 'Supplier#000000741', 'BLP6zAc29lDLOvSE3 h2', 7, '17-292-821-2297', 824.94, 'even, unusual instructions b');
+INSERT INTO `supplier` VALUES (800, 'Supplier#000000800', 'Z4 hpmBjpjBXREqzixsBCIaF', 0, '10-497-654-8607', 7956.80, 'he bold foxes boost blithely about the blithely final epitaphs. slyly');
+INSERT INTO `supplier` VALUES (817, 'Supplier#000000817', '0GTKh7JybR8sVahPoJT8kbNtDV0TzA79Q', 0, '10-282-124-6047', 4468.89, ' blithely even requests. blithely ironic deposits wake slyly. ideas haggle! quickly i');
+INSERT INTO `supplier` VALUES (370, 'Supplier#000000370', 'yyNSJAG9UXcWit4SeMkEIrNcdVq5', 0, '10-602-768-3758', 8515.99, 'ound the unusual foxes sleep finally within the furiously unusual requests. sl');
+INSERT INTO `supplier` VALUES (567, 'Supplier#000000567', 'fvuRpAap0MvoBguGKBfp', 1, '11-390-878-2811', 5264.91, 'ke fluffily furiously ironic ideas. qu');
+INSERT INTO `supplier` VALUES (678, 'Supplier#000000678', 'SLpBfeoHSImv', 1, '11-465-565-3513', -58.41, 'he blithely even requests. blithely unusual theodolites sleep furiously against the');
+INSERT INTO `supplier` VALUES (801, 'Supplier#000000801', 'zohVF4 4GHOJpWy9kdytvYwm27mJEBhk', 1, '11-673-791-6926', 976.53, 'ckly final accounts wake since the even instructions. regular, permanent accounts are against t');
+INSERT INTO `supplier` VALUES (300, 'Supplier#000000300', 'YU QZvXHJC7,ZspUPGwaIOa', 2, '12-468-732-4623', 811.42, 'furiously even theodolites haggle along the final, ironic foxes. bold deposits are.');
+INSERT INTO `supplier` VALUES (743, 'Supplier#000000743', 'ccFQShf qHch yPwbryx12DfnIYAp83,F', 2, '12-841-918-5889', 4384.23, 'e slyly after the quickly final platelets? special, special foxes nag slyl');
+INSERT INTO `supplier` VALUES (993, 'Supplier#000000993', 'z2NwUJ TPfd9MP8K3Blp1prYQ116 ', 2, '12-316-384-2073', 2336.52, ' asymptotes haggle slowly above the');
+INSERT INTO `supplier` VALUES (887, 'Supplier#000000887', 'urEaTejH5POADP2ARrf', 3, '13-738-297-6117', 3113.73, 's. regular realms haggle. special, unusual accounts wake furiously. bold pearls play c');
+INSERT INTO `supplier` VALUES (475, 'Supplier#000000475', 'xw4V6,4QQW LI5Qg EOKy4JD B4Cq1tjzaOma9Y', 3, '13-397-755-1516', -115.01, 'among the slyly regular deposits cajole after the even theodolites. carefully unusua');
+INSERT INTO `supplier` VALUES (402, 'Supplier#000000402', 'i9Sw4DoyMhzhKXCH9By,AYSgmD', 3, '13-109-731-3195', 4943.01, 'around the carefully pending dolp');
+INSERT INTO `supplier` VALUES (378, 'Supplier#000000378', 'FfbhyCxWvcPrO8ltp9', 3, '13-930-567-5190', 4429.27, ' among the furiously pending excuses. fluffily express deposits except the slyly final packages');
+INSERT INTO `supplier` VALUES (928, 'Supplier#000000928', 'VL,J8Fq0GI0BnVTaTU9Dcp9Z', 18, '28-382-849-1505', 8512.48, 'equests are. slyly specia');
+INSERT INTO `supplier` VALUES (255, 'Supplier#000000255', 'qx16XyCEUh9OawVeQWOlGlhAU32iHFPNkO', 18, '28-629-327-4139', 4663.08, 's boost. ironic pinto beans along the slyly unusual foxes haggle regular, final asymptotes. reque');
+INSERT INTO `supplier` VALUES (584, 'Supplier#000000584', 'XvDYsHYpmY5AkX60fj0bZo4WW', 18, '28-223-704-2186', 6912.86, 'e requests haggle carefully even ideas. express, bold requests integrate quickly furiously ');
+INSERT INTO `supplier` VALUES (301, 'Supplier#000000301', 'YPFTsQOPRAGIlBw', 4, '14-434-699-9741', 6472.62, 'express foxes sleep carefully even packages. carefully special ideas cajole slyly. carefully r');
+INSERT INTO `supplier` VALUES (67, 'Supplier#000000067', '7YrEKJncHFk5D W7ZaqfAXV', 4, '14-563-538-1657', 3576.55, 'ray slyly final foxes. furio');
+INSERT INTO `supplier` VALUES (78, 'Supplier#000000078', '9y3OZ2CV hGrsrQxzB7V3zTtygHVHlG3SD6yrz', 5, '15-670-998-6860', 1044.10, ', regular packages wake quickly bold requests. carefully unusual requests about the unusual request');
+INSERT INTO `supplier` VALUES (243, 'Supplier#000000243', '8aQ3HGeOXxgYeMAXZQe B5y2RKEF5jdmN3Qb', 6, '16-554-376-5494', 747.88, 'kly silent requests among the blithely regular foxes use fu');
+INSERT INTO `supplier` VALUES (417, 'Supplier#000000417', 'b3CbQxCMWWu,YyeQU 51fccuv7Mt', 6, '16-563-597-5520', -113.45, 'equests hinder quiet courts. carefully');
+INSERT INTO `supplier` VALUES (451, 'Supplier#000000451', 'cqMKQiLjokvIFG', 6, '16-328-146-7253', 2503.45, 'cial packages. pinto beans ');
+INSERT INTO `supplier` VALUES (254, 'Supplier#000000254', 'c6h4mizJAVT0Oz', 7, '17-100-212-8737', 6230.48, 'nos. bold ideas wake carefully among the furiously ');
+INSERT INTO `supplier` VALUES (786, 'Supplier#000000786', 'QiKBtsiRdDZ2xGcwZgOSoMaKSH4HQ360,88L', 8, '18-280-624-2919', 406.37, 'uests. regular warthogs across the blithely express');
+INSERT INTO `supplier` VALUES (878, 'Supplier#000000878', 'cennOpnejXFuwxsxrfoz6U,WN TC7', 8, '18-462-213-5795', 4140.02, 'gular theodolites wake. blithely bold deposit');
+INSERT INTO `supplier` VALUES (551, 'Supplier#000000551', 'ZNiqP1w6Z SGZsLllIhaicTnLCCuAepdNbkm6pJ', 8, '18-297-775-8421', 9364.67, 'lithely even instructions poach quickly. furiously bold accounts sleep final, final accoun');
+INSERT INTO `supplier` VALUES (702, 'Supplier#000000702', '1IfvvCrOk6tDle1AjJisjgmZTSrf6Y 2t,Mdv', 9, '19-354-412-3179', 7655.97, 'about the unusual, bold foxes. quickl');
+INSERT INTO `supplier` VALUES (505, 'Supplier#000000505', 'aqcYZYQD5TYlLDgIxhKZyFCzL3Ch5qKOxj', 9, '19-480-691-1853', 6399.78, ' requests engage slyly regular ideas. fina');
+INSERT INTO `supplier` VALUES (676, 'Supplier#000000676', 'USGIdhKusoe8dcvWdBbZWUfxnVxNnsgY mG', 9, '19-833-604-9178', 5783.61, 's use deposits. quickly even packages haggle quickl');
+INSERT INTO `supplier` VALUES (834, 'Supplier#000000834', 'fwX0Z5,PgFaauaEXlVQX6UmHM0RDKS4EXe,Tn3nJ', 9, '19-419-490-3356', 3732.75, ' express foxes nag slyly after the regular pinto beans. regul');
+INSERT INTO `supplier` VALUES (504, 'Supplier#000000504', 'P8k2mjRiRUFCJfxw7KrEdRpNNQPDxiI', 10, '20-322-544-5770', 9050.12, 'y final pinto beans. blithely regular instructions wake abo');
+INSERT INTO `supplier` VALUES (240, 'Supplier#000000240', 'yMzL86zw28z6sMa', 10, '20-843-630-4161', 6537.07, 'sly. final, regular pinto beans unwind slyl');
+INSERT INTO `supplier` VALUES (286, 'Supplier#000000286', 'o80iAPvmwqM3WOA93pqBHT4Dsgy1rwG', 10, '20-459-893-8984', 7517.31, 'iously regular pinto beans sleep carefully slyly even accounts. packages cajol');
+INSERT INTO `supplier` VALUES (176, 'Supplier#000000176', 'OLVnGuOx8m6NfApzODj4 JP01JJIm,qI53BChmgQ', 10, '20-970-245-2712', 6387.89, 's according to the carefully expr');
+INSERT INTO `supplier` VALUES (613, 'Supplier#000000613', 'DYwZjMQj26Es8D8pxn2zx', 11, '21-796-340-9401', 2201.94, 'e furiously. final foxes haggle carefully quickly express theodolites. regular deposits affix bli');
+INSERT INTO `supplier` VALUES (5, 'Supplier#000000005', 'Gcdm2rJRzl5qlTVzc', 11, '21-151-690-3663', -283.84, '. slyly regular pinto bea');
+INSERT INTO `supplier` VALUES (493, 'Supplier#000000493', '7tdI3AtlDll57sj5K48WLX j5RDbc', 11, '21-252-702-2543', 4999.17, 'gular foxes. slyly pending requests hang along');
+INSERT INTO `supplier` VALUES (113, 'Supplier#000000113', '5 YOpqbaHs7dR gG4EmXrI7XtA7DcnRMsWPU1z2D', 11, '21-211-117-1937', 1882.05, 'blithely regular courts wake quickly even pl');
+INSERT INTO `supplier` VALUES (337, 'Supplier#000000337', 'IRrbCdIS,GB4YYhr', 12, '22-951-643-8793', 9029.85, 'en theodolites-- special, final deposits should have to boost ca');
+INSERT INTO `supplier` VALUES (550, 'Supplier#000000550', 'QQavssDXnYHbvOrg', 12, '22-648-743-9295', 9238.79, 'en, bold ideas. ironic, unusual deposits boost carefully quick accounts. slyly e');
+INSERT INTO `supplier` VALUES (837, 'Supplier#000000837', '717LGrDM2ChnIS91,PE4 ycp4mu4HPdcX', 12, '22-626-153-5392', 5167.00, 'gular instructions are furiously a');
+INSERT INTO `supplier` VALUES (36, 'Supplier#000000036', 'mzSpBBJvbjdx3UKTW3bLFewRD78D91lAC879', 13, '23-273-493-3679', 2371.51, 'ular theodolites must haggle regular, bold accounts. slyly final pinto beans bo');
+INSERT INTO `supplier` VALUES (577, 'Supplier#000000577', 'kn5oGAnFD1CQjet8awWorC,UMf37MP71yNcVD', 13, '23-973-363-7797', 5593.17, 'olites along the quick accounts cajole throughout the regular asymptotes. accounts maintain');
+INSERT INTO `supplier` VALUES (508, 'Supplier#000000508', 'F9,suuHYbe6kCRCPZaeSHSPAFBk9vOcFX8TUx', 14, '24-179-400-2422', 3878.22, 'sits. blithely furious requests boost slyly about the quickly even packages. closely');
+INSERT INTO `supplier` VALUES (808, 'Supplier#000000808', 'B3zlGM54ECUk5MgRzKI9f7F bB8', 15, '25-297-954-4894', 9438.28, 'y even packages. requests sleep quickly fo');
+INSERT INTO `supplier` VALUES (4, 'Supplier#000000004', 'Bk7ah4CK8SYQTepEmvMkkgMwg', 15, '25-843-787-7479', 4641.08, 'riously even requests above the exp');
+INSERT INTO `supplier` VALUES (755, 'Supplier#000000755', 'IRW3Y6qorkh4GBy4gHSpVTF5L', 15, '25-750-724-4757', 9046.17, 'ding accounts was. carefully express ac');
+INSERT INTO `supplier` VALUES (178, 'Supplier#000000178', 'VJ9DInoVjbDg', 16, '26-471-122-2582', 4693.27, 'hely final foxes instead of the express, expres');
+INSERT INTO `supplier` VALUES (8, 'Supplier#000000008', '9Sq4bBH2FQEmaFOocY45sRTxo6yuoG', 17, '27-498-742-3860', 7627.85, 'al pinto beans. asymptotes haggl');
+INSERT INTO `supplier` VALUES (754, 'Supplier#000000754', 'GLSmwjGddmyMx2D BlOKJm1Ji', 17, '27-971-371-9417', 7425.83, 'leep. pinto beans haggle according to the unusual, e');
+INSERT INTO `supplier` VALUES (656, 'Supplier#000000656', 'mQXqRMgstvOI', 19, '29-633-362-8481', 8069.74, 'ronic packages integrate. even excuses integrate carefully ruthlessly bold packages. regular ideas a');
+INSERT INTO `supplier` VALUES (925, 'Supplier#000000925', 'x3n4pg,q28EckYO,613G7seoAmTPSX0jTvDvM2U', 19, '29-398-723-8226', 406.59, 'regular packages can haggle acro');
+INSERT INTO `supplier` VALUES (123, 'Supplier#000000123', 'IqRn20xsj5ibqAQjb6YNQf0xah', 19, '29-602-688-1506', 5726.19, 'nts x-ray quickly according to t');
+INSERT INTO `supplier` VALUES (952, 'Supplier#000000952', 'n8W6MbJdih Ckh6wDvYJz84ZmabvK4yQDz', 22, '32-276-558-4960', 8621.52, 'cajole permanently? carefully slow deposits cajole quickly. regular');
+INSERT INTO `supplier` VALUES (578, 'Supplier#000000578', 'bn5J0A4426DpcW7m rQ9,qxqJ1KN', 20, '30-105-334-1726', 7428.76, 'carefully about the slyly regular warthogs. special packages above the regular pa');
+INSERT INTO `supplier` VALUES (426, 'Supplier#000000426', 'zjIHPRMAI8vF', 23, '33-576-289-4702', 8621.42, ' requests nag. slyly regular ideas ');
+INSERT INTO `supplier` VALUES (939, 'Supplier#000000939', 'mWBKbdzDn3yJNpOT8p', 23, '33-487-125-3117', 7815.06, 'efully. final requests after the unusual requests wake fluffily after the furiously r');
+INSERT INTO `supplier` VALUES (202, 'Supplier#000000202', 'NALZjSfea6SY zB1,I09OJYGrA8bwR4pU', 23, '33-549-918-5721', 6739.52, 'courts cajole bold, special accounts. bold packages haggle re');
+INSERT INTO `supplier` VALUES (84, 'Supplier#000000084', 'DcYjWMiZGQqEKOJi4wAmIV08ikx', 24, '34-869-118-7803', 4780.93, 'even depths. regular foxes use slyly. theod');
+INSERT INTO `supplier` VALUES (87, 'Supplier#000000087', 'WCw7URDj8zoZ7tqC3cpm7', 24, '34-860-229-1674', 4746.66, 'all are quickly after the ironic platelets. pending dolphins are. final the');
+INSERT INTO `supplier` VALUES (828, 'Supplier#000000828', '0B2aPqJ6KTEr2fqxuC7z ', 21, '31-911-715-8972', 289.32, 'ions are carefully along the regular, pending pinto beans. special ');
+INSERT INTO `supplier` VALUES (870, 'Supplier#000000870', 'QIgRinpKvCLPG', 21, '31-675-338-9417', 3689.14, 'ronic accounts. quickly pending pinto beans after the regular asymptotes sleep furiously');
+INSERT INTO `supplier` VALUES (863, 'Supplier#000000863', 'TsC9OuodnybJhWXq4PFNdEJf9jx2y181N3ilV', 21, '31-589-608-3508', 487.31, 'ounts. fluffily special platelets along the even pinto beans boost');
+DROP TABLE IF EXISTS `customer`;
+CREATE TABLE `customer`  (
+`c_custkey` int NOT NULL,
+`C_NAME` varchar(25) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`C_ADDRESS` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`C_NATIONKEY` int NOT NULL,
+`C_PHONE` char(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`C_ACCTBAL` decimal(15, 2) NOT NULL,
+`C_MKTSEGMENT` char(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`C_COMMENT` varchar(117) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+PRIMARY KEY (`c_custkey`) USING BTREE,
+INDEX `CUSTOMER_FK1`(`C_NATIONKEY`) USING BTREE,
+CONSTRAINT `customer_ibfk_1` FOREIGN KEY (`C_NATIONKEY`) REFERENCES `nation` (`n_nationkey`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+CONSTRAINT `customer_ibfk_2` FOREIGN KEY (`C_NATIONKEY`) REFERENCES `nation` (`n_nationkey`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+CONSTRAINT `customer_ibfk_3` FOREIGN KEY (`C_NATIONKEY`) REFERENCES `nation` (`n_nationkey`) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+INSERT INTO customer VALUES (301, 'Customer#000000301', 'FtFq9Cgg5UAzUL', 7, '17-265-345-9265',
+9305.05, 'HOUSEHOLD',  'ular, regular notornis sleep along the furiously pending foxes');
+INSERT INTO customer VALUES (71, 'Customer#000000071', 'TlGalgdXWBmMV,6agLyWYDyIz9MKzcY8gl,w6t1B',
+7, '17-710-812-5403', -611.19, 'HOUSEHOLD', 'g courts across the regular, final pinto beans are blithely pending ac');
+INSERT INTO customer VALUES (46, 'Customer#000000046', 'eaTXWWm10L9', 6, '16-357-681-2007',
+5744.59, 'AUTOMOBILE', 'ctions. accounts sleep furiously even requests. regular, regular accounts cajole blithely around the final pa');
+INSERT INTO customer VALUES (281, 'Customer#000000281', 'x5gJ8IGm2Fo9Jigt', 6, '16-809-382-6446',
+4361.70, 'BUILDING', 'fully quiet ideas detect quickly even packages. regular instructions accor');
+DROP TABLE IF EXISTS `orders`;
+CREATE TABLE `orders`  (
+`o_orderkey` int NOT NULL,
+`O_CUSTKEY` int NOT NULL,
+`O_ORDERSTATUS` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`O_TOTALPRICE` decimal(15, 2) NOT NULL,
+`O_ORDERDATE` date NOT NULL,
+`O_ORDERPRIORITY` char(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`O_CLERK` char(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`O_SHIPPRIORITY` int NOT NULL,
+`O_COMMENT` varchar(79) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+PRIMARY KEY (`o_orderkey`) USING BTREE,
+INDEX `ORDERS_FK1`(`O_CUSTKEY`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+INSERT INTO `orders` VALUES (118370, 301, 'P', 168147.19, '1995-04-29', '5-LOW', 'Clerk#000000272', 0, 'ickly. regular requests play furiously. slyly express accounts a');
+INSERT INTO `orders` VALUES (520707, 71, 'O', 116317.26, '1996-06-01', '3-MEDIUM', 'Clerk#000000381', 0, 'blithely permanent');
+INSERT INTO `orders` VALUES (584192, 46, 'P', 180239.21, '1995-03-19', '1-URGENT', 'Clerk#000000844', 0, 'to the final requests. quickl');
+INSERT INTO `orders` VALUES (479207, 281, 'O ', 169385.50, '1996-02-22', '2-HIGH', 'Clerk#000000930', 0, 'yly. carefully express deposits poach regular re');
+INSERT INTO `orders` VALUES (554307, 2915, 'O', 206510.07, '1998-06-13', '2-HIGH', 'Clerk#000000524', 0, 'ely about the ironic, final foxes. quickly bold accou');
+INSERT INTO `orders` VALUES (111521, 7412, 'O', 182164.10, '1997-02-15', '4-NOT SPECIFIED', 'Clerk#000000329', 0, 'ites are carefully among the furiously ironic acco');
+INSERT INTO `orders` VALUES (444225, 10408, 'O', 306687.42, '1996-06-20', '1-URGENT', 'Clerk#000000096', 0, 'kages use slyly over the slyly blithe dolph');
+INSERT INTO `orders` VALUES (245857, 8044, 'O', 318891.86, '1995-12-24', '5-LOW', 'Clerk#000000721', 0, 'ajole slyly furiously final packages. blithely final ex');
+INSERT INTO `orders` VALUES (132321, 12107, 'F', 243124.18, '1994-02-07', '1-URGENT', 'Clerk#000000853', 0, 'fily final asymptotes sleep furiously across the regul');
+INSERT INTO `orders` VALUES (438816, 6655, 'F', 221287.80, '1993-02-24', '5-LOW', 'Clerk#000000276', 0, 'blithely quickly express pac');
+INSERT INTO `orders` VALUES (74497, 3776, 'F', 191392.39, '1992-12-14', '3-MEDIUM', 'Clerk#000000444', 0, 'fully near the pending, even requests. blithe');
+INSERT INTO `orders` VALUES (89510, 5669, 'O', 216768.31, '1998-05-06', '1-URGENT', 'Clerk#000000190', 0, 'oxes. furiously pending d');
+INSERT INTO `orders` VALUES (157444, 12382, 'O', 215961.16, '1997-02-05', '5-LOW', 'Clerk#000000322', 0, 'carefully silent instructions. carefully thin t');
+INSERT INTO `orders` VALUES (233090, 13514, 'O', 278845.12, '1996-03-24', '3-MEDIUM', 'Clerk#000000736', 0, 'ts above the slyly ruthless requests boost furiously fi');
+INSERT INTO `orders` VALUES (287744, 2327, 'F', 41484.05, '1995-02-04', '1-URGENT', 'Clerk#000000176', 0, 'asymptotes are. furiously regular excuses detect across the blithely fi');
+INSERT INTO `orders` VALUES (91747, 12295, 'F', 157138.78, '1994-09-18', '4-NOT SPECIFIED', 'Clerk#000000591', 0, 'ggle among the blithely unusual instructions. furiously unusual reque');
+INSERT INTO `orders` VALUES (54277, 3023, 'F', 253275.46, '1993-01-03', '1-URGENT', 'Clerk#000000163', 0, 'bove the deposits. carefully unusual sheaves cajole bli');
+INSERT INTO `orders` VALUES (75299, 11546, 'F', 200783.02, '1992-12-19', '2-HIGH', 'Clerk#000000117', 0, 'riously ironic deposits. silent accounts nag. carefully permanent not');
+INSERT INTO `orders` VALUES (529379, 7471, 'O', 274221.23, '1998-04-16', '5-LOW', 'Clerk#000000698', 0, 'usly bold ideas run furiously along the blithely unusual requests');
+INSERT INTO `orders` VALUES (32005, 10379, 'O', 207579.11, '1997-06-01', '4-NOT SPECIFIED', 'Clerk#000000765', 0, 'fily even foxes are slyly requests: careful theodolites haggle slyly ');
+INSERT INTO `orders` VALUES (7907, 5645, 'O', 157133.02, '1996-10-10', '5-LOW', 'Clerk#000000418', 0, 'ly even requests wake slyly along the blithely regular packages. sl');
+INSERT INTO `orders` VALUES (196260, 9337, 'O', 200452.87, '1995-12-14', '5-LOW', 'Clerk#000000890', 0, 'sts integrate. furiously special instructions believe quickly amo');
+INSERT INTO `orders` VALUES (346592, 13015, 'F', 182905.27, '1994-08-16', '1-URGENT', 'Clerk#000000849', 0, 'lly. blithely ironic packages are furiously ironic accounts. ca');
+INSERT INTO `orders` VALUES (388736, 8510, 'F', 56404.94, '1993-03-11', '3-MEDIUM', 'Clerk#000000617', 0, 'o beans sleep blithely alongs');
+INSERT INTO `orders` VALUES (552771, 7894, 'F', 334693.22, '1992-04-25', '2-HIGH', 'Clerk#000000691', 0, 'yly unusual dependencies nag blithely among the flu');
+INSERT INTO `orders` VALUES (56134, 11779, 'O', 243929.66, '1998-04-01', '2-HIGH', 'Clerk#000000404', 0, 'uriously ironic requests cajole ideas. blithely r');
+INSERT INTO `orders` VALUES (226145, 7430, 'O', 60709.47, '1997-10-27', '4-NOT SPECIFIED', 'Clerk#000000644', 0, 'pinto beans. regular p');
+INSERT INTO `orders` VALUES (35427, 3022, 'O', 65591.02, '1996-02-25', '4-NOT SPECIFIED', 'Clerk#000000321', 0, 'onic asymptotes! stealthily ruthless Tiresias nag. carefully e');
+INSERT INTO `orders` VALUES (183524, 11161, 'O', 278859.04, '1995-07-07', '5-LOW', 'Clerk#000000879', 0, ' affix furiously. stealthy, regular accounts haggle carefully express package');
+INSERT INTO `orders` VALUES (247297, 2053, 'F', 278670.11, '1994-09-04', '1-URGENT', 'Clerk#000000213', 0, 'rint furiously ironic, unusua');
+INSERT INTO `orders` VALUES (201607, 14615, 'F', 137139.20, '1993-01-09', '3-MEDIUM', 'Clerk#000000008', 0, ' accounts breach slyly. entic');
+INSERT INTO `orders` VALUES (10948, 6694, 'F', 227941.08, '1992-08-14', '3-MEDIUM', 'Clerk#000000489', 0, 'nic grouches detect stealthily fluffily even de');
+INSERT INTO `orders` VALUES (519911, 2474, 'O', 85447.40, '1998-05-09', '5-LOW', 'Clerk#000000901', 0, 'ld, final instructions cajole slyly of the slyly ironi');
+INSERT INTO `orders` VALUES (292454, 6178, 'O', 237065.90, '1997-07-28', '5-LOW', 'Clerk#000000570', 0, 'ites. final, sly requests boost slyly. furiously even shea');
+INSERT INTO `orders` VALUES (233921, 2129, 'O', 163162.77, '1996-02-09', '2-HIGH', 'Clerk#000000382', 0, 'fluffy packages: carefully speci');
+INSERT INTO `orders` VALUES (562599, 14189, 'P', 246108.56, '1995-05-17', '3-MEDIUM', 'Clerk#000000899', 0, 'ding packages. quickly ironic pinto beans above the blithely fl');
+INSERT INTO `orders` VALUES (20199, 2923, 'F', 208687.85, '1994-04-27', '1-URGENT', 'Clerk#000000933', 0, 'lar foxes alongside of the quickly even dolphi');
+INSERT INTO `orders` VALUES (375971, 5954, 'F', 319538.48, '1993-03-26', '5-LOW', 'Clerk#000000129', 0, 'ts hang. slyly regular requests haggle furi');
+INSERT INTO `orders` VALUES (156774, 9308, 'F', 171093.18, '1992-09-11', '2-HIGH', 'Clerk#000000564', 0, 'ans. warhorses sleep. bold accounts promise');
+INSERT INTO `orders` VALUES (281319, 10241, 'O', 94440.21, '1998-04-03', '3-MEDIUM', 'Clerk#000000569', 0, 'en theodolites. blithely express accounts are furiously. stealthil');
+INSERT INTO `orders` VALUES (25029, 13751, 'O', 49638.36, '1997-11-15', '2-HIGH', 'Clerk#000000284', 0, 'ar foxes. blithely even e');
+INSERT INTO `orders` VALUES (180997, 7627, 'O', 164460.51, '1996-08-28', '3-MEDIUM', 'Clerk#000000989', 0, ' furiously ironic deco');
+INSERT INTO `orders` VALUES (545542, 11422, 'O', 269307.75, '1995-07-27', '5-LOW', 'Clerk#000000788', 0, 'ptotes sleep slyly ironic foxes. pending requests integrate fu');
+INSERT INTO `orders` VALUES (111235, 979, 'F', 242840.39, '1994-06-12', '2-HIGH', 'Clerk#000000464', 0, 'old, pending theodolites. q');
+INSERT INTO `orders` VALUES (71975, 12628, 'F', 206803.03, '1993-10-14', '2-HIGH', 'Clerk#000000948', 0, 'onically ironic instructions');
+INSERT INTO `orders` VALUES (284743, 1295, 'F', 89977.99, '1992-02-28', '5-LOW', 'Clerk#000000088', 0, 'ly special requests dazzle blithely. silent packages are quickly r');
+INSERT INTO `orders` VALUES (239905, 6661, 'O', 222791.73, '1998-01-17', '5-LOW', 'Clerk#000000574', 0, ' final dinos according to the carefully un');
+INSERT INTO `orders` VALUES (77026, 3913, 'O', 174749.79, '1997-01-16', '1-URGENT', 'Clerk#000000807', 0, 'equests at the slyly special instructions use furiously after the regular i');
+INSERT INTO `orders` VALUES (56902, 8291, 'O', 150428.22, '1996-11-10', '4-NOT SPECIFIED', 'Clerk#000000788', 0, 'deposits wake never among the regular courts. bold, express asympt');
+INSERT INTO `orders` VALUES (591970, 14726, 'P', 270683.83, '1995-05-10', '5-LOW', 'Clerk#000000408', 0, 'bold accounts. express, regular accounts engage furiously even, ir');
+INSERT INTO `orders` VALUES (290081, 8926, 'F', 159281.61, '1994-07-23', '4-NOT SPECIFIED', 'Clerk#000000530', 0, 'y special deposits alongside of the');
+INSERT INTO `orders` VALUES (240676, 7609, 'F', 149107.47, '1993-09-13', '5-LOW', 'Clerk#000000803', 0, 'mptotes lose about the fluffily regular requ');
+INSERT INTO `orders` VALUES (543332, 11716, 'F', 251043.20, '1992-11-25', '5-LOW', 'Clerk#000000635', 0, 's use slyly final requests.');
+INSERT INTO `orders` VALUES (60162, 8227, 'O', 27699.32, '1998-07-21', '3-MEDIUM', 'Clerk#000000381', 0, 're. furiously ironic acc');
+INSERT INTO `orders` VALUES (28391, 5416, 'O', 177042.21, '1997-12-31', '4-NOT SPECIFIED', 'Clerk#000000302', 0, 'ts. express, regular p');
+INSERT INTO `orders` VALUES (143237, 12463, 'O', 137599.97, '1996-06-17', '3-MEDIUM', 'Clerk#000000054', 0, 't carefully packages. quickly regular do');
+INSERT INTO `orders` VALUES (184738, 2479, 'F', 264759.05, '1995-02-24', '2-HIGH', 'Clerk#000000116', 0, '. furiously even ideas wake carefully. furiously final');
+INSERT INTO `orders` VALUES (355009, 10513, 'F', 258908.67, '1994-10-11', '2-HIGH', 'Clerk#000000090', 0, ' the regular, final packages sleep among the regular cour');
+INSERT INTO `orders` VALUES (267012, 5912, 'F', 140872.95, '1993-05-16', '4-NOT SPECIFIED', 'Clerk#000000004', 0, 'onic theodolites wake slyly after the carefully regular ideas. quickl');
+INSERT INTO `orders` VALUES (463459, 13636, 'F', 166984.44, '1992-09-18', '3-MEDIUM', 'Clerk#000000346', 0, 'blithely above the bu');
+INSERT INTO `orders` VALUES (158240, 2822, 'O', 198647.49, '1998-04-02', '4-NOT SPECIFIED', 'Clerk#000000923', 0, 'ymptotes nag fluffily regular theodolites. enticingl');
+INSERT INTO `orders` VALUES (101056, 11518, 'O', 243377.30, '1997-04-24', '2-HIGH', 'Clerk#000000380', 0, ' warhorses cajole bold, special deposits. blithely exp');
+INSERT INTO `orders` VALUES (374149, 451, 'O', 81750.52, '1996-04-12', '4-NOT SPECIFIED', 'Clerk#000000866', 0, 'ts are furiously. carefully special pac');
+INSERT INTO `orders` VALUES (561857, 13111, 'O', 249337.85, '1995-12-13', '1-URGENT', 'Clerk#000000555', 0, 'ly ironic deposits. fin');
+INSERT INTO `orders` VALUES (422529, 1943, 'F', 158004.97, '1994-04-10', '5-LOW', 'Clerk#000000238', 0, 's wake slyly among the always regular ideas. pending,');
+INSERT INTO `orders` VALUES (186275, 12335, 'F', 277388.41, '1993-08-25', '3-MEDIUM', 'Clerk#000000370', 0, 'y final packages. carefully ironic requests nag silently reg');
+INSERT INTO `orders` VALUES (203457, 8491, 'F', 210610.26, '1992-07-09', '2-HIGH', 'Clerk#000000864', 0, 'ronic requests. instructions wake al');
+INSERT INTO `orders` VALUES (413282, 11311, 'O', 90313.25, '1998-04-18', '3-MEDIUM', 'Clerk#000000435', 0, 'e silent asymptotes grow fluffily carefully final cou');
+INSERT INTO `orders` VALUES (93794, 232, 'O', 228122.85, '1997-08-08', '2-HIGH', 'Clerk#000000480', 0, 'elets cajole quickly about the blithely busy pinto be');
+INSERT INTO `orders` VALUES (550241, 4813, 'O', 218976.24, '1996-01-13', '5-LOW', 'Clerk#000000043', 0, 'usly even dependencies affix deposits. furiously regular excu');
+INSERT INTO `orders` VALUES (340576, 12532, 'O', 316138.21, '1995-12-23', '5-LOW', 'Clerk#000000806', 0, 'gular requests detect furiously. enticing, special accounts will have to cajo');
+INSERT INTO `orders` VALUES (36896, 6136, 'F', 214441.63, '1994-11-04', '1-URGENT', 'Clerk#000000699', 0, 's cajole fluffily brave theodolites. express requests sleep furi');
+INSERT INTO `orders` VALUES (71269, 10151, 'F', 114358.27, '1993-01-20', '5-LOW', 'Clerk#000000766', 0, ' even packages haggle sl');
+INSERT INTO `orders` VALUES (391013, 6413, 'F', 305358.46, '1992-03-28', '4-NOT SPECIFIED', 'Clerk#000000729', 0, '. fluffily special asymptotes haggle blithe');
+INSERT INTO `orders` VALUES (108838, 4615, 'O', 255956.94, '1998-01-14', '1-URGENT', 'Clerk#000000374', 0, 'ckly bold packages sle');
+INSERT INTO `orders` VALUES (440067, 11368, 'O', 105309.92, '1997-03-10', '4-NOT SPECIFIED', 'Clerk#000000394', 0, 'final realms sleep. blithely unusual ');
+INSERT INTO `orders` VALUES (79333, 5875, 'O', 193685.31, '1996-05-24', '4-NOT SPECIFIED', 'Clerk#000000486', 0, 'iously pending requests affix fluffily. blith');
+INSERT INTO `orders` VALUES (248417, 12583, 'O', 81229.81, '1995-09-14', '5-LOW', 'Clerk#000000554', 0, 'ly silent packages use pend');
+INSERT INTO `orders` VALUES (247557, 203, 'F', 221236.41, '1994-10-28', '2-HIGH', 'Clerk#000000062', 0, 'hely ironic packages are. ironic deposits haggle. packages boost slyly a');
+INSERT INTO `orders` VALUES (24866, 7361, 'F', 119100.11, '1993-12-05', '4-NOT SPECIFIED', 'Clerk#000000941', 0, 'ajole blithely slyly final deposits. furiously regul');
+INSERT INTO `orders` VALUES (439175, 9439, 'F', 119521.71, '1992-06-22', '4-NOT SPECIFIED', 'Clerk#000000622', 0, 'ial accounts use across the deposits.');
+INSERT INTO `orders` VALUES (442278, 5485, 'O', 138815.96, '1998-04-07', '2-HIGH', 'Clerk#000000901', 0, 'y above the even, pend');
+INSERT INTO `orders` VALUES (498596, 11428, 'O', 207055.52, '1997-05-06', '1-URGENT', 'Clerk#000000413', 0, 'e quickly quickly special foxes. special accounts sleep');
+INSERT INTO `orders` VALUES (359047, 9205, 'O', 147075.49, '1996-08-17', '2-HIGH', 'Clerk#000000643', 0, 'ven deposits on the furiously ironic platelets sleep never carefully ironi');
+INSERT INTO `orders` VALUES (480391, 14464, 'O', 228575.29, '1995-07-23', '3-MEDIUM', 'Clerk#000000653', 0, 'ar instructions nag slyly slyly express dolphins. unusual, ironic foxes hag');
+INSERT INTO `orders` VALUES (358918, 5815, 'F', 130495.07, '1994-05-06', '2-HIGH', 'Clerk#000000008', 0, 'thely express deposits. bli');
+INSERT INTO `orders` VALUES (408641, 8767, 'F', 103243.69, '1993-08-04', '4-NOT SPECIFIED', 'Clerk#000000167', 0, 'le furiously blithely pending pinto beans. furiously');
+INSERT INTO `orders` VALUES (117221, 7189, 'F', 155260.65, '1992-12-14', '3-MEDIUM', 'Clerk#000000352', 0, 'ncies haggle evenly. quickly ironic deposits haggle blithely a');
+INSERT INTO `orders` VALUES (204871, 1828, 'O', 106488.18, '1998-03-22', '4-NOT SPECIFIED', 'Clerk#000000783', 0, 'ithely fluffily bold ide');
+INSERT INTO `orders` VALUES (67426, 8593, 'O', 295962.76, '1997-03-08', '3-MEDIUM', 'Clerk#000000699', 0, 'ake always carefully final foxes. finally unusual requests affix a');
+INSERT INTO `orders` VALUES (156000, 8777, 'O', 132256.74, '1996-10-12', '3-MEDIUM', 'Clerk#000000505', 0, 'olites use quickly against the carefully ironic warhors');
+INSERT INTO `orders` VALUES (68322, 9095, 'O', 227844.86, '1995-10-08', '2-HIGH', 'Clerk#000000930', 0, 'uiet hockey players. blithely regular packages sleep above the fina');
+INSERT INTO `orders` VALUES (185315, 7027, 'F', 165274.21, '1994-08-24', '2-HIGH', 'Clerk#000000762', 0, 'es at the quickly special ');
+INSERT INTO `orders` VALUES (380708, 796, 'F', 136913.45, '1993-03-09', '3-MEDIUM', 'Clerk#000000473', 0, 'y special courts detect ironically accounts?');
+INSERT INTO `orders` VALUES (214951, 535, 'F', 182746.71, '1992-04-12', '1-URGENT', 'Clerk#000000816', 0, 'yly at the excuses. f');
+INSERT INTO `orders` VALUES (370689, 10045, 'O', 94356.50, '1998-07-09', '3-MEDIUM', 'Clerk#000000159', 0, 'ep. quickly special requests cajole slyly along the closel');
+INSERT INTO `orders` VALUES (408548, 12508, 'O', 196969.96, '1997-04-29', '1-URGENT', 'Clerk#000000591', 0, 'ic attainments cajole abo');
+INSERT INTO `orders` VALUES (455750, 8741, 'O', 70777.01, '1996-05-26', '5-LOW', 'Clerk#000000159', 0, 'along the final requests. fluffily bold dolphins at the ca');
+INSERT INTO `orders` VALUES (283046, 4640, 'O', 279900.46, '1995-11-21', '3-MEDIUM', 'Clerk#000000280', 0, ' pending, unusual packages. pinto b');
+INSERT INTO `orders` VALUES (92258, 5122, 'F', 165050.88, '1994-04-14', '4-NOT SPECIFIED', 'Clerk#000000926', 0, 'al requests sleep-- finally regular wa');
+INSERT INTO `orders` VALUES (206208, 656, 'F', 76543.28, '1993-10-13', '1-URGENT', 'Clerk#000000245', 0, 'tions wake. even attainments nag');
+INSERT INTO `orders` VALUES (145507, 4564, 'F', 193243.57, '1992-07-06', '1-URGENT', 'Clerk#000000794', 0, 'lyly final deposits cajole quickly among the fina');
+INSERT INTO `orders` VALUES (153351, 5620, 'O', 255270.94, '1998-04-21', '4-NOT SPECIFIED', 'Clerk#000000450', 0, 'nal dependencies. carefully enticing asymptotes until the never ironic theodol');
+INSERT INTO `orders` VALUES (466977, 2878, 'O', 262631.99, '1997-09-03', '2-HIGH', 'Clerk#000000643', 0, 'thely. unusual accounts about the fluffily even deposits');
+INSERT INTO `orders` VALUES (103810, 8923, 'O', 245711.92, '1996-05-15', '1-URGENT', 'Clerk#000000840', 0, 'e deposits. furiously pending foxes detect final, sly forges. caref');
+INSERT INTO `orders` VALUES (110178, 5164, 'O', 205720.59, '1995-06-15', '3-MEDIUM', 'Clerk#000000299', 0, ' against the blithely regular requests. furiously final deposi');
+INSERT INTO `orders` VALUES (13698, 14821, 'F', 175122.99, '1994-08-05', '4-NOT SPECIFIED', 'Clerk#000000640', 0, 'iously bold deposits are carefully blithely unusual ');
+INSERT INTO `orders` VALUES (172710, 2641, 'F', 210749.12, '1993-10-31', '5-LOW', 'Clerk#000000500', 0, 'ly bold pearls. quickly ironic requests affix accounts: blithely final i');
+INSERT INTO `orders` VALUES (528513, 11021, 'F', 164509.80, '1992-05-22', '2-HIGH', 'Clerk#000000599', 0, ' the decoys. furiously bold packages cajole slyly. even, bold deposits ');
+INSERT INTO `orders` VALUES (420295, 298, 'O', 170798.06, '1998-01-06', '2-HIGH', 'Clerk#000000056', 0, 'deas cajole blithely. asymptotes boost furiously ar');
+INSERT INTO `orders` VALUES (150465, 12545, 'O', 192854.70, '1997-01-13', '2-HIGH', 'Clerk#000000638', 0, ', unusual pinto beans are slyly final epitaphs. furiously regular requests af');
+INSERT INTO `orders` VALUES (139616, 9278, 'O', 156706.85, '1996-11-04', '4-NOT SPECIFIED', 'Clerk#000000608', 0, 'l accounts about the ironic, regular packages snooze car');
+INSERT INTO `orders` VALUES (180832, 12367, 'O', 365903.02, '1995-11-04', '2-HIGH', 'Clerk#000000106', 0, 'nal accounts. grouches breach against the furiously fluffy theo');
+INSERT INTO `orders` VALUES (312962, 10448, 'F', 76205.53, '1994-03-03', '1-URGENT', 'Clerk#000000131', 0, ', special deposits sleep instru');
+INSERT INTO `orders` VALUES (111942, 5354, 'F', 142010.74, '1993-01-26', '2-HIGH', 'Clerk#000000831', 0, 'nic requests. carefully bold theodolites sleep. blithely special package');
+INSERT INTO `orders` VALUES (188032, 3595, 'F', 231980.13, '1992-06-17', '5-LOW', 'Clerk#000000584', 0, 'counts boost blithely against the slyly ironic notornis-- regular');
+INSERT INTO `orders` VALUES (315844, 9257, 'O', 80492.03, '1998-07-28', '5-LOW', 'Clerk#000000788', 0, 'n sublate. fluffily');
+INSERT INTO `orders` VALUES (324771, 2933, 'O', 231373.80, '1997-01-31', '5-LOW', 'Clerk#000000698', 0, 'l, blithe requests boost quickly even plat');
+INSERT INTO `orders` VALUES (323234, 12136, 'O', 226785.51, '1996-11-05', '5-LOW', 'Clerk#000000685', 0, 's. ideas use. sentiments do wake among the ironic re');
+INSERT INTO `orders` VALUES (229475, 9820, 'O', 245629.36, '1995-12-21', '5-LOW', 'Clerk#000000761', 0, 's. final, unusual packages affix against');
+INSERT INTO `orders` VALUES (364805, 8956, 'F', 23880.77, '1994-05-19', '3-MEDIUM', 'Clerk#000000275', 0, 'n carefully above the carefully even instructions. quickly final pa');
+INSERT INTO `orders` VALUES (246052, 9604, 'F', 65364.61, '1993-08-15', '2-HIGH', 'Clerk#000000205', 0, 'ticing, special platelets. ironic, ironic packages can was');
+INSERT INTO `orders` VALUES (159940, 9760, 'F', 57327.04, '1992-10-22', '5-LOW', 'Clerk#000000941', 0, ' are quietly above the furiously express packages. qui');
+INSERT INTO `orders` VALUES (88773, 2074, 'O', 193398.58, '1998-04-29', '4-NOT SPECIFIED', 'Clerk#000000568', 0, 'asymptotes. even, final ideas a');
+INSERT INTO `orders` VALUES (61059, 12005, 'O', 163479.86, '1997-12-02', '4-NOT SPECIFIED', 'Clerk#000000155', 0, 'le quickly even package');
+INSERT INTO `orders` VALUES (75712, 12296, 'O', 97092.35, '1996-01-04', '3-MEDIUM', 'Clerk#000000285', 0, 'nic deposits wake furiously ');
+INSERT INTO `orders` VALUES (502210, 12883, 'O', 30929.99, '1995-07-11', '4-NOT SPECIFIED', 'Clerk#000000717', 0, ' the quickly pending foxes breach sp');
+INSERT INTO `orders` VALUES (581318, 6445, 'F', 229949.49, '1994-09-20', '3-MEDIUM', 'Clerk#000000850', 0, 'ourts across the carefully final requests use quickly slyly ');
+INSERT INTO `orders` VALUES (262180, 10639, 'F', 35438.89, '1993-01-24', '2-HIGH', 'Clerk#000000735', 0, 'express, regular dep');
+INSERT INTO `orders` VALUES (442529, 7211, 'F', 100580.86, '1992-09-04', '1-URGENT', 'Clerk#000000376', 0, 'hely bold requests. regular, ironic deposits ');
+INSERT INTO `orders` VALUES (393062, 6769, 'O', 124823.56, '1998-05-28', '2-HIGH', 'Clerk#000000072', 0, 'the packages. furiously regular deposits about the ironic packages sleep ');
+INSERT INTO `orders` VALUES (440802, 3157, 'O', 98539.44, '1997-07-20', '5-LOW', 'Clerk#000000501', 0, 'kages haggle blithely. asymptotes use slyly. furi');
+INSERT INTO `orders` VALUES (129282, 2881, 'O', 214294.02, '1996-07-14', '1-URGENT', 'Clerk#000000962', 0, 'eas wake even, regular instructions: s');
+INSERT INTO `orders` VALUES (53189, 7924, 'O', 36320.43, '1995-08-24', '1-URGENT', 'Clerk#000000127', 0, 'blithely regular de');
+INSERT INTO `orders` VALUES (220419, 2569, 'F', 118619.37, '1994-04-07', '4-NOT SPECIFIED', 'Clerk#000000208', 0, 'tain. bold deposits about t');
+INSERT INTO `orders` VALUES (235171, 7286, 'F', 339797.80, '1993-06-11', '2-HIGH', 'Clerk#000000801', 0, 'fully silent excuses about the special requests wake against the instru');
+INSERT INTO `orders` VALUES (406339, 14738, 'F', 218329.22, '1992-06-16', '1-URGENT', 'Clerk#000000154', 0, ' dinos. special, even excuses along the bold excuses grow carefully even, un');
+INSERT INTO `orders` VALUES (78567, 8092, 'O', 179276.82, '1998-05-26', '5-LOW', 'Clerk#000000281', 0, 'are quickly even, unusual pinto beans. fi');
+INSERT INTO `orders` VALUES (451809, 10708, 'O', 65517.87, '1997-09-16', '2-HIGH', 'Clerk#000000580', 0, 'y after the blithely ironic accounts. slyly regular ac');
+INSERT INTO `orders` VALUES (133601, 12047, 'O', 203661.30, '1996-05-10', '2-HIGH', 'Clerk#000000520', 0, 'regular packages bo');
+INSERT INTO `orders` VALUES (467232, 353, 'F', 74983.09, '1995-01-26', '5-LOW', 'Clerk#000000458', 0, 'dolphins play blithely final, regular foxes. dogg');
+INSERT INTO `orders` VALUES (208480, 5143, 'F', 222813.18, '1994-12-29', '4-NOT SPECIFIED', 'Clerk#000000883', 0, 'ress hockey players ca');
+INSERT INTO `orders` VALUES (487680, 2024, 'F', 149428.95, '1993-09-25', '3-MEDIUM', 'Clerk#000000047', 0, 'regular, final instructions boost even,');
+INSERT INTO `orders` VALUES (363841, 4426, 'F', 169547.16, '1992-03-21', '5-LOW', 'Clerk#000000827', 0, 'e blithely bold, bold deposits. furiously even soma');
+INSERT INTO `orders` VALUES (216454, 10072, 'O', 214680.26, '1998-01-18', '3-MEDIUM', 'Clerk#000000322', 0, 'platelets after the regular ');
+INSERT INTO `orders` VALUES (61954, 8164, 'O', 164853.36, '1997-01-14', '2-HIGH', 'Clerk#000000562', 0, 'press platelets cajole fluffily');
+INSERT INTO `orders` VALUES (150531, 2335, 'O', 63449.78, '1996-08-28', '1-URGENT', 'Clerk#000000516', 0, 'regular courts. orbits detect furiously. p');
+INSERT INTO `orders` VALUES (265476, 4067, 'P', 78738.68, '1995-04-16', '2-HIGH', 'Clerk#000000375', 0, 'ular, final deposits. furiously pending platelets boost a');
+INSERT INTO `orders` VALUES (205574, 13831, 'F', 95856.59, '1994-03-08', '1-URGENT', 'Clerk#000000033', 0, 'ording to the closely unusual accounts. ironic accounts are carefully amo');
+INSERT INTO `orders` VALUES (474403, 3341, 'F', 57130.19, '1993-05-17', '3-MEDIUM', 'Clerk#000000413', 0, 'ess realms are fluffily even i');
+INSERT INTO `orders` VALUES (94338, 10078, 'F', 132893.14, '1992-10-11', '3-MEDIUM', 'Clerk#000000391', 0, 'counts. slyly regular asymptotes agains');
+INSERT INTO `orders` VALUES (126337, 4126, 'O', 349901.54, '1998-02-22', '1-URGENT', 'Clerk#000000124', 0, 'ckages. slyly stealthy requests i');
+INSERT INTO `orders` VALUES (121606, 13733, 'O', 326252.88, '1997-02-25', '5-LOW', 'Clerk#000000517', 0, 'ously special packages against the pending instructions cajole fluffi');
+INSERT INTO `orders` VALUES (509413, 7315, 'O', 202720.54, '1996-04-16', '1-URGENT', 'Clerk#000000580', 0, 'ackages wake slyly. bold, unusual packages breach. blithely');
+INSERT INTO `orders` VALUES (192197, 6175, 'O', 2453.65, '1995-08-07', '1-URGENT', 'Clerk#000000126', 0, 'ily express platelets. furiously final sentiments are b');
+INSERT INTO `orders` VALUES (32358, 14771, 'F', 245782.82, '1994-06-10', '2-HIGH', 'Clerk#000000174', 0, 'final foxes sleep furi');
+INSERT INTO `orders` VALUES (42375, 3332, 'F', 188459.13, '1993-10-02', '2-HIGH', 'Clerk#000000728', 0, ' enticing deposits. blithely final theodolites ar');
+INSERT INTO `orders` VALUES (53984, 4147, 'F', 59589.68, '1992-12-11', '3-MEDIUM', 'Clerk#000000040', 0, 's wake about the blithely final');
+INSERT INTO `orders` VALUES (52167, 12748, 'O', 253368.62, '1998-07-11', '1-URGENT', 'Clerk#000000971', 0, 'slyly special deposits cajole orbi');
+INSERT INTO `orders` VALUES (350083, 7954, 'O', 31094.84, '1997-06-06', '1-URGENT', 'Clerk#000000516', 0, 'ress dinos are quickly. slyly ironic acco');
+INSERT INTO `orders` VALUES (407073, 11647, 'O', 152916.08, '1996-04-03', '3-MEDIUM', 'Clerk#000000793', 0, 'cies. special, regular deposits among the slyly ironic packages b');
+INSERT INTO `orders` VALUES (22532, 5971, 'F', 54887.64, '1995-02-09', '1-URGENT', 'Clerk#000000907', 0, 'ust have to sleep about th');
+INSERT INTO `orders` VALUES (19047, 5740, 'F', 236935.71, '1994-01-29', '2-HIGH', 'Clerk#000000036', 0, 'ake. instructions integrate along the furiously unus');
+INSERT INTO `orders` VALUES (166243, 8321, 'F', 248901.42, '1993-12-27', '3-MEDIUM', 'Clerk#000000340', 0, 't furiously slyly unusual asymptotes. careful');
+INSERT INTO `orders` VALUES (220421, 340, 'F', 94461.44, '1992-02-14', '4-NOT SPECIFIED', 'Clerk#000000323', 0, ' nag carefully after the even p');
+INSERT INTO `orders` VALUES (9287, 7897, 'O', 14628.23, '1998-01-02', '4-NOT SPECIFIED', 'Clerk#000000636', 0, 'ously unusual packages. regular foxes detect. blithely slow ideas sl');
+INSERT INTO `orders` VALUES (45862, 9674, 'O', 46102.50, '1997-07-02', '4-NOT SPECIFIED', 'Clerk#000000850', 0, 'erns. final requests haggle slyly. theodolites wake after the furio');
+INSERT INTO `orders` VALUES (92002, 131, 'O', 121046.69, '1996-09-09', '2-HIGH', 'Clerk#000000353', 0, 's. regular theodolit');
+INSERT INTO `orders` VALUES (389633, 8653, 'P', 161208.66, '1995-03-19', '1-URGENT', 'Clerk#000000457', 0, 'ites are carefully silent deposits. fluffily ironic request');
+INSERT INTO `orders` VALUES (96739, 8362, 'F', 175525.87, '1994-07-12', '2-HIGH', 'Clerk#000000596', 0, 's was carefully unusual sauternes. furiou');
+INSERT INTO `orders` VALUES (575109, 4259, 'F', 181707.71, '1993-03-25', '3-MEDIUM', 'Clerk#000000461', 0, 'ans. ironic, express platelets use regularly. fluffily regular instru');
+INSERT INTO `orders` VALUES (284578, 2647, 'F', 22278.93, '1992-03-06', '2-HIGH', 'Clerk#000000531', 0, 'ake quickly. final plate');
+INSERT INTO `orders` VALUES (351843, 7504, 'O', 72209.48, '1998-03-01', '2-HIGH', 'Clerk#000000663', 0, 'phins. furiously final theodolites boost daringly care');
+INSERT INTO `orders` VALUES (19014, 10459, 'O', 259321.32, '1997-09-23', '5-LOW', 'Clerk#000000340', 0, 'r dependencies haggle quickly bold accounts; pending dependencies ');
+INSERT INTO `orders` VALUES (22436, 7495, 'O', 191816.91, '1996-05-24', '1-URGENT', 'Clerk#000000068', 0, 'ar packages. even, bold foxes wake. dependencies cajole carefully iron');
+INSERT INTO `orders` VALUES (59108, 6067, 'O', 271402.46, '1995-10-08', '5-LOW', 'Clerk#000000259', 0, ' deposits cajole above the quickly ironic deposits. carefully express ');
+INSERT INTO `orders` VALUES (593637, 7817, 'F', 208444.44, '1994-11-17', '3-MEDIUM', 'Clerk#000000249', 0, 'ously multipliers. regular requests cajol');
+INSERT INTO `orders` VALUES (15744, 12130, 'F', 48861.07, '1993-03-22', '1-URGENT', 'Clerk#000000939', 0, 'ily ironic pinto beans. ironic, unusual instructions n');
+INSERT INTO `orders` VALUES (303877, 4105, 'F', 201610.61, '1992-11-18', '4-NOT SPECIFIED', 'Clerk#000000745', 0, 'dolites sleep furiously after the even, ironi');
+DROP TABLE IF EXISTS `part`;
+CREATE TABLE `part`  (
+`p_partkey` int NOT NULL,
+`P_NAME` varchar(55) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`P_MFGR` char(25) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`P_BRAND` char(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`P_TYPE` varchar(25) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`P_SIZE` int NOT NULL,
+`P_CONTAINER` char(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`P_RETAILPRICE` decimal(15, 2) NOT NULL,
+`P_COMMENT` varchar(23) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+PRIMARY KEY (`p_partkey`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+INSERT INTO `part` VALUES (299, 'deep coral dodger green peach', 'Manufacturer#4', 'Brand#41', 'STANDARD ANODIZED COPPER', 26, 'WRAP PKG', 1199.29, 'regular dol');
+INSERT INTO `part` VALUES (316, 'almond rosy green hot midnight', 'Manufacturer#4', 'Brand#41', 'MEDIUM BRUSHED TIN', 9, 'MED CASE', 1216.31, 'deposits haggle');
+INSERT INTO `part` VALUES (119, 'olive metallic slate peach green', 'Manufacturer#4', 'Brand#43', 'LARGE POLISHED STEEL', 30, 'WRAP CASE', 1019.11, 'out the quickly r');
+INSERT INTO `part` VALUES (177, 'indian turquoise purple green spring', 'Manufacturer#2', 'Brand#21', 'MEDIUM BRUSHED STEEL', 42, 'LG BAG', 1077.17, 'ermanently eve');
+INSERT INTO `part` VALUES (300, 'light goldenrod green lime papaya', 'Manufacturer#4', 'Brand#44', 'PROMO ANODIZED BRASS', 1, 'WRAP PACK', 1200.30, 'tructions int');
+INSERT INTO `part` VALUES (242, 'spring green lemon medium olive', 'Manufacturer#3', 'Brand#35', 'SMALL POLISHED STEEL', 42, 'LG BAG', 1142.24, 'ously final theodo');
+INSERT INTO `part` VALUES (886, 'turquoise dodger lemon antique green', 'Manufacturer#5', 'Brand#55', 'LARGE BRUSHED COPPER', 46, 'MED BAG', 1786.88, 'tornis haggle! ');
+INSERT INTO `part` VALUES (474, 'papaya green royal burlywood saddle', 'Manufacturer#1', 'Brand#14', 'ECONOMY PLATED STEEL', 45, 'LG PACK', 1374.47, 'ously even reques');
+INSERT INTO `part` VALUES (401, 'almond chiffon indian green dim', 'Manufacturer#2', 'Brand#21', 'ECONOMY POLISHED STEEL', 10, 'SM PKG', 1301.40, 'ideas cajole ');
+INSERT INTO `part` VALUES (377, 'green forest rose slate cornflower', 'Manufacturer#4', 'Brand#44', 'STANDARD BURNISHED COPPER', 16, 'WRAP BOX', 1277.37, 'ly regula');
+INSERT INTO `part` VALUES (4, 'cornflower chocolate smoke green pink', 'Manufacturer#3', 'Brand#34', 'SMALL PLATED BRASS', 14, 'MED DRUM', 904.00, 'p furiously r');
+INSERT INTO `part` VALUES (83, 'blush green dim lawn peru', 'Manufacturer#1', 'Brand#12', 'PROMO BURNISHED NICKEL', 47, 'SM CAN', 983.08, 'ly regul');
+INSERT INTO `part` VALUES (577, 'lime green dark misty chiffon', 'Manufacturer#2', 'Brand#22', 'LARGE BRUSHED STEEL', 34, 'JUMBO BAG', 1477.57, 'ding, fur');
+INSERT INTO `part` VALUES (327, 'metallic lavender green firebrick ghost', 'Manufacturer#2', 'Brand#23', 'PROMO POLISHED BRASS', 14, 'SM PACK', 1227.32, 'regular');
+INSERT INTO `part` VALUES (416, 'ghost misty chocolate peach green', 'Manufacturer#1', 'Brand#13', 'MEDIUM POLISHED STEEL', 11, 'WRAP JAR', 1316.41, 'yly pending deposit');
+INSERT INTO `part` VALUES (450, 'sky lace green pale lime', 'Manufacturer#4', 'Brand#43', 'MEDIUM BURNISHED TIN', 23, 'SM CASE', 1350.45, 'slyly');
+INSERT INTO `part` VALUES (3, 'spring green yellow purple cornsilk', 'Manufacturer#4', 'Brand#42', 'STANDARD POLISHED BRASS', 21, 'WRAP CASE', 903.00, 'egular deposits hag');
+INSERT INTO `part` VALUES (35, 'green blush tomato burlywood seashell', 'Manufacturer#4', 'Brand#43', 'MEDIUM ANODIZED BRASS', 14, 'JUMBO PACK', 935.03, 'e carefully furi');
+INSERT INTO `part` VALUES (201, 'dodger white chiffon moccasin green', 'Manufacturer#4', 'Brand#42', 'SMALL POLISHED STEEL', 18, 'JUMBO BAG', 1101.20, ' courts sl');
+INSERT INTO `part` VALUES (175, 'magenta blue chartreuse tan green', 'Manufacturer#1', 'Brand#11', 'PROMO ANODIZED TIN', 45, 'JUMBO JAR', 1075.17, 'ole against the');
+INSERT INTO `part` VALUES (489, 'smoke green blush deep royal', 'Manufacturer#2', 'Brand#22', 'LARGE BURNISHED TIN', 36, 'LG CAN', 1389.48, 'unts. quickly bold id');
+INSERT INTO `part` VALUES (362, 'sienna green ghost rose lawn', 'Manufacturer#1', 'Brand#13', 'ECONOMY POLISHED COPPER', 9, 'JUMBO BAG', 1262.36, 'accounts. furi');
+INSERT INTO `part` VALUES (86, 'green blanched firebrick dim cream', 'Manufacturer#4', 'Brand#44', 'STANDARD PLATED TIN', 37, 'LG CASE', 986.08, ' daring sheaves ');
+INSERT INTO `part` VALUES (326, 'sky papaya green azure chiffon', 'Manufacturer#3', 'Brand#34', 'LARGE ANODIZED STEEL', 48, 'JUMBO CAN', 1226.32, 'aggle slyly special f');
+INSERT INTO `part` VALUES (7, 'moccasin green thistle khaki floral', 'Manufacturer#1', 'Brand#11', 'SMALL PLATED COPPER', 45, 'SM BAG', 907.00, 'lyly. ex');
+INSERT INTO `part` VALUES (257, 'blue gainsboro maroon green burnished', 'Manufacturer#4', 'Brand#41', 'ECONOMY POLISHED COPPER', 11, 'SM JAR', 1157.25, 'riously final foxes');
+INSERT INTO `part` VALUES (557, 'firebrick ghost steel green chartreuse', 'Manufacturer#3', 'Brand#35', 'LARGE BURNISHED TIN', 8, 'JUMBO PKG', 1457.55, 'ccounts im');
+INSERT INTO `part` VALUES (905, 'burlywood honeydew cornsilk indian green', 'Manufacturer#2', 'Brand#25', 'PROMO BRUSHED BRASS', 27, 'MED CASE', 1805.90, 'es. furiously ir');
+INSERT INTO `part` VALUES (674, 'tomato chartreuse cornflower green pale', 'Manufacturer#3', 'Brand#35', 'SMALL BRUSHED TIN', 5, 'LG PKG', 1574.67, 'unts use slyly bold');
+INSERT INTO `part` VALUES (872, 'papaya frosted cornflower green almond', 'Manufacturer#1', 'Brand#15', 'MEDIUM PLATED STEEL', 41, 'LG CASE', 1772.87, 'gular inst');
+INSERT INTO `part` VALUES (1436, 'smoke floral green medium blush', 'Manufacturer#5', 'Brand#54', 'ECONOMY ANODIZED COPPER', 10, 'LG BAG', 1337.43, 'sily pending inst');
+INSERT INTO `part` VALUES (336, 'maroon medium green tomato rosy', 'Manufacturer#2', 'Brand#25', 'PROMO ANODIZED TIN', 3, 'WRAP JAR', 1236.33, 'nto beans.');
+DROP TABLE IF EXISTS `partsupp`;
+CREATE TABLE `partsupp`  (
+`ps_partkey` int NOT NULL,
+`PS_SUPPKEY` int NOT NULL,
+`PS_AVAILQTY` int NOT NULL,
+`PS_SUPPLYCOST` decimal(15, 2) NOT NULL,
+`PS_COMMENT` varchar(199) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+PRIMARY KEY (`ps_partkey`, `PS_SUPPKEY`) USING BTREE,
+INDEX `PARTSUPP_FK1`(`PS_SUPPKEY`) USING BTREE,
+CONSTRAINT `partsupp_ibfk_1` FOREIGN KEY (`PS_SUPPKEY`) REFERENCES `supplier` (`s_suppkey`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+CONSTRAINT `partsupp_ibfk_2` FOREIGN KEY (`ps_partkey`) REFERENCES `part` (`p_partkey`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+CONSTRAINT `partsupp_ibfk_3` FOREIGN KEY (`PS_SUPPKEY`) REFERENCES `supplier` (`s_suppkey`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+CONSTRAINT `partsupp_ibfk_4` FOREIGN KEY (`ps_partkey`) REFERENCES `part` (`p_partkey`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+CONSTRAINT `partsupp_ibfk_5` FOREIGN KEY (`PS_SUPPKEY`) REFERENCES `supplier` (`s_suppkey`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+CONSTRAINT `partsupp_ibfk_6` FOREIGN KEY (`ps_partkey`) REFERENCES `part` (`p_partkey`) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+INSERT INTO `partsupp` VALUES (299, 800, 2035, 248.11, 'ithely final foxes cajole. blithely pending packages grow slyly special, ironic platelets. fluffily pending dept');
+INSERT INTO `partsupp` VALUES (316, 817, 8752, 591.79, 'sts hinder carefully. furiously unusual deposits haggle fluffily ');
+INSERT INTO `partsupp` VALUES (119, 370, 1452, 676.92, 'ular instructions was slyly. furiously bold gifts boost f');
+INSERT INTO `partsupp` VALUES (177, 678, 9872, 252.42, 'sual platelets. bold foxes affix furiously. pending, pending accounts lose furiously. pending platelets along the unusual, even foxes wake regular, even theo');
+INSERT INTO `partsupp` VALUES (300, 801, 7118, 743.78, 'sts wake carefully regular, pending pinto beans. unusual foxes wake slyly among the ironic, reg');
+INSERT INTO `partsupp` VALUES (242, 743, 2514, 208.39, 'ckages. permanent, even warhorses cajole blithely after the final accounts. quickly pending packag');
+INSERT INTO `partsupp` VALUES (886, 887, 4069, 19.56, 'r requests across the carefully final deposits nag ironic ideas. unusual dolphins nag furiously near the furiou');
+INSERT INTO `partsupp` VALUES (474, 475, 3200, 728.15, 'ding to the express courts. furiously ironic deposits nod accounts. bold deposits cajole throughout the carefully close accounts. fluffily final attainments will cajole blithely even foxes. slyl');
+INSERT INTO `partsupp` VALUES (401, 402, 3408, 214.06, 'eep slyly-- slyly fluffy deposits thrash fluffily fluffily even deposits. final accounts are slyly among the final ideas. unusual packages print slyly carefully iro');
+INSERT INTO `partsupp` VALUES (377, 378, 9022, 665.73, 'hely pending deposits integrate according to the regular foxes. furiously ironic ideas sleep about the ironic');
+INSERT INTO `partsupp` VALUES (4, 255, 6377, 591.18, 'ly final courts haggle carefully regular accounts. carefully regular accounts could integrate slyly. slyly express packages about the accounts wake slyly');
+INSERT INTO `partsupp` VALUES (83, 584, 5974, 657.22, ' even packages boost furiously. slyly regular gifts above the accounts are quickly express packages. slyly pending deposits besides the express, even asymptotes haggle after the ironic ins');
+INSERT INTO `partsupp` VALUES (577, 78, 9072, 373.75, 'ges detect quickly final requests. unusual pinto beans sleep furiously');
+INSERT INTO `partsupp` VALUES (327, 78, 7862, 290.17, 'uests. regular requests haggle. blithely bold requests l');
+INSERT INTO `partsupp` VALUES (416, 417, 4241, 813.99, 'of the pending, even requests could lose slyly regular ideas. slyly final dependencies use-- furiousl');
+INSERT INTO `partsupp` VALUES (450, 451, 1191, 118.60, 'cording to the pending requests. ironic ideas use slyly against the final requests. regular accoun');
+INSERT INTO `partsupp` VALUES (3, 254, 4093, 498.13, 'ending dependencies haggle fluffily. regular deposits boost quickly carefully regular requests. deposits affix furiously around the pinto beans. ironic, unusual platelets across the p');
+INSERT INTO `partsupp` VALUES (35, 786, 2025, 411.17, 's cajole fluffily final deposits. furiously express packages after the blithely special realms boost evenly even requests. slow requests use above the unusual accoun');
+INSERT INTO `partsupp` VALUES (201, 702, 4125, 534.11, 'uctions sleep slyly final theodolites. ironic, regular pinto beans along the sly');
+INSERT INTO `partsupp` VALUES (175, 676, 8501, 706.61, 'int above the instructions. furiously regular requests integrate blithely according to the instructions. slyly pending foxes are asymptotes. slyly ruthless accounts wake. r');
+INSERT INTO `partsupp` VALUES (489, 240, 3471, 937.30, 'dogged pinto beans above the silent, bold requests wake slyly about the regular accounts. blithely ironic deposits wake. even, express sheaves haggle carefully deposits. specia');
+INSERT INTO `partsupp` VALUES (362, 613, 6711, 357.00, 'ss the blithely express ideas integrate furiously alongside of the requests. silent instructions engage. furiously special pa');
+INSERT INTO `partsupp` VALUES (86, 337, 2773, 250.04, 'ding accounts. slyly special requests will have to affix carefully along the furiously unusual packages. regular theodol');
+INSERT INTO `partsupp` VALUES (326, 577, 7160, 592.60, 'ronic deposits wake slyly regular ideas. pinto beans across the carefully even ideas affix furiously fluffily final accounts. packages are blithely above the r');
+INSERT INTO `partsupp` VALUES (7, 508, 3377, 68.77, 'usly against the daring asymptotes. slyly regular platelets sleep quickly blithely regular deposits. boldly regular deposits wake blithely ironic accounts');
+INSERT INTO `partsupp` VALUES (257, 508, 276, 612.44, 'among the packages. thinly special packages sleep. blithely ironic packages are furiously around the furiously even packages. carefully unusual accounts nag bold dolphins. blithely ironic depend');
+INSERT INTO `partsupp` VALUES (557, 808, 106, 823.28, 'ns. slyly final packages wake. carefully ironic packages affix. even, final accounts according to the fluffily final pinto beans use slyl');
+INSERT INTO `partsupp` VALUES (905, 656, 5818, 118.80, 'closely bold packages haggle furiously final requests. regular requests cajole slyly. carefully final asymptote');
+INSERT INTO `partsupp` VALUES (674, 925, 2476, 726.52, 'e furiously even dolphins use across the final, bold deposits. regular pinto beans doubt thinly furiously pending dolphins. theodolites cajole slyly. blithely special deposits are furiously. s');
+INSERT INTO `partsupp` VALUES (872, 123, 8098, 669.74, 'ly pending packages. requests wake carefully ironic, unusual dependencies. carefully pending pinto beans wake after the blithely special instructions. fluffily quiet requests');
+INSERT INTO `partsupp` VALUES (1436, 939, 2379, 231.49, 'pending pinto beans play furiously furiously unusual requests. ');
+INSERT INTO `partsupp` VALUES (336, 87, 1661, 339.32, 'ntain along the furiously ironic packages. express accounts sleep quickly. deposits cajole slyly regular ideas. final excus');
+DROP TABLE IF EXISTS `lineitem`;
+CREATE TABLE `lineitem`  (
+`l_orderkey` int NOT NULL,
+`L_PARTKEY` int NOT NULL,
+`L_SUPPKEY` int NOT NULL,
+`L_LINENUMBER` int NOT NULL,
+`L_QUANTITY` decimal(15, 2) NOT NULL,
+`L_EXTENDEDPRICE` decimal(15, 2) NOT NULL,
+`L_DISCOUNT` decimal(15, 2) NOT NULL,
+`L_TAX` decimal(15, 2) NOT NULL,
+`L_RETURNFLAG` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`L_LINESTATUS` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`L_SHIPDATE` date NOT NULL,
+`L_COMMITDATE` date NOT NULL,
+`L_RECEIPTDATE` date NOT NULL,
+`L_SHIPINSTRUCT` char(25) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`L_SHIPMODE` char(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+`L_COMMENT` varchar(44) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
+PRIMARY KEY (`l_orderkey`, `L_LINENUMBER`) USING BTREE,
+INDEX `LINEITEM_FK2`(`L_PARTKEY`, `L_SUPPKEY`) USING BTREE,
+CONSTRAINT `lineitem_ibfk_1` FOREIGN KEY (`l_orderkey`) REFERENCES `orders` (`o_orderkey`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+CONSTRAINT `lineitem_ibfk_3` FOREIGN KEY (`l_orderkey`) REFERENCES `orders` (`o_orderkey`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+CONSTRAINT `lineitem_ibfk_5` FOREIGN KEY (`l_orderkey`) REFERENCES `orders` (`o_orderkey`) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+INSERT INTO  lineitem 	VALUES(118370, 5349, 605, 2, 42.00, 52682.28, 0.08, 0.07, 
+'R', 'F', '1995-05-30', '1995-06-20', '1995-06-04', 'NONE', 'AIR', 'carefully final requests. furiously final');
+INSERT INTO  lineitem 	VALUES(520707, 19569 , 839, 2, 31.00, 46145.36, 0.08, 0.03,
+'N', 'O', '1996-07-20', '1996-07-02', '1996-07-30', 'NONE', 'AIR' , 'y pending shea');
+INSERT INTO  lineitem 	VALUES(584192, 5740, 996, 1, 28.00, 46080.72, 0.09, 0.03,
+'N', 'O', '1995-06-28', '1995-06-14', '1995-07-28', 'TAKE BACK RETURN', 'AIR', 'ual ideas. blithely special acco');
+INSERT INTO  lineitem 	VALUES( 479207, 1238, 741, 5, 30.00, 34176.90, 0.06, 0.03,
+'N', 'O', '1996-03-07', '1996-05-21', '1996-03-20', 'DELIVER IN PERSON', 'RAIL',  'ons. special, pending accounts wake care');
+INSERT INTO `lineitem` VALUES (554307, 299, 800, 5, 31.00, 37177.99, 0.10, 0.03, 'N', 'O', '1998-09-17', '1998-07-20', '1998-09-24', 'TAKE BACK RETURN', 'RAIL', 'carefully regul');
+INSERT INTO `lineitem` VALUES (111521, 316, 817, 2, 27.00, 32840.37, 0.04, 0.05, 'N', 'O', '1997-03-30', '1997-05-09', '1997-04-04', 'DELIVER IN PERSON', 'REG AIR', 'old deposits doubt ');
+INSERT INTO `lineitem` VALUES (444225, 119, 370, 1, 44.00, 44840.84, 0.01, 0.01, 'N', 'O', '1996-08-28', '1996-09-06', '1996-09-27', 'COLLECT COD', 'FOB', 'uriously special ');
+INSERT INTO `lineitem` VALUES (245857, 119, 370, 4, 42.00, 42802.62, 0.03, 0.08, 'N', 'O', '1996-02-12', '1996-02-12', '1996-02-13', 'TAKE BACK RETURN', 'SHIP', 'tions along the reg');
+INSERT INTO `lineitem` VALUES (132321, 119, 370, 2, 43.00, 43821.73, 0.04, 0.00, 'A', 'F', '1994-03-09', '1994-04-24', '1994-03-12', 'NONE', 'MAIL', 'ickly pendin');
+INSERT INTO `lineitem` VALUES (438816, 119, 370, 1, 39.00, 39745.29, 0.06, 0.07, 'A', 'F', '1993-05-11', '1993-04-22', '1993-05-24', 'TAKE BACK RETURN', 'TRUCK', ' special accounts nag ');
+INSERT INTO `lineitem` VALUES (74497, 119, 370, 4, 38.00, 38726.18, 0.09, 0.01, 'A', 'F', '1993-02-24', '1993-01-31', '1993-03-04', 'DELIVER IN PERSON', 'REG AIR', 'ckages among the car');
+INSERT INTO `lineitem` VALUES (89510, 316, 567, 2, 46.00, 55950.26, 0.05, 0.07, 'N', 'O', '1998-08-01', '1998-06-29', '1998-08-13', 'NONE', 'SHIP', 'packages are blithely final requests. car');
+INSERT INTO `lineitem` VALUES (157444, 177, 678, 7, 6.00, 6463.02, 0.01, 0.08, 'N', 'O', '1997-03-06', '1997-03-25', '1997-03-28', 'NONE', 'TRUCK', 'es against the regular instr');
+INSERT INTO `lineitem` VALUES (233090, 177, 678, 2, 1.00, 1077.17, 0.07, 0.06, 'N', 'O', '1996-05-03', '1996-06-19', '1996-05-23', 'NONE', 'MAIL', 'stealthily slyly idle dolphins. regular i');
+INSERT INTO `lineitem` VALUES (287744, 316, 567, 3, 6.00, 7297.86, 0.07, 0.06, 'R', 'F', '1995-04-14', '1995-03-15', '1995-04-16', 'TAKE BACK RETURN', 'REG AIR', ' express foxes. dep');
+INSERT INTO `lineitem` VALUES (91747, 300, 801, 7, 9.00, 10802.70, 0.04, 0.06, 'R', 'F', '1994-09-28', '1994-12-10', '1994-10-19', 'NONE', 'MAIL', 'detect slyly plat');
+INSERT INTO `lineitem` VALUES (54277, 177, 678, 3, 32.00, 34469.44, 0.02, 0.03, 'A', 'F', '1993-02-17', '1993-03-05', '1993-02-28', 'DELIVER IN PERSON', 'AIR', ' fluffy, ironic packages. furiou');
+INSERT INTO `lineitem` VALUES (75299, 177, 678, 2, 32.00, 34469.44, 0.04, 0.07, 'R', 'F', '1993-04-15', '1993-01-19', '1993-04-25', 'TAKE BACK RETURN', 'SHIP', 'ding decoys cajole slyly. bravely bold');
+INSERT INTO `lineitem` VALUES (529379, 299, 300, 2, 18.00, 21587.22, 0.08, 0.02, 'N', 'O', '1998-07-06', '1998-06-18', '1998-08-01', 'TAKE BACK RETURN', 'AIR', 'es are furiously across the fi');
+INSERT INTO `lineitem` VALUES (32005, 242, 743, 1, 48.00, 54827.52, 0.05, 0.06, 'N', 'O', '1997-08-07', '1997-07-01', '1997-08-30', 'TAKE BACK RETURN', 'TRUCK', ' slyly along the furiously express');
+INSERT INTO `lineitem` VALUES (7907, 242, 743, 3, 42.00, 47974.08, 0.01, 0.04, 'N', 'O', '1996-12-02', '1996-11-22', '1996-12-08', 'DELIVER IN PERSON', 'SHIP', 'nst the sometimes pending pa');
+INSERT INTO `lineitem` VALUES (196260, 242, 993, 2, 20.00, 22844.80, 0.07, 0.00, 'N', 'O', '1996-02-19', '1996-03-01', '1996-03-01', 'TAKE BACK RETURN', 'AIR', 'al ideas wake carefully quickly unusu');
+INSERT INTO `lineitem` VALUES (346592, 242, 743, 5, 18.00, 20560.32, 0.10, 0.03, 'A', 'F', '1994-12-05', '1994-10-17', '1994-12-26', 'DELIVER IN PERSON', 'RAIL', 'y alongside of the furious');
+INSERT INTO `lineitem` VALUES (388736, 242, 743, 2, 43.00, 49116.32, 0.06, 0.04, 'A', 'F', '1993-05-11', '1993-04-27', '1993-05-15', 'COLLECT COD', 'TRUCK', 'blithely special dolphi');
+INSERT INTO `lineitem` VALUES (552771, 242, 743, 2, 1.00, 1142.24, 0.06, 0.01, 'A', 'F', '1992-08-09', '1992-07-02', '1992-08-25', 'TAKE BACK RETURN', 'TRUCK', 'unusual deposits. slyly express i');
+INSERT INTO `lineitem` VALUES (56134, 886, 887, 4, 24.00, 42885.12, 0.07, 0.02, 'N', 'O', '1998-05-31', '1998-06-29', '1998-06-23', 'COLLECT COD', 'TRUCK', 'l packages maintain about ');
+INSERT INTO `lineitem` VALUES (226145, 474, 475, 4, 16.00, 21991.52, 0.08, 0.00, 'N', 'O', '1997-11-09', '1998-01-01', '1997-11-22', 'NONE', 'TRUCK', 'arefully final foxes boost furiou');
+INSERT INTO `lineitem` VALUES (35427, 401, 402, 3, 5.00, 6507.00, 0.05, 0.07, 'N', 'O', '1996-05-23', '1996-05-19', '1996-05-24', 'TAKE BACK RETURN', 'REG AIR', 'ully across the quickly ');
+INSERT INTO `lineitem` VALUES (183524, 377, 378, 1, 11.00, 14051.07, 0.00, 0.07, 'N', 'O', '1995-09-15', '1995-08-12', '1995-10-10', 'COLLECT COD', 'RAIL', 'sily accor');
+INSERT INTO `lineitem` VALUES (247297, 377, 378, 2, 46.00, 58759.02, 0.07, 0.02, 'R', 'F', '1994-09-18', '1994-10-17', '1994-09-24', 'NONE', 'SHIP', ' deposits. boldly pending deposits');
+INSERT INTO `lineitem` VALUES (201607, 401, 402, 6, 1.00, 1301.40, 0.02, 0.02, 'R', 'F', '1993-02-11', '1993-02-12', '1993-03-10', 'COLLECT COD', 'AIR', 'y unusual packages. blithely regular dino');
+INSERT INTO `lineitem` VALUES (10948, 377, 378, 1, 44.00, 56204.28, 0.09, 0.01, 'A', 'F', '1992-10-24', '1992-10-16', '1992-11-01', 'TAKE BACK RETURN', 'SHIP', 'leep blithely deposits. foxes n');
+INSERT INTO `lineitem` VALUES (519911, 177, 928, 3, 5.00, 5385.85, 0.08, 0.04, 'N', 'O', '1998-06-06', '1998-06-26', '1998-06-10', 'COLLECT COD', 'MAIL', ' fluffily even foxes integrate the');
+INSERT INTO `lineitem` VALUES (292454, 4, 255, 2, 15.00, 13560.00, 0.05, 0.02, 'N', 'O', '1997-11-04', '1997-09-03', '1997-11-09', 'TAKE BACK RETURN', 'MAIL', 'fluffily unusual instructions ');
+INSERT INTO `lineitem` VALUES (233921, 83, 584, 2, 45.00, 44238.60, 0.04, 0.04, 'N', 'O', '1996-05-06', '1996-04-14', '1996-05-20', 'COLLECT COD', 'AIR', 't the sauternes wake fluffily alon');
+INSERT INTO `lineitem` VALUES (562599, 4, 255, 4, 19.00, 17176.00, 0.09, 0.00, 'N', 'O', '1995-07-06', '1995-07-08', '1995-08-03', 'TAKE BACK RETURN', 'AIR', 'eposits are acro');
+INSERT INTO `lineitem` VALUES (20199, 4, 255, 1, 29.00, 26216.00, 0.09, 0.01, 'A', 'F', '1994-07-12', '1994-05-28', '1994-07-18', 'COLLECT COD', 'AIR', 'osits use after the furiously express ');
+INSERT INTO `lineitem` VALUES (375971, 4, 255, 7, 16.00, 14464.00, 0.10, 0.08, 'A', 'F', '1993-05-02', '1993-06-22', '1993-05-29', 'COLLECT COD', 'MAIL', ' slyly instead of');
+INSERT INTO `lineitem` VALUES (156774, 4, 255, 1, 20.00, 18080.00, 0.07, 0.01, 'A', 'F', '1992-10-21', '1992-10-31', '1992-10-27', 'COLLECT COD', 'MAIL', 't the special package');
+INSERT INTO `lineitem` VALUES (281319, 300, 301, 2, 22.00, 26406.60, 0.10, 0.05, 'N', 'O', '1998-05-27', '1998-05-22', '1998-06-13', 'DELIVER IN PERSON', 'REG AIR', 'theodolites. unusual foxes integrate boldl');
+INSERT INTO `lineitem` VALUES (25029, 300, 301, 2, 12.00, 14403.60, 0.08, 0.04, 'N', 'O', '1998-02-09', '1998-01-18', '1998-02-22', 'COLLECT COD', 'AIR', 's affix blithely regular waters.');
+INSERT INTO `lineitem` VALUES (180997, 316, 67, 4, 22.00, 26758.82, 0.02, 0.06, 'N', 'O', '1996-10-06', '1996-11-17', '1996-11-02', 'DELIVER IN PERSON', 'MAIL', 'counts integrate. carefully even ideas a');
+INSERT INTO `lineitem` VALUES (545542, 300, 301, 1, 43.00, 51612.90, 0.01, 0.06, 'N', 'O', '1995-10-06', '1995-09-11', '1995-10-26', 'NONE', 'TRUCK', 'ts sleep blithely abov');
+INSERT INTO `lineitem` VALUES (111235, 300, 301, 1, 40.00, 48012.00, 0.00, 0.04, 'A', 'F', '1994-06-27', '1994-07-23', '1994-07-11', 'COLLECT COD', 'FOB', 'unusual ideas boost around the blithely fin');
+INSERT INTO `lineitem` VALUES (71975, 316, 67, 4, 50.00, 60815.50, 0.08, 0.03, 'R', 'F', '1993-10-30', '1993-12-06', '1993-11-27', 'DELIVER IN PERSON', 'SHIP', ' haggle quickly against the bl');
+INSERT INTO `lineitem` VALUES (284743, 316, 67, 1, 40.00, 48652.40, 0.09, 0.00, 'R', 'F', '1992-05-18', '1992-04-02', '1992-05-24', 'DELIVER IN PERSON', 'SHIP', 'xcuses. blith');
+INSERT INTO `lineitem` VALUES (239905, 577, 78, 4, 27.00, 39894.39, 0.05, 0.08, 'N', 'O', '1998-05-04', '1998-04-03', '1998-05-16', 'DELIVER IN PERSON', 'REG AIR', 'ously regular ');
+INSERT INTO `lineitem` VALUES (77026, 327, 78, 5, 33.00, 40501.56, 0.10, 0.05, 'N', 'O', '1997-04-22', '1997-03-08', '1997-05-03', 'COLLECT COD', 'TRUCK', 'ully even deposits. ');
+INSERT INTO `lineitem` VALUES (56902, 577, 78, 5, 45.00, 66490.65, 0.05, 0.01, 'N', 'O', '1996-11-13', '1996-12-17', '1996-11-14', 'DELIVER IN PERSON', 'FOB', ' quickly regular accounts. instructions');
+INSERT INTO `lineitem` VALUES (591970, 327, 78, 3, 40.00, 49092.80, 0.09, 0.08, 'N', 'O', '1995-07-21', '1995-07-08', '1995-08-01', 'NONE', 'MAIL', 's use carefully finally');
+INSERT INTO `lineitem` VALUES (290081, 577, 78, 3, 17.00, 25118.69, 0.04, 0.06, 'R', 'F', '1994-10-01', '1994-09-05', '1994-10-27', 'NONE', 'TRUCK', 'carefully even requests. request');
+INSERT INTO `lineitem` VALUES (240676, 577, 78, 1, 7.00, 10342.99, 0.01, 0.00, 'R', 'F', '1993-10-14', '1993-11-25', '1993-11-12', 'DELIVER IN PERSON', 'RAIL', ' deposits. pending foxes nag. p');
+INSERT INTO `lineitem` VALUES (543332, 327, 78, 3, 33.00, 40501.56, 0.04, 0.02, 'R', 'F', '1993-03-07', '1993-02-04', '1993-03-25', 'NONE', 'REG AIR', 'ically ironic requests. silently sp');
+INSERT INTO `lineitem` VALUES (60162, 242, 243, 1, 25.00, 28556.00, 0.03, 0.00, 'N', 'O', '1998-08-16', '1998-09-06', '1998-08-23', 'COLLECT COD', 'FOB', 'ly. furiously ironic attainments h');
+INSERT INTO `lineitem` VALUES (28391, 242, 243, 3, 12.00, 13706.88, 0.06, 0.04, 'N', 'O', '1998-01-12', '1998-03-16', '1998-01-30', 'COLLECT COD', 'AIR', 'ic ideas. blithely even ideas wak');
+INSERT INTO `lineitem` VALUES (143237, 416, 417, 1, 14.00, 18429.74, 0.10, 0.03, 'N', 'O', '1996-08-26', '1996-07-17', '1996-09-04', 'NONE', 'MAIL', 'y even accoun');
+INSERT INTO `lineitem` VALUES (184738, 416, 417, 5, 28.00, 36859.48, 0.04, 0.07, 'R', 'F', '1995-05-08', '1995-05-23', '1995-05-27', 'DELIVER IN PERSON', 'MAIL', 'slyly bold ');
+INSERT INTO `lineitem` VALUES (355009, 450, 451, 5, 30.00, 40513.50, 0.00, 0.05, 'R', 'F', '1995-02-09', '1994-11-15', '1995-02-28', 'NONE', 'SHIP', 'ajole blithely pending requests');
+INSERT INTO `lineitem` VALUES (267012, 242, 243, 2, 9.00, 10280.16, 0.01, 0.04, 'A', 'F', '1993-09-11', '1993-07-04', '1993-09-26', 'NONE', 'RAIL', 'le fluffily. blithely unusual ');
+INSERT INTO `lineitem` VALUES (463459, 242, 243, 4, 13.00, 14849.12, 0.05, 0.06, 'R', 'F', '1992-10-06', '1992-12-05', '1992-10-19', 'TAKE BACK RETURN', 'RAIL', 'ounts affix quickly care');
+INSERT INTO `lineitem` VALUES (158240, 3, 254, 6, 23.00, 20769.00, 0.02, 0.08, 'N', 'O', '1998-07-01', '1998-06-17', '1998-07-20', 'COLLECT COD', 'AIR', 'ounts. quietly ironic ');
+INSERT INTO `lineitem` VALUES (101056, 3, 254, 7, 24.00, 21672.00, 0.04, 0.01, 'N', 'O', '1997-06-08', '1997-06-09', '1997-06-27', 'DELIVER IN PERSON', 'FOB', ' the blithely final accounts. silent');
+INSERT INTO `lineitem` VALUES (374149, 3, 254, 1, 39.00, 35217.00, 0.10, 0.08, 'N', 'O', '1996-06-24', '1996-06-25', '1996-07-13', 'TAKE BACK RETURN', 'RAIL', 'iresias boost');
+INSERT INTO `lineitem` VALUES (561857, 3, 254, 3, 44.00, 39732.00, 0.06, 0.00, 'N', 'O', '1996-01-01', '1996-02-23', '1996-01-16', 'COLLECT COD', 'SHIP', 'thely unusual gifts after');
+INSERT INTO `lineitem` VALUES (422529, 3, 254, 2, 45.00, 40635.00, 0.07, 0.03, 'A', 'F', '1994-06-12', '1994-05-19', '1994-07-11', 'TAKE BACK RETURN', 'REG AIR', 'y pending accounts impress acros');
+INSERT INTO `lineitem` VALUES (186275, 3, 254, 5, 10.00, 9030.00, 0.01, 0.03, 'A', 'F', '1993-12-09', '1993-10-15', '1993-12-14', 'COLLECT COD', 'MAIL', 'yly against the express accounts. even re');
+INSERT INTO `lineitem` VALUES (203457, 3, 254, 3, 39.00, 35217.00, 0.00, 0.05, 'R', 'F', '1992-11-01', '1992-09-08', '1992-11-05', 'DELIVER IN PERSON', 'FOB', ' boost quickly even pinto beans! slyly s');
+INSERT INTO `lineitem` VALUES (413282, 35, 786, 2, 17.00, 15895.51, 0.10, 0.08, 'N', 'O', '1998-07-16', '1998-06-16', '1998-07-26', 'TAKE BACK RETURN', 'RAIL', 'lar requests wake blithely ironic, regular ');
+INSERT INTO `lineitem` VALUES (93794, 35, 786, 6, 9.00, 8415.27, 0.07, 0.07, 'N', 'O', '1997-11-08', '1997-10-14', '1997-12-08', 'NONE', 'FOB', 'ideas along the always expr');
+INSERT INTO `lineitem` VALUES (550241, 35, 786, 4, 12.00, 11220.36, 0.01, 0.06, 'N', 'O', '1996-01-26', '1996-03-19', '1996-02-12', 'NONE', 'RAIL', 'carefully daring deposits. fluffil');
+INSERT INTO `lineitem` VALUES (340576, 377, 878, 2, 29.00, 37043.73, 0.07, 0.00, 'N', 'O', '1996-03-05', '1996-02-29', '1996-03-20', 'DELIVER IN PERSON', 'RAIL', 'pecial warthogs cajole above t');
+INSERT INTO `lineitem` VALUES (36896, 35, 786, 2, 7.00, 6545.21, 0.08, 0.00, 'R', 'F', '1994-11-10', '1994-12-30', '1994-11-23', 'TAKE BACK RETURN', 'AIR', 's are inside the even, bold accounts. ca');
+INSERT INTO `lineitem` VALUES (71269, 300, 551, 1, 6.00, 7201.80, 0.05, 0.04, 'A', 'F', '1993-03-14', '1993-02-21', '1993-03-27', 'COLLECT COD', 'RAIL', 'ual, ironic requests are regular, even dep');
+INSERT INTO `lineitem` VALUES (391013, 35, 786, 4, 28.00, 26180.84, 0.03, 0.04, 'R', 'F', '1992-05-15', '1992-05-16', '1992-05-21', 'NONE', 'MAIL', 'te according to the instructions. b');
+INSERT INTO `lineitem` VALUES (108838, 201, 702, 5, 15.00, 16518.00, 0.01, 0.06, 'N', 'O', '1998-01-22', '1998-04-03', '1998-02-07', 'DELIVER IN PERSON', 'SHIP', 'equests? q');
+INSERT INTO `lineitem` VALUES (440067, 4, 505, 4, 45.00, 40680.00, 0.02, 0.03, 'N', 'O', '1997-03-20', '1997-05-18', '1997-04-02', 'TAKE BACK RETURN', 'FOB', 'tect atop the slyly fina');
+INSERT INTO `lineitem` VALUES (79333, 175, 676, 5, 31.00, 33330.27, 0.02, 0.00, 'N', 'O', '1996-06-21', '1996-07-11', '1996-06-28', 'NONE', 'SHIP', 'requests agai');
+INSERT INTO `lineitem` VALUES (248417, 4, 505, 3, 41.00, 37064.00, 0.08, 0.02, 'N', 'O', '1995-10-13', '1995-11-05', '1995-10-24', 'DELIVER IN PERSON', 'FOB', 'ag furiously. carefully even deposit');
+INSERT INTO `lineitem` VALUES (247557, 83, 834, 3, 4.00, 3932.32, 0.10, 0.07, 'A', 'F', '1994-12-31', '1995-01-09', '1995-01-19', 'COLLECT COD', 'REG AIR', ' pinto beans sublate. epitaphs h');
+INSERT INTO `lineitem` VALUES (24866, 4, 505, 4, 22.00, 19888.00, 0.09, 0.03, 'A', 'F', '1994-01-14', '1994-02-06', '1994-01-31', 'NONE', 'SHIP', 'rts. requests nag quickly to the');
+INSERT INTO `lineitem` VALUES (439175, 83, 834, 1, 47.00, 46204.76, 0.07, 0.03, 'A', 'F', '1992-10-02', '1992-08-06', '1992-10-17', 'TAKE BACK RETURN', 'FOB', ' after the quickly');
+INSERT INTO `lineitem` VALUES (442278, 3, 504, 2, 12.00, 10836.00, 0.08, 0.05, 'N', 'O', '1998-05-28', '1998-05-15', '1998-06-18', 'TAKE BACK RETURN', 'SHIP', 'requests sleep blithely f');
+INSERT INTO `lineitem` VALUES (498596, 3, 504, 5, 46.00, 41538.00, 0.07, 0.03, 'N', 'O', '1997-06-22', '1997-07-17', '1997-07-11', 'COLLECT COD', 'REG AIR', 'efully regular instructions. slyly');
+INSERT INTO `lineitem` VALUES (359047, 489, 240, 6, 31.00, 43073.88, 0.07, 0.03, 'N', 'O', '1996-12-14', '1996-11-08', '1996-12-15', 'DELIVER IN PERSON', 'AIR', 's! silent packages sleep fluf');
+INSERT INTO `lineitem` VALUES (480391, 3, 504, 5, 38.00, 34314.00, 0.06, 0.00, 'N', 'O', '1995-10-03', '1995-09-25', '1995-10-16', 'NONE', 'TRUCK', 'r packages. quickly ironic pinto beans was');
+INSERT INTO `lineitem` VALUES (358918, 35, 286, 2, 41.00, 38336.23, 0.05, 0.04, 'A', 'F', '1994-05-23', '1994-07-21', '1994-05-31', 'DELIVER IN PERSON', 'FOB', 'ular accounts. quickly silent ideas use sl');
+INSERT INTO `lineitem` VALUES (408641, 3, 504, 3, 15.00, 13545.00, 0.09, 0.01, 'R', 'F', '1993-09-17', '1993-09-23', '1993-10-13', 'TAKE BACK RETURN', 'REG AIR', 'lets sleep: furiou');
+INSERT INTO `lineitem` VALUES (117221, 175, 176, 3, 34.00, 36555.78, 0.02, 0.05, 'A', 'F', '1993-01-11', '1993-01-22', '1993-01-30', 'COLLECT COD', 'AIR', 'e quickly even f');
+INSERT INTO `lineitem` VALUES (204871, 362, 613, 1, 6.00, 7574.16, 0.09, 0.02, 'N', 'O', '1998-04-05', '1998-05-20', '1998-04-17', 'NONE', 'AIR', ' blithely furiously bold ideas. regular,');
+INSERT INTO `lineitem` VALUES (67426, 4, 5, 4, 17.00, 15368.00, 0.07, 0.08, 'N', 'O', '1997-04-09', '1997-04-15', '1997-04-24', 'DELIVER IN PERSON', 'AIR', 'er the even excuses are furiously regula');
+INSERT INTO `lineitem` VALUES (156000, 4, 5, 3, 16.00, 14464.00, 0.09, 0.04, 'N', 'O', '1996-11-20', '1997-01-05', '1996-12-17', 'DELIVER IN PERSON', 'FOB', 'ronic ideas sleep');
+INSERT INTO `lineitem` VALUES (68322, 242, 493, 1, 41.00, 46831.84, 0.02, 0.06, 'N', 'O', '1996-02-02', '1996-01-02', '1996-02-05', 'NONE', 'AIR', 'imes final the');
+INSERT INTO `lineitem` VALUES (185315, 4, 5, 2, 28.00, 25312.00, 0.08, 0.01, 'A', 'F', '1994-09-08', '1994-10-31', '1994-10-05', 'TAKE BACK RETURN', 'AIR', ' express instructions');
+INSERT INTO `lineitem` VALUES (380708, 4, 5, 3, 14.00, 12656.00, 0.10, 0.07, 'R', 'F', '1993-05-14', '1993-05-23', '1993-06-07', 'DELIVER IN PERSON', 'FOB', 'olve blithely regular plat');
+INSERT INTO `lineitem` VALUES (214951, 362, 113, 4, 24.00, 30296.64, 0.09, 0.04, 'A', 'F', '1992-08-11', '1992-07-06', '1992-08-23', 'NONE', 'SHIP', 're against the regular re');
+INSERT INTO `lineitem` VALUES (370689, 86, 337, 2, 6.00, 5916.48, 0.01, 0.06, 'N', 'O', '1998-07-16', '1998-08-19', '1998-07-26', 'DELIVER IN PERSON', 'AIR', 'n enticingly ');
+INSERT INTO `lineitem` VALUES (408548, 299, 550, 2, 14.00, 16790.06, 0.09, 0.08, 'N', 'O', '1997-05-23', '1997-06-21', '1997-06-03', 'NONE', 'AIR', 'y according to ');
+INSERT INTO `lineitem` VALUES (455750, 86, 837, 1, 2.00, 1972.16, 0.08, 0.04, 'N', 'O', '1996-09-17', '1996-08-16', '1996-09-19', 'NONE', 'RAIL', 'r accounts dazzle clo');
+INSERT INTO `lineitem` VALUES (283046, 86, 837, 5, 37.00, 36484.96, 0.05, 0.08, 'N', 'O', '1995-12-09', '1996-02-10', '1995-12-30', 'TAKE BACK RETURN', 'MAIL', 'uriously carefully p');
+INSERT INTO `lineitem` VALUES (92258, 86, 837, 5, 19.00, 18735.52, 0.08, 0.05, 'A', 'F', '1994-05-22', '1994-06-01', '1994-06-13', 'COLLECT COD', 'FOB', 'pinto beans');
+INSERT INTO `lineitem` VALUES (206208, 86, 337, 1, 21.00, 20707.68, 0.06, 0.02, 'A', 'F', '1993-12-16', '1993-11-16', '1994-01-15', 'TAKE BACK RETURN', 'FOB', 'ndencies. blit');
+INSERT INTO `lineitem` VALUES (145507, 86, 837, 1, 17.00, 16763.36, 0.07, 0.05, 'R', 'F', '1992-10-12', '1992-09-15', '1992-11-09', 'TAKE BACK RETURN', 'AIR', 'regular dolphins. furiously');
+INSERT INTO `lineitem` VALUES (153351, 35, 36, 3, 33.00, 30855.99, 0.05, 0.08, 'N', 'O', '1998-05-16', '1998-05-23', '1998-05-24', 'COLLECT COD', 'AIR', 'e quickly above');
+INSERT INTO `lineitem` VALUES (466977, 35, 36, 5, 42.00, 39271.26, 0.07, 0.04, 'N', 'O', '1997-10-04', '1997-10-16', '1997-10-28', 'COLLECT COD', 'REG AIR', 'tes are blithely final pa');
+INSERT INTO `lineitem` VALUES (103810, 35, 36, 1, 38.00, 35531.14, 0.06, 0.02, 'N', 'O', '1996-06-13', '1996-08-13', '1996-06-25', 'NONE', 'RAIL', 'le on the requ');
+INSERT INTO `lineitem` VALUES (110178, 35, 36, 2, 41.00, 38336.23, 0.07, 0.02, 'N', 'O', '1995-08-04', '1995-07-20', '1995-09-03', 'DELIVER IN PERSON', 'REG AIR', 'yly regular');
+INSERT INTO `lineitem` VALUES (13698, 35, 36, 1, 50.00, 46751.50, 0.03, 0.03, 'A', 'F', '1994-09-23', '1994-11-01', '1994-09-26', 'TAKE BACK RETURN', 'MAIL', 'ffily express accounts use after th');
+INSERT INTO `lineitem` VALUES (172710, 35, 36, 1, 45.00, 42076.35, 0.10, 0.07, 'A', 'F', '1993-11-15', '1994-01-13', '1993-12-13', 'NONE', 'SHIP', 'ges wake after the furious');
+INSERT INTO `lineitem` VALUES (528513, 326, 577, 4, 24.00, 29431.68, 0.09, 0.00, 'R', 'F', '1992-08-27', '1992-07-31', '1992-09-21', 'DELIVER IN PERSON', 'RAIL', 'integrate carefully aft');
+INSERT INTO `lineitem` VALUES (420295, 7, 508, 2, 49.00, 44443.00, 0.09, 0.04, 'N', 'O', '1998-03-09', '1998-03-30', '1998-03-11', 'TAKE BACK RETURN', 'RAIL', 'al deposits. thinly exp');
+INSERT INTO `lineitem` VALUES (150465, 257, 508, 4, 1.00, 1157.25, 0.01, 0.06, 'N', 'O', '1997-03-12', '1997-02-26', '1997-04-06', 'COLLECT COD', 'RAIL', 'yly final packages are furiously. ');
+INSERT INTO `lineitem` VALUES (139616, 257, 508, 1, 32.00, 37032.00, 0.00, 0.04, 'N', 'O', '1997-03-05', '1997-01-20', '1997-03-28', 'DELIVER IN PERSON', 'TRUCK', 'ainst the fu');
+INSERT INTO `lineitem` VALUES (180832, 7, 508, 4, 13.00, 11791.00, 0.06, 0.08, 'N', 'O', '1996-02-22', '1996-01-18', '1996-02-25', 'COLLECT COD', 'TRUCK', 'ross the slyly silent accoun');
+INSERT INTO `lineitem` VALUES (312962, 257, 508, 1, 6.00, 6943.50, 0.02, 0.02, 'R', 'F', '1994-05-19', '1994-04-11', '1994-06-08', 'NONE', 'REG AIR', ' regular ideas haggle blithely slyly iron');
+INSERT INTO `lineitem` VALUES (111942, 7, 508, 1, 19.00, 17233.00, 0.00, 0.02, 'R', 'F', '1993-05-05', '1993-04-03', '1993-05-23', 'DELIVER IN PERSON', 'REG AIR', 'usual ideas nag ruthlessly slyl');
+INSERT INTO `lineitem` VALUES (188032, 257, 508, 4, 12.00, 13887.00, 0.00, 0.05, 'R', 'F', '1992-09-18', '1992-07-21', '1992-10-16', 'NONE', 'TRUCK', 'e slyly. quickly special ');
+INSERT INTO `lineitem` VALUES (315844, 557, 808, 2, 49.00, 71419.95, 0.00, 0.03, 'N', 'O', '1998-11-24', '1998-08-28', '1998-12-16', 'NONE', 'MAIL', 'efully. slyly ruthless ideas use fluffily ');
+INSERT INTO `lineitem` VALUES (324771, 3, 4, 3, 21.00, 18963.00, 0.09, 0.00, 'N', 'O', '1997-03-07', '1997-04-06', '1997-03-20', 'NONE', 'SHIP', 'uriously acro');
+INSERT INTO `lineitem` VALUES (323234, 3, 4, 1, 3.00, 2709.00, 0.03, 0.04, 'N', 'O', '1996-12-24', '1997-02-03', '1997-01-12', 'COLLECT COD', 'REG AIR', 'es cajole sl');
+INSERT INTO `lineitem` VALUES (229475, 3, 4, 2, 43.00, 38829.00, 0.04, 0.03, 'N', 'O', '1996-03-10', '1996-02-12', '1996-03-26', 'DELIVER IN PERSON', 'AIR', 'counts use fluffily final dependencies. re');
+INSERT INTO `lineitem` VALUES (364805, 3, 4, 2, 7.00, 6321.00, 0.10, 0.02, 'A', 'F', '1994-09-11', '1994-07-01', '1994-10-06', 'COLLECT COD', 'FOB', 's are quickly according to the reque');
+INSERT INTO `lineitem` VALUES (246052, 4, 755, 1, 22.00, 19888.00, 0.07, 0.06, 'A', 'F', '1993-11-04', '1993-09-17', '1993-11-17', 'NONE', 'REG AIR', 'egular idea');
+INSERT INTO `lineitem` VALUES (159940, 3, 4, 2, 27.00, 24381.00, 0.02, 0.02, 'A', 'F', '1992-10-28', '1993-01-10', '1992-11-20', 'NONE', 'RAIL', ' boldly silent asymptotes a');
+INSERT INTO `lineitem` VALUES (88773, 177, 178, 1, 27.00, 29083.59, 0.03, 0.06, 'N', 'O', '1998-05-10', '1998-06-09', '1998-05-28', 'NONE', 'REG AIR', 'es. blithely even requests s');
+INSERT INTO `lineitem` VALUES (61059, 177, 178, 3, 19.00, 20466.23, 0.00, 0.06, 'N', 'O', '1998-03-31', '1998-01-24', '1998-04-15', 'NONE', 'TRUCK', 'aintain. expre');
+INSERT INTO `lineitem` VALUES (75712, 177, 178, 3, 7.00, 7540.19, 0.02, 0.03, 'N', 'O', '1996-04-19', '1996-03-30', '1996-04-25', 'COLLECT COD', 'AIR', ' furiously according to the special fox');
+INSERT INTO `lineitem` VALUES (502210, 177, 178, 1, 12.00, 12926.04, 0.09, 0.00, 'N', 'O', '1995-11-07', '1995-09-16', '1995-11-27', 'TAKE BACK RETURN', 'RAIL', 'es poach. blithely ');
+INSERT INTO `lineitem` VALUES (581318, 177, 178, 7, 10.00, 10771.70, 0.10, 0.03, 'R', 'F', '1994-11-02', '1994-12-09', '1994-11-08', 'DELIVER IN PERSON', 'REG AIR', 'ets. blithely regular excuses boost flu');
+INSERT INTO `lineitem` VALUES (262180, 177, 178, 1, 35.00, 37700.95, 0.06, 0.00, 'R', 'F', '1993-03-23', '1993-04-23', '1993-03-26', 'COLLECT COD', 'TRUCK', 'lar ideas. fluff');
+INSERT INTO `lineitem` VALUES (442529, 177, 178, 3, 17.00, 18311.89, 0.07, 0.03, 'R', 'F', '1992-10-22', '1992-10-27', '1992-11-17', 'TAKE BACK RETURN', 'RAIL', 'wake carefu');
+INSERT INTO `lineitem` VALUES (393062, 7, 8, 1, 47.00, 42629.00, 0.02, 0.02, 'N', 'O', '1998-07-19', '1998-06-30', '1998-07-20', 'DELIVER IN PERSON', 'FOB', 'quests. request');
+INSERT INTO `lineitem` VALUES (440802, 7, 8, 2, 49.00, 44443.00, 0.07, 0.06, 'N', 'O', '1997-08-06', '1997-08-20', '1997-08-18', 'TAKE BACK RETURN', 'TRUCK', 's engage. re');
+INSERT INTO `lineitem` VALUES (129282, 3, 754, 5, 45.00, 40635.00, 0.02, 0.02, 'N', 'O', '1996-11-03', '1996-08-15', '1996-11-18', 'DELIVER IN PERSON', 'SHIP', 's haggle above the blithely ');
+INSERT INTO `lineitem` VALUES (53189, 3, 754, 2, 3.00, 2709.00, 0.03, 0.01, 'N', 'O', '1995-09-30', '1995-11-07', '1995-10-30', 'COLLECT COD', 'FOB', 'regular ideas. iron');
+INSERT INTO `lineitem` VALUES (220419, 7, 8, 5, 27.00, 24489.00, 0.08, 0.01, 'A', 'F', '1994-04-22', '1994-06-03', '1994-05-11', 'DELIVER IN PERSON', 'REG AIR', 's haggle carefully against the furio');
+INSERT INTO `lineitem` VALUES (235171, 3, 754, 2, 36.00, 32508.00, 0.08, 0.07, 'R', 'F', '1993-06-28', '1993-08-13', '1993-07-21', 'COLLECT COD', 'FOB', 's nag around the special packag');
+INSERT INTO `lineitem` VALUES (406339, 3, 754, 1, 36.00, 32508.00, 0.05, 0.05, 'A', 'F', '1992-10-03', '1992-08-27', '1992-10-21', 'COLLECT COD', 'FOB', 'ly ironic id');
+INSERT INTO `lineitem` VALUES (78567, 905, 656, 4, 44.00, 79459.60, 0.08, 0.06, 'N', 'O', '1998-08-20', '1998-08-23', '1998-08-21', 'NONE', 'RAIL', 'onic requests haggle fl');
+INSERT INTO `lineitem` VALUES (451809, 674, 925, 3, 6.00, 9448.02, 0.03, 0.04, 'N', 'O', '1997-12-10', '1997-11-02', '1997-12-16', 'TAKE BACK RETURN', 'REG AIR', 'lly ironicall');
+INSERT INTO `lineitem` VALUES (133601, 674, 925, 5, 7.00, 11022.69, 0.02, 0.06, 'N', 'O', '1996-08-22', '1996-08-01', '1996-08-26', 'COLLECT COD', 'SHIP', 'ggle quickly against the bravely unusual a');
+INSERT INTO `lineitem` VALUES (467232, 872, 123, 2, 7.00, 12410.09, 0.01, 0.03, 'R', 'F', '1995-03-22', '1995-03-25', '1995-03-27', 'NONE', 'REG AIR', 'ound the iron');
+INSERT INTO `lineitem` VALUES (208480, 872, 123, 6, 28.00, 49640.36, 0.02, 0.05, 'R', 'F', '1995-02-20', '1995-02-10', '1995-03-14', 'TAKE BACK RETURN', 'FOB', 'ites might hinder alongside of the slo');
+INSERT INTO `lineitem` VALUES (487680, 872, 123, 5, 17.00, 30138.79, 0.02, 0.06, 'R', 'F', '1993-10-04', '1993-12-23', '1993-10-13', 'DELIVER IN PERSON', 'AIR', 's wake blithely final ideas. regul');
+INSERT INTO `lineitem` VALUES (363841, 674, 925, 4, 19.00, 29918.73, 0.10, 0.08, 'A', 'F', '1992-07-10', '1992-06-09', '1992-07-19', 'NONE', 'RAIL', 'ongside of the fluffily regular accounts.');
+INSERT INTO `lineitem` VALUES (216454, 201, 952, 7, 35.00, 38542.00, 0.07, 0.04, 'N', 'O', '1998-03-15', '1998-04-07', '1998-03-27', 'COLLECT COD', 'AIR', 'ly furiously unusual foxes. ');
+INSERT INTO `lineitem` VALUES (61954, 201, 952, 2, 30.00, 33036.00, 0.03, 0.06, 'N', 'O', '1997-04-07', '1997-03-30', '1997-04-12', 'TAKE BACK RETURN', 'RAIL', 'lieve at the');
+INSERT INTO `lineitem` VALUES (150531, 201, 952, 2, 9.00, 9910.80, 0.07, 0.05, 'N', 'O', '1996-11-13', '1996-10-04', '1996-12-07', 'DELIVER IN PERSON', 'SHIP', 'efully express packages. slyl');
+INSERT INTO `lineitem` VALUES (265476, 201, 952, 1, 27.00, 29732.40, 0.09, 0.03, 'N', 'F', '1995-05-28', '1995-05-19', '1995-06-25', 'DELIVER IN PERSON', 'RAIL', ' pending theodolites wake. furiously reg');
+INSERT INTO `lineitem` VALUES (205574, 201, 952, 2, 32.00, 35238.40, 0.03, 0.05, 'A', 'F', '1994-06-26', '1994-05-01', '1994-07-03', 'COLLECT COD', 'TRUCK', ' carefully bold pinto beans wake sl');
+INSERT INTO `lineitem` VALUES (474403, 201, 952, 2, 48.00, 52857.60, 0.01, 0.06, 'R', 'F', '1993-08-14', '1993-07-30', '1993-09-13', 'DELIVER IN PERSON', 'TRUCK', 'permanent, even ideas integrate c');
+INSERT INTO `lineitem` VALUES (94338, 201, 952, 5, 38.00, 41845.60, 0.01, 0.03, 'A', 'F', '1992-12-26', '1992-12-13', '1993-01-14', 'DELIVER IN PERSON', 'RAIL', 'ironic asymptotes sleep ab');
+INSERT INTO `lineitem` VALUES (126337, 327, 578, 3, 47.00, 57684.04, 0.10, 0.01, 'N', 'O', '1998-05-26', '1998-04-27', '1998-06-17', 'COLLECT COD', 'SHIP', 'ng to the ');
+INSERT INTO `lineitem` VALUES (121606, 327, 578, 1, 48.00, 58911.36, 0.00, 0.07, 'N', 'O', '1997-03-15', '1997-05-09', '1997-03-26', 'DELIVER IN PERSON', 'RAIL', 'its. ironic requests was. ironic acc');
+INSERT INTO `lineitem` VALUES (509413, 327, 578, 5, 10.00, 12273.20, 0.07, 0.06, 'N', 'O', '1996-05-14', '1996-07-11', '1996-06-02', 'NONE', 'AIR', 'r theodoli');
+INSERT INTO `lineitem` VALUES (192197, 327, 578, 1, 2.00, 2454.64, 0.02, 0.02, 'N', 'O', '1995-11-13', '1995-10-02', '1995-11-29', 'COLLECT COD', 'RAIL', ', regular epitaphs haggle slyly final dep');
+INSERT INTO `lineitem` VALUES (32358, 327, 578, 6, 38.00, 46638.16, 0.07, 0.07, 'A', 'F', '1994-08-01', '1994-07-30', '1994-08-20', 'DELIVER IN PERSON', 'REG AIR', 'unts are care');
+INSERT INTO `lineitem` VALUES (42375, 327, 578, 3, 49.00, 60138.68, 0.06, 0.02, 'A', 'F', '1993-11-11', '1993-12-24', '1993-12-07', 'NONE', 'REG AIR', ' x-ray carefully bold instru');
+INSERT INTO `lineitem` VALUES (53984, 327, 578, 1, 18.00, 22091.76, 0.03, 0.08, 'A', 'F', '1993-01-19', '1993-02-10', '1993-01-24', 'COLLECT COD', 'TRUCK', 'thy deposits. silent requests agains');
+INSERT INTO `lineitem` VALUES (52167, 175, 426, 2, 22.00, 23653.74, 0.09, 0.04, 'N', 'O', '1998-08-03', '1998-08-23', '1998-08-08', 'TAKE BACK RETURN', 'TRUCK', 'ess deposits eat blithely. brave ');
+INSERT INTO `lineitem` VALUES (350083, 175, 426, 2, 23.00, 24728.91, 0.10, 0.07, 'N', 'O', '1997-09-15', '1997-08-01', '1997-10-12', 'NONE', 'TRUCK', 'accounts wake accounts. packages wake fi');
+INSERT INTO `lineitem` VALUES (407073, 1436, 939, 3, 38.00, 50822.34, 0.07, 0.01, 'N', 'O', '1996-06-07', '1996-05-05', '1996-06-13', 'NONE', 'TRUCK', ' bold accounts. final acco');
+INSERT INTO `lineitem` VALUES (22532, 201, 202, 1, 9.00, 9910.80, 0.08, 0.00, 'R', 'F', '1995-06-07', '1995-04-22', '1995-06-08', 'TAKE BACK RETURN', 'AIR', ' the express, slow theodoli');
+INSERT INTO `lineitem` VALUES (19047, 175, 426, 2, 45.00, 48382.65, 0.03, 0.01, 'A', 'F', '1994-03-20', '1994-03-09', '1994-03-22', 'DELIVER IN PERSON', 'FOB', 'pending, daring ');
+INSERT INTO `lineitem` VALUES (166243, 201, 202, 2, 25.00, 27530.00, 0.06, 0.03, 'R', 'F', '1994-02-09', '1994-03-17', '1994-02-15', 'NONE', 'TRUCK', 'ogs breach blithely ideas. unusual reques');
+INSERT INTO `lineitem` VALUES (220421, 175, 426, 3, 23.00, 24728.91, 0.06, 0.05, 'R', 'F', '1992-06-10', '1992-04-02', '1992-06-18', 'TAKE BACK RETURN', 'RAIL', 'unusual deposits accordin');
+INSERT INTO `lineitem` VALUES (9287, 83, 84, 1, 16.00, 15729.28, 0.07, 0.00, 'N', 'O', '1998-03-25', '1998-02-10', '1998-04-16', 'DELIVER IN PERSON', 'FOB', 'ironic accounts sl');
+INSERT INTO `lineitem` VALUES (45862, 83, 84, 3, 1.00, 983.08, 0.00, 0.02, 'N', 'O', '1997-07-17', '1997-08-19', '1997-07-22', 'COLLECT COD', 'SHIP', 'accounts-- fluffily pending deposits a');
+INSERT INTO `lineitem` VALUES (92002, 83, 84, 1, 45.00, 44238.60, 0.01, 0.06, 'N', 'O', '1996-12-26', '1996-10-17', '1996-12-28', 'COLLECT COD', 'SHIP', 'ts. blithely even ');
+INSERT INTO `lineitem` VALUES (389633, 336, 87, 2, 2.00, 2472.66, 0.09, 0.06, 'N', 'O', '1995-07-14', '1995-04-21', '1995-07-23', 'DELIVER IN PERSON', 'AIR', 'thely about the carefully');
+INSERT INTO `lineitem` VALUES (96739, 83, 84, 1, 48.00, 47187.84, 0.04, 0.00, 'R', 'F', '1994-08-24', '1994-08-14', '1994-09-22', 'NONE', 'REG AIR', 'sual accounts sle');
+INSERT INTO `lineitem` VALUES (575109, 83, 84, 2, 35.00, 34407.80, 0.09, 0.02, 'R', 'F', '1993-05-21', '1993-06-19', '1993-06-11', 'TAKE BACK RETURN', 'FOB', '. blithely ironic ideas after the carefull');
+INSERT INTO `lineitem` VALUES (284578, 83, 84, 2, 14.00, 13763.12, 0.03, 0.08, 'R', 'F', '1992-03-13', '1992-05-14', '1992-03-29', 'TAKE BACK RETURN', 'SHIP', 'lar requests. ironic packages nag ');
+INSERT INTO `lineitem` VALUES (351843, 327, 828, 4, 11.00, 13500.52, 0.02, 0.04, 'N', 'O', '1998-03-21', '1998-04-30', '1998-04-05', 'NONE', 'TRUCK', 'ly silent requests-- fina');
+INSERT INTO `lineitem` VALUES (19014, 119, 870, 5, 38.00, 38726.18, 0.10, 0.05, 'N', 'O', '1997-10-08', '1997-11-23', '1997-10-26', 'NONE', 'REG AIR', 'sual theodol');
+INSERT INTO `lineitem` VALUES (22436, 362, 863, 3, 27.00, 34083.72, 0.10, 0.00, 'N', 'O', '1996-06-17', '1996-06-23', '1996-06-23', 'TAKE BACK RETURN', 'REG AIR', 'ackages haggle slyly ');
+INSERT INTO `lineitem` VALUES (59108, 119, 870, 6, 21.00, 21401.31, 0.00, 0.06, 'N', 'O', '1995-11-16', '1995-12-13', '1995-11-27', 'DELIVER IN PERSON', 'SHIP', ' slyly. stealthily slow requests solve');
+INSERT INTO `lineitem` VALUES (593637, 327, 828, 6, 11.00, 13500.52, 0.03, 0.06, 'R', 'F', '1994-11-22', '1994-12-23', '1994-12-02', 'DELIVER IN PERSON', 'AIR', 'sly regular instructions.');
+INSERT INTO `lineitem` VALUES (15744, 119, 870, 1, 17.00, 17324.87, 0.10, 0.05, 'R', 'F', '1993-06-20', '1993-05-29', '1993-07-09', 'DELIVER IN PERSON', 'RAIL', 'quickly final requests sle');
+INSERT INTO `lineitem` VALUES (303877, 362, 863, 3, 39.00, 49232.04, 0.00, 0.01, 'A', 'F', '1992-11-28', '1992-12-18', '1992-11-29', 'DELIVER IN PERSON', 'MAIL', 'furiously.');
+ANALYZE TABLE supplier;
+Table	Op	Msg_type	Msg_text
+pq_database.supplier	analyze	status	OK
+ANALYZE TABLE lineitem;
+Table	Op	Msg_type	Msg_text
+pq_database.lineitem	analyze	status	OK
+ANALYZE TABLE orders;
+Table	Op	Msg_type	Msg_text
+pq_database.orders	analyze	status	OK
+ANALYZE TABLE customer;
+Table	Op	Msg_type	Msg_text
+pq_database.customer	analyze	status	OK
+ANALYZE TABLE nation;
+Table	Op	Msg_type	Msg_text
+pq_database.nation	analyze	status	OK
+ANALYZE TABLE part;
+Table	Op	Msg_type	Msg_text
+pq_database.part	analyze	status	OK
+ANALYZE TABLE partsupp;
+Table	Op	Msg_type	Msg_text
+pq_database.partsupp	analyze	status	OK
+explain select
+supp_nation,
+cust_nation,
+l_year,
+sum(volume) as revenue
+from
+(
+select
+n1.n_name as supp_nation,
+n2.n_name as cust_nation,
+extract(year from l_shipdate) as l_year,
+l_extendedprice * (1 - l_discount) as volume
+from
+supplier,
+lineitem,
+orders,
+customer,
+nation n1,
+nation n2
+where
+s_suppkey = l_suppkey
+and o_orderkey = l_orderkey
+and c_custkey = o_custkey
+and s_nationkey = n1.n_nationkey
+and c_nationkey = n2.n_nationkey
+and (
+(n1.n_name = 'FRANCE' and n2.n_name = 'GERMANY')
+or (n1.n_name = 'GERMANY' and n2.n_name = 'FRANCE')
+)
+and l_shipdate between date '1995-01-01' and date '1996-12-31'
+	) as shipping
+group by
+supp_nation,
+cust_nation,
+l_year
+order by
+supp_nation,
+cust_nation,
+l_year;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Parallel execute (1 workers)
+2	SIMPLE	customer	NULL	index	PRIMARY,CUSTOMER_FK1	CUSTOMER_FK1	4	NULL	4	100.00	Using index; Using temporary; Using filesort
+2	SIMPLE	n2	NULL	eq_ref	PRIMARY	PRIMARY	4	pq_database.customer.C_NATIONKEY	1	19.00	Using where
+2	SIMPLE	orders	NULL	ref	PRIMARY,ORDERS_FK1	ORDERS_FK1	4	pq_database.customer.c_custkey	1	100.00	Using index
+2	SIMPLE	lineitem	NULL	ref	PRIMARY	PRIMARY	4	pq_database.orders.o_orderkey	1	11.11	Using where
+2	SIMPLE	supplier	NULL	eq_ref	PRIMARY,SUPPLIER_FK1	PRIMARY	4	pq_database.lineitem.L_SUPPKEY	1	100.00	NULL
+2	SIMPLE	n1	NULL	eq_ref	PRIMARY	PRIMARY	4	pq_database.supplier.S_NATIONKEY	1	19.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `pq_database`.`n1`.`N_NAME` AS `supp_nation`,`pq_database`.`n2`.`N_NAME` AS `cust_nation`,extract(year from `pq_database`.`lineitem`.`L_SHIPDATE`) AS `l_year`,sum((`pq_database`.`lineitem`.`L_EXTENDEDPRICE` * (1 - `pq_database`.`lineitem`.`L_DISCOUNT`))) AS `revenue` from `pq_database`.`supplier` join `pq_database`.`lineitem` join `pq_database`.`orders` join `pq_database`.`customer` join `pq_database`.`nation` `n1` join `pq_database`.`nation` `n2` where ((`pq_database`.`n2`.`n_nationkey` = `pq_database`.`customer`.`C_NATIONKEY`) and (`pq_database`.`n1`.`n_nationkey` = `pq_database`.`supplier`.`S_NATIONKEY`) and (`pq_database`.`orders`.`O_CUSTKEY` = `pq_database`.`customer`.`c_custkey`) and (`pq_database`.`lineitem`.`l_orderkey` = `pq_database`.`orders`.`o_orderkey`) and (`pq_database`.`supplier`.`s_suppkey` = `pq_database`.`lineitem`.`L_SUPPKEY`) and (((`pq_database`.`n2`.`N_NAME` = 'GERMANY') and (`pq_database`.`n1`.`N_NAME` = 'FRANCE')) or ((`pq_database`.`n2`.`N_NAME` = 'FRANCE') and (`pq_database`.`n1`.`N_NAME` = 'GERMANY'))) and (`pq_database`.`lineitem`.`L_SHIPDATE` between DATE'1995-01-01' and DATE'1996-12-31')) group by `shipping`.`supp_nation`,`shipping`.`cust_nation`,`shipping`.`l_year` order by `shipping`.`supp_nation`,`shipping`.`cust_nation`,`l_year`
+select
+supp_nation,
+cust_nation,
+l_year,
+sum(volume) as revenue
+from
+(
+select
+n1.n_name as supp_nation,
+n2.n_name as cust_nation,
+extract(year from l_shipdate) as l_year,
+l_extendedprice * (1 - l_discount) as volume
+from
+supplier,
+lineitem,
+orders,
+customer,
+nation n1,
+nation n2
+where
+s_suppkey = l_suppkey
+and o_orderkey = l_orderkey
+and c_custkey = o_custkey
+and s_nationkey = n1.n_nationkey
+and c_nationkey = n2.n_nationkey
+and (
+(n1.n_name = 'FRANCE' and n2.n_name = 'GERMANY')
+or (n1.n_name = 'GERMANY' and n2.n_name = 'FRANCE')
+)
+and l_shipdate between date '1995-01-01' and date '1996-12-31'
+	) as shipping
+group by
+supp_nation,
+cust_nation,
+l_year
+order by
+supp_nation,
+cust_nation,
+l_year;
+supp_nation	cust_nation	l_year	revenue
+FRANCE	GERMANY	1995	48467.6976
+FRANCE	GERMANY	1996	42453.7312
+GERMANY	FRANCE	1995	41933.4552
+GERMANY	FRANCE	1996	32126.2860
+explain select
+nation,
+o_year,
+sum(amount) as sum_profit
+from
+(
+select
+n_name as nation,
+extract(year from o_orderdate) as o_year,
+l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount
+from
+part,
+supplier,
+lineitem,
+partsupp,
+orders,
+nation
+where
+s_suppkey = l_suppkey
+and ps_suppkey = l_suppkey
+and ps_partkey = l_partkey
+and p_partkey = l_partkey
+and o_orderkey = l_orderkey
+and s_nationkey = n_nationkey
+and p_name like '%green%'
+	) as profit
+group by
+nation,
+o_year
+order by
+nation,
+o_year desc;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	32	11.11	Parallel execute (1 workers)
+2	SIMPLE	part	NULL	ALL	PRIMARY	NULL	NULL	NULL	32	11.11	Using where; Using temporary; Using filesort
+2	SIMPLE	partsupp	NULL	ref	PRIMARY,PARTSUPP_FK1	PRIMARY	4	pq_database.part.p_partkey	1	100.00	NULL
+2	SIMPLE	supplier	NULL	eq_ref	PRIMARY,SUPPLIER_FK1	PRIMARY	4	pq_database.partsupp.PS_SUPPKEY	1	100.00	NULL
+2	SIMPLE	nation	NULL	eq_ref	PRIMARY	PRIMARY	4	pq_database.supplier.S_NATIONKEY	1	100.00	NULL
+2	SIMPLE	lineitem	NULL	ref	PRIMARY,LINEITEM_FK2	LINEITEM_FK2	8	pq_database.part.p_partkey,pq_database.partsupp.PS_SUPPKEY	2	100.00	NULL
+2	SIMPLE	orders	NULL	eq_ref	PRIMARY	PRIMARY	4	pq_database.lineitem.l_orderkey	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `pq_database`.`nation`.`N_NAME` AS `nation`,extract(year from `pq_database`.`orders`.`O_ORDERDATE`) AS `o_year`,sum(((`pq_database`.`lineitem`.`L_EXTENDEDPRICE` * (1 - `pq_database`.`lineitem`.`L_DISCOUNT`)) - (`pq_database`.`partsupp`.`PS_SUPPLYCOST` * `pq_database`.`lineitem`.`L_QUANTITY`))) AS `sum_profit` from `pq_database`.`part` join `pq_database`.`supplier` join `pq_database`.`lineitem` join `pq_database`.`partsupp` join `pq_database`.`orders` join `pq_database`.`nation` where ((`pq_database`.`nation`.`n_nationkey` = `pq_database`.`supplier`.`S_NATIONKEY`) and (`pq_database`.`orders`.`o_orderkey` = `pq_database`.`lineitem`.`l_orderkey`) and (`pq_database`.`partsupp`.`ps_partkey` = `pq_database`.`part`.`p_partkey`) and (`pq_database`.`lineitem`.`L_PARTKEY` = `pq_database`.`part`.`p_partkey`) and (`pq_database`.`supplier`.`s_suppkey` = `pq_database`.`partsupp`.`PS_SUPPKEY`) and (`pq_database`.`lineitem`.`L_SUPPKEY` = `pq_database`.`partsupp`.`PS_SUPPKEY`) and (`pq_database`.`part`.`P_NAME` like '%green%')) group by `profit`.`nation`,`profit`.`o_year` desc order by `profit`.`nation`,`o_year` desc
+select
+nation,
+o_year,
+sum(amount) as sum_profit
+from
+(
+select
+n_name as nation,
+extract(year from o_orderdate) as o_year,
+l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount
+from
+part,
+supplier,
+lineitem,
+partsupp,
+orders,
+nation
+where
+s_suppkey = l_suppkey
+and ps_suppkey = l_suppkey
+and ps_partkey = l_partkey
+and p_partkey = l_partkey
+and o_orderkey = l_orderkey
+and s_nationkey = n_nationkey
+and p_name like '%green%'
+	) as profit
+group by
+nation,
+o_year
+order by
+nation,
+o_year desc;
+nation	o_year	sum_profit
+ALGERIA	1998	25768.7810
+ALGERIA	1997	15548.4252
+ALGERIA	1996	14607.9516
+ALGERIA	1995	13087.9014
+ALGERIA	1994	12961.3008
+ALGERIA	1993	10960.6926
+ALGERIA	1992	9517.8638
+ARGENTINA	1997	4883.8698
+ARGENTINA	1996	749.3481
+ARGENTINA	1994	3676.5720
+ARGENTINA	1993	25702.6112
+ARGENTINA	1992	25013.2224
+BRAZIL	1997	42083.4240
+BRAZIL	1996	38741.9592
+BRAZIL	1994	14753.2680
+BRAZIL	1993	37208.5708
+BRAZIL	1992	865.3156
+CANADA	1998	39413.7216
+CANADA	1997	8581.7984
+CANADA	1996	5111.3500
+CANADA	1995	6728.0400
+CANADA	1994	24022.3086
+CANADA	1993	1061.3120
+CANADA	1992	21853.7748
+CHINA	1997	4014.3000
+CHINA	1996	12894.1560
+CHINA	1995	4397.7400
+CHINA	1994	6712.3400
+CHINA	1993	3558.7200
+CHINA	1992	4990.8000
+ETHIOPIA	1998	27808.4205
+ETHIOPIA	1997	26875.7940
+ETHIOPIA	1996	46347.3675
+ETHIOPIA	1995	33067.6480
+ETHIOPIA	1994	17760.1924
+ETHIOPIA	1993	7623.3101
+ETHIOPIA	1992	29305.8876
+FRANCE	1996	5190.9060
+FRANCE	1995	12593.3808
+FRANCE	1994	36955.5000
+GERMANY	1998	8896.6300
+GERMANY	1997	8850.0000
+GERMANY	1996	12268.2300
+GERMANY	1995	15430.3600
+GERMANY	1994	15374.7000
+GERMANY	1993	3958.4000
+GERMANY	1992	15789.9300
+INDIA	1998	7316.0690
+INDIA	1997	4125.6711
+INDIA	1996	6174.1164
+INDIA	1994	3143.4032
+INDIA	1992	13882.6548
+INDONESIA	1998	8341.1700
+INDONESIA	1996	10758.7546
+IRAN	1996	11002.4084
+IRAQ	1998	4750.4856
+JAPAN	1998	4357.0752
+JAPAN	1993	14214.3792
+JORDAN	1992	12560.4288
+KENYA	1998	37073.4000
+KENYA	1997	533.2375
+KENYA	1996	17433.9200
+KENYA	1995	10189.5300
+KENYA	1994	3129.9900
+KENYA	1993	15926.3700
+KENYA	1992	6537.7200
+MOROCCO	1998	31079.2300
+ROMANIA	1998	67875.6320
+ROMANIA	1997	4805.4594
+ROMANIA	1996	5716.5962
+ROMANIA	1995	7597.8091
+ROMANIA	1994	29894.8328
+ROMANIA	1993	18150.4342
+ROMANIA	1992	13122.9770
+UNITED KINGDOM	1996	38468.1562
+UNITED STATES	1995	1571.4806
+drop table partsupp;
+drop table supplier;
+drop table lineitem;
+drop table orders;
+drop table customer;
+drop table nation;
+drop table part;
+drop database pq_database;

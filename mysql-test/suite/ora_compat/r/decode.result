@@ -1,0 +1,228 @@
+drop table if exists t1, t2;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+select DECODE("b", "a", 1, "b", 2);
+DECODE("b", "a", 1, "b", 2)
+2
+select DECODE("c", "a", 1, "b", 2);
+DECODE("c", "a", 1, "b", 2)
+NULL
+select DECODE("c", "a", 1, "b", 2, 3);
+DECODE("c", "a", 1, "b", 2, 3)
+3
+select DECODE(BINARY "b", "a", 1, "B", 2, "b", "ok");
+DECODE(BINARY "b", "a", 1, "B", 2, "b", "ok")
+ok
+Warnings:
+Warning	1287	'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead
+select DECODE("b", "a", 1, "B", 2, "b", "ok");
+DECODE("b", "a", 1, "B", 2, "b", "ok")
+2
+select DECODE(concat("a","b"), concat("ab",""), "a", "b", "b");
+DECODE(concat("a","b"), concat("ab",""), "a", "b", "b")
+a
+select DECODE(1=0, false, "true", "false");
+DECODE(1=0, false, "true", "false")
+true
+select DECODE(1, 1, "one", 2, "two", "more");
+DECODE(1, 1, "one", 2, "two", "more")
+one
+explain select DECODE(1, 1, "one", 2, "two", "more");
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Note	1003	/* select#1 */ select decode(1,1,'one',2,'two','more') AS `DECODE(1, 1, "one", 2, "two", "more")`
+select DECODE(2.0, 1, "one", 2.0, "two", "more");
+DECODE(2.0, 1, "one", 2.0, "two", "more")
+two
+select DECODE(1, 1, true, 1, false) from dual;
+DECODE(1, 1, true, 1, false)
+1
+select DECODE("two", "one", "1", "two", "2") | 0;
+DECODE("two", "one", "1", "two", "2") | 0
+2
+select DECODE("two","one", 1.00, "two", 2.00) +0.0;
+DECODE("two","one", 1.00, "two", 2.00) +0.0
+2.00
+select DECODE(1/0, "a", "true", "false");
+DECODE(1/0, "a", "true", "false")
+false
+select DECODE(1/0, "a", "true");
+DECODE(1/0, "a", "true")
+NULL
+select DECODE(1/0, "a", "true") | 0;
+DECODE(1/0, "a", "true") | 0
+NULL
+select DECODE(1/0, "a", "true") + 0.0;
+DECODE(1/0, "a", "true") + 0.0
+NULL
+select DECODE(1>0, true, "TRUE", "FALSE");
+DECODE(1>0, true, "TRUE", "FALSE")
+TRUE
+select DECODE(1<0, false, "TRUE", "FALSE");
+DECODE(1<0, false, "TRUE", "FALSE")
+TRUE
+create table t1 (a int);
+insert into t1 values(1),(2),(3),(4);
+select decode(a, 1, 2, 2, 3, 0) as fcase, count(*) from t1 group by fcase;
+fcase	count(*)
+2	1
+3	1
+0	2
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+explain select decode(a, 1, 2, 2, 3, 0) as fcase, count(*) from t1 group by fcase;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select decode(`test`.`t1`.`a`,1,2,2,3,0) AS `fcase`,count(0) AS `count(*)` from `test`.`t1` group by `fcase`
+select decode(a, 1, "one", 2, "two", "nothing") as fcase, count(*) from t1 group by fcase;
+fcase	count(*)
+one	1
+two	1
+nothing	2
+drop table t1;
+create table t1 (`row` int not null, col int not null, val varchar(255) not null);
+insert into t1 values (1,1,'orange'),(1,2,'large'),(2,1,'yellow'),(2,2,'medium'),(3,1,'green'),(3,2,'small');
+select max(decode(col, 1, val, null)) as color from t1 group by `row`;
+color
+orange
+yellow
+green
+drop table t1;
+SET NAMES latin1;
+CREATE TABLE t1 SELECT 
+DECODE(1, true, _latin1'a' COLLATE latin1_danish_ci, _latin1'a') AS c1,
+DECODE(1, true, _latin1'a', _latin1'a' COLLATE latin1_danish_ci) AS c2,
+DECODE(1, true, 'a', 1) AS c3,
+DECODE(1, true, 1, 'a') AS c4,
+DECODE(1, true, 'a', 1.0) AS c5,
+DECODE(1, true, 1.0, 'a') AS c6,
+DECODE(1, true, 1, 1.0) AS c7,
+DECODE(1, true, 1.0, 1) AS c8,
+DECODE(1, true, 1.0) AS c9,
+DECODE(1, true, 0.1e1, 0.1) AS c10,
+DECODE(1, true, 0.1e1, 1) AS c11,
+DECODE(1, true, 0.1e1, '1') AS c12
+;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` varchar(1) CHARACTER SET latin1 COLLATE latin1_danish_ci NOT NULL DEFAULT '',
+  `c2` varchar(1) CHARACTER SET latin1 COLLATE latin1_danish_ci NOT NULL DEFAULT '',
+  `c3` varchar(2) CHARACTER SET latin1 NOT NULL DEFAULT '',
+  `c4` varchar(2) CHARACTER SET latin1 NOT NULL DEFAULT '',
+  `c5` varchar(4) CHARACTER SET latin1 NOT NULL DEFAULT '',
+  `c6` varchar(4) CHARACTER SET latin1 NOT NULL DEFAULT '',
+  `c7` decimal(2,1) NOT NULL DEFAULT '0.0',
+  `c8` decimal(2,1) NOT NULL DEFAULT '0.0',
+  `c9` decimal(2,1) DEFAULT NULL,
+  `c10` double NOT NULL DEFAULT '0',
+  `c11` double NOT NULL DEFAULT '0',
+  `c12` varchar(22) CHARACTER SET latin1 NOT NULL DEFAULT ''
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+SELECT DECODE(1, true, _latin1'a' COLLATE latin1_danish_ci, _latin1'a' COLLATE latin1_swedish_ci);
+ERROR HY000: Illegal mix of collations (latin1_danish_ci,EXPLICIT) and (latin1_swedish_ci,EXPLICIT) for operation 'case'
+SELECT DECODE(_latin1'a' COLLATE latin1_general_ci, 
+_latin1'a' COLLATE latin1_danish_ci, 1,
+_latin1'a' COLLATE latin1_swedish_ci, 2
+);
+ERROR HY000: Illegal mix of collations (latin1_general_ci,EXPLICIT), (latin1_danish_ci,EXPLICIT), (latin1_swedish_ci,EXPLICIT) for operation 'case'
+SELECT 
+DECODE(_latin1'a' COLLATE latin1_general_ci, _latin1'A', '1', 2),
+DECODE(_latin1'a' COLLATE latin1_bin, _latin1'A', '1', 2),
+DECODE(_latin1'a', _latin1'A' COLLATE latin1_swedish_ci, '1', 2),
+DECODE(_latin1'a', _latin1'A' COLLATE latin1_bin, '1', 2);
+DECODE(_latin1'a' COLLATE latin1_general_ci, _latin1'A', '1', 2)	DECODE(_latin1'a' COLLATE latin1_bin, _latin1'A', '1', 2)	DECODE(_latin1'a', _latin1'A' COLLATE latin1_swedish_ci, '1', 2)	DECODE(_latin1'a', _latin1'A' COLLATE latin1_bin, '1', 2)
+1	2	1	2
+SELECT 'decode+union+test'
+UNION 
+SELECT DECODE(LOWER('1'), LOWER('2'), 'BUG', 'nobug');
+decode+union+test
+decode+union+test
+nobug
+SELECT DECODE(LOWER('1'), LOWER('2'), 'BUG', 'nobug');
+DECODE(LOWER('1'), LOWER('2'), 'BUG', 'nobug')
+nobug
+create table t1(a float, b int default 3);
+insert into t1 (a) values (2), (11), (8);
+select min(a), min(decode(1=1, true, a, NULL)),
+min(decode(1!=1, true, NULL, a)) 
+from t1 where b=3 group by b;
+min(a)	min(decode(1=1, true, a, NULL))	min(decode(1!=1, true, NULL, a))
+2	2	2
+drop table t1;
+create table t1 (a int, b bigint unsigned);
+create table t2 (c int);
+insert into t1 (a, b) values (1,4572794622775114594), (2,18196094287899841997),
+(3,11120436154190595086);
+insert into t2 (c) values (1), (2), (3);
+select t1.a, decode(t1.a, 0, 0, t1.b) d from t1 
+join t2 on t1.a=t2.c order by d;
+a	d
+1	4572794622775114594
+3	11120436154190595086
+2	18196094287899841997
+select t1.a, decode(t1.a, 0, 0, t1.b) d from t1 
+join t2 on t1.a=t2.c where b=11120436154190595086 order by d;
+a	d
+3	11120436154190595086
+drop table t1, t2;
+CREATE TABLE t1(a YEAR);
+SELECT 1 FROM t1 WHERE a=1 AND DECODE(1, a, 1, 1);
+1
+DROP TABLE t1;
+SET sql_mode = default;
+CREATE TABLE source(bt INTEGER, bf INTEGER, i8u BIGINT UNSIGNED, i8s BIGINT);
+INSERT INTO source VALUES
+(1,0,0,-9223372036854775808), (1,0,18446744073709551615,9223372036854775807);
+CREATE TABLE target
+SELECT DECODE(bt, i8u, i8s) as u,
+DECODE(bf, i8u, i8s) as s
+FROM source;
+SHOW CREATE TABLE target;
+Table	Create Table
+target	CREATE TABLE `target` (
+  `u` bigint DEFAULT NULL,
+  `s` bigint DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT DECODE(bt, true, i8u, i8s) AS u,
+DECODE(bf, true, i8u, i8s) AS s
+FROM source;
+u	s
+0	-9223372036854775808
+18446744073709551615	9223372036854775807
+SELECT * FROM target;
+u	s
+NULL	-9223372036854775808
+NULL	NULL
+DROP TABLE target;
+#
+# Test for a memory leak in WL#6570
+#
+CREATE TABLE t1 (a VARCHAR(110));
+INSERT INTO t1 VALUES (REPEAT("a",100));
+SELECT (t1.a,t1.a) IN (('a','c'),('a','b')) END FROM t1;
+END
+0
+SELECT DECODE(t1.a, 'a', 'c', 'd') FROM t1;
+DECODE(t1.a, 'a', 'c', 'd')
+d
+DROP TABLE t1;
+DROP TABLE source;
+#
+# test null in expr.
+#
+SELECT decode(null, 1, 'one', null, 'is_null', 'others');
+decode(null, 1, 'one', null, 'is_null', 'others')
+is_null
+SELECT decode(null, null, 'is_null', 2, 'two', 'others');
+decode(null, null, 'is_null', 2, 'two', 'others')
+is_null
+SELECT decode(null, 2, 'two', 'others');
+decode(null, 2, 'two', 'others')
+others
+SELECT decode(null, 2, 'two');
+decode(null, 2, 'two')
+NULL

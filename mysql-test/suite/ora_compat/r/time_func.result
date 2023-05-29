@@ -1,0 +1,333 @@
+select add_months('2021-02-07 16:00:00', 1) from dual;
+add_months('2021-02-07 16:00:00', 1)
+2021-03-07 16:00:00
+select add_months('2021-02-07 16:00:00', -1) from dual;
+add_months('2021-02-07 16:00:00', -1)
+2021-01-07 16:00:00
+select add_months('2021-02-07 16:00:00', 10) from dual;
+add_months('2021-02-07 16:00:00', 10)
+2021-12-07 16:00:00
+select add_months('2021-02-07 16:00:00', -10) from dual;
+add_months('2021-02-07 16:00:00', -10)
+2020-04-07 16:00:00
+select add_months('2021-05-31 00:00:00', -1) from dual;
+add_months('2021-05-31 00:00:00', -1)
+2021-04-30 00:00:00
+select add_months('2021-05-31 00:00:00', 1) from dual;
+add_months('2021-05-31 00:00:00', 1)
+2021-06-30 00:00:00
+select add_months('2021-03-31 00:00:00', -1) from dual;
+add_months('2021-03-31 00:00:00', -1)
+2021-02-28 00:00:00
+select add_months('2021-05-31 00:00:00', 2.5) from dual;
+add_months('2021-05-31 00:00:00', 2.5)
+2021-07-31 00:00:00
+select add_months('2021-05-31 00:00:00', -2.89) from dual;
+add_months('2021-05-31 00:00:00', -2.89)
+2021-03-31 00:00:00
+select months_between('2021-3-21', '2021-1-10') from dual;
+months_between('2021-3-21', '2021-1-10')
+2.3548387096774195
+select months_between('2021-1-10', '2021-3-21') from dual;
+months_between('2021-1-10', '2021-3-21')
+-2.3548387096774195
+select months_between('2020-1-10', '2021-3-21') from dual;
+months_between('2020-1-10', '2021-3-21')
+-14.35483870967742
+select months_between('2021-3-21', '2020-1-10') from dual;
+months_between('2021-3-21', '2020-1-10')
+14.35483870967742
+select months_between('2021-3-21', '2020-1-10 00:01:00') from dual;
+months_between('2021-3-21', '2020-1-10 00:01:00')
+14.354816308243727
+select months_between('2021-3-21', '00:01:00') from dual;
+months_between('2021-3-21', '00:01:00')
+NULL
+Warnings:
+Warning	1292	Incorrect datetime value: '00:01:00'
+select months_between('2021-3-21', '2aaaa') from dual;
+months_between('2021-3-21', '2aaaa')
+NULL
+Warnings:
+Warning	1292	Incorrect datetime value: '2aaaa'
+select months_between('bbbbb', 'aaaaa') from dual;
+months_between('bbbbb', 'aaaaa')
+NULL
+Warnings:
+Warning	1292	Incorrect datetime value: 'aaaaa'
+select months_between('2021-3-21', 0);
+months_between('2021-3-21', 0)
+NULL
+Warnings:
+Warning	1292	Incorrect datetime value: '0'
+select months_between('2021-3-21', NULL);
+months_between('2021-3-21', NULL)
+NULL
+select months_between('2021-3-21', 16281924723) from dual;
+months_between('2021-3-21', 16281924723)
+NULL
+Warnings:
+Warning	1292	Incorrect datetime value: '16281924723'
+select months_between('2021-3-21', -16281924723);
+months_between('2021-3-21', -16281924723)
+NULL
+Warnings:
+Warning	1292	Incorrect datetime value: '-16281924723'
+select months_between('2021-3-21', 2.6);
+months_between('2021-3-21', 2.6)
+NULL
+Warnings:
+Warning	1292	Incorrect datetime value: '2.6'
+select months_between('20090228', '20080228') as months from dual;
+months
+12
+select months_between('20090228', '20080229') as months from dual;
+months
+12
+select months_between('20080229', '20070228') as months from dual;
+months
+12
+select months_between('20100327', '20100228') as months from dual;
+months
+0.967741935483871
+select months_between('20100330', '20100228') as months from dual;
+months
+1.064516129032258
+select months_between('20100228', '20100130') as months from dual;
+months
+0.935483870967742
+select months_between('20100228', '20100131') as months from dual;
+months
+1
+select months_between('20100228', '20100127') as months from dual;
+months
+1.032258064516129
+select months_between('20100228', '20100131') as months from dual;
+months
+1
+select months_between(to_date('2022-04-30 03:59:00','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-03-30 01:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+months_between(to_date('2022-04-30 03:59:00','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-03-30 01:00:00','yyyy-mm-dd hh24:mi:ss'))
+1
+select months_between(to_date('2022-04-28 23:59:59','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-04-28 01:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+months_between(to_date('2022-04-28 23:59:59','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-04-28 01:00:00','yyyy-mm-dd hh24:mi:ss'))
+0
+select months_between(to_date('2022-04-28 03:00:00','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-04-24 01:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+months_between(to_date('2022-04-28 03:00:00','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-04-24 01:00:00','yyyy-mm-dd hh24:mi:ss'))
+0.13172043010752688
+select months_between(to_date('2022-04-28 01:00:00','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-04-24 03:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+months_between(to_date('2022-04-28 01:00:00','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-04-24 03:00:00','yyyy-mm-dd hh24:mi:ss'))
+0.12634408602150538
+select months_between(to_date('2022-04-24 03:00:00','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-04-28 01:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+months_between(to_date('2022-04-24 03:00:00','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-04-28 01:00:00','yyyy-mm-dd hh24:mi:ss'))
+-0.12634408602150538
+select months_between(to_date('2022-04-24 01:00:00','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-04-28 03:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+months_between(to_date('2022-04-24 01:00:00','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-04-28 03:00:00','yyyy-mm-dd hh24:mi:ss'))
+-0.13172043010752688
+select months_between(to_date('2022-02-28 01:00:00','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-02-24 03:00:00','yyyy-mm-dd hh24:mi:ss')) FROM dual;
+months_between(to_date('2022-02-28 01:00:00','yyyy-mm-dd hh24:mi:ss'),
+to_date('2022-02-24 03:00:00','yyyy-mm-dd hh24:mi:ss'))
+0.12634408602150538
+select MONTHS_BETWEEN(to_date('03-01-02 8:11:12', 'YY-MM-DD HH24:MI:SS'),
+to_date('03-01-02 8:11:52', 'YY-MM-DD HH24:MI:SS')) result from dual;
+result
+0
+select MONTHS_BETWEEN(to_date('03-01-02 8:11:52', 'YY-MM-DD HH24:MI:SS'),
+to_date('03-01-02 8:11:00', 'YY-MM-DD HH24:MI:SS')) result from dual;
+result
+0
+select strcmp(systimestamp(),concat(current_date()," ",current_time(6)));
+strcmp(systimestamp(),concat(current_date()," ",current_time(6)))
+0
+select now() - sysdate, sleep(2), UNIX_TIMESTAMP(now()) - UNIX_TIMESTAMP(sysdate);
+now() - sysdate	sleep(2)	UNIX_TIMESTAMP(now()) - UNIX_TIMESTAMP(sysdate)
+0	0	-2
+set sql_mode='oracle';
+set timestamp=1;
+select  now() - sysdate as zero;
+zero
+0
+select sysdate, sleep(2), sysdate ;
+sysdate	sleep(2)	sysdate
+1970-01-01 03:00:01.000000	0	1970-01-01 03:00:01.000000
+create table t1(col1 int, col2 timestamp(6) default sysdate);
+set timestamp=1;
+insert into t1 values(1, systimestamp);
+insert into t1 values(1, systimestamp());
+insert into t1 values(1, systimestamp(0));
+insert into t1 values(1, systimestamp(1));
+insert into t1 values(1, systimestamp(2));
+insert into t1 values(1, systimestamp(3));
+insert into t1 values(1, systimestamp(4));
+insert into t1 values(1, systimestamp(5));
+insert into t1 values(1, systimestamp(6));
+insert into t1 values(1, systimestamp(7));
+ERROR 42000: Too-big precision 7 specified for 'now'. Maximum is 6.
+insert into t1(col1) values(2);
+select * from t1;
+col1	col2
+1	1970-01-01 03:00:01.000000
+1	1970-01-01 03:00:01.000000
+1	1970-01-01 03:00:01.000000
+1	1970-01-01 03:00:01.000000
+1	1970-01-01 03:00:01.000000
+1	1970-01-01 03:00:01.000000
+1	1970-01-01 03:00:01.000000
+1	1970-01-01 03:00:01.000000
+1	1970-01-01 03:00:01.000000
+2	1970-01-01 03:00:01.000000
+drop table t1;
+create table t1(c1 int default (months_between('20220204','20220203')));
+explain format=tree  SELECT c1 FROM t1 WHERE MONTHS_BETWEEN(c1,'20210201')=1;
+EXPLAIN
+-> Filter: (months_between('20210201',t1.c1) = 1)  (cost=# rows=#)
+    -> Table scan on t1  (cost=# rows=#)
+
+drop table t1;
+set sql_mode=oracle;
+create table t1(c1 int);
+alter table t1 change column c1  c1 int default (months_between('20210101','20210201'));
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE "t1" (
+  "c1" int DEFAULT (months_between(_utf8mb4'20210101',_utf8mb4'20210201'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop table t1;
+set sql_mode=oracle;
+create table t1(c1 datetime default(add_months('2022-01-31',1)), c2 int, c3 double, c4 decimal(10,2));
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE "t1" (
+  "c1" datetime DEFAULT (add_months(_utf8mb4'2022-01-31',1)),
+  "c2" int DEFAULT NULL,
+  "c3" double DEFAULT NULL,
+  "c4" decimal(10,2) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t1 values('2022-02-28 11:00:00', 1, 1.1, 1.1);
+insert into t1 values('2022-02-28 11:00:00', 1, 1.6, 1.6);
+insert into t1 values('2022-02-28 11:00:00', -1, -1.1, -1.1);
+insert into t1 values('2022-02-28 11:00:00', null, null, null);
+insert into t1 values(null, -1, -1.1, -1.1);
+insert into t1 values(null, null, null, null);
+insert into t1 values('2022-02-28 11:00:00', -1, -1.6, -1.6);
+insert into t1 values('2022-04-30 11:00:00', -1, -1.1, -1.1);
+insert into t1 values('2022-04-30 11:00:00',  1,  1.1,  1.1);
+insert into t1 values('2022-04-30 11:00:00',  1024,  1024.45,  1024.45);
+insert into t1 values('2022-04-30 11:00:00', -1024, -1024.45, -1024.45);
+insert into t1 values('2022-07-22 12:34:56', -1, -1.1, -1.1);
+insert into t1 values('2022-07-22 12:34:56',  1,  1.1,  1.1);
+select c1, c2, c3, c4, add_months(c1, c2) v_int, add_months(c1, c3) v_double, add_months(c1, c4) v_decimal
+from t1;
+c1	c2	c3	c4	v_int	v_double	v_decimal
+2022-02-28 11:00:00	1	1.1	1.1	2022-03-31 11:00:00	2022-03-31 11:00:00	2022-03-31 11:00:00
+2022-02-28 11:00:00	1	1.6	1.6	2022-03-31 11:00:00	2022-03-31 11:00:00	2022-03-31 11:00:00
+2022-02-28 11:00:00	-1	-1.1	-1.1	2022-01-31 11:00:00	2022-01-31 11:00:00	2022-01-31 11:00:00
+2022-02-28 11:00:00	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	-1	-1.1	-1.1	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL	NULL	NULL
+2022-02-28 11:00:00	-1	-1.6	-1.6	2022-01-31 11:00:00	2022-01-31 11:00:00	2022-01-31 11:00:00
+2022-04-30 11:00:00	-1	-1.1	-1.1	2022-03-31 11:00:00	2022-03-31 11:00:00	2022-03-31 11:00:00
+2022-04-30 11:00:00	1	1.1	1.1	2022-05-31 11:00:00	2022-05-31 11:00:00	2022-05-31 11:00:00
+2022-04-30 11:00:00	1024	1024.45	1024.45	2107-08-31 11:00:00	2107-08-31 11:00:00	2107-08-31 11:00:00
+2022-04-30 11:00:00	-1024	-1024.45	-1024.45	1936-12-31 11:00:00	1936-12-31 11:00:00	1936-12-31 11:00:00
+2022-07-22 12:34:56	-1	-1.1	-1.1	2022-06-22 12:34:56	2022-06-22 12:34:56	2022-06-22 12:34:56
+2022-07-22 12:34:56	1	1.1	1.1	2022-08-22 12:34:56	2022-08-22 12:34:56	2022-08-22 12:34:56
+select add_months('2022-02-28','') from dual;
+add_months('2022-02-28','')
+NULL
+select add_months('2022-02-28',null) from dual;
+add_months('2022-02-28',null)
+NULL
+select add_months('2022-02-28','   ') from dual;
+add_months('2022-02-28','   ')
+NULL
+select add_months('2022-02-28','1.1  ') from dual;
+add_months('2022-02-28','1.1  ')
+2022-03-31 00:00:00
+select add_months('2022-02-28','  1.7') from dual;
+add_months('2022-02-28','  1.7')
+2022-03-31 00:00:00
+select add_months('2022-02-28','  1.1') from dual;
+add_months('2022-02-28','  1.1')
+2022-03-31 00:00:00
+select add_months('2022-02-28','1.23e-1') from dual;
+add_months('2022-02-28','1.23e-1')
+2022-02-28 00:00:00
+SELECT add_months('2022-02-28', '1.23a') FROM dual;
+ERROR HY000: Incorrect arguments to add_months
+SELECT add_months('2022-02-28', 'a1.23') FROM dual;
+ERROR HY000: Incorrect arguments to add_months
+SELECT add_months('2022-02-28', '1.23xx') FROM dual;
+ERROR HY000: Incorrect arguments to add_months
+SELECT add_months('2022-02-28', sysdate()) FROM dual;
+ERROR HY000: Incorrect arguments to add_months
+SELECT add_months('2022-02-28', '1.2  a') FROM dual;
+ERROR HY000: Incorrect arguments to add_months
+SELECT add_months('2022-02-28', '  a1.2') FROM dual;
+ERROR HY000: Incorrect arguments to add_months
+set sql_mode=oracle;
+select c1, c2, c3, c4, add_months(c1, c2) v_int, add_months(c1, c3) v_double, add_months(c1, c4) v_decimal
+from t1 where add_months(c1, c2) is not null;
+c1	c2	c3	c4	v_int	v_double	v_decimal
+2022-02-28 11:00:00	1	1.1	1.1	2022-03-31 11:00:00	2022-03-31 11:00:00	2022-03-31 11:00:00
+2022-02-28 11:00:00	1	1.6	1.6	2022-03-31 11:00:00	2022-03-31 11:00:00	2022-03-31 11:00:00
+2022-02-28 11:00:00	-1	-1.1	-1.1	2022-01-31 11:00:00	2022-01-31 11:00:00	2022-01-31 11:00:00
+2022-02-28 11:00:00	-1	-1.6	-1.6	2022-01-31 11:00:00	2022-01-31 11:00:00	2022-01-31 11:00:00
+2022-04-30 11:00:00	-1	-1.1	-1.1	2022-03-31 11:00:00	2022-03-31 11:00:00	2022-03-31 11:00:00
+2022-04-30 11:00:00	1	1.1	1.1	2022-05-31 11:00:00	2022-05-31 11:00:00	2022-05-31 11:00:00
+2022-04-30 11:00:00	1024	1024.45	1024.45	2107-08-31 11:00:00	2107-08-31 11:00:00	2107-08-31 11:00:00
+2022-04-30 11:00:00	-1024	-1024.45	-1024.45	1936-12-31 11:00:00	1936-12-31 11:00:00	1936-12-31 11:00:00
+2022-07-22 12:34:56	-1	-1.1	-1.1	2022-06-22 12:34:56	2022-06-22 12:34:56	2022-06-22 12:34:56
+2022-07-22 12:34:56	1	1.1	1.1	2022-08-22 12:34:56	2022-08-22 12:34:56	2022-08-22 12:34:56
+select c1, c2, c3, c4, add_months(c1, c2) v_int, add_months(c1, c3) v_double, add_months(c1, c4) v_decimal
+from t1 where add_months(c1, c2) is null;
+c1	c2	c3	c4	v_int	v_double	v_decimal
+2022-02-28 11:00:00	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	-1	-1.1	-1.1	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL	NULL	NULL
+drop table t1;
+select add_months('2022-02-28','') from dual;
+add_months('2022-02-28','')
+NULL
+select add_months('2022-02-28',null) from dual;
+add_months('2022-02-28',null)
+NULL
+select add_months('2022-02-28','   ') from dual;
+add_months('2022-02-28','   ')
+NULL
+select add_months('2022-02-28','1.1  ') from dual;
+add_months('2022-02-28','1.1  ')
+2022-03-31 00:00:00
+select add_months('2022-02-28','  1.7') from dual;
+add_months('2022-02-28','  1.7')
+2022-03-31 00:00:00
+select add_months('2022-02-28','  1.1') from dual;
+add_months('2022-02-28','  1.1')
+2022-03-31 00:00:00
+select add_months('2022-02-28','1.23e-1') from dual;
+add_months('2022-02-28','1.23e-1')
+2022-02-28 00:00:00
+SELECT add_months('2022-02-28', '1.23a') FROM dual;
+ERROR HY000: Incorrect arguments to add_months
+SELECT add_months('2022-02-28', 'a1.23') FROM dual;
+ERROR HY000: Incorrect arguments to add_months
+SELECT add_months('2022-02-28', '1.23xx') FROM dual;
+ERROR HY000: Incorrect arguments to add_months
+SELECT add_months('2022-02-28', sysdate()) FROM dual;
+ERROR HY000: Incorrect arguments to add_months
+SELECT add_months('2022-02-28', '1.2  a') FROM dual;
+ERROR HY000: Incorrect arguments to add_months
+SELECT add_months('2022-02-28', '  a1.2') FROM dual;
+ERROR HY000: Incorrect arguments to add_months

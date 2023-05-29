@@ -1,0 +1,697 @@
+create table t1(c1 int, c2 varchar(10));
+create table t2(c1 int, c2 varchar(10));
+create table t3(c1 int, c2 varchar(10));
+insert into t1 values(1, 'abc');
+insert into t1 values(2, 'cde');
+insert into t2 values(1, 'fgh');
+insert into t2 values(2, 'ijk');
+insert into t2 values(3, 'lmn');
+insert into t3 values(3, 'zzz');
+select * from t1 full join t2 on t1.c1=t2.c1;
+c1	c2	c1	c2
+1	abc	1	fgh
+2	cde	2	ijk
+NULL	NULL	3	lmn
+select * from t1 full join t2 on t1.c1=t2.c1 and t1.c1=1;
+c1	c2	c1	c2
+1	abc	1	fgh
+2	cde	NULL	NULL
+NULL	NULL	2	ijk
+NULL	NULL	3	lmn
+select * from t1 full join t2 on t1.c1=t2.c1 and t2.c1=1;
+c1	c2	c1	c2
+1	abc	1	fgh
+2	cde	NULL	NULL
+NULL	NULL	2	ijk
+NULL	NULL	3	lmn
+select * from t1 full join t2 on t1.c1=t2.c1 where t1.c1=1;
+c1	c2	c1	c2
+1	abc	1	fgh
+select * from t2 full join t3 on t2.c1=t3.c1 where t2.c1=1;
+c1	c2	c1	c2
+1	fgh	NULL	NULL
+select * from t2 full join t3 on t2.c1=t3.c1 where t3.c1=1;
+c1	c2	c1	c2
+select * from t1 full join (t2 full join t3 on t2.c1=t3.c1) on t1.c1=t2.c1;
+c1	c2	c1	c2	c1	c2
+1	abc	1	fgh	NULL	NULL
+2	cde	2	ijk	NULL	NULL
+NULL	NULL	3	lmn	3	zzz
+select * from t1 full join (t2 full join t3 on t2.c1=t3.c1) on t1.c1=t3.c1;
+c1	c2	c1	c2	c1	c2
+1	abc	NULL	NULL	NULL	NULL
+2	cde	NULL	NULL	NULL	NULL
+NULL	NULL	1	fgh	NULL	NULL
+NULL	NULL	2	ijk	NULL	NULL
+NULL	NULL	3	lmn	3	zzz
+select * from t1 full join (t2 full join t3 on t2.c1=t3.c1) on t1.c1=t2.c1 where t2.c1 = 1;
+c1	c2	c1	c2	c1	c2
+1	abc	1	fgh	NULL	NULL
+explain json test
+explain format=json select * from t1 full join t2 on t1.c1=t2.c1;
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "1.30"
+    },
+    "nested_loop": [
+      {
+        "table": {
+          "table_name": "t1",
+          "access_type": "ALL",
+          "rows_examined_per_scan": 2,
+          "rows_produced_per_join": 2,
+          "filtered": "100.00",
+          "cost_info": {
+            "read_cost": "0.25",
+            "eval_cost": "0.20",
+            "prefix_cost": "0.45",
+            "data_read_per_join": "96"
+          },
+          "used_columns": [
+            "c1",
+            "c2"
+          ]
+        }
+      },
+      {
+        "table": {
+          "table_name": "t2",
+          "access_type": "ALL",
+          "rows_examined_per_scan": 3,
+          "rows_produced_per_join": 6,
+          "filtered": "100.00",
+          "using_join_buffer": "hash join",
+          "cost_info": {
+            "read_cost": "0.25",
+            "eval_cost": "0.60",
+            "prefix_cost": "1.30",
+            "data_read_per_join": "288"
+          },
+          "used_columns": [
+            "c1",
+            "c2"
+          ],
+          "attached_condition": "<if>(is_not_null_compl(t2), (`test`.`t1`.`c1` = `test`.`t2`.`c1`), true)"
+        }
+      }
+    ]
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`c1` AS `c1`,`test`.`t1`.`c2` AS `c2`,`test`.`t2`.`c1` AS `c1`,`test`.`t2`.`c2` AS `c2` from `test`.`t1` full join `test`.`t2` on((`test`.`t1`.`c1` = `test`.`t2`.`c1`)) where true
+
+>>>>>>> full join with derived table(s)
+select * from t1 full join (select t2.c1, t2.c2 from t2 full join t3 on t2.c1=t3.c1 where t3.c1=1) ta on t1.c1=ta.c1;
+c1	c2	c1	c2
+1	abc	NULL	NULL
+2	cde	NULL	NULL
+select * from t1 full join (select t2.c1, t2.c2 from t2 full join t3 on t2.c1=t3.c1 where t2.c1=1) ta on t1.c1=ta.c1;
+c1	c2	c1	c2
+1	abc	1	fgh
+2	cde	NULL	NULL
+select * from t1 left join (select t2.c1, t2.c2 from t2 full join t3 on t2.c1=t3.c1 where t3.c1=1) ta on t1.c1=ta.c1;
+c1	c2	c1	c2
+1	abc	NULL	NULL
+2	cde	NULL	NULL
+select * from t1 left join (select t2.c1, t2.c2 from t2 full join t3 on t2.c1=t3.c1 where t2.c1=1) ta on t1.c1=ta.c1;
+c1	c2	c1	c2
+1	abc	1	fgh
+2	cde	NULL	NULL
+select * from t1 full join (select t2.c1, t2.c2 from t2 left join t3 on t2.c1=t3.c1 where t2.c1=1) ta on t1.c1=ta.c1;
+c1	c2	c1	c2
+1	abc	1	fgh
+2	cde	NULL	NULL
+select * from t1 right join (select t2.c1, t2.c2 from t2 full join t3 on t2.c1=t3.c1 where t2.c1=1) ta on t1.c1=ta.c1;
+c1	c2	c1	c2
+1	abc	1	fgh
+select * from t1 full join (select t2.c1, t2.c2 from t2 right join t3 on t2.c1=t3.c1 where t2.c1=1) ta on t1.c1=ta.c1;
+c1	c2	c1	c2
+1	abc	NULL	NULL
+2	cde	NULL	NULL
+explain format=tree select * from (select 1 from dual) ta full join t1 on ta.1=t1.c1;
+EXPLAIN
+-> Full hash join (ta.`1` = t1.c1)  (cost=* rows=*)
+    -> Table scan on ta  (cost=2.61..2.61 rows=1)
+        -> Materialize  (cost=0.10..0.10 rows=1)
+            -> Rows fetched before execution  (cost=0.00..0.00 rows=1)
+    -> Hash
+        -> Table scan on t1  (cost=* rows=*)
+
+select * from (select 1 from dual) ta full join t1 on ta.1=t1.c1;
+1	c1	c2
+1	1	abc
+NULL	2	cde
+drop table t1;
+drop table t2;
+drop table t3;
+>>>>>>> Following testcases are dervied from main suite testcases
+>>>>>>> such as main.join
+drop table if exists t1,t2,t3;
+set sql_mode=oracle;
+CREATE TABLE t1 (S1 INT);
+CREATE TABLE t2 (S1 INT);
+INSERT INTO t1 VALUES (1);
+INSERT INTO t2 VALUES (2);
+SELECT * from t1 FULL JOIN t2 ON (t2.S1=2);
+S1	S1
+1	2
+SELECT * from t2 FULL JOIN t1 ON(t1.S1=1);
+S1	S1
+2	1
+SELECT * from t2 FULL JOIN t1 USING(S1);
+ERROR 42000: This version of MySQL doesn't yet support 'FULL JOIN with USING clause'
+SELECT * from t1 FULL JOIN t2 USING(S1);
+ERROR 42000: This version of MySQL doesn't yet support 'FULL JOIN with USING clause'
+drop table t1,t2;
+create table t1 (id int primary key);
+create table t2 (id int);
+insert into t1 values (75);
+insert into t1 values (79);
+insert into t1 values (78);
+insert into t1 values (77);
+replace into t1 values (76);
+replace into t1 values (76);
+insert into t1 values (104);
+insert into t1 values (103);
+insert into t1 values (102);
+insert into t1 values (101);
+insert into t1 values (105);
+insert into t1 values (106);
+insert into t1 values (107);
+insert into t2 values (107);
+insert into t2 values (75);
+insert into t2 values (1000);
+drop table t1,t2;
+create table t1 (a int primary key);
+insert into t1 values(1),(2);
+select t1.a from t1 as t1 full join t1 as t2 using (a) full join t1 as t3 using (a) full join t1 as t4 using (a) full join t1 as t5 using (a) full join t1 as t6 using (a) full join t1 as t7 using (a) full join t1 as t8 using (a);
+ERROR 42000: This version of MySQL doesn't yet support 'FULL JOIN with USING clause'
+select t1.a from t1 as t1 full join t1 as t2 using (a) full join t1 as t3 using (a) full join t1 as t4 using (a) full join t1 as t5 using (a) full join t1 as t6 using (a) full join t1 as t7 using (a) full join t1 as t8 using (a) full join t1 as t9 using (a) full join t1 as t10 using (a) full join t1 as t11 using (a) full join t1 as t12 using (a) full join t1 as t13 using (a) full join t1 as t14 using (a) full join t1 as t15 using (a) full join t1 as t16 using (a) full join t1 as t17 using (a) full join t1 as t18 using (a) full join t1 as t19 using (a) full join t1 as t20 using (a) full join t1 as t21 using (a) full join t1 as t22 using (a) full join t1 as t23 using (a) full join t1 as t24 using (a) full join t1 as t25 using (a) full join t1 as t26 using (a) full join t1 as t27 using (a) full join t1 as t28 using (a) full join t1 as t29 using (a) full join t1 as t30 using (a) full join t1 as t31 using (a) full join t1 as t32 using (a) full join t1 as t33 using (a) full join t1 as t34 using (a) full join t1 as t35 using (a) full join t1 as t36 using (a) full join t1 as t37 using (a) full join t1 as t38 using (a) full join t1 as t39 using (a) full join t1 as t40 using (a) full join t1 as t41 using (a) full join t1 as t42 using (a) full join t1 as t43 using (a) full join t1 as t44 using (a) full join t1 as t45 using (a) full join t1 as t46 using (a) full join t1 as t47 using (a) full join t1 as t48 using (a) full join t1 as t49 using (a) full join t1 as t50 using (a) full join t1 as t51 using (a) full join t1 as t52 using (a) full join t1 as t53 using (a) full join t1 as t54 using (a) full join t1 as t55 using (a) full join t1 as t56 using (a) full join t1 as t57 using (a) full join t1 as t58 using (a) full join t1 as t59 using (a) full join t1 as t60 using (a) full join t1 as t61 using (a) full join t1 as t62 using (a) full join t1 as t63 using (a) full join t1 as t64 using (a) full join t1 as t65 using (a);
+ERROR 42000: This version of MySQL doesn't yet support 'FULL JOIN with USING clause'
+drop table t1;
+CREATE TABLE t1 (
+a int NOT NULL,
+b int NOT NULL,
+PRIMARY KEY  (a,b)
+);
+INSERT INTO t1 VALUES (1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(2,3);
+CREATE TABLE t2 (
+a int default NULL
+);
+INSERT INTO t2 VALUES (2),(3);
+SELECT t1.a,t2.a,b FROM t1 full join t2 on true WHERE t1.a=t2.a AND (t1.a=1 OR t1.a=2) AND b>=1 AND b<=3;
+a	a	b
+2	2	3
+DROP TABLE t1, t2;
+CREATE TABLE t1 (d DATE NOT NULL);
+CREATE TABLE t2 (d DATE NOT NULL);
+INSERT INTO t1 (d) VALUES ('2001-08-01'),('1000-01-01');
+INSERT INTO t2 (d) VALUES ('2002-08-01');
+SELECT * FROM t1 FULL JOIN t2 ON t1.d = t2.d WHERE t2.d IS NULL;
+d	d
+2001-08-01	NULL
+1000-01-01	NULL
+SELECT * FROM t1 FULL JOIN t2 ON t1.d = t2.d WHERE t2.d IS NOT NULL;
+d	d
+NULL	2002-08-01
+SELECT * FROM t1 FULL JOIN t2 ON t1.d = t2.d WHERE t1.d IS NULL;
+d	d
+NULL	2002-08-01
+SELECT * FROM t1 FULL JOIN t2 ON t1.d = t2.d WHERE t1.d IS NOT NULL;
+d	d
+2001-08-01	NULL
+1000-01-01	NULL
+SELECT * FROM t1 FULL JOIN t2 USING (d) WHERE t2.d IS NULL;
+ERROR 42000: This version of MySQL doesn't yet support 'FULL JOIN with USING clause'
+SELECT * FROM t1 FULL JOIN t2 USING (d) WHERE t2.d IS NOT NULL;
+ERROR 42000: This version of MySQL doesn't yet support 'FULL JOIN with USING clause'
+SELECT * FROM t1 FULL JOIN t2 USING (d) WHERE d IS NULL;
+ERROR 42000: This version of MySQL doesn't yet support 'FULL JOIN with USING clause'
+SELECT * FROM t1 FULL JOIN t2 USING (d) WHERE d IS NOT NULL;
+ERROR 42000: This version of MySQL doesn't yet support 'FULL JOIN with USING clause'
+DROP TABLE t1,t2;
+CREATE TABLE t1 (
+t1_id int default NULL,
+t2_id int default NULL,
+type enum('Cost','Percent') default NULL,
+cost_unit enum('Cost','Unit') default NULL,
+min_value double default NULL,
+max_value double default NULL,
+t3_id int default NULL,
+item_id int default NULL
+);
+INSERT INTO t1 VALUES (12,5,'Percent','Cost',-1,0,-1,-1),(14,4,'Percent','Cost',-1,0,-1,-1),(18,5,'Percent','Cost',-1,0,-1,-1),(19,4,'Percent','Cost',-1,0,-1,-1),(20,5,'Percent','Cost',100,-1,22,291),(21,5,'Percent','Cost',100,-1,18,291),(22,1,'Percent','Cost',100,-1,6,291),(23,1,'Percent','Cost',100,-1,21,291),(24,1,'Percent','Cost',100,-1,9,291),(25,1,'Percent','Cost',100,-1,4,291),(26,1,'Percent','Cost',100,-1,20,291),(27,4,'Percent','Cost',100,-1,7,202),(28,1,'Percent','Cost',50,-1,-1,137),(29,2,'Percent','Cost',100,-1,4,354),(30,2,'Percent','Cost',100,-1,9,137),(93,2,'Cost','Cost',-1,10000000,-1,-1);
+CREATE TABLE t2 (
+id int unsigned NOT NULL auto_increment,
+name varchar(255) default NULL,
+PRIMARY KEY  (id)
+);
+INSERT INTO t2 VALUES (1,'s1'),(2,'s2'),(3,'s3'),(4,'s4'),(5,'s5');
+select t1.*, t2.*  from t1 full join t2 on t2.id=t1.t2_id where t2.id=t1.t2_id limit 2;
+t1_id	t2_id	type	cost_unit	min_value	max_value	t3_id	item_id	id	name
+12	5	Percent	Cost	-1	0	-1	-1	5	s5
+14	4	Percent	Cost	-1	0	-1	-1	4	s4
+drop table t1, t2;
+CREATE TABLE t1 (
+siteid varchar(25) NOT NULL default '',
+emp_id varchar(30) NOT NULL default '',
+rate_code varchar(10) default NULL,
+UNIQUE KEY site_emp (siteid,emp_id),
+KEY siteid (siteid)
+);
+INSERT INTO t1 VALUES ('rivercats','psmith','cust'), ('rivercats','KWalker','cust');
+CREATE TABLE t2 (
+siteid varchar(25) NOT NULL default '',
+rate_code varchar(10) NOT NULL default '',
+base_rate float NOT NULL default '0',
+PRIMARY KEY  (siteid,rate_code),
+FULLTEXT KEY rate_code (rate_code)
+);
+INSERT INTO t2 VALUES ('rivercats','cust',20);
+INSERT INTO t2 VALUES ('nonsense', 'cust',30);
+SELECT emp.rate_code, lr.base_rate FROM t1 AS emp FULL JOIN t2 AS lr ON emp.siteid = lr.siteid AND emp.rate_code = lr.rate_code WHERE emp.emp_id = 'psmith' AND lr.siteid = 'rivercats';
+rate_code	base_rate
+cust	20
+SELECT emp.rate_code, lr.base_rate FROM t1 AS emp FULL JOIN t2 AS lr ON emp.siteid = lr.siteid AND emp.rate_code = lr.rate_code WHERE lr.siteid = 'rivercats' AND emp.emp_id = 'psmith';
+rate_code	base_rate
+cust	20
+SELECT emp.rate_code, lr.base_rate FROM t1 AS emp FULL JOIN t2 AS lr ON emp.siteid = lr.siteid AND emp.rate_code = lr.rate_code WHERE emp.emp_id = 'psmith';
+rate_code	base_rate
+cust	20
+SELECT emp.rate_code, lr.base_rate FROM t1 AS emp FULL JOIN t2 AS lr ON emp.siteid = lr.siteid AND emp.rate_code = lr.rate_code WHERE emp.siteid = 'rivercats';
+rate_code	base_rate
+cust	20
+cust	20
+drop table t1,t2;
+create table t1 (i int);
+create table t2 (i int);
+create table t3 (i int);
+insert into t1 values(1),(2);
+insert into t2 values(2),(3);
+insert into t3 values (2),(4);
+select * from t1 natural left join t2 full join t3 on 1=1;
+i	i
+1	2
+1	4
+2	2
+2	4
+select * from t1 full join t2 on (t1.i=t2.i);
+i	i
+1	NULL
+2	2
+NULL	3
+select * from t1 full join t2 on (t1.i=t2.i) left join t3 on (t2.i=t3.i);
+i	i	i
+1	NULL	NULL
+2	2	2
+NULL	3	NULL
+select * from t1 left join t2 on (t1.i=t2.i) full join t3 on (t2.i=t3.i);
+i	i	i
+1	NULL	NULL
+2	2	2
+NULL	NULL	4
+select * from t1 right join t2 on (t1.i=t2.i) full join t3 on (t2.i=t3.i);
+i	i	i
+2	2	2
+NULL	3	NULL
+NULL	NULL	4
+select * from t1 full join t2 on (t1.i=t2.i) right join t3 on (t2.i=t3.i);
+i	i	i
+2	2	2
+NULL	NULL	4
+select * from t3 full join t2 on (t3.i=t2.i) full join t1 on (t2.i=t1.i);
+i	i	i
+2	2	2
+4	NULL	NULL
+NULL	3	NULL
+NULL	NULL	1
+select t1.i,t2.i,t3.i from t1,t2 full join t3 on (t2.i=t3.i) order by t1.i,t2.i,t3.i;
+i	i	i
+1	2	2
+1	3	NULL
+2	2	2
+2	3	NULL
+NULL	NULL	4
+select t1.i,t2.i,t3.i from t2 full join t3 on (t2.i=t3.i),t1 order by t1.i,t2.i,t3.i;
+i	i	i
+1	2	2
+1	3	NULL
+1	NULL	4
+2	2	2
+2	3	NULL
+2	NULL	4
+select t1.i,t2.i,t3.i from t1,t3 full join t2 on (t2.i=t3.i) order by t1.i,t2.i,t3.i;
+i	i	i
+1	2	2
+1	NULL	4
+2	2	2
+2	NULL	4
+NULL	3	NULL
+select t1.i,t2.i,t3.i from t3 full join t2 on (t2.i=t3.i),t1 order by t1.i,t2.i,t3.i;
+i	i	i
+1	2	2
+1	3	NULL
+1	NULL	4
+2	2	2
+2	3	NULL
+2	NULL	4
+drop table t1,t2,t3;
+create table t1 (c int, b int);
+create table t2 (a int, b int);
+create table t3 (b int, c int);
+create table t4 (y int, c int);
+create table t5 (y int, z int);
+create table t6 (a int, c int);
+insert into t1 values (10,1);
+insert into t1 values (3 ,1);
+insert into t1 values (3 ,2);
+insert into t2 values (2, 1);
+insert into t3 values (1, 3);
+insert into t3 values (1,10);
+insert into t4 values (11,3);
+insert into t4 values (2, 3);
+insert into t5 values (11,4);
+insert into t6 values (2, 3);
+create algorithm=merge view v2a as
+select t1.c, t1.b, t2.a from t1 full join (t2 full join t4 on b + 1 = y) on t1.c = t4.c;
+create algorithm=merge view v2b as
+select t1.c as b, t1.b as a, t2.a as c
+from t1 join (t2 full join t4 on b + 1 = y) on t1.c = t4.c;
+select * from v2a;
+c	b	a
+10	1	NULL
+3	1	2
+3	1	NULL
+3	2	2
+3	2	NULL
+select * from v2b;
+b	a	c
+3	1	2
+3	1	NULL
+3	2	2
+3	2	NULL
+drop view v2a;
+drop view v2b;
+select * from t1 natural join (t2 full join t4 on b + 1 = y);
+c	b	a	y
+3	1	2	2
+select * from (t1, t2) full join (t3, t4) on (a < y and t2.b < t3.c);
+c	b	a	b	b	c	y	c
+10	1	2	1	1	10	11	3
+10	1	2	1	1	3	11	3
+3	1	2	1	1	10	11	3
+3	1	2	1	1	3	11	3
+3	2	2	1	1	10	11	3
+3	2	2	1	1	3	11	3
+NULL	NULL	NULL	NULL	1	10	2	3
+NULL	NULL	NULL	NULL	1	3	2	3
+select * from ((t3 join (t1 join t2 on c > a) on t3.b < t2.a) join t4 on y > t1.c) join t5 on z = t1.b + 3;
+b	c	c	b	a	b	y	c	y	z
+1	10	10	1	2	1	11	3	11	4
+1	10	3	1	2	1	11	3	11	4
+1	3	10	1	2	1	11	3	11	4
+1	3	3	1	2	1	11	3	11	4
+select * from t2 full join (t3 natural join t4) on t2.a = y;
+a	b	c	b	y
+2	1	3	1	2
+NULL	NULL	3	1	11
+select * from t2 full join (t3 natural join t4) on t2.a = y;
+a	b	c	b	y
+2	1	3	1	2
+NULL	NULL	3	1	11
+drop table t1, t2, t3, t4, t5, t6;
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT);
+CREATE TABLE t2 (c INT PRIMARY KEY, d INT);
+INSERT INTO t1 VALUES(1,NULL),(2,NULL),(3,NULL),(4,NULL);
+INSERT INTO t1 SELECT a + 4, b FROM t1;
+INSERT INTO t1 SELECT a + 8, b FROM t1;
+INSERT INTO t1 SELECT a + 16, b FROM t1;
+INSERT INTO t1 SELECT a + 32, b FROM t1;
+INSERT INTO t1 SELECT a + 64, b FROM t1;
+INSERT INTO t2 SELECT a, b FROM t1;
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+explain SELECT * FROM t1 FULL JOIN t2 ON b=c ORDER BY a LIMIT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	128	100.00	Using temporary; Using filesort
+1	SIMPLE	t2	NULL	ALL	PRIMARY	NULL	NULL	NULL	128	0.78	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select "test"."t1"."a" AS "a","test"."t1"."b" AS "b","test"."t2"."c" AS "c","test"."t2"."d" AS "d" from "test"."t1" full join "test"."t2" on(("test"."t1"."b" = "test"."t2"."c")) where true order by "test"."t1"."a" limit 2
+explain SELECT * FROM t1 FULL JOIN t2 ON b=c ORDER BY a LIMIT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	128	100.00	Using temporary; Using filesort
+1	SIMPLE	t2	NULL	ALL	PRIMARY	NULL	NULL	NULL	128	0.78	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select "test"."t1"."a" AS "a","test"."t1"."b" AS "b","test"."t2"."c" AS "c","test"."t2"."d" AS "d" from "test"."t1" full join "test"."t2" on(("test"."t1"."b" = "test"."t2"."c")) where true order by "test"."t1"."a" limit 2
+SELECT * FROM t1 FULL JOIN t2 ON b=c ORDER BY a LIMIT 2;
+a	b	c	d
+1	NULL	NULL	NULL
+2	NULL	NULL	NULL
+SELECT * FROM t1 FULL JOIN t2 ON a=c ORDER BY a LIMIT 2;
+a	b	c	d
+1	NULL	1	NULL
+2	NULL	2	NULL
+DROP TABLE t1, t2;
+#
+# nested query
+#
+CREATE TABLE t1 (a INT);
+CREATE TABLE t2 (a INT);
+CREATE TABLE t3 (a INT, INDEX (a));
+CREATE TABLE t4 (a INT);
+CREATE TABLE t5 (a INT);
+CREATE TABLE t6 (a INT);
+INSERT INTO t1 VALUES (1), (1), (1);
+INSERT INTO t2 VALUES
+(2), (2), (2), (2), (2), (2), (2), (2), (2), (2);
+INSERT INTO t3 VALUES
+(3), (3), (3), (3), (3), (3), (3), (3), (3), (3);
+ANALYZE TABLE t1, t2, t3, t4, t5, t6;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
+test.t4	analyze	status	OK
+test.t5	analyze	status	OK
+test.t6	analyze	status	OK
+EXPLAIN
+SELECT *
+FROM
+t1 JOIN t2 ON t1.a = t2.a
+FULL JOIN
+(
+(
+t3 FULL JOIN t4 ON t3.a = t4.a
+)
+FULL JOIN
+(
+t5 FULL JOIN t6 ON t5.a = t6.a
+)
+ON t4.a = t5.a
+)
+ON t1.a = t3.a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	10	10.00	Using where; Using join buffer (hash join)
+1	SIMPLE	t3	NULL	index	a	a	5	NULL	10	100.00	Using where; Using index; Using join buffer (hash join)
+1	SIMPLE	t4	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; Using join buffer (hash join)
+1	SIMPLE	t5	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; Using join buffer (hash join)
+1	SIMPLE	t6	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select "test"."t1"."a" AS "a","test"."t2"."a" AS "a","test"."t3"."a" AS "a","test"."t4"."a" AS "a","test"."t5"."a" AS "a","test"."t6"."a" AS "a" from "test"."t1" join "test"."t2" full join ("test"."t3" full join "test"."t4" on(("test"."t3"."a" = "test"."t4"."a")) full join ("test"."t5" full join "test"."t6" on(("test"."t5"."a" = "test"."t6"."a"))) on(("test"."t4"."a" = "test"."t5"."a"))) on(("test"."t1"."a" = "test"."t3"."a")) where ("test"."t1"."a" = "test"."t2"."a")
+SELECT *
+FROM
+t1 JOIN t2 ON t1.a = t2.a
+FULL JOIN
+(
+(
+t3 FULL JOIN t4 ON t3.a = t4.a
+)
+FULL JOIN
+(
+t5 FULL JOIN t6 ON t5.a = t6.a
+)
+ON t4.a = t5.a
+)
+ON t1.a = t3.a;
+a	a	a	a	a	a
+NULL	NULL	3	NULL	NULL	NULL
+NULL	NULL	3	NULL	NULL	NULL
+NULL	NULL	3	NULL	NULL	NULL
+NULL	NULL	3	NULL	NULL	NULL
+NULL	NULL	3	NULL	NULL	NULL
+NULL	NULL	3	NULL	NULL	NULL
+NULL	NULL	3	NULL	NULL	NULL
+NULL	NULL	3	NULL	NULL	NULL
+NULL	NULL	3	NULL	NULL	NULL
+NULL	NULL	3	NULL	NULL	NULL
+drop table t1, t2, t3, t4, t5, t6;
+#
+# Bug #59696 Optimizer fails to move WHERE condition on JOIN column
+#            when joining with a view
+#
+CREATE TABLE t1 (
+c1 INTEGER NOT NULL
+);
+INSERT INTO t1 VALUES (1),(2),(3);
+CREATE TABLE t2 (
+pk INTEGER NOT NULL,
+c1 INTEGER NOT NULL,
+PRIMARY KEY (pk)
+);
+INSERT INTO t2 VALUES (1,4),(3,5),(2,6);
+ANALYZE  TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+CREATE VIEW v_foj AS SELECT t2.* FROM t1 full join t2 on t1.c1=t2.pk;
+EXPLAIN FORMAT=TREE SELECT * FROM v_foj;
+EXPLAIN
+-> Full hash join (t2.pk = t1.c1)  (cost=* rows=*)
+    -> Table scan on t1  (cost=* rows=*)
+    -> Hash
+        -> Table scan on t2  (cost=* rows=*)
+
+EXPLAIN SELECT * FROM v_foj join t1 on v_foj.pk = t1.c1 WHERE v_foj.pk = t1.c1 AND v_foj.pk >= 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+1	SIMPLE	t2	NULL	ALL	PRIMARY	NULL	NULL	NULL	3	33.33	Using where; Using join buffer (hash join)
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select "test"."t2"."pk" AS "pk","test"."t2"."c1" AS "c1","test"."t1"."c1" AS "c1" from "test"."t1" full join "test"."t2" on(("test"."t2"."pk" = "test"."t1"."c1")) join "test"."t1" where (("test"."t1"."c1" = "test"."t2"."pk") and ("test"."t2"."pk" >= 2))
+SELECT * FROM v_foj join t1 on v_foj.pk = t1.c1 WHERE v_foj.pk = t1.c1 AND v_foj.pk >= 2;
+pk	c1	c1
+2	6	2
+3	5	3
+DROP VIEW v_foj;
+DROP TABLE t1, t2;
+# SELECT 1 FROM t
+CREATE TABLE t1(a INTEGER);
+SELECT 1 FROM (SELECT 1 FROM t1 WHERE a) AS q NATURAL LEFT JOIN t1 FULL JOIN t1 AS t2 ON 1=1;
+1
+SELECT 1 FROM t1 FULL JOIN t1 AS t2 on 1=1 NATURAL RIGHT JOIN (SELECT 1 FROM t1 WHERE a) AS q;
+1
+DROP TABLE t1;
+# group by, limit clause
+CREATE TABLE t1 (t1_id INT PRIMARY KEY AUTO_INCREMENT, t2_id INT DEFAULT NULL);
+CREATE TABLE t2 (t2_id INT PRIMARY KEY AUTO_INCREMENT, is_active TINYINT NOT NULL DEFAULT '1');
+INSERT INTO t2 VALUES (2,1),(3,0),(1000,1);
+INSERT INTO t1 VALUES (1,1000),(2,5);
+SELECT t1.t1_id,t1.t2_id,t2.t2_id FROM t1 FULL JOIN t2 ON (t1.t2_id = t2.t2_id AND t2.is_active=1) GROUP BY t1_id,t1.t2_id,t2.t2_id ORDER BY t1_id LIMIT 2;
+t1_id	t2_id	t2_id
+1	1000	1000
+2	5	NULL
+DROP TABLE t1,t2;
+create table t(a int);
+insert into t values(1),(2);
+explain format=tree select * from t t1
+where t1.a in (select dt.a
+from t t2
+full join (select * from t t3 where t3.a>t1.a) dt
+on true);
+EXPLAIN
+-> Nested loop semijoin  (cost=* rows=*)
+    -> Invalidate materialized tables (row from t1)  (cost=* rows=*)
+        -> Table scan on t1  (cost=* rows=*)
+    -> Filter: (t1.a = dt.a)  (cost=* rows=*)
+        -> Full hash join (no condition)  (cost=* rows=*)
+            -> Table scan on t2  (cost=* rows=*)
+            -> Hash
+                -> Table scan on dt  (cost=2.96..2.96 rows=1)
+                    -> Materialize (invalidate on row from t1)  (cost=0.45..0.45 rows=1)
+                        -> Filter: (t3.a > t1.a)  (cost=* rows=*)
+                            -> Table scan on t3  (cost=* rows=*)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.a' of SELECT #3 was resolved in SELECT #1
+select * from t t1
+where t1.a in (select dt.a
+from t t2
+full join (select * from t t3 where t3.a>t1.a) dt
+on true);
+a
+drop table t;
+CREATE TABLE t1 (
+id int DEFAULT NULL,
+name varchar(2048) DEFAULT NULL
+);
+CREATE TABLE t2 (
+id int DEFAULT NULL,
+name varchar(2048) DEFAULT NULL
+) ;
+INSERT INTO t1 VALUES (1, 'a');
+INSERT INTO t1 VALUES (2, 'b');
+INSERT INTO t1 VALUES (3, 'c');
+INSERT INTO t2 VALUES (1, 'a');
+INSERT INTO t2 VALUES (2, 'b');
+INSERT INTO t2 VALUES (3, NULL);
+INSERT INTO t2 VALUES (4, 'e');
+select b.name from t1 a full  join  t2 b on  1=1 where b.name in (select t1.name from t1 full join t2 on 1=1 where t1.id=1 and t2.name is null);
+name
+a
+a
+a
+select c.name from t1 d left join (select b.name from t1 a full join  t2 b on a.name!=b.name  ) c on 1=1 where c.name is null;
+name
+NULL
+NULL
+NULL
+select b.name from t1 a full  join  t2 on  1=1 full join  t1 b on 1=1 where a.name is null;
+name
+const table test
+select * from (select 4 id from dual) ta full join t1 on ta.id=t1.id;
+id	id	name
+4	NULL	NULL
+NULL	1	a
+NULL	2	b
+NULL	3	c
+a testcase for a partition table
+create table t3(c1 int primary key,c2 int)PARTITION BY HASH (c1) PARTITIONS 4;
+insert into t3 VALUES(3,3);
+insert into t3 VALUES(4,4);
+insert into t3 VALUES(5,5);
+insert into t3 VALUES(6,6);
+insert into t3 VALUES(7,7);
+insert into t3 VALUES(8,8);
+select t3.c1 from t3 full join t1 on 1=2 where t3.c1=7;
+c1
+7
+DROP TABLE t1, t2, t3;
+create table t1(c1 int, c2 varchar(10));
+create table t2(c1 int, c2 varchar(10));
+insert into t1 values(1, 'abc');
+insert into t1 values(2, 'cde');
+insert into t1 values(2, 'fgh');
+insert into t1 values(4, 'ijk');
+insert into t2 values(1, 'abc');
+insert into t2 values(2, 'cde');
+insert into t2 values(2, 'fgh');
+insert into t2 values(6, 'ijk');
+select * from t1 full join t2 on t1.c1=t2.c1 and t1.c1=2;
+c1	c2	c1	c2
+1	abc	NULL	NULL
+2	cde	2	fgh
+2	cde	2	cde
+2	fgh	2	fgh
+2	fgh	2	cde
+4	ijk	NULL	NULL
+NULL	NULL	1	abc
+NULL	NULL	6	ijk
+create index it1c1 on t1(c1);
+create index it1c1 on t2(c1);
+select * from t1 full join t2 on t1.c1=t2.c1 and t1.c1=2;
+c1	c2	c1	c2
+1	abc	NULL	NULL
+2	cde	2	fgh
+2	cde	2	cde
+2	fgh	2	fgh
+2	fgh	2	cde
+4	ijk	NULL	NULL
+NULL	NULL	1	abc
+NULL	NULL	6	ijk
+drop table t1, t2;

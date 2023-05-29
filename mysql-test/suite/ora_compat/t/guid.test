@@ -1,0 +1,37 @@
+
+# 'ncv NVARCHAR(10)' triggers warning in 8.0.22.
+# Using VARCHAR(40) CHARACTER SET UTF8MB4 to avoid warning.
+CREATE TABLE t1 (iv INT, cv VARCHAR(10), ncv VARCHAR(40) CHARACTER SET UTF8MB4);
+INSERT INTO t1 VALUES (1, '11111', sys_guid());
+INSERT INTO t1 VALUES (2, '22222', sys_guid());
+INSERT INTO t1 VALUES (3, '33333', sys_guid());
+INSERT INTO t1 VALUES (4, '44444', sys_guid());
+INSERT INTO t1 VALUES (5, '55555', sys_guid());
+INSERT INTO t1 VALUES (6, '66666', sys_guid());
+INSERT INTO t1 VALUES (7, '77777', sys_guid());
+
+--echo # sys_guid 产生32字符，生成的字符唯一，不能有任何相同
+SELECT LENGTH (ncv) FROM t1;
+SELECT COUNT(DISTINCT ncv) FROM t1;
+
+--echo # sys_guid 产生32字符，如：aaaaaaaabbbbccccddddeeeeeeeeeeee,第五段为依据mac生成，相同库必须一致
+select COUNT(DISTINCT SUBSTR(ncv,20)) from t1;
+
+
+# n'万里开源' triggers warning in 8.0.22.
+# Specifying UTF8MB4 to avoid warning.
+INSERT INTO t1 VALUES (3, 'greatdb', _UTF8MB4 '万里开源');
+
+#add test case
+select length(sys_guid())=32;
+
+select 1 from t1 order by sys_guid();
+select iv from(select iv,sys_guid() from t1 group by iv,sys_guid());
+select iv from(select iv,sys_guid(),GROUP_CONCAT(sys_guid() ORDER BY sys_guid() DESC ) from t1 group by iv,sys_guid() order by iv,sys_guid());
+select sys_guid() is null,sys_guid() is not null;
+select count(*) from (select 1 from t1 where sys_guid() is null);
+select count(*) from (select 1 from t1 where sys_guid() is not null);
+
+DROP TABLE t1;
+
+

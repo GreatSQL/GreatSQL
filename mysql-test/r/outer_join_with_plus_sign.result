@@ -1,0 +1,800 @@
+# Oracle (+) synatx.
+create table t1(ida int, age int, name varchar(10));
+insert into t1 values(1, 2, ''), (NULL, 2, 'a'), (3, 2, 'b');
+create table t2(ida int, age int, name varchar(10));
+insert into t2 values(1, 2, ''), (2, 2, 'a'), (3, 1, 'b');
+create table t3(ida int, age int, name varchar(10));
+insert into t3 values(2, 3, 'a'), (5, NULL, '');
+select * from t1, t2 where t1.ida like t2.ida(+);
+ida	age	name	ida	age	name
+1	2		1	2	
+NULL	2	a	NULL	NULL	NULL
+3	2	b	3	1	b
+select * from t1, t2 where t1.ida < t2.ida(+)+t2.age(+);
+ida	age	name	ida	age	name
+1	2		3	1	b
+1	2		2	2	a
+1	2		1	2	
+NULL	2	a	NULL	NULL	NULL
+3	2	b	3	1	b
+3	2	b	2	2	a
+select * from t1, t2 where t1.ida = t2.ida(+);
+ida	age	name	ida	age	name
+1	2		1	2	
+NULL	2	a	NULL	NULL	NULL
+3	2	b	3	1	b
+select * from t1, t2 where t1.age(+) < t2.age and t2.name = 'cc';
+ida	age	name	ida	age	name
+select * from t1, t2, t3 where t3.age < 5  and t2.age(+) = t1.age and t2.ida < t3.ida(+);
+ida	age	name	ida	age	name	ida	age	name
+1	2		1	2		2	3	a
+NULL	2	a	1	2		2	3	a
+3	2	b	1	2		2	3	a
+insert into t1 values(3, 4, 'b');
+select * from t1, t2 where t1.ida = t2.ida(+) and t1.age(+) < 5;
+ida	age	name	ida	age	name
+1	2		1	2	
+NULL	2	a	NULL	NULL	NULL
+3	2	b	3	1	b
+3	4	b	3	1	b
+select * from t1, t2, t3 where t2.ida < t3.ida(+);
+ida	age	name	ida	age	name	ida	age	name
+1	2		3	1	b	5	NULL	
+1	2		2	2	a	5	NULL	
+1	2		1	2		2	3	a
+1	2		1	2		5	NULL	
+NULL	2	a	3	1	b	5	NULL	
+NULL	2	a	2	2	a	5	NULL	
+NULL	2	a	1	2		2	3	a
+NULL	2	a	1	2		5	NULL	
+3	2	b	3	1	b	5	NULL	
+3	2	b	2	2	a	5	NULL	
+3	2	b	1	2		2	3	a
+3	2	b	1	2		5	NULL	
+3	4	b	3	1	b	5	NULL	
+3	4	b	2	2	a	5	NULL	
+3	4	b	1	2		2	3	a
+3	4	b	1	2		5	NULL	
+select * from t1, t2, t3 where t2.ida < t3.ida(+) and t1.age = 4;
+ida	age	name	ida	age	name	ida	age	name
+3	4	b	1	2		5	NULL	
+3	4	b	1	2		2	3	a
+3	4	b	2	2	a	5	NULL	
+3	4	b	3	1	b	5	NULL	
+create table t4(ida int, age int, name varchar(10));
+insert into t4 values(2, 3, 'a'), (5, NULL, '');
+select * from t1, t2, t3 where t2.age(+) = t1.age and t2.ida < t3.ida(+) and t3.age < 5;
+ida	age	name	ida	age	name	ida	age	name
+1	2		1	2		2	3	a
+NULL	2	a	1	2		2	3	a
+3	2	b	1	2		2	3	a
+select * from t1, t2, t3 where t2.age(+) = t1.age and t2.ida < t3.ida(+);
+ida	age	name	ida	age	name	ida	age	name
+1	2		2	2	a	5	NULL	
+1	2		1	2		5	NULL	
+1	2		1	2		2	3	a
+NULL	2	a	2	2	a	5	NULL	
+NULL	2	a	1	2		5	NULL	
+NULL	2	a	1	2		2	3	a
+3	2	b	2	2	a	5	NULL	
+3	2	b	1	2		5	NULL	
+3	2	b	1	2		2	3	a
+3	4	b	NULL	NULL	NULL	NULL	NULL	NULL
+select * from t1, t2, t3 where t2.ida < t3.ida(+) and t2.name(+) = t1.name;
+ida	age	name	ida	age	name	ida	age	name
+1	2		1	2		2	3	a
+1	2		1	2		5	NULL	
+NULL	2	a	2	2	a	5	NULL	
+3	2	b	3	1	b	5	NULL	
+3	4	b	3	1	b	5	NULL	
+select * from t1 left join (t2 left join t3 on t2.ida < t3.ida) on t2.name = t1.name;
+ida	age	name	ida	age	name	ida	age	name
+1	2		1	2		2	3	a
+1	2		1	2		5	NULL	
+NULL	2	a	2	2	a	5	NULL	
+3	2	b	3	1	b	5	NULL	
+3	4	b	3	1	b	5	NULL	
+select * from t1, t2, t3, t4 where t1.ida > t2.ida(+) and t3.age = t4.age(+);
+ida	age	name	ida	age	name	ida	age	name	ida	age	name
+1	2		NULL	NULL	NULL	5	NULL		NULL	NULL	NULL
+1	2		NULL	NULL	NULL	2	3	a	2	3	a
+NULL	2	a	NULL	NULL	NULL	5	NULL		NULL	NULL	NULL
+NULL	2	a	NULL	NULL	NULL	2	3	a	2	3	a
+3	2	b	2	2	a	5	NULL		NULL	NULL	NULL
+3	2	b	1	2		5	NULL		NULL	NULL	NULL
+3	2	b	2	2	a	2	3	a	2	3	a
+3	2	b	1	2		2	3	a	2	3	a
+3	4	b	2	2	a	5	NULL		NULL	NULL	NULL
+3	4	b	1	2		5	NULL		NULL	NULL	NULL
+3	4	b	2	2	a	2	3	a	2	3	a
+3	4	b	1	2		2	3	a	2	3	a
+select * from t1, t2, t3 where t1.ida = t2.ida(+) and t3.age = t1.age(+);
+ida	age	name	ida	age	name	ida	age	name
+NULL	NULL	NULL	NULL	NULL	NULL	2	3	a
+NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+select * from t1, t2, t3 where t2.ida < t3.ida(+) and t2.age(+) = t1.age;
+ida	age	name	ida	age	name	ida	age	name
+1	2		2	2	a	5	NULL	
+1	2		1	2		2	3	a
+1	2		1	2		5	NULL	
+NULL	2	a	2	2	a	5	NULL	
+NULL	2	a	1	2		2	3	a
+NULL	2	a	1	2		5	NULL	
+3	2	b	2	2	a	5	NULL	
+3	2	b	1	2		2	3	a
+3	2	b	1	2		5	NULL	
+3	4	b	NULL	NULL	NULL	NULL	NULL	NULL
+select * from t1, t2, t3 where t2.age(+) = t1.age and t2.ida < t3.ida(+);
+ida	age	name	ida	age	name	ida	age	name
+1	2		2	2	a	5	NULL	
+1	2		1	2		5	NULL	
+1	2		1	2		2	3	a
+NULL	2	a	2	2	a	5	NULL	
+NULL	2	a	1	2		5	NULL	
+NULL	2	a	1	2		2	3	a
+3	2	b	2	2	a	5	NULL	
+3	2	b	1	2		5	NULL	
+3	2	b	1	2		2	3	a
+3	4	b	NULL	NULL	NULL	NULL	NULL	NULL
+select * from t1 left join (t2 left join t3 on t2.ida < t3.ida) on t1.age = t2.age;
+ida	age	name	ida	age	name	ida	age	name
+1	2		2	2	a	5	NULL	
+1	2		1	2		2	3	a
+1	2		1	2		5	NULL	
+NULL	2	a	2	2	a	5	NULL	
+NULL	2	a	1	2		2	3	a
+NULL	2	a	1	2		5	NULL	
+3	2	b	2	2	a	5	NULL	
+3	2	b	1	2		2	3	a
+3	2	b	1	2		5	NULL	
+3	4	b	NULL	NULL	NULL	NULL	NULL	NULL
+select * from t1, t2, t3, t4 where t2.ida(+) = t3.ida and t3.age(+) = t4.age and t1.name < 'cc';
+ida	age	name	ida	age	name	ida	age	name	ida	age	name
+3	4	b	2	2	a	2	3	a	2	3	a
+3	2	b	2	2	a	2	3	a	2	3	a
+NULL	2	a	2	2	a	2	3	a	2	3	a
+1	2		2	2	a	2	3	a	2	3	a
+3	4	b	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+3	2	b	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+NULL	2	a	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+1	2		NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+select t1.*, t2.*, t3.*, t4.* from t4 left join ( t3 left join t2 on t2.ida=t3.ida) on t3.age = t4.age, t1 where t1.name < 'cc';
+ida	age	name	ida	age	name	ida	age	name	ida	age	name
+3	4	b	2	2	a	2	3	a	2	3	a
+3	2	b	2	2	a	2	3	a	2	3	a
+NULL	2	a	2	2	a	2	3	a	2	3	a
+1	2		2	2	a	2	3	a	2	3	a
+3	4	b	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+3	2	b	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+NULL	2	a	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+1	2		NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+select * from t1, t2, t3, t4 where t2.ida(+) = t3.ida and t3.age(+) = t4.age and t1.age < 3;
+ida	age	name	ida	age	name	ida	age	name	ida	age	name
+3	2	b	2	2	a	2	3	a	2	3	a
+NULL	2	a	2	2	a	2	3	a	2	3	a
+1	2		2	2	a	2	3	a	2	3	a
+3	2	b	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+NULL	2	a	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+1	2		NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+select * from t1, (select ida, count(*) from t2 group by ida) t2 where t1.ida = t2.ida(+);
+ida	age	name	ida	count(*)
+1	2		1	1
+NULL	2	a	NULL	NULL
+3	2	b	3	1
+3	4	b	3	1
+select * from t1 left join (select ida, count(*) from t2 group by ida) t2 on t1.ida = t2.ida;
+ida	age	name	ida	count(*)
+1	2		1	1
+NULL	2	a	NULL	NULL
+3	2	b	3	1
+3	4	b	3	1
+select * from t1 where t1.ida(+) <5;
+ida	age	name
+1	2	
+3	2	b
+3	4	b
+select * from t1, t2 where t1.ida <3 and t2.age(+)> 5;
+ida	age	name	ida	age	name
+select * from t1, t2, t3 where t1.ida(+) <t2.ida and t1.age < 10;
+ida	age	name	ida	age	name	ida	age	name
+1	2		3	1	b	2	3	a
+1	2		2	2	a	2	3	a
+1	2		3	1	b	5	NULL	
+1	2		2	2	a	5	NULL	
+select * from t1 where ida = age;
+ida	age	name
+select count(*) from t1 having sum(age(+)) < 5;
+count(*)
+select * from (select count(*) from t1, t2 where t1.age(+) < t2.age) t;
+count(*)
+3
+select t.ida, count(*) from (select t1.ida, count(*) as b from t1, t2 where t1.age(+) < t2.age group by t1.ida) t group by t.ida;
+ida	count(*)
+NULL	1
+select t1.name, sum(t2.age) from t1, t2 where t1.ida = t2.ida(+) group by t1.name having count(t1.ida(+)) < 5;
+name	sum(t2.age)
+	2
+a	NULL
+b	2
+select ida, count(age) from t1 group by ida, age having age(+) < 10;
+ida	count(age)
+1	1
+NULL	1
+3	1
+3	1
+select * from t1, t2 where t1.ida in (select ida from t2 where age(+) = t1.age);
+ida	age	name	ida	age	name
+1	2		1	2	
+1	2		2	2	a
+1	2		3	1	b
+select * from t1, t2 where t1.ida = t2.ida(+) and t1.age < t2.age;
+ida	age	name	ida	age	name
+select ida, count(*) from t1 group by ida(+);
+ida	count(*)
+1	1
+NULL	1
+3	2
+select * from t1, t2 where t1.ida in (select t2.ida from t2, t3  where t2.ida = t3.ida(+) and  t2.age(+) = t1.age);
+ida	age	name	ida	age	name
+1	2		1	2	
+1	2		2	2	a
+1	2		3	1	b
+select * from t1, t2 where t1.ida(+) between t2.ida and 3;
+ida	age	name	ida	age	name
+3	4	b	1	2	
+3	2	b	1	2	
+1	2		1	2	
+3	4	b	2	2	a
+3	2	b	2	2	a
+3	4	b	3	1	b
+3	2	b	3	1	b
+select * from t1, t2 where t2.age(+)> 5 and t2.ida(+) = t1.ida;
+ida	age	name	ida	age	name
+1	2		NULL	NULL	NULL
+NULL	2	a	NULL	NULL	NULL
+3	2	b	NULL	NULL	NULL
+3	4	b	NULL	NULL	NULL
+select * from t1, t2 where t1.ida(+) is null;
+ida	age	name	ida	age	name
+NULL	2	a	1	2	
+NULL	2	a	2	2	a
+NULL	2	a	3	1	b
+create table t3(ida(+) int);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '(+) int)' at line 1
+select * from t1 where (ida+age)(+) < 5;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '(+) < 5' at line 1
+select * from t1, t2 where t1.ida = (select ida from t2)(+);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '(+)' at line 1
+select ida, count(age(+)) from t1 group by ida;
+ERROR HY000: OuterJoin: outer join operator (+) is not allowed here
+select * from t1 join t2 on t1.ida = t2.ida where t1.age = t2.age(+);
+ERROR HY000: OuterJoin: old style outer join (+) cannot be used with ANSI joins
+select * from t1, t2, t3 where t1.ida = t2.ida(+) or t1.age = t3.age;
+ERROR HY000: OuterJoin: outer join operator (+) not allowed in operand of OR or IN
+select * from t1, t2, t3 where t1.ida(+) in (t2.ida , t2.age);
+ERROR HY000: OuterJoin: outer join operator (+) not allowed in operand of OR or IN
+select * from t1, t2 where t1.ida in (select ida from t2 where age = t1.age(+));
+ERROR HY000: OuterJoin: an outer join cannot be specified on a correlation column
+select * from t1, t2 where t1.age = t2.age(+) and  t1.ida in (select t1.ida(+) from t2 where age = t1.age);
+ERROR HY000: OuterJoin: outer join operator (+) is not allowed here
+select * from t1, t2 where t1.ida(+) = (select ida from t2);
+ERROR HY000: OuterJoin: a column may not be outer-joined to a subquery
+select * from t1, t2 where t1.ida(+) < t2.ida(+)+t2.age(+);
+ERROR HY000: OuterJoin: a predicate may reference only one outer-joined table
+select * from t1, t2, t3 where t1.ida(+) = t2.ida+t3.ida;
+ERROR HY000: OuterJoin: a table may be outer joined to at most one other table
+select * from t1, t2, t3 where t2.ida < t3.ida(+) and t1.age = t3.age(+);
+ERROR HY000: OuterJoin: a table may be outer joined to at most one other table
+select sum(t.b) from (select t1.ida(+), count(*) as b from t1, t2 where t1.age(+) < t2.age group by t1.ida) t group by t.ida;
+ERROR HY000: OuterJoin: outer join operator (+) is not allowed here
+select ida(+) from t1;
+ERROR HY000: OuterJoin: outer join operator (+) is not allowed here
+select count(ida(+)) from t1;
+ERROR HY000: OuterJoin: outer join operator (+) is not allowed here
+select * from t1, t2, t3 where t1.ida = t1.ida(+) and t3.age = t2.age(+);
+ERROR HY000: OuterJoin: two tables cannot be outer-joined to each other
+select * from t1, t2 where t1.ida = t2.ida(+) and t1.age(+) < t2.age;
+ERROR HY000: OuterJoin: two tables cannot be outer-joined to each other
+select ida, count(age) from t1 where exists(select t1.ida(+) from t2);
+ERROR HY000: OuterJoin: outer join operator (+) is not allowed here
+select * from t1 where t1.ida in (select count(*) from t2 group by t1.age(+));
+ERROR HY000: OuterJoin: an outer join cannot be specified on a correlation column
+select (select count(age(+)) from t1) as b from t2;
+ERROR HY000: OuterJoin: outer join operator (+) is not allowed here
+DROP TABLE t1, t2, t3, t4;
+create table t1(ida int, age int);
+insert into t1 values(1, 2), (2, 3);
+create table t2(ida int, age int);
+insert into t2 values(1, 2);
+select * from t1, (select * from t2) tt where t1.ida = tt.ida(+);
+ida	age	ida	age
+1	2	1	2
+2	3	NULL	NULL
+select * from t1, (select * from t2) tt where t1.ida(+) = tt.ida;
+ida	age	ida	age
+1	2	1	2
+select * from t1, (select ida , count(*) from t2 group by ida) tt where t1.ida(+) = tt.ida;
+ida	age	ida	count(*)
+1	2	1	1
+select * from t1, (select ida , count(*) from t2 group by ida) tt where t1.ida = tt.ida(+);
+ida	age	ida	count(*)
+1	2	1	1
+2	3	NULL	NULL
+select * from t1, (select ida+age a , count(*) from t2 group by ida, age) tt where t1.ida = tt.a(+);
+ida	age	a	count(*)
+1	2	NULL	NULL
+2	3	NULL	NULL
+select * from t1, (select ida+age c from t2) tt where t1.ida = tt.c(+);
+ida	age	c
+1	2	NULL
+2	3	NULL
+select * from t1, (select ida+age c from t2 where age > 10) tt where t1.ida = tt.c(+);
+ida	age	c
+1	2	NULL
+2	3	NULL
+select * from t1, (select ida+age c from t2) t2 , t1 t3 where t1.ida = t2.c(+) and t1.age(+) <t3.age;
+ida	age	c	ida	age
+NULL	NULL	NULL	1	2
+1	2	NULL	2	3
+select * from (select ida+age a, count(*) b from t1 group by ida, age) t1, (select * from t2) t2 where t1.a = t2.ida(+);
+a	b	ida	age
+3	1	NULL	NULL
+5	1	NULL	NULL
+create table t3 (ida int, age int);
+insert into t3 values(1, 2), (2, 3), (1, 2);
+select * from t1 A, (select ida, age from t2) B, t3 C where A.ida = B.ida(+) and A.ida = C.ida(+) and A.age < 5;
+ida	age	ida	age	ida	age
+1	2	1	2	1	2
+1	2	1	2	1	2
+2	3	NULL	NULL	2	3
+DROP TABLE t1, t2, t3;
+CREATE TABLE `t_ucp_authelement` (
+`AUTHID` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`MODULEID` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`AUTHCODE` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`SUPERCODE` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`AUTHNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`MENUFLAG` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`DESCRIPTION` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`AUTHTYPE` tinyint DEFAULT '1',
+`REGION` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CREATOR` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CREATEORG` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISPUBLIC` tinyint DEFAULT '1',
+`CREATEDATE` datetime DEFAULT NULL,
+`STATUS` tinyint DEFAULT '1',
+`STATUSDATE` datetime DEFAULT NULL,
+`NOTES` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`RIGHTGROUP` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CREATETYPE` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`DISPLAYNO` int DEFAULT NULL,
+`SYSTEMID` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISDEFORG` tinyint DEFAULT '0',
+`STARTDATE` datetime DEFAULT NULL,
+`ENDDATE` datetime DEFAULT NULL,
+PRIMARY KEY (`AUTHID`),
+KEY `IX_UCP_AUTH_SUPERCODE` (`SUPERCODE`),
+KEY `IX_UCP_AUTH_AUTHCODE` (`AUTHCODE`),
+KEY `IX_UCP_AUTH_ISDEFORG` (`ISDEFORG`),
+CONSTRAINT `t_ucp_authelement_chk_1` CHECK ((`AUTHID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_10` CHECK ((`CREATOR` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_11` CHECK ((`CREATEORG` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_12` CHECK ((`NOTES` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_13` CHECK ((`RIGHTGROUP` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_14` CHECK ((`CREATETYPE` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_15` CHECK ((`SYSTEMID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_2` CHECK ((`MODULEID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_3` CHECK ((`AUTHCODE` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_4` CHECK ((`SUPERCODE` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_5` CHECK ((`AUTHNAME` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_6` CHECK ((`MENUFLAG` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_7` CHECK ((`DESCRIPTION` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_8` CHECK ((`HOSTEDCCID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_authelement_chk_9` CHECK ((`REGION` <> _utf8mb4''))
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+CREATE TABLE `t_ucp_putauth` (
+`STAFFID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`MODULEID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`AUTHID` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`CONDITIONSTR` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`BEGINDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`ENDDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+PRIMARY KEY (`STAFFID`,`MODULEID`,`AUTHID`),
+KEY `IX_UCP_PUTAUTH_AUTH` (`AUTHID`),
+CONSTRAINT `t_ucp_putauth_chk_1` CHECK ((`STAFFID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_putauth_chk_2` CHECK ((`MODULEID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_putauth_chk_3` CHECK ((`AUTHID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_putauth_chk_4` CHECK ((`CONDITIONSTR` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_putauth_chk_5` CHECK ((`HOSTEDCCID` <> _utf8mb4''))
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+CREATE TABLE `t_ucp_roleputauth` (
+`ROLEID` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`MODULEID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`AUTHID` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`CONDITIONSTR` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+PRIMARY KEY (`ROLEID`,`MODULEID`,`AUTHID`),
+KEY `IDX_UCP_ROLEPUTAUTH_AMID` (`AUTHID`,`MODULEID`),
+CONSTRAINT `t_ucp_roleputauth_chk_1` CHECK ((`ROLEID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_roleputauth_chk_2` CHECK ((`MODULEID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_roleputauth_chk_3` CHECK ((`AUTHID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_roleputauth_chk_4` CHECK ((`CONDITIONSTR` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_roleputauth_chk_5` CHECK ((`HOSTEDCCID` <> _utf8mb4''))
+)  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+CREATE TABLE `t_ucp_staffrole` (
+`ROLEID` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`STAFFID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`CONDITIONSTR` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STATUS` tinyint DEFAULT '1',
+`STATUSDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`CREATEDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`ORGAID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`BEGINDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`ENDDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`ROAMSTATIONID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT '0',
+`NOTES` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+KEY `IX_UCP_STAFFROLE_STAFF` (`STAFFID`),
+CONSTRAINT `t_ucp_staffrole_chk_1` CHECK ((`ROLEID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_staffrole_chk_2` CHECK ((`STAFFID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_staffrole_chk_3` CHECK ((`CONDITIONSTR` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_staffrole_chk_4` CHECK ((`HOSTEDCCID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_staffrole_chk_5` CHECK ((`ORGAID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_staffrole_chk_6` CHECK ((`ROAMSTATIONID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_staffrole_chk_7` CHECK ((`NOTES` <> _utf8mb4''))
+)  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+CREATE TABLE `t_ucp_roleauth` (
+`ROLEID` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`MODULEID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`AUTHID` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`CONDITIONSTR` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STATUS` tinyint DEFAULT '1',
+`STATUSDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`CREATEDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`BEGINDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`ENDDATE` datetime DEFAULT CURRENT_TIMESTAMP,
+`NOTES` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+PRIMARY KEY (`ROLEID`,`MODULEID`,`AUTHID`),
+KEY `IDX_UCP_ROLEAUTH_ROLEMODULE` (`ROLEID`,`MODULEID`),
+KEY `IDX_UCP_ROLEAUTH_MODULEAUTHID` (`AUTHID`,`MODULEID`),
+KEY `IX_UCP_ROLEAUTH_ROLEAUTH` (`ROLEID`,`AUTHID`),
+CONSTRAINT `t_ucp_roleauth_chk_1` CHECK ((`ROLEID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_roleauth_chk_2` CHECK ((`MODULEID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_roleauth_chk_3` CHECK ((`AUTHID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_roleauth_chk_4` CHECK ((`CONDITIONSTR` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_roleauth_chk_5` CHECK ((`HOSTEDCCID` <> _utf8mb4'')),
+CONSTRAINT `t_ucp_roleauth_chk_6` CHECK ((`NOTES` <> _utf8mb4''))
+)  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+select T1.*,decode(nvl(T2.ROLEID,''),'','   ','   ') MENUFLAG    from ( SELECT * FROM (SELECT DISTINCT A.AUTHID,         A.AUTHNAME                                        FROM t_ucp_authelement A                                                   WHERE EXISTS ( SELECT B.AUTHID   FROM t_ucp_putauth B   WHERE A.AUTHID = B.AUTHID  AND B.STAFFID = 'hw_nxy_lf'                                                                         UNION ALL                                                                        SELECT /*+ index(c IDX_UCP_ROLEPUTAUTH_AMID) */ C.AUTHID                                                                         FROM t_ucp_roleputauth C, t_ucp_staffrole D    WHERE A.AUTHID = C.AUTHID  AND C.ROLEID = D.ROLEID   AND D.STAFFID = 'hw_nxy_lf'                                                                    )                                                            )                    WHERE 1 = 1     AND AUTHNAME LIKE '      ' || '%'          ) T1, (SELECT AUTHID,ROLEID FROM t_ucp_roleauth E where E.ROLEID = '20211116040459' ) T2 WHERE T1.AUTHID=T2.AUTHID(+);
+AUTHID	AUTHNAME	MENUFLAG
+Warnings:
+Warning	1287	'|| as a synonym for OR' is deprecated and will be removed in a future release. Please use OR instead
+Warning	3128	Unresolved name `c`@`select#5` for INDEX hint
+Warning	3128	Unresolved name `c`@`select#5` `IDX_UCP_ROLEPUTAUTH_AMID` for INDEX hint
+Warning	1292	Truncated incorrect DOUBLE value: '%'
+select T1.*,decode(nvl(T2.ROLEID,''),'','   ','   ') MENUFLAG    from ( SELECT * FROM (SELECT DISTINCT A.AUTHID,         A.AUTHNAME                                        FROM t_ucp_authelement A                                                   WHERE EXISTS ( SELECT B.AUTHID   FROM t_ucp_putauth B   WHERE A.AUTHID = B.AUTHID  AND B.STAFFID = 'hw_nxy_lf'                                                                         UNION ALL                                                                        SELECT /*+ index(c IDX_UCP_ROLEPUTAUTH_AMID) */ C.AUTHID                                                                         FROM t_ucp_roleputauth C, t_ucp_staffrole D    WHERE A.AUTHID = C.AUTHID  AND C.ROLEID = D.ROLEID   AND D.STAFFID = 'hw_nxy_lf'                                                                    )                                                            )                    WHERE 1 = 1     AND AUTHNAME LIKE '      ' || '%'          ) T1, (SELECT AUTHID,ROLEID FROM t_ucp_roleauth E where E.ROLEID = '20211116040459' ) T2 WHERE T1.AUTHID(+)=T2.AUTHID;
+AUTHID	AUTHNAME	MENUFLAG
+Warnings:
+Warning	1287	'|| as a synonym for OR' is deprecated and will be removed in a future release. Please use OR instead
+Warning	3128	Unresolved name `c`@`select#5` for INDEX hint
+Warning	3128	Unresolved name `c`@`select#5` `IDX_UCP_ROLEPUTAUTH_AMID` for INDEX hint
+Warning	1292	Truncated incorrect DOUBLE value: '%'
+drop table t_ucp_authelement, t_ucp_putauth, t_ucp_roleputauth, t_ucp_staffrole, t_ucp_roleauth;
+CREATE TABLE `t_bme_publicdatadict` (
+`TYPEID` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`TYPEDESC` varchar(72) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`DATAID` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`DATADESC` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CITYID` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`VERSION` varchar(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`STATUS` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`EFFDATE` datetime DEFAULT NULL,
+`EXPDATE` datetime DEFAULT NULL,
+`ORDERNO` double DEFAULT '0',
+`LASTUPDATEPERSON` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`LASTUPDATEDATE` datetime DEFAULT NULL,
+`NOTES` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`COLUMN1` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`COLUMN2` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`COLUMN3` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`COLUMN4` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`COLUMN5` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`COLUMN6` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`COLUMN7` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`COLUMN8` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`COLUMN9` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`COLUMN10` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+KEY `INDEX_BME_PUBLICDD_TYPEDESC` (`TYPEDESC`),
+KEY `INDEX_BME_PUBLICDD_DATADESC` (`DATADESC`),
+KEY `PK_BME_PUBLICDATADICT` (`TYPEID`,`DATAID`,`CITYID`,`VERSION`)
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+CREATE TABLE `t_bme_languagelocaldisplay` (
+`KEYINDEX` varchar(72) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`LOCALEINDEX` varchar(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`MSGINFO` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+KEY `PK_BME_LANGLOCALDISPLAY` (`KEYINDEX`,`LOCALEINDEX`)
+)  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+CREATE TABLE `t_ucp_staffbasicinfo` (
+`STAFFID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`STAFFNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`STAFFSTATE` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`STAFFIDSTATUS` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+`DLEVELID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`DLMODULUS` decimal(4,2) DEFAULT NULL,
+`SECONDPOST` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`DUTYID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`SECONDDUTY` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`PTEAMID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ORGAID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`POSTID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STAFFACCOUNT` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`DISABLEBEGINDATE` datetime DEFAULT NULL,
+`DISABLEENDDATE` datetime DEFAULT NULL,
+`HOSTEDCCID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`PERSONALCFGID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`UPDATETIME` datetime DEFAULT CURRENT_TIMESTAMP,
+`BATCHNO` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STAFFTYPE` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISMANAGER` tinyint DEFAULT NULL,
+`HRSTATUS` tinyint DEFAULT NULL,
+`CREATEDATE` datetime DEFAULT NULL,
+`STATUSDATE` datetime DEFAULT NULL,
+`REMARK` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`REGION` int DEFAULT NULL,
+`BEGINDATE` datetime DEFAULT NULL,
+`ENDDATE` datetime DEFAULT NULL,
+`RELESTAFFID` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`WORKEFFICIENCY` int DEFAULT NULL,
+`TELNO` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`LOGINTYPE` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`WORKTYPE` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`AREAID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`EMPLOYEETYPE` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STAFFNUMBER` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`STAFFIDUSE` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISADMIN` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`PETNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`ISMODIFYCONTROL` varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT '0',
+`RESPCITYID` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`NOTMODSTATUS` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CURRENTORGAID` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CURRENTREGION` int DEFAULT NULL,
+`SALESCENE` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`CHANNELTYPE` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+`LOGINCHKPHOTO` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT '0',
+`UPLOADPHOTO` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT '0',
+`USERNAME` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+PRIMARY KEY (`STAFFID`),
+KEY `IDX_UCP_STAFFINFO_CURORGAID` (`CURRENTORGAID`),
+KEY `IDX_UCP_STAFFBASICINFO_TELNO` (`TELNO`),
+KEY `IK_UCP_STAFFBASICINFO_ORGAID` (`ORGAID`),
+KEY `IDX_UCP_STAFF_STAFFNUMBER` (`STAFFNUMBER`),
+KEY `IX_UCP_STAFF_REGSTAFFID` (`REGION`,`STAFFID`),
+KEY `IK_UCP_STAFFBASICINFO_PETNAME` (`PETNAME`)
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+SELECT A.STAFFID "staffId", A.ORGAID "orgaId",
+B.STAFFNAME "staffName",
+C.ORGANAME "orgaName",
+A.ORDERNO "orderNo"
+FROM ( 
+SELECT A.TYPEID, A.DATAID STAFFID, B.MSGINFO ORGAID, A.ORDERNO
+FROM t_bme_publicdatadict A, t_bme_languagelocaldisplay B
+WHERE A.TYPEID = 'CSP.UCP.STF.REGIONOASYSOPLIST'AND A.DATADESC = B.KEYINDEX
+UNION ALL
+SELECT A.TYPEID, A.DATAID STAFFID, B.MSGINFO ORGAID, A.ORDERNO
+FROM t_bme_publicdatadict A, t_bme_languagelocaldisplay B
+WHERE A.TYPEID = 'CSP.UCP.STF.TOWNOASYSOPLIST'AND A.DATADESC = B.KEYINDEX
+) A,
+( SELECT A.DATAID ORGAID, B.MSGINFO ORGANAME
+FROM t_bme_publicdatadict A, t_bme_languagelocaldisplay B
+WHERE A.TYPEID = 'CSP.UCP.ORGA.OASYSOPNAMELIST'AND A.DATADESC = B.KEYINDEX
+) C,
+t_ucp_staffbasicinfo B
+WHERE 
+A.STAFFID = B.STAFFID(+)
+AND A.ORGAID = C.ORGAID(+)
+ORDER BY ORDERNO,ORGANAME;
+staffId	orgaId	staffName	orgaName	orderNo
+drop table t_bme_publicdatadict, t_bme_languagelocaldisplay, t_ucp_staffbasicinfo;
+create table t1(ida int, age int, name varchar(50));
+insert into t1 values(1, 2, 'a'), (2, 3, 'bxxxxxxx');
+create table t2(ida int not null, age int, name varchar(10) not null);
+insert into t2 values(1, 2, 'a'), (3, 4, 'xxx');
+select * from t1, t2 where t2.ida(+) = t1.ida order by t2.ida, t2.name;
+ida	age	name	ida	age	name
+2	3	bxxxxxxx	NULL	NULL	NULL
+1	2	a	1	2	a
+select * from t1, t2 where t2.ida(+) = t1.ida order by t2.ida;
+ida	age	name	ida	age	name
+2	3	bxxxxxxx	NULL	NULL	NULL
+1	2	a	1	2	a
+drop table t1, t2;
+create table t1(r1 NUMBER,r2 VARCHAR2(41));
+insert into t1 (r1, r2) values (1, '1a');
+insert into t1 (r1, r2) values (2, '2a');
+insert into t1 (r1, r2) values (3, '3a');
+insert into t1 (r1, r2) values (4, '4a');
+insert into t1 (r1, r2) values (5, '5a');
+insert into t1 (r1, r2) values (6, '6a');
+insert into t1 (r1, r2) values (7, '7a');
+insert into t1 (r1, r2) values (8, '8a');
+insert into t1 (r1, r2) values (9, '9a');
+insert into t1 (r1, r2) values (10, '10a');
+insert into t1 (r1, r2) values (11, '11a');
+insert into t1 (r1, r2) values (12, '12a');
+insert into t1 (r1, r2) values (13, '13a');
+insert into t1 (r1, r2) values (14, '14a');
+insert into t1 (r1, r2) values (15, '15a');
+insert into t1 (r1, r2) values (16, '16a');
+insert into t1 (r1, r2) values (17, '17a');
+insert into t1 (r1, r2) values (18, '18a');
+insert into t1 (r1, r2) values (19, '19a');
+insert into t1 (r1, r2) values (20, '20a');
+create table t2(r1 NUMBER,r2 VARCHAR2(41));
+insert into t2 (r1, r2) values (1, '1b');
+insert into t2 (r1, r2) values (2, '2b');
+insert into t2 (r1, r2) values (3, '3b');
+insert into t2 (r1, r2) values (4, '4b');
+insert into t2 (r1, r2) values (5, '5b');
+insert into t2 (r1, r2) values (6, '6b');
+insert into t2 (r1, r2) values (7, '7b');
+insert into t2 (r1, r2) values (8, '8b');
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+analyze table t2;
+Table	Op	Msg_type	Msg_text
+test.t2	analyze	status	OK
+select * from t1,t2 where t1.r1=t2.r1(+) and rownum<5;
+r1	r2	r1	r2
+1.000000000000000000000000000000	1a	1.000000000000000000000000000000	1b
+2.000000000000000000000000000000	2a	2.000000000000000000000000000000	2b
+3.000000000000000000000000000000	3a	3.000000000000000000000000000000	3b
+4.000000000000000000000000000000	4a	4.000000000000000000000000000000	4b
+select * from t1,t2 where t1.r1=t2.r1 and rownum<5;
+r1	r2	r1	r2
+1.000000000000000000000000000000	1a	1.000000000000000000000000000000	1b
+2.000000000000000000000000000000	2a	2.000000000000000000000000000000	2b
+3.000000000000000000000000000000	3a	3.000000000000000000000000000000	3b
+4.000000000000000000000000000000	4a	4.000000000000000000000000000000	4b
+select * from t1,t2 where t1.r1=t2.r1(+) and rownum<t2.r1;
+r1	r2	r1	r2
+2.000000000000000000000000000000	2a	2.000000000000000000000000000000	2b
+3.000000000000000000000000000000	3a	3.000000000000000000000000000000	3b
+4.000000000000000000000000000000	4a	4.000000000000000000000000000000	4b
+5.000000000000000000000000000000	5a	5.000000000000000000000000000000	5b
+6.000000000000000000000000000000	6a	6.000000000000000000000000000000	6b
+7.000000000000000000000000000000	7a	7.000000000000000000000000000000	7b
+8.000000000000000000000000000000	8a	8.000000000000000000000000000000	8b
+explain format=tree select * from t1,t2 where t1.r1=t2.r1(+) and rownum<5;
+EXPLAIN
+-> Filter: (rownum < 5)  (cost=16.31 rows=160)
+    -> Left hash join (t2.r1 = t1.r1)  (cost=16.31 rows=160)
+        -> Table scan on t1  (cost=2.25 rows=20)
+        -> Hash
+            -> Table scan on t2  (cost=0.05 rows=8)
+
+explain format=tree select * from t1,t2 where t1.r1=t2.r1 and rownum<5;
+EXPLAIN
+-> Filter: (rownum < 5)  (cost=17.30 rows=16)
+    -> Inner hash join (t1.r1 = t2.r1)  (cost=17.30 rows=16)
+        -> Table scan on t1  (cost=0.06 rows=20)
+        -> Hash
+            -> Table scan on t2  (cost=1.05 rows=8)
+
+explain format=tree select * from t1,t2 where t1.r1=t2.r1(+) and rownum<t2.r1;
+EXPLAIN
+-> Filter: (rownum < t2.r1)  (cost=16.77 rows=16)
+    -> Inner hash join (t1.r1 = t2.r1)  (cost=16.77 rows=16)
+        -> Table scan on t1  (cost=0.17 rows=20)
+        -> Hash
+            -> Table scan on t2  (cost=0.52 rows=8)
+
+select * from t1, t2 where rownum < t1.r1;
+r1	r2	r1	r2
+20.000000000000000000000000000000	20a	1.000000000000000000000000000000	1b
+19.000000000000000000000000000000	19a	1.000000000000000000000000000000	1b
+18.000000000000000000000000000000	18a	1.000000000000000000000000000000	1b
+17.000000000000000000000000000000	17a	1.000000000000000000000000000000	1b
+16.000000000000000000000000000000	16a	1.000000000000000000000000000000	1b
+15.000000000000000000000000000000	15a	1.000000000000000000000000000000	1b
+14.000000000000000000000000000000	14a	1.000000000000000000000000000000	1b
+13.000000000000000000000000000000	13a	1.000000000000000000000000000000	1b
+12.000000000000000000000000000000	12a	1.000000000000000000000000000000	1b
+11.000000000000000000000000000000	11a	1.000000000000000000000000000000	1b
+20.000000000000000000000000000000	20a	2.000000000000000000000000000000	2b
+19.000000000000000000000000000000	19a	2.000000000000000000000000000000	2b
+18.000000000000000000000000000000	18a	2.000000000000000000000000000000	2b
+17.000000000000000000000000000000	17a	2.000000000000000000000000000000	2b
+16.000000000000000000000000000000	16a	2.000000000000000000000000000000	2b
+20.000000000000000000000000000000	20a	3.000000000000000000000000000000	3b
+19.000000000000000000000000000000	19a	3.000000000000000000000000000000	3b
+20.000000000000000000000000000000	20a	4.000000000000000000000000000000	4b
+20.000000000000000000000000000000	20a	5.000000000000000000000000000000	5b
+CREATE TABLE b (
+means_id varchar(100) COLLATE utf8mb4_0900_bin DEFAULT NULL,
+means_name varchar(100) COLLATE utf8mb4_0900_bin DEFAULT NULL
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+insert  into b(means_id,means_name) values ('A1080001','aaa'),('A1080002','bbb');
+CREATE TABLE c (
+means_id varchar(100) COLLATE utf8mb4_0900_bin DEFAULT NULL,
+region_code varchar(100) COLLATE utf8mb4_0900_bin DEFAULT NULL,
+status_code varchar(10) COLLATE utf8mb4_0900_bin DEFAULT NULL
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+insert  into c(means_id,region_code,status_code) values ('A1080001','124','04'),('A1080001','112','00'),('A1080001','119','04'),('A1080001','127','00'),('A1080002','127','00');
+select * from b ,c where b.means_id=c.means_id(+) and ((c.region_code = '100' and c.status_code = '99') or  c.region_code = '119');
+means_id	means_name	means_id	region_code	status_code
+A1080001	aaa	A1080001	119	04
+select * from b ,c where b.means_id=c.means_id(+) and (c.region_code = '100' and c.status_code = '99');
+means_id	means_name	means_id	region_code	status_code
+select * from b ,c where b.means_id=c.means_id(+)    and ((b.means_name='aaa' and c.status_code = '99') or  c.region_code = '119');
+means_id	means_name	means_id	region_code	status_code
+A1080001	aaa	A1080001	119	04
+select * from b ,c where b.means_id=c.means_id(+) and (c.status_code(+) = '99' or  c.region_code = '119');
+ERROR HY000: OuterJoin: outer join operator (+) not allowed in operand of OR or IN
+select * from b ,c where b.means_id=c.means_id(+) and (b.means_name(+)='aaa' or  c.region_code = '119');
+ERROR HY000: OuterJoin: outer join operator (+) not allowed in operand of OR or IN
+drop table t1, t2, b, c;
+create table t(c1 int primary key,c2 varchar(10));
+create view v1 as select 1 from t a,t b,t c where a.c1=b.c1(+) and a.c1=c.c1(+);
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select 1 AS `1` from ((`t` `a` left join `t` `b` on((`a`.`c1` = `b`.`c1`))) left join `t` `c` on((`a`.`c1` = `c`.`c1`)))	utf8mb4	utf8mb4_0900_ai_ci
+select * from v1;
+1
+drop view v1;
+drop table t;
+create table mk_custgroup_info(
+cust_group_id varchar(18),
+cust_group_name varchar(200),
+cust_group_desc varchar(500),
+region_code varchar(5),
+status_code varchar(5),
+cust_num bigint,
+oper_date datetime,
+primary key (cust_group_id)
+);
+create table mk_regioncode_dict(
+region_code varchar(20),
+region_name varchar(32),
+group_id varchar(8),
+primary key (region_code),
+key(region_name)
+);
+create table mk_collectiondetail_info (
+collection_id varchar(18) not null, 
+detail_value varchar(100) not null,
+detail_name varchar(100) default null,
+send_status varchar(5) default(0),
+send_time datetime default current_timestamp,
+detail_desc text character set utf8mb4 collate utf8mb4_bin,
+eff_date datetime default null,
+exp_date datetime default null,
+type int default null,
+key idx_mkcolldetail_info_dc(detail_value, collection_id),
+key mk_collectiondetail_dvalue(collection_id, detail_value),
+key mk_coll_send_status(send_status)
+);
+create table mk_importcustlimit_rel (
+cust_group_id varchar(18) not null,
+limit_type varchar(5) not null,
+region_code varchar(5) not null,
+limit_value varchar(20) default null,
+oper_date datetime default null,
+bak1 varchar(50) default null,
+bak2 varchar(50) default null,
+bak3 varchar(50) default null,
+unique key index_importcustlimit_rel(cust_group_id, limit_type, region_code)
+);
+select a.CUST_GROUP_NAME, a.CUST_GROUP_DESC, a.CUST_GROUP_ID, a.cust_num, a.region_code 
+from mk_custgroup_info a ,mk_regioncode_dict b
+where a.region_code = b.region_code(+) AND NOT EXISTS (SELECT 1  FROM mk_importcustlimit_rel c where c.cust_group_id=a.cust_group_id and c.limit_type='0' 
+and c.cust_group_id not in (select DETAIL_NAME from mk_collectiondetail_info where COLLECTION_ID = 'MBQKJXQX' and DETAIL_VALUE='aa0010111'))
+order by a.oper_date desc,a.CUST_GROUP_ID;
+CUST_GROUP_NAME	CUST_GROUP_DESC	CUST_GROUP_ID	cust_num	region_code
+select a.CUST_GROUP_NAME, a.CUST_GROUP_DESC, a.CUST_GROUP_ID, a.cust_num, a.region_code  from mk_custgroup_info a ,mk_regioncode_dict b where a.region_code = b.region_code(+) AND NOT EXISTS (SELECT 1  FROM mk_importcustlimit_rel c where c.cust_group_id=b.group_id and c.limit_type='0'        and c.cust_group_id not in (select DETAIL_NAME from mk_collectiondetail_info where COLLECTION_ID = 'MBQKJXQX' and DETAIL_VALUE='aa0010111')) order by a.oper_date desc,a.CUST_GROUP_ID;
+CUST_GROUP_NAME	CUST_GROUP_DESC	CUST_GROUP_ID	cust_num	region_code
+drop table mk_custgroup_info, mk_regioncode_dict, mk_collectiondetail_info, mk_importcustlimit_rel;

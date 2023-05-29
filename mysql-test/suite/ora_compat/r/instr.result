@@ -1,0 +1,637 @@
+set sql_mode='oracle';
+CREATE TABLE t1 (iv INT, cv VARCHAR(10), ncv VARCHAR(40) CHARACTER SET UTF8MB4);
+INSERT INTO t1 VALUES (3, 'l', 'helloworld');
+INSERT INTO t1 VALUES (4, 'lo', 'helloworld');
+INSERT INTO t1 VALUES (6, 'wo', 'helloworld');
+INSERT INTO t1 VALUES (1, '19', '192.168.0.22');
+INSERT INTO t1 VALUES (5, 'greatdb', _UTF8MB4 '万里开源');
+SELECT iv,instr(ncv,cv) FROM t1;
+iv	instr(ncv,cv)
+3	3
+4	4
+6	6
+1	1
+5	0
+select instr('helloworld','l',2,2,2) from dual;
+ERROR 42000: Incorrect parameter count in the call to native function 'instr'
+select instr('helloworld') from dual;
+ERROR 42000: Incorrect parameter count in the call to native function 'instr'
+select instr('helloworld','l',2,2) from dual;
+instr('helloworld','l',2,2)
+4
+select instr('helloworld','l',3,2) from dual;
+instr('helloworld','l',3,2)
+4
+select instr('helloworld','l',4,2) from dual;
+instr('helloworld','l',4,2)
+9
+select instr('helloworld','l',-1,1) from dual;
+instr('helloworld','l',-1,1)
+9
+select instr('helloworld','l',-2,2) from dual;
+instr('helloworld','l',-2,2)
+4
+select instr('helloworld','l',2,3) from dual;
+instr('helloworld','l',2,3)
+9
+select instr('helloworld','l',-2,3) from dual;
+instr('helloworld','l',-2,3)
+3
+select instr('helloworld','l',2) from dual;
+instr('helloworld','l',2)
+3
+select instr('helloworld','l',4) from dual;
+instr('helloworld','l',4)
+4
+select instr('helloworld','l',5) from dual;
+instr('helloworld','l',5)
+9
+select instr('thisisatestsentence','t',1,0)  from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+select instr('thisisatestsentence','t',1,'')  from dual;
+instr('thisisatestsentence','t',1,'')
+NULL
+select instr('thisisatestsentence','t','',1)  from dual;
+instr('thisisatestsentence','t','',1)
+NULL
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: ''
+select instr('thisisatestsentence','t','','')  from dual;
+instr('thisisatestsentence','t','','')
+NULL
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: ''
+select instr('thisisatestsentence','','1','1')  from dual;
+instr('thisisatestsentence','','1','1')
+NULL
+select instr(null,'','1','1')  from dual;
+instr(null,'','1','1')
+NULL
+select instr('',null,'1','1')  from dual;
+instr('',null,'1','1')
+NULL
+select instr('','','1','1')  from dual;
+instr('','','1','1')
+NULL
+select instr('','t','1','1')  from dual;
+instr('','t','1','1')
+NULL
+select instr('','b')  from dual;
+instr('','b')
+NULL
+select instr('b','')  from dual;
+instr('b','')
+NULL
+select substr('192.168.0.22', instr('192.168.0.22', '.', 1, 3) +1) from dual;
+substr('192.168.0.22', instr('192.168.0.22', '.', 1, 3) +1)
+22
+select INSTR('中国人中国人中国人中国人', '中', -2, 2),INSTR('中国人中国人中国人中国人', '中', -2),INSTR('Geeksforgeeks', 'e', -2, 2),INSTR('Geeksforgeeks', 'e', -2), INSTR('Geeksforgeeks', 'e', -2,1)from dual;
+INSTR('中国人中国人中国人中国人', '中', -2, 2)	INSTR('中国人中国人中国人中国人', '中', -2)	INSTR('Geeksforgeeks', 'e', -2, 2)	INSTR('Geeksforgeeks', 'e', -2)	INSTR('Geeksforgeeks', 'e', -2,1)
+7	10	10	11	11
+SELECT INSTR('中国人中国人中国人中国人', '中', -2) from dual;
+INSTR('中国人中国人中国人中国人', '中', -2)
+10
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,1) from dual;
+INSTR('中国人中国人中国人中国人', '中', -2,1)
+10
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,2) from dual;
+INSTR('中国人中国人中国人中国人', '中', -2,2)
+7
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,3) from dual;
+INSTR('中国人中国人中国人中国人', '中', -2,3)
+4
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,4) from dual;
+INSTR('中国人中国人中国人中国人', '中', -2,4)
+1
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,5) from dual;
+INSTR('中国人中国人中国人中国人', '中', -2,5)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,100) from dual;
+INSTR('中国人中国人中国人中国人', '中', -2,100)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中', -2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国人中国人中国人', '中', -4) from dual;
+INSTR('中国人中国人中国人中国人', '中', -4)
+7
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,1) from dual;
+INSTR('中国人中国人中国人中国人', '中', -4,1)
+7
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,2) from dual;
+INSTR('中国人中国人中国人中国人', '中', -4,2)
+4
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,3) from dual;
+INSTR('中国人中国人中国人中国人', '中', -4,3)
+1
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,4) from dual;
+INSTR('中国人中国人中国人中国人', '中', -4,4)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,5) from dual;
+INSTR('中国人中国人中国人中国人', '中', -4,5)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,100) from dual;
+INSTR('中国人中国人中国人中国人', '中', -4,100)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中', -4,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -2)
+10
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,1) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -2,1)
+10
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,2) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -2,2)
+7
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,3) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -2,3)
+4
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,4) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -2,4)
+1
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,5) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -2,5)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,100) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -2,100)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -4)
+7
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,1) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -4,1)
+7
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,2) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -4,2)
+4
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,3) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -4,3)
+1
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,4) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -4,4)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,5) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -4,5)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,100) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', -4,100)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', -4,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', -2)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,1) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', -2,1)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,2) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', -2,2)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,3) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', -2,3)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,4) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', -2,4)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,5) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', -2,5)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,100) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', -2,100)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', -2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', -2)
+13
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,1) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', -2,1)
+13
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,2) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', -2,2)
+10
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,3) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', -2,3)
+4
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,4) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', -2,4)
+1
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,5) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', -2,5)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,100) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', -2,100)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', -2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', -2)
+13
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,1) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', -2,1)
+13
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,2) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', -2,2)
+10
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,3) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', -2,3)
+1
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,4) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', -2,4)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,5) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', -2,5)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,100) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', -2,100)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', -2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', -2)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,1) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', -2,1)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,2) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', -2,2)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,3) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', -2,3)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,4) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', -2,4)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,5) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', -2,5)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,100) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', -2,100)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', -2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('Geeksforgeeks', 'e', -2) from dual;
+INSTR('Geeksforgeeks', 'e', -2)
+11
+SELECT INSTR('Geeksforgeeks', 'e', -2,1) from dual;
+INSTR('Geeksforgeeks', 'e', -2,1)
+11
+SELECT INSTR('Geeksforgeeks', 'e', -2,2) from dual;
+INSTR('Geeksforgeeks', 'e', -2,2)
+10
+SELECT INSTR('Geeksforgeeks', 'e', -2,3) from dual;
+INSTR('Geeksforgeeks', 'e', -2,3)
+3
+SELECT INSTR('Geeksforgeeks', 'e', -2,4) from dual;
+INSTR('Geeksforgeeks', 'e', -2,4)
+2
+SELECT INSTR('Geeksforgeeks', 'e', -2,5) from dual;
+INSTR('Geeksforgeeks', 'e', -2,5)
+0
+SELECT INSTR('Geeksforgeeks', 'e', -2,100) from dual;
+INSTR('Geeksforgeeks', 'e', -2,100)
+0
+SELECT INSTR('Geeksforgeeks', 'e', -2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国人中国人中国人', '中', 2) from dual;
+INSTR('中国人中国人中国人中国人', '中', 2)
+4
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,1) from dual;
+INSTR('中国人中国人中国人中国人', '中', 2,1)
+4
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,2) from dual;
+INSTR('中国人中国人中国人中国人', '中', 2,2)
+7
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,3) from dual;
+INSTR('中国人中国人中国人中国人', '中', 2,3)
+10
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,4) from dual;
+INSTR('中国人中国人中国人中国人', '中', 2,4)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,5) from dual;
+INSTR('中国人中国人中国人中国人', '中', 2,5)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,100) from dual;
+INSTR('中国人中国人中国人中国人', '中', 2,100)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中', 2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国人中国人中国人', '中', 4) from dual;
+INSTR('中国人中国人中国人中国人', '中', 4)
+4
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,1) from dual;
+INSTR('中国人中国人中国人中国人', '中', 4,1)
+4
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,2) from dual;
+INSTR('中国人中国人中国人中国人', '中', 4,2)
+7
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,3) from dual;
+INSTR('中国人中国人中国人中国人', '中', 4,3)
+10
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,4) from dual;
+INSTR('中国人中国人中国人中国人', '中', 4,4)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,5) from dual;
+INSTR('中国人中国人中国人中国人', '中', 4,5)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,100) from dual;
+INSTR('中国人中国人中国人中国人', '中', 4,100)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中', 4,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 2)
+4
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,1) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 2,1)
+4
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,2) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 2,2)
+7
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,3) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 2,3)
+10
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,4) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 2,4)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,5) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 2,5)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,100) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 2,100)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 4)
+4
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4,1) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 4,1)
+4
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4,2) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 4,2)
+7
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4,3) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 4,3)
+10
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4,4) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 4,4)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4,5) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 4,5)
+0
+SELECT INSTR('中国人中国人中国人中国人', '中国人', 4,100) from dual;
+INSTR('中国人中国人中国人中国人', '中国人', 4,100)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', 2)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,1) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', 2,1)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,2) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', 2,2)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,3) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', 2,3)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,4) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', 2,4)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,5) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', 2,5)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,100) from dual;
+INSTR('中国人中国人中国人中国人', 'A中', 2,100)
+0
+SELECT INSTR('中国人中国人中国人中国人', 'A中', 2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', 2)
+4
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,1) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', 2,1)
+4
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,2) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', 2,2)
+10
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,3) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', 2,3)
+13
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,4) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', 2,4)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,5) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', 2,5)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,100) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中', 2,100)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中', 2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', 2)
+10
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,1) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', 2,1)
+10
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,2) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', 2,2)
+13
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,3) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', 2,3)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,4) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', 2,4)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,5) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', 2,5)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,100) from dual;
+INSTR('中国人中国AB人C中国人中国人', '中国人', 2,100)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', '中国人', 2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', 2)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,1) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', 2,1)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,2) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', 2,2)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,3) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', 2,3)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,4) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', 2,4)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,5) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', 2,5)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,100) from dual;
+INSTR('中国人中国AB人C中国人中国人', 'A中', 2,100)
+0
+SELECT INSTR('中国人中国AB人C中国人中国人', 'A中', 2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+SELECT INSTR('Geeksforgeeks', 'e', 2) from dual;
+INSTR('Geeksforgeeks', 'e', 2)
+2
+SELECT INSTR('Geeksforgeeks', 'e', 2,1) from dual;
+INSTR('Geeksforgeeks', 'e', 2,1)
+2
+SELECT INSTR('Geeksforgeeks', 'e', 2,2) from dual;
+INSTR('Geeksforgeeks', 'e', 2,2)
+3
+SELECT INSTR('Geeksforgeeks', 'e', 2,3) from dual;
+INSTR('Geeksforgeeks', 'e', 2,3)
+10
+SELECT INSTR('Geeksforgeeks', 'e', 2,4) from dual;
+INSTR('Geeksforgeeks', 'e', 2,4)
+11
+SELECT INSTR('Geeksforgeeks', 'e', 2,5) from dual;
+INSTR('Geeksforgeeks', 'e', 2,5)
+0
+SELECT INSTR('Geeksforgeeks', 'e', 2,100) from dual;
+INSTR('Geeksforgeeks', 'e', 2,100)
+0
+SELECT INSTR('Geeksforgeeks', 'e', 2,-100) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+select instr(111,'x',-1) from dual;
+instr(111,'x',-1)
+0
+select instr('x',111,-1) from dual;
+instr('x',111,-1)
+0
+select instr(111,222,-1) from dual;
+instr(111,222,-1)
+0
+select instr(222,22,-1) from dual;
+instr(222,22,-1)
+2
+select instr(-111,'x',-1) from dual;
+instr(-111,'x',-1)
+0
+select instr('x',-111,-1) from dual;
+instr('x',-111,-1)
+0
+select instr(-111,-222,-1) from dual;
+instr(-111,-222,-1)
+0
+select instr(-222,-22,-1) from dual;
+instr(-222,-22,-1)
+1
+select instr(111,'x',1) from dual;
+instr(111,'x',1)
+0
+select instr('x',111,1) from dual;
+instr('x',111,1)
+0
+select instr(111,222,1) from dual;
+instr(111,222,1)
+0
+select instr(222,22,1) from dual;
+instr(222,22,1)
+1
+select instr(-111,'x',1) from dual;
+instr(-111,'x',1)
+0
+select instr('x',-111,1) from dual;
+instr('x',-111,1)
+0
+select instr(-111,-222,1) from dual;
+instr(-111,-222,1)
+0
+select instr(-222,-22,1) from dual;
+instr(-222,-22,1)
+1
+select instr('AAAAAA','a') from dual;
+instr('AAAAAA','a')
+0
+select instr('AAAAAA','A') from dual;
+instr('AAAAAA','A')
+1
+select instr('中国人中国','中国') from dual;
+instr('中国人中国','中国')
+1
+select instr('中国人中国','中国',2,1) from dual;
+instr('中国人中国','中国',2,1)
+4
+select instr('中国人中国','中国',2,2) from dual;
+instr('中国人中国','中国',2,2)
+0
+select instr('中国人中国','中国',2,3) from dual;
+instr('中国人中国','中国',2,3)
+0
+SELECT INSTR('中国人中国AB人中国aB中国人中国人', '国a', 1,1) from dual;
+INSTR('中国人中国AB人中国aB中国人中国人', '国a', 1,1)
+10
+SELECT INSTR('中国人中国AB人中国aB中国人中国人', '国a', 1,2) from dual;
+INSTR('中国人中国AB人中国aB中国人中国人', '国a', 1,2)
+0
+SELECT INSTR('中国人中国AB人中国aB中国人中国人', '国B', 1,1) from dual;
+INSTR('中国人中国AB人中国aB中国人中国人', '国B', 1,1)
+0
+SELECT INSTR('中国人中国AB人中国aB中国人中国人', '国a', 1,1) from dual;
+INSTR('中国人中国AB人中国aB中国人中国人', '国a', 1,1)
+10
+SELECT INSTR('中国人111中国1B人中国1B中国人中国人', '中国1B', 1,1) from dual;
+INSTR('中国人111中国1B人中国1B中国人中国人', '中国1B', 1,1)
+7
+SELECT INSTR('中国人111中国1B人中国1b中国人中国人', '中国1B', 11,2) from dual;
+INSTR('中国人111中国1B人中国1b中国人中国人', '中国1B', 11,2)
+0
+SELECT INSTR('中国人111中国1B人中国1b中国人中国人', '中国1b', 1,1) from dual;
+INSTR('中国人111中国1B人中国1b中国人中国人', '中国1b', 1,1)
+12
+SELECT INSTR('中国人111中国1B人中国1B中国人中国人', '中国1B', -1,2) from dual;
+INSTR('中国人111中国1B人中国1B中国人中国人', '中国1B', -1,2)
+7
+SELECT INSTR('中国人111中国1B人中国1b中国人中国人', '中国1b', 1,1) from dual
+union
+SELECT INSTR('中国人111中国1B人中国1B中国人中国人', '中国1B', -1,2) from dual;
+INSTR('中国人111中国1B人中国1b中国人中国人', '中国1b', 1,1)
+12
+7
+select instr('thisisatestsentence','c',0,1)  from dual;
+instr('thisisatestsentence','c',0,1)
+0
+select instr('thisisatestsentence','c',0)  from dual;
+instr('thisisatestsentence','c',0)
+0
+select instr('thisisatestsentence','c',0,0)  from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+select instr('thisisatestsentence','t',1,'')  from dual;
+instr('thisisatestsentence','t',1,'')
+NULL
+select instr('thisisatestsentence','t','',1)  from dual;
+instr('thisisatestsentence','t','',1)
+NULL
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: ''
+select instr('thisisatestsentence','t','','')  from dual;
+instr('thisisatestsentence','t','','')
+NULL
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: ''
+select instr('xx','') is null,instr('xx','','') is null,instr('xx','','','') is null from dual;
+instr('xx','') is null	instr('xx','','') is null	instr('xx','','','') is null 
+1	1	1
+set sql_mode = '';
+select instr('AAAAAA','a') from dual;
+instr('AAAAAA','a')
+1
+select instr('AAAAAA','A') from dual;
+instr('AAAAAA','A')
+1
+select instr('helloworld','l') from dual;
+instr('helloworld','l')
+3
+select instr('helloworld','l',2) from dual;
+ERROR 42000: Incorrect parameter count in the call to native function 'instr'
+select instr('helloworld','l',2,2) from dual;
+ERROR 42000: Incorrect parameter count in the call to native function 'instr'
+DROP TABLE t1;
