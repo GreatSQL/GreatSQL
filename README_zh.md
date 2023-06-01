@@ -123,6 +123,9 @@ $ systemctl status mysqld
 
 就可以正常启动GreatSQL服务了。
 
+# 编译GreatSQL二进制包
+
+推荐利用Docker环境快速编译GreatSQL二进制包，可参考方法：[编译源码安装GreatSQL](https://gitee.com/GreatSQL/GreatSQL-Doc/blob/master/user-manual/4-install-guide/4-6-install-with-source-code.md)。
 
 # 版本历史
 ---
