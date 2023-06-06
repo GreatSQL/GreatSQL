@@ -92,8 +92,10 @@ $ yum search greatsql
 No matches found.
 
 #然后安装
-$ rpm -ivh greatsql-client-8.0.32-24.1.el8.x86_64.rpm greatsql-devel-8.0.32-24.1.el8.x86_64.rpm greatsql-mysql-router-8.0.32-24.1.el8.x86_64.rpm greatsql-server-8.0.32-24.1.el8.x86_64.rpm greatsql-shared-8.0.32-24.1.el8.x86_64.rpm
+$ rpm -ivh --nodeps greatsql-client-8.0.32-24.1.el8.x86_64.rpm greatsql-devel-8.0.32-24.1.el8.x86_64.rpm greatsql-icu-data-files-8.0.32-24.1.el8.x86_64.rpm greatsql-mysql-router-8.0.32-24.1.el8.x86_64.rpm greatsql-server-8.0.32-24.1.el8.x86_64.rpm greatsql-shared-8.0.32-24.1.el8.x86_64.rpm greatsql-test-8.0.32-24.1.el8.x86_64.rpm
 ```
+
+**提示**：正式安装GreatSQL RPM包时，可能还需要依赖Perl等其他软件包，此处为快速演示，因此加上 `--nodeps` 参数，忽略相应的依赖关系检查。安装完毕后，如果因为依赖关系无法启动，请再行安装相应软件依赖包。
 
 安装完成后，GreatSQL会自行完成初始化，可以再检查是否已加入系统服务或已启动：
 ```
