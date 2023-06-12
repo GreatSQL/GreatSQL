@@ -953,21 +953,39 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/private/libprotobuf.so.*
 
 %dir %{_libdir}/mysql/plugin
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_file.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/procfs.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/binlog_utils_udf.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_query_attributes.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_reference_cache.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/adt_null.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/auth_socket.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_kerberos_client.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_sasl.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_sasl_client.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_simple.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_oci_client.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/greatdb_ha.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/group_replication.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_log_sink_syseventlog.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_log_sink_json.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_log_filter_dragnet.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_mysqlbackup.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_validate_password.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_audit_api_message_emit.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_encryption_udf.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_file.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_kmip.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_kms.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_log_filter_dragnet.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_log_sink_json.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_log_sink_syseventlog.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_mysqlbackup.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_query_attributes.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_reference_cache.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_audit_api_message.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_deinit.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_host_application_signal.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_command_services.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_system_variable_set.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_sensitive_system_variables.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_status_var_reader.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_table_access.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_udf_services.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_validate_password.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/conflicting_variables.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/connection_control.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/ddl_rewriter.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/ha_example.so
@@ -984,30 +1002,48 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/rewriter.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/semisync_master.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/semisync_slave.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/semisync_replica.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/semisync_source.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/validate_password.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/version_token.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_audit_api_message.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_host_application_signal.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/test_services_command_services.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/test_services_host_application_signal.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/test_udf_wrappers.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/data_masking*
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_udf_services.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_simple.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_deinit.so
 %dir %{_libdir}/mysql/plugin/debug
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_keyring_file.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/procfs.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/data_masking.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/adt_null.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/auth_socket.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/authentication_kerberos_client.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/authentication_ldap_simple.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/authentication_ldap_sasl.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/authentication_ldap_sasl_client.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/authentication_oci_client.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/greatdb_ha.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/group_replication.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_log_sink_syseventlog.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_log_sink_json.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_log_filter_dragnet.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_mysqlbackup.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_validate_password.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_audit_api_message_emit.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_encryption_udf.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_keyring_file.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_keyring_kmip.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_keyring_kms.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_log_filter_dragnet.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_log_sink_json.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_log_sink_syseventlog.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_mysqlbackup.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_query_attributes.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_reference_cache.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_audit_api_message.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_deinit.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_host_application_signal.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_mysql_command_services.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_mysql_system_variable_set.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_sensitive_system_variables.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_status_var_reader.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_table_access.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_udf_services.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_validate_password.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/conflicting_variables.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/connection_control.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/ddl_rewriter.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/ha_example.so
@@ -1024,17 +1060,13 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/rewriter.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/semisync_master.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/semisync_slave.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/semisync_replica.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/semisync_source.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/validate_password.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/version_token.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_audit_api_message.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_host_application_signal.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/test_services_command_services.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/test_services_host_application_signal.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_udf_services.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_deinit.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/binlog_utils_udf.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_query_attributes.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_reference_cache.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/libtest_sql_sleep_is_connected.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/test_udf_wrappers.so
 %if 0%{?mecab}
 %{_libdir}/mysql/mecab
@@ -1072,8 +1104,6 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/libmurmur_udf.*
 %attr(755, root, root) %{_libdir}/mysql/plugin/dialog.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/dialog.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/auth.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/auth.so
 #%attr(755, root, root) %{_libdir}/mysql/plugin/query_response_time.so
 #%attr(755, root, root) %{_libdir}/mysql/plugin/debug/query_response_time.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/keyring_vault.so
@@ -1107,6 +1137,7 @@ fi
 %attr(755, root, root) %{_datadir}/greatsql/messages_to_error_log.txt
 %attr(755, root, root) %{_datadir}/greatsql/charsets/
 %attr(755, root, root) %{_datadir}/greatsql/bulgarian/
+%attr(755, root, root) %{_datadir}/greatsql/chinese/
 %attr(755, root, root) %{_datadir}/greatsql/czech/
 %attr(755, root, root) %{_datadir}/greatsql/danish/
 %attr(755, root, root) %{_datadir}/greatsql/dutch/
@@ -1139,6 +1170,7 @@ fi
 %attr(755, root, root) %{_bindir}/mysqladmin
 %attr(755, root, root) %{_bindir}/mysqlbinlog
 %attr(755, root, root) %{_bindir}/mysqlcheck
+%attr(755, root, root) %{_bindir}/mysqldecrypt
 %attr(755, root, root) %{_bindir}/mysqldump
 %attr(755, root, root) %{_bindir}/mysqlimport
 %attr(755, root, root) %{_bindir}/mysqlpump
@@ -1200,7 +1232,6 @@ fi
 %attr(755, root, root) %{_bindir}/mysqlxtest
 
 %attr(755, root, root) %{_libdir}/mysql/plugin/libtest_sql_sleep_is_connected.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/test_udf_wrappers.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/auth.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/auth_test_plugin.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_example_component1.so
@@ -1344,11 +1375,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/test_udf_services.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/udf_example.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_mysqlx_global_reset.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/binlog_utils_udf.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_query_attributes.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_reference_cache.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/libtest_sql_sleep_is_connected.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/test_udf_wrappers.so
 
 #%if 0%{?tokudb}
 #%files -n percona-server-tokudb
@@ -1378,6 +1405,7 @@ fi
 %doc %{src_dir}/router/README.router  %{src_dir}/router/LICENSE.router
 %dir %{_sysconfdir}/mysqlrouter
 %config(noreplace) %{_sysconfdir}/mysqlrouter/mysqlrouter.conf
+%attr(644, root, root) %config(noreplace,missingok) %{_sysconfdir}/logrotate.d/mysqlrouter
 %{_bindir}/mysqlrouter
 %{_bindir}/mysqlrouter_keyring
 %{_bindir}/mysqlrouter_passwd
