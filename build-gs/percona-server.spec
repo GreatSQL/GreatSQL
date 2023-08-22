@@ -511,12 +511,13 @@ mkdir debug
            -DFEATURE_SET="%{feature_set}" \
            -DWITH_AUTHENTICATION_LDAP=OFF \
            -DWITH_PAM=1 \
-           -DWITH_ROCKSDB=1 \
+           -DWITH_ROCKSDB=OFF \
            -DALLOW_NO_SSE42=ON \
            -DROCKSDB_DISABLE_AVX2=1 \
            -DROCKSDB_DISABLE_MARCH_NATIVE=1 \
            -DGROUP_REPLICATION_WITH_ROCKSDB=OFF \
            -DWITH_TOKUDB=0 \
+           -DWITH_TOKUDB_BACKUP=OFF \
            -DWITH_INNODB_MEMCACHED=1 \
            -DMYSQL_MAINTAINER_MODE=OFF \
            -DFORCE_INSOURCE_BUILD=1 \
@@ -563,7 +564,8 @@ mkdir release
            -DWITH_AUTHENTICATION_LDAP=OFF \
            -DWITH_PAM=1 \
            -DWITH_TOKUDB=0 \
-           -DWITH_ROCKSDB=1 \
+           -DWITH_TOKUDB_BACKUP=OFF \
+           -DWITH_ROCKSDB=OFF \
            -DROCKSDB_DISABLE_AVX2=1 \
            -DROCKSDB_DISABLE_MARCH_NATIVE=1 \
            -DGROUP_REPLICATION_WITH_ROCKSDB=OFF \
@@ -672,7 +674,6 @@ rm -rf %{buildroot}/usr/lib/libkmip.a
 rm -rf %{buildroot}/usr/lib/libkmippp.a
 #%if 0%{?tokudb}
 #  rm -f %{buildroot}%{_prefix}/README.md
-#  rm -f %{buildroot}%{_prefix}/COPYING.AGPLv3
 #  rm -f %{buildroot}%{_prefix}/COPYING.GPLv2
 #  rm -f %{buildroot}%{_prefix}/PATENTS
 #%endif
