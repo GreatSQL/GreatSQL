@@ -265,9 +265,10 @@ fi
         -DFN_NO_CASE_SENSE=1 \
         -DWITH_AUTHENTICATION_LDAP=OFF \
         -DWITH_PAM=ON \
-        -DWITH_ROCKSDB=ON \
+        -DWITH_ROCKSDB=OFF \
         -DGROUP_REPLICATION_WITH_ROCKSDB=OFF \
         -DWITH_TOKUDB=OFF \
+        -DWITH_TOKUDB_BACKUP=OFF \
         -DWITH_INNODB_MEMCACHED=ON \
         -DWITH_ZLIB=bundled \
         -DWITH_NUMA=ON \
@@ -445,14 +446,11 @@ fi
 # Package the archive
 (
     cd "$INSTALLDIR/usr/local/"
-    #PS-4854 Percona Server for MySQL tarball without AGPLv3 dependency/license
-    find $PRODUCT_FULL -type f -name 'COPYING.AGPLv3' -delete
     #$TAR --owner=0 --group=0 -czf "$WORKDIR_ABS/$PRODUCT_FULL.tar.gz" $PRODUCT_FULL
     $TAR --owner=0 --group=0 -cf "$WORKDIR_ABS/$PRODUCT_FULL.tar" $PRODUCT_FULL
     xz -9 -f $TAR_PROCESSORS "$WORKDIR_ABS/$PRODUCT_FULL.tar"
 
     cd "$INSTALLDIR/usr/local/minimal/"
-    find $PRODUCT_FULL-minimal -type f -name 'COPYING.AGPLv3' -delete
     #$TAR --owner=0 --group=0 -czf "$WORKDIR_ABS/$PRODUCT_FULL-minimal.tar.gz" $PRODUCT_FULL-minimal
     $TAR --owner=0 --group=0 -cf "$WORKDIR_ABS/$PRODUCT_FULL-minimal.tar" $PRODUCT_FULL-minimal
     xz -9 -f $TAR_PROCESSORS "$WORKDIR_ABS/$PRODUCT_FULL-minimal.tar"
