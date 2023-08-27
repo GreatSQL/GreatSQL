@@ -127,7 +127,7 @@ $ systemctl status mysqld
 
 # 编译GreatSQL二进制包
 
-推荐利用Docker环境快速编译GreatSQL二进制包，可参考方法：[编译源码安装GreatSQL](https://gitee.com/GreatSQL/GreatSQL-Doc/blob/master/user-manual/4-install-guide/4-6-install-with-source-code.md)。
+推荐利用Docker环境快速编译GreatSQL二进制包，可参考方法：[编译源码安装GreatSQL](https://gitee.com/GreatSQL/GreatSQL-Manual/blob/master/4-install-guide/4-6-install-with-source-code.md)。
 
 # 版本历史
 ---
@@ -156,7 +156,7 @@ $ systemctl status mysqld
 
 # 专栏文章
 - [深入浅出MGR专栏文章](https://gitee.com/GreatSQL/GreatSQL-Doc/blob/master/deep-dive-mgr)，深入浅出MGR相关知识点、运维管理实操，配合「实战MGR」视频内容食用更佳。
-- [GreatSQL文档](https://gitee.com/GreatSQL/GreatSQL-Doc/tree/master/user-manual)，GreatSQL开源分支文档。
+- [GreatSQL文档](https://gitee.com/GreatSQL/GreatSQL-Manual)，GreatSQL开源分支文档。
 
 
 # 相关资源
