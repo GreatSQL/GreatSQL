@@ -152,6 +152,14 @@ class View_impl : public Abstract_table_impl, public View {
   void set_updatable(bool updatable) override { m_is_updatable = updatable; }
 
   /////////////////////////////////////////////////////////////////////////
+  // is_materialized_view.
+  /////////////////////////////////////////////////////////////////////////
+  bool is_materialized_view() const override { return m_is_materialized_view; }
+  void set_is_materialized_view(bool is_materialized_view) override {
+    m_is_materialized_view = is_materialized_view;
+  }
+
+  /////////////////////////////////////////////////////////////////////////
   // algorithm.
   /////////////////////////////////////////////////////////////////////////
 
@@ -289,6 +297,8 @@ class View_impl : public Abstract_table_impl, public View {
   String_type m_definition_utf8;
   String_type m_definer_user;
   String_type m_definer_host;
+  // materialized view flag
+  bool m_is_materialized_view;
 
   Properties_impl m_column_names;
 

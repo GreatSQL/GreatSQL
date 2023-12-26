@@ -2,6 +2,7 @@
 #define ITEM_SUBSELECT_INCLUDED
 
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -324,6 +325,10 @@ class Item_singlerow_subselect : public Item_subselect {
 
   bool collect_scalar_subqueries(uchar *) override;
   virtual bool is_maxmin() const { return false; }
+  LEX_STRING get_udt_name() const override;
+  LEX_STRING get_udt_db_name() const override;
+  type_conversion_status save_in_field_inner(Field *field,
+                                             bool no_conversions) override;
 
   /**
     Argument for walk method replace_scalar_subquery

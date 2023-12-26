@@ -49,6 +49,7 @@
 #include "sql/dd/types/column.h"
 #include "sql/derror.h"  // ER_THD
 #include "sql/field.h"
+#include "sql/gdb_sequence.h"
 #include "sql/gis/srid.h"
 #include "sql/intrusive_list_iterator.h"
 #include "sql/item.h"
@@ -70,6 +71,7 @@
 #include "sql/query_options.h"
 #include "sql/query_result.h"
 #include "sql/query_term.h"
+#include "sql/sequence_option.h"
 #include "sql/sp.h"  // sp_add_used_routine
 #include "sql/sp_head.h"
 #include "sql/sp_instr.h"  // sp_instr_set
@@ -91,6 +93,7 @@
 #include "sql/sql_show_processlist.h"
 #include "sql/sql_show_status.h"  // build_show_session_status, ...
 #include "sql/sql_update.h"       // Sql_cmd_update...
+#include "sql/sql_view.h"         //check_duplicate_names
 #include "sql/system_variables.h"
 #include "sql/table_function.h"
 #include "sql/thr_malloc.h"
@@ -173,8 +176,14 @@ bool PT_joined_table::contextualize_tabs(Parse_context *pc) {
     return true;
   }
 
-  if (m_type & JTT_LEFT) {
+  if (m_type & JTT_LEFT || m_type & JTT_FULL) {
     m_right_table_ref->outer_join = true;
+
+    if (m_type & JTT_FULL) {
+      m_left_table_ref->foj_outer = true;
+      m_right_table_ref->foj_inner = true;
+    }
+
     if (was_right_join) {
       m_right_table_ref->join_order_swapped = true;
       m_right_table_ref->query_block->set_right_joins();
@@ -307,6 +316,37 @@ bool PT_order_expr::contextualize(Parse_context *pc) {
   return super::contextualize(pc) || item_initial->itemize(pc, &item_initial);
 }
 
+bool PT_connect_by::contextualize(Parse_context *pc) {
+  if (super::contextualize(pc)) return true;
+  if (m_start) {
+    if (m_start->itemize(pc, &m_start)) return true;
+    if (!m_start->is_bool_func()) {
+      my_error(ER_NON_BOOLEAN_EXPR_FOR_CHECK_CONSTRAINT, MYF(0), "start with");
+      return true;
+    }
+    pc->select->set_start_with_cond(m_start);
+  }
+
+  pc->select->parsing_place = CTX_CONNECT_BY;
+  pc->thd->where = "connect by";
+  if (m_expr->itemize(pc, &m_expr)) return true;
+
+  if (!m_expr->is_bool_func()) {
+    my_error(ER_NON_BOOLEAN_EXPR_FOR_CHECK_CONSTRAINT, MYF(0), "connect by");
+    return true;
+  }
+  // Ensure we're resetting parsing place of the right select
+  assert(pc->select->parsing_place == CTX_CONNECT_BY);
+  pc->select->parsing_place = CTX_NONE;
+  assert(m_expr != nullptr);
+  m_expr->apply_is_true();
+
+  pc->select->set_connect_by_cond(m_expr);
+  pc->select->connect_by_nocycle = m_nocycle != 0 ? true : false;
+  pc->thd->where = THD::DEFAULT_WHERE;
+  return false;
+}
+
 /**
   Recognize the transition variable syntax: { OLD | NEW } "." ...
 
@@ -405,7 +445,11 @@ static bool set_trigger_new_row(Parse_context *pc,
 
   assert(sp->m_trg_chistics.action_time == TRG_ACTION_BEFORE &&
          (sp->m_trg_chistics.event == TRG_EVENT_INSERT ||
-          sp->m_trg_chistics.event == TRG_EVENT_UPDATE));
+          sp->m_trg_chistics.event == TRG_EVENT_UPDATE ||
+          sp->m_trg_chistics.event == TRG_EVENT_INSERT_UPDATE ||
+          sp->m_trg_chistics.event == TRG_EVENT_INSERT_DELETE ||
+          sp->m_trg_chistics.event == TRG_EVENT_UPDATE_DELETE ||
+          sp->m_trg_chistics.event == TRG_EVENT_INSERT_UPDATE_DELETE));
 
   Item_trigger_field *trg_fld = new (pc->mem_root) Item_trigger_field(
       POS(), TRG_NEW_ROW, trigger_field_name.str, UPDATE_ACL, false);
@@ -531,6 +575,7 @@ bool PT_set_variable::contextualize(Parse_context *pc) {
   THD *const thd = pc->thd;
   LEX *const lex = thd->lex;
   LEX_CSTRING expr_query{};
+  lex->sql_command_only_in_sp = m_ora_set_var;
   if (lex->is_metadata_used()) {
     expr_query = make_string(thd, m_expr_pos.raw.start, m_expr_pos.raw.end);
     if (expr_query.str == nullptr) return true;  // OOM
@@ -577,11 +622,7 @@ bool PT_set_variable::contextualize(Parse_context *pc) {
     List_iterator_fast<ora_simple_ident_def> it(*m_def_list);
     ora_simple_ident_def *def, *def_before = nullptr;
     sp_variable *spv = nullptr;
-    sp_variable *spv_result = nullptr;
     LEX_CSTRING expr_query_local = EMPTY_CSTR;
-    LEX_STRING spv_def_name;
-    uint offset_def;
-    Create_field *cdf_before;
     for (uint offset = 0; (def = it++); offset++) {
       if (offset == 0) {
         if (!(spv = lex->find_variable(def->ident.str, def->ident.length, &pctx,
@@ -589,57 +630,31 @@ bool PT_set_variable::contextualize(Parse_context *pc) {
           my_error(ER_SP_UNDECLARED_VAR, MYF(0), def->ident.str);
           return true;
         }
-        spv_def_name = spv->field_def.udt_name.str
-                           ? spv->field_def.udt_name
-                           : to_lex_string(spv->field_def.nested_table_udt);
-        spv_result = spv;
-        def_before = def;
-      } else {  // offset > 0
-        if (!(spv = lex->find_variable(spv_def_name.str, spv_def_name.length,
-                                       &pctx, &rh))) {
-          my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), spv_def_name.str);
-          return true;
-        }
-        if (def_before->number == nullptr) {  // a.b
-          if (!spv->field_def.row_field_definitions()) {
-            my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), def_before->ident.str);
-            return true;
-          }
-          cdf_before =
-              spv->field_def.row_field_definitions()->find_row_field_by_name(
-                  to_lex_cstring(def->ident.str), &offset_def);
-        } else {
-          if (!spv->field_def.row_field_table_definitions()) {
-            my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0),
-                     def_before->ident.str);
-            return true;
-          }
-          cdf_before = spv->field_def.row_field_table_definitions()
-                           ->find_row_field_by_name(
-                               to_lex_cstring(def->ident.str), &offset_def);
-        }
-        if (!cdf_before) {
-          my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), def->ident.str);
-          return true;
-        }
-        spv_def_name = cdf_before->udt_name.str
-                           ? cdf_before->udt_name
-                           : to_lex_string(cdf_before->nested_table_udt);
       }
       def_before = def;
     }
-    sp_instr_set_row_field_table_by_name *is =
-        new (thd->mem_root) sp_instr_set_row_field_table_by_name(
-            sp_local->instructions(), lex, spv_result->offset, m_opt_expr,
-            expr_query_local, true, pctx, rh, m_def_list, m_name);
-    if (!is || sp_local->add_instr(thd, is)) return true;
+    if (m_name.str) {
+      sp_instr_set_row_field_table_by_name *is =
+          new (thd->mem_root) sp_instr_set_row_field_table_by_name(
+              sp_local->instructions(), lex, spv->offset, m_opt_expr,
+              expr_query_local, true, pctx, rh, m_def_list, m_name);
+      if (!is || sp_local->add_instr(thd, is)) return true;
+    } else {
+      sp_instr_set_row_field_table_by_index *is =
+          new (thd->mem_root) sp_instr_set_row_field_table_by_index(
+              sp->instructions(), lex, spv->offset, m_opt_expr,
+              expr_query_local, true, pctx, rh, def_before->number);
+      if (!is || sp->add_instr(thd, is)) return true;
+    }
     return false;
   } else {
     sp_variable *spv =
         lex->find_variable(m_opt_prefix.str, m_opt_prefix.length, &pctx, &rh);
-    if (spv && spv->field_def.row_field_definitions()) {
+    if (spv && (spv->field_def.ora_record.row_field_definitions() ||
+                spv->field_def.ora_record.table_rowtype_ref() ||
+                spv->field_def.ora_record.is_cursor_rowtype_ref())) {
       // type is record of
-      if (spv->field_def.is_record_define) {
+      if (spv->field_def.ora_record.is_record_define) {
         my_error(ER_SP_MISMATCH_USE_OF_RECORD_VAR, MYF(0), spv->name.str);
         return true;
       }
@@ -779,13 +794,23 @@ bool PT_select_sp_var::contextualize(Parse_context *pc) {
     my_error(ER_SP_UNDECLARED_VAR, MYF(0), name.str);
     return true;
   }
-
+  if (spv->field_def.ora_record.is_ref_cursor_define) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "the type of variable used in 'into list'");
+    return true;
+  }
   offset = spv->offset;
-  is_rowtype = spv->field_def.is_cursor_rowtype_ref() ||
-               spv->field_def.is_table_rowtype_ref() || spv->field_def.is_row();
-  is_record_define_type = spv->field_def.is_record_define;
-  is_row_table = spv->field_def.is_row_table();
-  is_record_table_define_type = spv->field_def.is_record_table_define;
+  is_row_table = spv->field_def.ora_record.is_row_table();
+  is_rowtype =
+      !is_row_table && (spv->field_def.ora_record.is_cursor_rowtype_ref() ||
+                        spv->field_def.ora_record.is_table_rowtype_ref() ||
+                        spv->field_def.ora_record.is_row());
+  is_record_define_type = spv->field_def.ora_record.is_record_define;
+
+  is_record_table_define_type =
+      spv->field_def.ora_record.is_record_table_define;
+  is_index_by_varchar =
+      spv->field_def.ora_record.index_length > 0 ? true : false;
 
   return false;
 }
@@ -1096,15 +1121,37 @@ Sql_cmd *PT_update::make_cmd(THD *thd) {
   if ((thd->variables.sql_mode & MODE_ORACLE) &&
       column_list->elements() > value_list->elements() &&
       value_list->elements() == 1) {
-    sql_cmd->is_ora_update_set = true;
     if (join_table_list.size() > 1) {
       my_error(ER_NOT_SUPPORTED_YET, MYF(0),
                "update set with more than one table.");
       return nullptr;
     }
+    if (dynamic_cast<PT_joined_table *>(*join_table_list.begin()) ||
+        dynamic_cast<PT_table_factor_joined_table *>(
+            *join_table_list.begin())) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "update set with join table.");
+      return nullptr;
+    }
+    uint i = 0;
+    Item *item_head = nullptr;
+    mem_root_deque<Item *> item_tail(thd->mem_root);
+    for (Item *&item : column_list->value) {
+      if (i == 0)
+        item_head = item;
+      else
+        item_tail.push_back(item);
+      i++;
+    }
+    Item *item_row = new (thd->mem_root) Item_row(item_head, item_tail);
+    if (item_row->itemize(&pc, &item_row)) return nullptr;
+    mem_root_deque<Item *> item_fields(thd->mem_root);
+    item_fields.push_back(item_row);
+    select->fields = item_fields;
   }
   // UPDATE tt_air SET (tt_air.name)=(2,9);
-  if (column_list->elements() < value_list->elements()) {
+  if (column_list->elements() < value_list->elements() ||
+      (column_list->elements() > value_list->elements() &&
+       value_list->elements() > 1)) {
     my_error(ER_NOT_SUPPORTED_YET, MYF(0),
              "update set with different column size.");
     return nullptr;
@@ -1299,6 +1346,201 @@ Sql_cmd *PT_insert::make_cmd(THD *thd) {
   return sql_cmd;
 }
 
+bool PT_insert_all_into::contextualize(Parse_context *pc) {
+  if (Parse_tree_node::contextualize(pc)) return true;
+
+  pc->select->parsing_place = CTX_SELECT_LIST;
+
+  if (opt_when) {
+    if (opt_when->itemize(pc, &opt_when)) return true;
+    if (!opt_when->is_bool_func()) {
+      opt_when = make_condition(pc, opt_when);
+      if (opt_when == nullptr) return true;
+    }
+  }
+  if (values_list->contextualize(pc)) return true;
+  for (auto val : values_list->value) {
+    pc->select->fields.push_back(val);
+  }
+
+  // Ensure we're resetting parsing place of the right select
+  assert(pc->select->parsing_place == CTX_SELECT_LIST);
+  pc->select->parsing_place = CTX_NONE;
+  return false;
+}
+
+Sql_cmd *PT_insert_all::make_cmd(THD *thd) {
+  LEX *const lex = thd->lex;
+  Parse_context pc(thd, lex->current_query_block());
+
+  lex->sql_command = SQLCOM_INSERT_ALL_SELECT;
+  lex->duplicates = DUP_ERROR;
+  lex->set_ignore(false);
+
+  uint insert_table_count = into_list->size();
+
+  auto fields_for_table =
+      thd->mem_root->ArrayAlloc<List_item *>(insert_table_count);
+  auto opt_whens = thd->mem_root->ArrayAlloc<Item *>(insert_table_count);
+  auto clause_types = thd->mem_root->ArrayAlloc<int>(insert_table_count);
+  if (fields_for_table == nullptr || opt_whens == nullptr ||
+      clause_types == nullptr)
+    return nullptr;
+
+  Yacc_state *yyps = &pc.thd->m_parser_state->m_yacc;
+
+  SQL_I_List<Table_ref> insert_table_list;
+
+  for (uint i = 0; i < insert_table_count; i++) {
+    auto iter = into_list->at(i);
+    // set values item
+    if (iter->contextualize(&pc)) return nullptr;
+
+    pc.select->m_table_list.save_and_clear(&insert_table_list);
+    if (!pc.select->add_table_to_list(thd, iter->table_ident, nullptr,
+                                      TL_OPTION_UPDATING, yyps->m_lock_type,
+                                      yyps->m_mdl_type, nullptr,
+                                      iter->opt_use_partition)) {
+      return nullptr;
+    }
+    // insert_table_list is empty when add first table
+    if (insert_table_list.first != nullptr) {
+      pc.select->m_table_list.push_front(&insert_table_list);
+    }
+    if (iter->column_list != nullptr) {
+      assert(lex->current_query_block() == lex->query_block);
+
+      iter->column_list->contextualize(&pc);
+      fields_for_table[i] = &iter->column_list->value;
+    } else {
+      fields_for_table[i] = nullptr;  // will fill by setup
+    }
+    opt_whens[i] = iter->opt_when;
+    clause_types[i] = iter->clause_type;
+  }
+
+  pc.select->set_lock_for_tables(lock_option);
+  if (opt_hints != nullptr && opt_hints->contextualize(&pc)) return nullptr;
+
+  pc.select->m_table_list.save_and_clear(&insert_table_list);
+  // create a derived_table
+
+  Query_block *outer_query_block = pc.select;
+  outer_query_block->parsing_place = CTX_DERIVED;
+  assert(outer_query_block->linkage != GLOBAL_OPTIONS_TYPE);
+  lex->push_context(
+      outer_query_block->master_query_expression()->outer_query_block()
+          ? &outer_query_block->master_query_expression()
+                 ->outer_query_block()
+                 ->context
+          : nullptr);
+  // add query to subquery
+
+  Query_block *child = lex->new_query(pc.select);
+  if (child == nullptr) return nullptr;
+  Parse_context inner_pc(thd, child);
+  inner_pc.m_stack.push_back(QueryLevel(pc.mem_root, SC_SUBQUERY));
+
+  child->linkage = DERIVED_TABLE_TYPE;
+  if (query_all->contextualize(&inner_pc)) return nullptr;
+  if (query_all->has_into_clause()) {
+    my_error(ER_MISPLACED_INTO, MYF(0));
+    return nullptr;
+  }
+
+  if (inner_pc.finalize_query_expression()) return nullptr;
+  inner_pc.m_stack.pop_back();
+  assert(inner_pc.m_stack.size() == 0);
+
+  lex->pop_context();
+
+  pc.select->n_child_sum_items += child->n_sum_items;
+  /*
+    A subquery (and all the subsequent query blocks in a UNION) can add
+    columns to an outer query block. Reserve space for them.
+  */
+  for (Query_block *temp = child; temp != nullptr;
+       temp = temp->next_query_block()) {
+    outer_query_block->select_n_where_fields += temp->select_n_where_fields;
+    outer_query_block->select_n_having_items += temp->select_n_having_items;
+  }
+
+  lex->pop_context();
+  outer_query_block->parsing_place = CTX_NONE;
+  assert(pc.select->next_query_block() == nullptr);
+  Query_expression *unit = pc.select->first_inner_query_expression();
+  pc.select = outer_query_block;
+  Table_ident *ti = new (pc.thd->mem_root) Table_ident(unit);
+  if (ti == nullptr) return nullptr;
+  auto values_table =
+      pc.select->add_table_to_list(pc.thd, ti, "", 0, TL_READ, MDL_SHARED_READ);
+
+  if (values_table == nullptr) return nullptr;
+  if (pc.select->add_joined_table(values_table)) return nullptr;
+
+  pc.select->context.table_list =
+      pc.select->context.first_name_resolution_table =
+          pc.select->m_table_list.first;
+
+  // insert table add table_list header
+  pc.select->m_table_list.push_front(&insert_table_list);
+
+  lex->bulk_insert_row_cnt = 0;
+
+  assert(insert_table_count == insert_table_list.size());
+  return new (thd->mem_root)
+      Sql_cmd_insert_all(insert_table_count, fields_for_table, opt_whens,
+                         clause_types, break_after_match, unconditional);
+}
+
+Sql_cmd *PT_execute::make_cmd(THD *thd) {
+  Parse_context pc(thd, thd->lex->current_query_block());
+
+  if (itemize_safe(&pc, &m_query)) {
+    return nullptr;
+  }
+  // set into
+  if (contextualize_safe(&pc, m_into)) {
+    return nullptr;
+  }
+
+  // can't use contextualize_safe set param
+  // just use use var_list
+  if (contextualize_safe(&pc, m_param)) {
+    return nullptr;
+  }
+  if (mode != sp_variable::MODE_IN && m_param) {
+    for (auto expr : m_param->value) {
+      if (!expr->is_splocal() && (expr->type() != Item::FUNC_ITEM)) {
+        my_error(ER_VARIABLE_IS_READONLY, MYF(0), "SESSION",
+                 expr->item_name.ptr(), "LOCAL");
+        return nullptr;
+      } else {
+        if (expr->type() == Item::FUNC_ITEM) {
+          auto func = dynamic_cast<Item_func *>(expr);
+          if (func) {
+            // public Item_var_func: @val
+            switch (func->functype()) {
+              case Item_func::GUSERVAR_FUNC:
+              case Item_func::SUSERVAR_FUNC:
+                // case Item_func::GSYSVAR_FUNC:
+                break;
+              default:
+                my_error(ER_VARIABLE_IS_READONLY, MYF(0), "SESSION",
+                         expr->item_name.ptr(), "LOCAL");
+                return nullptr;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  thd->lex->sql_command = SQLCOM_EXECUTE_IMMEDIATE;
+  return new (thd->mem_root)
+      Sql_cmd_execute(m_query, mode, (m_param) ? &m_param->value : nullptr);
+}
+
 Sql_cmd *PT_call::make_cmd(THD *thd) {
   LEX *const lex = thd->lex;
   enum_sp_type sp_type = enum_sp_type::PROCEDURE;
@@ -1310,11 +1552,21 @@ Sql_cmd *PT_call::make_cmd(THD *thd) {
   if (opt_expr_list != nullptr && opt_expr_list->contextualize(&pc))
     return nullptr; /* purecov: inspected */
 
+  mem_root_deque<Item *> *proc_args = nullptr;
+  if (opt_expr_list != nullptr) proc_args = &opt_expr_list->value;
+
+  sp_signature *sig = new (thd->mem_root) sp_signature(thd->mem_root);
+  sig->init_by(proc_args);
+
   lex->sql_command = SQLCOM_CALL;
+
+  LEX_CSTRING save_db = proc_name->m_db;
+  LEX_STRING save_fn_name = proc_name->m_name;
+  bool save_explicit_name = proc_name->m_explicit_name;
 
   sp_name *pkg_name = new (thd->mem_root) sp_name(NULL_CSTR, NULL_STR, false);
   if (sp_resolve_package_routine(thd, enum_sp_type::PROCEDURE, lex->sphead,
-                                 proc_name, pkg_name))
+                                 proc_name, pkg_name, sig))
     return nullptr;
 
   // mark this package to be loaded in open_tables_for_query()
@@ -1323,21 +1575,21 @@ Sql_cmd *PT_call::make_cmd(THD *thd) {
                             proc_name);
   else {
     sp_add_own_used_routine(lex, thd, Sroutine_hash_entry::PROCEDURE, proc_name,
-                            pkg_name->m_name.str, pkg_name->m_name.length);
+                            pkg_name->m_name.str, pkg_name->m_name.length, sig);
     // to acquire MDL for this package
     sp_add_own_used_routine(lex, thd, Sroutine_hash_entry::PACKAGE_BODY,
                             pkg_name);
   }
-  mem_root_deque<Item *> *proc_args = nullptr;
-  if (opt_expr_list != nullptr) proc_args = &opt_expr_list->value;
 
   return new (thd->mem_root)
-      Sql_cmd_call(proc_name, proc_args, sp_type, pkg_name);
+      Sql_cmd_call(proc_name, proc_args, sp_type, pkg_name, sig, save_db,
+                   save_fn_name, save_explicit_name);
 }
 
 bool PT_query_specification::contextualize(Parse_context *pc) {
   if (super::contextualize(pc)) return true;
   pc->m_stack.push_back(QueryLevel(pc->mem_root, SC_QUERY_SPECIFICATION));
+
   pc->select->parsing_place = CTX_SELECT_LIST;
 
   if (options.query_spec_options & SELECT_HIGH_PRIORITY) {
@@ -1346,13 +1598,35 @@ bool PT_query_specification::contextualize(Parse_context *pc) {
     yyps->m_mdl_type = MDL_SHARED_READ;
   }
   if (options.save_to(pc)) return true;
-
+  if (opt_connect_by_clause) pc->select->has_connect_by = true;
   if (item_list->contextualize(pc)) return true;
 
   // Ensure we're resetting parsing place of the right select
   assert(pc->select->parsing_place == CTX_SELECT_LIST);
   pc->select->parsing_place = CTX_NONE;
-
+  /*e.g: select ref_cursor from table without into.*/
+  if (pc->thd->lex->sphead && !opt_into1) {
+    THD *thd = pc->thd;
+    sp_pcontext *pctx;
+    const Sp_rcontext_handler *rh = nullptr;
+    sp_variable *spv;
+    for (uint i = 0; i < item_list->value.size(); i++) {
+      Item *itm = item_list->value.at(i);
+      if (itm->is_splocal()) {
+        Item_splocal *item_sp = dynamic_cast<Item_splocal *>(itm);
+        if (item_sp &&
+            (spv = thd->lex->find_variable(item_sp->m_name.ptr(),
+                                           item_sp->m_name.length(), &pctx,
+                                           &rh)) &&
+            (spv->field_def.ora_record.is_ref_cursor ||
+             spv->field_def.ora_record.is_ref_cursor_define)) {
+          my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                   "SELECT contains ref cursor variable");
+          return true;
+        }
+      }
+    }
+  }
   if (contextualize_safe(pc, opt_into1)) return true;
 
   if (!from_clause.empty()) {
@@ -1363,6 +1637,7 @@ bool PT_query_specification::contextualize(Parse_context *pc) {
   }
 
   if (itemize_safe(pc, &opt_where_clause) ||
+      contextualize_safe(pc, opt_connect_by_clause) ||
       contextualize_safe(pc, opt_group_clause) ||
       itemize_safe(pc, &opt_having_clause))
     return true;
@@ -1392,9 +1667,22 @@ bool PT_query_specification::contextualize(Parse_context *pc) {
   if (contextualize_safe(pc, opt_window_clause)) return true;
   pc->select->parsing_place = CTX_NONE;
 
+  if (m_pivot && m_pivot->contextualize(pc)) return true;
+
   QueryLevel ql = pc->m_stack.back();
   pc->m_stack.pop_back();
   pc->m_stack.back().m_elts.push_back(pc->select);
+
+  if (pc->select->has_foj()) {
+    if (pc->select->has_joined_item) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "Full join used together with outer join sign '(+)'");
+      return true;
+    }
+    Query_block *outer_query_block = pc->select->outer_query_block();
+    if (outer_query_block) outer_query_block->set_has_foj(true);
+  }
+
   return (opt_hints != nullptr ? opt_hints->contextualize(pc) : false);
 }
 
@@ -1511,14 +1799,19 @@ bool PT_table_sequence_function::contextualize(Parse_context *pc) {
 bool PT_table_record_function::contextualize(Parse_context *pc) {
   if (super::contextualize(pc)) return true;
   const Sp_rcontext_handler *rh = nullptr;
-  sp_variable *spv;
+  sp_variable *spv = nullptr;
+  sp_variable *spv_i = nullptr;
 
   if (!(spv = pc->thd->lex->find_variable(m_table_alias.str,
                                           m_table_alias.length, &rh))) {
     my_error(ER_SP_UNDECLARED_VAR, MYF(0), m_table_alias.str);
     return true;
   }
-
+  if (!(spv_i = pc->thd->lex->find_variable(m_forall_i.str, m_forall_i.length,
+                                            &rh))) {
+    my_error(ER_SP_UNDECLARED_VAR, MYF(0), m_forall_i.str);
+    return true;
+  }
 #ifndef NDEBUG
   sp_head *sp = pc->thd->lex->sphead;
 #endif
@@ -1530,14 +1823,14 @@ bool PT_table_record_function::contextualize(Parse_context *pc) {
     my_error(ER_VIEW_SELECT_VARIABLE, MYF(0));
     return true;
   }
-  if (!spv || !spv->field_def.row_field_table_definitions()) {
+  if (!spv || !spv->field_def.ora_record.row_field_table_definitions()) {
     my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0), m_table_alias.str);
     return true;
   }
   List<Create_field> vt_list;
   // vt_list will be inited in Table_function_record::init().
-  auto stf = new (pc->mem_root)
-      Table_function_record(m_table_alias.str, vt_list, spv->offset);
+  auto stf = new (pc->mem_root) Table_function_record(
+      m_table_alias.str, vt_list, spv->offset, spv_i->offset, false);
   if (stf == nullptr) return true;  // OOM
   LEX_CSTRING alias = to_lex_cstring(m_table_alias.str);
 
@@ -2165,6 +2458,24 @@ bool PT_foreign_key_definition::contextualize(Table_ddl_parse_context *pc) {
   return false;
 }
 
+bool PT_create_external_dir_file_name::contextualize(
+    Table_ddl_parse_context *pc) {
+  if (super::contextualize(pc)) return true;
+  if (pc->create_info->options & HA_LEX_CREATE_TMP_TABLE)
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "create temporary table of external table");
+
+  pc->create_info->external_file_name = file_name.str;
+
+  if (append_dir_to_file(pc->thd, dir_name.str,
+                         &pc->create_info->external_file_name))
+    return true;
+
+  pc->create_info->used_fields |=
+      HA_CREATE_USED_EXTERNAL_TABLE | HA_CREATE_USED_EXTERNAL_DATADIR;
+  return false;
+}
+
 bool PT_with_list::push_back(PT_common_table_expr *el) {
   const LEX_STRING &n = el->name();
   for (auto previous : m_elements) {
@@ -2477,6 +2788,61 @@ bool PT_column_def::contextualize(Table_ddl_parse_context *pc) {
       field_hidden_type, false, field_def->udt_ident);
 }
 
+bool PT_create_table_stmt::unsupported_ora_temp_table_create_options(
+    Table_ddl_parse_context *pc) {
+  if (!(ora_tmp_table_options & HA_ORA_TMP_TABLE)) return false;
+  if (!opt_create_table_options) return false;
+  uint64_t unsupport_fields =
+      HA_CREATE_USED_ROW_FORMAT | HA_CREATE_USED_START_TRANSACTION;
+  if (pc->create_info->used_fields & unsupport_fields) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "global/private temp table with such table option");
+    return true;
+  }
+  return false;
+}
+
+bool PT_create_table_stmt::invalid_ora_temp_table_param(
+    bool is_global, enum temp_table_oc_param commit_type,
+    const char *table_name) {
+  ora_tmp_table_options = HA_ORA_TMP_TABLE;
+  if (is_global) {
+    ora_tmp_table_options |= HA_ORA_TMP_TABLE_GLOBAL;
+    if (commit_type == temp_table_oc_param::TEMP_TABLE_OC_DEFAULT)
+      commit_type = temp_table_oc_param::TEMP_TABLE_OC_DELETE_ROWS;
+    if (commit_type == temp_table_oc_param::TEMP_TABLE_OC_DELETE_ROWS)
+      ora_tmp_table_options |= HA_ORA_TMP_TABLE_TRANS;
+    else if (commit_type == temp_table_oc_param::TEMP_TABLE_OC_PRESERVE_ROWS)
+      ora_tmp_table_options |= HA_ORA_TMP_TABLE_SESS;
+    else {
+      my_error(ER_SYNTAX_ERROR, MYF(0));
+      return true;
+    }
+
+    if (is_private_temp_table_prefix(table_name)) {
+      my_error(ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX, MYF(0));
+      return true;
+    }
+  } else {
+    ora_tmp_table_options |= HA_ORA_TMP_TABLE_PRIV;
+    if (commit_type == temp_table_oc_param::TEMP_TABLE_OC_DEFAULT)
+      commit_type = temp_table_oc_param::TEMP_TABLE_OC_DROP_DEF;
+    if (commit_type == temp_table_oc_param::TEMP_TABLE_OC_DROP_DEF)
+      ora_tmp_table_options |= HA_ORA_TMP_TABLE_TRANS;
+    else if (commit_type == temp_table_oc_param::TEMP_TABLE_OC_PRESERVE_DEF)
+      ora_tmp_table_options |= HA_ORA_TMP_TABLE_SESS;
+    else {
+      my_error(ER_SYNTAX_ERROR, MYF(0));
+      return true;
+    }
+    if (!is_private_temp_table_prefix(table_name)) {
+      my_error(ER_INVALID_PRIVATE_TEMP_TABLE_PREFIX, MYF(0));
+      return true;
+    }
+  }
+  return false;
+}
+
 Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
   LEX *const lex = thd->lex;
 
@@ -2496,6 +2862,13 @@ Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
   Table_ddl_parse_context pc2(thd, pc.select, &m_alter_info);
 
   pc2.create_info->options = 0;
+  pc2.create_info->ora_tmp_table_options = ora_tmp_table_options;
+  /* In ORACLE_MODE, normal table name cannot use private table prefix */
+  if (thd->variables.sql_mode & MODE_ORACLE && !ora_tmp_table_options &&
+      is_private_temp_table_prefix(table_name->table.str)) {
+    my_error(ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX, MYF(0));
+    return nullptr;
+  }
   if (is_temporary) pc2.create_info->options |= HA_LEX_CREATE_TMP_TABLE;
   if (only_if_not_exists)
     pc2.create_info->options |= HA_LEX_CREATE_IF_NOT_EXISTS;
@@ -2511,8 +2884,11 @@ Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
     pc2.create_info->options |= HA_LEX_CREATE_TABLE_LIKE;
     Table_ref **like_clause_table = &lex->query_tables->next_global;
     // limit this option for such special case only.
+    ulong tlo = is_temporary && thd->m_ora_create_global_temp_instance
+                    ? TL_OPTION_FOR_TMP
+                    : 0;
     Table_ref *src_table = pc.select->add_table_to_list(
-        thd, opt_like_clause, nullptr, 0, TL_READ, MDL_SHARED_READ);
+        thd, opt_like_clause, nullptr, tlo, TL_READ, MDL_SHARED_READ);
     if (!src_table) return nullptr;
     /* CREATE TABLE ... LIKE is not allowed for views. */
     src_table->required_type = dd::enum_table_type::BASE_TABLE;
@@ -2552,10 +2928,17 @@ Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
     if (opt_create_table_options) {
       for (auto option : *opt_create_table_options)
         if (option->contextualize(&pc2)) return nullptr;
+
+      if (unsupported_ora_temp_table_create_options(&pc2)) return nullptr;
     }
 
     if (opt_partitioning) {
       Table_ref **exclude_part_tables = lex->query_tables_last;
+      if (ora_tmp_table_options & HA_ORA_TMP_TABLE) {
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                 "global/private temp table with partitioning");
+        return nullptr;
+      }
       if (opt_partitioning->contextualize(&pc)) return nullptr;
       /*
         Remove all tables used in PARTITION clause from the global table
@@ -2626,7 +3009,59 @@ Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
   create_table_set_open_action_and_adjust_tables(lex);
 
   thd->lex->alter_info = &m_alter_info;
+
+  /*
+    Save materialized view column aliases
+  */
+  if (lex->is_materialized_view()) {
+    if (!qe_tables) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "using dual in materialized view");
+      return nullptr;
+    }
+    if (m_column_names.size()) {
+      /*
+        Only column names of the first query block should be checked for
+        duplication; any further UNION-ed part isn't used for determining
+        names of the view's columns.
+      */
+      if (check_duplicate_names(&m_column_names, lex->query_block->fields,
+                                true)) {
+        return nullptr;
+      }
+      qe_tables->set_derived_column_names(&m_column_names);
+    }
+  }
   return new (thd->mem_root) Sql_cmd_create_table(&m_alter_info, qe_tables);
+}
+
+Sql_cmd *PT_create_sequence_stmt::make_cmd(THD *thd) {
+  LEX *const lex = thd->lex;
+  lex->sql_command = SQLCOM_CREATE_SEQUENCE;
+
+  assert(nullptr == lex->create_info);
+  lex->create_info = thd->alloc_typed<HA_CREATE_INFO>();
+  if (nullptr == lex->create_info) {  // OOM
+    return nullptr;
+  }
+  lex->create_info->options |=
+      ((if_not_exists) ? HA_LEX_CREATE_IF_NOT_EXISTS : 0);
+
+  return new (thd->mem_root) Sql_cmd_create_sequence(
+      &seq_ident->db, &seq_ident->table, &lex->seq_option);
+}
+
+Sql_cmd *PT_drop_sequence_stmt::make_cmd(THD *thd) {
+  LEX *const lex = thd->lex;
+  lex->sql_command = SQLCOM_DROP_SEQUENCE;
+  return new (thd->mem_root)
+      Sql_cmd_drop_sequence(&seq_ident->db, &seq_ident->table);
+}
+
+Sql_cmd *PT_alter_sequence_stmt::make_cmd(THD *thd) {
+  LEX *const lex = thd->lex;
+  lex->sql_command = SQLCOM_ALTER_SEQUENCE;
+  return new (thd->mem_root) Sql_cmd_alter_sequence(
+      &seq_ident->db, &seq_ident->table, &lex->seq_option);
 }
 
 bool PT_table_locking_clause::set_lock_for_tables(Parse_context *pc) {
@@ -2875,6 +3310,12 @@ Sql_cmd *PT_show_create_type::make_cmd(THD *thd) {
 
   lex->spname = m_spname;
 
+  return &m_sql_cmd;
+}
+
+Sql_cmd *PT_show_create_sequence::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
   return &m_sql_cmd;
 }
 
@@ -3278,6 +3719,22 @@ Sql_cmd *PT_show_table_status::make_cmd(THD *thd) {
 
   if (dd::info_schema::build_show_tables_query(m_pos, thd, lex->wild, m_where,
                                                true) == nullptr)
+    return nullptr;
+
+  return &m_sql_cmd;
+}
+
+Sql_cmd *PT_show_sequences::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+  setup_lex_show_cmd_type(thd, m_show_cmd_type);
+
+  lex->query_block->db = m_opt_db;
+
+  if (m_wild.str && lex->set_wild(m_wild)) return nullptr;  // OOM
+
+  if (dd::info_schema::build_show_sequences_query(m_pos, thd, lex->wild,
+                                                  m_where) == nullptr)
     return nullptr;
 
   return &m_sql_cmd;
@@ -4116,6 +4573,7 @@ bool PT_table_factor_table_ident::contextualize(Parse_context *pc) {
       opt_key_definition, opt_use_partition, nullptr, pc);
   if (m_table_ref == nullptr) return true;
   if (pc->select->add_joined_table(m_table_ref)) return true;
+
   return false;
 }
 
@@ -4147,6 +4605,7 @@ bool PT_cross_join::contextualize(Parse_context *pc) {
 
 bool PT_joined_table_on::contextualize(Parse_context *pc) {
   if (this->contextualize_tabs(pc)) return true;
+  if (m_full_join) pc->select->set_has_foj(true);
 
   if (push_new_name_resolution_context(pc, this->m_left_table_ref,
                                        this->m_right_table_ref)) {
@@ -4203,6 +4662,116 @@ bool PT_table_locking_clause::raise_error(THD *thd, const Table_ident *name,
 
 bool PT_table_locking_clause::raise_error(int error) {
   my_error(error, MYF(0));
+  return true;
+}
+
+bool PT_column_locking_clause::set_lock_for_tables(Parse_context *pc) {
+  THD *thd = pc->thd;
+  for (Qualified_column_ident *column_ident : m_columns) {
+    Query_block *select = pc->select;
+    Table_ref *table_list = nullptr;
+    LEX_CSTRING db_name = column_ident->db;
+    LEX_CSTRING table_name = column_ident->table;
+    if (table_name.length == 0) {
+      if (select->m_table_list.size() == 1) {
+        table_list = select->m_table_list.first;
+        if (table_list) {
+          table_name = to_lex_cstring(table_list->alias);
+          column_ident->table = table_name;
+        } else
+          return true;
+      } else {
+        my_error(ER_NON_UNIQ_ERROR, MYF(0), column_ident->m_column.str,
+                 "field list");
+        return true;
+      }
+    }
+    for (Table_ref *table = select->m_table_list.first; table;
+         table = table->next_local) {
+      if ((db_name.length == 0 ||
+           my_strcasecmp(system_charset_info, db_name.str, table->db) == 0) &&
+          my_strcasecmp(system_charset_info, table_name.str, table->alias) ==
+              0) {
+        table_list = table;
+        break;
+      }
+    }
+    if (table_list == nullptr)
+      return raise_error(thd, column_ident, ER_UNRESOLVED_TABLE_LOCK);
+
+    Item *update_of = new (thd->mem_root)
+        Item_field(POS(), thd->db().str, column_ident->table.str,
+                   column_ident->m_column.str);
+    if (update_of->itemize(pc, &update_of)) return true;
+    Item_field *update_of_field = dynamic_cast<Item_field *>(update_of);
+    update_of_field->cached_table = table_list;
+    bool is_duplicate = false;
+    // If for update of a.c1,a.c2,the a.c2 sould not do
+    // select->set_lock_for_table.
+    for (uint i = 0; i < select->m_update_of_cond_dq.size(); i++) {
+      Item_field *item_field =
+          dynamic_cast<Item_field *>(select->m_update_of_cond_dq.at(i));
+      if (my_strcasecmp(system_charset_info, item_field->db_name,
+                        update_of_field->db_name) == 0 &&
+          my_strcasecmp(system_charset_info, item_field->table_name,
+                        update_of_field->table_name) == 0) {
+        is_duplicate = true;
+      }
+    }
+    if (!is_duplicate) {
+      if (table_list->lock_descriptor().type != TL_READ_DEFAULT)
+        return raise_error(thd, column_ident, ER_DUPLICATE_COLUMN_LOCK);
+      select->set_lock_for_table(get_lock_descriptor(), table_list);
+    }
+    select->set_update_of_cond(update_of_field);
+  }
+  if (m_action->is_wait) {
+    if ((ulong)m_action->timeout->val_int() > LONG_TIMEOUT) {
+      my_error(ER_WRONG_ARGUMENTS, MYF(0), "wait n");
+      return true;
+    }
+    sys_var_with_base value;
+    value.var = nullptr;
+    value.base_name = to_lex_cstring("innodb_lock_wait_timeout");
+    System_variable_tracker var_tracker = System_variable_tracker::make_tracker(
+        to_string_view(NULL_CSTR), to_string_view(value.base_name));
+    // if (find_sys_var_null_base(thd, &value)) return true;
+    thd->lex->lock_wait_var = new (thd->mem_root) Sys_var_hint(thd->mem_root);
+    thd->lex->lock_wait_var->add_var(thd, var_tracker, m_action->timeout);
+  }
+  if (m_columns.empty()) {
+    Local_tables_list local_tables(pc->select->m_table_list.first);
+    for (Table_ref *table_list : local_tables)
+      if (!table_list->is_derived()) {
+        if (table_list->lock_descriptor().type != TL_READ_DEFAULT) {
+          my_error(ER_DUPLICATE_TABLE_LOCK, MYF(0), table_list->alias);
+          return true;
+        }
+        pc->select->set_lock_for_table(get_lock_descriptor(), table_list);
+      }
+  }
+  return false;
+}
+
+void PT_column_locking_clause::print_column_ident(
+    const THD *thd, const Qualified_column_ident *ident, String *s) {
+  if (ident->db.length > 0) {
+    append_identifier(thd, s, ident->db.str, ident->db.length);
+    s->append('.');
+  }
+  if (ident->table.length > 0) {
+    append_identifier(thd, s, ident->table.str, ident->table.length);
+    s->append('.');
+  }
+  append_identifier(thd, s, ident->m_column.str, ident->m_column.length);
+}
+
+bool PT_column_locking_clause::raise_error(THD *thd,
+                                           const Qualified_column_ident *name,
+                                           int error) {
+  String s;
+  print_column_ident(thd, name, &s);
+  my_error(error, MYF(0), s.ptr());
   return true;
 }
 
@@ -4413,6 +4982,7 @@ bool PT_into_destination::contextualize(Parse_context *pc) {
       error(pc, m_pos);
     return true;
   }
+  lex->has_into_clause = true;
   return false;
 }
 
@@ -4441,6 +5011,12 @@ bool PT_select_var_list::contextualize(Parse_context *pc) {
   PT_select_var *var;
   while ((var = it++)) {
     if (var->contextualize(pc)) return true;
+    if (is_bulk_into && var->var_is_index_by_varchar()) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "bulk SQL with associative arrays with VARCHAR2 key");
+      return true;
+    }
+    var->set_bulk_collect(is_bulk_into);
   }
 
   LEX *const lex = pc->thd->lex;

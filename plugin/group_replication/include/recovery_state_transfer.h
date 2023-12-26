@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -82,6 +83,10 @@ class Recovery_state_transfer {
   /** Sets the sleep time between connection attempts to all possible donors */
   void set_recovery_donor_reconnect_interval(ulong reconnect_interval) {
     donor_reconnect_interval = reconnect_interval;
+  }
+
+  void set_donor_threshold(ulonglong donor_threshold_value) {
+    donor_threshold = donor_threshold_value;
   }
 
   /**
@@ -455,6 +460,7 @@ class Recovery_state_transfer {
   long max_connection_attempts_to_donors;
   /* Sleep time between connection attempts to all possible donors*/
   long donor_reconnect_interval;
+  ulonglong donor_threshold;
   /* compression algorithm to be used for communication */
   char recovery_compression_algorithm[COMPRESSION_ALGORITHM_NAME_LENGTH_MAX];
   /* compression level to be used for compression */

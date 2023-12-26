@@ -1,0 +1,217 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+
+############################################################
+#  1. Create the test table without primary key on
+#     members.
+SET SESSION sql_log_bin=0;
+call mtr.add_suppression("Table.*does not have any PRIMARY KEY. This is not compatible with Group Replication.");
+SET SESSION sql_log_bin=1;
+set sql_mode=oracle;
+create private temporary table ora$ptt_t1 (a int) on commit preserve definition;
+create global temporary table gt_t1 (a int);
+create global temporary table gt_t2 (a int primary key) on commit preserve rows;
+show create table ora$ptt_t1;
+Table	Create Table
+ora$ptt_t1	CREATE PRIVATE TEMPORARY TABLE "ora$ptt_t1" (
+  "a" int DEFAULT NULL
+) ON COMMIT PRESERVE DEFINITION ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table gt_t1;
+Table	Create Table
+gt_t1	CREATE GLOBAL TEMPORARY TABLE "gt_t1" (
+  "a" int DEFAULT NULL
+) ON COMMIT DELETE ROWS ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+show create table gt_t2;
+Table	Create Table
+gt_t2	CREATE GLOBAL TEMPORARY TABLE "gt_t2" (
+  "a" int NOT NULL,
+  PRIMARY KEY ("a")
+) ON COMMIT PRESERVE ROWS ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+create or replace function f1() return int deterministic as
+c int := 0;
+begin
+insert into gt_t1 values (1);
+select count(*) into c from gt_t1;
+return c;
+end //
+include/rpl_sync.inc
+begin;
+select f1();
+f1()
+1
+select f1();
+f1()
+2
+commit;
+create table a1 (a int);
+show create table a1;
+Table	Create Table
+a1	CREATE TABLE "a1" (
+  "a" int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+ERROR HY000: The table does not comply with the requirements by an external plugin.
+drop table a1;
+create table a1 (a int primary key);
+show create table a1;
+Table	Create Table
+a1	CREATE TABLE "a1" (
+  "a" int NOT NULL,
+  PRIMARY KEY ("a")
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+drop table a1;
+create table a1 like ora$ptt_t1;
+show create table a1;
+Table	Create Table
+a1	CREATE TABLE "a1" (
+  "a" int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+ERROR HY000: The table does not comply with the requirements by an external plugin.
+drop table a1;
+create table a1 like gt_t1;
+show create table a1;
+Table	Create Table
+a1	CREATE TABLE "a1" (
+  "a" int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+ERROR HY000: The table does not comply with the requirements by an external plugin.
+drop table a1;
+create table a1 like gt_t2;
+show create table a1;
+Table	Create Table
+a1	CREATE TABLE "a1" (
+  "a" int NOT NULL,
+  PRIMARY KEY ("a")
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+drop table a1;
+create temporary table a1 like ora$ptt_t1;
+show create table a1;
+Table	Create Table
+a1	CREATE TEMPORARY TABLE "a1" (
+  "a" int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+drop table a1;
+create temporary table a1 like gt_t1;
+show create table a1;
+Table	Create Table
+a1	CREATE TEMPORARY TABLE "a1" (
+  "a" int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+drop table a1;
+create temporary table a1 like gt_t2;
+show create table a1;
+Table	Create Table
+a1	CREATE TEMPORARY TABLE "a1" (
+  "a" int NOT NULL,
+  PRIMARY KEY ("a")
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+drop table a1;
+
+############################################################
+#  1. Create the test table without primary key on
+#     members.
+include/rpl_sync.inc
+
+############################################################
+#  2. Run the function twice in a transaction.
+SET SESSION sql_log_bin=0;
+call mtr.add_suppression("Table.*does not have any PRIMARY KEY. This is not compatible with Group Replication.");
+SET SESSION sql_log_bin=1;
+set sql_mode=oracle;
+create private temporary table ora$ptt_t1 (a int) on commit preserve definition;
+begin;
+select f1();
+f1()
+1
+select f1();
+f1()
+2
+commit;
+create table a1 (a int);
+show create table a1;
+Table	Create Table
+a1	CREATE TABLE "a1" (
+  "a" int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+ERROR HY000: The table does not comply with the requirements by an external plugin.
+drop table a1;
+create table a1 (a int primary key);
+show create table a1;
+Table	Create Table
+a1	CREATE TABLE "a1" (
+  "a" int NOT NULL,
+  PRIMARY KEY ("a")
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+drop table a1;
+create table a1 like ora$ptt_t1;
+show create table a1;
+Table	Create Table
+a1	CREATE TABLE "a1" (
+  "a" int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+ERROR HY000: The table does not comply with the requirements by an external plugin.
+drop table a1;
+create table a1 like gt_t1;
+show create table a1;
+Table	Create Table
+a1	CREATE TABLE "a1" (
+  "a" int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+ERROR HY000: The table does not comply with the requirements by an external plugin.
+drop table a1;
+create table a1 like gt_t2;
+show create table a1;
+Table	Create Table
+a1	CREATE TABLE "a1" (
+  "a" int NOT NULL,
+  PRIMARY KEY ("a")
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+drop table a1;
+create temporary table a1 like ora$ptt_t1;
+show create table a1;
+Table	Create Table
+a1	CREATE TEMPORARY TABLE "a1" (
+  "a" int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+drop table a1;
+create temporary table a1 like gt_t1;
+show create table a1;
+Table	Create Table
+a1	CREATE TEMPORARY TABLE "a1" (
+  "a" int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+drop table a1;
+create temporary table a1 like gt_t2;
+show create table a1;
+Table	Create Table
+a1	CREATE TEMPORARY TABLE "a1" (
+  "a" int NOT NULL,
+  PRIMARY KEY ("a")
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into a1 values (1);
+drop table a1;
+include/rpl_sync.inc
+
+############################################################
+#  3. Clean data.
+drop function f1;
+drop table gt_t2;
+drop table gt_t1;
+include/group_replication_end.inc

@@ -50,6 +50,7 @@ class Procedure;
 class Void_key;
 class Time_zone;
 class Properties;
+class Trigger_impl;
 
 namespace tables {
 class Schemata;

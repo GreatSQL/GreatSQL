@@ -258,6 +258,10 @@ bool plugin_is_group_replication_running() {
   return lv.group_replication_running;
 }
 
+bool is_set_read_only_for_slave_primary() {
+  return ov.is_set_read_only_for_slave_primary;
+}
+
 bool plugin_is_group_replication_cloning() {
   return lv.group_replication_cloning;
 }
@@ -405,13 +409,12 @@ uint get_auto_evict_timeout() { return ov.auto_evict_timeout; }
  */
 void handle_group_replication_incoming_connection(THD *thd, int fd,
                                                   SSL *ssl_ctx) {
-  auto *new_connection = new Network_connection(fd, ssl_ctx);
-  new_connection->has_error = false;
-
   Gcs_mysql_network_provider *mysql_provider =
       gcs_module->get_mysql_network_provider();
 
   if (mysql_provider) {
+    auto *new_connection = new Network_connection(fd, ssl_ctx);
+    new_connection->has_error = false;
     mysql_provider->set_new_connection(thd, new_connection);
   }
 }
@@ -2502,11 +2505,6 @@ int terminate_applier_module() {
   DBUG_SIGNAL_WAIT_FOR(
       current_thd, "group_replication_status_when_terminal_applier",
       "reach_after_terminate_applier_sync", "end_after_terminate_applier_sync");
-  /*
-    Since GR is being stopped we can disable the guarantee that the
-    binlog commit order will follow the order instructed by GR.
-  */
-  Commit_stage_manager::disable_manual_session_tickets();
   return error;
 }
 
@@ -2802,6 +2800,7 @@ int initialize_recovery_module() {
   recovery_module->set_recovery_donor_retry_count(ov.recovery_retry_count_var);
   recovery_module->set_recovery_donor_reconnect_interval(
       ov.recovery_reconnect_interval_var);
+  recovery_module->set_donor_threshold(ov.donor_threshold_var);
 
   recovery_module->set_recovery_public_key_path(
       ov.recovery_public_key_path_var);
@@ -4633,6 +4632,62 @@ static void update_clone_threshold(MYSQL_THD, SYS_VAR *, void *var_ptr,
   }
 }
 
+// donor var related methods
+
+static int check_donor_threshold(MYSQL_THD, SYS_VAR *var, void *save,
+                                 struct st_mysql_value *value) {
+  DBUG_TRACE;
+
+  Checkable_rwlock::Guard g(*lv.plugin_running_lock,
+                            Checkable_rwlock::TRY_READ_LOCK);
+  if (!plugin_running_lock_is_rdlocked(g)) return 1;
+
+  longlong orig = 0;
+  ulonglong in_val = 0;
+  bool is_negative = false;
+
+  value->val_int(value, &orig);
+  in_val = orig;
+
+  /* Check if value is negative */
+  if (!value->is_unsigned(value) && orig < 0) {
+    is_negative = true;
+  }
+
+  if (is_negative || in_val > GNO_END || in_val < 1) {
+    std::stringstream ss;
+    ss << "The value "
+       << (is_negative ? std::to_string(orig) : std::to_string(in_val))
+       << " is not within the range of accepted values for the option "
+       << var->name << ". The value must be between 1 and " << GNO_END
+       << " inclusive.";
+    my_message(ER_WRONG_VALUE_FOR_VAR, ss.str().c_str(), MYF(0));
+    return 1;
+  }
+
+  *static_cast<ulonglong *>(save) = in_val;
+
+  return 0;
+}
+
+static void update_donor_threshold(MYSQL_THD, SYS_VAR *, void *var_ptr,
+                                   const void *save) {
+  DBUG_TRACE;
+
+  Checkable_rwlock::Guard g(*lv.plugin_running_lock,
+                            Checkable_rwlock::TRY_READ_LOCK);
+  if (!plugin_running_lock_is_rdlocked(g)) return;
+
+  longlong in_val = *static_cast<const ulonglong *>(save);
+  *static_cast<ulonglong *>(var_ptr) = in_val;
+
+  if (recovery_module != nullptr) {
+    recovery_module->set_donor_threshold((longlong)in_val);
+  }
+
+  return;
+}
+
 static void update_transaction_size_limit(MYSQL_THD, SYS_VAR *, void *var_ptr,
                                           const void *save) {
   DBUG_TRACE;
@@ -4688,6 +4743,14 @@ static MYSQL_SYSVAR_BOOL(start_on_boot,                          /* name */
                          nullptr, /* update func*/
                          1);      /* default*/
 
+static MYSQL_SYSVAR_BOOL(
+    async_auto_failover_channel_read_only_mode, /* name */
+    ov.is_set_read_only_for_slave_primary,      /* var */
+    PLUGIN_VAR_OPCMDARG,                        /* optional var */
+    "Whether kill primary node all connection after primary role changed",
+    nullptr, /* check func*/
+    nullptr, /* update func*/
+    0);      /* default*/
 // GCS module variables
 
 static MYSQL_SYSVAR_STR(
@@ -4818,6 +4881,20 @@ static MYSQL_SYSVAR_ULONG(
     0,                                  /* min */
     LONG_TIMEOUT,                       /* max */
     0                                   /* block */
+);
+
+static MYSQL_SYSVAR_ULONGLONG(
+    donor_threshold,                                       /* name */
+    ov.donor_threshold_var,                                /* var */
+    PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var */
+    "The max number of missing transactions in a joining member needed to be a "
+    "recover doner.",
+    check_donor_threshold,  /* check func. */
+    update_donor_threshold, /* update func. */
+    GNO_END,                /* default */
+    1,                      /* min */
+    GNO_END,                /* max */
+    0                       /* block */
 );
 
 // SSL options for recovery
@@ -5242,10 +5319,10 @@ static MYSQL_SYSVAR_LONG(
     ov.flow_control_replay_lag_behind_var,                 /* var */
     PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var */
     "Specifies the number of waiting seconds that will lag behind the master."
-    "Default: 60",
+    "Default: 600",
     nullptr,                            /* check func. */
     nullptr,                            /* update func. */
-    60,                                 /* default */
+    600,                                /* default */
     0,                                  /* min */
     MAX_FLOW_CONTROL_REPLAY_LAG_BEHIND, /* max */
     0                                   /* block */
@@ -5780,6 +5857,7 @@ static MYSQL_SYSVAR_UINT(auto_evict_timeout,    /* name */
 static SYS_VAR *group_replication_system_vars[] = {
     MYSQL_SYSVAR(group_name),
     MYSQL_SYSVAR(start_on_boot),
+    MYSQL_SYSVAR(async_auto_failover_channel_read_only_mode),
     MYSQL_SYSVAR(local_address),
     MYSQL_SYSVAR(group_seeds),
     MYSQL_SYSVAR(force_members),
@@ -5843,6 +5921,7 @@ static SYS_VAR *group_replication_system_vars[] = {
     MYSQL_SYSVAR(message_cache_size),
     MYSQL_SYSVAR(communication_flp_timeout),
     MYSQL_SYSVAR(clone_threshold),
+    MYSQL_SYSVAR(donor_threshold),
     MYSQL_SYSVAR(recovery_tls_version),
     MYSQL_SYSVAR(recovery_tls_ciphersuites),
     MYSQL_SYSVAR(advertise_recovery_endpoints),

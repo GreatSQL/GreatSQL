@@ -1,0 +1,28 @@
+set sql_mode='oracle';
+
+DELIMITER /;
+--error ER_SP_BAD_RETURN_PROC
+CREATE FUNCTION f1() RETURN INT
+as
+BEGIN
+   select 'hello world';
+  RETURN;
+END;
+/
+DELIMITER ;/
+
+DELIMITER /;
+CREATE procedure p1 ()
+as
+BEGIN
+  select 'hello world';
+  RETURN;
+  select 'php is the best';
+END;
+/
+DELIMITER ;/
+
+call p1();
+
+drop procedure p1;
+

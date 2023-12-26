@@ -1,0 +1,294 @@
+#
+# Test of problem with trim() and long separators.
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+DROP PROCEDURE IF EXISTS p1;
+--enable_warnings
+
+create table t1 (id int,a char(10));
+insert into t1 values (1,' ABC123万AH ');
+insert into t1 values (2,'');
+set sql_mode='';
+select trim(a) from t1;
+select trim(a) a from t1 union select 'x' a from t1;
+set sql_mode='oracle';
+select trim(a) from t1;
+select trim(a) a from t1 union select 'x' a from t1;
+drop table t1;
+
+set sql_mode='';
+select 'a' union SELECT trim('');
+SELECT trim(leading '' from '');
+SELECT trim(trailing '' from '');
+SELECT trim(both ' ' from '    ');
+SELECT ltrim('    ');
+SELECT rtrim('    ');
+
+set sql_mode='oracle';
+select 'a' union SELECT trim('');
+SELECT trim(leading '' from '');
+SELECT trim(trailing '' from '');
+SELECT trim(both ' ' from '    ');
+SELECT ltrim('    ');
+SELECT rtrim('    ');
+
+set sql_mode='';
+CREATE PROCEDURE p1(a varchar(255))
+  SET @query = trim(a);
+CALL p1('   ');
+SELECT @query;
+DROP PROCEDURE p1;
+
+set sql_mode='oracle';
+delimiter //;
+CREATE PROCEDURE p1(a varchar(255)) as
+begin
+  SET @query = trim(a);
+END//
+delimiter ;//
+CALL p1('    ');
+SELECT @query;
+DROP PROCEDURE p1;
+
+# fix bug http://172.16.110.166/zentao/bug-view-2875.html
+create table t1(c1 int primary key, c2 varchar(20)) engine=innodb;
+insert into t1 values(1, null), (2, 'N'), (3, 'N');
+select t.* from (select c1, c2, TRIM(c2) trim_c2 from t1 where c1 >0 order by c1 limit 3) t;
+drop table t1;
+
+set sql_mode="oracle";
+select 1 from dual where trim('') is null;
+select 1 from dual where trim('')='';
+select trim(both null from 'abc') from dual;
+select trim(both '' from 'abc') from dual;
+set sql_mode=default;
+select 1 from dual where trim('') is null;
+select 1 from dual where trim('')='';
+select trim(both null from 'abc') from dual;
+select trim(both '' from 'abc') from dual;
+
+# Bugfix #4536: the views using function trim() caused syntax error on query or 'show view'
+-- echo bugfix#4536, original use case
+create or replace view `test`.`v_test` ( `result`) as
+select trim(leading from 'dfssa') `result` from dual;
+
+show create table `test`.`v_test`;
+select * from  `test`.`v_test`;
+drop view v_test;
+
+-- echo bugfix#4536 testcases, refers to different trim() calls
+create or replace view v1 as select trim(leading from 'abcde');
+select * from v1;
+show create view v1;
+
+create or replace view v1 as select trim(leading '.' from '.abcde');
+select * from v1;
+show create view v1;
+
+create or replace view v1 as select trim(_latin2' abcde ');
+select * from v1;
+show create view v1;
+
+create or replace view v1 as select trim('a' from 'abcde');
+select * from v1;
+show create view v1;
+
+create or replace view v1 as select trim(both '' from 'a');
+select * from v1;
+show create view v1;
+
+create or replace view v1 as select trim(trailing 'foo' from 'foo');
+select * from v1;
+show create view v1;
+
+create or replace view v1 as select trim(leading _latin2' ' from _latin2'a');
+select * from v1;
+show create view v1;
+
+create or replace view v1 as select trim(both _latin2' ' from _latin2'a');
+select * from v1;
+show create view v1;
+
+create or replace view v1 as select ltrim('  abcde');
+select * from v1;
+show create view v1;
+
+create or replace view v1 as select rtrim('abcde  ');
+select * from v1;
+show create view v1;
+
+drop view v1;
+
+set sql_mode=oracle;
+select ltrim('000greatedb', '0');
+select ltrim('000greatedb', '0ag');
+select ltrim('1', '11');
+select ltrim('αβγ ABC λλ我?βαγ 😀', 'βγα');
+select ltrim('我😀bba¢abccc', '😀我ab');
+select ltrim('我我我😀bba¢abccc', '我我我b我');
+
+select rtrim('greatedb000', '0');
+select rtrim('greatedb000', '0abcd');
+select rtrim('1', '11');
+select rtrim('αβγ ABC λλ我?βαγ😀', '我😀γ?a');
+select rtrim('αβγ ABC λλ我?βαγ😀😀😀', '😀');
+select rtrim('αβγ ABC λλ我?βαγ😀😀😀', '😀😀');
+
+set character_set_client = 'latin1';
+set character_set_connection = 'latin1';
+
+select ltrim('000greatedb', '0');
+select ltrim('000greatedb', '0ag');
+
+select rtrim('greatedb000', '0');
+select rtrim('greatedb000', '0abcd');
+
+create table t1(c1 varchar2(128), c2 varchar2(128));
+insert into t1 values('111', '11');
+insert into t1 values('1abc', '1111aaadddbbbcc');
+select ltrim(c1, c2), rtrim(c1, c2) from t1;
+insert into t1 values(ltrim('123456789', '147'), rtrim('123456789', '369'));
+select * from t1;
+drop table t1;
+
+create table t1(c1 varchar(20), c2 varchar(20));
+insert into t1 values('addd', 'bdddb'),('adddd', 'bddddb');
+select ltrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where ltrim(t.c2, 'b') > 'd';
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where rtrim(t.c2, 'b') > 'b';
+select ltrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where ltrim(t.c2) > 'd';
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where rtrim(t.c2) > 'b';
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where trim(t.c2) > 'd';
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where trim(t.c2) > 'b';
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where trim(LEADING 'b' FROM t.c2) > 'd';
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where trim(trailing 'b' from t.c2) > 'd';
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where trim(both 'b' from t.c2) > 'd';
+explain select ltrim(t.c1, 1) from (select * from t1 union all select * from t1) t where ltrim(t.c2, 'b') > 2;
+show warnings;
+explain select rtrim(t.c1, 1) from (select * from t1 union all select * from t1) t where rtrim(t.c2, 'd') > 2;
+show warnings;
+drop table t1;
+
+delimiter //;
+create or replace function f1(c1 varchar2(128), c2 varchar2(128)) return varchar2(128)
+as
+begin
+  return ltrim(c1, c2);
+end
+//
+
+create or replace function f2(c1 varchar2(128), c2 varchar2(128)) return varchar2(128)
+as
+begin
+  return ltrim(c1, c2);
+end
+//
+
+create or replace procedure pro(c1 in varchar2(128), c2 in varchar2(128))
+as
+  v_str varchar2(512) := '----- ';
+begin
+  v_str := CONCAT(v_str, ltrim(c1, c2));
+  v_str := CONCAT(v_str, ' ----- ');
+  v_str := CONCAT(v_str, rtrim(c1, c2));
+  select v_str;
+end
+//
+
+delimiter ;//
+
+select f1('1234567', '1258');
+select f2('23456', '6890765532');
+call pro('aabbccdd', 'cagh');
+
+drop function f1;
+drop function f2;
+drop procedure pro;
+
+
+set character_set_client = 'utf8mb4';
+set character_set_connection = 'utf8mb4';
+
+--error 7561
+select trim(leading 'ab' from 'abcdefg');
+select trim(leading 'a' from 'aaaabcdefg');
+select trim(leading '我' from '我我我我abcdef');
+select trim(leading '😀' from '😀😀😀😀😀abcdef');
+select trim(leading null from 'abcdefg');
+select trim(leading '' from 'abcdefg');
+
+--error 7561
+select trim(trailing 'ab' from 'abcdefg');
+select trim(trailing 'g' from 'abcdefggggg');
+select trim(trailing '我' from '我我我我abcdef我我我');
+select trim(trailing '😀' from '😀😀😀😀😀abcdef😀😀');
+select trim(trailing null from 'abcdefg');
+select trim(trailing '' from 'abcdefg');
+
+--error 7561
+select trim(both 'ab' from 'abcdefg');
+select trim(both 'g' from 'ggggabcdefggggg');
+select trim(both '我' from '我我我我abcdef我我我');
+select trim(both '😀' from '😀😀😀😀😀abcdef😀😀');
+select trim(both null from 'abcdefg');
+select trim(both '' from 'abcdefg');
+
+--error 7561
+select trim('ab' from 'abcdefg');
+select trim('g' from 'ggggabcdefggggg');
+select trim('我' from '我我我我abcdef我我我');
+select trim('😀' from '😀😀😀😀😀abcdef😀😀');
+select trim(null from 'abcdefg');
+select trim('' from 'abcdefg');
+
+set character_set_client = 'latin1';
+set character_set_connection = 'latin1';
+--error 7561
+select trim('ab' from 'abcdefg');
+--error 7561
+select trim('我' from '我我我我abcdef我我我');
+--error 7561
+select trim('😀' from '😀😀😀😀😀abcdef😀😀');
+select trim(null from 'abcdefg');
+select trim('' from 'abcdefg');
+select trim('g' from 'ggggabcdefggggg');
+
+set character_set_client = 'utf8mb4';
+set character_set_connection = 'utf8mb4';
+
+create table t1(
+  c1 varchar2(64),
+  c2 varchar2(64) default (trim(leading 'a' from 'aaaabcdefg')),
+  c3 varchar2(64) default (trim(trailing 'g' from 'abcdefggggg')),
+  c4 varchar2(64) default (trim(both 'g' from 'ggggabcdefggggg')),
+  c5 varchar2(64) default (trim('g' from 'ggggabcdefggggg'))
+);
+show create table t1;
+insert into t1(c1) values(trim(both '我' from '我我我我abcdef我我我'));
+select * from t1;
+
+delimiter //;
+create or replace function f(c1 varchar2(64), c2 varchar2(64)) return varchar2(64)
+as
+begin
+  return trim(c1 from c2);
+end
+//
+
+create or replace procedure pro(c1 in varchar2(64), c2 in varchar2(64))
+as
+begin
+  insert into t1(c1) values(trim(c1 from c2));
+end
+//
+
+delimiter ;//
+
+insert into t1(c1) values(f('😀', '😀😀😀😀😀abcdef😀😀'));
+call pro('😀', '😀😀😀😀😀abcdef😀😀');
+select * from t1;
+
+drop function f;
+drop procedure pro;
+drop table t1;

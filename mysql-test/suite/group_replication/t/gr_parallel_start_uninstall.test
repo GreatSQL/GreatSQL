@@ -55,6 +55,7 @@ SET @@GLOBAL.DEBUG='+d,group_replication_hold_stop_before_leave_the_group';
 SET DEBUG_SYNC='now wait_for signal.start_waiting';
 
 --send UNINSTALL PLUGIN group_replication;
+sleep 2;
 
 --let $rpl_connection_name= server_2
 --source include/rpl_connection.inc
@@ -115,6 +116,7 @@ SET @@GLOBAL.group_replication_recovery_retry_count = @saved_gr_recovery_retry_c
 SET @@GLOBAL.DEBUG='+d,group_replication_hold_stop_before_leave_the_group';
 
 --send UNINSTALL PLUGIN group_replication;
+sleep 2;
 
 --let $rpl_connection_name= server_2_1
 --source include/rpl_connection.inc

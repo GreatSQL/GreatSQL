@@ -43,6 +43,7 @@
 #include "mutex_lock.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
+#include "my_inttypes.h"
 #include "my_loglevel.h"
 #include "my_systime.h"
 #include "my_thread.h"
@@ -658,6 +659,8 @@ void Open_tables_state::set_open_tables_state(Open_tables_state *state) {
   this->state_flags = state->state_flags;
 
   this->m_reprepare_observers = state->m_reprepare_observers;
+
+  this->use_in_dbms_sql = state->use_in_dbms_sql;
 }
 
 void Open_tables_state::reset_open_tables_state() {
@@ -667,6 +670,7 @@ void Open_tables_state::reset_open_tables_state() {
   extra_lock = nullptr;
   locked_tables_mode = LTM_NONE;
   state_flags = 0U;
+  use_in_dbms_sql = false;
   reset_reprepare_observers();
 }
 
@@ -768,6 +772,8 @@ THD::THD(bool enable_plugins)
       m_query_rewrite_plugin_da_ptr(&m_query_rewrite_plugin_da),
       m_parser_da(&parser_da),
       m_stmt_da(&main_da),
+      m_dbmsotpt(),
+      m_dbmsotpt_ptr(&m_dbmsotpt),
       duplicate_slave_id(false),
       is_a_srv_session_thd(false),
       m_is_plugin_fake_ddl(false),
@@ -1089,6 +1095,7 @@ Sql_condition *THD::raise_condition(uint sql_errno, const char *sqlstate,
   if (handle_condition(sql_errno, sqlstate, &level, msg)) return nullptr;
 
   Diagnostics_area *da = get_stmt_da();
+  Dbms_output_package *dbms_otpt = get_dbmsotpt();
   if (level == Sql_condition::SL_ERROR) {
     /*
       Reporting an error invokes audit API call that notifies the error
@@ -1118,7 +1125,15 @@ Sql_condition *THD::raise_condition(uint sql_errno, const char *sqlstate,
   if (!(is_fatal_error() &&
         (sql_errno == EE_OUTOFMEMORY || sql_errno == ER_OUTOFMEMORY ||
          sql_errno == ER_STD_BAD_ALLOC_ERROR))) {
-    cond = da->push_warning(this, sql_errno, sqlstate, level, msg);
+    // always push ER_ORA_DBMS_OUTPUT messages to dbms_da
+    if (sql_errno == ER_ORA_DBMS_OUTPUT) {
+      if (dbms_otpt->get_buf_enabled())
+        cond = dbms_otpt->get_dbms_da()->push_warning(this, sql_errno, sqlstate,
+                                                      level, msg, user_defined);
+    } else {
+      cond =
+          da->push_warning(this, sql_errno, sqlstate, level, msg, user_defined);
+    }
   }
   return cond;
 }
@@ -1268,6 +1283,7 @@ void THD::cleanup_connection(void) {
   clear_error();
   // clear the warnings
   get_stmt_da()->reset_condition_info(this);
+  get_dbmsotpt()->reset_dbms_output_package(this);
   // clear profiling information
 #if defined(ENABLED_PROFILING)
   profiling->cleanup();
@@ -2161,7 +2177,7 @@ void THD::update_charset() {
  */
 void THD::change_item_tree(Item **place, Item *new_value) {
   /* TODO: check for OOM condition here */
-  if (!stmt_arena->is_regular()) {
+  if (!stmt_arena->is_regular() && lex->is_exec_started()) {
     DBUG_PRINT("info", ("change_item_tree place %p old_value %p new_value %p",
                         place, *place, new_value));
     nocheck_register_item_tree_change(place, new_value);
@@ -3632,6 +3648,42 @@ bool THD::is_connected() {
   return get_protocol()->connection_alive();
 }
 
+/**
+  Display dbms_output messages if serveroutput is on
+
+  @param is_my_ok_pattern
+*/
+void THD::show_dbms_output(bool is_my_ok_pattern) {
+  if (!sp_runtime_ctx && m_dbmsotpt_ptr->get_serveroutput() &&
+      m_dbmsotpt_ptr->get_dbms_da()->cond_count()) {
+    auto saved_server_status = server_status;
+    server_status |= SERVER_MORE_RESULTS_EXISTS;
+
+    if (!is_my_ok_pattern) m_protocol->send_eof(server_status, 0);
+    mem_root_deque<Item *> field_list(mem_root);
+    field_list.push_back(
+        new Item_empty_string("DBMS_OUTPUT", ::strlen("DBMS_OUTPUT")));
+    send_result_metadata(field_list,
+                         Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF);
+
+    Diagnostics_area::Sql_condition_iterator it =
+        m_dbmsotpt_ptr->get_dbms_da()->sql_conditions();
+    const Sql_condition *output_msg = nullptr;
+    while ((output_msg = it++)) {
+      m_protocol->start_row();
+      m_protocol->store_string(output_msg->message_text(),
+                               output_msg->message_octet_length(),
+                               system_charset_info);
+      m_protocol->end_row();
+    }
+    m_dbmsotpt_ptr->reset_dbms_output_package(this);
+
+    if (is_my_ok_pattern || is_error()) m_protocol->send_eof(server_status, 0);
+    server_status = saved_server_status;
+  }
+  return;
+}
+
 void THD::push_protocol(Protocol *protocol) {
   assert(m_protocol != nullptr);
   assert(protocol != nullptr);
@@ -3677,6 +3729,56 @@ void THD::inc_lock_usec(ulonglong lock_usec) {
 void THD::update_slow_query_status() {
   if (get_query_time(this) > variables.long_query_time)
     server_status |= SERVER_QUERY_WAS_SLOW;
+}
+
+const my_decimal *THD::get_cached_seq_currval(const char *db, const char *name,
+                                              const Gdb_sequence_entity *seq) {
+  DBUG_TRACE;
+  assert(db != nullptr && strlen(db) > 0);
+  assert(name != nullptr && strlen(name) > 0);
+
+  std::string seq_name_string = normalize_seq_name(name);
+  std::string seq_key = calc_seq_key(db, seq_name_string.c_str());
+  auto it = this->sequence_cache.find(seq_key);
+
+  if (it == this->sequence_cache.end()) {
+    return nullptr;
+  }
+
+  auto &cached_entity = it->second;
+  if (cached_entity->valid == false) {
+    return nullptr;
+  }
+
+  if (it->second->volatile_id != seq->volatile_id()) {
+    // The cached sequence currval is already different from the global one,
+    // even though they have the same name, this means that global one has been
+    // removed and recreated with same name, so the cached one is invalid.
+    this->sequence_cache.erase(it);
+    return nullptr;
+  }
+
+  return &(it->second->currval);
+}
+
+void THD::update_seq_cache_entity(const char *db, const char *name, uint64_t id,
+                                  my_decimal &cval) {
+  DBUG_TRACE;
+  assert(db != nullptr && strlen(db) > 0);
+  assert(name != nullptr && strlen(name) > 0);
+
+  std::string seq_name_string = normalize_seq_name(name);
+  std::string seq_key = calc_seq_key(db, seq_name_string.c_str());
+  auto it = this->sequence_cache.find(seq_key);
+
+  if (it == this->sequence_cache.end()) {
+    auto entity = std::make_unique<seq_currval_cache_entity>(id);
+    entity->update(id, cval);
+    this->sequence_cache.insert({seq_key, std::move(entity)});
+  } else {
+    assert(it->second != nullptr);
+    it->second->update(id, cval);
+  }
 }
 
 /**
@@ -3737,11 +3839,13 @@ void Transactional_ddl_context::post_ddl() {
 void my_ok(THD *thd, ulonglong affected_rows, ulonglong id,
            const char *message) {
   thd->set_row_count_func(affected_rows);
+  thd->set_ora_implicit_cursor_attr_rowcount(affected_rows);
   thd->get_stmt_da()->set_ok_status(affected_rows, id, message);
 }
 
 void my_eof(THD *thd) {
   thd->set_row_count_func(-1);
+  thd->set_ora_implicit_cursor_attr_rowcount(0);
   thd->get_stmt_da()->set_eof_status(thd);
   if (thd->variables.session_track_transaction_info > TX_TRACK_NONE) {
     TX_TRACKER_GET(tst);
@@ -4049,10 +4153,12 @@ std::string Sp_rcontext_layer::gen_field_expr(
       }
       case Sp_rcontext_layer::Item_expr_holder::STRING_TYPE: {
         temp.length(0);
-        std::string item_expr(
-            to_string(pk_item_field->val_str(&temp)->lex_cstring()));
-        ::string_replace(item_expr, "\\", "\\\\");
-        ::string_replace(item_expr, "\'", "\\\'");
+        String *val = pk_item_field->val_str(&temp);
+        std::string item_expr(val ? to_string(val->lex_cstring()) : "");
+        if (!item_expr.empty()) {
+          ::string_replace(item_expr, "\\", "\\\\");
+          ::string_replace(item_expr, "\'", "\\\'");
+        }
 
         oss << pk_item_field->field_name
             << Sp_rcontext_layer::Item_expr_holder::COND_EQ << "\'" << item_expr

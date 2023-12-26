@@ -80,12 +80,15 @@
 #include "sql/rpl_rli.h"      // Relay_log_info
 #include "sql/sp.h"           // sp_prepare_and_store_item
 #include "sql/sp_pcontext.h"
+#include "sql/sp_rcontext.h"
 #include "sql/spatial.h"  // Geometry
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"              // THD
 #include "sql/sql_exception_handler.h"  // handle_std_exception
+#include "sql/sql_executor.h"
 #include "sql/sql_insert.h"
 #include "sql/sql_lex.h"
+#include "sql/sql_prepare.h"
 #include "sql/sql_time.h"       // str_to_datetime_with_warn
 #include "sql/sql_tmp_table.h"  // create_tmp_field
 #include "sql/srs_fetcher.h"
@@ -1255,6 +1258,10 @@ enum_field_types Field::field_type_merge(enum_field_types a,
   return field_types_merge_rules[field_type2index(a)][field_type2index(b)];
 }
 
+/*
+  @@NOTE@@ any new type is added here, field_types_osp_base_types[] should be
+  added/checked also.
+*/
 static Item_result field_types_result_type[FIELDTYPE_NUM] = {
     // MYSQL_TYPE_DECIMAL      MYSQL_TYPE_TINY
     DECIMAL_RESULT, INT_RESULT,
@@ -1287,6 +1294,46 @@ static Item_result field_types_result_type[FIELDTYPE_NUM] = {
     STRING_RESULT, STRING_RESULT,
     // MYSQL_TYPE_STRING       MYSQL_TYPE_GEOMETRY
     STRING_RESULT, STRING_RESULT};
+
+static enum_osp_base_types field_types_osp_base_types[FIELDTYPE_NUM] = {
+    // MYSQL_TYPE_DECIMAL      MYSQL_TYPE_TINY
+    OSP_NUMBER, OSP_NUMBER,
+    // MYSQL_TYPE_SHORT        MYSQL_TYPE_LONG
+    OSP_NUMBER, OSP_NUMBER,
+    // MYSQL_TYPE_FLOAT        MYSQL_TYPE_DOUBLE
+    OSP_FLOAT, OSP_DOUBLE,
+    // MYSQL_TYPE_NULL         MYSQL_TYPE_TIMESTAMP
+    OSP_STRING, OSP_TIMESTAMP,
+    // MYSQL_TYPE_LONGLONG     MYSQL_TYPE_INT24
+    OSP_NUMBER, OSP_NUMBER,
+    // MYSQL_TYPE_DATE         MYSQL_TYPE_TIME
+    OSP_DATE, OSP_TIME,
+    // MYSQL_TYPE_DATETIME     MYSQL_TYPE_YEAR
+    OSP_DATETIME, OSP_YEAR,
+    // MYSQL_TYPE_NEWDATE      MYSQL_TYPE_VARCHAR
+    OSP_DATE, OSP_STRING,
+    // MYSQL_TYPE_BIT          MYSQL_TYPE_INVALID
+    OSP_NUMBER, OSP_INVALID,
+    // Unused entries: <17>-<242>
+    // MYSQL_TYPE_BOOL         MYSQL_TYPE_JSON
+    OSP_NUMBER, OSP_STRING,
+    // MYSQL_TYPE_NEWDECIMAL   MYSQL_TYPE_ENUM
+    OSP_NUMBER, OSP_STRING,
+    // MYSQL_TYPE_SET          MYSQL_TYPE_TINY_BLOB
+    OSP_STRING, OSP_STRING,
+    // MYSQL_TYPE_MEDIUM_BLOB  MYSQL_TYPE_LONG_BLOB
+    OSP_STRING, OSP_STRING,
+    // MYSQL_TYPE_BLOB         MYSQL_TYPE_VAR_STRING
+    OSP_STRING, OSP_STRING,
+    // MYSQL_TYPE_STRING       MYSQL_TYPE_GEOMETRY
+    OSP_STRING, OSP_STRING};
+
+static_assert(sizeof(field_types_osp_base_types) /
+                      sizeof(field_types_osp_base_types[0]) ==
+                  sizeof(field_types_result_type) /
+                      sizeof(field_types_result_type[0]),
+              "The size of field_types_result_type and "
+              "field_types_osp_base_types should be the same");
 
 /**
   Convert Field::geometry_type to the corresponding Geometry::wkbType.
@@ -1370,6 +1417,10 @@ int compare(unsigned int a, unsigned int b) {
 
 Item_result Field::result_merge_type(enum_field_types field_type) {
   return field_types_result_type[field_type2index(field_type)];
+}
+
+enum_osp_base_types Field::osp_base_type(enum_field_types field_type) {
+  return field_types_osp_base_types[field_type2index(field_type)];
 }
 
 /*****************************************************************************
@@ -2273,7 +2324,8 @@ bool Field::sp_prepare_and_store_item(THD *thd, Item **value) {
   /*
     expr_item is now fixed, it's safe to call cmp_type()
   */
-  if (expr_item->result_type() == ROW_RESULT && !expr_item->is_ora_type()) {
+  if (expr_item->result_type() == ROW_RESULT &&
+      !expr_item->this_item()->is_ora_type()) {
     my_error(ER_OPERAND_COLUMNS, MYF(0), 1);
     goto error;
   }
@@ -2328,16 +2380,14 @@ void Field_null::sql_type(String &res) const {
 /****************************************************************************
   Field_row, e.g. for ROW-type SP variables
 ****************************************************************************/
-Field_row::~Field_row() {
-  if (m_table) delete m_table;
-}
+Field_row::~Field_row() { clear_table_all_field(); }
 
 void Field_row::clear_table_all_field() {
   if (!m_table) return;
-  for (uint j = 0; j < m_table->s->fields; j++) {
-    m_table->field[j]->clear_table_all_field();
-  }
   free_blobs(m_table);
+  close_tmp_table(m_table);
+  free_tmp_table(m_table);
+  m_table = nullptr;
 }
 
 bool Field_row::alloc_default_value_list(THD *thd, uint count) {
@@ -2349,15 +2399,14 @@ bool Field_row::alloc_default_value_list(THD *thd, uint count) {
 }
 
 String *Field_row::val_str(String *str, String *) const {
-  if (!arg_count) {
+  if (!arg_count || !is_udt_value_initialized) {
     return nullptr;
   }
-  if (!is_udt_value_initialized) return nullptr;
   if (current_thd->variables.udt_format_result == UDT_FORMAT_RESULT_BINARY) {
     str->set(pointer_cast<const char *>(m_table->record[0]),
              m_table->s->reclength, field_charset);
   } else {
-    show_udt_values(m_table, str);
+    return show_udt_values(m_table, str);
   }
   return str;
 }
@@ -2400,53 +2449,246 @@ void Field_row::set_notnull(ptrdiff_t row_offset) {
     Field::set_notnull(row_offset);
   }
 }
+
+void Field_row::sql_type(String &str) const {
+  str.set(m_udt_name.str, m_udt_name.length, str.charset());
+}
+
+void Field_row::create_udt_table(THD *thd, List<Create_field> *fld_list) {
+  assert(!m_table);
+  m_table = create_tmp_table_from_fields(thd, *fld_list);
+}
+
+/****************************************************************************
+  Field_refcursor, e.g. create function f1 return sys_refcursor
+****************************************************************************/
+Cursor_return_table::~Cursor_return_table() {
+  if (!m_table) return;
+  free_blobs(m_table);
+  if (m_table->blob_storage) destroy(m_table->blob_storage);
+  free_tmp_table(m_table);
+  m_table = nullptr;
+}
+
+bool Cursor_return_table::make_return_table(THD *thd,
+                                            List<Create_field> *list) {
+  m_table = create_tmp_table_from_fields(thd, *list);
+  if (!m_table) return true;
+  m_table->copy_blobs = true;
+  m_table->alias = "";
+  if (m_table->s->blob_fields) {
+    m_table->blob_storage = new (thd->mem_root) Blob_mem_storage();
+    if (m_table->blob_storage == nullptr) return true;
+  }
+  tmp_table_param = new (&m_table->s->mem_root) Temp_table_param;
+  if (!tmp_table_param) return true;
+  tmp_table_param->items_to_copy =
+      new (&m_table->s->mem_root) Func_ptr_array(&m_table->s->mem_root);
+  if (!tmp_table_param->items_to_copy) return true;
+  return false;
+}
+
+bool Cursor_return_table::check_return_data(
+    THD *thd, const mem_root_deque<Item *> &items) {
+  Field **field_ptr = m_table->field;
+  for (Item *item : VisibleFields(items)) {
+    Field *field = *field_ptr++;
+    tmp_table_param->items_to_copy->push_back(Func_ptr(item, field));
+  }
+  Strict_error_handler strict_handler(
+      Strict_error_handler::ENABLE_SET_SELECT_STRICT_ERROR_HANDLER);
+  enum_check_fields save_check_for_truncated_fields =
+      thd->check_for_truncated_fields;
+  unsigned int stmt_unsafe_rollback_flags =
+      thd->get_transaction()->get_unsafe_rollback_flags(Transaction_ctx::STMT);
+  thd->check_for_truncated_fields = CHECK_FIELD_ERROR_FOR_NULL;
+  thd->get_transaction()->reset_unsafe_rollback_flags(Transaction_ctx::STMT);
+  if (thd->is_strict_mode() && !thd->lex->is_ignore())
+    thd->push_internal_handler(&strict_handler);
+  bool rc = copy_funcs(tmp_table_param, thd);
+  if (thd->is_strict_mode() && !thd->lex->is_ignore())
+    thd->pop_internal_handler();
+  thd->check_for_truncated_fields = save_check_for_truncated_fields;
+  thd->get_transaction()->set_unsafe_rollback_flags(Transaction_ctx::STMT,
+                                                    stmt_unsafe_rollback_flags);
+  tmp_table_param->items_to_copy->clear();
+  return rc;
+}
+
+Field_refcursor::Field_refcursor(uchar *ptr_arg, const char *field_name_arg,
+                                 LEX_CSTRING udt_name)
+    : Field_row(ptr_arg, field_name_arg),
+      m_is_first_set(false),
+      m_cursor(std::make_shared<sp_refcursor>()),
+      m_is_in_mode(false),
+      m_return_table(std::make_shared<Cursor_return_table>()) {
+  m_udt_name = to_lex_string(udt_name);
+}
+
+Field_refcursor::~Field_refcursor() { m_cursor.reset(); }
+
+void Field_refcursor::sql_type(String &res) const {
+  res.set_ascii(STRING_WITH_LEN("sys_refcursor"));
+}
+
+void Field_refcursor::set_null(ptrdiff_t) {
+  current_thd->sp_runtime_ctx->reset_refcursor(this);
+  m_cursor.reset();
+}
+
+// for open cursor for,it must destroy source cursor to reuse.
+void Field_refcursor::release_cursor() { m_cursor->destroy(); }
+
+/*for c := f1()*/
+type_conversion_status Field_refcursor::move_refcursor(
+    Field_refcursor *field_from) {
+  if (set_refcursor(field_from)) return TYPE_ERR_BAD_VALUE;
+  field_from->m_cursor.reset();
+  return TYPE_OK;
+}
+
+type_conversion_status Field_refcursor::set_refcursor(
+    Field_refcursor *field_from) {
+  if (m_is_first_set && m_is_in_mode) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "change ref cursor of in mode");
+    return TYPE_ERR_BAD_VALUE;
+  }
+  // it can't return strong ref cursor
+  if (current_thd->sp_runtime_ctx->is_return_value_set()) {
+    if (field_from->virtual_tmp_table_addr()[0]) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "funtion return strong ref cursor");
+      return TYPE_ERR_BAD_VALUE;
+    }
+  }
+  // set strong ref cursor to strong ref cursor,their udt name must be same.
+  if (field_from->virtual_tmp_table_addr()[0] && m_return_table->get_table()) {
+    if (my_strcasecmp(system_charset_info, udt_name().str,
+                      field_from->udt_name().str) != 0) {
+      my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), "", udt_name().str, "",
+               field_from->udt_name().str);
+      return TYPE_ERR_BAD_VALUE;
+    }
+  }
+  // for c:=c1,the fields must be same.
+  if (m_return_table->get_table() && field_from->m_cursor &&
+      m_return_table->get_table()->visible_field_count() !=
+          field_from->m_cursor->m_result.get_field_count()) {
+    my_error(ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT, MYF(0));
+    return TYPE_ERR_BAD_VALUE;
+  }
+  m_cursor = field_from->m_cursor;
+  set_cursor_return_type();
+  m_is_first_set = true;
+  return TYPE_OK;
+}
+
+void Field_refcursor::set_cursor_return_type() {
+  if (m_cursor) m_cursor->m_result.m_return_table = m_return_table;
+}
+
+bool Field_refcursor::set_cursor_return_type_from_other_refcursor(uint offset) {
+  Item *item = current_thd->sp_runtime_ctx->get_item(offset);
+  Item_field_refcursor *item_field = dynamic_cast<Item_field_refcursor *>(item);
+  if (!item_field) return true;
+  m_return_table = item_field->get_refcursor_field()->m_return_table;
+  set_cursor_return_type();
+  return false;
+}
+
 /****************************************************************************
   Field_row_table, e.g. for ROW-type SP variables
 ****************************************************************************/
+Field_row_table::~Field_row_table() { clear_table_all_field(); }
 
 TABLE **Field_row_table::virtual_tmp_table_addr() {
   return &table_record->table;
 }
 
+bool Field_row_table::check_if_row_not_exist(Item *item_index) {
+  return table_record->select_result_table_one_row_col(item_index, -1) ==
+         nullptr;
+}
+
+/* used for i IN dr_table.first .. dr_table.last loop,
+  return dr_table.first or dr_table.last.
+*/
+bool Field_row_table::get_first_index(String *value) {
+  if (!table_record->get_index_first()) return true;
+  value->set(table_record->get_index_first()->c_ptr_safe(),
+             table_record->get_index_first()->length(), &my_charset_bin);
+  return false;
+}
+
+bool Field_row_table::get_last_index(String *value) {
+  if (!table_record->get_index_last()) return true;
+  value->set(table_record->get_index_last()->c_ptr_safe(),
+             table_record->get_index_last()->length(), &my_charset_bin);
+  return false;
+}
+
+void Field_row_table::clear_table() {
+  assert(table_record);
+  if (table_record->table->is_created()) table_record->init_table();
+}
+
 void Field_row_table::clear_table_all_field() {
   if (!table_record || !table_record->table) return;
-  for (uint j = 0; j < arg_count; j++) {
-    table_record->table->field[j]->clear_table_all_field();
-  }
-  List_iterator_fast<Item> item_iter(m_row_table_list);
-  Item *item;
-  while ((item = item_iter++)) {
-    Item_field *item_field = dynamic_cast<Item_field *>(item);
-    item_field->field->clear_table_all_field();
-  }
+  clear_table();
   free_blobs(table_record->table);
   close_tmp_table(table_record->table);
   free_tmp_table(table_record->table);
   table_record->table = nullptr;
 }
 
-bool Field_row_table::fill_result_table_all_default_col() {
-  for (uint offset = 0; offset < arg_count; offset++) {
+bool Field_row_table::fill_result_table_all_default_col(Item *index_item) {
+  for (uint offset = 1; offset < arg_count; offset++) {
+    Field_row *field_row =
+        dynamic_cast<Field_row *>(table_record->table->field[offset]);
+    Field_udt_type *udt =
+        dynamic_cast<Field_udt_type *>(table_record->table->field[offset]);
     Item_field_row *item_field =
         dynamic_cast<Item_field_row *>(get_cdf_default_list(offset));
-    if (item_field) {
-      item_field->row = offset_table;
+    if (field_row) {
+      String tmp;
+      String *result = index_item->this_item()->val_str(&tmp);
+      char *str = current_thd->strmake(result->c_ptr_safe(), result->length());
+      item_field->row = new (current_thd->mem_root)
+          String(str, result->length(), &my_charset_bin);
       item_field->col = offset;
-      m_row_table_list.push_back(item_field);
+      m_row_table_items.push_back(item_field);
       continue;
-    } else
-      get_cdf_default_list(offset)->save_in_field(
-          table_record->get_field(offset), false);
+    } else if (udt && get_cdf_default_list(offset)->type() == Item::NULL_ITEM) {
+      /*  type dr_type is table of t2%ROWTYPE index by binary_integer;
+          dr_table dr_type;
+          dr_table(100).name := NULL; The name can't be inited.
+      */
+      Item *value = get_cdf_default_list(offset);
+      if (sp_eval_expr(current_thd, table_record->get_field(offset), &value))
+        return true;
+      table_record->get_field(offset)->set_udt_value_initialized(false);
+    } else {
+      Item *value = get_cdf_default_list(offset);
+      if (sp_eval_expr(current_thd, table_record->get_field(offset), &value))
+        return true;
+    }
   }
-  return table_record->write_row();
+  if (sp_eval_expr(current_thd, table_record->get_field(0), &index_item))
+    return true;
+  return table_record->write_row_and_cmp_index(index_item);
 }
 
-Item *Field_row_table::get_table_element(uint row_count, uint i) {
-  List_iterator_fast<Item> item_iter(m_row_table_list);
+Item *Field_row_table::get_table_element(Item *item_index, uint i) {
+  List_iterator_fast<Item> item_iter(m_row_table_items);
   Item *item = nullptr;
+  String tmp;
+  String *str = item_index->val_str(&tmp);
   while ((item = item_iter++)) {
     Item_field_row *item_field = dynamic_cast<Item_field_row *>(item);
-    if (item_field->row == row_count && item_field->col == i) return item_field;
+    if (item_field->col == i &&
+        my_strcasecmp(system_charset_info, item_field->row->c_ptr_safe(),
+                      str->c_ptr_safe()) == 0)
+      return item_field;
   }
   return nullptr;
 }
@@ -2475,63 +2717,125 @@ bool Field_row_table::insert_into_table_udt_table_values(THD *thd,
              "non udt table object saves to table object");
     return true;
   }
-  int all_rows = 0;
-  table_record->empty_table();
-  clear_args_map();
+  longlong all_rows = 0;
+
   if (func_table) {
-    all_rows = func_table->argument_count();
+    bool has_assignment_list = func_table->has_assignment_list();
+    all_rows = has_assignment_list ? func_table->argument_count() / 2
+                                   : func_table->argument_count();
     // It's table type when m_varray_size_limit = 1.
     if (m_varray_size_limit != -1 && all_rows > m_varray_size_limit) {
       my_error(ER_RECORD_TABLE_OUTSIZE_LIMIT, MYF(0));
       return true;
     }
-    for (uint i = 0; i < func_table->arg_count; i++) {
+    /*when has_assignment_list(),it's stu_val(1=>stu(1,2),2=>stu(1,2)..)
+     */
+    Table_function_record *tmp_table_func = new (thd->mem_root)
+        Table_function_record("", *get_field_create_field_list(), 0, 0, false);
+    if (tmp_table_func->create_result_table(thd, 0, "")) return true;
+
+    const auto x_guard = create_scope_guard([tmp_table_func]() {
+      tmp_table_func->init_table();
+      free_blobs(tmp_table_func->table);
+      close_tmp_table(tmp_table_func->table);
+      free_tmp_table(tmp_table_func->table);
+    });
+
+    if (instantiate_tmp_table(thd, tmp_table_func->table)) return true;
+    tmp_table_func->init_table();
+
+    for (uint i = has_assignment_list; i < func_table->arg_count;
+         i = i + has_assignment_list + 1) {
       items.clear();
       Item_func *item_table_arg =
           dynamic_cast<Item_func *>(func_table->arguments()[i]);
-      if (item_table_arg) {
+      // tklist(stu_record('aa','bb','cc'))
+      if (item_table_arg &&
+          (item_table_arg->is_ora_type() || item_table_arg->is_ora_table())) {
         for (uint j = 0; j < item_table_arg->arg_count; j++) {
           items.push_back(item_table_arg->arguments()[j]);
         }
-      } else {
+      } else {  // tklist(f1(1),f1(2),'cc')
         items.push_back(func_table->arguments()[i]);
       }
-      if (table_record->fill_result_table_all_col(thd, items)) return true;
+      Item *item_index = nullptr;
+      if (!has_assignment_list) {
+        item_index = new (thd->mem_root) Item_uint(i + 1);
+      } else {
+        item_index = func_table->arguments()[i - 1]->this_item();
+      }
+      if (tmp_table_func->fill_result_table_all_col(thd, items, item_index))
+        return true;
     }
-    for (int i = 0; i < all_rows; i++) {
-      set_row_count_with_fix(i + 1);
-    }
+
+    if (tmp_table_func->copy_to_other_table(table_record)) return true;
   }
+  Query_arena backup_arena;
   if (item_table) {
     Field_row_table *field_table =
         dynamic_cast<Field_row_table *>(item_table->field);
-    all_rows = field_table->get_arg_table_count() + 1;
+
+    all_rows = field_table->get_row_count();
+
     // It's table type when m_varray_size_limit = 1.
     if (m_varray_size_limit != -1 && all_rows > m_varray_size_limit) {
       my_error(ER_RECORD_TABLE_OUTSIZE_LIMIT, MYF(0));
       return true;
     }
-    for (int i = 0; i < field_table->get_arg_table_count() + 1; i++) {
-      for (uint offset = 0; offset < arg_count; offset++) {
-        Item_field_row *item_field = dynamic_cast<Item_field_row *>(
-            item_table->element_row_index(i, offset));
-        if (item_field) {
-          item_field->row = offset_table;
-          item_field->col = offset;
-          m_row_table_list.push_back(item_field);
-          continue;
-        } else
-          item_table->element_row_index(i, offset)->save_in_field(
-              table_record->get_field(offset), false);
+    m_row_table_items.clear();
+    thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &backup_arena);
+    const auto x_guard = create_scope_guard([thd, backup_arena]() {
+      thd->swap_query_arena(backup_arena, thd->sp_runtime_ctx->callers_arena);
+    });
+    List_iterator_fast<Item> it_table(field_table->m_row_table_items);
+    Item *it;
+    for (uint i = 0; (it = it_table++); i++) {
+      Item_field_row_table *item_table_from_tmp =
+          dynamic_cast<Item_field_row_table *>(it);
+      Item_field_row *item_tmp = dynamic_cast<Item_field_row *>(it);
+      Item_field_row *result = nullptr;
+      if (item_table_from_tmp) {
+        Field_row_table *field_table_from =
+            dynamic_cast<Field_row_table *>(item_table_from_tmp->field);
+        Field_row_table *field_table_tmp =
+            new (thd->mem_root) Field_row_table(*field_table_from);
+        field_table_tmp->table_record = nullptr;
+        Item_field_row_table *item_table_tmp =
+            new (thd->mem_root) Item_field_row_table(field_table_tmp);
+        sp_variable *spv = thd->sp_runtime_ctx->search_variable(
+            it->get_udt_name().str, it->get_udt_name().length);
+        if (item_table_tmp->row_table_create_items(
+                thd, spv->field_def.ora_record.row_field_table_definitions()))
+          return true;
+        Item *value = item_table_from_tmp;
+        if (sp_eval_expr(thd, field_table_tmp, &value)) return true;
+        result = item_table_tmp;
+      } else {
+        Field_row *field_row_tmp = dynamic_cast<Field_row *>(item_tmp->field);
+        Field_row *field_tmp = new (thd->mem_root) Field_row(*field_row_tmp);
+        field_tmp->virtual_tmp_table_addr()[0] = nullptr;
+        Item_field_row *item_row_tmp =
+            new (thd->mem_root) Item_field_row(field_tmp);
+        sp_variable *spv = thd->sp_runtime_ctx->search_variable(
+            it->get_udt_name().str, it->get_udt_name().length);
+        if (item_row_tmp->row_create_items(
+                thd, spv->field_def.ora_record.row_field_definitions()))
+          return true;
+        Item *value = item_tmp;
+        if (sp_eval_expr(thd, field_tmp, &value)) return true;
+        result = item_row_tmp;
       }
-      if (table_record->write_row()) return true;
+      char *str = current_thd->strmake(item_tmp->row->c_ptr_safe(),
+                                       item_tmp->row->length());
+      result->row = new (current_thd->mem_root)
+          String(str, item_tmp->row->length(), &my_charset_bin);
+      result->col = item_tmp->col;
+      m_row_table_items.push_back(result);
     }
-    mem_root_deque<int> map = field_table->get_row_count_map();
-    for (int i = 0; i < (int)map.size(); i++) {
-      set_row_count_with_fix(map.at(i));
-    }
+    if (field_table->table_record->copy_to_other_table(table_record))
+      return true;
   }
-  set_udt_value_initialized();
+  set_udt_value_initialized(true);
   return false;
 }
 
@@ -2544,8 +2848,7 @@ void Field_row_table::set_null(ptrdiff_t row_offset) {
   if (!is_tmp_field) {
     Field::set_null(row_offset);
   }
-  table_record->empty_table();
-  clear_args_map();
+  clear_table();
   is_udt_value_initialized = false;
 }
 
@@ -2559,6 +2862,65 @@ void Field_row_table::set_notnull(ptrdiff_t row_offset) {
     Field::set_notnull(row_offset);
   }
 }
+
+longlong Field_row_table::get_row_count() {
+  return table_record->get_row_count();
+}
+
+String *Field_row_table::val_str(String *str, String *) const {
+  str->length(0);
+  str->append(m_udt_name.str, m_udt_name.length);
+  str->append('(');
+  TABLE *table = table_record->table;
+  if (table->file->ha_rnd_init(true)) return nullptr;
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> tmp;
+  bool is_empty = true;
+  do {
+    int res = table->file->ha_rnd_next(table->record[0]);
+    if (res == 0) {
+      is_empty = false;
+      if (m_nested_table_udt.length == 0) {
+        if (table->field[1]->is_null()) {
+          str->append(STRING_WITH_LEN("NULL"));
+        } else {
+          append_field_to_string(table->field[1], str);
+        }
+      } else {
+        str->append(m_nested_table_udt.str, m_nested_table_udt.length);
+        str->append('(');
+        for (uint i = 1; i < table->s->fields; i++) {
+          if (table->field[i]->is_null()) {
+            str->append(STRING_WITH_LEN("NULL"));
+          } else {
+            append_field_to_string(table->field[i], str);
+          }
+          str->append(',');
+        }
+        (*str)[str->length() - 1] = ')';
+      }
+      str->append(',');
+    } else if (res == HA_ERR_END_OF_FILE) {
+      break;
+    } else {
+      table->file->print_error(res, MYF(0));
+      return nullptr;
+    }
+  } while (true);
+
+  table->file->ha_rnd_end();
+
+  if (is_empty)
+    str->append(')');
+  else
+    (*str)[str->length() - 1] = ')';
+  return str;
+}
+
+List<Create_field> *Field_row_table::get_field_create_field_list() {
+  if (table_record == nullptr) return nullptr;
+  return &table_record->m_vt_list;
+}
+
 /****************************************************************************
   Functions for the Field_decimal class
   This is an number stored as a pre-space (or pre-zero) string
@@ -7871,22 +8233,34 @@ Field_udt_type::Field_udt_type(uchar *ptr_arg, uint32 len_arg,
                                uchar null_bit_arg, uchar auto_flags_arg,
                                const char *field_name_arg, TABLE_SHARE *share,
                                const CHARSET_INFO *cs, LEX_CSTRING *ident,
-                               MEM_ROOT *share_mem_root, char *db_name)
+                               MEM_ROOT *share_mem_root, LEX_STRING db_name)
     : Field_varstring(ptr_arg, len_arg, length_bytes_arg, null_ptr_arg,
                       null_bit_arg, auto_flags_arg, field_name_arg, share, cs),
       m_ident(*ident),
       m_type_table(nullptr),
       m_share_mem_root(share_mem_root),
-      m_udt_db_name(db_name),
-      is_udt_value_initialized(false) {
+      m_udt_db_name(db_name.str) {
   share->udt_fields++;
+  set_charset(&my_charset_bin);
+}
+
+Field_udt_type::Field_udt_type(uint32 len_arg, bool is_nullable_arg,
+                               const char *field_name_arg, TABLE_SHARE *share,
+                               const CHARSET_INFO *cs, LEX_CSTRING ident,
+                               MEM_ROOT *share_mem_root, LEX_STRING db_name)
+    : Field_varstring(len_arg, is_nullable_arg, field_name_arg, share, cs),
+      m_ident(ident),
+      m_type_table(nullptr),
+      m_share_mem_root(share_mem_root),
+      m_udt_db_name(db_name.str) {
+  if (share != nullptr) {
+    share->udt_fields++;
+  }
+  set_charset(&my_charset_bin);
 }
 
 void Field_udt_type::clear_table_all_field() {
   if (!m_type_table) return;
-  for (uint j = 0; j < m_type_table->s->fields; j++) {
-    m_type_table->field[j]->clear_table_all_field();
-  }
   free_blobs(m_type_table);
 }
 
@@ -7909,16 +8283,16 @@ type_conversion_status Field_udt_type::store(const Field *from) {
 
 String *Field_udt_type::val_str(String *, String *val_ptr) const {
   if (!data_ptr()) return nullptr;
-  copy_data_ptr_to_table();
+  copy_data_to_table();
   if (current_thd->variables.udt_format_result == UDT_FORMAT_RESULT_BINARY)
     val_ptr = Field_varstring::val_str(val_ptr, val_ptr);
   else {
-    show_udt_values(m_type_table, val_ptr);
+    return show_udt_values(m_type_table, val_ptr);
   }
   return val_ptr;
 }
 
-void Field_udt_type::copy_data_ptr_to_table() const {
+void Field_udt_type::copy_data_to_table() const {
   memcpy(m_type_table->record[0], const_cast<uchar *>(data_ptr()),
          m_type_table->s->reclength);
 }
@@ -9823,7 +10197,8 @@ Field *make_field(MEM_ROOT *mem_root, TABLE_SHARE *share, uchar *ptr,
                   bool treat_bit_as_char, uint pack_length_override,
                   std::optional<gis::srid_t> srid, bool is_array,
                   bool is_rowtype_ref, bool is_row_table, LEX_CSTRING *udt_name,
-                  const char *db_name) {
+                  LEX_STRING db_name, int index_length,
+                  dd::Column::enum_hidden_type hidden, bool is_ref_cursor) {
   uchar *bit_ptr = nullptr;
   uchar bit_offset = 0;
   assert(mem_root);
@@ -9852,14 +10227,20 @@ Field *make_field(MEM_ROOT *mem_root, TABLE_SHARE *share, uchar *ptr,
                        field_type, field_length, interval,
                        (is_array ? "true" : "false")));
 
-  if (is_rowtype_ref && field_type == MYSQL_TYPE_NULL) {
+  if (is_rowtype_ref && field_type == MYSQL_TYPE_NULL && !is_row_table) {
     Field_row *field_row = new (mem_root) Field_row(ptr, field_name);
     field_row->set_charset(field_charset);
     return field_row;
   }
+  if (is_ref_cursor) {
+    Field_refcursor *field_refcursor = new (mem_root)
+        Field_refcursor(ptr, field_name, udt_name ? *udt_name : NULL_CSTR);
+    field_refcursor->set_charset(field_charset);
+    return field_refcursor;
+  }
   if (is_row_table) {
     Field_row_table *field_row_table =
-        new (mem_root) Field_row_table(mem_root, ptr, field_name);
+        new (mem_root) Field_row_table(ptr, field_name, index_length);
     field_row_table->set_charset(field_charset);
     return field_row_table;
   }
@@ -9908,17 +10289,20 @@ Field *make_field(MEM_ROOT *mem_root, TABLE_SHARE *share, uchar *ptr,
     case MYSQL_TYPE_STRING:
       return new (mem_root) Field_string(ptr, field_length, null_pos, null_bit,
                                          auto_flags, field_name, field_charset);
-    case MYSQL_TYPE_VARCHAR:
-      if (udt_name && udt_name->str) {
+    case MYSQL_TYPE_VARCHAR: {
+      if (udt_name && udt_name->str)
         return new (mem_root) Field_udt_type(
             ptr, field_length, HA_VARCHAR_PACKLENGTH(field_length), null_pos,
             null_bit, auto_flags, field_name, share, field_charset, udt_name,
-            mem_root, const_cast<char *>(db_name));
-      }
+            mem_root, db_name);
 
-      return new (mem_root) Field_varstring(
+      Field *result = nullptr;
+      result = new (mem_root) Field_varstring(
           ptr, field_length, HA_VARCHAR_PACKLENGTH(field_length), null_pos,
-          null_bit, auto_flags, field_name, share, field_charset);
+          null_bit, auto_flags, field_name, share, field_charset, decimals);
+      result->set_hidden(hidden);
+      return result;
+    }
     case MYSQL_TYPE_BLOB:
     case MYSQL_TYPE_MEDIUM_BLOB:
     case MYSQL_TYPE_TINY_BLOB:
@@ -9999,10 +10383,13 @@ Field *make_field(MEM_ROOT *mem_root, TABLE_SHARE *share, uchar *ptr,
       return new (mem_root)
           Field_medium(ptr, field_length, null_pos, null_bit, auto_flags,
                        field_name, is_zerofill, is_unsigned);
-    case MYSQL_TYPE_LONG:
-      return new (mem_root)
+    case MYSQL_TYPE_LONG: {
+      Field *result = new (mem_root)
           Field_long(ptr, field_length, null_pos, null_bit, auto_flags,
                      field_name, is_zerofill, is_unsigned);
+      result->set_hidden(hidden);
+      return result;
+    }
     case MYSQL_TYPE_LONGLONG:
       return new (mem_root)
           Field_longlong(ptr, field_length, null_pos, null_bit, auto_flags,
@@ -10064,9 +10451,11 @@ Field *make_field(MEM_ROOT *mem_root, TABLE_SHARE *share, uchar *ptr,
 Field *make_field(const Create_field &create_field, TABLE_SHARE *share,
                   const char *field_name, size_t field_length, uchar *ptr,
                   uchar *null_pos, size_t null_bit) {
-  bool rowtype_ref = create_field.is_cursor_rowtype_ref() ||
-                     create_field.is_table_rowtype_ref() ||
-                     create_field.is_row();
+  bool rowtype_ref = !create_field.ora_record.is_row_table() &&
+                     !create_field.ora_record.is_ref_cursor &&
+                     (create_field.ora_record.is_cursor_rowtype_ref() ||
+                      create_field.ora_record.is_table_rowtype_ref() ||
+                      create_field.ora_record.is_row());
   LEX_CSTRING cstr = create_field.udt_name.str
                          ? to_lex_cstring(create_field.udt_name)
                          : NULL_CSTR;
@@ -10078,7 +10467,9 @@ Field *make_field(const Create_field &create_field, TABLE_SHARE *share,
       create_field.is_unsigned, create_field.decimals,
       create_field.treat_bit_as_char, create_field.pack_length_override,
       create_field.m_srid, create_field.is_array, rowtype_ref,
-      create_field.is_row_table(), &cstr, create_field.udt_db_name);
+      create_field.ora_record.is_row_table(), &cstr, create_field.udt_db_name,
+      create_field.ora_record.index_length, create_field.hidden,
+      create_field.ora_record.is_ref_cursor);
 }
 
 Field *make_field(const Create_field &create_field, TABLE_SHARE *share,
@@ -10249,6 +10640,15 @@ bool Field::set_warning(Sql_condition::enum_severity_level level, uint code,
 
   unsigned int current_warning_mask = 0;
   const char *col_name = field_name;
+  String tmp_col_name;
+  if (thd->lex->sql_command == SQLCOM_INSERT_ALL_SELECT) {
+    if (table != nullptr && table->alias != nullptr) {
+      tmp_col_name.append(table->alias);
+      tmp_col_name.append(".");
+      tmp_col_name.append(field_name);
+      col_name = tmp_col_name.c_ptr();
+    }
+  }
 
   if (code == ER_BAD_NULL_ERROR)
     current_warning_mask = BAD_NULL_ERROR_PUSHED;
@@ -10857,13 +11257,14 @@ Field_varstring::Field_varstring(uchar *ptr_arg, uint32 len_arg,
                                  uint length_bytes_arg, uchar *null_ptr_arg,
                                  uchar null_bit_arg, uchar auto_flags_arg,
                                  const char *field_name_arg, TABLE_SHARE *share,
-                                 const CHARSET_INFO *cs)
+                                 const CHARSET_INFO *cs, uint dec_arg)
     : Field_longstr(ptr_arg, len_arg, null_ptr_arg, null_bit_arg,
                     auto_flags_arg, field_name_arg, cs),
       length_bytes(length_bytes_arg) {
   if (share != nullptr) {
     share->varchar_fields++;
   }
+  dec = dec_arg;
 }
 
 Field_varstring::Field_varstring(uint32 len_arg, bool is_nullable_arg,
@@ -10875,6 +11276,31 @@ Field_varstring::Field_varstring(uint32 len_arg, bool is_nullable_arg,
       length_bytes(len_arg < 256 ? 1 : 2) {
   if (share != nullptr) {
     share->varchar_fields++;
+  }
+}
+
+void Field_varstring::store_timestamp(const my_timeval *tm) {
+  MYSQL_TIME_cache tm_cache;
+  Time_zone *tz = current_thd->time_zone();
+  uint d = dec;
+  bool is_ora_current_timestamp =
+      (current_thd->variables.sql_mode & MODE_ORACLE) &&
+      (auto_flags & Field::VARCHAR_DEFAULT_CURRENT_TIMESTAP);
+  if (is_ora_current_timestamp &&
+      !(auto_flags & Field::CURRENT_TIMESTAMP_DEC_APPOINT)) {
+    d = 6;
+  }
+  tm_cache.set_datetime(*tm, d, tz);
+  MYSQL_TIME l_time;
+  tm_cache.get_time(&l_time);
+
+  if (is_ora_current_timestamp) {
+    String str;
+    str.set_charset(&my_charset_numeric);
+    Item_func_now::convert_to_ora_current_timestamp(&l_time, tz, d, &str);
+    store(str.ptr(), str.length(), str.charset());
+  } else {
+    store_time(&l_time, d);
   }
 }
 
@@ -11037,26 +11463,32 @@ const char *get_field_name_or_expression(THD *thd, const Field *field) {
   return field->field_name;
 }
 
-void show_udt_values(TABLE *table, String *var) {
-  if (!table || !table->s) return;
+String *show_udt_values(TABLE *table, String *var) {
+  if (!table || !table->s) return nullptr;
   Field **flds = table->visible_field_ptr();
-  String buf;
+
   var->length(0);
-  for (uint i = 0; i < table->s->fields; i++) {
+  for (uint i = 0; i < table->visible_field_count(); i++) {
     var->append(flds[i]->field_name);
     var->append(":");
-    buf.length(0);
-    flds[i]->val_str(&buf);
     if (!flds[i]->is_null()) {
-      if (flds[i]->type() == MYSQL_TYPE_BIT) {
-        longlong bit_num = flds[i]->val_int();
-        char bit_char[64];
-        sprintf(bit_char, "0x%llX", bit_num);
-        var->append(bit_char);
-      } else
-        var->append(buf);
+      append_field_to_string(flds[i], var);
     } else
       var->append("NULL");
-    if (i != table->s->fields - 1) var->append(" | ");
+    if (i != table->visible_field_count() - 1) var->append(" | ");
+  }
+  return var;
+}
+
+void append_field_to_string(Field *fld, String *str) {
+  if (fld->type() == MYSQL_TYPE_BIT) {
+    longlong bit_num = fld->val_int();
+    char bit_char[64];
+    sprintf(bit_char, "0x%llX", bit_num);
+    str->append(bit_char);
+  } else {
+    StringBuffer<STRING_BUFFER_USUAL_SIZE> buf;
+    String *res = fld->val_str(&buf);
+    str->append(*res);
   }
 }

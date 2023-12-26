@@ -1,0 +1,368 @@
+SET sql_mode='ORACLE';
+
+
+# Predefined exceptions: TOO_MANY_ROWS, NO_DATA_FOUND,DUP_VAL_ON_INDEX,ZERO_DIVIDE
+
+# Testing NO_DATA_FOUND and TOO_MANY_ROWS
+
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (10),(20);
+
+DELIMITER $$;
+CREATE PROCEDURE p1(lim INT, res OUT varchar(50))
+as
+  a INT;
+BEGIN
+  SELECT a INTO a FROM t1 LIMIT lim;
+EXCEPTION
+  WHEN TOO_MANY_ROWS THEN
+    set res='--- too_many_rows cought ---';
+  WHEN NO_DATA_FOUND THEN
+    set res='--- no_data_found cought ---';
+END;
+$$
+DELIMITER ;$$
+SET @res='';
+CALL p1(0, @res);
+SELECT @res;
+CALL p1(2, @res);
+SELECT @res;
+DROP PROCEDURE p1;
+DROP TABLE t1;
+
+# Testing ZERO_DIVIDE
+
+DELIMITER $$;
+CREATE PROCEDURE p1(res OUT varchar(50))
+as
+BEGIN
+  select 1/0 ;
+EXCEPTION
+  WHEN ZERO_DIVIDE THEN
+    set res='--- ZERO_DIVIDE cought ---';
+  when others then
+    set res='--- others cought ---';
+END;
+$$
+DELIMITER ;$$
+
+CALL p1(@res);
+SELECT @res;
+
+DROP PROCEDURE p1;
+
+--echo #
+--echo # Testing DUP_VAL_ON_INDEX
+--echo #
+
+CREATE TABLE t1 (a INT PRIMARY KEY);
+
+DELIMITER $$;
+CREATE PROCEDURE p1(res OUT VARCHAR(50))
+as
+BEGIN
+  INSERT INTO t1 VALUES (10);
+  INSERT INTO t1 VALUES (10);
+EXCEPTION
+  WHEN DUP_VAL_ON_INDEX THEN
+    set res='--- dup_val_on_index cought ---';
+END;
+$$
+DELIMITER ;$$
+SET @res='';
+CALL p1(@res);
+SELECT @res;
+SELECT * FROM t1;
+DROP PROCEDURE p1;
+DROP TABLE t1;
+
+#
+# sql_mode=ORACLE: Do not require BEGIN..END in multi-statement exception handlers in THEN clause
+#
+CREATE TABLE t1 (a INT PRIMARY KEY);
+INSERT INTO t1 VALUES (10),(20),(30);
+
+DELIMITER $$;
+CREATE PROCEDURE p1(a INT)
+as
+BEGIN
+  INSERT INTO t1 (a) VALUES (a);
+EXCEPTION
+  WHEN DUP_VAL_ON_INDEX THEN
+    set a= a+1;
+    INSERT INTO t1 VALUES (a);
+  WHEN OTHERS THEN
+    select 'others1';
+    select 'others2';
+END;
+$$
+DELIMITER ;$$
+CALL p1(30);
+SELECT * FROM t1;
+DROP PROCEDURE p1;
+DROP TABLE t1;
+
+#
+#  Exception can be used with RAISE
+#
+
+DELIMITER $$;
+CREATE PROCEDURE p1()
+as
+begin
+  BEGIN
+    select 'hello world';
+    raise TOO_MANY_ROWS;
+  EXCEPTION
+    WHEN OTHERS THEN
+      select 'get raise exception from others and raise' as val;
+      raise;
+  END;
+EXCEPTION
+  when TOO_MANY_ROWS then
+    select 'get too_many_rows from raise' as val;
+end;
+$$
+DELIMITER ;$$
+
+call p1();
+DROP PROCEDURE p1;
+
+
+DELIMITER $$;
+--error ER_RAISE_NOT_IN_EXCEPTION
+CREATE PROCEDURE p1()
+as
+begin
+  raise;
+EXCEPTION
+  when others then
+    select 'get too_many_rows from raise' as val;
+end;
+$$
+
+DELIMITER ;$$
+
+## Error code 1: User-Defined Exception
+
+DELIMITER $$;
+
+CREATE PROCEDURE p1()
+as
+  c EXCEPTION;
+  b EXCEPTION;
+begin
+	select 'hello world';
+  raise c;
+EXCEPTION
+when b then
+	select 'get raise 2' as res;
+  raise;
+when c then
+	select 'get raise 1' as res;
+end;
+$$
+
+DELIMITER ;$$
+
+call p1();
+DROP PROCEDURE p1;
+
+DELIMITER $$;
+CREATE PROCEDURE p1()
+as
+  a EXCEPTION;
+begin
+  DECLARE
+    c EXCEPTION;
+  begin
+    raise c;
+  exception
+    when c then
+      select 'get c raise 1' as res;
+      raise;
+  end;
+EXCEPTION
+when a then
+  select 'get a raise 2 is failed' as res;
+END;
+$$
+DELIMITER ;$$
+
+--error ER_SIGNAL_EXCEPTION
+call p1();
+DROP PROCEDURE p1;
+
+DELIMITER $$;
+CREATE PROCEDURE p1()
+as
+  a EXCEPTION;
+  errno INT;
+  msg TEXT;
+begin
+  DECLARE
+    c EXCEPTION;
+  begin
+    raise c;
+  end;
+EXCEPTION
+when a then
+  select 'get a raise 2 is failed' as res;
+when others then
+  GET DIAGNOSTICS CONDITION 1
+  errno = RETURNED_SQLSTATE, msg = MESSAGE_TEXT;
+  select 'get others:'||errno ||  msg as res;
+
+END;
+$$
+DELIMITER ;$$
+
+call p1();
+DROP PROCEDURE p1;
+
+
+# redirect mysql errno to user defined
+
+CREATE TABLE t1 (a INT);
+DELIMITER $$;
+CREATE PROCEDURE p1()
+as
+  a EXCEPTION;
+  PRAGMA EXCEPTION_INIT(a,1329);
+  b INT;
+begin
+  SELECT a INTO b FROM t1;
+EXCEPTION
+when a then
+	select '--NO_DATA_FOUND--' as res;
+when others then
+	select 'get others' as res;
+  raise;
+END;
+$$
+
+DELIMITER ;$$
+
+call p1();
+DROP PROCEDURE p1;
+DROP TABLE t1;
+
+DELIMITER $$;
+
+--error ER_SP_DUP_HANDLER
+CREATE PROCEDURE p1(lim INT, res OUT varchar(50))
+as
+  a INT;
+BEGIN
+  SELECT a INTO a FROM t1 LIMIT lim;
+EXCEPTION
+  WHEN TOO_MANY_ROWS THEN
+    set res='--- too_many_rows cought ---1';
+  WHEN TOO_MANY_ROWS THEN
+    set res='--- too_many_rows cought ---2';
+  WHEN NO_DATA_FOUND THEN
+    set res='--- no_data_found cought ---';
+END;
+$$
+
+--error ER_SP_DUP_HANDLER
+CREATE PROCEDURE p1()
+as
+  a EXCEPTION;
+  PRAGMA EXCEPTION_INIT(a,1329);
+begin
+  select 'hello world';
+EXCEPTION
+when a then
+	select '--NO_DATA_FOUND-- a' as res;
+when NO_DATA_FOUND then
+	select '--NO_DATA_FOUND-- b' as res;
+when others then
+	select 'get others' as res;
+END;
+$$
+
+
+--error ER_SP_DUP_HANDLER
+CREATE PROCEDURE p1()
+as
+  a EXCEPTION;
+ PRAGMA EXCEPTION_INIT(a,1329);
+  b EXCEPTION;
+ PRAGMA EXCEPTION_INIT(b,1329);
+begin
+  select 'hello world';
+EXCEPTION
+when a then
+	select '--NO_DATA_FOUND-- a' as res;
+when b then
+	select '--NO_DATA_FOUND-- b' as res;
+when others then
+	select 'get others' as res;
+END;
+$$
+
+CREATE PROCEDURE p1()
+as
+  a EXCEPTION;
+  PRAGMA EXCEPTION_INIT(a,1329);
+begin
+  select 'hello world';
+
+  raise_application_error(1329 , 'test');
+
+EXCEPTION
+when a then
+	select '--NO_DATA_FOUND-- a' as res;
+  raise;
+when others then
+	select 'get others' as res;
+END;
+$$
+DELIMITER ;$$
+
+--error 1329
+call p1();
+DROP PROCEDURE p1;
+
+DELIMITER $$;
+CREATE PROCEDURE p1()
+as
+begin
+  raise_application_error(1329 , 'test');
+END;
+$$
+
+DELIMITER ;$$
+
+--error 1329
+call p1();
+DROP PROCEDURE p1;
+
+
+DELIMITER $$;
+CREATE PROCEDURE p1()
+as
+begin
+  raise_application_error(1329 , 'test');
+exception
+  when others then
+    select sqlerrm ;
+END;
+
+$$
+DELIMITER ;$$
+
+call p1();
+
+drop PROCEDURE p1;
+
+set sql_mode=oracle;
+--error 1064
+raise;
+
+--error 1064,1319
+raise TOO_MANY_ROWS;
+
+--error 1064
+raise_application_error(1329 , 'test');

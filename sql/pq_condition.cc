@@ -49,10 +49,10 @@ const Item_sum::Sumfunctype NO_PQ_SUPPORTED_AGG_FUNC_TYPES[] = {
     Item_sum::SUM_BIT_FUNC};
 
 const Item_func::Functype NO_PQ_SUPPORTED_FUNC_TYPES[] = {
-    Item_func::FT_FUNC,      Item_func::MATCH_FUNC, Item_func::SUSERVAR_FUNC,
-    Item_func::FUNC_SP,      Item_func::JSON_FUNC,  Item_func::SUSERVAR_FUNC,
-    Item_func::UDF_FUNC,     Item_func::XML_FUNC,   Item_func::ROWNUM_FUNC,
-    Item_func::NOT_ALL_FUNC,
+    Item_func::FT_FUNC,      Item_func::MATCH_FUNC,    Item_func::SUSERVAR_FUNC,
+    Item_func::FUNC_SP,      Item_func::JSON_FUNC,     Item_func::SUSERVAR_FUNC,
+    Item_func::UDF_FUNC,     Item_func::XML_FUNC,      Item_func::ROWNUM_FUNC,
+    Item_func::NOT_ALL_FUNC, Item_func::SEQUENCE_FUNC,
 };
 
 const char *NO_PQ_SUPPORTED_FUNC_ARGS[] = {
@@ -90,7 +90,6 @@ const char *NO_PQ_SUPPORTED_FUNC_ARGS[] = {
     "vsize",
     "lpad_oracle",
     "rownum",
-    "add_months",
     "nchr",
 };
 
@@ -694,6 +693,12 @@ bool check_pq_select_result_fields(JOIN *join) {
  *    false.
  */
 bool check_pq_select_fields(JOIN *join) {
+  for (Item *item : join->query_block->fields) {
+    if (!check_pq_support_fieldtype(item, false)) {
+      return false;
+    }
+  }
+
   // check whether contains blob, text, json and geometry field
   for (Item *item : *join->fields) {
     if (!check_pq_support_fieldtype(item, false)) {
@@ -831,7 +836,12 @@ bool suite_for_parallel_query(Query_block *select) {
                       // table〝subquery condition and so on.
       select->outer_query_block() != nullptr ||  // nested subquery
       select->is_distinct() ||                   // select distinct
-      select->saved_windows_elements) {          // windows function
+      select->has_foj() ||                       // full join
+      select->has_connect_by == true ||          // connect by
+      (select->select_limit_fetch &&
+       (select->select_limit_percent ||
+        select->select_limit_ties)) ||   // fetch first
+      select->saved_windows_elements) {  // windows function
     return false;
   }
   if (select->has_limit() &&
@@ -896,7 +906,9 @@ bool suite_for_parallel_query(JOIN *join) {
 bool check_pq_running_threads(uint dop, ulong timeout_ms) {
   bool success = false;
   mysql_mutex_lock(&LOCK_pq_threads_running);
-  if (parallel_threads_running + dop > parallel_max_threads) {
+  if (dop > parallel_max_threads) {
+    success = false;
+  } else if (parallel_threads_running + dop > parallel_max_threads) {
     if (timeout_ms > 0) {
       struct timespec start_ts;
       struct timespec end_ts;
@@ -1080,9 +1092,6 @@ bool check_select_group_and_order_by(Query_block *select_lex) {
   for (ORDER *order = select_lex->order_list.first; order;
        order = order->next) {
     Item *item = *order->item;
-    if (item && item->type() == Item::SUM_FUNC_ITEM) {
-      return false;
-    }
     if (item && !check_pq_support_fieldtype(item, false)) {
       return false;
     }

@@ -397,3 +397,131 @@ void Table_cache_manager::print_tables() {
     m_table_cache[i].print_tables();
 }
 #endif
+
+#ifdef HAVE_PSI_INTERFACE
+PSI_mutex_key Global_temp_table_cache::m_lock_key;
+PSI_mutex_info Global_temp_table_cache::m_mutex_keys[] = {
+    {&m_lock_key, "LOCK_global_temp_table_cache", 0, 0, PSI_DOCUMENT_ME}};
+#endif
+
+Global_temp_table_cache global_temp_table_cache;
+
+/**
+  Initialize instance of global temp table cache.
+
+  @retval false - success.
+  @retval true  - failure.
+*/
+
+bool Global_temp_table_cache::init() {
+  mysql_mutex_init(m_lock_key, &m_lock, MY_MUTEX_INIT_FAST);
+  inited = true;
+  return false;
+}
+
+/** Destroy instance of table cache. */
+
+void Global_temp_table_cache::destroy() {
+  // mysqld may not call Global_temp_table_cache::init() because of error.
+  // !inited check is necessary.
+  if (!inited) return;
+  lock();
+  m_cache.clear();
+  unlock();
+  inited = false;
+  mysql_mutex_destroy(&m_lock);
+}
+
+/** Init P_S instrumentation key for mutex protecting Global_temp_table_cache
+ * instance. */
+
+void Global_temp_table_cache::init_psi_keys() {
+#ifdef HAVE_PSI_INTERFACE
+  mysql_mutex_register("sql", m_mutex_keys,
+                       static_cast<int>(array_elements(m_mutex_keys)));
+#endif
+}
+
+void Global_temp_table_cache::add_used_table(std::string *key_str) {
+  lock();
+
+  const auto el_it = m_cache.find(*key_str);
+  if (el_it != m_cache.end()) {
+    el_it->second++;
+  } else {
+    m_cache.emplace(*key_str, 1);
+  }
+
+  unlock();
+}
+
+void Global_temp_table_cache::add_used_table(const char *db,
+                                             const char *table_name) {
+  if (!inited) return;
+
+  std::string key_str = create_table_def_key_string(db, table_name);
+  add_used_table(&key_str);
+}
+
+void Global_temp_table_cache::release_table(TABLE *table) {
+  if (!inited) return;
+
+  assert(table->s != nullptr);
+  std::string key_str =
+      create_table_def_key_string(table->s->db.str, table->s->table_name.str);
+
+  lock();
+
+  const auto el_it = m_cache.find(key_str);
+  if (el_it != m_cache.end()) {
+    el_it->second--;
+
+    if (el_it->second == 0) {
+      m_cache.erase(key_str);
+    } else {
+      m_cache[key_str] = el_it->second;
+    }
+  }
+
+  unlock();
+}
+
+bool Global_temp_table_cache::in_use(std::string *key_str) {
+  bool in_cache;
+
+  lock();
+
+  const auto el_it = m_cache.find(*key_str);
+  in_cache = el_it != m_cache.end();
+  unlock();
+
+  return in_cache;
+}
+
+bool Global_temp_table_cache::in_use(TABLE *table) {
+  if (!inited) return false;
+
+  const char *key = table->s->table_cache_key.str;
+  size_t key_length = table->s->table_cache_key.length;
+  if (table->s->table_category == TABLE_CATEGORY_TEMPORARY)
+    key_length -= TMP_TABLE_KEY_EXTRA;
+
+  std::string key_str(key, key_length);
+
+  return in_use(&key_str);
+}
+
+bool Global_temp_table_cache::in_use(const char *db, const char *table_name) {
+  if (!inited) return false;
+
+  std::string key_str = create_table_def_key_string(db, table_name);
+  return in_use(&key_str);
+}
+
+bool is_in_global_temp_table_cache(THD *thd, const char *db,
+                                   const char *table_name) {
+  // for slave thread, bypass this check.
+  if (thd->slave_thread) return false;
+
+  return global_temp_table_cache.in_use(db, table_name);
+}

@@ -1,0 +1,86 @@
+[### test create sequence of special db/seq name]
+create database `t``e"s'\'t`;
+create sequence `t``e"s'\'t`.`s``e"q'\'uen.ce` cache 2;
+show sequences from `t``e"s'\'t`;
+Sequences_in_t`e"s'\'t
+s`e"q'\'uen.ce
+show full sequences from `t``e"s'\'t`;
+Sequences_in_t`e"s'\'t	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+s`e"q'\'uen.ce	1	1	9999999999999999999999999999	1	0	2	0
+show create sequence `t``e"s'\'t`.`s``e"q'\'uen.ce`;
+Sequence	Create Sequence
+s`e"q'\'uen.ce	CREATE SEQUENCE `s``e"q'\'uen.ce` START WITH 1 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 2 NOORDER
+select * from mysql.greatdb_sequences;
+db	name	start_with	minvalue	maxvalue	increment	cycle_flag	cache_num	order_flag
+t`e"s'\'t	s`e"q'\'uen.ce	1	1	9999999999999999999999999999	1	0	2	0
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+t`e"s'\'t	s`e"q'\'uen.ce	-1000000000000000000000000000
+
+[### test get value from sequence with special name]
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+ERROR HY000: read sequence value failed, cause currval is not yet defined in this session
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.nextval;
+nextval
+1
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+currval
+1
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.nextval;
+nextval
+2
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+currval
+2
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+t`e"s'\'t	s`e"q'\'uen.ce	2
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.nextval;
+nextval
+3
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+currval
+3
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.nextval;
+nextval
+4
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+currval
+4
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+t`e"s'\'t	s`e"q'\'uen.ce	4
+
+[### test drop sequence with special name]
+drop sequence `t``e"s'\'t`.`s``e"q'\'uen.ce`;
+select * from mysql.greatdb_sequences;
+db	name	start_with	minvalue	maxvalue	increment	cycle_flag	cache_num	order_flag
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+
+[### test backend sequence with special name]
+create sequence `t``e"s'\'t`.`s``e"q'\'uen.ce`;
+select * from mysql.greatdb_sequences;
+db	name	start_with	minvalue	maxvalue	increment	cycle_flag	cache_num	order_flag
+t`e"s'\'t	s`e"q'\'uen.ce	1	1	9999999999999999999999999999	1	0	20	0
+[shard_id=15 is shard 'sd2']
+show full sequences from `t``e"s'\'t`;
+Sequences_in_t`e"s'\'t	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+s`e"q'\'uen.ce	1	1	9999999999999999999999999999	1	0	20	0
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.nextval;
+nextval
+1
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+currval
+1
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.nextval;
+nextval
+2
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+currval
+2
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+t`e"s'\'t	s`e"q'\'uen.ce	20
+drop sequence `t``e"s'\'t`.`s``e"q'\'uen.ce`;
+drop database `t``e"s'\'t`;

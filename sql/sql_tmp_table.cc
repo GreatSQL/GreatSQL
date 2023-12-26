@@ -63,6 +63,7 @@
 #include "sql/item_func.h"  // Item_func
 #include "sql/item_sum.h"   // Item_sum
 #include "sql/key.h"
+#include "sql/key_spec.h"
 #include "sql/mem_root_allocator.h"
 #include "sql/mem_root_array.h"     // Mem_root_array
 #include "sql/mysqld.h"             // heap_hton
@@ -82,6 +83,7 @@
 #include "sql/sql_plugin.h"  // plugin_unlock
 #include "sql/sql_plugin_ref.h"
 #include "sql/sql_select.h"
+#include "sql/sql_table.h"
 #include "sql/system_variables.h"
 #include "sql/table.h"
 #include "sql/temp_table_param.h"
@@ -202,6 +204,11 @@ Field *create_tmp_field_from_field(THD *thd, const Field *org_field,
     new_field->clear_flag(NOT_NULL_FLAG);  // Because of outer join
   if (org_field->type() == FIELD_TYPE_DOUBLE)
     down_cast<Field_double *>(new_field)->not_fixed = true;
+  if (org_field->has_insert_default_datetime_value_expression() &&
+      org_field->type() == MYSQL_TYPE_VARCHAR) {
+    new_field->auto_flags = org_field->auto_flags;
+    down_cast<Field_varstring *>(new_field)->dec = org_field->decimals();
+  }
   /*
     This field will belong to an internal temporary table, it cannot be
     generated.
@@ -235,6 +242,14 @@ static Field *create_tmp_field_from_item(Item *item, TABLE *table,
   bool maybe_null = item->is_nullable();
   Field *new_field = nullptr;
   MEM_ROOT *pq_check_root = root ? root : *THR_MALLOC;
+
+  /*e.g:create table tv as select stu_record_val*/
+  if (item->this_item()->type() == Item::ORACLE_ROWTYPE_TABLE_ITEM ||
+      item->this_item()->type() == Item::ORACLE_ROWTYPE_ITEM) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "create table as select udt/nested_table/ref_cursor");
+    return new_field;
+  }
 
   switch (item->result_type()) {
     case REAL_RESULT:
@@ -287,6 +302,15 @@ static Field *create_tmp_field_from_item(Item *item, TABLE *table,
       new_field = Field_new_decimal::create_from_item(item, root);
       break;
     case ROW_RESULT:
+      // SELECT FIRST_VALUE(f1) over (order by i) a from t1; f1 is udt column.
+      new_field = item->make_string_field(table);
+
+      if (new_field != nullptr) {
+        new_field->set_derivation(item->collation.derivation);
+        Field_udt_type *field_udt = dynamic_cast<Field_udt_type *>(new_field);
+        if (field_udt) field_udt->create_udt_table_from_routine(current_thd);
+      }
+      break;
     default:
       // This case should never be chosen
       assert(0);
@@ -373,7 +397,14 @@ Field *create_tmp_field(THD *thd, TABLE *table, Item *item, Item::Type type,
                         bool copy_result_field, MEM_ROOT *root) {
   DBUG_TRACE;
   Field *result = nullptr;
+  /*e.g:create table tv as select stu_record_val(0).id*/
+  if (type == Item::ORACLE_ROWTYPE_ITEM ||
+      type == Item::ORACLE_ROWTYPE_TABLE_ITEM) {
+    type = item->this_item()->type();
+    item = item->this_item();
+  }
   Item::Type orig_type = type;
+
   Item *orig_item = nullptr;
 
   // If we are optimizing twice (due to being in the hypergraph optimizer
@@ -456,9 +487,18 @@ Field *create_tmp_field(THD *thd, TABLE *table, Item *item, Item::Type type,
           *from_field = item_func_sp->get_result_field();
         }
 
-        result = create_tmp_field_from_field(thd, sp_result_field,
-                                             item_func_sp->item_name.ptr(),
-                                             table, nullptr, root);
+        if (item_func_sp->is_ora_type()) {
+          result = create_tmp_field_from_item(item, table, root);
+        } else if (item_func_sp->is_ora_table()) {
+          my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                   "udt table as subquery table column");
+          return nullptr;
+        } else {
+          result = create_tmp_field_from_field(thd, sp_result_field,
+                                               item_func_sp->item_name.ptr(),
+                                               table, nullptr, root);
+        }
+
         if (!result) break;
         if (modify_item) item_func_sp->set_result_field(result);
         if (!make_copy_field) {
@@ -484,6 +524,7 @@ Field *create_tmp_field(THD *thd, TABLE *table, Item *item, Item::Type type,
     case Item::NULL_ITEM:
     case Item::VARBIN_ITEM:
     case Item::PARAM_ITEM:
+    case Item::CONNECT_BY_FUNC_ITEM:
     case Item::SUM_FUNC_ITEM:
       if (type == Item::SUM_FUNC_ITEM && !is_wf) {
         Item_sum *item_sum = down_cast<Item_sum *>(item);
@@ -509,11 +550,17 @@ Field *create_tmp_field(THD *thd, TABLE *table, Item *item, Item::Type type,
       result = down_cast<Item_aggregate_type *>(item)->make_field_by_type(
           table, thd->is_strict_mode(), root);
       break;
+    case Item::ORACLE_ROWTYPE_ITEM:
+    case Item::ORACLE_ROWTYPE_TABLE_ITEM:
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "create table as select udt/nested_table/ref_cursor");
+      break;
     default:  // Doesn't have to be stored
       assert(false);
       break;
   }
 
+  if (!result) return result;
   /* Make sure temporary fields are never compressed */
   if (result->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED)
     result->clear_flag(FIELD_FLAGS_COLUMN_FORMAT_MASK);
@@ -943,6 +990,13 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
   bool unique_constraint_via_hash_field =
       param->m_operation != Temp_table_param::TTP_UNION_OR_TABLE;
 
+  bool except_connect_by =
+      param->allow_connect_by_tmp_table & EXCEPT_CONNECT_BY_FUNC;
+
+  bool except_connect_by_value =
+      param->allow_connect_by_tmp_table & EXCEPT_CONNECT_BY_VALUE;
+
+  bool except_rand_item = param->allow_connect_by_tmp_table & EXCEPT_RAND_FUNC;
   /*
     When loose index scan is employed as access method, it already
     computes all groups and the result of all aggregate functions. We
@@ -1095,6 +1149,16 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
           store_column = false;
       }
 
+      if (item->has_connect_by_func()) {
+        if (except_connect_by) {
+          store_column = false;
+        } else {
+          if (except_connect_by_value && item->has_connect_by_value()) {
+            store_column = false;
+          }
+        }
+      }
+
       if (item->const_item()) {
         if ((int)hidden_field_count <= 0) {
           // mark this item and then we can identify it without sending a
@@ -1126,6 +1190,9 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
           */
           continue;
         }
+      }
+      if (except_rand_item && (item->used_tables() & (RAND_TABLE_BIT))) {
+        store_column = false;
       }
     }
 
@@ -1216,7 +1283,6 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
       }
 
       if (new_field == nullptr) {
-        assert(thd->is_fatal_error());
         return nullptr;  // Got OOM
       }
       /*
@@ -1452,7 +1518,32 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
       unique_constraint_via_hash_field = true;
     }
   }
+  if (except_connect_by) {
+    Field_longlong *connect_by_field = new (&share->mem_root)
+        Field_longlong(sizeof(ulonglong), false, "<connect_by_field>", true);
+    if (connect_by_field == nullptr) {
+      /* purecov: begin inspected */
+      assert(thd->is_fatal_error());
+      return nullptr;  // Got OOM
+                       /* purecov: end */
+    }
+    // Mark as NOT NULL
+    connect_by_field->set_flag(NOT_NULL_FLAG);
+    // Register set counter as a hidden field.
+    register_hidden_field(table, &default_field[0], &from_field[0],
+                          share->blob_field, connect_by_field);
 
+    // Repoint arrays
+    table->field--;
+    default_field--;
+    from_field--;
+    from_item--;
+    share->reclength += connect_by_field->pack_length();
+    share->fields = ++fieldnr;
+    param->hidden_field_count++;
+    share->field--;
+    table->connect_by_field = connect_by_field;
+  }
   if (unique_constraint_via_hash_field) {
     if (param->needs_set_counter()) {
       // EXCEPT and INTERSECT implementation
@@ -2050,8 +2141,9 @@ TABLE *create_tmp_table_from_fields(THD *thd, List<Create_field> &field_list,
     if ((*reg_field)->is_flag_set(BLOB_FLAG))
       share->blob_field[blob_count++] = (uint)(reg_field - table->field);
 
-    if ((*reg_field)->udt_name().str) {
-      if ((*reg_field)->create_udt_table_from_routine(thd)) goto error;
+    Field_udt_type *udt_field_type = dynamic_cast<Field_udt_type *>(*reg_field);
+    if ((*reg_field)->udt_name().str && udt_field_type) {
+      if (udt_field_type->create_udt_table_from_routine(thd)) goto error;
       share->udt_field[udt_count++] = (uint)(reg_field - table->field);
     }
 
@@ -2112,6 +2204,76 @@ TABLE *create_tmp_table_from_fields(THD *thd, List<Create_field> &field_list,
 error:
   for (reg_field = table->field; *reg_field; ++reg_field) destroy(*reg_field);
   return nullptr;
+}
+
+bool create_tmp_table_unique_index_info(THD *thd, TABLE *table,
+                                        const char *table_alias,
+                                        List<Create_field> *field_list) {
+  /*
+    Make KEY objects for the keys in the new table.
+  */
+  TABLE_SHARE *share = table->s;
+  MEM_ROOT *mem_root = &share->mem_root;
+  KEY *key_info;
+  KEY **key_info_buffer = (KEY **)share->mem_root.Alloc(sizeof(KEY) * 2);
+  memset(key_info_buffer, 0, sizeof(KEY) * 2);
+  (*key_info_buffer) = key_info = (KEY *)share->mem_root.Alloc(sizeof(KEY));
+  KEY_PART_INFO *key_part_info =
+      (KEY_PART_INFO *)share->mem_root.Alloc(sizeof(KEY_PART_INFO));
+  *key_info = KEY();
+  *key_part_info = KEY_PART_INFO();
+  if (!*key_info_buffer || !key_part_info) return true;  // Out of memory
+
+  Mem_root_array<const KEY *> keys_to_check(mem_root);
+  if (keys_to_check.reserve(1)) return true;  // Out of memory
+  List<Key_part_spec> cols;
+  Key_part_spec *spec = new (mem_root) Key_part_spec(
+      to_lex_cstring(ORA_TYPE_RECORD_INDEX_COLUMN_NAME), 0, ORDER_NOT_RELEVANT);
+  cols.push_back(spec);
+  const char *index_name = "idx";
+  int auto_increment = 0;
+  KEY_CREATE_INFO *const key_create_info =
+      new (mem_root) KEY_CREATE_INFO(false);
+  const Key_spec *key = new (mem_root)
+      Key_spec(mem_root, keytype::KEYTYPE_UNIQUE, to_lex_cstring(index_name),
+               key_create_info, false, true, cols);
+  HA_CREATE_INFO create_info;
+  create_info.db_type = share->db_type();
+  create_info.table_options &= HA_OPTION_PACK_RECORD;
+
+  Alter_info alter_info(mem_root);
+  alter_info.flags = Alter_info::ALTER_ADD_INDEX;
+  thd->lex->alter_info = &alter_info;
+
+  key_part_info->init_from_field(share->field[0]);
+  if (tmp_table_prepare_key(thd, thd->db().str, table_alias, &create_info,
+                            field_list, key, key_info_buffer, key_info,
+                            &key_part_info, keys_to_check, 0, table->file,
+                            &auto_increment))
+    return true;
+
+  // fill_indexes_from_dd
+  share->keys_for_keyread.init(0);
+  share->keys_in_use.init();
+  share->visible_indexes.init();
+
+  share->keys = 1;
+  share->key_parts = 1;
+  share->key_info = key_info;
+  if (!(share->keynames.type_names = (const char **)share->mem_root.Alloc(
+            (share->keys + 1) * sizeof(char *))))
+    return true; /* purecov: inspected */
+  memset(share->keynames.type_names, 0, ((share->keys + 1) * sizeof(char *)));
+  share->keynames.type_names[share->keys] = nullptr;
+  share->keynames.type_names[0] = key_info->name;
+  share->keynames.count = share->keys;
+  share->keys_in_use.set_bit(0);
+  share->max_key_length = 0;
+  share->total_key_length = 0;
+  table->key_info = share->key_info;
+  // only ORA_TYPE_RECORD_INDEX_COLUMN_NAME is hidden field.
+  table->hidden_field_count++;
+  return false;
 }
 
 /**
@@ -3036,6 +3198,9 @@ static int FindCopyBitmap(Item *item) {
     }
     if (item_wf->uses_only_one_row()) {
       bits |= 1 << CFT_WF_USES_ONLY_ONE_ROW;
+    }
+    if (item_wf->only_need_do_second_phase()) {
+      bits |= 1 << CFT_WF_ORA_ONLY_NEED_DO_SECOND_PHASE;
     }
   } else {
     if (item->has_wf()) {

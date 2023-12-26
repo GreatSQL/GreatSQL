@@ -1,0 +1,1140 @@
+--source include/have_debug.inc
+set sql_mode="oracle";
+set @@udt_format_result='DBA';
+
+CREATE TABLE t1 (a INT, b VARCHAR(3));
+insert into t1 values(1,'aa'),(2,'bb'),(3,'cc') ;
+
+--echo #
+--echo # test of SYS_REFCURSOR,open cursor for ident
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+  rSql varchar(100);
+  dr_type t1%rowtype;
+begin
+  rSql := 'select * from t1';
+  open cSendCursor for rSql;
+  loop
+    fetch cSendCursor into dr_type;
+    exit when cSendCursor%NOTFOUND;
+    select dr_type.a,dr_type.b;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+show procedure code p1;
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of error ER_SP_UNDECLARED_VAR
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+  rSql varchar(100);
+  dr_type t1%rowtype;
+begin
+  rSql := 'select * from t1 into dr_type';
+  open cSendCursor for rSql;
+  loop
+    fetch cSendCursor into dr_type;
+    exit when cSendCursor%NOTFOUND;
+    select dr_type.a,dr_type.b;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+--error ER_SP_UNDECLARED_VAR
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of open cursor for select_stmt
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+  dr_type t1%rowtype;
+begin
+  open cSendCursor for select * from t1;
+  loop
+    fetch cSendCursor into dr_type;
+    exit when cSendCursor%NOTFOUND;
+    select dr_type.a,dr_type.b;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of open cursor for select_stmt
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+  type dr_typ is record(
+    a int, b varchar(10)
+  );
+  dr_type dr_typ;
+begin
+  open cSendCursor for select * from t1;
+  loop
+    fetch cSendCursor into dr_type;
+    exit when cSendCursor%NOTFOUND;
+    select dr_type.a,dr_type.b;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of for in (select_stmt) loop
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+begin
+  for dr_type in (select * from t1) loop
+    select dr_type.a,dr_type.b;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of open cursor for ident
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+  rSql varchar(100);
+  dr_type t1%rowtype;
+begin
+  rSql := 'update t1 set a=1 ';
+  open cSendCursor for rSql;
+  loop
+    fetch cSendCursor into dr_type;
+    exit when cSendCursor%NOTFOUND;
+    select dr_type.a,dr_type.b;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+--error ER_SP_BAD_CURSOR_QUERY
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of ref cursor
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+  dr_type t1%rowtype;
+begin
+  open cSendCursor for select * from t1 where a<3;
+  loop
+    fetch cSendCursor into dr_type;
+    exit when cSendCursor%NOTFOUND;
+    select dr_type.a,dr_type.b;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of multiple ref cursor
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+  type dr_cursor is ref cursor;
+  cSendCursor1 dr_cursor;
+  rSql varchar(100);
+  dr_type t1%rowtype;
+begin
+  rSql := 'select * from t1 where a<3';
+  open cSendCursor for rSql;
+  open cSendCursor1 for select * from t1 where a<4;
+  loop
+    fetch cSendCursor into dr_type;
+    exit when cSendCursor%NOTFOUND;
+    select dr_type;
+  end loop;
+  loop
+    fetch cSendCursor1 into dr_type;
+    exit when cSendCursor1%NOTFOUND;
+    select dr_type;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of ref cursor ER_NOT_SUPPORTED_YET
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+  dr_type cSendCursor%rowtype;
+begin
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1;
+
+--echo #
+--echo # test of ref cursor ER_SP_MISMATCH_RECORD_VAR
+--echo #
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+CREATE or replace PROCEDURE p1() as
+  dr_cursor sys_refcursor;
+  cSendCursor dr_cursor;
+  dr_type cSendCursor%rowtype;
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of ref cursor ER_NOT_SUPPORTED_YET
+--echo #
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+  dr_type cSendCursor%type;
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of ref cursor ER_NOT_SUPPORTED_YET
+--echo #
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE or replace PROCEDURE p1() as
+  dr_cursor sys_refcursor;
+  dr_type dr_cursor%type;
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of ref cursor ER_SP_MISMATCH_RECORD_VAR
+--echo #
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+  type cc is record(
+    c1 cSendCursor;
+  );
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of ref cursor ER_SP_MISMATCH_RECORD_VAR
+--echo #
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+  cc cSendCursor;
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of ref cursor ER_SP_MISMATCH_RECORD_VAR
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+  i int;
+begin
+  i := cSendCursor;
+  select i;
+end;
+$$
+DELIMITER ;$$
+--error ER_UDT_INCONS_DATATYPES
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of ref cursor ER_SP_CURSOR_MISMATCH
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+  i int;
+begin
+  fetch cSendCursor into i;
+end;
+$$
+DELIMITER ;$$
+--error ER_SP_CURSOR_MISMATCH
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of ref cursor ER_SP_CURSOR_MISMATCH
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+begin
+  close cSendCursor;
+end;
+$$
+DELIMITER ;$$
+--error ER_SP_CURSOR_MISMATCH
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of ref cursor ER_NOT_SUPPORTED_YET
+--echo #
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+begin
+  open cSendCursor for select * from t1;
+  fetch cSendCursor into cSendCursor,cSendCursor;
+  select cSendCursor;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of ref cursor ER_NOT_SUPPORTED_YET
+--echo #
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+begin
+  select 1 into cSendCursor;
+  select cSendCursor;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of ref cursor ER_SP_DUP_CURS
+--echo #
+DELIMITER $$;
+--error ER_SP_DUP_CURS
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+  cursor cSendCursor is select * from t1;
+begin
+  open cSendCursor for select * from t1;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of ref cursor ER_NOT_SUPPORTED_YET
+--echo #
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+begin
+  open dr_cursor for select * from t1;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of ref cursor ER_SP_CURSOR_MISMATCH
+--echo #
+DELIMITER $$;
+--error ER_SP_CURSOR_MISMATCH
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+begin
+  open cSendCursor for select * from t1;
+  open cSendCursor1 for select * from t1;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of ref cursor ER_SP_CURSOR_MISMATCH
+--echo #
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE or replace PROCEDURE p1() as
+  type dr_cursor is ref cursor;
+  cSendCursor dr_cursor;
+begin
+  for i in cSendCursor loop
+  end loop;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of ref cursor ER_SP_MISMATCH_RECORD_VAR
+--echo #
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+CREATE or replace PROCEDURE p1() as
+  dr_cursor sys_refcursor;
+  cSendCursor dr_cursor;
+  dr_type cSendCursor%rowtype;
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of var in for loop
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  dr_type int;
+begin
+  for dr_type in (select * from t1) loop
+    select dr_type.a,dr_type.b;
+  end loop;
+ select dr_type;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of multiple SYS_REFCURSOR
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+  cSendCursor2 SYS_REFCURSOR;
+  rSql varchar(100);
+  dr_type t1%rowtype;
+begin 
+  rSql := 'select * from t1';
+  open cSendCursor for rSql;
+  loop
+    fetch cSendCursor into dr_type;
+    exit when cSendCursor%NOTFOUND;
+    select dr_type.a,dr_type.b;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of duplicate col name
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  dr_type int;
+begin
+  for dr_type in (select a,b,10 a from t1) loop
+    select dr_type;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of duplicate col name
+--echo #
+DELIMITER $$;
+--error ER_SP_UNDECLARED_VAR
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+  rSql varchar(100);
+  dr_type t1%rowtype;
+begin
+  rSql := 'select * from t1';
+  open cSendCursor for lsql;
+  loop
+    fetch cSendCursor into dr_type;
+    exit when cSendCursor%NOTFOUND;
+    select dr_type.a,dr_type.b;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of EXIT WHEN
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  salary INT;
+  dr t1%rowtype;
+  CURSOR cselect IS select * from t1;
+BEGIN
+  OPEN cselect;
+  loop
+    EXIT WHEN cselect%NOTFOUND;
+    FETCH cselect INTO dr;
+    select dr;
+  END LOOP;
+END;
+$$
+DELIMITER ;$$
+call p1;
+delete from t1;
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of multiple open ref cursor
+--echo #
+insert into t1 values(1,'aa'),(2,'bb'),(3,'cc') ;
+
+DELIMITER $$;
+create or replace procedure p1() as
+  ccur sys_refcursor;
+  cursor c is select * from t1;
+  rsql varchar(100);
+  dr_type t1%rowtype;
+begin
+  rsql := 'select * from t1';
+  open ccur for rsql;
+  loop
+    exit when ccur%notfound;
+    fetch ccur into dr_type;
+    select dr_type.a, dr_type.b;
+  end loop;
+  close ccur;
+
+  rsql := 'select * from t1 where a > 1';
+  open ccur for rsql;
+  loop
+    exit when ccur%notfound;
+    fetch ccur into dr_type;
+    select dr_type.a, dr_type.b;
+  end loop;
+  close ccur;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of same name of cursor
+--echo #
+DELIMITER $$;
+--error ER_SP_DUP_CURS
+create or replace procedure p1() as
+  ccur sys_refcursor;
+  cursor ccur is select * from t1;
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of multiple open ref cursor
+--echo #
+CREATE TABLE t2 (a INT, b VARCHAR(3), c int);
+insert into t2 values(1,'aa',1),(2,'bb',2);
+
+DELIMITER $$;
+create or replace procedure p1() as
+  ccur sys_refcursor;
+  rsql varchar(100);
+  dr_type t1%rowtype;
+  dr_type1 t2%rowtype;
+begin
+  rsql := 'select * from t1';
+  open ccur for rsql;
+  loop
+    exit when ccur%notfound;
+    fetch ccur into dr_type;
+    select dr_type.a, dr_type.b;
+  end loop;
+  close ccur;
+
+  rsql := 'select * from t2';
+  open ccur for rsql;
+  loop
+    exit when ccur%notfound;
+    fetch ccur into dr_type1;
+    select dr_type1.a, dr_type1.b, dr_type1.c;
+  end loop;
+  close ccur;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of multiple open ref cursor without close
+--echo #
+DELIMITER $$;
+create or replace procedure p1() as
+  ccur sys_refcursor;
+  rsql varchar(100);
+  dr_type t1%rowtype;
+  dr_type1 t2%rowtype;
+begin
+  rsql := 'select * from t1';
+  open ccur for rsql;
+  loop
+    exit when ccur%notfound;
+    fetch ccur into dr_type;
+    select dr_type.a, dr_type.b;
+  end loop;
+
+  rsql := 'select * from t2';
+  open ccur for rsql;
+  loop
+    exit when ccur%notfound;
+    fetch ccur into dr_type1;
+    select dr_type1.a, dr_type1.b, dr_type1.c;
+  end loop;
+  close ccur;
+end;
+$$
+DELIMITER ;$$
+show procedure code p1;
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of multiple open ref cursor
+--echo #
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+create or replace procedure p1() as
+  ccur sys_refcursor;
+  rsql varchar(100);
+  dr_type t1%rowtype;
+  dr_type1 t2%rowtype;
+begin
+  open ccur;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of multiple open ref cursor without close
+--echo #
+DELIMITER $$;
+create or replace procedure p1() as
+  ccur sys_refcursor;
+  rsql varchar(100);
+  dr_type t1%rowtype;
+  dr_type1 t2%rowtype;
+begin
+  rsql := 'select * from t1';
+  open ccur for rsql;
+  loop
+    exit when ccur%notfound;
+    fetch ccur into dr_type;
+    select dr_type.a, dr_type.b;
+  end loop;
+
+  rsql := 'select * from t2';
+  open ccur for rsql;
+  loop
+    exit when ccur%notfound;
+    fetch ccur into dr_type1;
+    select dr_type1.a, dr_type1.b, dr_type1.c;
+  end loop;
+  close ccur;
+  open ccur for rsql;
+  fetch ccur into dr_type1;
+  select dr_type1.a, dr_type1.b, dr_type1.c;
+end;
+$$
+DELIMITER ;$$
+show procedure code p1;
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of open ref cursor with empty string
+--echo #
+DELIMITER $$;
+create or replace procedure p1() as
+  ccur sys_refcursor;
+  rsql varchar(100);
+  dr_type t1%rowtype;
+  dr_type1 t2%rowtype;
+begin
+  rsql := '';
+  open ccur for rsql;
+end;
+$$
+DELIMITER ;$$
+--error ER_EMPTY_QUERY
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of open ref cursor with null string
+--echo #
+DELIMITER $$;
+create or replace procedure p1() as
+  ccur sys_refcursor;
+  rsql varchar(100);
+  dr_type t1%rowtype;
+  dr_type1 t2%rowtype;
+begin
+  rsql := null;
+  open ccur for rsql;
+end;
+$$
+DELIMITER ;$$
+--error ER_EMPTY_QUERY
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of duplicate define of cursors
+--echo #
+DELIMITER $$;
+--error ER_SP_DUP_CURS
+create or replace procedure p1() as
+  ccur sys_refcursor;
+  rsql varchar(100);
+  dr_type t1%rowtype;
+  dr_type1 t2%rowtype;
+  cursor c is select * from t2;
+  type dr_cursor is ref cursor;
+  c dr_cursor;
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of duplicate define of cursors
+--echo #
+DELIMITER $$;
+--error ER_SP_DUP_CURS
+create or replace procedure p1() as
+  ccur sys_refcursor;
+  rsql varchar(100);
+  dr_type t1%rowtype;
+  dr_type1 t2%rowtype;
+  cursor c is select * from t2;
+  c sys_refcursor;
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of duplicate open cursors
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+  rSql varchar(100);
+  dr_type t2%rowtype;
+  id int:=0;
+begin
+  rSql := 'select * from t2';
+  open cSendCursor for rSql;
+ loop
+    open cSendCursor for rSql;
+    fetch cSendCursor into dr_type;
+    exit when id=3;
+    select dr_type.a,dr_type.b;
+    id := id+1;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of unsupport expression
+--echo #
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE or replace PROCEDURE p1() as
+  dr_type t1%rowtype;
+begin
+  for dr_type in 1 loop
+    select dr_type;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of for in function loop
+--echo #
+DELIMITER $$;
+CREATE FUNCTION f1 (a int) RETURN int no sql
+is result int;
+BEGIN
+  result := a+10;
+  RETURN(result);
+END;
+$$
+
+CREATE or replace PROCEDURE p1() as
+  dr_type t1%rowtype;
+begin
+  for dr_type in f1(1) .. f1(2) loop
+    select dr_type;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of for in reverse function loop
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  dr_type t1%rowtype;
+begin
+  for dr_type in reverse f1(2) .. f1(1) loop
+    select dr_type;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of for in function loop
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+begin
+  for dr_type in (select f1(1)) loop
+    select dr_type;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of for in select loop
+--echo #
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE or replace PROCEDURE p1() as
+BEGIN
+  for i in (select 1.1) .. (select 2.6) loop
+  	select i;
+  end loop;
+END;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of for in inner layer of sp
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type tklist is table of t1%rowtype INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>null);
+BEGIN
+  stu_record_val(1).a := 10;
+  stu_record_val(1).b := 'bb';
+  FORALL i IN f1(1)-10 .. f1(1)-10
+    insert into t1 values stu_record_val (i);
+  select * from t1;
+END;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+drop function f1;
+
+--echo #
+--echo # test of for in inner layer of sp
+--echo #
+set @tv1=10;
+
+DELIMITER $$;
+CREATE FUNCTION f1(a int) RETURN int NO SQL
+AS result int;
+BEGIN
+  result := a + @tv1;
+  RETURN (result);
+END ;$$
+
+CREATE OR REPLACE PROCEDURE p1() AS
+BEGIN
+  FOR dr_type in f1(1) .. f1(2) LOOP
+    select dr_type;
+    set @tv1 = @tv1 + 1;
+  END LOOP;
+END;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+drop function f1;
+
+--echo #
+--echo # test of digest about .. % bulk collect into in reverse
+--echo #
+select statement_digest_text('CREATE or replace PROCEDURE p1() as
+begin
+  for i in 1 .. 2 loop
+    select i;
+  end loop;
+end;');
+
+select statement_digest_text('CREATE or replace PROCEDURE p1() as
+begin
+  for i in reverse 1 .. 2 loop
+    select i;
+  end loop;
+end;');
+
+select statement_digest_text('CREATE or replace PROCEDURE p1() as
+  id int;
+  id1 id%type;
+begin
+end;');
+
+select statement_digest_text('CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := ''a'',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ select * bulk collect into stu_record_val from t1;
+end;');
+
+
+DROP TABLE t1;
+drop table t2;
+
+--echo #
+--echo # Bugfix#7095
+--echo #
+CREATE TABLE t1 (a INT, b VARCHAR(3));
+insert into t1 values(1,'aa'),(2,'bb'),(3,'cc') ;
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+begin
+  for dr_type in (select * from t1) loop
+    select dr_type.a,dr_type.b;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1();
+truncate table t1;
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # Bugfix#7445
+--echo #
+insert into t1 values(1,'aa'),(2,'bb'),(3,'cc') ;
+DELIMITER $$;
+CREATE or replace function f1() RETURN INT no SQL
+AS
+  cSendCursor SYS_REFCURSOR;
+  rSql varchar(100);
+  dr_type t1%rowtype;
+  r_rec int;
+begin
+  rSql := 'select * from t1';
+  open cSendCursor for rSql;
+  loop
+    fetch cSendCursor into dr_type;
+    exit when cSendCursor%NOTFOUND;
+    select dr_type.a into r_rec;
+  end loop;
+  RETURN r_rec;
+end;
+$$
+DELIMITER ;$$
+select f1();
+truncate table t1;
+select f1();
+drop function f1;
+
+drop table t1;
+
+--echo #
+--echo # Bugfix#7830
+--echo #
+CREATE TABLE t1(col1 int,col2 VARCHAR(100),col3 pls_integer) partition by hash(col1) partitions 15  ;
+INSERT INTO t1 values(1,'col1',11),(2,'col2',12),(3,'col3',13),(4,'col4',14),(5,'col5',15);
+CREATE TEMPORARY table t_t1 (SELECT * FROM t1);
+CREATE GLOBAL TEMPORARY TABLE tg_1(
+  col1 int AUTO_INCREMENT PRIMARY KEY,col2 VARCHAR(100),col3 number NOT NULL default 3.1415)
+  ON COMMIT PRESERVE ROWS ;
+insert into tg_1 values(1,'insert into values',987.564);
+insert into tg_1 values(2,'insert into set (data_source)',987.564);
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE p1(v_sql varchar2(500) )
+AS
+  emp_cursor SYS_REFCURSOR; 
+  v_employee t1%ROWTYPE;
+BEGIN
+   OPEN emp_cursor FOR v_sql;
+    LOOP
+    FETCH emp_cursor INTO v_employee;
+    EXIT WHEN emp_cursor%NOTFOUND;
+    SELECT v_employee.col1;
+  END LOOP;  
+  CLOSE emp_cursor;
+END;
+
+CREATE or replace function f1(rSql varchar2(500)) RETURN INT no SQL
+AS
+  cSendCursor SYS_REFCURSOR;
+  dr_type t1%rowtype;
+  r_rec int;
+begin
+  open cSendCursor for rSql;
+  loop
+    fetch cSendCursor into dr_type;
+    exit when cSendCursor%NOTFOUND;
+    select dr_type.col1 into r_rec;
+  end loop;
+  RETURN r_rec;
+end;
+$$
+DELIMITER ;$$
+CALL p1('select * from t_t1'); 
+CALL p1('select * from tg_1');
+CALL p1('select * from t1');
+drop PROCEDURE p1;
+select f1('select * from t_t1');
+select f1('select * from tg_1');
+select f1('select * from t1');
+drop function f1;
+
+drop table t1;
+drop table t_t1;
+drop table tg_1;
+
+--echo #
+--echo # Bugfix#7823
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+begin
+  select cSendCursor%isopen;
+end;
+$$
+DELIMITER ;$$
+call p1();
+call p1();
+drop PROCEDURE p1;
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+begin
+  select cSendCursor%notfound;
+end;$$
+DELIMITER ;$$
+--error ER_SP_CURSOR_MISMATCH
+call p1();
+drop PROCEDURE p1;
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+begin
+  select cSendCursor%rowcount;
+end;$$
+DELIMITER ;$$
+--error ER_SP_CURSOR_NOT_OPEN
+call p1();
+drop PROCEDURE p1;
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  cSendCursor SYS_REFCURSOR;
+begin
+  select cSendCursor%found;
+end;$$
+DELIMITER ;$$
+--error ER_SP_CURSOR_MISMATCH
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # Bugfix#8880
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  a int := 0;
+begin
+  loop
+    exit when a=6;
+    for i in (select 1 as s1,2 as s2 from dual) loop
+      select i;
+    end loop;
+    a:=a+1;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1();
+call p1();
+drop PROCEDURE p1;
+
+
+
+

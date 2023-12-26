@@ -1,0 +1,718 @@
+
+set sql_mode=oracle;
+
+--echo # mysql temporary table work
+create temporary table mtmp (id int not null auto_increment primary key, des varchar2(10));
+show create table mtmp;
+insert into mtmp values (1, 'desc');
+
+
+--echo # the name of private temporary table should be started with ORA$PTT_
+--error ER_INVALID_PRIVATE_TEMP_TABLE_PREFIX
+create private temporary table temp_s1(id int, des varchar2(30)) on commit preserve definition;
+--error ER_INVALID_PRIVATE_TEMP_TABLE_PREFIX
+create private temporary table temp_t1(id int, des varchar2(30)) on commit drop definition;
+--error ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX
+create global temporary table ora$ptt_t1(id int, des varchar2(30)) on commit delete rows;
+--error ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX
+create global temporary table ora$ptt_t1(id int, des varchar2(30)) on commit preserve rows;
+--error ER_NOT_SUPPORTED_YET
+create global temporary table gt_t_t1(id int, des varchar2(30)) on commit delete rows start transaction;
+
+create table ref_tab(id int primary key);
+--error ER_CANNOT_ADD_FOREIGN
+create global temporary table gt_t_t1 (
+  id int PRIMARY KEY,
+  name VARCHAR(16),
+  deptId int,
+  CONSTRAINT fk_emp_dept1 FOREIGN KEY(deptId) REFERENCES ref_tab(id)
+);
+create global temporary table gt_t_t1 (
+  id int PRIMARY KEY,
+  name VARCHAR(16),
+  deptId int
+);
+--error ER_CANNOT_ADD_FOREIGN
+alter table gt_t_t1 add constraint forkey_name foreign key(deptId) references
+  ref_tab(id) on delete cascade ON UPDATE CASCADE ;
+
+drop table gt_t_t1;
+drop table ref_tab;
+
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+create private temporary table ora$ptt_t1 (id int primary key) on commit preserve definition;
+create private temporary table ora$ptt_t1 (id int) on commit preserve definition;
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+alter table ora$ptt_t1 add primary key(id);
+drop table ora$ptt_t1;
+
+--echo # create global temporary table instance in a proc.
+create global temporary table gt_t_t1(id int, name varchar(16), deptId int)
+  on commit delete rows;
+delimiter //;
+create or replace procedure p1() as
+salary varchar(20);
+begin
+  start transaction;
+  insert into gt_t_t1 values (1, 'bb', 1);
+  select name into salary from gt_t_t1 limit 1;
+  select salary;
+  commit;
+  select * from gt_t_t1;
+end; //
+delimiter ;//
+call p1;
+call p1;
+call p1;
+drop procedure p1;
+drop table gt_t_t1;
+
+--echo # rename check
+create global temporary table gt_t_t1 (id int primary key, name varchar(16), deptid int, i int invisible, `sidec` int generated always as (sqrt(((id * deptid) + (id * deptid)))) virtual) on commit delete rows;
+begin;
+insert into gt_t_t1 (id, name, i, deptid) values (1,'aa',1,10);
+select * from gt_t_t1;
+--error ER_GLOBAL_TEMP_TABLE_IN_USE
+rename table gt_t_t1 to ptt_t1t1;
+select * from gt_t_t1;
+commit;
+--error ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX
+rename table gt_t_t1 to ora$ptt_t1;
+--error ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX
+alter table gt_t_t1 rename ora$ptt_t1;
+alter table gt_t_t1 rename ptt_t1t1;
+
+drop table ptt_t1t1;
+
+--echo # check lifecycle/behaviors of private temporary tables
+create private temporary table ora$ptt_s1(id int, des varchar2(30)) on commit preserve definition;
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+create index ooo_t1 on ora$ptt_s1 (des);
+begin;
+# 'drop definition' is default for private temp on-commit clause.
+create private temporary table ora$ptt_t0(id int, des varchar2(30));
+create private temporary table ora$ptt_t1(id int, des varchar2(30)) on commit drop definition;
+insert into ora$ptt_s1 values (1, 'ora$ptt_s1-1');
+insert into ora$ptt_s1 values (2, 'ora$ptt_s1-2');
+show create table ora$ptt_s1;
+select * from ora$ptt_s1;
+insert into ora$ptt_t0 values (10, 'ora$ptt_t0-10');
+insert into ora$ptt_t0 values (20, 'ora$ptt_t0-20');
+show create table ora$ptt_t0;
+insert into ora$ptt_t1 values (100, 'ora$ptt_t1-100');
+insert into ora$ptt_t1 values (200, 'ora$ptt_t1-200');
+show create table ora$ptt_t1;
+select * from ora$ptt_t1;
+commit;
+--error ER_NO_SUCH_TABLE
+select * from ora$ptt_t0;
+select * from ora$ptt_s1;
+--error ER_NO_SUCH_TABLE
+select * from ora$ptt_t1;
+
+
+--echo # check lifecycle/behavior of global temporary tables
+create global temporary table gt_s_inc(id int not null auto_increment primary key, fname varchar2(25), lname varchar(25), store_id int, department_id int, cond_value int) on commit preserve rows;
+create index gt_s_inc_a on gt_s_inc (id, fname, lname, store_id,department_id);
+show index from gt_s_inc;
+show create table gt_s_inc;
+
+# 'delete rows' is default for global temp on-commit clause.
+create global temporary table gt_t_t0(id int not null auto_increment primary key, fname varchar2(25), lname varchar(25), store_id int, department_id int, cond_value int);
+create index gt_t_t0_a on gt_t_t0 (id, fname, lname, store_id,department_id);
+show index from gt_t_t0;
+show create table gt_t_t0;
+
+create global temporary table gt_t_inc(id int not null auto_increment primary key, fname varchar2(25), lname varchar(25), store_id int, department_id int, cond_value int) on commit delete rows;
+create index gt_t_inc_a on gt_t_inc (id, fname, lname, store_id,department_id);
+show index from gt_t_inc;
+show create table gt_t_inc;
+
+--echo # global temp session/trans table behaviors
+begin;
+insert into gt_s_inc values (0, 'f1', 'l1', 1, 11, 111);
+insert into gt_s_inc values (0, 'f2', 'l2', 2, 22, 222);
+select * from gt_s_inc;
+show create table gt_s_inc;
+insert into gt_t_inc values (0, 'tf1', 'tl1', 1, 11, 111);
+insert into gt_t_inc values (0, 'tf2', 'tl2', 2, 22, 222);
+select * from gt_t_inc;
+show create table gt_t_inc;
+commit;
+select * from gt_s_inc;
+show create table gt_s_inc;
+select * from gt_t_inc;
+show create table gt_t_inc;
+
+truncate table gt_s_inc;
+show create table gt_s_inc;
+truncate table gt_t_inc;
+show create table gt_t_inc;
+
+--echo # temp table instance created by 'create temporary table ... like ...'
+--echo # should not be removed at the end implicit transaction.
+insert into gt_s_inc select 0, 'f0', 'l0', 0, 1, 11 from dual where 1 > 0;
+insert into gt_t_inc select 0, 'tf0', 'tl0', 0, 1, 11 from dual where 1 > 0;
+
+--echo # if instance created by insert operation and no row is added,
+--echo # the instance is removed at the end of statement.
+--echo # using 'insert' command
+begin;
+show create table gt_s_inc;
+insert into gt_s_inc select 0, 'sf2', 'sl2', 9, 99, 999 from dual where 1 > 2;
+show create table gt_s_inc;
+rollback;
+
+--echo # using 'insert all' command
+begin;
+show create table gt_s_inc;
+show create table gt_t_inc;
+INSERT ALL
+WHEN 4 > x THEN
+  INTO gt_s_inc VALUES (0, 'iaf4', 'ial4', 4, 44, 444)
+WHEN 3 > x THEN
+  INTO gt_t_inc VALUES (0, 'iaf3', 'ial3', 3, 33, 333)
+SELECT 3 x FROM dual;
+select * from gt_s_inc;
+select * from gt_t_inc;
+show create table gt_s_inc;
+show create table gt_t_inc;
+rollback;
+truncate table gt_s_inc;
+
+begin;
+show create table gt_s_inc;
+show create table gt_t_inc;
+INSERT ALL
+WHEN 4 > x THEN
+  INTO gt_t_inc VALUES (0, 'iaf4', 'ial4', 4, 44, 444)
+WHEN 3 > x THEN
+  INTO gt_s_inc VALUES (0, 'iaf3', 'ial3', 3, 33, 333)
+SELECT 3 x FROM dual;
+select * from gt_s_inc;
+select * from gt_t_inc;
+show create table gt_s_inc;
+show create table gt_t_inc;
+rollback;
+truncate table gt_t_inc;
+
+begin;
+show create table gt_s_inc;
+show create table gt_t_inc;
+INSERT ALL
+WHEN 4 > x THEN
+  INTO gt_t_inc VALUES (0, 'iaf4', 'ial4', 4, 44, 444)
+WHEN 3 > x THEN
+  INTO gt_s_inc VALUES (0, 'iaf3', 'ial3', 3, 33, 333)
+SELECT 5 x FROM dual;
+select * from gt_s_inc;
+select * from gt_t_inc;
+show create table gt_s_inc;
+show create table gt_t_inc;
+rollback;
+
+--echo # using 'merge into' command
+begin;
+show create table gt_s_inc;
+MERGE INTO gt_s_inc t1
+USING (select 1 id,'f' fname from dual) t2
+ON (1 = 0)
+WHEN NOT MATCHED THEN
+INSERT (t1.fname, t1.lname, t1.store_id, t1.department_id)
+VALUES (t2.fname, 3, 4, 5);
+select * from gt_s_inc;
+show create table gt_s_inc;
+rollback;
+truncate table gt_s_inc;
+
+begin;
+show create table gt_s_inc;
+MERGE INTO gt_s_inc t1
+USING (select 1 id,'f' fname from dual) t2
+ON (1 = 1)
+WHEN NOT MATCHED THEN
+INSERT (t1.fname, t1.lname, t1.store_id, t1.department_id)
+VALUES (t2.fname, 3, 4, 5);
+select * from gt_s_inc;
+show create table gt_s_inc;
+rollback;
+truncate table gt_s_inc;
+
+--echo # disable meta modification if global temp table instance is created
+create global temporary table gt_s1 (id int auto_increment primary key, v2 varchar2(10)) on commit preserve rows;
+insert into gt_s1 values (0, 'a1');
+select * from gt_s1;
+show create table gt_s1;
+--error ER_GLOBAL_TEMP_TABLE_IN_USE
+alter table gt_s1 add column i3 int;
+--error ER_GLOBAL_TEMP_TABLE_IN_USE
+create index gt_s1_r on gt_s1 (v2);
+
+truncate table gt_s1;
+alter table gt_s1 add column i3 int;
+create index gt_s1_r on gt_s1 (id,v2,i3);
+
+insert into gt_s1 values (0, 'b1', 3);
+show create table gt_s1;
+--echo # if the only global temp table instance is owned by current session,
+--echo # drop table will succeed.
+drop table gt_s1;
+
+--echo # create a global temporary table in default connection
+create global temporary table gt_s1 (id int auto_increment primary key, v2 varchar2(10)) on commit preserve rows;
+insert into gt_s1 values (0, 'c1');
+
+--echo # change to conn1 connection
+connect (conn1,localhost,root,,test);
+SELECT 'conn1', CURRENT_USER;
+SET SQL_MODE=ORACLE;
+--error ER_GLOBAL_TEMP_TABLE_IN_USE
+alter table gt_s1 add column i3 int;
+--error ER_GLOBAL_TEMP_TABLE_IN_USE
+create index gt_s1_r on gt_s1 (id,v2);
+truncate table gt_s1;
+--error ER_GLOBAL_TEMP_TABLE_IN_USE
+alter table gt_s1 add column i3 int;
+--error ER_GLOBAL_TEMP_TABLE_IN_USE
+create index gt_s1_r on gt_s1 (id,v2);
+--error ER_GLOBAL_TEMP_TABLE_IN_USE
+drop table gt_s1;
+
+--echo # make sure MySQL temporary in this section may override global temp.
+truncate table gt_s1;
+show create table gt_s1;
+create temporary table gt_s1 (a int);
+show create table gt_s1;
+alter table gt_s1 add column b int;
+rename table gt_s1 to s2;
+rename table s2 to gt_s1;
+create index gt_s1_r on gt_s1 (a, b);
+create table t1 (a int);
+--error ER_TRG_ON_VIEW_OR_TEMP_TABLE
+create trigger trig1 after insert on gt_s1 for each row insert into t1 values (1);
+drop table gt_s1;
+drop table t1;
+--echo # now neither gt_s1 instance nor gt_s1 mysql temporary table in conn1.
+
+--echo # change to default connection
+connection default;
+truncate table gt_s1;
+
+--echo # change to conn1 connection
+connection conn1;
+alter table gt_s1 add column i3 int;
+create index gt_s1_r on gt_s1 (id,v2);
+drop table gt_s1;
+
+--echo # disconnect conn1, and return to default connection.
+disconnect conn1;
+connection default;
+
+# cleanup - only necessary for global temporary tables.
+drop table gt_t_inc;
+drop table gt_t_t0;
+drop table gt_s_inc;
+
+
+# trigger test
+--echo # for trigger
+CREATE GLOBAL TEMPORARY TABLE temptest46(
+  a int AUTO_INCREMENT UNIQUE KEY PRIMARY KEY,
+  b number NOT NULL default 3.1415,
+  c DATETIME,
+  d VARCHAR(20),
+  e CLOB,index dex1(a))
+  ON COMMIT PRESERVE ROWS ENGINE=InnoDB;
+--echo # create trigger when no global temp table instance is created.
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+CREATE TRIGGER trig1 AFTER INSERT ON temptest46 FOR EACH ROW INSERT INTO temptest48(e) VALUES('this row from TRIGGER');
+insert into temptest46 values(1,987.564,'1998-09-22 15:23:00','insert into values','insert into values, insert into for update, insert into select, insert into set');
+insert into temptest46 values(2,987.564,'1998-09-22 15:23:00','(data_source)','insert into values, insert into for update, insert into select, insert into set (data_source)');
+insert into temptest46 values(2,9999,'1998-09-22 15:23:00','insert into update','insert into values, insert into for update, insert into select, insert into set') ON DUPLICATE KEY UPDATE d=VALUES(d);
+insert into temptest46 values(3,9999,'1998-09-22 15:23:00','insert into update','insert into values, insert into for update, insert into select, insert into set') ON DUPLICATE KEY UPDATE b=VALUES(b);
+insert into temptest46 select 4,-9847,'1998-09-22 15:23:00','insert into select','insert into values, insert into for update, insert into select, insert into set' from dual;
+insert into temptest46 set b=0,c='1998-09-22 15:23:00',d='insert into set',e='insert into values, insert into for update, insert into select, insert into set';
+replace into temptest46(a,b,c,d,e) values(6,987.564,'1998-09-22 15:23:00','replace into values','replace into values, replace into select, replace into set');
+replace into temptest46(a,b,c,d,e) values(6,0.9876543,'2023-02-27 10:23:56','replace into values','replace into values, replace into select, replace into set');
+replace into temptest46(b,c,d,e) select -9847,'1998-09-22 15:23:00','replace into select','replace into values, replace into select, replace into set' from dual;
+replace into temptest46 set b=0,c='1998-09-22 15:23:00',d='replace into set',e='replace into values, replace into select, replace into set';
+
+CREATE TABLE temptest48 as select * from temptest46;
+select * from temptest48 order by a;
+
+--echo # create trigger when global temp table instance is created.
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+CREATE TRIGGER trig1 AFTER INSERT ON temptest46 FOR EACH ROW INSERT INTO temptest48(e) VALUES('this row from TRIGGER');
+
+--echo # using global temp table in trigger of another table is supported.
+CREATE TRIGGER trig1 AFTER INSERT ON temptest48 FOR EACH ROW INSERT INTO temptest46(e) VALUES(concat('this row from ', :NEW.e));
+insert into temptest48(e) values ('TRIGGER test in q2');
+select * from temptest48 order by a;
+select * from temptest46 order by a;
+
+--echo # make sure no instance is created before using trigger
+truncate table temptest46;
+show create table temptest46;
+insert into temptest48(e) values ('TRIGGER test in q3');
+show create table temptest46;
+select * from temptest46 order by a;
+
+# using global temporary table in function
+drop table temptest46;
+create global temporary table temptest46(
+  a int AUTO_INCREMENT UNIQUE KEY PRIMARY KEY,
+  b number NOT NULL default 3.1415,
+  c DATETIME,
+  d VARCHAR(20),
+  e CLOB,index dex1(a))
+  on commit delete rows;
+delimiter //;
+create or replace function f0() return int deterministic as
+    c int := 0;
+begin
+  insert into temptest46(b,c,d,e) values(987.564,'1998-09-22','insert into values','insert into values, insert into for update, insert into select, insert into set');
+  select count(*) into c from temptest46;
+  return c;
+end; //
+delimiter ;//
+truncate table temptest46;
+select f0(),'1 expected';
+select f0(),'1 expected';
+
+begin;
+truncate table temptest46;
+select f0(),'1 expected';
+select f0(),'2 expected';
+commit;
+
+drop function f0;
+
+# using global temporary table in procedure
+delimiter //;
+create or replace procedure p0() as
+    c int := 0;
+begin
+  insert into temptest46(b,c,d,e) values(987.564,'1998-09-22','insert into values','insert into values, insert into for update, insert into select, insert into set');
+  select count(*) from temptest46;
+end; //
+delimiter ;//
+
+truncate table temptest46;
+call p0();
+call p0();
+
+truncate table temptest46;
+begin;
+call p0;
+call p0;
+commit;
+
+drop procedure p0;
+
+drop table temptest48;
+drop table temptest46;
+
+
+# replace (similar to insert statement)
+create global temporary table temptest49(a mediumint,b double,c timestamp,d text,e varchar2(100));
+begin;
+replace into temptest49(a,b,c,d,e) values(6,987.564,'1998-09-22 15:23:00','replace into values','replace into values, replace into select, replace into set');
+show create table temptest49;
+select *,'1 row' from temptest49;
+commit;
+
+replace into temptest49(a,b,c,d,e) values(6,987.564,'1998-09-22 15:23:00','replace into values','replace into values, replace into select, replace into set');
+show create table temptest49;
+select *,'no row' from temptest49;
+truncate table temptest49;
+
+# view test
+--echo # using global temp table in view
+--echo # view can be created if global temp table instance exists
+begin;
+insert into temptest49(a,b,c,d,e) values(6,987.564,'1998-09-22 15:23:00','replace into values','replace into values, replace into select, replace into set');
+create view temp_view1 as select * from temptest49;
+commit;
+begin;
+insert into temptest49(a,b,c,d,e) values(6,987.564,'1998-09-22 15:23:00','replace into values','replace into values, replace into select, replace into set');
+select count(*),'1 expected' from temp_view1;
+drop view temp_view1;
+commit;
+
+--echo # view can be created if global temp table doesnot exist
+truncate table temptest49;
+create view temp_view1 as select * from temptest49;
+
+begin;
+insert into temptest49(a,b,c,d,e) values(6,987.564,'1998-09-22 15:23:00','replace into values','replace into values, replace into select, replace into set');
+select count(*),'1 expected' from temp_view1;
+commit;
+
+select count(*),'0 expected' from temp_view1;
+
+drop view temp_view1;
+drop table temptest49;
+
+# create as
+begin;
+create private temporary table ora$ptt_temptest46(
+  a int,b number,c datetime,d varchar(20),e clob,
+  f binary(10), g bit, h enum('春','夏','秋','冬','unknow'),i SET('A', 'B', 'C'))
+  ON COMMIT DROP DEFINITION ENGINE=InnoDB;
+select * from ora$ptt_temptest46;
+create table oraptt_temptest48 as select * from ora$ptt_temptest46;
+commit;
+drop table oraptt_temptest48;
+
+# index or not-null column attribute
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+create private temporary table ora$ptt_temptest11(a int auto_increment primary key) on commit preserve definition;
+
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+create private temporary table ora$ptt_temptest12(a int primary key) on commit preserve definition;
+
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+create private temporary table ora$ptt_temptest13(a int, index index1(a)) on commit preserve definition;
+
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+create private temporary table ora$ptt_temptest14(a int unique key) on commit preserve definition;
+
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+create private temporary table ora$ptt_temptest15(a int default 999) on commit preserve definition;
+
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+create private temporary table ora$ptt_temptest15(a int default(999)) on commit preserve definition;
+
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+create private temporary table ora$ptt_temptest15(a varchar(20) default('ccc')) on commit preserve definition;
+
+--error ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE
+create private temporary table ora$ptt_temptest16(a int not null) on commit preserve definition;
+
+create private temporary table ora$ptt_temptest17(a int null) on commit preserve definition;
+drop table ora$ptt_temptest17;
+
+--error ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX
+create table ora$ptt_abc (a int);
+
+create private temporary table ora$ptt_temptest17 (a int) on commit preserve definition;
+create global temporary table gt_temp17 (a int) on commit preserve rows;
+--error ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX
+create table ora$ptt_abc like ora$ptt_temptest17;
+--error ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX
+create table ora$ptt_abc like gt_temp17;
+--error ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX
+create temporary table ora$ptt_abc like ora$ptt_temptest17;
+--error ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX
+create temporary table ora$ptt_abc like gt_temp17;
+
+set sql_mode=default;
+create table ora$ptt_abc (a int);
+drop table ora$ptt_abc;
+create table ora$ptt_abc like ora$ptt_temptest17;
+drop table ora$ptt_abc;
+create table ora$ptt_abc like gt_temp17;
+drop table ora$ptt_abc;
+create temporary table ora$ptt_abc like ora$ptt_temptest17;
+drop table ora$ptt_abc;
+create temporary table ora$ptt_abc like gt_temp17;
+drop table ora$ptt_abc;
+
+drop table gt_temp17;
+
+# storage engine check
+set sql_mode=oracle;
+set @@default_tmp_storage_engine=myisam;
+select @@default_storage_engine,@@default_tmp_storage_engine;
+create global temporary table t_m2 (cc int) on commit preserve rows;
+--echo # engine should be @@default_tmp_storage_engine
+show create table t_m2;
+insert into t_m2 values(1);
+--echo # engine should be @@default_tmp_storage_engine
+show create table t_m2;
+
+drop table t_m2;
+create global temporary table t_m2 (cc int) on commit preserve rows engine=innodb;
+--echo # engine is innodb.
+show create table t_m2;
+insert into t_m2 values(1);
+--echo # engine should be @@default_tmp_storage_engine
+show create table t_m2;
+
+drop table t_m2;
+
+set sql_mode=oracle;
+create global temporary table temp2(a mediumint, b double, c timestamp, d text, e varchar2(100));
+begin;
+insert into temp2 (a) values (1);
+select * from temp2;
+show create table temp2;
+
+--echo # change to conn1 connection
+connect (conn1,localhost,root,,test);
+SELECT 'conn1', CURRENT_USER;
+SET SQL_MODE=ORACLE;
+select * from temp2;
+show create table temp2;
+--echo "if no lock issue, the truncate command will be returned immediately."
+truncate table temp2;
+
+--echo # disconnect conn1, and return to default connection.
+disconnect conn1;
+connection default;
+commit;
+drop table temp2;
+
+--echo # private temp table truncate
+drop temporary table if exists ora$ptt_t0;
+drop temporary table if exists ora$ptt_t1;
+drop temporary table if exists ora$ptt_t2;
+
+# In MySQL, even truncate its native temporary table will end the current
+# transaction. It is the current limitation for transactional private temporary
+# table.
+begin;
+create private temporary table ora$ptt_t0(id int, des varchar2(30));
+insert into ora$ptt_t0 values (1, 't0');
+select * from ora$ptt_t0 order by id;
+truncate table ora$ptt_t0;
+--error ER_NO_SUCH_TABLE
+select count(*),'should be 0' from ora$ptt_t0;
+commit;
+
+begin;
+create private temporary table ora$ptt_t1(id int, des varchar2(30)) on commit drop definition;
+insert into ora$ptt_t1 values (1, 't1');
+select * from ora$ptt_t1 order by id;
+truncate table ora$ptt_t1;
+--error ER_NO_SUCH_TABLE
+select count(*),'should be 0' from ora$ptt_t1;
+commit;
+
+--echo # truncating MySQL temporary table will end the transaction.
+--echo # All transactional temporary tables will be removed.
+begin;
+create temporary table temptest1(id int, des varchar2(30));
+insert into temptest1 values (1, 'temptest1');
+create private temporary table ora$ptt_t1(id int, des varchar2(30)) on commit drop definition;
+insert into ora$ptt_t1 values (1, 't1');
+create private temporary table ora$ptt_ts(id int, des varchar2(30)) on commit preserve definition;
+insert into ora$ptt_ts values (1, 't2');
+select * from temptest1;
+select * from ora$ptt_t1;
+select * from ora$ptt_ts;
+truncate table temptest1;
+select count(*),'should be 0' from temptest1;
+--error ER_NO_SUCH_TABLE
+select count(*),'no such table' from ora$ptt_t1;
+select count(*),'should be 1' from ora$ptt_ts;
+drop table temptest1;
+drop table ora$ptt_ts;
+commit;
+
+begin;
+create private temporary table ora$ptt_t2(id int, des varchar2(30)) on commit preserve definition;
+insert into ora$ptt_t2 values (1, 't2');
+select * from ora$ptt_t2 order by id;
+truncate table ora$ptt_t2;
+select count(*),'should be 0' from ora$ptt_t2;
+insert into ora$ptt_t2 values (1, 't2');
+select * from ora$ptt_t2 order by id;
+commit;
+
+--echo # updatable view
+set sql_mode=oracle;
+create global temporary table gt_t1 (c integer) on commit preserve rows;
+create table t1 (c integer);
+insert into t1 values (10);
+create view vup as select * from gt_t1;
+
+update vup set c = 2;
+show create table gt_t1;
+select * from gt_t1;
+
+insert into vup (c) values (1);
+show create table gt_t1;
+select * from gt_t1;
+
+update vup set c = 2;
+show create table gt_t1;
+select * from gt_t1;
+
+truncate table gt_t1;
+
+delimiter //;
+create or replace function f1(v integer) return int deterministic as
+sp_c integer;
+begin
+  insert into vup (c) values (v);
+  select c into sp_c from vup order by c desc limit 1;
+  return sp_c+100;
+end; //
+delimiter ;//
+
+create view vf as select f1(c) from t1;
+
+delimiter //;
+create or replace procedure p1(v integer) as
+sp_c integer;
+begin
+  insert into vup (c) values (v);
+  select c from vup order by c desc limit 1;
+  select c into sp_c from vup order by c desc limit 1;
+  select sp_c;
+end; //
+delimiter ;//
+
+call p1(10);
+select * from vup;
+select * from vf;
+show create table gt_t1;
+
+call p1(20);
+select * from vup;
+select * from vf;
+show create table gt_t1;
+
+drop function f1;
+drop procedure p1;
+drop view vf;
+drop view vup;
+drop table t1;
+drop table gt_t1;
+
+--echo # insertable view
+create global temporary table gt_t1 (id int, value int) on commit preserve rows;
+create table table_b (id int, ta_id int, value int);
+create view v AS
+    select      a.id a_id, b.id b_id, b.ta_id, a.value v1, b.value v2
+    from        gt_t1 a
+    inner join  table_b b on (b.ta_id = a.id);
+select * from v;
+
+--echo # global temp table instance should be created
+insert into v (b_id, ta_id, v2) values (5, 3, 500);
+show create table gt_t1;
+insert into v (a_id, v1) values (3, 30);
+show create table gt_t1;
+
+select * from gt_t1;
+select * from table_b;
+
+drop view v;
+drop table gt_t1;
+drop table table_b;
+
+--echo # global temp table in select-clause of insert statement
+create global temporary table zgh1(a mediumint,b double,c timestamp,d text,e varchar2(100))on commit preserve rows;
+create table zgh2 (a int);
+select count(*), 'no rows of zgh1' from zgh1;
+insert into zgh2 select a from zgh1;
+select *,'no rows' from zgh2;
+
+insert into zgh1 (a) values (1);
+insert into zgh2 select a from zgh1;
+select *,'1 row' from zgh2;
+
+drop table zgh1;
+drop table zgh2;

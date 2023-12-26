@@ -69,7 +69,8 @@ HashJoinIterator::HashJoinIterator(
     const std::vector<HashJoinCondition> &join_conditions,
     bool allow_spill_to_disk, JoinType join_type,
     const Mem_root_array<Item *> &extra_conditions, bool probe_input_batch_mode,
-    uint64_t *hash_table_generation)
+    uint64_t *hash_table_generation, bool foj_attach)
+
     : RowIterator(thd),
       m_state(State::READING_ROW_FROM_PROBE_ITERATOR),
       m_hash_table_generation(hash_table_generation),
@@ -87,7 +88,8 @@ HashJoinIterator::HashJoinIterator(
       m_estimated_build_rows(estimated_build_rows),
       m_probe_input_batch_mode(probe_input_batch_mode),
       m_allow_spill_to_disk(allow_spill_to_disk),
-      m_join_type(join_type) {
+      m_join_type(join_type),
+      m_foj_attach(foj_attach) {
   assert(m_build_input != nullptr);
   assert(m_probe_input != nullptr);
 
@@ -1040,13 +1042,17 @@ int HashJoinIterator::ReadNextJoinedRowFromHashTable() {
       SetReadingProbeRowState();
       return -1;  // Read the next row.
     case JoinType::OUTER:
+    case JoinType::FULL_OUTER:
     case JoinType::INNER:
       // Inner join should return all matching rows from the hash table before
       // moving to the next row from the probe input.
       m_state = State::READING_FROM_HASH_TABLE;
+      if (m_foj_attach) {
+        m_current_row = m_current_row.Decode().next;
+        return -1;  // do not return matched rows in attached right join for
+                    // full join
+      }
       break;
-    case JoinType::FULL_OUTER:
-      assert(false);
   }
 
   m_current_row = m_current_row.Decode().next;
@@ -1099,8 +1105,21 @@ int HashJoinIterator::Read() {
         assert(res == 1);
         return res;
       }
-      case State::END_OF_ROWS:
+      case State::READING_FROM_ATTACH_ITERATOR: {
+        assert(foj_attach_it);
+        const int res = foj_attach_it->Read();
+        return res;
+      }
+      case State::END_OF_ROWS: {
+        if (foj_attach_it) {
+          if (foj_attach_it->Init()) {
+            return 1;
+          }
+          m_state = State::READING_FROM_ATTACH_ITERATOR;
+          continue;
+        }
         return -1;
+      }
     }
   }
 

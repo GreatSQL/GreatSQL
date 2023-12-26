@@ -1429,6 +1429,8 @@ class MDL_context {
 
   bool try_acquire_lock(MDL_request *mdl_request);
   bool acquire_lock(MDL_request *mdl_request, Timeout_type lock_wait_timeout);
+  bool polling_acquire_lock(MDL_request *mdl_request,
+                            Timeout_type lock_wait_timeout);
   bool acquire_locks(MDL_request_list *requests,
                      Timeout_type lock_wait_timeout);
   bool upgrade_shared_lock(MDL_ticket *mdl_ticket, enum_mdl_type new_type,

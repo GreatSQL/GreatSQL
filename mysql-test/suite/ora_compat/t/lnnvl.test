@@ -1,0 +1,2873 @@
+
+create table account(name varchar(20),year number);
+insert into account values('peter2001',2001);
+insert into account values('peter2002',2002);
+insert into account values('peter2003',2003);
+insert into account values('peter2004',2004);
+insert into account values('peter2005',2005);
+insert into account values('peter2006',2006);
+insert into account values('peter2007',null);
+
+#test explain
+set sql_mode=oracle;
+--replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/  /rows=\d+(\.\.\d+\.\d+)?/rows=***/
+explain format=tree select * from account where lnnvl(name like '%2004%') and lnnvl(year is null);
+--replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/  /rows=\d+(\.\.\d+\.\d+)?/rows=***/
+explain format=tree select * from account a,account b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0) and a.name ='peter2003';
+--replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/  /rows=\d+(\.\.\d+\.\d+)?/rows=***/
+explain format=tree select * from account a,account b where (lnnvl(b.name = a.name) or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0);
+
+#test session var
+set sql_mode=oracle;
+
+set @mytest=2001;
+select * from account where lnnvl(@mytest<>2001);
+select * from account where lnnvl(2001<>2001);
+select * from account where lnnvl(@mytest=2001);
+select * from account where lnnvl(2001=2001);
+select * from account where lnnvl(year<=@mytest);
+select * from account where lnnvl(year<=2001);
+
+#test sp
+delimiter //;
+
+declare
+my_var int;
+my_var2 varchar(256);
+begin
+my_var:=1;
+my_var2:='2004';
+select * from account where lnnvl(my_var>year);
+select * from account where lnnvl(my_var+2000>year);
+select * from account where lnnvl(name not like '%'||my_var2||'%') and lnnvl(year like '%lnnvl%') and lnnvl(year is null);
+select * from account where lnnvl(name not like '%'||my_var2||'%') and lnnvl(year like '%lnnvl%') and lnnvl(year is null) and year=0;
+end;
+//
+
+create or replace procedure p1() AS
+my_var int;
+my_var2 varchar(256);
+begin
+my_var:=1;
+my_var2:='2004';
+select * from account where lnnvl(my_var>year);
+select * from account where lnnvl(my_var+2000>year);
+select * from account where lnnvl(name not like '%'||my_var2||'%') and lnnvl(year like '%lnnvl%') and lnnvl(year is null);
+select * from account where lnnvl(name not like '%'||my_var2||'%') and lnnvl(year like '%lnnvl%') and lnnvl(year is null) and year=0;
+end;
+//
+
+call p1()//
+call p1()//
+
+drop procedure p1//
+
+delimiter ;//
+
+
+#test outer-join with plus sign
+create table t1(ida int, age int, name varchar(10));
+insert into t1 values(1, 2, '');
+insert into t1 values(NULL, 2, 'a');
+insert into t1 values(3, 2, 'b');
+create table t2(ida int, age int, name varchar(10));
+insert into t2 values(1, 2, '');
+insert into t2 values(2, 2, 'a');
+insert into t2 values(3, 1, 'b');
+create table t3(ida int, age int, name varchar(10));
+insert into t3 values(2, 3, 'a');
+insert into t3 values(5, NULL, '');
+
+
+select * from t1, t2 where lnnvl(t1.ida like t2.ida(+));
+
+select * from t1, t2 where lnnvl(t1.ida < t2.ida(+)+t2.age(+));
+
+select * from t1, t2 where lnnvl(t1.ida = t2.ida(+));
+
+select * from t1, t2 where lnnvl(t1.ida = t2.ida(+)) and t2.ida=1;
+
+select * from t1, t2 where lnnvl(t1.age(+) < t2.age) and t2.name = 'cc';
+
+select * from t1, t2, t3 where lnnvl(t3.age < 5)  and lnnvl(t2.age(+) = t1.age) and t2.ida < t3.ida(+);
+
+select * from t1, t2, t3 where lnnvl(t3.age < 5)  and lnnvl(t2.age(+) = t1.age) and lnnvl(t2.ida < t3.ida(+));
+
+select * from t1, t2 where lnnvl(t1.ida(+)>1);
+
+
+drop table t1;
+drop table t2;
+drop table t3;
+
+
+
+#test connect by
+
+CREATE TABLE student (
+    id       INT,
+    name  VARCHAR(10),
+    grade INT
+);
+
+INSERT INTO student VALUES(1, 'John', NULL);
+INSERT INTO student VALUES(2, 'Paul', 1);
+INSERT INTO student VALUES(3, 'Nancy', 1);
+INSERT INTO student VALUES(4, 'Sarah', 3);
+
+select id, name, grade, level from student where lnnvl(id=1) connect by prior id=grade order by id,name;
+select id, name, grade, level from student where lnnvl(id=1) and name = 'Nancy' connect by prior id=grade order by id,name;
+
+create table m1(grade int,name varchar2(200));
+insert into m1 values(1, 'test1');
+insert into m1 values(2, 'test2');
+insert into m1 values(3, 'test3');
+insert into m1 values(4, 'test4');
+insert into m1 values(5, 'test5');
+create table m2(id int,grade int);
+insert into m2 values(1, -1);
+insert into m2 values(2, 1);
+insert into m2 values(3, 1);
+insert into m2 values(4, 2);
+
+select m2.id , m2.grade, m1.name  from m2,m1 where lnnvl(m2.id = m1.grade) connect by prior m2.id = m2.grade order by id,grade,name;
+select m2.id , m2.grade, m1.name,count(*) from m2,m1 where lnnvl(m2.id = m1.grade) connect by prior m2.id = m2.grade group by m2.id , m2.grade, m1.name order by m2.id , m2.grade, m1.name;
+select count(*) from m2,m1 where lnnvl(m2.id = m1.grade) connect by prior m2.id = m2.grade;
+select m2.id , m2.grade, m1.name  from m2,m1 where lnnvl(m2.id = m1.grade) and m1.name='test3' connect by prior m2.id = m2.grade order by id,grade,name;
+select m2.id , m2.grade, m1.name  from m2,m1 where (lnnvl(m2.id = m1.grade) or m1.grade=5)  connect by prior m2.id = m2.grade order by id,grade,name;
+select m2.id , m2.grade, m1.name  from m2,m1 where (lnnvl(m2.id = m1.grade) or m1.grade=5) and m1.name='test5' connect by prior m2.id = m2.grade order by id,grade,name;
+select m2.id , m2.grade, m1.name  from m2,m1 where (lnnvl(m2.id = m1.grade) or m1.grade=5) and m1.name='test1' connect by prior m2.id = m2.grade order by id,grade,name;
+select m2.id , m2.grade, m1.name  from m2 join m1 on lnnvl(m2.id = m1.grade) connect by prior m2.id = m2.grade order by id,grade,name;
+select count(*)  from m2 join m1 on lnnvl(m2.id = m1.grade) connect by prior m2.id = m2.grade;
+select m2.id , m2.grade, m1.name  from m2 join m1 on lnnvl(m2.id = m1.grade) where m1.name='test3' connect by prior m2.id = m2.grade order by id,grade,name;
+select m2.id , m2.grade, m1.name  from m2 join m1 on (lnnvl(m2.id = m1.grade) or m1.grade=5) where m1.name='test3' connect by prior m2.id = m2.grade order by id,grade,name;
+select m2.id , m2.grade, m1.name  from m2 join m1 on (lnnvl(m2.id = m1.grade) or m1.grade=5) where m1.name='test3' and m2.grade=2 connect by prior m2.id = m2.grade order by id,grade,name;
+select m2.id , m2.grade, m1.name  from m2 join m1 on (lnnvl(m2.id = m1.grade) or m1.grade=5) where m1.name='test3' and m2.grade=1 connect by prior m2.id = m2.grade order by id,grade,name;
+select m2.id , m2.grade, m1.name  from m2 join m1 on (lnnvl(m2.id = m1.grade) or m1.grade=5) where m1.name='test3' and lnnvl(m2.grade<>1) connect by prior m2.id = m2.grade order by id,grade,name;
+
+drop table m1;
+drop table m2;
+drop table student;
+drop table account;
+
+#test lnnvl combined query
+
+create table account(name varchar(20),year number);
+delete from account;
+insert into account values('peter2001',2001);
+insert into account values('peter2002',2002);
+insert into account values('peter2003',null);
+insert into account values('peter2004A',0);
+insert into account values('peter2004B',1);
+
+select * from account where lnnvl(year=2002);
+select * from account where lnnvl(year!=2002);
+select * from account where lnnvl(year<>2002);
+select * from account where lnnvl(year>2002);
+select * from account where lnnvl(year>=2002);
+select * from account where lnnvl(year<2002);
+select * from account where lnnvl(year<=2002);
+select * from account where lnnvl(year in(2002));
+select * from account where lnnvl(year not in(2002));
+
+select * from account where lnnvl(year=2003);
+select * from account where lnnvl(year!=2003);
+select * from account where lnnvl(year<>2003);
+select * from account where lnnvl(year>2003);
+select * from account where lnnvl(year>=2003);
+select * from account where lnnvl(year<2003);
+select * from account where lnnvl(year<=2003);
+select * from account where lnnvl(year in(2003));
+select * from account where lnnvl(year not in(2003));
+
+select * from account where lnnvl(year=2004);
+select * from account where lnnvl(year!=2004);
+select * from account where lnnvl(year<>2004);
+select * from account where lnnvl(year>2004);
+select * from account where lnnvl(year>=2004);
+select * from account where lnnvl(year<2004);
+select * from account where lnnvl(year<=2004);
+select * from account where lnnvl(year in(2004));
+select * from account where lnnvl(year not in(2004));
+
+select * from account where lnnvl(!year);# year=0
+select * from account where lnnvl(not(year)); # year=0
+select * from account where lnnvl(0=(year));
+select * from account where lnnvl(0=year);
+
+select * from account where lnnvl(not(year=2002));# year!=2002
+select * from account where lnnvl(0!=(year-2002));
+select * from account where lnnvl(year!=2002);
+
+select * from account where lnnvl(not(year-2002));# (year-2002)=0
+select * from account where lnnvl(0=(year-2002));
+select * from account where lnnvl(year=2002);
+
+select * from account where lnnvl(not(not(year-2002)));# year-2002!=0
+select * from account where lnnvl(year!=2002);
+
+select * from account where lnnvl(not(year+1));
+select * from account where lnnvl(0=(year+1));
+select * from account where lnnvl(year is null);
+select * from account where lnnvl(year is not null);
+select * from account where lnnvl(null is null);
+select * from account where lnnvl(null is not null);
+select * from account where lnnvl(1>1);
+select * from account where lnnvl(1>null);
+
+select * from account where (1=null);
+select * from account where (null=null);
+select * from account where (null is null);
+select * from account where (null is not null);
+select * from account where (null is null) and name = 'peter2003';
+select * from account where (null is not null) and name = 'peter2003';
+select * from account where (year <> null);
+select * from account where (year = null);
+select * from account where (year = null) and name = 'peter2003';
+select * from account where (year is null);
+select * from account where (year is not null) and name = 'peter2002';
+select * from account where (year is not null) and name = 'peter2003';
+select * from account where lnnvl(name<>'peter2003');
+select * from account where lnnvl(name='peter2003') and year=1;
+
+
+select * from account where lnnvl(year > 2001);
+select * from account where lnnvl(year < least(2001,1));
+select * from account where lnnvl(year > least(2001,1));
+select * from account where lnnvl(year < length(length(1)));
+
+
+#exists statement test
+
+
+select * from account a where exists (select 1 from account b where lnnvl(a.year=b.year) and a.year=1);
+
+select * from account a where exists (select 1 from account b where lnnvl(a.year=b.year));
+
+select * from account a where exists (select 1 from account b where lnnvl(a.year=b.year) and a.year=1) and year=1;
+
+select * from account a where exists (select 1 from account b where lnnvl(a.year=b.year)) and year=1;
+
+select * from account a where not exists (select 1 from account b where lnnvl(a.year=b.year) and a.year=1);
+
+select * from account a where not exists (select 1 from account b where lnnvl(a.year=b.year));
+
+select * from account a where not exists (select 1 from account b where lnnvl(a.year=b.year) and a.year=1) and year=1;
+
+select * from account a where not exists (select 1 from account b where lnnvl(a.year=b.year)) and year=1;
+
+select * from account a where not exists (select 1 from account b where a.year=b.year and a.year=1);
+select * from account a where not exists (select 1 from account b where a.year=b.year);
+
+#test subquery
+set sql_mode=oracle;
+select * from account where lnnvl(year = (select 2001 from dual));
+select * from account where lnnvl(year != (select 2001 from dual));
+select * from account where lnnvl(year = (select * from (select year from account where year is not null order by year desc) where rownum<=1));
+select * from account where lnnvl((select 2001 from dual) = (select 2001 from dual));
+select * from account where lnnvl((select 2001 from dual)+1 = (select 2001 from dual));
+--error 1242
+select * from account where lnnvl(year = (select 2001 from dual union select 1 from dual));
+
+select * from account where lnnvl((select * from (select year from account order by year) where rownum<=1)<2001);
+select * from account where lnnvl((select * from (select year from account order by year) where rownum<=1)>2001);
+select * from account where lnnvl((select * from (select year from account where year is not null order by year desc) where rownum<=1)=2001+1);
+select * from account where lnnvl((select * from (select year from account where year is not null order by year desc) where rownum<=1)=year);
+select * from account where lnnvl((select * from (select year from account where year is not null order by year desc) where rownum<=1)=year+1);
+select * from account where lnnvl(year = (select year from account where lnnvl(name='peter2003') and year=1));
+select * from account where lnnvl(year <> (select year from account where lnnvl(name='peter2003') and year=1));
+select * from account where lnnvl(name = (select name from account where lnnvl(name<>'peter2003')));
+select * from account where lnnvl(name <> (select name from account where lnnvl(name<>'peter2003')));
+
+
+select * from account where lnnvl(year = (select 1 from account a where exists (select 1 from account b where lnnvl(a.year=b.year) and a.year=1)));
+--error 1242
+select * from account where lnnvl(year = (select 1 from account a where exists (select 1 from account b where lnnvl(a.year=b.year))));
+
+select * from account where lnnvl(year = (select 1 from account a where exists (select 1 from account b where lnnvl(a.year=b.year) and a.year=1) and year=1));
+
+select * from account where lnnvl(year = (select 1 from account a where exists (select 1 from account b where lnnvl(a.year=b.year)) and year=1));
+
+--error 1242
+select * from account where lnnvl(year = (select 1 from account a where not exists (select 1 from account b where lnnvl(a.year=b.year) and a.year=1)));
+
+select * from account where lnnvl(year = (select 1 from account a where not exists (select 1 from account b where lnnvl(a.year=b.year))));
+
+select * from account where lnnvl(year = (select 1 from account a where not exists (select 1 from account b where lnnvl(a.year=b.year) and a.year=1) and year=1));
+
+select * from account where lnnvl(year = (select 1 from account a where not exists (select 1 from account b where lnnvl(a.year=b.year)) and year=1));
+
+#like statement
+select * from account where lnnvl(name like '%2004%');
+select * from account where lnnvl(name like '%test%');
+select * from account where lnnvl(name not like '%test%');
+select * from account where lnnvl(not(name like '%2004%'));
+select * from account where lnnvl(name not like '%2004%');
+select * from account where lnnvl(name like '%'||to_char(2004)||'%');
+select * from account where lnnvl(year not like '%lnnvl(year>2004)%');
+select * from account where lnnvl(year not like '%lnnvl%');
+select * from account where lnnvl(year like '%lnnvl%');
+select * from account where lnnvl(year like '%1%');
+select * from account where lnnvl(year not like '%1%');
+
+
+#supplementary check
+set sql_mode=default;
+
+select * from account where lnnvl(1>1);
+select * from account where lnnvl(year>2001);
+
+set sql_mode=oracle;
+
+select * from account where lnnvl(1>1);
+select * from account where lnnvl(year>2001);
+
+#default mode || test
+set sql_mode=default;
+select * from account where lnnvl(year>2004)||1;
+select * from account where lnnvl(year>2004) or 1;
+select * from account where 1||lnnvl(year>2004);
+select * from account where 1 or lnnvl(year>2004);
+select * from account where lnnvl(year>2004)||lnnvl(name<>'peter2003');
+select * from account where lnnvl(year>2004) or lnnvl(name<>'peter2003');
+select * from account where (lnnvl(year>2004)||lnnvl(name<>'peter2003')) and name='peter2004A';
+select * from account where (lnnvl(year>2004) or lnnvl(name<>'peter2003')) and name='peter2004A';
+select * from account where (lnnvl(year>2004)&&lnnvl(name<>'peter2003')) and name='peter2004A';
+select * from account where (lnnvl(year>2004) and lnnvl(name<>'peter2003')) and name='peter2004A';
+select * from account where (lnnvl(year>2004)&&lnnvl(name<>'peter2003'));
+
+#join condition test!!!
+set sql_mode=oracle;
+select * from account where name = 'peter2003';
+select * from account where name = 'peter2003' and year is null;
+select * from account where name = 'peter2001' or year is null;
+select * from account where lnnvl(year=2001) and year=1;
+select * from account where lnnvl(year=2001) or year=1;
+select * from account where (lnnvl(year=2001) or year=1);
+select * from account where (lnnvl(year=2001) or year=1) and year is null;
+select * from account where (lnnvl(year=2001) or year=1) and year is not null;
+select * from account where (lnnvl(year=2001) or year=1) and year = 2001;
+select * from account where (lnnvl(year=2001) or year=1) and year = 2002;
+select * from account where (lnnvl(year=2001) or year=1) and name like '%2004%';
+select * from account where lnnvl(year<>2002);
+select * from account where lnnvl(year<>2003);
+select * from account where lnnvl(year<>2002) and lnnvl(year<>2003);
+select * from account where lnnvl(year<>2002) and lnnvl(name='peter2002');
+select * from account where lnnvl(year<>2002) and lnnvl(name<>'peter2002');
+select * from account where lnnvl(year<>2002) and lnnvl(year<>2003) and year is null;
+select * from account where lnnvl(year<>2002) and lnnvl(year<>2003) and year is not null;
+select * from account where lnnvl(year<>2002) or lnnvl(year<>2003);
+select * from account where lnnvl(year<>2002) and name = 'peter2002';
+select * from account where lnnvl(year<>2002) or name = 'peter2002';
+select * from account where lnnvl(year<>2002) and lnnvl(year<>2003);
+select * from account where lnnvl(year<>2002) and lnnvl(name<>'peter2002');
+
+select * from account a,account b where lnnvl(a.year<>b.year) order by a.name;
+select * from account a,account b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name);
+select * from account a,account b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name) and b.year!=0;
+select * from account a,account b where lnnvl(a.year<>b.year) and lnnvl(a.name like b.name);
+select * from account a,account b where lnnvl(a.year<>b.year) and lnnvl(a.name not like b.name);
+select * from account a,account b where lnnvl(a.year is null) and lnnvl(b.name is not null);
+select * from account a,account b where lnnvl(a.year is null) and lnnvl(b.name is null);
+select * from account a,account b where lnnvl(b.name not like '%2004%') and lnnvl(a.year like '%lnnvl%') and lnnvl(a.name is null) and lnnvl(a.year=0);
+select * from account a,account b where lnnvl(b.name not like '%2004%') and lnnvl(a.year like '%lnnvl%') and lnnvl(a.name is null) and lnnvl(a.year=0) and a.name ='peter2003';
+select * from account a,account b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0);
+select * from account a,account b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0) and a.name ='peter2003';
+select * from account a,account b where (lnnvl(b.name = a.name) or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0);
+select * from account a,account b where (lnnvl(b.name = a.name) or lnnvl(a.year like '%lnnvl%')) and b.year=1;
+
+select * from account where lnnvl(name like '%2004%');
+select * from account where lnnvl(year is null) and lnnvl(name like '%2004%');
+select * from account where lnnvl(name like '%2004%') and lnnvl(year is null);
+select * from account where lnnvl(name like '%2004%') or lnnvl(year is null);
+select * from account where lnnvl(year is null) or lnnvl(name like '%2004%');
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year is null);
+select * from account where lnnvl(year is null) and lnnvl(name not like '%2004%');
+select * from account where lnnvl(name like '%2004%') and lnnvl(year is not null);
+select * from account where lnnvl(name like '%2004%') and lnnvl(year = 2001);
+select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%');
+select * from account where lnnvl(year is not null) and lnnvl(year = 2001);
+select * from account where lnnvl(year = 2001) and lnnvl(year is not null);
+
+select * from account where lnnvl(name not like '%2004%');
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year is null);
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year is not null);
+select * from account where lnnvl(name like '%2004%') and lnnvl(year not like '%lnnvl%');
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year not like '%lnnvl%');
+select * from account where lnnvl(name like '%2004%') and lnnvl(year like '%lnnvl%');
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%');
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and year=11;
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and year=1;
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and lnnvl(year is null);
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and lnnvl(year is not null);
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and lnnvl(year+1 is not null);
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and lnnvl(name is null);
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and lnnvl(name is not null);
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and lnnvl(name is null) and year=1;
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and lnnvl(name is null) and lnnvl(year=0);
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and lnnvl(name is null) and lnnvl(year!=0);
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and lnnvl(name is null) and lnnvl(year=0) and year=1;
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and lnnvl(name is null) and lnnvl(year=0) and year=0;
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and lnnvl(name is null) and lnnvl(year!=0) and year=1;
+select * from account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and lnnvl(name is null) and lnnvl(year!=0) and year=0;
+select * from account where lnnvl(name not like '%2004%') and (lnnvl(year like '%lnnvl%') or lnnvl(name is null)) and lnnvl(year!=0) and year=0;
+select * from account where (lnnvl(name not like '%2004%') or lnnvl(year like '%lnnvl%') or lnnvl(name is null)) and lnnvl(year!=0) and year=0;
+select * from account where (lnnvl(name not like '%2004%') or lnnvl(year like '%lnnvl%') or lnnvl(name is null)) and lnnvl(year!=0) and year is null;
+select * from account where lnnvl(name not like '%2004%') and (lnnvl(year like '%lnnvl%') or lnnvl(name is null)) and lnnvl(year!=0);
+
+--error 1096
+select * from dual where lnnvl(length('AA')>0);# select * from dual where 1;
+
+
+create table my_account_1(name varchar2(20),year number);
+insert into my_account_1 values('peter2001',2001);
+insert into my_account_1 values('peter2002',2002);
+insert into my_account_1 values('peter2003',2003);
+insert into my_account_1 values('peter2004',2004);
+insert into my_account_1 values('peter2005',2005);
+insert into my_account_1 values('peter2006',2006);
+insert into my_account_1 values('peter2007',null);
+
+select * from my_account_1 where lnnvl(year<2003);
+select * from my_account_1 where lnnvl(year is not null);
+select * from my_account_1 where lnnvl(year is null);
+select * from my_account_1 where lnnvl(year=2008);
+select * from my_account_1 where lnnvl(year!=2008);
+
+create table my_account_2(name varchar2(20),id number);
+insert into my_account_2 values('a',2);
+insert into my_account_2 values('b',null);
+
+select * from my_account_2 where lnnvl(id=1);
+select * from my_account_2 where lnnvl(id=2);
+select * from my_account_2 where lnnvl(id>2);
+select * from my_account_2 where lnnvl(id<2);
+select * from my_account_2 where lnnvl(id is null);
+
+drop table my_account_1;
+drop table my_account_2;
+
+#test prepare
+create table my_account_3(name varchar(20),year int);
+insert into my_account_3 values('peter2001',2001);
+insert into my_account_3 values('peter2002',2002);
+insert into my_account_3 values('peter2003',null);
+insert into my_account_3 values('peter2004A',0);
+insert into my_account_3 values('peter2004B',1);
+
+#select * from my_account_3 where (null is null) and name = 'peter2003';
+set @my_stmt='select * from my_account_3 where (null is null) and name = \'peter2003\'';
+execute immediate @my_stmt;
+
+#select * from my_account_3 a,my_account_3 b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name);
+set @my_stmt2='select * from my_account_3 a,my_account_3 b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name)';
+execute immediate @my_stmt2;
+
+#select * from my_account_3 where lnnvl(year = 2001) and lnnvl(name like '%2004%');
+#select * from my_account_3 where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003';
+execute immediate 'select * from my_account_3 where lnnvl(year = 2001) and lnnvl(name like \'%2004%\')';
+execute immediate 'select * from my_account_3 where lnnvl(year = ?) and lnnvl(name like \'%\'||?||\'%\')' using 2001,'2004';
+execute immediate 'select * from my_account_3 where lnnvl(year = ?) and lnnvl(name like \'%\'||?||\'%\') and name = ?' using 2001,'2004','peter2003';
+
+
+prepare my_stmt1 from 'select * from my_account_3 where (null is null) and name = \'peter2003\'';
+execute my_stmt1;
+deallocate prepare my_stmt1;
+
+SET @v1 = 2001;
+SET @v2 = '2004';
+SET @v3 = 'peter2003';
+select @v1,@v2,@v3;
+prepare my_stmt2 from 'select * from my_account_3 where lnnvl(year = ?) and lnnvl(name like \'%\'||?||\'%\') and name = ? ';
+execute my_stmt2 using @v1,@v2,@v3;
+deallocate prepare my_stmt2;
+
+SET @v4 = 2002;
+SET @v5 = 'peter2002';
+SET @v6 = 2008;
+select @v4,@v5,@v6;
+prepare my_stmt3 from 'select * from account where lnnvl(year<>?)';
+execute my_stmt3 using @v4;
+prepare my_stmt3 from 'select * from account where lnnvl(year<>?) and lnnvl(name<>?)';
+execute my_stmt3 using @v4,@v5;
+prepare my_stmt3 from 'select * from account where lnnvl(year<>?) and lnnvl(name<>?) and year=?';
+execute my_stmt3 using @v4,@v5,@v6;
+deallocate prepare my_stmt3;
+
+drop table my_account_3;
+
+
+#test index
+create table my_account_5(name varchar(20),year int);
+insert into my_account_5 values('peter2001',2001);
+insert into my_account_5 values('peter2002',2002);
+insert into my_account_5 values('peter2003',null);
+insert into my_account_5 values('peter2004A',0);
+insert into my_account_5 values('peter2004B',1);
+
+create table my_account_4(name varchar(20) primary key,year int);
+insert into my_account_4 values('peter2001',2001);
+insert into my_account_4 values('peter2002',2002);
+insert into my_account_4 values('peter2003',null);
+insert into my_account_4 values('peter2004A',0);
+insert into my_account_4 values('peter2004B',1);
+
+select * from my_account_4 where lnnvl(year = 2001)
+minus
+select * from my_account_5 where lnnvl(year = 2001);
+
+select * from my_account_5 where lnnvl(year = 2001)
+minus
+select * from my_account_4 where lnnvl(year = 2001);
+
+select * from my_account_4 where lnnvl(year = 2001) and lnnvl(name like '%2004%')
+minus
+select * from my_account_5 where lnnvl(year = 2001) and lnnvl(name like '%2004%');
+
+select * from my_account_5 where lnnvl(year = 2001) and lnnvl(name like '%2004%')
+minus
+select * from my_account_4 where lnnvl(year = 2001) and lnnvl(name like '%2004%');
+
+
+select * from my_account_4 where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003'
+minus
+select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003';
+
+select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003'
+minus
+select * from my_account_4 where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003';
+
+
+select * from account a,account b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name)
+minus
+select * from my_account_4 a,my_account_4 b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name);
+
+select * from my_account_4 a,my_account_4 b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name)
+minus
+select * from account a,account b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name);
+
+
+select * from my_account_4 a,my_account_4 b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0)
+minus
+select * from account a,account b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0);
+
+select * from account a,account b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0)
+minus
+select * from my_account_4 a,my_account_4 b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0);
+
+
+drop table my_account_4;
+create table my_account_4(name varchar(20) primary key,year int,unique key(year));
+insert into my_account_4 values('peter2001',2001);
+insert into my_account_4 values('peter2002',2002);
+insert into my_account_4 values('peter2003',null);
+insert into my_account_4 values('peter2004A',0);
+insert into my_account_4 values('peter2004B',1);
+
+select * from my_account_4 where lnnvl(year = 2001)
+minus
+select * from my_account_5 where lnnvl(year = 2001);
+
+select * from my_account_5 where lnnvl(year = 2001)
+minus
+select * from my_account_4 where lnnvl(year = 2001);
+
+select * from my_account_4 where lnnvl(year = 2001) and lnnvl(name like '%2004%')
+minus
+select * from my_account_5 where lnnvl(year = 2001) and lnnvl(name like '%2004%');
+
+select * from my_account_5 where lnnvl(year = 2001) and lnnvl(name like '%2004%')
+minus
+select * from my_account_4 where lnnvl(year = 2001) and lnnvl(name like '%2004%');
+
+
+select * from my_account_4 where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003'
+minus
+select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003';
+
+select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003'
+minus
+select * from my_account_4 where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003';
+
+
+select * from account a,account b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name)
+minus
+select * from my_account_4 a,my_account_4 b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name);
+
+select * from my_account_4 a,my_account_4 b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name)
+minus
+select * from account a,account b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name);
+
+
+select * from my_account_4 a,my_account_4 b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0)
+minus
+select * from account a,account b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0);
+
+select * from account a,account b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0)
+minus
+select * from my_account_4 a,my_account_4 b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0);
+
+
+drop table my_account_4;
+create table my_account_4(name varchar(20) primary key,year int,key(year));
+insert into my_account_4 values('peter2001',2001);
+insert into my_account_4 values('peter2002',2002);
+insert into my_account_4 values('peter2003',null);
+insert into my_account_4 values('peter2004A',0);
+insert into my_account_4 values('peter2004B',1);
+
+select * from my_account_4 where lnnvl(year = 2001)
+minus
+select * from my_account_5 where lnnvl(year = 2001);
+
+select * from my_account_5 where lnnvl(year = 2001)
+minus
+select * from my_account_4 where lnnvl(year = 2001);
+
+select * from my_account_4 where lnnvl(year = 2001) and lnnvl(name like '%2004%')
+minus
+select * from my_account_5 where lnnvl(year = 2001) and lnnvl(name like '%2004%');
+
+select * from my_account_5 where lnnvl(year = 2001) and lnnvl(name like '%2004%')
+minus
+select * from my_account_4 where lnnvl(year = 2001) and lnnvl(name like '%2004%');
+
+
+select * from my_account_4 where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003'
+minus
+select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003';
+
+select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003'
+minus
+select * from my_account_4 where lnnvl(year = 2001) and lnnvl(name like '%2004%') and name = 'peter2003';
+
+
+select * from account a,account b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name)
+minus
+select * from my_account_4 a,my_account_4 b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name);
+
+select * from my_account_4 a,my_account_4 b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name)
+minus
+select * from account a,account b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name);
+
+
+select * from my_account_4 a,my_account_4 b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0)
+minus
+select * from account a,account b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0);
+
+select * from account a,account b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0)
+minus
+select * from my_account_4 a,my_account_4 b where (lnnvl(b.name not like '%2004%') or lnnvl(a.year like '%lnnvl%')) and lnnvl(a.name is null) and lnnvl(a.year=0);
+
+drop table my_account_4,my_account_5;
+
+
+#test set op
+create table my_account_6(name varchar(20),year int);
+insert into my_account_6 values('peter2001',2001);
+insert into my_account_6 values('peter2002',2002);
+insert into my_account_6 values('peter2003',null);
+insert into my_account_6 values('peter2004A',0);
+insert into my_account_6 values('peter2004B',1);
+
+create table my_account_7(name varchar(20),year int);
+insert into my_account_7 values('peter2001',2001);
+insert into my_account_7 values('peter2002',2002);
+insert into my_account_7 values('peter2003',null);
+insert into my_account_7 values('peter2004A',0);
+insert into my_account_7 values('peter2004B',1);
+
+--replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/  /rows=\d+(\.\.\d+\.\d+)?/rows=***/
+explain format=tree
+select * from my_account_6 where lnnvl(year = 2001)
+minus
+select * from my_account_7 where lnnvl(year = 2001);
+
+select * from my_account_6 where lnnvl(year = 2001)
+minus
+select * from my_account_7 where lnnvl(year = 2001);
+
+select * from my_account_7 where lnnvl(year = 2001)
+minus
+select * from my_account_6 where lnnvl(year = 2001);
+
+select * from my_account_7 where lnnvl(year = 2001)
+minus
+select * from my_account_7 where lnnvl(year = 2001);
+
+--replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/  /rows=\d+(\.\.\d+\.\d+)?/rows=***/
+explain format=tree
+select * from my_account_6 where lnnvl(year = 2001) and name = 'peter2003'
+minus
+select * from my_account_7 where lnnvl(year = 2001) and name = 'peter2003';
+
+select * from my_account_7 where lnnvl(year = 2001) and name = 'peter2003'
+minus
+select * from my_account_6 where lnnvl(year = 2001) and name = 'peter2003';
+
+select * from my_account_6 where lnnvl(year = 2001) and name = 'peter2003'
+minus
+select * from my_account_7 where lnnvl(year = 2001) and name = 'peter2003';
+
+select * from my_account_7 where lnnvl(year = 2001) and name = 'peter2003'
+minus
+select * from my_account_7 where lnnvl(year = 2001) and name = 'peter2003';
+
+--replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/  /rows=\d+(\.\.\d+\.\d+)?/rows=***/
+explain format=tree
+(select * from my_account_7 where lnnvl(year = 2001) and name = 'peter2003'
+intersect
+select * from my_account_7 where lnnvl(year = 2001) and name = 'peter2003')
+minus
+(
+select * from my_account_6 where lnnvl(year = 2001) and name = 'peter2003'
+intersect
+select * from my_account_6 where lnnvl(year = 2001) and name = 'peter2003'
+);
+
+(select * from my_account_7 where lnnvl(year = 2001) and name = 'peter2003'
+intersect
+select * from my_account_7 where lnnvl(year = 2001) and name = 'peter2003')
+minus
+(
+select * from my_account_6 where lnnvl(year = 2001) and name = 'peter2003'
+intersect
+select * from my_account_6 where lnnvl(year = 2001) and name = 'peter2003'
+);
+
+drop table my_account_6,my_account_7;
+
+#test view tmptable
+create view my_view_account as select * from account;
+
+select * from my_view_account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and year=1;
+select * from my_view_account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%');
+
+drop view my_view_account;
+
+create temporary table my_tmp_account(name varchar(20),year number);
+insert into my_tmp_account values('peter2001',2001);
+insert into my_tmp_account values('peter2002',2002);
+insert into my_tmp_account values('peter2003',null);
+insert into my_tmp_account values('peter2004A',0);
+insert into my_tmp_account values('peter2004B',1);
+
+select * from my_tmp_account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%') and year=1;
+select * from my_tmp_account where lnnvl(name not like '%2004%') and lnnvl(year like '%lnnvl%');
+
+drop temporary table my_tmp_account;
+
+#test derived table subqueries
+create table my_account_8(name varchar(20),year int);
+insert into my_account_8 values('peter2001',2001);
+insert into my_account_8 values('peter2005',2002);
+insert into my_account_8 values('peter2009',null);
+
+select * from (select * from account) where lnnvl(year = 2001);
+select * from account where lnnvl(year = 2001);
+select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%');
+select * from (select * from account where lnnvl(year = 2001));
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%'));
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) where year = 2002;
+
+select * from (
+select * from account where lnnvl(year = 2001)
+union
+select * from my_account_8
+) where name = 'peter2003';
+
+
+select * from (
+select * from account
+union
+select * from my_account_8
+) where name = 'peter2003' and lnnvl(year = 2001);
+
+select * from (
+select * from account
+union
+select * from my_account_8
+) where lnnvl(year = 2001);
+
+
+select * from (
+select * from account
+union
+select * from my_account_8
+) where lnnvl(year = 2001) and lnnvl(name='peter2004A');
+
+select * from (
+select * from account where lnnvl(year = 2001)
+union
+select * from account where lnnvl(year = 2002)
+) where name = 'peter2003';
+
+select * from (
+select * from account where lnnvl(year = 2001)
+union
+select * from account where lnnvl(year = 2002)
+) where lnnvl(year = 2001);
+
+
+select * from (select * from account) where lnnvl(2001 <> 2001);
+select * from (select * from account) where lnnvl(2001 <> 2001) and year=2001;
+
+select * from (select * from account) where lnnvl(year is null);
+select * from (select * from account) where lnnvl(year is not null);
+select * from (select * from account) where lnnvl(year is null) and year=2002;
+select * from (select * from account) where lnnvl(year is not null) and year=2002;
+select * from (select * from account) where lnnvl(year is not null) and year is null;
+select * from (select * from account) where lnnvl(1 is null);
+select * from (select * from account) where lnnvl(1 is not null);
+select * from (select * from account) where lnnvl(1 is null) and year=2002;
+select * from (select * from account) where lnnvl(1 is not null) and year=2002;
+select * from (select * from account) where lnnvl(1 is not null) and year is null;
+select * from (select * from account) where lnnvl(null is null);
+select * from (select * from account) where lnnvl(null is not null);
+select * from (select * from account) where lnnvl(null is null) and year=2002;
+select * from (select * from account) where lnnvl(null is not null) and year=2002;
+select * from (select * from account) where lnnvl(null is not null) and year is null;
+
+select * from account where lnnvl(year like '%2001%');
+select * from account where lnnvl(name like '%2004%');
+select * from account where lnnvl(year not like '%2001%');
+select * from account where lnnvl(name not like '%2004%');
+
+select * from account where lnnvl(year like '%2001%') and year=0;
+select * from account where lnnvl(name like '%2004%') and year is not null;
+select * from account where lnnvl(year not like '%2001%') and year=2001;
+select * from account where lnnvl(name not like '%2004%') and year in(0,1);
+
+select * from (select * from account) where lnnvl(year like '%2001%');
+select * from (select * from account) where lnnvl(name like '%2004%');
+select * from (select * from account) where lnnvl(year not like '%2001%');
+select * from (select * from account) where lnnvl(name not like '%2004%');
+
+select * from (select * from account) where lnnvl(year like '%2001%') and year=0;
+select * from (select * from account) where lnnvl(name like '%2004%') and year is not null;
+select * from (select * from account) where lnnvl(year not like '%2001%') and year=2001;
+select * from (select * from account) where lnnvl(name not like '%2004%') and year in(0,1);
+
+select * from (select * from (select * from account) where lnnvl(year = 2001)) where lnnvl(year = 2001);
+select * from (select * from (select * from account)) where lnnvl(year = 2001);
+select * from (select * from account) where lnnvl(year = 2001);
+select * from (select * from account) where length(year) = 2001;
+select * from (select * from account) where lnnvl(year = 2001) and lnnvl(name like '%2004%');
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) where lnnvl(year = 2001);
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) where lnnvl(year = 2002);
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) where lnnvl(year = 2001) and lnnvl(name like '%2004%');
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) where lnnvl(year = 2002) and lnnvl(name like '%2004%');
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) where lnnvl(year = 2002) and lnnvl(name like '%2004%') and name = 'test';
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) where lnnvl(year = 2002) and lnnvl(name like '%2004%') and name = 'peter2003';
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) where lnnvl(year = 2002) and lnnvl(name not like '%2004%');
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) a,account b where lnnvl(a.year=b.year);
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) a,account b where lnnvl(a.year=b.year) and b.name='peter2004A';
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) a,(select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) b where lnnvl(a.year=b.year);
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) a,(select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) b where lnnvl(a.year=b.year) and b.name='peter2004A';
+select * from (select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) a,(select * from account where lnnvl(year = 2001) and lnnvl(name like '%2004%')) b where lnnvl(a.year=b.year) and a.name='peter2003';
+drop table my_account_8;
+
+#test rownum
+select * from account where lnnvl(rownum<>rownum);
+select * from account where lnnvl(rownum<10);
+select * from account where lnnvl(rownum=rownum);
+select * from account where lnnvl(rownum=rownum+1);
+select * from account a,account b where lnnvl(rownum<>rownum) order by a.name;
+select * from account a,account b where lnnvl(rownum=rownum) order by a.name;
+select * from account a,account b where lnnvl(rownum=rownum+1) order by a.name;
+
+drop table account;
+
+create table account(name varchar(20),year number);
+insert into account values('peter2001',2001);
+insert into account values('peter2002',2002);
+insert into account values('peter2003',null);
+insert into account values('peter2004A',0);
+insert into account values('peter2004B',1);
+
+set sql_mode=oracle;
+
+select * from account where lnnvl(1<1);
+select * from account where lnnvl(null<null);
+select * from account where lnnvl(null>null);
+select * from account where lnnvl(null is null);
+select * from account where lnnvl(null is not null);
+select * from account where lnnvl('5'<1);
+select * from account where lnnvl('2'<5);
+select * from account where lnnvl('5'=5);
+select * from account where lnnvl('5'<>5);
+select * from account where lnnvl(year=2004);
+select * from account where lnnvl(year=2004) and name = '';
+select * from account where lnnvl(name like '%200%');
+select * from account where lnnvl(name not like '%200%');
+select * from account where lnnvl(year!=2004) and lnnvl(year!=2005);
+select * from account where lnnvl(year=2004) and lnnvl(year=2005);
+select * from account where lnnvl(year=2004) and lnnvl(year=2004);
+select * from account where lnnvl(year!=2004);
+select * from account where lnnvl(year=2004);
+
+drop table account;
+
+create table my_tt(name varchar(32),id number(10));
+insert into my_tt(name,id) values('a',2);
+insert into my_tt(name,id) values('b',null);
+
+create table account(name varchar(20),year number);
+insert into account values('peter2001',2001);
+insert into account values('peter2002',2002);
+insert into account values('peter2003',null);
+insert into account values('peter2004A',0);
+insert into account values('peter2004B',1);
+
+create table account2(name varchar(20),year number);
+insert into account2 values('peter2001',2001);
+insert into account2 values('peter2002',2002);
+insert into account2 values('peter2003',2003);
+insert into account2 values('peter2004',2004);
+insert into account2 values('peter2005',2005);
+insert into account2 values('peter2006',2006);
+insert into account2 values('peter2007',null);
+
+set sql_mode=oracle;
+
+select * from account a,account2 b where lnnvl(a.year<2003) and lnnvl(b.year<2003);
+select * from account a,account2 b where lnnvl(a.year<b.year);
+--disable_warnings
+select * from account a,account2 b where lnnvl(substr(a.name,6)+1<b.year);
+--enable_warnings
+select * from account a,account2 b where lnnvl(a.year<b.year);
+select * from account a,account2 b where (not(a.year<b.year) or a.year is null or b.year is null);
+select * from account a,account2 b where lnnvl(a.year = null);
+select * from account where lnnvl(year<2003);
+select * from account where lnnvl(year<2003) and lnnvl(year<2003);
+select * from account where lnnvl((select year from account2 where rownum<=1)<2001);
+select * from account where (select year from account2 where rownum<=1)<2004;
+select * from account a where lnnvl(to_char(a.year)<a.name);
+select * from account a where (not(to_char(a.year)<a.name) or to_char(a.year) is null or a.name is null);
+select * from account a where lnnvl(a.year<a.year);
+select * from account a where (not(a.year<a.year) or a.year is null);
+select * from account a where lnnvl(a.year is null);
+select * from account a where (not(a.year is null));
+select * from account a where lnnvl(a.year is not null);
+select * from account a where (not(a.year is not null));
+select * from account a where lnnvl(null is null);
+select * from account a where lnnvl(null is not null);
+select * from account a where not(null is null);
+select * from account a where lnnvl(a.year <> null);
+select * from account a where (not(a.year <> null) or 1=1);
+select 1 from dual where lnnvl(null<null);
+select 1 from dual where lnnvl(1<1);
+select 1 from dual where lnnvl(1+null<null);
+select * from account where lnnvl(1<1);
+select * from account where lnnvl(year<1500);
+select * from account where lnnvl(year<year);
+select * from account where lnnvl(year<>year);
+select * from account where lnnvl(year=year);
+select * from account where lnnvl(year<year+100);
+select * from account where lnnvl(year is null);
+select * from account where lnnvl(year+1 is null);
+select * from account where lnnvl(null is null);
+select * from account where lnnvl(year is not null);
+select * from account where lnnvl(year+1 is not null);
+select * from account where lnnvl(null is not null);
+select * from account where lnnvl(year = null);
+select * from account where lnnvl(year = 1+null);
+select * from account where lnnvl(year = null+null);
+select * from account where lnnvl(year+1 = null);
+select * from account where lnnvl(year > null);
+select * from account where lnnvl(year < null);
+select * from account where lnnvl(year <> null);
+select * from account where lnnvl(year is not null);
+select * from account where lnnvl(year is null);
+select * from account where lnnvl(sysdate<sysdate+1);
+select * from account where lnnvl(1<1);
+select * from account where lnnvl(year=2004);
+select * from account where lnnvl((select year from account where rownum<=1)<2001);
+select * from account where lnnvl(year<>2004);
+select * from account where lnnvl(year!=2004);
+select * from account where lnnvl(year is null);
+select * from account where lnnvl(year is not null);
+select * from account where lnnvl(year=1) and lnnvl(year=2005);
+
+--disable_warnings
+select * from account a,account2 b where lnnvl(substr(a.name,6)<b.year)
+minus
+select * from account a,account2 b where (not(substr(a.name,6)<b.year) or b.year is null or substr(a.name,6) is null);
+
+select * from account a,account2 b where (not(substr(a.name,6)<b.year) or b.year is null or substr(a.name,6) is null)
+minus
+select * from account a,account2 b where lnnvl(substr(a.name,6)<b.year);
+--enable_warnings
+
+select * from my_tt where lnnvl(id=1);
+select * from my_tt where lnnvl(id=2);
+select * from my_tt where lnnvl(id>2);
+select * from my_tt where lnnvl(id<2);
+select * from my_tt where lnnvl(id is null);
+select * from my_tt where lnnvl(id is not null);
+select * from my_tt where lnnvl(id=1);
+
+drop table my_tt;
+drop table account;
+drop table account2;
+
+#test lnnvl setup on merge into/cte/materialized view/with function
+#test lnnvl setup on insert/update/delete
+CREATE TABLE student (
+    id       INT,
+    name  VARCHAR(10),
+    grade INT
+);
+
+delete from student;
+INSERT INTO student VALUES(1, 'John', NULL);
+INSERT INTO student VALUES(2, 'Paul', 1);
+INSERT INTO student VALUES(3, 'Nancy', 1);
+INSERT INTO student VALUES(4, 'Sarah', 3);
+
+create table account(name varchar(20),year int);
+create table account_bk(name varchar(20),year int);
+delete from account;
+insert into account values('peter2001',2001);
+insert into account values('peter2002',2002);
+insert into account values('peter2003',null);
+insert into account values('peter2004A',0);
+insert into account values('peter2004B',1);
+insert into account_bk select * from account;
+
+
+create table account2(year1 int,year2 int);
+create table account2_bk(year1 int,year2 int);
+delete from account2;
+insert into account2 values(1,1);
+insert into account2 values(2,2);
+insert into account2 values(3,3);
+insert into account2 values(4,4);
+insert into account2 values(5,5);
+insert into account2 values(6,6);
+insert into account2 values(7,7);
+insert into account2 values(8,8);
+insert into account2 values(9,9);
+insert into account2 values(10,10);
+insert into account2 values(11,11);
+insert into account2_bk select * from account2;
+
+set sql_mode=oracle;
+#set @oracle_mode_emptystring_equal_null='oracle,emptystring_equal_null';
+#set sql_mode=@oracle_mode_emptystring_equal_null;
+
+####################################################################################################################################
+select * from account where lnnvl('AAA'='AAA');
+select * from account where lnnvl('AAA'!='AAA');
+select * from account where lnnvl(1=1);
+select * from account where lnnvl(1!=1);
+select * from account where lnnvl(1!=1) and year = 0;
+select * from account where lnnvl(length(year)=1);
+select * from account where lnnvl(length(year)=1) and year = 2001;
+
+set sql_mode=oracle;
+
+create view my_view_lnnvl4 as select * from account2 where lnnvl(length(year1)=1);
+select * from my_view_lnnvl4;
+create view my_view_lnnvl5 as select * from account2 where lnnvl(year1=1) and year2 in(2,3);
+select * from my_view_lnnvl5;
+
+create force view my_view_lnnvl6 as select * from account2 where lnnvl(length(year1)=1);
+select * from my_view_lnnvl6;
+create force view my_view_lnnvl7 as select * from account2 where lnnvl(year1=1) and year2 in(2,3);
+select * from my_view_lnnvl7;
+
+create table my_table_lnnvl4 as select * from account2 where lnnvl(length(year1)=1);
+select * from my_table_lnnvl4;
+create table my_table_lnnvl5 as select * from account2 where lnnvl(year1=1) and year2 in(2,3);
+select * from my_table_lnnvl5;
+
+create materialized view my_mv_lnnvl4(a,b) build deferred refresh complete on demand as select year1,year2 from account2 where lnnvl(length(year1)=1);
+create materialized view my_mv_lnnvl5(a,b) build deferred refresh complete on demand as select year1,year2 from account2 where lnnvl(year1=1) and year2 in(2,3);
+select * from my_mv_lnnvl4;
+select * from my_mv_lnnvl5;
+
+drop view my_view_lnnvl4;
+drop view my_view_lnnvl5;
+drop view my_view_lnnvl6;
+drop view my_view_lnnvl7;
+drop table my_table_lnnvl4;
+drop table my_table_lnnvl5;
+drop materialized view my_mv_lnnvl4;
+drop materialized view my_mv_lnnvl5;
+
+set sql_mode=default;
+
+
+#with function
+set sql_mode=oracle;
+delimiter //;
+with function my_func(my_year1 int,my_year2 int) return int deterministic is
+var int;
+begin
+select year1 into var from account2 where lnnvl(year1=my_year1) and lnnvl(year2=my_year2) and year2 = 10;
+return var;
+end;
+select my_func(1,4) from dual;//
+
+delimiter ;//
+
+#test lnnvl in cte.
+set sql_mode=default;
+
+--sorted_result
+with temp_table as (
+  select year1,year2 from account2 where lnnvl(year1=1) and lnnvl(year2=4)
+)
+select * from temp_table
+order by year1,year2;
+
+--sorted_result
+with temp_table as (
+  select year1,year2 from account2 where lnnvl(year1=1)
+)
+select * from temp_table
+order by year1,year2;
+
+--sorted_result
+with temp_table as (
+  select year1,year2 from account2 where lnnvl(year1=1)
+)
+select * from temp_table where lnnvl(year2=5)
+order by year1,year2;
+
+--sorted_result
+with temp_table as (
+  select year1,year2 from account2 where lnnvl(year1=1) and lnnvl(year2=4)
+)
+select * from temp_table where lnnvl(year1=2)
+order by year1,year2;
+
+--sorted_result
+with temp_table as (
+  select year1,year2 from account2 where lnnvl(year1=1) and lnnvl(year2=4)
+)
+select * from temp_table where lnnvl(year1=2) and lnnvl(year2=8)
+order by year1,year2;
+
+####################################################################################################################################
+
+#insert
+
+delete from account;
+insert into account select * from account_bk;
+insert into account(name,year) values(lnnvl('AAA'='AAA'),lnnvl(1=1));
+select * from account;
+
+delete from account;
+insert into account select * from account_bk;
+insert into account(name,year) values(lnnvl('AAA'!='AAA'),lnnvl(1!=1));
+select * from account;
+
+delete from account;
+insert into account select * from account_bk;
+insert into account(name,year) select name,year from account where lnnvl(1!=1);
+select * from account;
+
+delete from account;
+insert into account select * from account_bk;
+insert into account(name,year) select name,year from account where lnnvl(1!=1) and lnnvl(year=1);
+select * from account;
+
+delete from account;
+insert into account select * from account_bk;
+insert into account(name,year) select name,year from account where lnnvl(1!=1) and lnnvl(year=1) and year=0;
+select * from account;
+
+#rollbak account
+delete from account;
+insert into account select * from account_bk;
+####################################################################################################################################
+#replace into
+
+#init data
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+
+replace into account2 values (12,lnnvl(1>1));
+replace into account2 values (13,lnnvl(length(1)>1));
+replace into account2 values (lnnvl(1=1),lnnvl(1<1));
+replace into account2 set year1=lnnvl(1>1);
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+replace into account select to_char(year1),year2 from account2 where lnnvl(year2=2);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+replace into account select to_char(year1),year2 from account2 where lnnvl(year2=2) and year2=1;
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+replace into account select to_char(year1),year2 from account2 where lnnvl(year2=2) and lnnvl(year1=5);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+replace into account select to_char(year1),year2 from account2 where lnnvl(year2=2) and lnnvl(year1=5) and year1 in(1,3);
+select * from account;
+select * from account2;
+
+
+#rollbak account,account2
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+####################################################################################################################################
+#insert all
+
+#init data
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+insert all
+into account
+into account2(year1,year2) values (888,lnnvl(1=1))
+select 1111,2222 from dual;
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+insert all
+into account
+into account2(year1,year2) values (888,lnnvl(1=1))
+select year1,year2 from account2 where lnnvl(year1=3);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+insert all
+into account
+into account2(year1,year2) values (888,null)
+select year1,year2 from account2 where lnnvl(year1=3);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+insert all
+into account
+into account2(year1,year2) values (888,lnnvl(1=1))
+select year1,year2 from account2 where lnnvl(year1=3) and year2 in(4,6);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+insert all
+into account
+into account2(year1,year2) values (888,null)
+select year1,year2 from account2 where lnnvl(year1=3) and year2 in(4,6);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+insert all
+into account
+into account2(year1,year2) values (888,lnnvl(1=1))
+select year1,year2 from account2 where lnnvl(year1=3) and lnnvl(year2=5);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+insert all
+into account
+into account2(year1,year2) values (888,null)
+select year1,year2 from account2 where lnnvl(year1=3) and lnnvl(year2=5);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+insert all
+into account
+into account2(year1,year2) values (888,lnnvl(year1=1))
+select year1,year2 from account2 where lnnvl(year1=3) and lnnvl(year2=5) and year2 in(4,6);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+insert all
+into account
+into account2(year1,year2) values (888,null)
+select year1,year2 from account2 where lnnvl(year1=3) and lnnvl(year2=5) and year2 in(4,6);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+insert all
+into account
+into account2(year1,year2) values (lnnvl(year1=1),lnnvl(year2=1))
+select year1,year2 from account2 where lnnvl(year1=3) and lnnvl(year2=5) and year2 in(4,6);
+select * from account;
+select * from account2;
+
+
+#rollbak account,account2
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+
+####################################################################################################################################
+#update
+select * from account2;
+
+update account2 set year2=lnnvl(1=1) where year2=1;
+select * from account2;
+
+update account2 set year2=lnnvl(1!=1) where year2=2;
+select * from account2;
+
+update account2 set year2=lnnvl(year1>0) where year2=3;
+select * from account2;
+
+update account2 set year2=lnnvl(length(year1)>1) where year2=4;
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+update account2 set year2=lnnvl(1=1);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+update account2 set year2=lnnvl(1!=1);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+update account2 set year2=lnnvl(year1>0);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+update account2 set year2=lnnvl(length(year1)>1);
+select * from account2;
+
+
+delete from account2;
+insert into account2 select * from account2_bk;
+update account2 set year2=lnnvl(year1>0) where lnnvl(year1>3);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+update account2 set year2=lnnvl(year1>0) where lnnvl(year1>3) and year2=2;
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+update account2 set year2=lnnvl(year1>0) where lnnvl(year1>3) and lnnvl(year2=3);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+update account2 set year2=lnnvl(year1>0) where lnnvl(year1>3) and lnnvl(year2=3) and year2=2;
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+update account2 set year1=lnnvl(year1=0) , year2=lnnvl(year1>0) where lnnvl(year1>3);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+update account2 set year1=lnnvl(year1=0) , year2=lnnvl(year1>0) where lnnvl(year1>3) and year2=2;
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+update account2 set year1=lnnvl(year1=0) , year2=lnnvl(year1>0) where lnnvl(year1>3) and lnnvl(year2=3);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+update account2 set year1=lnnvl(year1=0) , year2=lnnvl(year1>0) where lnnvl(year1>3) and lnnvl(year2=3) and year2=2;
+select * from account2;
+
+
+set sql_mode=oracle;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+UPDATE account a, account2 b SET (a.year,b.year1)=(lnnvl(1>1),9);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+UPDATE account a, account2 b SET (a.year,b.year1)=(lnnvl(1>1),lnnvl(1=1));
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+UPDATE account a, account2 b SET (a.year,b.year1)=(lnnvl(1>1),lnnvl(1=1)) where b.year2=2;
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+UPDATE account a, account2 b SET (a.year,b.year1)=(lnnvl(1>1),lnnvl(1=1)) where lnnvl(a.year!=b.year1);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+UPDATE account a, account2 b SET (a.year,b.year1)=(lnnvl(a.year>1),lnnvl(1=1)) where lnnvl(a.year!=b.year1) and b.year2=2;
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+UPDATE account a, account2 b SET (a.year,b.year1)=(lnnvl(a.year>1),lnnvl(1=1)) where lnnvl(a.year=b.year1) and b.year2=2;
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+update account a join account2 b set a.name=lnnvl(1=1);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+update account a join account2 b set a.name=lnnvl(b.year1=2);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+update account a join account2 b set a.name=lnnvl(b.year1=2) where lnnvl(a.year=1);
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+update account a join account2 b set a.name=lnnvl(b.year1=2) where lnnvl(a.year=1) and b.year2=2;
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+update account a join account2 b on (lnnvl(a.year=b.year1)) set a.name=lnnvl(b.year1=2) where lnnvl(a.year=1) and b.year2=2;
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+update account a join account2 b on (lnnvl(8=b.year1) and b.year2=4) set a.name=lnnvl(b.year1=2) where lnnvl(b.year1=1) and a.year=2001;
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+update account a join account2 b on (lnnvl(7=b.year1) and length(b.year2)=1 and (lnnvl(a.year=8) and lnnvl(a.name='peter2003'))) set a.name=lnnvl(b.year1=2) where lnnvl(b.year1=1) and a.year<>1;
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+update account a right join account2 b on (lnnvl(a.year=b.year1)) set a.name=lnnvl(b.year1=2) where lnnvl(a.year=1) and b.year2=2;
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+update account a right join account2 b on (lnnvl(8=b.year1) and b.year2=4) set a.name=lnnvl(b.year1=2) where lnnvl(b.year1=1) and a.year=2001;
+select * from account;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+update account a right join account2 b on (lnnvl(7=b.year1) and length(b.year2)=1 and (lnnvl(a.year=8) and lnnvl(a.name='peter2003'))) set a.name=lnnvl(b.year1=2) where lnnvl(b.year1=1) and a.year<>1;
+select * from account;
+select * from account2;
+
+#rollbak account,account2
+set sql_mode=default;
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+####################################################################################################################################
+#delete
+
+#init data
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+delete from account2 where lnnvl(1=1);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+delete from account2 where lnnvl(1=0);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+delete from account2 where lnnvl(year1=1);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+delete from account2 where lnnvl(length(year1)=1);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+delete from account2 where lnnvl(year1=1) and year2 in(2,3);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+delete from account2 where lnnvl(year1=1) and lnnvl(year2=4);
+select * from account2;
+
+delete from account2;
+insert into account2 select * from account2_bk;
+delete from account2 where lnnvl(year1=1) and lnnvl(year2=4) and year2 = 10;
+select * from account2;
+
+delete from account;
+delete from account2;
+insert into account select * from account_bk;
+insert into account2 select * from account2_bk;
+
+####################################################################################################################################
+#merge into
+
+explain merge into account
+using (select * from account2 where lnnvl(year1=1)) ac2
+on ( lnnvl(account.year = ac2.year1) )
+when matched then
+update set account.name=lnnvl(year1=2) where lnnvl(year1=3)
+when not matched then
+insert (account.name, account.year)
+values (to_char(ac2.year1),lnnvl(ac2.year2=5)) where lnnvl(year1=4);
+show warnings;
+
+explain merge into account
+using (select * from account2 where lnnvl(year1=1)) ac2
+on ( lnnvl(account.year = ac2.year1) )
+when matched then
+update set account.name=lnnvl(year1=2) where lnnvl(year1=3)
+delete where lnnvl(ac2.year1=2);
+show warnings;
+
+explain merge into account
+using (select * from account2 where lnnvl(year1=1) and year2=11) ac2
+on ( lnnvl(account.year = ac2.year1) and ac2.year1 = 22 )
+when matched then
+update set account.name=lnnvl(year1=2) where lnnvl(year1=3) and year2 = 33
+when not matched then
+insert (account.name, account.year)
+values (to_char(ac2.year1),lnnvl(ac2.year2=5)) where lnnvl(year1=4) and year2 = 44;
+show warnings;
+
+explain merge into account
+using (select * from account2 where lnnvl(year1=1) and year2=11) ac2
+on ( lnnvl(account.year = ac2.year1) and ac2.year1 = 22 )
+when matched then
+update set account.name=lnnvl(year1=2) where lnnvl(year1=3) and year2 = 33
+delete where lnnvl(ac2.year1=2) and year2=44;
+show warnings;
+
+delete from account;
+insert into account select * from account_bk;
+merge into account
+using account2
+on ( account2.year1 = 3 )
+when matched then
+update set account.name=lnnvl(year1=2)
+when not matched then
+insert (account.name, account.year)
+values (to_char(account2.year1),lnnvl(account2.year2=5));
+select * from account;
+
+delete from account;
+insert into account select * from account_bk;
+merge into account
+using account2
+on ( account2.year1 = 3 )
+when matched then
+update set account.name=lnnvl(year1=2) where lnnvl(account.year=1);
+select * from account;
+
+delete from account;
+insert into account select * from account_bk;
+merge into account
+using account2
+on ( account2.year1 = 3 )
+when matched then
+update set account.name=lnnvl(year1=2) where lnnvl(account.year=1) and year=2002;
+select * from account;
+
+delete from account;
+insert into account select * from account_bk;
+merge into account
+using account2
+on ( account2.year1 = 3 )
+when matched then
+update set account.name=lnnvl(year1=2)
+delete where lnnvl(account.year=1);
+select * from account;
+
+delete from account;
+insert into account select * from account_bk;
+merge into account
+using account2
+on ( account2.year1 = 3 )
+when matched then
+update set account.name=lnnvl(year1=2)
+when not matched then
+insert (account.name, account.year)
+values (to_char(account2.year1),lnnvl(account2.year2=5)) where lnnvl(account2.year1 = 8);
+select * from account;
+
+delete from account;
+insert into account select * from account_bk;
+merge into account
+using account2
+on ( account2.year1 = 3 )
+when matched then
+update set account.name=lnnvl(year1=2)
+when not matched then
+insert (account.name, account.year)
+values (to_char(account2.year1),lnnvl(account2.year2=5)) where lnnvl(account2.year1 = 8) and account2.year1=7;
+select * from account;
+
+delete from account;
+insert into account select * from account_bk;
+merge into account
+using (select * from account2 where lnnvl(year2=5)) ac2
+on ( ac2.year1 = 3 )
+when matched then
+update set account.name=lnnvl(year1=2)
+when not matched then
+insert (account.name, account.year)
+values (to_char(ac2.year1),lnnvl(ac2.year2=5));
+select * from account;
+
+delete from account;
+insert into account select * from account_bk;
+merge into account
+using (select * from account2 where lnnvl(year2=5) and year1 in(3,4,5)) ac2
+on ( ac2.year1 = 3 )
+when matched then
+update set account.name=lnnvl(year1=2)
+when not matched then
+insert (account.name, account.year)
+values (to_char(ac2.year1),lnnvl(ac2.year2=5));
+select * from account;
+
+delete from account;
+insert into account select * from account_bk;
+merge into account
+using account2
+on ( lnnvl(account2.year1 <> 3) )
+when matched then
+update set account.name=lnnvl(year1=2)
+when not matched then
+insert (account.name, account.year)
+values (to_char(account2.year1),lnnvl(account2.year2=5));
+select * from account;
+
+#drop tables
+drop table student;
+drop table account;
+drop table account2;
+drop table account_bk;
+drop table account2_bk;
+
+#test outer join with plus sign
+CREATE TABLE student (
+    id       INT,
+    name  VARCHAR(10),
+    grade INT
+);
+
+INSERT INTO student VALUES(1, 'John', NULL);
+INSERT INTO student VALUES(2, 'Paul', 1);
+INSERT INTO student VALUES(3, 'Nancy', 1);
+INSERT INTO student VALUES(4, 'Sarah', 3);
+
+create table account(name varchar(20),year number);
+insert into account values('peter2001',2001);
+insert into account values('peter2002',2002);
+insert into account values('peter2003',null);
+insert into account values('peter2004A',0);
+insert into account values('peter2004B',1);
+
+create table t1(ida int, age int, name varchar(10));
+insert into t1 values(1, 2, '');
+insert into t1 values(NULL, 2, 'a');
+insert into t1 values(3, 2, 'b');
+create table t2(ida int, age int, name varchar(10));
+insert into t2 values(1, 2, '');
+insert into t2 values(2, 2, 'a');
+insert into t2 values(3, 1, 'b');
+create table t3(ida int, age int, name varchar(10));
+insert into t3 values(2, 3, 'a');
+insert into t3 values(5, NULL, '');
+
+
+#begin test1:
+
+set @oracle_mode_emptystring_equal_null='oracle,emptystring_equal_null';
+set sql_mode=@oracle_mode_emptystring_equal_null;
+
+select * from t1 a join t2 b on lnnvl(a.ida>1);
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida) t where lnnvl(t.a2<>3) and t.a4=2;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.age<>3) and b.ida=2) t;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida=b.ida) t where lnnvl(t.a2=3) and t.a4=1;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida=b.ida) t where lnnvl(t.a2=3);
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida) t where lnnvl(t.a2=3) and t.a4=1;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida) t where lnnvl(t.a2=3);
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida=b.ida) t where lnnvl(t.a2<>2) and t.a4=1;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name <> b.name) or b.age=2)) t where lnnvl(t.a2<>3) and t.a5=2;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name <> b.name) or b.age=2)) t where t.a5=2;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name <> b.name) or b.age=2)) t where (not(t.a2<>3) or t.a2 is null or 3 is null) and t.a5=2;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida=b.ida and (lnnvl(a.name <> b.name) or b.age=2)) t where lnnvl(t.a4=1);
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida=b.ida and (lnnvl(a.name <> b.name) or b.age=2)) t where lnnvl(t.a4=1) and t.a5=1;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida=b.ida and (lnnvl(a.name <> b.name) or b.age=2)) t where lnnvl(t.a4=1) and t.a5=2;
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=2001);
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=b.ida);
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=2001) and lnnvl(a.ida=2001);
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=2001) and lnnvl(b.age<>2);
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=2001) and lnnvl(b.age<>2) and a.age=2;
+select * from t1 a left join t2 b on a.ida=b.ida where lnnvl(a.ida=2001);
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.name = 'b');
+select * from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name = 'b') or lnnvl(a.ida=2001));
+select * from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name = b.name) or b.age=2);
+select * from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name <> b.name) or b.age=2);
+select * from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name <> b.name) or b.age=2) and b.ida=3;
+select * from (select * from account) t where lnnvl(t.year=2001);
+select * from (select * from account) t where lnnvl(t.year=2001) and t.year=2002;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name <> b.name) or b.age=2)) t;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name <> b.name) or b.age=2)) t where lnnvl(t.a2<>3);
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name <> b.name) or b.age=2)) t where lnnvl(t.a2<>3) and t.a5<>2;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name <> b.name) or b.age=2)) t where lnnvl(t.a2 = t.a5);
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name <> b.name) or b.age=2)) t where lnnvl(t.a2<>3) and t.a5=2;
+select * from (select a.ida a1,a.age a2,a.name a3,b.ida a4,b.age a5,b.name a6 from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name <> b.name) or b.age=2)) t where lnnvl(t.a2 = t.a5) and t.a5=2;
+
+select * from t1 a,t2 b where lnnvl(a.ida(+)=2001);
+
+select * from t1 a,t2 b where lnnvl(a.ida(+)=b.ida);
+
+select * from t1 a,t2 b where lnnvl(a.ida(+)>1);
+
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida(+)=b.ida);
+--error 7524
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=b.ida(+));
+--error 7524
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida(+)=b.ida(+));
+--error 7524
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=2001) or lnnvl(a.ida=2001);
+--error 7524
+select * from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name(+) = 'b') or lnnvl(a.ida=2001));
+
+#drop tables
+drop table student;
+drop table account;
+drop table t1;
+drop table t2;
+drop table t3;
+
+#test lnnvl setup on join
+create table account(name varchar(20),year number);
+insert into account values('peter2001',2001);
+insert into account values('peter2002',2002);
+insert into account values('peter2003',null);
+insert into account values('peter2004A',0);
+insert into account values('peter2004B',1);
+
+create table t1(ida int, age int, name varchar(10));
+insert into t1 values(1, 2, '');
+insert into t1 values(NULL, 2, 'a');
+insert into t1 values(3, 2, 'b');
+create table t2(ida int, age int, name varchar(10));
+insert into t2 values(1, 2, '');
+insert into t2 values(2, 2, 'a');
+insert into t2 values(3, 1, 'b');
+create table t3(ida int, age int, name varchar(10));
+insert into t3 values(2, 3, 'a');
+insert into t3 values(5, NULL, '');
+
+
+#cross join
+set sql_mode=oracle;
+select * from t1 a join t2 b on lnnvl(a.ida<>1);
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and b.name='a');
+select * from t1 a join t2 b on (b.name='a' and lnnvl(a.ida<>1));
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(b.age<>1));
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(b.age<>1) and b.name='b');
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(b.age<>1) and b.name<>'b');
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(b.age<>1) and b.name is null);
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(b.age<>1) and b.name is not null);
+select * from t1 a join t2 b on lnnvl(a.ida<>1) where a.age=2;
+select * from t1 a join t2 b on lnnvl(a.ida<>1) where a.age=20;
+select * from t1 a join t2 b on lnnvl(a.ida<>1) where b.age=1;
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and b.name='a') where a.age=2;
+select * from t1 a join t2 b on (b.name='a' and lnnvl(a.ida<>1)) where a.age=2;
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(b.age<>1)) where b.age=1;
+select * from t1 a join t2 b on (lnnvl(a.ida=b.ida)) where b.age=1;
+select * from t1 a join t2 b on (lnnvl(a.ida<>b.ida)) where b.age=1;
+select * from t1 a join t2 b on (lnnvl(a.ida=b.ida) and b.name = 'a') where b.age=2;
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida)) where b.age=2;
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where b.age=2;
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where b.age=2 and lnnvl(a.name=b.name);
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where lnnvl(a.name=b.name);
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where lnnvl(a.name <> b.name) and lnnvl(a.age<b.age) and b.name='a' and a.name='a';
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(b.age<>1) and b.name='b') where b.name='b';
+select * from t1 a join t2 b on lnnvl(a.ida<>1) where lnnvl(a.name='a');
+select * from t1 a join t2 b on lnnvl(a.ida<>1) where lnnvl(a.name='a') and b.name='a';
+select * from t1 a join t2 b on lnnvl(a.ida<>1) where b.name='a';
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where lnnvl(a.age<b.age);
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where lnnvl(a.age=1);
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where lnnvl(a.name='a');
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where a.name='a';
+#must be set emptystring_equal_null
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where a.name!='a';
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where lnnvl(a.name!='a');
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where lnnvl(a.name<>b.name);
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where lnnvl(a.name<>b.name) and lnnvl(a.age<b.age);
+
+set @oracle_mode_emptystring_equal_null='oracle,emptystring_equal_null';
+set sql_mode=@oracle_mode_emptystring_equal_null;
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where a.name!='a';
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where lnnvl(a.name!='a');
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where lnnvl(a.name<>b.name);
+select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where lnnvl(a.name<>b.name) and lnnvl(a.age<b.age);
+
+#select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = 'a') where lnnvl(a.name='a');
+execute immediate 'select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = \'a\') where lnnvl(a.name=\'a\')';
+execute immediate 'select * from t1 a join t2 b on (lnnvl(a.ida<>?) and lnnvl(a.ida=b.ida) and b.name = ?) where lnnvl(a.name=?)' using 1,'a','a';
+
+prepare my_stmt1 from 'select * from t1 a join t2 b on (lnnvl(a.ida<>1) and lnnvl(a.ida=b.ida) and b.name = \'a\') where lnnvl(a.name=\'a\')';
+execute my_stmt1;
+deallocate prepare my_stmt1;
+
+SET @v1 = 1;
+SET @v2 = 'a';
+SET @v3 = 'a';
+select @v1,@v2,@v3;
+prepare my_stmt2 from 'select * from t1 a join t2 b on (lnnvl(a.ida<>?) and lnnvl(a.ida=b.ida) and b.name = ?) where lnnvl(a.name=?)';
+execute my_stmt2 using @v1,@v2,@v3;
+deallocate prepare my_stmt2;
+
+#other
+select * from t1 a join t2 b on lnnvl(not(not(a.ida)));
+select * from t1 a join t2 b on lnnvl(a.ida<>0);
+
+select * from t1 a join t2 b on lnnvl(a.ida=0);
+select * from t1 a join t2 b on lnnvl(not(a.ida));
+
+#msic
+set @oracle_mode_emptystring_equal_null='oracle,emptystring_equal_null';
+set sql_mode=@oracle_mode_emptystring_equal_null;
+
+select * from t1 a,t2 b where lnnvl(a.ida<>1);
+select * from t1 a cross join t2 b where lnnvl(a.ida<>1);
+select * from t1 a left join t2 b on lnnvl(a.ida=1);
+select * from t1 a cross join (t2 b join t3 c on(lnnvl(b.ida=c.ida)));
+select * from t1 a cross join (t2 b join t3 c on(lnnvl(b.ida=c.ida) and c.name='a'));
+select * from t1 a cross join (t2 b join t3 c on(lnnvl(b.ida=c.ida) and c.name<>'a'));
+select * from t1 a cross join (t2 b join t3 c on(lnnvl(b.ida=c.ida) and lnnvl(b.name<>c.name)));
+select * from t1 a cross join (t2 b join t3 c on(lnnvl(b.ida=c.ida) and lnnvl(b.name<>c.name) and c.name='a'));
+select * from t1 a cross join (t2 b join t3 c on(lnnvl(b.ida=c.ida) and lnnvl(b.name<>c.name) and c.name<>'a'));
+select * from t1 a join (t2 b join t3 c on(lnnvl(b.ida=c.ida))) on lnnvl(a.ida=b.ida);
+select * from t1 a join (t2 b join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and a.name='b');
+select * from t1 a join (t2 b join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and a.name<>'b');
+select * from t1 a join (t2 b join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b');
+select * from t1 a join (t2 b join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b') where a.age=2;
+select * from t1 a join (t2 b join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b') where a.age=1;
+select * from t1 a join (t2 b join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b') where lnnvl(c.age<>2);
+select * from t1 a join (t2 b join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b') where lnnvl(c.age<>2) and b.name='a';
+select * from t1 a join (t2 b join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b') where lnnvl(c.age<>2) and lnnvl(b.name<>a.name);
+select * from t1 a join (t2 b join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b') where lnnvl(c.age<>2) and lnnvl(b.name<>a.name) and a.name='a';
+select * from t1 a join (t2 b join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b') where lnnvl(c.age<>2) and lnnvl(b.name<>a.name) and a.name='b';
+select * from t1 a left join (t2 b right join t3 c on(lnnvl(b.ida=c.ida))) on lnnvl(a.ida=b.ida);
+select * from t1 a full join (t2 b full join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b');
+select * from t1 a right join (t2 b right join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b');
+select * from t1 a left join (t2 b left join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b');
+select * from t1 a right join (t2 b full join t3 c on(lnnvl(b.ida=c.ida))) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b') where lnnvl(c.age<>2) and lnnvl(b.name<>a.name) and a.name='b';
+select * from t1 a right join (t2 b full join t3 c on(b.ida=c.ida)) on (lnnvl(a.ida=b.ida) and lnnvl(a.age=0) and a.name='b') where lnnvl(c.age<>2) and lnnvl(b.name<>a.name) and a.name='b' order by b.ida;
+select * from t1 a right join (t2 b full join t3 c on(b.ida=c.ida)) on (lnnvl(a.ida=b.ida) and a.name='b') where lnnvl(c.age<>2) and lnnvl(b.name<>a.name) and a.name='b' order by b.ida;
+select * from account a,account b where lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name) and b.year!=0;
+select * from account a join account b on(lnnvl(a.year<>b.year) and lnnvl(a.name<>b.name)) where b.year!=0;
+select * from account a join account b on(lnnvl(a.year<>b.year)) where b.year!=0;
+select * from account a join account b on(lnnvl(a.year<>b.year));
+select * from account a join account b on(lnnvl(a.year<>b.year) and b.year!=0);
+select * from account a left join account b on(lnnvl(a.year<>b.year) and b.year!=0);
+select * from account a right join account b on(lnnvl(a.year<>b.year) and b.year!=0);
+select * from account a full join account b on(lnnvl(a.year<>b.year) and b.year!=0);
+select * from t1 a join t2 b on lnnvl(a.ida<>1);
+select * from t1 a left join t2 b on lnnvl(a.ida=1);
+select * from t1 a left join t2 b on lnnvl(a.ida<>1);
+select * from t1 a left join t2 b on lnnvl(a.ida=1) and a.age=2;
+select * from t1 a left join t2 b on (lnnvl(a.ida=1) and a.age=2);
+select * from t1 a left join t2 b on (lnnvl(a.ida=1) and a.age=2) where a.ida=1;
+select * from t1 a left join (t2 b join t3 c on b.ida=c.ida) on(lnnvl(a.ida=b.ida));
+
+set sql_mode=oracle;
+
+drop table account;
+drop table t1;
+drop table t2;
+drop table t3;
+
+#begin test lnnvl in sp instructions.
+delimiter //;
+set sql_mode=oracle//
+
+#test sp_anonymous
+declare
+a int;
+begin
+a:=1;
+select a;
+end//
+
+declare
+a int;
+begin
+a:=lnnvl(1>1);
+select a;
+end//
+
+#test procedure
+create or replace procedure proc_calc as
+a int;
+begin
+a:=1;
+select a;
+end;
+//
+
+call proc_calc();//
+
+drop procedure proc_calc;//
+
+#test function
+create or replace function func_calc return number is
+temp int := 0;
+begin
+return temp;
+end;
+//
+
+select func_calc()//
+
+create or replace function func_calc return number is
+temp int := 0;
+begin
+return length(1);
+end;
+//
+
+select func_calc()//
+
+create or replace function func_calc return number is
+temp int := lnnvl(1>1);
+begin
+return temp;
+end;
+//
+
+select func_calc()//
+
+drop function func_calc;//
+
+#test trigger
+create table t1(i int, j int);
+insert into t1 values(0, 1);
+
+create trigger trig_calc before insert
+on t1 for each row
+begin
+:new.i:=0;
+end;
+//
+insert into t1 values(0, 1);//
+
+drop trigger trig_calc;//
+create trigger trig_calc before insert
+on t1 for each row
+begin
+:new.i:=lnnvl(1>1);
+end;
+//
+
+insert into t1 values(0, 1);//
+
+drop trigger trig_calc;//
+create trigger trig_calc before insert
+on t1 for each row
+begin
+if :new.i<2 then
+:new.j:=lnnvl(1>1);
+end if;
+end;
+//
+
+insert into t1 values(0, 1);//
+drop trigger trig_calc;//
+drop table t1;//
+
+#test if
+
+declare
+a int;
+begin
+a:=1;
+if a = 1 then
+select a;
+end if;
+end//
+
+declare
+a int;
+begin
+a:=2;
+if a = 1 then
+select a;
+elsif a = 2 then
+select a+1;
+end if;
+end//
+
+declare
+a int;
+begin
+a:=1;
+if lnnvl(1!=1) then
+select a;
+end if;
+end//
+
+declare
+a int;
+begin
+a:=1;
+if lnnvl(1!=1) = 0 then
+select a;
+end if;
+end//
+
+declare
+a int;
+begin
+a:=1;
+if lnnvl(1=1) then
+select a;
+end if;
+end//
+
+declare
+a int;
+begin
+a:=1;
+if lnnvl(1>1) is null then
+select a;
+end if;
+end//
+
+#test lnnvl with cursor
+create table account(name varchar(20),year number);
+insert into account values('greatdb2001',2001);
+insert into account values('greatdb2002',2002);
+insert into account values('greatdb2003',2003);
+insert into account values('greatdb2004',2004);
+insert into account values('greatdb2005',2005);
+insert into account values('greatdb2006',2006);
+insert into account values('greatdb2007',null);
+
+create or replace procedure proc_calc as
+  v_year int;
+  cursor c is select year from account where lnnvl(name<>'greatdb2004');
+begin
+  open c;
+  fetch c into v_year;
+  select v_year;
+  close c;
+end;
+//
+
+call proc_calc//
+
+create or replace procedure proc_calc as
+  v_year int;
+  cursor c is select year from account where lnnvl(name='greatdb2004');
+begin
+  open c;
+	loop
+    fetch c into v_year;
+    exit when c%notfound;
+    select v_year;
+  end loop;
+  close c;
+end;
+//
+
+call proc_calc//
+
+create or replace procedure proc_calc(a_a varchar(32)) as
+  v_year int;
+  cursor c(p_a varchar(32)) is select year from account where lnnvl(name<>p_a);
+begin
+  open c(a_a);
+  fetch c into v_year;
+  select v_year;
+  close c;
+end;
+//
+
+call proc_calc('greatdb2004')//
+
+create or replace procedure proc_calc(a_a varchar(32)) as
+begin
+  select nvl(a_a,'NULL VALUE');
+end;
+//
+
+
+call proc_calc(lnnvl(1>1));//
+
+call proc_calc(lnnvl(1));//
+
+create or replace procedure proc_calc2 as
+begin
+  call proc_calc(lnnvl(1));
+end;
+//
+
+call proc_calc2//
+
+create or replace procedure proc_calc2 as
+begin
+  call proc_calc(lnnvl(1>1));
+end;
+//
+
+call proc_calc2//
+
+create or replace function func_calc(id int) return number is
+temp int := 0;
+begin
+return temp+id;
+end;
+//
+
+select func_calc(lnnvl(1));//
+select func_calc(lnnvl(1>1));//
+
+drop procedure proc_calc//
+drop procedure proc_calc2//
+drop function func_calc//
+drop table account//
+
+delimiter ;//
+
+###############################################################################################################
+set sql_mode=oracle;
+create table account(year number);
+insert into account values(1);
+
+select lnnvl(1=1) a,lnnvl(1=1)+1 b,lnnvl(1=1) is null c,lnnvl(1=1) is not null d,lnnvl(1=1)=0 e,lnnvl(1=1)!=0 f from dual;
+select lnnvl(1!=1) a,lnnvl(1!=1)+1 b,lnnvl(1!=1) is null c,lnnvl(1!=1) is not null d,lnnvl(1!=1)=0 e,lnnvl(1!=1)!=0 f from dual;
+select lnnvl(null is null) a,lnnvl(null is null)+1 b,lnnvl(null is null) is null c,lnnvl(null is null) is not null d,lnnvl(null is null)=0 e,lnnvl(null is null)!=0 f from dual;
+select lnnvl(null is not null) a,lnnvl(null is not null)+1 b,lnnvl(null is not null) is null c,lnnvl(null is not null) is not null d,lnnvl(null is not null)=0 e,lnnvl(null is not null)!=0 f from dual;
+select lnnvl(year=1) a,lnnvl(year=1)+1 b,lnnvl(year=1) is null c,lnnvl(year=1) is not null d,lnnvl(year=1)=0 e,lnnvl(year=1)!=0 f from account;
+select lnnvl(year!=1) a,lnnvl(year!=1)+1 b,lnnvl(year!=1) is null c,lnnvl(year!=1) is not null d,lnnvl(year!=1)=0 e,lnnvl(year!=1)!=0 f from account;
+select lnnvl(year is null) a,lnnvl(year is null)+1 b,lnnvl(year is null) is null c,lnnvl(year is null) is not null d,lnnvl(year is null)=0 e,lnnvl(year is null)!=0 f from account;
+select lnnvl(year is not null) a,lnnvl(year is not null)+1 b,lnnvl(year is not null) is null c,lnnvl(year is not null) is not null d,lnnvl(year is not null)=0 e,lnnvl(year is not null)!=0 f from account;
+
+drop table account;
+
+create table account(name varchar(20),year number);
+create table account_bk(name varchar(20),year number);
+insert into account values('peter2001',2001);
+insert into account values('peter2002',2002);
+insert into account values('peter2003',2003);
+insert into account values('peter2004',2004);
+insert into account values('peter2005',2005);
+insert into account values('peter2006',2006);
+insert into account values('peter2007',null);
+insert into account_bk select * from account;
+
+--error 1210
+select * from account where lnnvl(1>1 or 1=2);
+--error 1210
+select * from account where lnnvl(1>1 or 1);
+--error 1210
+select * from account where lnnvl(1>1 and 1=2);
+--error 1210
+select * from account where lnnvl(1>1 and (1=2 or 1=2));
+--error 1210
+select * from account where lnnvl(name like '%2004%' or year=2001);
+--error 1210
+select * from account where lnnvl(not(a=1 and b=2));
+--error 1210
+select * from account where lnnvl(not(a between 1 and 2));
+--error 1210
+select * from account where lnnvl(a not between 1 and 2);
+--error 1210
+select * from account where lnnvl(1>1 and year like '%2004%');
+--error 1210
+select * from account where lnnvl(1=(1=1 and 2=2));
+--error 1210
+select * from account where lnnvl(1=(1=1 or 2=2));
+--error 1210
+select * from account where lnnvl(1=(year between 2001 and 2003));
+--error 1210
+select * from account where lnnvl(1=(year not between 2001 and 2003));
+--error 1210
+select * from account where lnnvl(not(year between 2001 and 2003));
+--error 1210
+select * from account where lnnvl(not(year between 2001 and 2003)=1);
+--error 1210
+select * from account where lnnvl(1=(1=1 and year between 2001 and 2003));
+--error 1210
+select * from account where lnnvl(1=(1=1 or year between 2001 and 2003));
+
+select * from account where lnnvl(1=(1=1));
+select * from account where lnnvl(not(year));
+select * from account where lnnvl(not(year>1));
+select * from account where lnnvl(not(year)>1);
+select * from account where lnnvl(not(year>1)>1);
+select * from account where lnnvl(length(year)>1);
+select * from account where lnnvl(length(year>1)>1);
+select * from account where lnnvl(length(1)>1);
+select * from account where lnnvl(length(1>1)>1);
+select * from account where lnnvl(length(null)>1);
+select * from account where lnnvl(length(null>1)>1);
+select * from account where not(lnnvl(year>1));
+select * from account where not(lnnvl(year>1)>1);
+select * from account where not(lnnvl(1>1));
+select * from account where not(lnnvl(1>1)>1);
+select * from account where not(lnnvl(null>1));
+select * from account where not(lnnvl(null>1)>1);
+select * from account where length(lnnvl(year>1));
+select * from account where length(lnnvl(year>1)>1);
+select * from account where length(lnnvl(1>1));
+select * from account where length(lnnvl(1>1)>1);
+select * from account where length(lnnvl(null>1));
+select * from account where length(lnnvl(null>1)>1);
+select * from account where lnnvl(year = (select year from account where year=2001 and name='peter2004'));
+select * from account where lnnvl(year = (select year from account where (year=2001 or name='peter2004') and rownum<=1));
+select * from account where lnnvl(year in (select year from account where year=2001 or name='peter2004'));
+select * from account where lnnvl(year in (select year from account where year between 2001 and 2003));
+select * from account where lnnvl(year in (select year from account where year not between 2001 and 2003));
+
+#test insert or update
+
+insert into account values('peter2008',lnnvl(1>1));
+insert into account values('peter2008',lnnvl(lnnvl(1>1)));
+update account set name = lnnvl(1>1) where name = 'peter2008';
+update account set name = lnnvl(lnnvl(1>1)) where name = 'peter2008';
+select * from account;
+delete from account;
+insert into account select * from account_bk;
+
+select * from account where length((lnnvl(year>1) is null)) is null;
+select * from account where length((lnnvl(year>1) is null)) = 1;
+select * from account where lnnvl(not(year));
+select * from account where lnnvl(year=0);
+select * from account where lnnvl(year!=2001);
+select * from account where lnnvl(year=2001);
+select * from account where lnnvl(not(year!=2001));
+select * from account where not(lnnvl(year=2001));
+select * from account where not(lnnvl(year!=2001));
+select * from account where not lnnvl(year=2001);
+select * from account where not lnnvl(year!=2001);
+select * from account where lnnvl(2001<>2001) in (1,2,3);
+select * from account where lnnvl(year<>2001) in (1,2,3);
+select * from account where lnnvl(year<>2001) like '%test%';
+select * from account where lnnvl(2001<>2001) in (1,2,3) and year =1;
+select * from account where lnnvl(year<>2001) in (1,2,3) and year =1;
+select * from account where lnnvl(year<>2001) like '%test' and year =1;
+select * from account a join account b on(lnnvl(a.year=b.year)) where b.year=2001;
+select * from account a join account b on(lnnvl(a.year=b.year));
+select * from account a join account b on(lnnvl(a.year=b.year) is null);
+select * from account a join account b on(lnnvl(a.year=b.year) = 0);
+select * from account a join account b on(lnnvl(a.year=b.year) is null) where b.year is null;
+select * from account a right join account b on(lnnvl(a.year=b.year)) where b.year=2001;
+select * from account a right join account b on(lnnvl(a.year=b.year));
+select * from account a right join account b on(lnnvl(a.year=b.year) is null);
+select * from account a right join account b on(lnnvl(a.year=b.year) = 0);
+select * from account a right join account b on(lnnvl(a.year=b.year) is null) where b.year is null;
+select * from account a,account b where lnnvl(a.year=b.year);
+select * from account a,account b where lnnvl(a.year=b.year) is null;
+select * from account a,account b where lnnvl(a.year=b.year) = 0;
+
+select 1 from dual where lnnvl(1=1)!=0;
+select 1 from dual where lnnvl(1=1)!=1;
+select 1 from dual where lnnvl(1=1) is null;
+select 1 from dual where lnnvl(1=1) is not null;
+
+select 1 from dual where lnnvl(1!=1)!=0;
+select 1 from dual where lnnvl(1!=1)!=1;
+select 1 from dual where lnnvl(1!=1) is null;
+select 1 from dual where lnnvl(1!=1) is not null;
+
+select * from account where lnnvl(year=2001) = 0;
+select * from account where lnnvl(year=2001) != 0;
+select * from account where lnnvl(year=2001) is null;
+select * from account where lnnvl(year=2001) is not null;
+
+select * from account where lnnvl(year!=2001) = 0;
+select * from account where lnnvl(year!=2001) != 0;
+select * from account where lnnvl(year!=2001) is null;
+select * from account where lnnvl(year!=2001) is not null;
+
+select * from account where lnnvl(year is null) = 0;
+select * from account where lnnvl(year is null) != 0;
+select * from account where lnnvl(year is null) is null;
+select * from account where lnnvl(year is null) is not null;
+
+select * from account where lnnvl(year is not null) = 0;
+select * from account where lnnvl(year is not null) != 0;
+select * from account where lnnvl(year is not null) is null;
+select * from account where lnnvl(year is not null) is not null;
+
+select * from account where lnnvl(lnnvl(year>1));
+select * from account where lnnvl(lnnvl(lnnvl(year>1)));
+select * from account where lnnvl(lnnvl(lnnvl(lnnvl(year>1))));
+select * from account where lnnvl(lnnvl(year>1)>1) is null;
+select * from account where lnnvl(lnnvl(year>1)>1) is null and year=2006;
+
+drop table account;
+
+create table account(name varchar2(20),year number);
+insert into account values('peter2001',null);
+
+select * from account where lnnvl(year>1);
+select * from account where lnnvl(lnnvl(year>1));
+select * from account where lnnvl(lnnvl(lnnvl(year>1)));
+select * from account where lnnvl(lnnvl(lnnvl(lnnvl(year>1))));
+select * from account where lnnvl(lnnvl(year>1)>1);
+select * from account where lnnvl(lnnvl(year>1)>1) is null;
+drop table account;
+
+
+create table account(name varchar2(20),year varchar2(20));
+insert into account values('peter2001','');
+
+select * from account where lnnvl(year>1);
+select * from account where lnnvl(lnnvl(year>1));
+
+set @oracle_mode_emptystring_equal_null='oracle,emptystring_equal_null';
+set sql_mode=@oracle_mode_emptystring_equal_null;
+
+select * from account where lnnvl(year='');
+select * from account where lnnvl(lnnvl(year=''));
+select * from account where lnnvl(year is null);
+select * from account where lnnvl(lnnvl(year is null));
+
+drop table account;
+
+
+#exception
+select lnnvl(1);
+select lnnvl(1+1);
+select lnnvl(1)+1;
+select lnnvl(1)>0;
+select lnnvl(1) is null;
+
+select lnnvl(null);
+select lnnvl(null+1);
+select lnnvl(null)+1;
+select lnnvl(null)>0;
+select lnnvl(null) is null;
+
+delimiter //;
+begin
+select lnnvl(null) is null;
+end//
+
+create or replace procedure p1() as
+begin
+select lnnvl(null) is null;
+end//
+
+call p1//
+
+drop procedure p1//
+
+declare
+a int;
+begin
+a:=2;
+if a = 1 then
+select a;
+elsif a = 2 then
+select lnnvl(a);
+end if;
+end//
+
+declare
+a int;
+begin
+a:=2;
+if a = 1 then
+select a;
+elsif a = 2 then
+select lnnvl(a>1);
+end if;
+end//
+
+declare
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'aaa',
+  score float := 0.1
+);
+my_var stu_record;
+begin
+select lnnvl(my_var.id>0);
+end;//
+
+
+delimiter ;//
+
+
+create table account(name varchar(20),year number);
+insert into account values('peter2001',2001);
+insert into account values('peter2002',2002);
+insert into account values('peter2003',2003);
+insert into account values('peter2004',2004);
+insert into account values('peter2005',2005);
+insert into account values('peter2006',2006);
+insert into account values('peter2007',null);
+
+
+#group by
+select lnnvl(year>1) from account group by lnnvl(year>1);
+select year from account group by year having lnnvl(year>1);
+select year from account group by year having lnnvl(year>1) is null;
+select year from account group by year having lnnvl(year>1) = 0;
+select lnnvl(year>1) from account group by lnnvl(year>1);
+select lnnvl(year>1)=1 from account group by lnnvl(year>1)=1;
+select lnnvl(year>1) is null from account group by lnnvl(year>1) is null;
+
+
+#order by
+select * from account order by lnnvl(year>0);
+select * from account order by lnnvl(year>0) is null;
+select * from account order by lnnvl(year>0) = 1;
+select year,name,lnnvl(year>1) from account order by lnnvl(year>1);
+select year,name,lnnvl(year>1) is null from account order by lnnvl(year>1) is null;
+select year,name,lnnvl(year>1) = 1 from account order by lnnvl(year>1) = 1;
+
+#connect by
+CREATE TABLE student (
+    id       INT,
+    name  VARCHAR(10),
+    grade INT
+);
+
+INSERT INTO student VALUES(1, 'John', NULL);
+INSERT INTO student VALUES(2, 'Paul', 1);
+INSERT INTO student VALUES(3, 'Nancy', 1);
+INSERT INTO student VALUES(4, 'Sarah', 3);
+--error 7563
+select level,id,name,grade from student connect by lnnvl(prior id = grade);
+select level,id,name,grade from student connect by lnnvl(prior id>0) = grade;
+--error 7563
+select level,id,name,grade from student connect by lnnvl(prior id>0) is null;
+select level,id,name,grade from student connect by lnnvl(prior id>0) is not null;
+select level,id,name,grade from student connect by lnnvl(prior id>0);
+select level,id,name,grade,lnnvl(grade=1) from student connect by lnnvl(prior id>0) = lnnvl(grade!=1);
+select level,id,name,grade from student start with lnnvl(id=2) connect by prior id = grade;
+select level,id,name,grade from student start with lnnvl(id=2) is null connect by prior id = grade;
+select level,id,name,grade from student start with lnnvl(id=2) = 0 connect by prior id = grade;
+select level,id,name,grade from student connect by lnnvl(prior id>0) = lnnvl(grade!=1);
+select level,id,name,grade,lnnvl(grade) from student connect by lnnvl(prior id>0) = lnnvl(grade!=1);
+select level,id,name,grade from student start with lnnvl(id) connect by prior id = grade;
+
+drop table student;
+
+#between statement test
+--error 1210
+select * from account where lnnvl(year between 2004 and 2004);
+--error 1210
+select * from account where lnnvl(year not between 2004 and 2004);
+--error 1210
+select * from account where lnnvl(year between 2004 and 2005);
+--error 1210
+select lnnvl(year between 2004 and 2004) from account;
+--error 1210
+select lnnvl(year not between 2004 and 2004) from account;
+--error 1210
+select lnnvl(year between 2004 and 2005) from account;
+
+select * from account where lnnvl(2001<>2001) between 1 and 10;
+select * from account where lnnvl(year<>2001) between 1 and 10;
+select * from account where nvl(lnnvl(year<>2001),2) between 1 and 10;
+
+#select case when
+select year,(case when lnnvl(year>1) = 2001 then name||'-2001' else name||'-2002' end) col from account;
+select year,(case when lnnvl(year>1) then name||'-2001' else name||'-2002' end) col from account;
+select year,(case when lnnvl(year) then name||'-2001' else name||'-2002' end) col from account;
+
+#fetch offset
+select * from account
+offset 2 rows
+fetch next 50 percent rows with ties;
+
+--error 7523
+select * from account
+offset lnnvl(year) rows
+fetch next 50 percent rows with ties;
+--error 7523
+select * from account
+offset lnnvl(year>1) rows
+fetch next 50 percent rows with ties;
+--error 7523
+select * from account
+offset 2 rows
+fetch next lnnvl(year) percent rows with ties;
+--error 7523
+select * from account
+offset 2 rows
+fetch next lnnvl(year>1) percent rows with ties;
+
+#test windows func
+--disable_warnings
+select wm_concat(lnnvl(name)) over (partition by year) from account;
+--enable_warnings
+select listagg(lnnvl(year=1)) over (partition by year) from account;
+select listagg(null) over (partition by year) from account;
+
+#test pivot
+create table cust_sales_category(location varchar2(1024), prod_category varchar(1024), customer_id int, sale_amount int);
+insert into cust_sales_category values('north',    'furniture',   2, 875);
+insert into cust_sales_category values('south',    'electronics', 2, 378);
+insert into cust_sales_category values('east',     'gardening',   4, 136);
+insert into cust_sales_category values('west',     'electronics', 3, 236);
+insert into cust_sales_category values('central',  'furniture',   3, 174);
+insert into cust_sales_category values('north',    'electronics', 1, 729);
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (lnnvl(customer_id), 2, 3, 4)
+) order by location;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (lnnvl(customer_id=2), 2, 3, 4)
+) order by location;
+
+drop table cust_sales_category;
+
+#test create table default value
+create table tt ( id int,c1 int default (lnnvl(1>1)+1));
+insert into tt(id) value(1);
+select * from tt;
+drop table tt;
+
+create table tt ( id int,c1 int default (lnnvl(1>1)));
+drop table tt;
+
+create table tt ( id int,c1 int default (lnnvl(1)));
+insert into tt(id) value(1);
+select * from tt;
+drop table tt;
+
+#test oracle (+) synatx.
+create table t1(ida int, age int, name varchar(10));
+insert into t1 values(1, 2, '');
+insert into t1 values(NULL, 2, 'a');
+insert into t1 values(3, 2, 'b');
+create table t2(ida int, age int, name varchar(10));
+insert into t2 values(1, 2, '');
+insert into t2 values(2, 2, 'a');
+insert into t2 values(3, 1, 'b');
+create table t3(ida int, age int, name varchar(10));
+insert into t3 values(2, 3, 'a');
+insert into t3 values(5, NULL, '');
+set @oracle_mode_emptystring_equal_null='oracle,emptystring_equal_null';
+set sql_mode=@oracle_mode_emptystring_equal_null;
+
+select * from t1, t2 where lnnvl(t1.ida>1) = t2.ida(+);
+select * from t1, t2 where lnnvl(t1.ida(+)>1) = t2.ida;
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=2001)>1;
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=2001) is null;
+select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=2001)+1;
+--error 7524
+select * from t1, t2 where lnnvl(t1.ida(+)>1) = t2.ida(+);
+
+drop table t1;
+drop table t2;
+drop table t3;
+
+
+delete from account;
+insert into account select * from account_bk;
+select * from account;
+
+#in statement test
+select * from account where lnnvl(year in(2004));
+select * from account where lnnvl(year not in(2004));
+select * from account where lnnvl(year in (select 2001 from dual));
+select * from account where lnnvl(year in (select year from account));
+select * from account where lnnvl(year not in (select 2001 from dual));
+select * from account where lnnvl(year not in (select year from account));
+select * from account where lnnvl(year not in (select 2001 from dual));
+select * from account where lnnvl((select 2001 from dual) in (select 2001 from dual));
+select * from account where lnnvl((select 2001 from dual) not in (select 2001 from dual));
+select lnnvl(year in(2004)) from account;
+select lnnvl(year not in(2004)) from account;
+select lnnvl(year in(2004,2005)) from account;
+select lnnvl(year not in(2004,2005)) from account;
+
+#exists statement test
+--error 1210
+select * from account a where lnnvl(exists (select 1 from account b where a.year=b.year and a.year=1) and a.year=1);
+select * from account a where lnnvl(exists (select 1 from account b where a.year=b.year and a.year=1));
+select * from account a where lnnvl(not exists (select 1 from account b where a.year=b.year and a.year=1));
+select * from account a where lnnvl(not(exists (select 1 from account b where a.year=b.year and a.year=1)));
+select * from account a where lnnvl(exists (select 1 from account b where a.year=b.year));
+select * from account a where lnnvl(not exists (select 1 from account b where a.year=b.year));
+select exists (select 1 from account b where a.year=b.year),lnnvl(exists (select 1 from account b where a.year=b.year)) from account a where lnnvl(exists (select 1 from account b where a.year=b.year));
+select exists (select 1 from account b where a.year=b.year),year,name from account a;
+select not exists (select 1 from account b where a.year=b.year),year,name from account a;
+select exists (select 1 from account b where a.year=b.year),year,name from account a where lnnvl(exists (select 1 from account b where a.year=b.year) = 0);
+select exists (select 1 from account b where a.year=b.year),year,name from account a where lnnvl(exists (select 1 from account b where a.year=b.year) != 0);
+select not exists (select 1 from account b where a.year=b.year),year,name from account a where lnnvl(not exists (select 1 from account b where a.year=b.year) = 0);
+select not exists (select 1 from account b where a.year=b.year),year,name from account a where lnnvl(not exists (select 1 from account b where a.year=b.year) != 0);
+
+select * from account a where lnnvl(exists (select lnnvl(year) from account b where a.year=b.year));
+select * from account a where lnnvl(exists (select lnnvl(year>1) from account b where a.year=b.year));
+select * from account a where exists (select lnnvl(a.year=b.year) from account b where a.year=b.year and a.year=2001);
+select * from account a where exists (select lnnvl(a.year=b.year) from account b where a.year=b.year);
+select * from account a where exists (select lnnvl(a.year=b.year) from account b where a.year=b.year and a.year=2001);
+select * from account a where exists (select lnnvl(a.year=b.year) from account b where a.year=b.year) and year=2001;
+select * from account a where not exists (select lnnvl(a.year=b.year) from account b where a.year=b.year and a.year=2001);
+select * from account a where not exists (select lnnvl(a.year=b.year) from account b where a.year=b.year);
+select * from account a where not exists (select lnnvl(a.year=b.year) from account b where a.year=b.year and a.year=2001);
+select * from account a where not exists (select lnnvl(a.year=b.year) from account b where a.year=b.year) and year=2001;
+select * from account a where not exists (select lnnvl(a.year>1)+1 from account b where a.year=b.year);
+select * from account a where not exists (select lnnvl(a.year) from account b where a.year=b.year);
+
+#any all
+select * from account where lnnvl(year > any(2001));
+select * from account where lnnvl(year >= any(2001));
+select * from account where lnnvl(year < any(2001));
+select * from account where lnnvl(year <= any(2001));
+select * from account where lnnvl(year = any(2001));
+select * from account where lnnvl(year != any(2001));
+
+select * from account where lnnvl(year > all(2001));
+select * from account where lnnvl(year >= all(2001));
+select * from account where lnnvl(year < all(2001));
+select * from account where lnnvl(year <= all(2001));
+select * from account where lnnvl(year = all(2001));
+select * from account where lnnvl(year != all(2001));
+
+select * from account where lnnvl(year = any(select year from account));
+select * from account where lnnvl(year = any(select year from account));
+select * from account where lnnvl(year != any(select year from account));
+select * from account where lnnvl(year > any(select year from account));
+select * from account where lnnvl(year >= any(select year from account));
+select * from account where lnnvl(year < any(select year from account));
+select * from account where lnnvl(year <= any(select year from account));
+
+select * from account where lnnvl(year = all(select year from account));
+select * from account where lnnvl(year != all(select year from account));
+select * from account where lnnvl(year > all(select year from account));
+select * from account where lnnvl(year >= all(select year from account));
+select * from account where lnnvl(year < all(select year from account));
+select * from account where lnnvl(year <= all(select year from account));
+
+select * from account where lnnvl(year > any(2001,1));
+select * from account where lnnvl(year > all(2001,1));
+
+drop table account;
+drop table account_bk;
+
+###############################################################################################################
+#test greatdb's lnnvl function
+
+set sql_mode=oracle;
+create table account(name varchar(20),year number);
+insert into account values('peter2001',2001);
+insert into account values('peter2002',2002);
+insert into account values('peter2003',2003);
+insert into account values('peter2004',2004);
+insert into account values('peter2005',2005);
+insert into account values('peter2006',2006);
+insert into account values('peter2007',null);
+
+select * from account;
+
+select 1 from dual where lnnvl(1=1) is null;
+select 1 from dual where lnnvl(1!=1) is null;
+select 1 from dual where lnnvl(1) is null;
+select 1 from dual where lnnvl(0) is null;
+select * from account where lnnvl(1);
+select * from account where lnnvl(0);
+select * from account where lnnvl(null);
+
+select * from account where lnnvl(year);
+select * from account where lnnvl(lnnvl(year));
+select * from account where not(lnnvl(year));
+select * from account where lnnvl(lnnvl(lnnvl(year)));
+select * from account where not(not(lnnvl(year)));
+select * from account where lnnvl(lnnvl(lnnvl(lnnvl(year))));
+select * from account where not(not(not(lnnvl(year))));
+
+select * from account where lnnvl(year>1);
+select * from account where lnnvl(lnnvl(year>1));
+select * from account where not(lnnvl(year>1));
+select * from account where lnnvl(lnnvl(lnnvl(year>1)));
+select * from account where not(not(lnnvl(year>1)));
+select * from account where lnnvl(lnnvl(lnnvl(lnnvl(year>1))));
+select * from account where not(not(not(lnnvl(year>1))));
+
+select * from account where lnnvl(year);
+select * from account where lnnvl(length(year));
+select * from account where lnnvl(length(year>1));
+select * from account where lnnvl(length(1));
+select * from account where lnnvl(length(1>1));
+select * from account where lnnvl(length(null));
+select * from account where lnnvl(length(null>1));
+select * from account where not(lnnvl(year));
+select * from account where not(lnnvl(year)>1);
+select * from account where not(lnnvl(1));
+select * from account where not(lnnvl(1)>1);
+select * from account where not(lnnvl(null));
+select * from account where not(lnnvl(null)>1);
+select * from account where length(lnnvl(year));
+select * from account where length(lnnvl(year)>1);
+select * from account where length(lnnvl(1));
+select * from account where length(lnnvl(1)>1);
+select * from account where length(lnnvl(null));
+select * from account where length(lnnvl(null)>1);
+select * from account where lnnvl(lnnvl(year)>1);
+select * from account where lnnvl(null);
+select * from account where lnnvl(lnnvl(year)>1);
+select * from account where lnnvl(lnnvl(year)='');
+select * from account where lnnvl(lnnvl(year) is null);
+
+select lnnvl(year) from account group by lnnvl(year);
+select year from account group by year having lnnvl(year);
+
+select * from account order by lnnvl(year);
+select * from account order by lnnvl(year)>0;
+select * from account where lnnvl(2001) between 1 and 10;
+select * from account where lnnvl(2001=2001) between 1 and 10;
+
+
+insert into account values('peter2008',lnnvl(1));
+update account set name = lnnvl(1) where year=2001;
+select * from account;
+
+delete from account where lnnvl(1);
+select * from account;
+
+delete from account where lnnvl(1)+1;
+select * from account;
+
+delete from account where lnnvl(lnnvl(year)=1);
+select * from account;
+
+drop table account;
+
+
+

@@ -1,0 +1,121 @@
+################################################################################
+# Validate that list of senders is updated when the sources are (fake) 5.7
+# servers.
+#
+# Test:
+#  0. The test requires 6 servers:
+#       server1: group1 primary
+#       server2: group1 secondary
+#       server3: group1 secondary
+#  1. Deploy one group which have 3 members in single primary mode.
+#  2. set mgr_exit_primary_kill_connection_mode = OFF, check connection nums after primary changed
+#  3. set mgr_exit_primary_kill_connection_mode = ON, check connection nums after primary changed
+#  4. Clean up.
+################################################################################
+
+--disable_query_log
+CALL mtr.add_suppression("Sending passwords in plain text without SSL/TLS is extremely insecure");
+CALL mtr.add_suppression("kill all connections after primary changed");
+--enable_query_log
+
+--source include/big_test.inc
+--source include/have_debug.inc
+--source include/have_group_replication_plugin.inc
+--let $group_replication_group_name= aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_server_count= 3
+--source include/group_replication.inc
+
+--echo
+--echo ############################################################
+--echo # 1. Deploy one group which have 3 members in single primary mode.
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--let $server1_uuid= `SELECT @@server_uuid`
+--source include/start_and_bootstrap_group_replication.inc
+
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--source include/start_group_replication.inc
+--let $server2_uuid= `SELECT @@server_uuid`
+
+--let $rpl_connection_name= server3
+--source include/rpl_connection.inc
+--source include/start_group_replication.inc
+--let $group_replication_number_of_members= 3
+--source include/gr_wait_for_number_of_members.inc
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--eval INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so'
+create user test_user;
+grant all on *.* to test_user;
+create user test_user1;
+grant all on *.* to test_user1;
+connect(con1,localhost,test_user,,);
+connect(con2,localhost,test_user1,,);
+
+--echo
+--echo ############################################################
+--echo # 2. set mgr_exit_primary_kill_connection_mode = OFF, check connection nums after primary changed
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--replace_result $server2_uuid MEMBER2_UUID
+--eval SELECT group_replication_set_as_primary("$server2_uuid")
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--source include/gr_assert_primary_member.inc
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+select count(*) from performance_schema.threads where PROCESSLIST_USER = "test_user" or PROCESSLIST_USER = "test_user1";
+--replace_result $server1_uuid MEMBER1_UUID
+--eval SELECT group_replication_set_as_primary("$server1_uuid")
+--source include/gr_assert_primary_member.inc
+
+
+--echo
+--echo ############################################################
+--echo # 3. set mgr_exit_primary_kill_connection_mode = ON, check connection nums after primary changed
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+set global greatdb_ha_mgr_exit_primary_kill_connection_mode = ON;
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--replace_result $server2_uuid MEMBER2_UUID
+--eval SELECT group_replication_set_as_primary("$server2_uuid")
+--source include/gr_assert_primary_member.inc
+
+--let $rpl_connection_name= server1
+--let $rpl_server_number= 1
+--source include/rpl_reconnect.inc
+select count(*) from performance_schema.threads where PROCESSLIST_USER = "test_user" or PROCESSLIST_USER = "test_user1";
+
+
+--echo
+--echo ############################################################
+--echo # 4. clean up
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--replace_result $server1_uuid MEMBER1_UUID
+--eval SELECT group_replication_set_as_primary("$server1_uuid")
+--source include/gr_assert_primary_member.inc
+set global greatdb_ha_mgr_exit_primary_kill_connection_mode = OFF;
+--eval UNINSTALL PLUGIN greatdb_ha
+drop user test_user;
+drop user test_user1;
+
+--let $rpl_connection_name= server3
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_group_replication_reset_persistent_vars=1
+--source include/group_replication_end.inc

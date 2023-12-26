@@ -1,0 +1,50 @@
+connect (conn1_1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn1_2,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+--connection conn1_1
+--echo [Prepare sequences]
+create sequence seq cache 5;
+create sequence seq_min__10000 cache 3 increment by 7;
+create sequence seq_front;
+show full sequences;
+
+--echo [Simple sequences show in variant sessions]
+--connection conn1_2
+show full sequences;
+
+--connection conn1_1
+select seq.nextval;
+select seq_front.nextval;
+select seq_min__10000.nextval;
+show full sequences;
+select seq.nextval;
+select seq_front.nextval;
+select seq_min__10000.nextval;
+show full sequences;
+
+--connection conn1_2
+show full sequences;
+select seq.nextval;
+select seq_front.nextval;
+select seq_min__10000.nextval;
+show full sequences;
+
+--connection conn1_1
+show full sequences;
+select seq.nextval;
+select seq_front.nextval;
+select seq_min__10000.nextval;
+show full sequences;
+select seq.nextval;
+select seq_front.nextval;
+select seq_min__10000.nextval;
+show full sequences;
+
+
+--echo [finalize]
+drop sequence seq;
+drop sequence seq_min__10000;
+drop sequence seq_front;
+
+--disconnect conn1_1
+--disconnect conn1_2

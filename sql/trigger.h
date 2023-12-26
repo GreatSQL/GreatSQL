@@ -98,7 +98,9 @@ class Trigger {
       const LEX_CSTRING &connection_cl_name, const LEX_CSTRING &db_cl_name,
       enum_trigger_event_type trg_event_type,
       enum_trigger_action_time_type trg_time_type, uint action_order,
-      my_timeval created_timestamp);
+      my_timeval created_timestamp,
+      enum_trigger_event_status trg_event_status =
+          enum_trigger_event_status::TRG_STATUS_ENABLED);
 
   Trigger *clone_shallow(MEM_ROOT *mem_root) const;
 
@@ -187,6 +189,14 @@ class Trigger {
 
   enum_trigger_event_type get_event() const { return m_event; }
 
+  void set_event_status(enum_trigger_event_status event_status) {
+    m_event_status = event_status;
+  }
+
+  enum_trigger_event_status get_event_status() const {
+    return static_cast<enum_trigger_event_status>(m_event_status);
+  }
+
   const LEX_CSTRING &get_event_as_string() const;
 
   enum_trigger_action_time_type get_action_time() const {
@@ -240,7 +250,9 @@ class Trigger {
           const LEX_CSTRING &connection_cl_name, const LEX_CSTRING &db_cl_name,
           enum_trigger_event_type event_type,
           enum_trigger_action_time_type action_time, uint action_order,
-          my_timeval created_timestamp);
+          my_timeval created_timestamp,
+          enum_trigger_event_status trg_event_status =
+              enum_trigger_event_status::TRG_STATUS_ENABLED);
 
  public:
   ~Trigger();
@@ -319,6 +331,9 @@ class Trigger {
 
   /// Trigger event.
   enum_trigger_event_type m_event;
+
+  /// Trigger event status.
+  enum_trigger_event_status m_event_status;
 
   /// Trigger action time.
   enum_trigger_action_time_type m_action_time;

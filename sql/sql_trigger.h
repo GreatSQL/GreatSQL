@@ -228,4 +228,21 @@ class Sql_cmd_drop_trigger : public Sql_cmd_ddl_trigger_common {
   bool execute(THD *thd) final;
 };
 
+/**
+  This class implements the ALTER TRIGGER statement.
+*/
+
+class Sql_cmd_alter_trigger : public Sql_cmd_ddl_trigger_common {
+ public:
+  /**
+    Return the command code for DROP TRIGGER
+  */
+
+  enum_sql_command sql_command_code() const final {
+    return SQLCOM_ALTER_TRIGGER;
+  }
+
+  bool execute(THD *thd) final;
+};
+
 #endif /* SQL_TRIGGER_INCLUDED */

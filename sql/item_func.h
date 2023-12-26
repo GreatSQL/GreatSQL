@@ -75,6 +75,8 @@ class THD;
 class sp_rcontext;
 struct MY_BITMAP;
 struct Parse_context;
+class Gdb_sequence_entity;
+class sp_variable;
 
 template <class T>
 class List;
@@ -84,15 +86,19 @@ enum class enum_udt_table_of_type;
 
 extern bool reject_geometry_args(uint arg_count, Item **args,
                                  Item_result_field *me);
+extern THD *thd_get_current_thd();
 void unsupported_json_comparison(size_t arg_count, Item **args,
                                  const char *msg);
 class Cursor_ref {
  protected:
   LEX_CSTRING m_cursor_name;
   uint m_cursor_offset;
+  sp_variable *m_cursor_spv;
   class sp_cursor *get_open_cursor_or_error();
-  Cursor_ref(LEX_CSTRING name, uint offset)
-      : m_cursor_name(name), m_cursor_offset(offset) {}
+  Cursor_ref(LEX_CSTRING name, uint offset, sp_variable *cursor_spv)
+      : m_cursor_name(name),
+        m_cursor_offset(offset),
+        m_cursor_spv(cursor_spv) {}
   void print_func(String *str, const char *func_name) const;
 };
 
@@ -300,6 +306,7 @@ class Item_func : public Item_result_field {
     FROM_UNIXTIME_FUNC,
     CONVERT_TZ_FUNC,
     LAST_DAY_FUNC,
+    LNNVL_FUNC,
     UNIX_TIMESTAMP_FUNC,
     TIME_TO_SEC_FUNC,
     TIMESTAMPDIFF_FUNC,
@@ -313,17 +320,14 @@ class Item_func : public Item_result_field {
     MEMBER_OF_FUNC,
     STRCMP_FUNC,
     TRUE_FUNC,
-    MONTHS_BETWEEN_FUNC,
-    ROWNUM_FUNC,
-    DBMSOTPT_PUTLINE,
-    DBMSOTPT_GETLINE,
-    DBMSOTPT_SETBUF,
-    DBMSOTPT_GETBUFFERCOUNT,
     FALSE_FUNC,
     UDT_FUNC,
+    UDT_TABLE_FUNC,
+    ROWNUM_FUNC,
+    SEQUENCE_FUNC,
+    CONNECT_BY_FUNC,
     JSON_FUNC,
-    XML_FUNC,
-    UDT_TABLE_FUNC
+    XML_FUNC
   };
   enum optimize_type {
     OPTIMIZE_NONE,
@@ -688,6 +692,9 @@ class Item_func : public Item_result_field {
 
   bool ensure_multi_equality_fields_are_available_walker(uchar *);
 
+  /// used for Item_func_udt_table and Item_func_udt_single_type_table
+  bool check_record_table_index(int index_length);
+
  protected:
   /**
     Whether or not an item should contribute to the filtering effect
@@ -997,6 +1004,11 @@ class Item_int_func : public Item_func {
   }
   Item_int_func(const POS &pos, Item *a, Item *b, Item *c, Item *d)
       : Item_func(pos, a, b, c, d) {
+    set_data_type_longlong();
+  }
+
+  Item_int_func(const POS &pos, Item *a, Item *b, Item *c, Item *d, Item *e)
+      : Item_func(pos, a, b, c, d, e) {
     set_data_type_longlong();
   }
 
@@ -1957,6 +1969,25 @@ class Item_func_instr final : public Item_func_locate {
   Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
+class Item_func_instrb final : public Item_int_func {
+  String value1, value2;
+  DTCollation cmp_collation;
+
+ public:
+  Item_func_instrb(const POS &pos, Item *a, Item *b)
+      : Item_int_func(pos, a, b) {}
+  Item_func_instrb(const POS &pos, Item *a, Item *b, Item *c)
+      : Item_int_func(pos, a, b, c) {}
+  Item_func_instrb(const POS &pos, Item *a, Item *b, Item *c, Item *d)
+      : Item_int_func(pos, a, b, c, d) {}
+
+  const char *func_name() const override { return "instrb"; }
+  longlong val_int() override;
+  bool resolve_type(THD *thd) override;
+  void print(const THD *thd, String *str,
+             enum_query_type query_type) const override;
+};
+
 class Item_func_ora_instr final : public Item_int_func {
   String value1, value2;
   DTCollation cmp_collation;
@@ -2575,7 +2606,9 @@ class Item_func_release_lock final : public Item_int_func {
   String value;
 
  public:
-  Item_func_release_lock(const POS &pos, Item *a) : Item_int_func(pos, a) {}
+  Item_func_release_lock(const POS &pos, Item *a) : Item_int_func(pos, a) {
+    set_has_notsupported_func_true();
+  }
   bool itemize(Parse_context *pc, Item **res) override;
 
   longlong val_int() override;
@@ -3351,6 +3384,7 @@ class user_var_entry {
     by Item_func_get_user_var (because that's not necessary).
   */
   query_id_t m_used_query_id;
+  bool dbms_lob_temporary{false};
 
  public:
   user_var_entry() = default; /* Remove gcc warning */
@@ -3438,6 +3472,8 @@ class user_var_entry {
   longlong val_int(bool *null_value) const;
   String *val_str(bool *null_value, String *str, uint decimals) const;
   my_decimal *val_decimal(bool *null_value, my_decimal *result) const;
+  void set_dbms_lob_temporary(bool v) { dbms_lob_temporary = v; }
+  bool is_dbms_lob_temporary() { return dbms_lob_temporary; }
 };
 
 /**
@@ -4011,7 +4047,9 @@ class Item_func_is_free_lock final : public Item_int_func {
   String value;
 
  public:
-  Item_func_is_free_lock(const POS &pos, Item *a) : Item_int_func(pos, a) {}
+  Item_func_is_free_lock(const POS &pos, Item *a) : Item_int_func(pos, a) {
+    set_has_notsupported_func_true();
+  }
 
   bool itemize(Parse_context *pc, Item **res) override;
   longlong val_int() override;
@@ -4038,7 +4076,9 @@ class Item_func_is_used_lock final : public Item_int_func {
   String value;
 
  public:
-  Item_func_is_used_lock(const POS &pos, Item *a) : Item_int_func(pos, a) {}
+  Item_func_is_used_lock(const POS &pos, Item *a) : Item_int_func(pos, a) {
+    set_has_notsupported_func_true();
+  }
 
   bool itemize(Parse_context *pc, Item **res) override;
   longlong val_int() override;
@@ -4082,12 +4122,40 @@ class Item_func_row_count final : public Item_int_func {
   }
 };
 
-class Item_func_udt_constructor final : public Item_func {
-  typedef Item_func super;
+/*
+*  collection type count
+*
+   declaration creates a collection type,
+   specifically an associative array or index-by table
+*  'type val is table of '
+*  example:
+*   select val.count;
+*
+*   for i in 1 .. val.count
+*       stmt ;
+*/
+class Item_func_table_count final : public Item_int_func {
+  uint m_spv_idx;
 
+ public:
+  explicit Item_func_table_count(const POS &pos, uint spv_idx)
+      : Item_int_func(pos), m_spv_idx(spv_idx) {}
+
+  bool resolve_type(THD *thd) override;
+  longlong val_int() override;
+  const char *func_name() const override { return "table_count"; }
+  void print(const THD *, String *str, enum_query_type) const override {
+    str->append("count");
+  }
+};
+
+class Item_func_udt_constructor : public Item_func {
+  typedef Item_func super;
+  bool m_use_explicit_name{false};
+
+ public:
   LEX_STRING m_db_name;
   LEX_STRING m_udt_name;
-  bool m_use_explicit_name{false};
   List<Create_field> *m_field_def_list{nullptr};
   ulong m_reclength;
   sql_mode_t m_sql_mode;
@@ -4104,19 +4172,12 @@ class Item_func_udt_constructor final : public Item_func {
   ~Item_func_udt_constructor() override {}
 
   bool fill_udt();
-  TABLE *table() { return m_table; }
-  bool is_ora_type() override { return true; }
+  TABLE *get_udt_table() override { return m_table; }
   enum Item_result result_type() const override { return ROW_RESULT; }
   const char *func_name() const override { return m_udt_name.str; }
   enum Functype functype() const override { return UDT_FUNC; }
   table_map get_initial_pseudo_tables() const override {
     return RAND_TABLE_BIT;
-  }
-  const CHARSET_INFO *charset_for_protocol() override {
-    if (current_thd->variables.udt_format_result == UDT_FORMAT_RESULT_BINARY)
-      return &my_charset_bin;
-
-    return system_charset_info;
   }
 
   void cleanup() override {
@@ -4133,21 +4194,18 @@ class Item_func_udt_constructor final : public Item_func {
   bool fix_fields(THD *thd, Item **ref) override;
   bool refix_fields() override;
   bool is_null() override { return false; }
-  double val_real() override;
-  longlong val_int() override {
-    String *res;
-    int error;
-    if (!(res = val_str(&str_value))) return (longlong)0;
-    const char *end_ptr = res->ptr() + res->length();
-    return my_strtoll10(res->ptr(), &end_ptr, &error);
+  double val_real() override { return 1.0; }
+
+  longlong val_int() override { return 1; }
+
+  bool get_date(MYSQL_TIME *, my_time_flags_t) override {
+    assert(0);
+    return true;
   }
 
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
-    return get_date_from_string(ltime, fuzzydate);
-  }
-
-  bool get_time(MYSQL_TIME *ltime) override {
-    return get_time_from_string(ltime);
+  bool get_time(MYSQL_TIME *) override {
+    assert(0);
+    return true;
   }
 
   String *val_str(String *val) override;
@@ -4160,36 +4218,30 @@ class Item_func_udt_constructor final : public Item_func {
                                                   bool no_conversions);
   type_conversion_status save_in_field_inner(Field *field,
                                              bool no_conversions) override;
+  /// for create table as select udt();
+  Field *tmp_table_field(TABLE *t_arg) override;
 };
 
-class Item_func_udt_table final : public Item_func {
+class Item_func_udt_table final : public Item_func_udt_constructor {
   typedef Item_func super;
 
-  LEX_STRING m_db_name;
-  LEX_STRING m_udt_name;
   LEX_CSTRING m_nested_table_udt;
-  ulong m_reclength;
   enum_udt_table_of_type m_table_type;
   ulonglong m_varray_size_limit;
-  List<Create_field> *m_field_def_list;
-  Name_resolution_context *context{nullptr};
+  bool m_has_assignment_list;
+  int m_index_length;
 
  public:
   Item_func_udt_table(const POS &pos, const LEX_STRING &db_name,
                       const LEX_STRING &udt_name,
                       const LEX_CSTRING nested_table_udt, ulong reclength,
                       enum_udt_table_of_type table_type, ulonglong varray_limit,
-                      PT_item_list *item_list, List<Create_field> *field_def);
+                      PT_item_list *item_list, List<Create_field> *field_def,
+                      int index_length = 0);
 
   ~Item_func_udt_table() override {}
 
-  bool is_ora_table() override { return true; }
-  enum Item_result result_type() const override { return ROW_RESULT; }
-  const char *func_name() const override { return m_udt_name.str; }
   enum Functype functype() const override { return UDT_TABLE_FUNC; }
-  table_map get_initial_pseudo_tables() const override {
-    return RAND_TABLE_BIT;
-  }
   const CHARSET_INFO *charset_for_protocol() override {
     return system_charset_info;
   }
@@ -4199,91 +4251,89 @@ class Item_func_udt_table final : public Item_func {
   bool itemize(Parse_context *pc, Item **res) override;
   bool fix_fields(THD *thd, Item **ref) override;
   bool refix_fields() override;
-  bool is_null() override { return false; }
-  double val_real() override {
-    assert(0);
-    return 0.0;
-  }
-
-  longlong val_int() override {
-    assert(0);
-    return 0;
-  }
-
-  bool get_date(MYSQL_TIME *, my_time_flags_t) override {
-    assert(0);
-    return true;
-  }
-
-  bool get_time(MYSQL_TIME *) override {
-    assert(0);
-    return true;
-  }
-
   String *val_str(String *) override;
-  bool resolve_type(THD *thd) override;
   void make_field(Send_field *field) override;
-  LEX_STRING get_udt_db_name() const override { return m_db_name; }
-  LEX_STRING get_udt_name() const override { return m_udt_name; }
-  LEX_CSTRING get_nested_table_udt() const override {
-    return m_nested_table_udt;
-  }
   longlong get_varray_size_limit() override { return m_varray_size_limit; }
   List<Create_field> *get_field_create_field_list() override {
     return m_field_def_list;
   }
+  bool has_assignment_list() override { return m_has_assignment_list; }
+  type_conversion_status save_in_field_inner(Field *field,
+                                             bool no_conversions) override {
+    return Item::save_in_field_inner(field, no_conversions);
+  }
+  /// for create table as select udt();
+  Field *tmp_table_field(TABLE *) override {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "create table as select udt_table()");
+    return nullptr;
+  }
 };
 
-class Item_func_udt_single_type_table final : public Item_func {
+class Item_func_udt_single_type_table final : public Item_func_udt_constructor {
   typedef Item_func super;
 
-  LEX_STRING m_db_name;
-  LEX_STRING m_udt_name;
   enum_udt_table_of_type m_table_type;
   ulonglong m_varray_size_limit;
-  List<Create_field> *m_field_def_list;
-  ulong m_reclength;
-  sql_mode_t m_sql_mode;
-  TABLE *m_table{nullptr};
-  Name_resolution_context *context{nullptr};
+  bool m_has_assignment_list;
+  int m_index_length;
 
  public:
-  Item_func_udt_single_type_table(const POS &pos, const LEX_STRING &db_name,
-                                  const LEX_STRING &udt_name,
-                                  enum_udt_table_of_type table_type,
-                                  ulonglong varray_limit,
-                                  PT_item_list *item_list,
-                                  List<Create_field> *field_def,
-                                  ulong reclength, sql_mode_t sql_mode);
+  Item_func_udt_single_type_table(
+      const POS &pos, const LEX_STRING &db_name, const LEX_STRING &udt_name,
+      enum_udt_table_of_type table_type, ulonglong varray_limit,
+      PT_item_list *item_list, List<Create_field> *field_def, ulong reclength,
+      sql_mode_t sql_mode, int index_length = 0);
 
   ~Item_func_udt_single_type_table() override {}
 
-  bool fill_udt(int number = -1);
-  TABLE *table() { return m_table; }
-  bool is_ora_table() override { return true; }
-  enum Item_result result_type() const override { return ROW_RESULT; }
-  const char *func_name() const override { return m_udt_name.str; }
+  bool fill_udt_single_type(int number = -1);
   enum Functype functype() const override { return UDT_TABLE_FUNC; }
-  table_map get_initial_pseudo_tables() const override {
-    return RAND_TABLE_BIT;
-  }
   const CHARSET_INFO *charset_for_protocol() override {
     return system_charset_info;
   }
 
-  void cleanup() override {
-    if (m_table) {
-      free_blobs(m_table);
-      close_tmp_table(m_table);
-      free_tmp_table(m_table);
-      m_table = nullptr;
-    }
-    Item_func::cleanup();
-  }
-
   bool itemize(Parse_context *pc, Item **res) override;
   bool fix_fields(THD *thd, Item **ref) override;
-  bool is_null() override { return false; }
+  String *val_str(String *) override;
+  void make_field(Send_field *field) override;
+  longlong get_varray_size_limit() override { return m_varray_size_limit; }
+  bool udt_table_store_to_table(TABLE *table_to) override;
+  List<Create_field> *get_field_create_field_list() override {
+    return m_field_def_list;
+  }
+  bool has_assignment_list() override { return m_has_assignment_list; }
+  type_conversion_status save_in_field_inner(Field *field,
+                                             bool no_conversions) override {
+    return Item::save_in_field_inner(field, no_conversions);
+  }
+  /// for create table as select udt();
+  Field *tmp_table_field(TABLE *) override {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "create table as select udt_table()");
+    return nullptr;
+  }
+};
+
+class Item_func_cursor final : public Item_func {
+  typedef Item_func super;
+  const LEX_STRING m_cursor_name;
+
+ public:
+  explicit Item_func_cursor(const POS &pos, const LEX_STRING cursor_name,
+                            PT_item_list *item_list)
+      : Item_func(pos, item_list), m_cursor_name(cursor_name) {}
+
+  LEX_STRING get_cursor_name() { return m_cursor_name; }
+  const char *func_name() const override { return "func_cursor"; }
+  bool resolve_type_inner(THD *) override {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "use static cursor as a variable");
+    return true;
+  }
+  bool resolve_type(THD *) override {
+    set_nullable(false);
+    return false;
+  }
   double val_real() override {
     assert(0);
     return 0.0;
@@ -4304,15 +4354,9 @@ class Item_func_udt_single_type_table final : public Item_func {
     return true;
   }
 
-  String *val_str(String *) override;
-  bool resolve_type(THD *thd) override;
-  void make_field(Send_field *field) override;
-  LEX_STRING get_udt_db_name() const override { return m_db_name; }
-  LEX_STRING get_udt_name() const override { return m_udt_name; }
-  longlong get_varray_size_limit() override { return m_varray_size_limit; }
-  bool udt_table_store_to_table(TABLE *table_to) override;
-  List<Create_field> *get_field_create_field_list() override {
-    return m_field_def_list;
+  String *val_str(String *) override {
+    assert(0);
+    return nullptr;
   }
 };
 
@@ -4324,22 +4368,49 @@ class Item_func_udt_single_type_table final : public Item_func {
 
 class sp_head;
 class sp_name;
+class sp_signature;
 
 class Item_func_sp final : public Item_func {
   typedef Item_func super;
+
+  /**
+    Backup and restore the list of parameters in the package function
+  */
+  class Backup_args_defer {
+   public:
+    Backup_args_defer(Item_func_sp *item);
+    ~Backup_args_defer();
+
+    Backup_args_defer(const Backup_args_defer &) = delete;
+    Backup_args_defer &operator=(const Backup_args_defer &) = delete;
+
+   private:
+    Item **backup_args{nullptr};
+    const Item_func_sp *outer{nullptr};
+  };
 
  private:
   Name_resolution_context *context{nullptr};
   /// The name of the stored function
   sp_name *m_name{nullptr};
+  LEX_CSTRING m_save_db;
+  LEX_STRING m_save_fn_name;
+  bool m_save_explicit_name;
+
   /// The name of the stored function
   sp_name *m_pkg_name{nullptr};
+  /*
+    routine signature which is set in itemize() and used in
+    invoking sp_setup_routine().
+  */
+  sp_signature *m_sig{nullptr};
   /// Pointer to actual function instance (null when not resolved or executing)
   sp_head *m_sp{nullptr};
   /// The result field of the concrete stored function.
   Field *sp_result_field{nullptr};
   /// true when function execution is deterministic
   bool m_deterministic{false};
+  bool m_is_refcursor{false};
 
   bool execute();
   bool execute_impl(THD *thd);
@@ -4347,12 +4418,22 @@ class Item_func_sp final : public Item_func {
 
  protected:
   bool is_expensive_processor(uchar *) override { return true; }
+  /**
+    It is used to judge and convert the non-binary string value of the RAW type
+    parameter passed to the function in PACKAGE according to the conversion
+    rules of oracle which is caused by the fact that there is no RAW type in
+    MySQL.
+
+    Note: In the future, if the RAW type is compatible, this function should be
+    discarded
+  */
+  bool is_raw_params_invalid();
 
  public:
   Item_func_sp(const POS &pos, const LEX_STRING &db_name,
                const LEX_STRING &fn_name, bool use_explicit_name,
                PT_item_list *opt_list);
-
+  ~Item_func_sp() override;
   bool itemize(Parse_context *pc, Item **res) override;
   /**
     Must not be called before the procedure is resolved,
@@ -4404,6 +4485,24 @@ class Item_func_sp final : public Item_func {
 
   void set_pkg_db(LEX_CSTRING &db_name);
   sp_name *get_sp_name() { return m_name; }
+  LEX_STRING get_udt_db_name() const override {
+    if (sp_result_field == nullptr) return NULL_STR;
+    return to_lex_string(to_lex_cstring(sp_result_field->get_udt_db_name()));
+  }
+  LEX_STRING get_udt_name() const override {
+    if (sp_result_field == nullptr) return NULL_STR;
+    return sp_result_field->udt_name();
+  }
+  bool udt_table_store_to_table(TABLE *table_to) override;
+  type_conversion_status save_in_field_inner(Field *field,
+                                             bool no_conversions) override;
+  bool is_ora_refcursor() const override { return m_is_refcursor; }
+  void cleanup_udt() {
+    if (is_ora_type() || is_ora_refcursor()) {
+      destroy(sp_result_field);
+      sp_result_field = nullptr;
+    }
+  }
 };
 
 class Item_func_found_rows final : public Item_int_func {
@@ -4467,6 +4566,20 @@ class Item_func_version final : public Item_static_string_func {
   Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
+class Item_func_vsize : public Item_int_func {
+  String value;
+
+ public:
+  Item_func_vsize(const POS &pos, Item *a) : Item_int_func(pos, a) {}
+  longlong val_int() override;
+  const char *func_name() const override { return "vsize"; }
+  bool resolve_type(THD *thd) override {
+    if (param_type_is_default(thd, 0, 1)) return true;
+    max_length = 10;
+    return false;
+  }
+};
+
 /**
   Internal function used by INFORMATION_SCHEMA implementation to check
   if a role is a mandatory role.
@@ -4485,6 +4598,73 @@ class Item_func_internal_is_mandatory_role : public Item_int_func {
     set_nullable(true);
     return false;
   }
+};
+
+class Item_func_sequence : public Item_func {
+ public:
+  Item_func_sequence(const POS &pos, const char *db, const char *table,
+                     const char *field, uint64_t version)
+      : Item_func(pos),
+        db_name(db),
+        table_name(table),
+        field_name(field),
+        m_seq_def(nullptr),
+        sequences_metadata_version(version) {
+    set_data_type_decimal(28, 0);  // force return decimal value
+    item_name.set(field);
+    int2my_decimal(E_DEC_FATAL_ERROR, 0, true, &curval);
+  }
+  String *val_str(String *str) override;
+  double val_real() override;
+  longlong val_int() override;
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t) override {
+    assert(0);
+    set_zero_time(ltime, MYSQL_TIMESTAMP_DATETIME);
+    return false;
+  }
+  bool get_time(MYSQL_TIME *ltime) override {
+    assert(0);
+    set_zero_time(ltime, MYSQL_TIMESTAMP_TIME);
+    return false;
+  }
+  my_decimal *val_decimal(my_decimal *) override;
+  const CHARSET_INFO *charset_for_protocol() override {
+    return &my_charset_numeric;
+  }
+  const char *func_name() const override { return "sequence_func"; }
+  enum Functype functype() const override { return SEQUENCE_FUNC; }
+  table_map get_initial_pseudo_tables() const override {
+    return RAND_TABLE_BIT;
+  }
+
+  // force return decimal value
+  enum Item_result result_type() const override { return DECIMAL_RESULT; }
+  bool resolve_type(THD *) override {
+    set_nullable(false);
+    unsigned_flag = true;
+    collation.set(&my_charset_numeric, DERIVATION_NUMERIC);
+    return false;
+  }
+
+  void reset_read_flag();
+  void set_seq_def(Gdb_sequence_entity *seq_def) { m_seq_def = seq_def; }
+  bool recheck_sequence_version(THD *thd);
+
+ private:
+  void set_val_with_cached_currval();
+
+ public:
+  const char *db_name;
+  const char *table_name;
+  const char *field_name;
+  Gdb_sequence_entity *m_seq_def;
+  bool read_next{false};
+  Item_func *ref_seq_func{nullptr};
+  uint64_t sequences_metadata_version;
+
+ private:
+  my_decimal curval;      // current value for row read
+  bool first_read{true};  // if it is the first read of a row.
 };
 
 /**
@@ -4509,6 +4689,7 @@ class Item_func_rownum : public Item_int_func {
 
  public:
   explicit Item_func_rownum(const POS &pos) : Item_int_func(pos) {
+    set_has_notsupported_func_true();
     row_no = 0;
     item_name = NAME_STRING("rownum");
     set_rownum();
@@ -4552,6 +4733,163 @@ class Item_func_rownum : public Item_int_func {
   bool first_read{true};
 };
 
+class Item_func_lnnvl_advisor {
+ public:
+  static bool is_valid_expr(Item *expr);
+  static bool is_lnnvl_expr(Item *expr);
+};
+
+class Item_func_lnnvl : public Item_int_func {
+ private:
+  bool validate_cond(THD *thd);
+
+ public:
+  explicit Item_func_lnnvl(const POS &pos, Item *a) : Item_int_func(pos, a) {}
+
+  bool itemize(Parse_context *pc, Item **res) override;
+  bool fix_fields(THD *thd, Item **ref) override;
+  bool resolve_type(THD *thd) override;
+  longlong val_int() override;
+  enum Item_result result_type() const override { return INT_RESULT; }
+  const char *func_name() const override { return "lnnvl"; }
+  enum_field_types default_data_type() const override {
+    return MYSQL_TYPE_NULL;
+  }
+  bool is_bool_func() const override { return true; }
+  enum Functype functype() const override { return LNNVL_FUNC; }
+  Item *pq_clone(THD *thd, Query_block *select) override;
+};
+
+class Item_func_dbms_sql_pkg : public Item_int_func {
+  typedef Item_int_func super;
+
+ public:
+  Item_func_dbms_sql_pkg(const POS &pos, Item *a) : Item_int_func(pos, a) {}
+  Item_func_dbms_sql_pkg(const POS &pos, Item *a, Item *b)
+      : Item_int_func(pos, a, b) {}
+  Item_func_dbms_sql_pkg(const POS &pos, Item *a, Item *b, Item *c)
+      : Item_int_func(pos, a, b, c) {}
+
+  // first always is cur_id
+  bool resolve_type(THD *thd) override;
+
+  bool itemize(Parse_context *pc, Item **res) override;
+
+ protected:
+  Prepared_statement *get_stmt(THD *thd, Item *arg);
+};
+
+class Item_func_dbms_sql_execute : public Item_func_dbms_sql_pkg {
+  typedef Item_func_dbms_sql_pkg super;
+
+ public:
+  Item_func_dbms_sql_execute(const POS &pos, Item *a)
+      : Item_func_dbms_sql_pkg(pos, a) {}
+
+  longlong val_int() override;
+  const char *func_name() const override { return "dbms_sql_execute"; }
+};
+
+class Item_func_dbms_sql_prepare : public Item_func_dbms_sql_pkg {
+  typedef Item_func_dbms_sql_pkg super;
+
+ public:
+  Item_func_dbms_sql_prepare(const POS &pos, Item *a, Item *b)
+      : Item_func_dbms_sql_pkg(pos, a, b) {}
+
+  longlong val_int() override;
+  const char *func_name() const override { return "dbms_sql_prepare"; }
+  bool resolve_type(THD *thd) override {
+    if (super::resolve_type(thd)) return true;
+    if (param_type_is_default(thd, 1, 2)) return true;
+    return false;
+  }
+};
+
+class Item_func_dbms_sql_close_cursor : public Item_func_dbms_sql_pkg {
+  typedef Item_func_dbms_sql_pkg super;
+
+ public:
+  Item_func_dbms_sql_close_cursor(const POS &pos, Item *a)
+      : Item_func_dbms_sql_pkg(pos, a) {}
+
+  longlong val_int() override;
+  const char *func_name() const override { return "dbms_sql_close_cursor"; }
+};
+
+
+class Item_func_dbms_sql_define : public Item_func_dbms_sql_pkg {
+  typedef Item_func_dbms_sql_pkg super;
+
+ public:
+  Item_func_dbms_sql_define(const POS &pos, Item *a, Item *b, Item *c)
+      : Item_func_dbms_sql_pkg(pos, a, b, c) {}
+  const char *func_name() const override { return "dbms_sql_define_column"; }
+  bool resolve_type(THD *thd) override {
+    if (super::resolve_type(thd)) return true;
+    if (args[1]->propagate_type(thd, MYSQL_TYPE_LONGLONG)) return true;
+    if (args[2]->propagate_type(thd, MYSQL_TYPE_VARCHAR)) return true;
+    return false;
+  }
+  longlong val_int() override;
+};
+
+class Item_func_dbms_sql_fetch : public Item_func_dbms_sql_pkg {
+  typedef Item_func_dbms_sql_pkg super;
+
+ public:
+  Item_func_dbms_sql_fetch(const POS &pos, Item *a)
+      : Item_func_dbms_sql_pkg(pos, a) {}
+  const char *func_name() const override { return "dbms_sql_fetch_rows"; }
+  longlong val_int() override;
+};
+
+class Item_func_dbmsotpt_putline : public Item_int_func {
+ public:
+  explicit Item_func_dbmsotpt_putline(const POS &pos, Item *a)
+      : Item_int_func(pos, a) {}
+  longlong val_int() override;
+  const char *func_name() const override { return "dbmsotpt_putline"; }
+};
+
+class Item_func_dbmsotpt_setbuf : public Item_int_func {
+ public:
+  Item_func_dbmsotpt_setbuf(const POS &pos, Item *a) : Item_int_func(pos, a) {}
+  longlong val_int() override;
+  const char *func_name() const override { return "dbmsotpt_setbuf"; }
+};
+
+class Item_func_dbmsotpt_getbuffercount : public Item_int_func {
+ public:
+  explicit Item_func_dbmsotpt_getbuffercount(const POS &pos)
+      : Item_int_func(pos) {}
+  longlong val_int() override;
+  const char *func_name() const override { return "dbmsotpt_getbuffercount"; }
+};
+
+class Item_func_dbmsjob_submit : public Item_int_func {
+ public:
+  Item_func_dbmsjob_submit(const POS &pos, Item *a, Item *b, Item *c, Item *d,
+                           Item *e)
+      : Item_int_func(pos, a, b, c, d, e) {}
+
+  longlong val_int() override;
+  const char *func_name() const override { return "dbms_job_submit"; }
+  bool resolve_type(THD *thd) override {
+    if (param_type_is_default(thd, 0, 3) || !args[3]->is_temporal()) {
+      my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "args", func_name());
+      return true;
+    }
+
+    if (args[4]->propagate_type(thd, MYSQL_TYPE_BOOL)) {
+      my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "broken", func_name());
+      return true;
+    }
+
+    return false;
+  }
+};
+
 /**
   Create new Item_func_get_system_var object
 
@@ -4584,6 +4922,22 @@ inline Item *get_system_variable(Parse_context *pc, enum_var_type scope,
   return get_system_variable(pc, scope, {}, trivial_name,
                              unsafe_for_replication);
 }
+
+class Item_func_cursor_rowcount : public Item_int_func, public Cursor_ref {
+ public:
+  Item_func_cursor_rowcount(const POS &pos, LEX_CSTRING name, uint offset,
+                            sp_variable *cursor_spv)
+      : Item_int_func(pos), Cursor_ref(name, offset, cursor_spv) {}
+  const char *func_name() const override { return "%ROWCOUNT"; }
+  longlong val_int() override;
+};
+
+class Item_func_implicit_cursor_rowcount : public Item_int_func {
+ public:
+  Item_func_implicit_cursor_rowcount(const POS &pos) : Item_int_func(pos) {}
+  const char *func_name() const override { return "SQL%ROWCOUNT"; }
+  longlong val_int() override;
+};
 
 extern bool check_reserved_words(const char *name);
 extern enum_field_types agg_field_type(Item **items, uint nitems);

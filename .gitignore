@@ -31,3 +31,5 @@ heatwaveml.*
 automl.egg-info/
 _userconf.sh
 scalability_jobs_*
+node_modules
+_book

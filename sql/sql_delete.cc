@@ -252,6 +252,7 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
   join_type type = JT_UNKNOWN;
 
   auto cleanup = create_scope_guard([&range_scan, table] {
+    current_thd->show_dbms_output(true);
     destroy(range_scan);
     table->set_keyread(false);
     table->file->ha_index_or_rnd_end();

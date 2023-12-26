@@ -75,6 +75,9 @@ INSERT INTO t2 VALUES (1,1);
 --echo # group_replication_before_message_broadcast debug sync point.
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
+--disable_query_log
+SET DEBUG_SYNC='now wait_for signal.group_replication_before_message_broadcast_reached';
+--enable_query_log
 --let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE State = 'debug sync point: now'
 --source include/wait_condition.inc
 
@@ -94,6 +97,9 @@ INSERT INTO t2 VALUES (2,1);
 --echo # Signal both transactions to resume the its path.
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
+--disable_query_log
+SET DEBUG_SYNC='now wait_for signal.group_replication_before_message_broadcast_reached';
+--enable_query_log
 --let $wait_condition=SELECT COUNT(*)=2 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE State = 'debug sync point: now'
 --source include/wait_condition.inc
 SET DEBUG_SYNC='now SIGNAL waiting';

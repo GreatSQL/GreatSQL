@@ -1406,10 +1406,10 @@ bool Explain_join::shallow_explain() {
   return false;
 }
 
-bool Explain_join::explain_pq_gather(QEP_TAB *tab_arg) {
-  assert(tab_arg->gather);
+bool Explain_join::explain_pq_gather(QEP_TAB *tab) {
+  assert(tab->gather);
 
-  JOIN *gather_join = tab_arg->gather->m_template_join;
+  JOIN *gather_join = tab->gather->m_template_join;
   Query_block *query_block = gather_join->query_block;
   const Explain_format_flags *flags = &gather_join->explain_flags;
   const bool need_tmp_table = flags->any(ESP_USING_TMPTABLE);
@@ -2157,8 +2157,10 @@ bool explain_query_specification(THD *explain_thd, const THD *query_thd,
       const bool need_tmp_table = flags->any(ESP_USING_TMPTABLE);
       const bool need_order = flags->any(ESP_USING_FILESORT);
       const bool distinct = flags->get(ESC_DISTINCT, ESP_EXISTS);
-
-      if (query_term->term_type() == QT_QUERY_BLOCK)
+      if (join->tables_list == nullptr && join->connect_by_cond != nullptr) {
+        ret = explain_no_table(explain_thd, query_thd, query_block,
+                               "No tables used", CTX_JOIN);
+      } else if (query_term->term_type() == QT_QUERY_BLOCK)
         ret = Explain_join(explain_thd, query_thd, query_block, need_tmp_table,
                            need_order, distinct)
                   .send();

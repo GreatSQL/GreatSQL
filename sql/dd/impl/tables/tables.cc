@@ -64,9 +64,10 @@ Tables::Tables() {
   m_target_def.add_field(FIELD_NAME, "FIELD_NAME",
                          "name VARCHAR(64) NOT NULL COLLATE " +
                              String_type(name_collation()->m_coll_name));
-  m_target_def.add_field(FIELD_TYPE, "FIELD_TYPE",
-                         "type ENUM('BASE TABLE', 'VIEW', 'SYSTEM VIEW')"
-                         "NOT NULL");
+  m_target_def.add_field(
+      FIELD_TYPE, "FIELD_TYPE",
+      "type ENUM('BASE TABLE', 'VIEW', 'SYSTEM VIEW', 'MATERIALIZED VIEW')"
+      "NOT NULL");
   m_target_def.add_field(FIELD_ENGINE, "FIELD_ENGINE",
                          "engine VARCHAR(64) NOT NULL "
                          "COLLATE utf8mb3_general_ci");
@@ -209,7 +210,8 @@ Abstract_table *Tables::create_entity_object(const Raw_record &r) const {
   enum_table_type table_type =
       static_cast<enum_table_type>(r.read_int(FIELD_TYPE));
 
-  if (table_type == enum_table_type::BASE_TABLE)
+  if (table_type == enum_table_type::BASE_TABLE ||
+      table_type == enum_table_type::MATERIALIZED_VIEW)
     return dd::create_object<Table>();
   else
     return dd::create_object<View>();

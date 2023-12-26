@@ -1,0 +1,338 @@
+DROP TABLE IF EXISTS t;
+DROP PROCEDURE IF EXISTS p1;
+CREATE TABLE t (s1 INT, s2 char(100),PRIMARY KEY (s1));
+INSERT INTO t values(1,'aaa');
+INSERT INTO t values(2,'bbb');
+INSERT INTO t values(3,'ccc');
+set sql_mode="oracle";
+CREATE PROCEDURE p1() as
+BEGIN
+DECLARE CURSOR stuCursor is SELECT s1,s2 FROM t;
+begin
+for rec in  stuCursor loop
+select rec.s1,rec.s2;
+exit when rec.s1=2;
+END LOOP;
+end;
+select 'after loop';
+END//
+show PROCEDURE code p1;
+Pos	Instruction
+0	cpush_rowtype stuCursor@0:SELECT s1,s2 FROM t
+1	cursor_copy_struct stuCursor@0 rec@0
+2	copen stuCursor@0
+3	cfetch stuCursor@0 rec@0
+4	jump_if_not 10(10) "stuCursor"%FOUND
+5	stmt "select rec.s1,rec.s2"
+6	jump_if_not 8(0) (rec.s1@0["s1"] = 2)
+7	jump 10
+8	cfetch stuCursor@0 rec@0
+9	jump 4
+10	cclose stuCursor@0
+11	cpop 1
+12	stmt "select 'after loop'"
+CALL p1();
+rec.s1	rec.s2
+1	aaa
+rec.s1	rec.s2
+2	bbb
+after loop
+after loop
+DROP PROCEDURE IF EXISTS p1;
+CREATE or replace PROCEDURE p1(p_a INT)
+AS
+v_a INT:=NULL;
+p_a INT:=NULL;
+CURSOR c (p_a VARCHAR(10)) IS SELECT s1 FROM t WHERE p_a IS NOT NULL;
+BEGIN
+OPEN c(p_a);
+FETCH c INTO v_a;
+IF c%NOTFOUND THEN
+BEGIN
+SELECT 'No records found' AS msg;
+RETURN;
+END;
+END IF;
+CLOSE c;
+SELECT 'Fetched a record a='||v_a AS msg;
+END//
+show PROCEDURE code p1;
+Pos	Instruction
+0	set v_a@1 NULL
+1	set p_a@2 NULL
+2	cpush_rowtype c@0:SELECT s1 FROM t WHERE p_a IS NOT NULL
+3	set p_a@3 p_a@2
+4	copen c@0
+5	cfetch c@0 v_a@1
+6	jump_if_not 9(9) "c"%NOTFOUND
+7	stmt "SELECT 'No records found' AS msg"
+8	preturn
+9	cclose c@0
+10	stmt "SELECT 'Fetched a record a='||v_a AS msg"
+11	cpop 1
+CALL p1(1);
+msg
+No records found
+show PROCEDURE code p1;
+Pos	Instruction
+0	set v_a@1 NULL
+1	set p_a@2 NULL
+2	cpush_rowtype c@0:SELECT s1 FROM t WHERE p_a IS NOT NULL
+3	set p_a@3 p_a@2
+4	copen c@0
+5	cfetch c@0 v_a@1
+6	jump_if_not 9(9) "c"%NOTFOUND
+7	stmt "SELECT 'No records found' AS msg"
+8	preturn
+9	cclose c@0
+10	stmt "SELECT 'Fetched a record a='||v_a AS msg"
+11	cpop 1
+CALL p1(1);
+msg
+No records found
+DROP PROCEDURE p1;
+drop table t;
+#
+# record type select/set
+#
+create or replace procedure p1 as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'aaa',
+score float := 0.1
+);
+type stu_record1 is record(
+ii int := 1,
+stu_record_val1 stu_record
+);
+type stu_record2 is record(
+jj int := 1,
+stu_record_val2 stu_record1
+);
+stu_record_val stu_record2;
+id float := 10;
+begin
+select stu_record_val.stu_record_val2.stu_record_val1.id,stu_record_val.stu_record_val2.stu_record_val1.name_d,stu_record_val.stu_record_val2.stu_record_val1.score;
+stu_record_val.stu_record_val2.stu_record_val1.id := 2;
+stu_record_val.stu_record_val2.stu_record_val1.name_d := 'bbb';
+select stu_record_val.stu_record_val2.stu_record_val1.id,stu_record_val.stu_record_val2.stu_record_val1.name_d;
+stu_record_val.jj := 100;
+stu_record_val.stu_record_val2.ii := 200;
+id := stu_record_val.stu_record_val2.stu_record_val1.id + stu_record_val.stu_record_val2.stu_record_val1.score;
+select id,stu_record_val.jj,stu_record_val.stu_record_val2.ii;
+end;
+$$
+show PROCEDURE code p1;
+Pos	Instruction
+0	set stu_record.id@0[0] 1
+1	set stu_record.name_d@0[1] 'aaa'
+2	set stu_record.score@0[2] 0.1
+3	set stu_record1.ii@1[0] 1
+4	set stu_record1.stu_record_val1@1[1] stu_record@0
+5	set stu_record2.jj@2[0] 1
+6	set stu_record2.stu_record_val2@2[1] stu_record1@1
+7	set stu_record_val@3 stu_record2@2
+8	set id@4 10
+9	stmt "select stu_record_val.stu_record_val2..."
+10	set stu_record_val.stu_record_val2.stu_record_val1.id 2
+11	set stu_record_val.stu_record_val2.stu_record_val1.name_d 'bbb'
+12	stmt "select stu_record_val.stu_record_val2..."
+13	set stu_record_val.jj@3[jj] 100
+14	set stu_record_val.stu_record_val2.ii 200
+15	set id@4 (stu_record_val.stu_record_val2.stu_record_val1.id + stu_record_val.stu_record_val2.stu_record_val1.score)
+16	stmt "select id,stu_record_val.jj,stu_recor..."
+CALL p1;
+stu_record_val.stu_record_val2.stu_record_val1.id	stu_record_val.stu_record_val2.stu_record_val1.name_d	stu_record_val.stu_record_val2.stu_record_val1.score
+1	aaa	0.1
+stu_record_val.stu_record_val2.stu_record_val1.id	stu_record_val.stu_record_val2.stu_record_val1.name_d
+2	bbb
+id	stu_record_val.jj	stu_record_val.stu_record_val2.ii
+2.1	100	200
+DROP PROCEDURE p1;
+#
+# record type table select/set
+#
+create or replace procedure p1 as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) ,
+score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+ii int := 1,
+stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+begin
+select stu_record_val.stu_record_val1(1).id;
+stu_record_val.stu_record_val1(1).id := 1;
+stu_record_val.stu_record_val1(2).name_d := 'aaa';
+stu_record_val.stu_record_val1(0).id := 2;
+stu_record_val.stu_record_val1(3).score := 3.22;
+select stu_record_val.stu_record_val1(1).id,stu_record_val.stu_record_val1(1).name_d,stu_record_val.stu_record_val1(0).id,stu_record_val.stu_record_val1(3).score;
+select stu_record_val.ii;
+end;
+$$
+show PROCEDURE code p1;
+Pos	Instruction
+0	set stu_record.id@0[0] 1
+1	set stu_record.name_d@0[1] NULL
+2	set stu_record.score@0[2] 0
+3	set stu_record1.ii@2[0] 1
+4	set stu_record1.stu_record_val1@2[1] tklist@1
+5	set stu_record_val@3 stu_record1@2
+6	stmt "select stu_record_val.stu_record_val1..."
+7	set stu_record_val.stu_record_val1(1).id 1
+8	set stu_record_val.stu_record_val1(2).name_d 'aaa'
+9	set stu_record_val.stu_record_val1(0).id 2
+10	set stu_record_val.stu_record_val1(3).score 3.22
+11	stmt "select stu_record_val.stu_record_val1..."
+12	stmt "select stu_record_val.ii"
+#
+# record type table select/set
+#
+create or replace procedure p1 as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) ,
+score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+ii int := 1,
+stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+id int;
+begin
+stu_record_val.stu_record_val1(1).id := 1;
+stu_record_val.stu_record_val1(2).name_d := 'aaa';
+stu_record_val.stu_record_val1(0).id := 2;
+stu_record_val.stu_record_val1(3).score := 3.22;
+select stu_record_val.stu_record_val1(1).id,stu_record_val.stu_record_val1(2).name_d,stu_record_val.stu_record_val1(0).id,stu_record_val.stu_record_val1(3).score;
+id := stu_record_val.stu_record_val1(1).id+stu_record_val.stu_record_val1(3).score;
+select id,stu_record_val.ii;
+end;
+$$
+show PROCEDURE code p1;
+Pos	Instruction
+0	set stu_record.id@0[0] 1
+1	set stu_record.name_d@0[1] NULL
+2	set stu_record.score@0[2] 0
+3	set stu_record1.ii@2[0] 1
+4	set stu_record1.stu_record_val1@2[1] tklist@1
+5	set stu_record_val@3 stu_record1@2
+6	set id@4 NULL
+7	set stu_record_val.stu_record_val1(1).id 1
+8	set stu_record_val.stu_record_val1(2).name_d 'aaa'
+9	set stu_record_val.stu_record_val1(0).id 2
+10	set stu_record_val.stu_record_val1(3).score 3.22
+11	stmt "select stu_record_val.stu_record_val1..."
+12	set id@4 (stu_record_val.stu_record_val1(1).id + stu_record_val.stu_record_val1(3).score)
+13	stmt "select id,stu_record_val.ii"
+CALL p1;
+stu_record_val.stu_record_val1(1).id	stu_record_val.stu_record_val1(2).name_d	stu_record_val.stu_record_val1(0).id	stu_record_val.stu_record_val1(3).score
+1	aaa	2	3.22
+id	stu_record_val.ii
+4	1
+DROP PROCEDURE p1;
+#
+# record type table select/set
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+value1  varchar(20) :='aaa',
+value2 varchar(20) :='bbb'
+  );
+type tklist is table of stu_record index by binary_integer;
+value1 tklist;
+BEGIN
+value1(1).id := 100;
+select value1(1).id , value1(1).value1,value1(1).value2;
+end;
+$$
+show PROCEDURE code p1;
+Pos	Instruction
+0	set stu_record.id@0[0] 1
+1	set stu_record.value1@0[1] 'aaa'
+2	set stu_record.value2@0[2] 'bbb'
+3	set value1@2 tklist@1
+4	set value1(1).id 100
+5	stmt "select value1(1).id , value1(1).value..."
+CALL p1;
+value1(1).id	value1(1).value1	value1(1).value2
+100	aaa	bbb
+DROP PROCEDURE p1;
+#
+# test of table().table()
+#
+CREATE or replace PROCEDURE p1() as
+TYPE rec1 IS RECORD (
+col1  varchar(30) := 'col1',
+col2   varchar(30) := 'col2',
+col3   varchar(30) := 'col3'
+  ); 
+TYPE t_rec1 IS TABLE OF rec1 index by binary_integer; 
+TYPE rec2 IS RECORD (
+v_t_rec1  t_rec1,  
+col4 varchar(30) := 'col4'
+  );
+TYPE t_rec2 IS TABLE OF rec2 index by binary_integer; 
+TYPE rec3 IS RECORD (
+v_t_rec2  t_rec2,  
+col5 varchar(30) := 'col5'
+  );
+TYPE t_rec3 IS TABLE OF rec3 index by binary_integer; 
+v_t_rec3 rec3;
+BEGIN
+v_t_rec3.col5 := 'abc';
+select v_t_rec3.v_t_rec2(0).col4,v_t_rec3.col5;
+v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1 :='abc';
+v_t_rec3.v_t_rec2(0).v_t_rec1(1).col2 :='123qwe';
+v_t_rec3.v_t_rec2(1).v_t_rec1(0).col2 :='qqqq';
+select v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1,v_t_rec3.v_t_rec2(0).v_t_rec1(0).col2,
+v_t_rec3.v_t_rec2(0).v_t_rec1(0).col3 ;
+select v_t_rec3.v_t_rec2(1).v_t_rec1(0).col1,v_t_rec3.v_t_rec2(1).v_t_rec1(0).col2,
+v_t_rec3.v_t_rec2(1).v_t_rec1(0).col3 ;
+select v_t_rec3.v_t_rec2(0).v_t_rec1(1).col1,v_t_rec3.v_t_rec2(0).v_t_rec1(1).col2,
+v_t_rec3.v_t_rec2(0).v_t_rec1(1).col3 ;
+END;
+$$
+show PROCEDURE code p1;
+Pos	Instruction
+0	set rec1.col1@0[0] 'col1'
+1	set rec1.col2@0[1] 'col2'
+2	set rec1.col3@0[2] 'col3'
+3	set rec2.v_t_rec1@2[0] t_rec1@1
+4	set rec2.col4@2[1] 'col4'
+5	set rec3.v_t_rec2@4[0] t_rec2@3
+6	set rec3.col5@4[1] 'col5'
+7	set v_t_rec3@6 rec3@4
+8	set v_t_rec3.col5@6[col5] 'abc'
+9	stmt "select v_t_rec3.v_t_rec2(0).col4,v_t_..."
+10	set v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1 'abc'
+11	set v_t_rec3.v_t_rec2(0).v_t_rec1(1).col2 '123qwe'
+12	set v_t_rec3.v_t_rec2(1).v_t_rec1(0).col2 'qqqq'
+13	stmt "select v_t_rec3.v_t_rec2(0).v_t_rec1(..."
+14	stmt "select v_t_rec3.v_t_rec2(1).v_t_rec1(..."
+15	stmt "select v_t_rec3.v_t_rec2(0).v_t_rec1(..."
+drop PROCEDURE p1;
+#
+# bugfix6944
+#
+CREATE OR REPLACE PROCEDURE p1(f1 float,f2 float) as
+i int:=10;
+BEGIN
+FOR i IN f1 .. f2 LOOP
+select i ;
+END LOOP;
+end;
+$$
+CALL p1(1.0,2.0);
+i 
+1
+i 
+2
+DROP PROCEDURE p1;

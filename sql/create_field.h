@@ -56,7 +56,7 @@ class Row_definition_table_list : public List<class Row_definition_list> {
   }
   bool append_uniq(MEM_ROOT *thd, Row_definition_list *var);
   Row_definition_list *find_row_fields_by_offset(uint offset) const;
-  Create_field *find_row_field_by_name(LEX_CSTRING name, uint *offset) const;
+  Create_field *find_row_field_by_name(LEX_STRING name, uint *offset) const;
 };
 
 /**
@@ -67,7 +67,7 @@ class Row_definition_list : public List<class Create_field> {
  private:
   int m_number;  // def_name(num).b
  public:
-  inline bool eq_name(const Create_field *def, LEX_CSTRING name) const;
+  inline bool eq_name(const Create_field *def, LEX_STRING name) const;
   /**
     Find a ROW field by name.
     @param [IN]  name   - the name
@@ -75,7 +75,7 @@ class Row_definition_list : public List<class Create_field> {
     @retval NULL        - the ROW field was not found
     @retval !NULL       - the pointer to the found ROW field
   */
-  Create_field *find_row_field_by_name(LEX_CSTRING name, uint *offset) const;
+  Create_field *find_row_field_by_name(LEX_STRING name, uint *offset) const;
   Create_field *find_row_field_by_offset(uint offset) const;
   static Row_definition_list *make(MEM_ROOT *mem_root, Create_field *var) {
     Row_definition_list *list;
@@ -85,6 +85,120 @@ class Row_definition_list : public List<class Create_field> {
   bool append_uniq(MEM_ROOT *thd, Create_field *var);
   int get_number() { return m_number; }
   void set_number(int num) { m_number = num; }
+  bool make_new_create_field_to_store_index(
+      THD *thd, const char *str_length, bool is_index_by,
+      Row_definition_list **list_new) const;
+};
+
+class Ora_record_refer {
+  Row_definition_list *m_row_field_definitions;  // for record
+  Row_definition_table_list
+      *m_row_field_table_definitions;  // for type of table
+  Table_ident *m_table_rowtype_ref;    // for table%ROWTYPE
+
+ public:
+  bool m_cursor_rowtype_ref;                  // for cursor%ROWTYPE
+  Qualified_column_ident *m_column_type_ref;  // for %TYPE
+  uint m_cursor_rowtype_offset;               // for cursor%ROWTYPE
+  bool is_record_define;                      // for type of record()
+  bool is_record_table_define;                // for type is table of ident
+  bool is_record_table_type_define;  // for type is table of varchar(20)
+  bool is_for_loop_var;              // for i in
+  bool is_record_table_ref;
+  bool is_forall_loop_var;     // forall i in
+  Item *record_default_value;  // used for type is record default value
+  /*For type is table of index by varchar(xx):
+      1<= index_length <=32767
+    For type is table of index by int(default):
+      index_length = 0
+  */
+  int index_length;
+  bool is_index_by;  // for TYPE IS table OF index by
+  bool is_ref_cursor;
+  bool is_ref_cursor_define;
+  int m_cursor_offset;  // for c sys_refcursor
+
+  Ora_record_refer()
+      : m_row_field_definitions(nullptr),
+        m_row_field_table_definitions(nullptr),
+        m_table_rowtype_ref(nullptr),
+        m_cursor_rowtype_ref(false),
+        m_column_type_ref(nullptr),
+        m_cursor_rowtype_offset(0),
+        is_record_define(false),
+        is_record_table_define(false),
+        is_record_table_type_define(false),
+        is_for_loop_var(false),
+        is_record_table_ref(false),
+        is_forall_loop_var(false),
+        record_default_value(nullptr),
+        index_length(0),
+        is_index_by(false),
+        is_ref_cursor(false),
+        is_ref_cursor_define(false),
+        m_cursor_offset(-1) {}
+  void set_record(Ora_record_refer *from) {
+    m_row_field_definitions = from->row_field_definitions();
+    m_row_field_table_definitions = from->row_field_table_definitions();
+    m_table_rowtype_ref = from->table_rowtype_ref();
+    m_cursor_rowtype_ref = from->m_cursor_rowtype_ref;
+    m_column_type_ref = from->m_column_type_ref;
+    m_cursor_rowtype_offset = from->m_cursor_rowtype_offset;
+    is_record_define = from->is_record_define;
+    is_record_table_define = from->is_record_table_define;
+    is_record_table_type_define = from->is_record_table_type_define;
+    is_for_loop_var = from->is_for_loop_var;
+    is_record_table_ref = from->is_record_table_ref;
+    is_forall_loop_var = from->is_forall_loop_var;
+    record_default_value = from->record_default_value;
+    index_length = from->index_length;
+    is_index_by = from->is_index_by;
+    is_ref_cursor = from->is_ref_cursor;
+    is_ref_cursor_define = from->is_ref_cursor_define;
+    m_cursor_offset = from->m_cursor_offset;
+  }
+  bool is_cursor_rowtype_ref() const { return m_cursor_rowtype_ref; }
+  bool is_column_type_ref() const { return m_column_type_ref != nullptr; }
+  bool is_table_rowtype_ref() const { return m_table_rowtype_ref != nullptr; }
+
+  Qualified_column_ident *column_type_ref() const { return m_column_type_ref; }
+
+  void set_column_type_ref(Qualified_column_ident *ref) {
+    m_column_type_ref = ref;
+  }
+
+  Table_ident *table_rowtype_ref() const { return m_table_rowtype_ref; }
+
+  void set_table_rowtype_ref(Table_ident *ref) { m_table_rowtype_ref = ref; }
+  void set_record_table_rowtype_ref(Table_ident *ref) {
+    if (!ref) return;
+    is_record_table_ref = true;
+    m_table_rowtype_ref = ref;
+  }
+  uint cursor_rowtype_offset() const { return m_cursor_rowtype_offset; }
+
+  void set_cursor_rowtype_ref(uint offset) {
+    m_cursor_rowtype_ref = true;
+    m_cursor_rowtype_offset = offset;
+  }
+
+  uint is_row() const { return m_row_field_definitions != nullptr; }
+
+  uint is_row_table() const { return m_row_field_table_definitions != nullptr; }
+
+  Row_definition_list *row_field_definitions() const {
+    return m_row_field_definitions;
+  }
+  void set_row_field_definitions(Row_definition_list *list) {
+    m_row_field_definitions = list;
+  }
+  // for type of table
+  Row_definition_table_list *row_field_table_definitions() const {
+    return m_row_field_table_definitions;
+  }
+  void set_row_field_table_definitions(Row_definition_table_list *list) {
+    m_row_field_table_definitions = list;
+  }
 };
 
 /// Create_field is a description a field/column that may or may not exists in
@@ -238,6 +352,8 @@ class Create_field {
   LEX_CSTRING m_engine_attribute = EMPTY_CSTR;
   LEX_CSTRING m_secondary_engine_attribute = EMPTY_CSTR;
   LEX_STRING udt_name = NULL_STR;
+  LEX_STRING udt_db_name =
+      NULL_STR;  // For udt column,use db name to get udt object.
   LEX_CSTRING nested_table_udt = NULL_CSTR;
   uint table_type = 255;
   ulonglong varray_limit = 0;
@@ -260,20 +376,7 @@ class Create_field {
         stored_in_db(false),
         m_default_val_expr(nullptr),
         zip_dict_id(0),
-        m_cursor_rowtype_ref(false),
-        m_column_type_ref(nullptr),
-        m_column_type(false),
-        m_table_rowtype_ref(nullptr),
-        m_table_rowtype(false),
-        m_row_field_definitions(nullptr),
-        m_row_field_table_definitions(nullptr),
-        is_record_define(false),
-        is_record_table_define(false),
-        is_for_loop_var(false),
-        is_record_table_ref(false),
-        is_forall_loop_var(false),
-        record_default_value(nullptr),
-        udt_db_name(nullptr) {}
+        ora_record() {}
   Create_field(Field *field, Field *orig_field);
 
   /* Used to make a clone of this object for ALTER/CREATE TABLE */
@@ -344,79 +447,14 @@ class Create_field {
  public:
   /**
     Used during a stored routine execution,
-    at for cursor loop time.
+    for cursor loop , type is record ..
 
     Notes:
     - ROW variables are defined as having MYSQL_TYPE_NULL,
       with a non-empty m_field_definitions.
   */
-  bool m_cursor_rowtype_ref;                     // for cursor%ROWTYPE
-  Qualified_column_ident *m_column_type_ref;     // for %TYPE
-  bool m_column_type;                            // for %TYPE
-  Table_ident *m_table_rowtype_ref;              // for table%ROWTYPE
-  bool m_table_rowtype;                          // for table%ROWTYPE
-  uint m_cursor_rowtype_offset;                  // for cursor%ROWTYPE
-  Row_definition_list *m_row_field_definitions;  // for record
-  Row_definition_table_list
-      *m_row_field_table_definitions;  // for type of table
-  bool is_record_define;               // for type of record()
-  bool is_record_table_define;         // for type is table of
-  bool is_for_loop_var;                // for i in
-  bool is_record_table_ref;
-  bool is_forall_loop_var;     // forall i in
-  Item *record_default_value;  // used for type is record default value
-  const char *udt_db_name;     // For udt column,use db name to get udt object.
-
-  bool is_cursor_rowtype_ref() const { return m_cursor_rowtype_ref; }
-  bool is_column_type_ref() const { return m_column_type; }
-  bool is_table_rowtype_ref() const { return m_table_rowtype; }
-
-  Qualified_column_ident *column_type_ref() const { return m_column_type_ref; }
-
-  void set_column_type_ref(Qualified_column_ident *ref) {
-    m_column_type = true;
-    m_column_type_ref = ref;
-  }
-
-  Table_ident *table_rowtype_ref() const { return m_table_rowtype_ref; }
-
-  void set_table_rowtype_ref(Table_ident *ref) {
-    assert(ref);
-    m_table_rowtype = true;
-    m_table_rowtype_ref = ref;
-  }
-  void set_record_table_rowtype_ref(Table_ident *ref) {
-    assert(ref);
-    is_record_table_ref = true;
-    m_table_rowtype_ref = ref;
-  }
-  uint cursor_rowtype_offset() const { return m_cursor_rowtype_offset; }
-
-  void set_cursor_rowtype_ref(uint offset) {
-    m_cursor_rowtype_ref = true;
-    m_cursor_rowtype_offset = offset;
-  }
-
-  uint is_row() const { return m_row_field_definitions != nullptr; }
-
-  uint is_row_table() const { return m_row_field_table_definitions != nullptr; }
-
-  Row_definition_list *row_field_definitions() const {
-    return m_row_field_definitions;
-  }
-  void set_row_field_definitions(Row_definition_list *list) {
-    assert(list);
-    m_row_field_definitions = list;
-  }
-  // for type of table
-  Row_definition_table_list *row_field_table_definitions() const {
-    return m_row_field_table_definitions;
-  }
-  void set_row_field_table_definitions(Row_definition_table_list *list) {
-    assert(list);
-    m_row_field_table_definitions = list;
-  }
-  void set_udt_db_name(const char *name) { udt_db_name = name; }
+  Ora_record_refer ora_record;
+  void set_udt_db_name(LEX_STRING name) { udt_db_name = name; }
 };
 
 /// @returns whether or not this field is a hidden column that represents a

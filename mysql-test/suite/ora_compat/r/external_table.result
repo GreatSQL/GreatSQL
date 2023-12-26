@@ -1,0 +1,452 @@
+#
+# external table related tests.
+#
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('t1.csv'));
+SELECT c1 , CUME_DIST() OVER (ORDER BY c3) cume_dist_val from external_t1;
+c1	cume_dist_val
+1	0.25
+2	0.5
+3	0.75
+4	1
+SELECT c1 , CUME_DIST() OVER (ORDER BY c3) cume_dist_val from external_t1;
+c1	cume_dist_val
+1	0.25
+2	0.5
+3	0.75
+4	1
+drop table external_t1;
+CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null) 
+organization external ( DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('external_table.csv'));
+CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null)
+organization external ( DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('external_table.csv'));
+ERROR 42S01: Table 'external_t2' already exists
+select c1,c2,c3 from external_t2;
+c1	c2	c3
+1	test1	external_test1
+2	test2	external_test2
+3	test3	external_test3
+4	test4	external_test4
+5	test5	external_test5
+6	test6	external_test6
+show create table external_t2;
+Table	Create Table
+external_t2	CREATE TABLE `external_t2` (
+  `c1` int NOT NULL,
+  `c2` varchar(10) NOT NULL,
+  `c3` char(20) NOT NULL
+) ORGANIZATION EXTERNAL ( LOCATION ( 'MYSQL_TMP_DIR' : 'external_table.csv'))
+drop table external_t2;
+CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null) 
+organization external ( DEFAULT DIRECTORY '/my_tmp' LOCATION ('MYSQL_TMP_DIR': 'external_table.csv'));
+show create table external_t2;
+Table	Create Table
+external_t2	CREATE TABLE `external_t2` (
+  `c1` int NOT NULL,
+  `c2` varchar(10) NOT NULL,
+  `c3` char(20) NOT NULL
+) ORGANIZATION EXTERNAL ( LOCATION ( 'MYSQL_TMP_DIR' : 'external_table.csv'))
+drop table external_t2;
+CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null) 
+organization external ( LOCATION ('MYSQL_TMP_DIR': 'external_table.csv'));
+create index i on external_t2(c1);
+ERROR HY000: Table storage engine for 'external_t2' doesn't have this option
+alter table external_t2 add index i(c1);
+ERROR HY000: Table storage engine for 'external_t2' doesn't have this option
+alter table external_t2 add c4 int not null first;
+ERROR HY000: Table storage engine for 'external_t2' doesn't have this option
+alter table external_t2 drop column c3;
+ERROR HY000: Table storage engine for 'external_t2' doesn't have this option
+drop table external_t2;
+CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null) 
+organization external ( DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('external_table.csv'));
+INSERT INTO external_t2 VALUES (7,'test7','external_test7');
+ERROR HY000: Table storage engine for 'external_t2' doesn't have this option
+select c1,c2,c3 from external_t2;
+c1	c2	c3
+1	test1	external_test1
+2	test2	external_test2
+3	test3	external_test3
+4	test4	external_test4
+5	test5	external_test5
+6	test6	external_test6
+select c1,c2,c3 from external_t2 where c2 like '%test%';
+c1	c2	c3
+1	test1	external_test1
+2	test2	external_test2
+3	test3	external_test3
+4	test4	external_test4
+5	test5	external_test5
+6	test6	external_test6
+select c1,c2,c3 from external_t2 where c1 = 10;
+c1	c2	c3
+delete from external_t2 where c3 = 'external_test10';
+ERROR HY000: Table storage engine for 'external_t2' doesn't have this option
+select c1,c2,c3 from external_t2;
+c1	c2	c3
+1	test1	external_test1
+2	test2	external_test2
+3	test3	external_test3
+4	test4	external_test4
+5	test5	external_test5
+6	test6	external_test6
+delete from external_t2 where c1 > 6;
+ERROR HY000: Table storage engine for 'external_t2' doesn't have this option
+select c1,c2,c3 from external_t2;
+c1	c2	c3
+1	test1	external_test1
+2	test2	external_test2
+3	test3	external_test3
+4	test4	external_test4
+5	test5	external_test5
+6	test6	external_test6
+update external_t2 set c2 = 'test' where c1 = 2;
+ERROR HY000: Table storage engine for 'external_t2' doesn't have this option
+truncate table external_t2;
+ERROR HY000: Table storage engine for 'external_t2' doesn't have this option
+delete from external_t2;
+ERROR HY000: Table storage engine for 'external_t2' doesn't have this option
+select c1,c2,c3 from external_t2;
+c1	c2	c3
+1	test1	external_test1
+2	test2	external_test2
+3	test3	external_test3
+4	test4	external_test4
+5	test5	external_test5
+6	test6	external_test6
+drop table external_t2;
+#
+# test for the column string length of CSV exceeds the defined length
+#
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 char(10) not null) 
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('external_table.csv'));
+select c1,c2,c3 from external_t1;
+ERROR HY000: Table 'external_t1' is marked as crashed and should be repaired
+show create table external_t1;
+Table	Create Table
+external_t1	CREATE TABLE `external_t1` (
+  `c1` int NOT NULL,
+  `c2` varchar(10) NOT NULL,
+  `c3` char(10) NOT NULL
+) ORGANIZATION EXTERNAL ( LOCATION ( 'MYSQL_TMP_DIR' : 'external_table.csv'))
+drop table external_t1;
+#
+# The external table columns are inconsistent with the external CSV data.
+#   The test of more columns and less columns
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null) 
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('external_table.csv'));
+select c1,c2 from external_t1;
+c1	c2
+1	test1
+2	test2
+3	test3
+4	test4
+5	test5
+6	test6
+show create table external_t1;
+Table	Create Table
+external_t1	CREATE TABLE `external_t1` (
+  `c1` int NOT NULL,
+  `c2` varchar(10) NOT NULL
+) ORGANIZATION EXTERNAL ( LOCATION ( 'MYSQL_TMP_DIR' : 'external_table.csv'))
+drop table external_t1;
+CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null,c4 char(20) not null) 
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('t2.csv'));
+select c1,c2,c3,c4 from external_t2;
+ERROR HY000: Table 'external_t2' is marked as crashed and should be repaired
+show create table external_t2;
+Table	Create Table
+external_t2	CREATE TABLE `external_t2` (
+  `c1` int NOT NULL,
+  `c2` varchar(10) NOT NULL,
+  `c3` char(20) NOT NULL,
+  `c4` char(20) NOT NULL
+) ORGANIZATION EXTERNAL ( LOCATION ( 'MYSQL_TMP_DIR' : 't2.csv'))
+check table external_t2;
+Table	Op	Msg_type	Msg_text
+test.external_t2	check	error	Corrupt
+repair table external_t2;
+Table	Op	Msg_type	Msg_text
+test.external_t2	repair	status	OK
+select c1,c2,c3,c4 from external_t2;
+c1	c2	c3	c4
+6	test6	external_test6	repair
+drop table external_t2;
+#
+# The external table no CSV file test.
+# 
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null) 
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('tmp.csv'));
+select c1,c2,c3 from external_t1;
+ERROR HY000: Can't get stat of 'MYSQL_TMP_DIR/tmp.csv' (OS errno 2 - No such file or directory)
+show create table external_t1;
+Table	Create Table
+external_t1	CREATE TABLE `external_t1` (
+  `c1` int NOT NULL,
+  `c2` varchar(10) NOT NULL,
+  `c3` char(20) NOT NULL
+) ORGANIZATION EXTERNAL ( LOCATION ( 'MYSQL_TMP_DIR' : 'tmp.csv'))
+drop table external_t1;
+#
+# Test for the validation of the file location
+#
+CREATE TABLE external_t1 (c1 INT not null,
+c2 varchar(10) not null,
+c3 char(20) not null) organization external ( DEFAULT DIRECTORY 'a#######################################################b#######################################################################################b#####################################################################################b######################################################################################b######################################################################################b#############################################################################################################' LOCATION ('external_table.csv') );
+ERROR HY000: The path specified for DIRECTORY is too long.
+CREATE TABLE external_t1 (c1 INT not null,
+c2 varchar(10) not null,
+c3 char(20) not null) organization external ( DEFAULT DIRECTORY 'test' LOCATION ('external_table.csv') );
+ERROR HY000: Incorrect DIRECTORY value: 'test'
+CREATE TABLE external_t1 (c1 INT not null,
+c2 varchar(10) not null,
+c3 char(20) not null) organization external ( DEFAULT DIRECTORY '/my_tmp' LOCATION ('external_table.csv') );
+select * from external_t1;
+ERROR HY000: Can't get stat of '/my_tmp/external_table.csv' (Errcode: ## - No such file or directory)
+drop table external_t1;
+CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null) 
+organization external ( LOCATION ('external_table.csv'));
+select * from external_t2;
+ERROR HY000: Can't get stat of './test/external_table.csv' (Errcode: ## - No such file or directory)
+repair table external_t2;
+Table	Op	Msg_type	Msg_text
+test.external_t2	repair	status	OK
+select * from external_t2;
+c1	c2	c3
+1	test1	external_test1
+2	test2	external_test2
+3	test3	external_test3
+4	test4	external_test4
+5	test5	external_test5
+6	test6	external_test6
+show create table external_t2;
+Table	Create Table
+external_t2	CREATE TABLE `external_t2` (
+  `c1` int NOT NULL,
+  `c2` varchar(10) NOT NULL,
+  `c3` char(20) NOT NULL
+) ORGANIZATION EXTERNAL ( LOCATION ( 'external_table.csv'))
+drop table external_t2;
+create table t1( EXTERNAL int);
+select EXTERNAL from t1;
+EXTERNAL
+create table t2( LOCATION int);
+select LOCATION from t2;
+LOCATION
+create table LOCATION ( EXTERNAL int);
+select EXTERNAL from  LOCATION;
+EXTERNAL
+create table EXTERNAL ( LOCATION int);
+select  LOCATION from EXTERNAL;
+LOCATION
+drop table t1;
+drop table t2;
+drop table EXTERNAL;
+drop table LOCATION;
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 set('a','b','c') not null)
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('t1.csv'));
+select c1,c2,c3 from external_t1;
+c1	c2	c3
+1	test1	a
+2	test2	b
+3	test3	c
+4	test4	a
+5	test5	b
+6	test6	c
+7	test7	a
+show create table external_t1;
+Table	Create Table
+external_t1	CREATE TABLE `external_t1` (
+  `c1` int NOT NULL,
+  `c2` varchar(10) NOT NULL,
+  `c3` set('a','b','c') NOT NULL
+) ORGANIZATION EXTERNAL ( LOCATION ( 'MYSQL_TMP_DIR' : 't1.csv'))
+drop table external_t1;
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 set('a','b','c') not null)
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('t1.csv'));
+select c1,c2,c3 from external_t1;
+c1	c2	c3
+1		a
+2		b
+drop table external_t1;
+CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP not null)
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('t2.csv'));
+select c1,c2,c3 from external_t2;
+c1	c2	c3
+1	test1	2030-10-27 16:40:24
+2	test2	2031-10-27 16:40:24
+3	test3	2032-10-27 16:40:24
+4	test4	2033-10-27 16:40:24
+show create table external_t2;
+Table	Create Table
+external_t2	CREATE TABLE `external_t2` (
+  `c1` int NOT NULL,
+  `c2` varchar(10) NOT NULL,
+  `c3` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ORGANIZATION EXTERNAL ( LOCATION ( 'MYSQL_TMP_DIR' : 't2.csv'))
+drop table external_t2;
+CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP not null)
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('t2.csv'));
+select c1,c2,c3 from external_t2;
+ERROR HY000: Table 'external_t2' is marked as crashed and should be repaired
+drop table external_t2;
+CREATE TABLE external_t3 (c1 bit(15) not null)
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('t3.csv'));
+select c1 from external_t3;
+c1
+  
+aÿ
+bÿ
+select bin(c1) from external_t3;
+bin(c1)
+0
+110000111111111
+110001011111111
+show create table external_t3;
+Table	Create Table
+external_t3	CREATE TABLE `external_t3` (
+  `c1` bit(15) NOT NULL
+) ORGANIZATION EXTERNAL ( LOCATION ( 'MYSQL_TMP_DIR' : 't3.csv'))
+drop table external_t3;
+CREATE TABLE external_t3 (c1 bit(15) not null)
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('bit.csv'));
+select * from external_t3;
+ERROR HY000: Table 'external_t3' is marked as crashed and should be repaired
+drop table external_t3;
+CREATE TABLE external_t3 (c1 bit(15) not null)
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('bit.csv'));
+select * from external_t3;
+c1
+  
+ 2
+ a
+select bin(c1) from external_t3;
+bin(c1)
+0
+110010
+1100001
+drop table external_t3;
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 blob not null)
+organization external (DEFAULT DIRECTORY '/my_tmp' LOCATION ('t1.CSV'));
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 blob not null)
+organization external (DEFAULT DIRECTORY '/my_tmp' LOCATION ('t1.CSV'));
+ERROR 42S01: Table 'external_t1' already exists
+drop table external_t1;
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY '/my_tmp' LOCATION ('t1.CSV'));
+show create table external_t1;
+Table	Create Table
+external_t1	CREATE TABLE `external_t1` (
+  `c1` int NOT NULL,
+  `c2` varchar(10) NOT NULL,
+  `c3` varchar(20) NOT NULL
+) ORGANIZATION EXTERNAL ( LOCATION ( '/my_tmp' : 't1.CSV'))
+select * from external_t1;
+ERROR HY000: Can't get stat of '/my_tmp/t1.CSV' (OS errno 2 - No such file or directory)
+check table external_t1;
+Table	Op	Msg_type	Msg_text
+test.external_t1	check	Error	Can't get stat of '/my_tmp/t1.CSV' (OS errno 2 - No such file or directory)
+test.external_t1	check	error	Corrupt
+REPAIR TABLE external_t1;
+Table	Op	Msg_type	Msg_text
+test.external_t1	repair	Error	Can't get stat of '/my_tmp/t1.CSV' (OS errno 2 - No such file or directory)
+test.external_t1	repair	error	Corrupt
+drop table external_t1;
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY '/my_tmp' LOCATION ('t1.CSV'));
+select * from external_t1;
+ERROR HY000: Can't get stat of '/my_tmp/t1.CSV' (OS errno 2 - No such file or directory)
+check table external_t1;
+Table	Op	Msg_type	Msg_text
+test.external_t1	check	Error	Can't get stat of '/my_tmp/t1.CSV' (OS errno 2 - No such file or directory)
+test.external_t1	check	error	Corrupt
+REPAIR TABLE external_t1;
+Table	Op	Msg_type	Msg_text
+test.external_t1	repair	Error	Can't get stat of '/my_tmp/t1.CSV' (OS errno 2 - No such file or directory)
+test.external_t1	repair	error	Corrupt
+drop table external_t1;
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('t1.csv'));
+select * from external_t1;
+ERROR HY000: Table 'external_t1' is marked as crashed and should be repaired
+show create table external_t1;
+Table	Create Table
+external_t1	CREATE TABLE `external_t1` (
+  `c1` int NOT NULL,
+  `c2` varchar(10) NOT NULL,
+  `c3` varchar(20) NOT NULL
+) ORGANIZATION EXTERNAL ( LOCATION ( 'MYSQL_TMP_DIR' : 't1.csv'))
+check table external_t1;
+Table	Op	Msg_type	Msg_text
+test.external_t1	check	status	OK
+REPAIR TABLE external_t1;
+Table	Op	Msg_type	Msg_text
+test.external_t1	repair	status	OK
+select * from external_t1;
+c1	c2	c3
+1	test1	test11
+2	test2	test22
+3	test3	test33
+4	test4	test44
+drop table external_t1;
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('t1.csv'));
+drop table if exists external_t1;
+CREATE USER user1@localhost;
+CREATE USER user2@localhost;
+grant all on *.* to user1@localhost;
+grant all on *.* to user2@localhost;
+use test;
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('t1.csv'));
+use test;
+select * from external_t1;
+c1	c2	c3
+1	test1	test11
+2	test2	test22
+3	test3	test33
+4	test4	test44
+use test;
+check TABLE external_t1;
+Table	Op	Msg_type	Msg_text
+test.external_t1	check	status	OK
+check TABLE external_t1;
+Table	Op	Msg_type	Msg_text
+test.external_t1	check	status	OK
+drop table external_t1;
+use test;
+set global log_bin_trust_function_creators=TRUE;
+set sql_mode=oracle;
+create or replace function f2() return int as
+str varchar(100);
+a int;
+cursor ref_rs is select c1 from external_t1;
+begin
+open ref_rs;
+fetch ref_rs into a;
+return a;
+end;//
+select f2();
+ERROR 42S02: Table 'test.external_t1' doesn't exist
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY 'MYSQL_TMP_DIR' LOCATION ('t1.csv'));
+use test;
+set sql_mode=oracle;
+select f2();
+f2()
+1
+select f2();
+f2()
+1
+use test;
+set sql_mode=oracle;
+REPAIR TABLE external_t1;
+Table	Op	Msg_type	Msg_text
+test.external_t1	repair	status	OK
+REPAIR TABLE external_t1;
+Table	Op	Msg_type	Msg_text
+test.external_t1	repair	status	OK
+drop function f2;
+drop table external_t1;
+drop user user1@localhost;
+drop user user2@localhost;

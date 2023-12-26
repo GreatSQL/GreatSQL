@@ -70,6 +70,7 @@ static const std::set<String_type> default_valid_option_keys = {
     "delay_key_write",
     "encrypt_type",
     "explicit_tablespace",
+    "is_force_view",
     "key_block_size",
     "keys_disabled",
     "max_rows",
@@ -92,7 +93,10 @@ static const std::set<String_type> default_valid_option_keys = {
     "gipk",
     "encryption_key_id",    // Added by Percona InnoDB KEYRING encryption
     "explicit_encryption",  // Added by Percona InnoDB KEYRING encryption
-    "udt_name"};
+    "udt_name",
+    "ora_temp",
+    "external_file_name",  // external file name
+    "external_data_dir"};
 
 ///////////////////////////////////////////////////////////////////////////
 // Abstract_table_impl implementation.
@@ -181,7 +185,10 @@ bool Abstract_table_impl::store_attributes(Raw_record *r) {
   // Store field values
   return store_id(r, Tables::FIELD_ID) || store_name(r, Tables::FIELD_NAME) ||
          r->store_ref_id(Tables::FIELD_SCHEMA_ID, m_schema_id) ||
-         r->store(Tables::FIELD_TYPE, static_cast<int>(type())) ||
+         r->store(Tables::FIELD_TYPE,
+                  !is_materialized_view()
+                      ? static_cast<int>(type())
+                      : static_cast<int>(enum_table_type::MATERIALIZED_VIEW)) ||
          r->store(Tables::FIELD_MYSQL_VERSION_ID, m_mysql_version_id) ||
          r->store(Tables::FIELD_OPTIONS, m_options) ||
          r->store(Tables::FIELD_CREATED, m_created) ||

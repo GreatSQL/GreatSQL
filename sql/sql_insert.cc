@@ -56,6 +56,7 @@
 #include "mysqld_error.h"
 #include "pfs_table_provider.h"
 #include "prealloced_array.h"
+#include "scope_guard.h"  // create_scope_guard
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_grant_all_columns
 #include "sql/binlog.h"
@@ -69,7 +70,7 @@
 #include "sql/discrete_interval.h"
 #include "sql/field.h"
 #include "sql/handler.h"
-#include "sql/item.h"
+#include "sql/item_func.h"
 #include "sql/key.h"
 #include "sql/lock.h"  // mysql_unlock_tables
 #include "sql/locked_tables_list.h"
@@ -481,6 +482,9 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
   assert(thd->lex->sql_command == SQLCOM_REPLACE ||
          thd->lex->sql_command == SQLCOM_INSERT);
 
+  auto dbms_output_displayer =
+      create_scope_guard([thd] { thd->show_dbms_output(true); });
+
   /*
     We have three alternative syntax rules for the INSERT statement:
     1) "INSERT (columns) VALUES ...", so non-listed columns need a default
@@ -780,6 +784,13 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
     my_ok(thd, row_count, id, buff);
   }
   thd->updated_row_count += row_count;
+  if (insert_table->m_check_inserted_rows) {
+    // let close_temporary_tables_for_eos() remove it.
+    if (info.stats.copied == 0)
+      insert_table->m_delete_on_eos = true;
+    else
+      insert_table->m_check_inserted_rows = false;
+  }
 
   /*
     If we have inserted into a VIEW, and the base table has
@@ -1196,6 +1207,11 @@ bool Sql_cmd_insert_base::prepare_inner(THD *thd) {
          insert_table->gen_def_fields_ptr != nullptr) &&
         validate_gc_assignment(insert_field_list, *values, insert_table))
       return true;
+
+    if (select->setup_sequence_func(
+            thd, const_cast<mem_root_deque<Item *> *>(values))) {
+      return true;
+    }
   }
 
   /*
@@ -1380,8 +1396,11 @@ bool Sql_cmd_insert_base::prepare_inner(THD *thd) {
     // field_count=1,column_count=1,unit->num_visible_fields()=1
     if (field_count == 1 && column_count == 1 &&
         insert_table->s->udt_name.str && unit->num_visible_fields() == 1 &&
-        insert_field_list.front()->is_ora_type() !=
-            unit->first_query_block()->fields.front()->is_ora_type()) {
+        insert_field_list.front()->this_item()->is_ora_type() !=
+            unit->first_query_block()
+                ->fields.front()
+                ->this_item()
+                ->is_ora_type()) {
       my_error(ER_UDT_INCONS_DATATYPES, MYF(0));
       return true;
     }
@@ -2388,6 +2407,10 @@ bool Query_result_insert::send_data(THD *thd,
   DBUG_TRACE;
   bool error = false;
 
+  if (thd->lex->is_materialized_view() &&
+      !strstr(thd->lex->create_materialized_view_info.str, "&BUILD IMMEDIATE"))
+    return error;
+
   Autoinc_field_has_explicit_non_null_value_reset_guard after_each_row(table);
   thd->check_for_truncated_fields = CHECK_FIELD_WARN;
   store_values(thd, values);
@@ -2576,6 +2599,14 @@ bool Query_result_insert::send_eof(THD *thd) {
     thd->first_successful_insert_id_in_cur_stmt =
         thd->first_successful_insert_id_in_prev_stmt;
 
+  if (table->m_check_inserted_rows) {
+    // let close_temporary_tables_for_eos() remove it.
+    if (info.stats.copied == 0)
+      table->m_delete_on_eos = true;
+    else
+      table->m_check_inserted_rows = false;
+  }
+
   return false;
 }
 
@@ -2635,6 +2666,8 @@ void Query_result_insert::abort_result_set(THD *thd) {
         transactional_table || !changed ||
         thd->get_transaction()->cannot_safely_rollback(Transaction_ctx::STMT));
     table->file->ha_release_auto_increment();
+    // let close_temporary_tables_for_eos() remove it.
+    if (table->m_check_inserted_rows) table->m_delete_on_eos = true;
   }
 }
 
@@ -3500,7 +3533,9 @@ bool Sql_cmd_insert_all::prepare_inner(THD *thd) {
   for (auto tb = insert_table_first; tb != nullptr; tb = tb->next_local) {
     lex->insert_table_leaf = tb;
     tb->shared = insert_tb_idx++;
+    int column_count = fields_for_table[tb->shared]->size();
     if (check_insert_fields(thd, tb, fields_for_table[tb->shared])) return true;
+    if (column_count == 0) bitmap_set_all(tb->table->write_set);
     tb->set_inserted();
   }
   lex->insert_table_leaf = insert_table_first;
@@ -3515,8 +3550,19 @@ bool Sql_cmd_insert_all::prepare_inner(THD *thd) {
 
   ulong added_options = SELECT_NO_UNLOCK;
 
+  // Is inserted table used somewhere in other parts of query
+  for (auto tb = lex->insert_table_leaf; tb != nullptr; tb = tb->next_local) {
+    // note: insert_table_end_ptr->next_global is first query table
+    if (unique_table(tb, insert_table_end_ptr->next_global, false)) {
+      // Using same table for INSERT and SELECT, buffer the selection
+      added_options |= OPTION_BUFFER_RESULT;
+      break;
+    }
+  }
+
   result = new (thd->mem_root) Query_result_insert_all(
-      into_table_count, fields_for_table, first_query_block_table);
+      into_table_count, fields_for_table, first_query_block_table, opt_when,
+      clause_type, break_after_match, unconditional);
   if (result == nullptr) return true; /* purecov: inspected */
 
   /*
@@ -3532,11 +3578,27 @@ bool Sql_cmd_insert_all::prepare_inner(THD *thd) {
   if (unit->prepare(thd, result, &insert_field_list, added_options, 0))
     return true;
 
+  lex->allow_sum_func = 0;
+  if (select->setup_conds(thd)) return true;
+  if (select->setup_base_ref_items(thd)) return true;
+  auto saved_privilege = thd->want_privilege;
+  thd->want_privilege = SELECT_ACL;
+  thd->mark_used_columns = MARK_COLUMNS_READ;
+  for (uint i = 0; i < into_table_count; i++) {
+    if (opt_when[i]) {
+      if (opt_when[i]->fix_fields(thd, &opt_when[i])) return true;
+      Mark_field mf(thd->mark_used_columns);
+      opt_when[i]->walk(&Item::mark_field_in_map, enum_walk::POSTFIX,
+                        (uchar *)&mf);
+    }
+  }
+  thd->want_privilege = saved_privilege;
+
   /* Restore the insert table but not the name resolution context */
-  if (first_query_block_table != select->get_table_list()) {
+  if (first_query_block_table != select->m_table_list.first) {
     // If we have transformation of the top block table list
     // by Query_block::transform_grouped_to_derived, we must update:
-    first_query_block_table = select->get_table_list();
+    first_query_block_table = select->m_table_list.first;
     ctx_state.update_next_local(first_query_block_table);
   }
 
@@ -3576,7 +3638,7 @@ bool Sql_cmd_insert_all::prepare_inner(THD *thd) {
   // The insert table should be a separate name resolution context
   // assert(table_list->next_name_resolution_table == nullptr);
 
-  if (!unit->is_union() && select->apply_local_transforms(thd, false))
+  if (!unit->is_set_operation() && select->apply_local_transforms(thd, false))
     return true; /* purecov: inspected */
 
   // Restore the insert table and the name resolution context
@@ -3679,6 +3741,15 @@ bool Query_result_insert_all::send_eof(THD *thd) {
 
     is_trans |= tb->table->file->has_transactions();
     tb->table->file->ha_release_auto_increment();
+
+    // multiple tb->table in the insert_tables may be the same temporary table
+    if (tb->table->m_check_inserted_rows) {
+      // let close_temporary_tables_for_eos() remove it.
+      if (insert_operations[tb->shared]->stats.copied == 0)
+        tb->table->m_delete_on_eos = true;
+      else
+        tb->table->m_check_inserted_rows = false;
+    }
   }
   /*
     Write to binlog before commiting transaction.  No statement will
@@ -3771,6 +3842,8 @@ void Query_result_insert_all::abort_result_set(THD *thd) {
         }
       }
       tb->table->file->ha_release_auto_increment();
+      // let close_temporary_tables_for_eos() remove it.
+      if (tb->table->m_check_inserted_rows) tb->table->m_delete_on_eos = true;
     }
   }
 
@@ -3811,6 +3884,7 @@ bool Query_result_insert_all::start_execution(THD *thd) {
             table, table->write_set)) {
       return false;
     }
+    insert_operations[tb->shared]->reset_counters();
 
     /*
     if(thd->slave_thread) {
@@ -3854,15 +3928,36 @@ bool Query_result_insert_all::send_data(
   List_item *fields;
   List_item values(thd->mem_root);  // tmp values
   uint offset_values = 0;
+  bool prev_when_value = true;
+  bool break_on_next = false;
   for (auto tb = insert_tables; tb != nullptr; tb = tb->next_leaf) {
     cur_table = tb->table;
     info = insert_operations[tb->shared];
     fields = fields_for_table[tb->shared];
 
+    bool when_value = true;
+    int this_type = clause_type[tb->shared];
+    if (this_type == INSERT_INTO_WHEN) {
+      if (opt_when[tb->shared]) {
+        if (break_on_next) break;
+        when_value = opt_when[tb->shared]->val_int() != 0;
+      } else {
+        when_value = prev_when_value;
+      }
+    } else if (this_type == INSERT_INTO_ELSE) {
+      if (break_on_next) break;
+    }
+
+    // the evaluation of offset_values is necessary for each iteration
     values.clear();
     for (uint val_i = 0; val_i < fields->size(); val_i++) {
       values.push_back(values_list[offset_values++]);
     }
+
+    break_on_next =
+        (this_type == INSERT_INTO_WHEN && when_value && break_after_match);
+    prev_when_value = when_value;
+    if (!when_value) continue;
 
     Autoinc_field_has_explicit_non_null_value_reset_guard after_each_row(
         cur_table);

@@ -73,7 +73,10 @@ Triggers::Triggers() {
                          "coll_conn.name");
   m_target_def.add_field(FIELD_DATABASE_COLLATION, "DATABASE_COLLATION",
                          "coll_db.name");
-
+  m_target_def.add_field(
+      FIELD_EVENT_STATUS, "TRIGGER_STATUS",
+      "IF (GET_DD_PROPERTY_KEY_VALUE(trg.options,'status')=1, 'ENABLED', "
+      "'DISABLED')");
   m_target_def.add_from(
       "mysql.triggers trg JOIN mysql.tables tbl "
       "ON tbl.id=trg.table_id");

@@ -42,6 +42,7 @@
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"  // Prealloced_array
+#include "scope_guard.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_table_access
 #include "sql/binlog.h"            // mysql_bin_log
@@ -51,7 +52,8 @@
 #include "sql/field.h"
 #include "sql/item.h"          // Item_splocal
 #include "sql/item_cmpfunc.h"  // Item_func_eq
-#include "sql/log.h"           // Query_logger
+#include "sql/item_sum.h"
+#include "sql/log.h"  // Query_logger
 #include "sql/mdl.h"
 #include "sql/mysqld.h"     // next_query_id
 #include "sql/opt_trace.h"  // Opt_trace_start
@@ -65,6 +67,7 @@
 #include "sql/sql_audit.h"
 #include "sql/sql_base.h"  // open_temporary_tables
 #include "sql/sql_const.h"
+#include "sql/sql_cursor.h"
 #include "sql/sql_digest_stream.h"
 #include "sql/sql_insert.h"
 #include "sql/sql_list.h"
@@ -456,6 +459,9 @@ bool sp_lex_instr::reset_lex_and_exec_core(THD *thd, uint *nextp,
     } else {
       DEBUG_SYNC(thd, "sp_lex_instr_before_exec_core");
       error = exec_core(thd, nextp);
+
+      thd->lex->reset_rownum_func();
+
       DBUG_PRINT("info", ("exec_core returned: %d", error));
     }
   }
@@ -763,7 +769,8 @@ bool sp_lex_instr::validate_lex_and_execute_core(THD *thd, uint *nextp,
         If an error occurred before execution, make sure next execution is
         started with a clean statement:
       */
-      if (m_lex->is_metadata_used() && !m_lex->is_exec_started()) {
+      if (m_lex->sql_command == SQLCOM_CREATE_TABLE &&
+          (m_lex->is_metadata_used() && !m_lex->is_exec_started())) {
         invalidate();
       }
       return true;
@@ -1089,9 +1096,8 @@ void sp_instr_set_row_field::print(const THD *thd, String *str) {
   size_t rsrv = SP_INSTR_UINT_MAXLEN + 40;
   sp_variable *var = m_pcont->find_variable(m_offset);
   const LEX_CSTRING *prefix = m_rcontext_handler->get_name_prefix();
-  const Create_field *def =
-      var->field_def.row_field_definitions()->find_row_field_by_offset(
-          m_field_offset);
+  const Create_field *def = var->field_def.ora_record.row_field_definitions()
+                                ->find_row_field_by_offset(m_field_offset);
 
   /* 'var' should always be non-null, but just in case... */
   if (var)
@@ -1204,6 +1210,45 @@ void sp_instr_set_row_field_table_by_name::print(const THD *thd, String *str) {
   m_value_item->print(thd, str, QT_TO_ARGUMENT_CHARSET);
 }
 
+///////////////////////////////////////////////////////////////////////////
+// sp_instr_set_row_field_table_by_index implementation.
+///////////////////////////////////////////////////////////////////////////
+
+#ifdef HAVE_PSI_INTERFACE
+PSI_statement_info sp_instr_set_row_field_table_by_index::psi_info = {
+    0, "set_row_field_table_by_index", 0, PSI_DOCUMENT_ME};
+#endif
+
+bool sp_instr_set_row_field_table_by_index::exec_core(THD *thd, uint *nextp) {
+  sp_rcontext *ctx = get_rcontext(thd);
+  *nextp = get_ip() + 1;
+  if (ctx->set_variable_row_table_by_index(thd, m_offset, m_index,
+                                           &m_value_item))
+    return true;
+
+  return false;
+}
+
+void sp_instr_set_row_field_table_by_index::print(const THD *thd, String *str) {
+  /* set name@offset ... */
+  const char *index_name = nullptr;
+  if (m_index->is_splocal()) {
+    Item_splocal *item_sp = dynamic_cast<Item_splocal *>(m_index);
+    index_name = item_sp->m_name.ptr();
+  } else
+    index_name = m_index->full_name();
+  size_t reslen = strlen(index_name) + 8;
+  sp_variable *var = m_pcont->find_variable(m_offset);
+  if (var) reslen += var->name.length;
+  str->reserve(reslen);
+  qs_append(STRING_WITH_LEN("set_record_table "), str);
+  str->append(var->name.str);
+  str->append('(');
+  str->append(index_name);
+  str->append(')');
+  qs_append(' ', str);
+  m_value_item->print(thd, str, QT_TO_ARGUMENT_CHARSET);
+}
 ///////////////////////////////////////////////////////////////////////////
 // sp_instr_set_trigger_field implementation.
 ///////////////////////////////////////////////////////////////////////////
@@ -1327,6 +1372,10 @@ bool sp_instr_jump_if_not::exec_core(THD *thd, uint *nextp) {
 
   if (!item) return true;
 
+  if (item->result_type() == ROW_RESULT) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "expression is of wrong type");
+    return true;
+  }
   *nextp = item->val_bool() ? get_ip() + 1 : m_dest;
 
   return false;
@@ -1615,6 +1664,25 @@ bool sp_instr_hpop::execute(THD *thd, uint *nextp) {
 }
 
 ///////////////////////////////////////////////////////////////////////////
+// sp_instr_goto implementation.
+///////////////////////////////////////////////////////////////////////////
+
+#ifdef HAVE_PSI_INTERFACE
+PSI_statement_info sp_instr_goto::psi_info = {0, "goto", 0, PSI_DOCUMENT_ME};
+#endif
+
+bool sp_instr_goto::execute(THD *thd, uint *nextp) {
+  // for goto label,it doesn't do pop_cursors.
+  if (!m_ignore_cursor_execute)
+    thd->sp_runtime_ctx->pop_cursors(m_cursor_count);
+  // for goto label,it doesn't do pop_handlers.
+  if (!m_ignore_handler_execute)
+    thd->sp_runtime_ctx->pop_handlers(m_parsing_ctx, m_handler_count);
+  *nextp = get_ip() + 1;
+  return false;
+}
+
+///////////////////////////////////////////////////////////////////////////
 // sp_instr_hreturn implementation.
 ///////////////////////////////////////////////////////////////////////////
 
@@ -1689,9 +1757,102 @@ PSI_statement_info sp_instr_cpush::psi_info = {0, "cpush", 0, PSI_DOCUMENT_ME};
 bool sp_instr_cpush::execute(THD *thd, uint *nextp) {
   *nextp = get_ip() + 1;
 
-  // sp_instr_cpush::execute() just registers the cursor in the runtime context.
+  /*for ref cursor as next,if the cursor exists,return false.
+  e.g:
+  Loop
+    for i in (select stmt) loop
+    end loop;
+  end loop;*/
+  sp_cursor *c = thd->sp_runtime_ctx->get_cursor(m_cursor_idx);
+  if (c) return false;
 
-  return thd->sp_runtime_ctx->push_cursor(this);
+  bool rc = thd->sp_runtime_ctx->push_cursor(this, m_cursor_idx);
+  if (rc) return true;
+  c = thd->sp_runtime_ctx->get_cursor(m_cursor_idx);
+  if (!c) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), "cursor");
+    return true;
+  }
+  if (!(thd->variables.sql_mode & MODE_ORACLE)) return rc;
+
+  // for cursor return type save the structure.
+  return copy_structure(thd, c, nextp);
+}
+
+bool sp_instr_cpush::copy_structure(THD *thd, sp_cursor *c, uint *nextp) {
+  sp_pcursor *pcursor = m_parsing_ctx->find_cursor_parameters(m_cursor_idx);
+  if (!pcursor) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), "cursor");
+    return true;
+  }
+  Query_arena old_arena;
+  /// for cursor return type
+  if (c->m_result.get_return_table()) return false;
+
+  if (pcursor->get_table_ref() || pcursor->get_row_definition_list() ||
+      pcursor->get_cursor_rowtype_offset() != -1) {
+    thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
+
+    if (pcursor->get_table_ref()) {
+      List<Create_field> defs;
+      if (pcursor->get_table_ref()->resolve_table_rowtype_ref(thd, defs))
+        goto error;
+      if (c->make_return_table(thd, &defs)) goto error;
+      thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+    } else if (pcursor->get_row_definition_list()) {
+      List<Create_field> *defs_tmp = dynamic_cast<List<Create_field> *>(
+          pcursor->get_row_definition_list());
+      if (c->make_return_table(thd, defs_tmp)) goto error;
+      thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+    } else if (pcursor->get_cursor_rowtype_offset() != -1) {
+      sp_cursor *c_return =
+          thd->sp_runtime_ctx->get_cursor(pcursor->get_cursor_rowtype_offset());
+      if (c_return) {
+        thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+        if (c_return->m_result.get_return_table()) {
+          c->set_return_table_from_cursor(c_return);
+          return false;
+        } else {
+          // it needs to open the static cursor to get the structure.
+          if (copy_structure_from_other_cursor(thd, nextp, c_return, c))
+            return true;
+        }
+      } else {  // it's type is ref cursor
+        thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+        sp_pcursor *pcursor_def = m_parsing_ctx->find_cursor_parameters(
+            pcursor->get_cursor_rowtype_offset());
+        if (c->set_return_table_from_pcursor(thd, pcursor_def)) goto error;
+        return false;
+      }
+    }
+  }
+  return false;
+error:
+  thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+  return true;
+}
+// open static cursor to get the structure.
+bool sp_instr_cpush::copy_structure_from_other_cursor(THD *thd, uint *nextp,
+                                                      sp_cursor *c_return,
+                                                      sp_cursor *c) {
+  sp_instr_cpush *push_instr = c_return->get_push_instr();
+  sp_instr_cpush_rowtype *push_instr_rowtype =
+      dynamic_cast<sp_instr_cpush_rowtype *>(push_instr);
+  Query_arena *stmt_arena_saved = thd->stmt_arena;
+  thd->stmt_arena = &push_instr_rowtype->m_arena;
+  push_instr_rowtype->is_copy_struct = true;
+  int var_save = push_instr_rowtype->get_var();
+  push_instr_rowtype->set_var(-1);
+  bool rc =
+      push_instr_rowtype->validate_lex_and_execute_core(thd, nextp, false);
+  push_instr_rowtype->is_copy_struct = false;
+  cleanup_items(push_instr_rowtype->m_arena.item_list());
+  thd->stmt_arena = stmt_arena_saved;
+  if (rc) return true;
+
+  c->set_return_table_from_cursor(c_return);
+  push_instr_rowtype->set_var(var_save);
+  return false;
 }
 
 bool sp_instr_cpush::exec_core(THD *thd, uint *) {
@@ -1699,7 +1860,9 @@ bool sp_instr_cpush::exec_core(THD *thd, uint *) {
 
   // sp_instr_cpush::exec_core() opens the cursor (it's called from
   // sp_instr_copen::execute().
-
+  if (!c) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), "cursor");
+  }
   return c ? c->open(thd) : true;
 }
 
@@ -1740,7 +1903,8 @@ bool sp_instr_cpush_rowtype::exec_core(THD *thd, uint *) {
     return false;
   }
 
-  if (!c->open(thd)) {
+  Query_arena old_arena;
+  if (c && !c->open(thd)) {
     /*
       Create row elements on the caller arena.
       It's the same arena that was used during sp_rcontext::create().
@@ -1751,23 +1915,31 @@ bool sp_instr_cpush_rowtype::exec_core(THD *thd, uint *) {
       - row->row_create_items() creates new Item_field instances.
       They all are created on the same mem_root.
     */
-    Item_field_row *row =
-        (Item_field_row *)thd->sp_runtime_ctx->get_item(m_var);
-    Query_arena old_arena;
-
     List<Create_field> defs;
     thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
 
-    if (!row->get_arg_count() && !(c->export_structure(thd, &defs)) &&
-        !thd->sp_runtime_ctx->add_udt_to_sp_var_list(thd, defs))
-      if (row->row_create_items(thd, &defs)) return true;
+    if (c->export_structure(thd, &defs) ||
+        thd->sp_runtime_ctx->add_udt_to_sp_var_list(thd, defs))
+      goto finish;
 
+    if (!c->m_result.get_return_table()) {
+      if (c->make_return_table(thd, &defs)) goto finish;
+    }
+    if (m_var != -1) {
+      Item *row = thd->sp_runtime_ctx->get_item(m_var);
+      if (!row->get_arg_count() && row->row_create_items(thd, &defs))
+        goto finish;
+    }
     thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
     return c->close();
   } else {
     my_error(ER_SP_CURSOR_FAILED, MYF(0));
     return true;
   }
+
+finish:
+  thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+  return true;
 }
 
 void sp_instr_cpush_rowtype::print(const THD *, String *str) {
@@ -1786,6 +1958,128 @@ void sp_instr_cpush_rowtype::print(const THD *, String *str) {
 
   qs_append(':', str);
   qs_append(m_cursor_query.str, m_cursor_query.length, str);
+}
+
+#ifdef HAVE_PSI_INTERFACE
+PSI_statement_info sp_instr_copen_for::psi_info = {0, "open_for", 0,
+                                                   PSI_DOCUMENT_ME};
+#endif
+
+bool sp_instr_copen_for_sql::execute(THD *thd, uint *nextp) {
+  *nextp = get_ip() + 1;
+  // lex->result has been set to nullptr in sp_refcursor::open_for_sql,so it
+  // must reparse.
+  invalidate();
+  return validate_lex_and_execute_core(thd, nextp, false);
+}
+
+bool sp_instr_copen_for_sql::exec_core(THD *thd, uint *) {
+  Item *item = thd->sp_runtime_ctx->get_item(m_spv_idx);
+  Item_field_refcursor *item_field = dynamic_cast<Item_field_refcursor *>(item);
+  Field_refcursor *field_ref = item_field->get_refcursor_field();
+  if (field_ref->m_is_in_mode) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "change ref cursor of in mode");
+    return true;
+  }
+  if (!field_ref->m_cursor)
+    field_ref->m_cursor = std::make_shared<sp_refcursor>();
+  else
+    field_ref->release_cursor();
+
+  field_ref->set_cursor_return_type();
+  bool rc = field_ref->m_cursor->open_for_sql(thd);
+  /*
+  1.item_func_sp:
+    the item's m_arena is same as
+    sp_instr_copen_for_sql->m_arena, but for item_func_sp->sp_result_field,its
+    m_arena is field_ref->m_cursor's m_arena, so it needs to cleanup here.
+  2.Item_rank:
+    the Item_rank->m_previous m_arena is same as
+    sp_instr_copen_for_sql->m_arena, but for Cached_item of m_previous,its
+    m_arena is field_ref->m_cursor's m_arena, so it needs to destroy(ci) here.
+    e.g:select RANK() OVER (PARTITION BY a ORDER BY b DESC) from t1;
+  3.m_lex->unit->master:
+    the m_lex->unit->master->window->m_partition_items/m_order_by_items
+    m_arena is same as
+    sp_instr_copen_for_sql->m_arena, but for Cached_item of m_partition_items
+    and Cached_item of m_order_by_items,its
+    m_arena is field_ref->m_cursor's m_arena, so it needs to destroy(ci) here.
+    e.g:select avg(a) keep (DENSE_RANK first ORDER BY b) OVER (partition by a)
+  from t1
+  */
+  Item *item_arena = m_arena.item_list();
+  Item *next;
+  for (; item_arena; item_arena = next) {
+    next = item_arena->next_free;
+    Item_func_sp *item_sp = dynamic_cast<Item_func_sp *>(item_arena);
+    if (item_sp) item_sp->cleanup_udt();
+    Item_rank *item_rank = dynamic_cast<Item_rank *>(item_arena);
+    if (item_rank) item_rank->clear_previous();
+  }
+  m_lex->unit->destroy();
+  m_lex->unit = nullptr;
+  return rc;
+}
+
+void sp_instr_copen_for_sql::print(const THD *, String *str) {
+  sp_variable *var = m_parsing_ctx->find_variable(m_spv_idx);
+  size_t rsrv =
+      SP_INSTR_UINT_MAXLEN + 11 + m_cursor_query.length + var->name.length + 1;
+
+  if (str->reserve(rsrv)) return;
+  qs_append(STRING_WITH_LEN("open_for "), str);
+  qs_append(var->name.str, var->name.length, str);
+  qs_append('@', str);
+
+  qs_append(m_spv_idx, str);
+  qs_append(STRING_WITH_LEN(" "), str);
+
+  qs_append(m_cursor_query.str, m_cursor_query.length, str);
+}
+
+bool sp_instr_copen_for_ident::execute(THD *thd, uint *nextp) {
+  clear_da(thd);
+  *nextp = get_ip() + 1;
+
+  return validate_lex_and_execute_core(thd, nextp, true);
+}
+
+bool sp_instr_copen_for_ident::exec_core(THD *thd, uint *nextp) {
+  *nextp = get_ip() + 1;
+  Item *item = thd->sp_runtime_ctx->get_item(m_spv_idx);
+  Item_field_refcursor *item_field = dynamic_cast<Item_field_refcursor *>(item);
+  Field_refcursor *field_ref = item_field->get_refcursor_field();
+  if (field_ref->m_is_in_mode) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "change ref cursor of in mode");
+    return true;
+  }
+  if (!field_ref->m_cursor)
+    field_ref->m_cursor = std::make_shared<sp_refcursor>();
+  else
+    field_ref->release_cursor();
+
+  field_ref->set_cursor_return_type();
+  bool rc = field_ref->m_cursor->open_for_ident(thd, m_sql_spv_idx);
+  thd->lex->set_exec_started();
+  return rc;
+}
+
+void sp_instr_copen_for_ident::print(const THD *, String *str) {
+  sp_variable *var_cursor = m_parsing_ctx->find_variable(m_spv_idx);
+  sp_variable *var_sql = m_parsing_ctx->find_variable(m_sql_spv_idx);
+  size_t rsrv = SP_INSTR_UINT_MAXLEN + 11 + var_cursor->name.length +
+                var_sql->name.length + 1;
+
+  if (str->reserve(rsrv)) return;
+  qs_append(STRING_WITH_LEN("open_for "), str);
+  qs_append(var_cursor->name.str, var_cursor->name.length, str);
+  qs_append('@', str);
+  qs_append(m_spv_idx, str);
+  qs_append(STRING_WITH_LEN(" "), str);
+
+  qs_append(var_sql->name.str, var_sql->name.length, str);
+  qs_append('@', str);
+  qs_append(m_sql_spv_idx, str);
 }
 ///////////////////////////////////////////////////////////////////////////
 // sp_instr_cpop implementation.
@@ -1827,7 +2121,10 @@ bool sp_instr_copen::execute(THD *thd, uint *nextp) {
 
   sp_cursor *c = thd->sp_runtime_ctx->get_cursor(m_cursor_idx);
 
-  if (!c) return true;
+  if (!c) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), "cursor");
+    return true;
+  }
 
   // Retrieve sp_instr_cpush instance.
 
@@ -1903,10 +2200,42 @@ bool sp_instr_cursor_copy_struct::execute(THD *thd, uint *nextp) {
   *nextp = get_ip() + 1;
 
   // Get the cursor pointer.
+  sp_pcursor *pcursor = m_parsing_ctx->find_cursor_parameters(m_cursor_idx);
+  if (!pcursor) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), "cursor");
+    return true;
+  }
+
+  // If it's ref cursor define.
+  if (pcursor->get_cursor_spv()) {
+    Item_field_refcursor *item_cursor = dynamic_cast<Item_field_refcursor *>(
+        thd->sp_runtime_ctx->get_item(pcursor->get_cursor_spv()->offset));
+    return item_cursor->set_cursor_rowtype_table(
+        thd, thd->sp_runtime_ctx->get_item(m_var), pcursor->has_return_type(),
+        pcursor->get_cursor_spv()->offset);
+  }
 
   sp_cursor *c = thd->sp_runtime_ctx->get_cursor(m_cursor_idx);
+  if (!c) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), pcursor->str);
+    return true;
+  }
 
-  if (!c) return true;
+  // TYPE ref_rs1 IS REF CURSOR RETURN cursor%rowtype;
+  if (c->m_result.get_return_table()) {
+    bool ret = false;
+    Item *item = thd->sp_runtime_ctx->get_item(m_var);
+
+    Query_arena old_arena;
+    thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
+    List<Create_field> defs;
+    if (!c->m_result.get_return_table()->export_structure(thd, &defs)) {
+      ret = item->row_create_items(thd, &defs);
+    } else
+      ret = true;
+    thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+    return ret;
+  }
 
   // Retrieve sp_instr_cpush instance.
 
@@ -1978,7 +2307,25 @@ bool sp_instr_cclose::execute(THD *thd, uint *nextp) {
 
   *nextp = get_ip() + 1;
 
+  if (m_cursor_spv) {
+    Item_field_refcursor *item = dynamic_cast<Item_field_refcursor *>(
+        thd->sp_runtime_ctx->get_item(m_cursor_spv->offset));
+    Field_refcursor *field = item->get_refcursor_field();
+    if (!field->m_cursor || !field->m_cursor->is_defined()) {
+      my_error(ER_SP_CURSOR_MISMATCH, MYF(0),
+               m_cursor_spv ? m_cursor_spv->name.str : "ref cursor");
+      return true;
+    }
+    field->set_null();
+    return false;
+  }
+
   sp_cursor *c = thd->sp_runtime_ctx->get_cursor(m_cursor_idx);
+  if (!c) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0),
+             m_cursor_spv ? m_cursor_spv->name.str : "ref cursor");
+    return true;
+  }
 
   return c ? c->close() : true;
 }
@@ -1989,14 +2336,22 @@ void sp_instr_cclose::print(const THD *, String *str) {
   /* cclose name@offset */
   size_t rsrv = SP_INSTR_UINT_MAXLEN + 8;
 
-  if (cursor_name) rsrv += cursor_name->length;
+  if (m_cursor_spv)
+    rsrv += m_cursor_spv->name.length;
+  else if (cursor_name)
+    rsrv += cursor_name->length;
+
   if (str->reserve(rsrv)) return;
   qs_append(STRING_WITH_LEN("cclose "), str);
-  if (cursor_name) {
+  if (m_cursor_spv) {
+    qs_append(m_cursor_spv->name.str, m_cursor_spv->name.length, str);
+    qs_append('@', str);
+    qs_append(m_cursor_spv->offset, str);
+  } else if (cursor_name) {
     qs_append(cursor_name->str, cursor_name->length, str);
     qs_append('@', str);
+    qs_append(m_cursor_idx, str);
   }
-  qs_append(m_cursor_idx, str);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -2013,8 +2368,24 @@ bool sp_instr_cfetch::execute(THD *thd, uint *nextp) {
   clear_da(thd);
 
   *nextp = get_ip() + 1;
-
+  if (m_cursor_spv) {
+    Item_field_refcursor *item = dynamic_cast<Item_field_refcursor *>(
+        thd->sp_runtime_ctx->get_item(m_cursor_spv->offset));
+    Field_refcursor *field = item->get_refcursor_field();
+    if (!field->m_cursor || !field->m_cursor->is_defined()) {
+      my_error(ER_SP_CURSOR_MISMATCH, MYF(0),
+               m_cursor_spv ? m_cursor_spv->name.str : "ref cursor");
+      return true;
+    }
+    field->set_cursor_return_type();
+    return field->m_cursor->fetch(&m_varlist);
+  }
   sp_cursor *c = thd->sp_runtime_ctx->get_cursor(m_cursor_idx);
+  if (!c) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0),
+             m_cursor_spv ? m_cursor_spv->name.str : "ref cursor");
+    return true;
+  }
 
   return c ? c->fetch(&m_varlist) : true;
 }
@@ -2027,14 +2398,22 @@ void sp_instr_cfetch::print(const THD *, String *str) {
   /* cfetch name@offset vars... */
   size_t rsrv = SP_INSTR_UINT_MAXLEN + 8;
 
-  if (cursor_name) rsrv += cursor_name->length;
+  if (m_cursor_spv)
+    rsrv += m_cursor_spv->name.length;
+  else if (cursor_name)
+    rsrv += cursor_name->length;
   if (str->reserve(rsrv)) return;
   qs_append(STRING_WITH_LEN("cfetch "), str);
-  if (cursor_name) {
+  if (m_cursor_spv) {
+    qs_append(m_cursor_spv->name.str, m_cursor_spv->name.length, str);
+    qs_append('@', str);
+    qs_append(m_cursor_spv->offset, str);
+  } else if (cursor_name) {
     qs_append(cursor_name->str, cursor_name->length, str);
     qs_append('@', str);
+    qs_append(m_cursor_idx, str);
   }
-  qs_append(m_cursor_idx, str);
+
   while ((pv = li++)) {
     if (str->reserve(pv->name.length + SP_INSTR_UINT_MAXLEN + 2)) return;
     qs_append(' ', str);
@@ -2059,11 +2438,34 @@ bool sp_instr_cfetch_bulk::execute(THD *thd, uint *nextp) {
 
   *nextp = get_ip() + 1;
 
+  int count = m_row_count;
+  /* m_row_count == -1 means fetch without limit n,so use
+     thd->variables.select_bulk_into_batch instead.
+  */
+  if (m_row_count == -1) count = thd->variables.select_bulk_into_batch;
+  if (m_cursor_spv) {
+    Item_field_refcursor *item = dynamic_cast<Item_field_refcursor *>(
+        thd->sp_runtime_ctx->get_item(m_cursor_spv->offset));
+    Field_refcursor *field = item->get_refcursor_field();
+    if (!field->m_cursor || !field->m_cursor->is_defined()) {
+      my_error(ER_SP_CURSOR_MISMATCH, MYF(0),
+               m_cursor_spv ? m_cursor_spv->name.str : "ref cursor");
+      return true;
+    }
+    field->set_cursor_return_type();
+    return field->m_cursor->fetch_bulk(&m_varlist, count);
+  }
+
   sp_cursor *c = thd->sp_runtime_ctx->get_cursor(m_cursor_idx);
+  if (!c) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0),
+             m_cursor_spv ? m_cursor_spv->name.str : "ref cursor");
+    return true;
+  }
   thd->sp_runtime_ctx->cleanup_record_variable_row_table(
       m_varlist.head()->offset);
 
-  return c ? c->fetch_bulk(&m_varlist, m_row_count) : true;
+  return c->fetch_bulk(&m_varlist, count);
 }
 
 void sp_instr_cfetch_bulk::print(const THD *, String *str) {

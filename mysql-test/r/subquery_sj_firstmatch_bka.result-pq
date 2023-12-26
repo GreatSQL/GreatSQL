@@ -4875,7 +4875,7 @@ drop table t0,t1,t2,t3,t4;
 create table t0 (a int);
 insert into t0 values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
 create table t1 (a int, b int, filler char(100), key(a,b));
-insert into t1 select A.a, B.a, 'filler' from t0 A, t0 B;
+insert into t1 select A.a, B.a, 'filler' from t0 A, t0 B order by A.a, B.a;
 create table t2 as select * from t1;
 explain select * from t2 where a in (select b from t1 where a=3);
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
@@ -4895,7 +4895,7 @@ drop table t1,t2;
 create table t1 (a int, b int);
 insert into t1 select a,a from t0;
 create table t2 (a int, b int);
-insert into t2 select A.a + 10*B.a, A.a + 10*B.a from t0 A, t0 B;
+insert into t2 select A.a + 10*B.a, A.a + 10*B.a from t0 A, t0 B order by A.a, B.a;
 explain select * from t1 where (a,b) in (select a,b from t2);
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Parallel execute (1 workers)
@@ -9873,10 +9873,11 @@ FROM t2 AS parent1 LEFT JOIN t3 AS parent2 USING (pk)
 AND grandparent1.col_varchar_key IS NOT NULL
 );
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	ROWS	100.00	NULL
-1	SIMPLE	parent1	NULL	ALL	NULL	NULL	NULL	NULL	ROWS	100.00	Using where; Not exists
-1	SIMPLE	parent2	NULL	eq_ref	PRIMARY	PRIMARY	4	test.parent1.pk	ROWS	100.00	Using index
-1	SIMPLE	grandparent1	NULL	ref	col_varchar_key	col_varchar_key	6	test.parent1.col_varchar_nokey	ROWS	100.00	Using where
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	ROWS	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	ROWS	100.00	NULL
+2	SIMPLE	parent1	NULL	ALL	NULL	NULL	NULL	NULL	ROWS	100.00	Using where; Not exists
+2	SIMPLE	parent2	NULL	eq_ref	PRIMARY	PRIMARY	4	test.parent1.pk	ROWS	100.00	Using index
+2	SIMPLE	grandparent1	NULL	ref	col_varchar_key	col_varchar_key	6	test.parent1.col_varchar_nokey	ROWS	100.00	Using where
 Warnings:
 Note	1003	/* select#1 */ select `test`.`t1`.`g1` AS `g1` from `test`.`t1` anti join (`test`.`t2` `grandparent1` join `test`.`t2` `parent1` left join `test`.`t3` `parent2` on((`test`.`parent2`.`pk` = `test`.`parent1`.`pk`))) on(((`test`.`grandparent1`.`col_varchar_nokey` = `test`.`t1`.`g1`) and (`test`.`grandparent1`.`col_varchar_key` = `test`.`parent1`.`col_varchar_nokey`) and (`test`.`grandparent1`.`col_varchar_key` is not null))) where true
 SELECT *
@@ -10286,10 +10287,11 @@ ON parent1.col_int_nokey = parent2.col_int_key
 AND grandparent1.col_int_key <> 3
 );
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t3	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
-1	SIMPLE	grandparent1	NULL	ref	col_int_key	col_int_key	4	test.t3.g1	1	100.00	Using where; Not exists
-1	SIMPLE	parent1	NULL	ref	col_int_key	col_int_key	4	test.grandparent1.col_int_nokey	1	100.00	Using where
-1	SIMPLE	parent2	NULL	ref	col_int_key	col_int_key	4	test.parent1.col_int_nokey	1	100.00	Using index
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Parallel execute (1 workers)
+2	SIMPLE	t3	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+2	SIMPLE	grandparent1	NULL	ref	col_int_key	col_int_key	4	test.t3.g1	1	100.00	Using where; Not exists
+2	SIMPLE	parent1	NULL	ref	col_int_key	col_int_key	4	test.grandparent1.col_int_nokey	1	100.00	Using where
+2	SIMPLE	parent2	NULL	ref	col_int_key	col_int_key	4	test.parent1.col_int_nokey	1	100.00	Using index
 Warnings:
 Note	1003	/* select#1 */ select `test`.`t3`.`g1` AS `g1` from `test`.`t3` anti join (`test`.`t1` `grandparent1` join `test`.`t1` `parent1` left join `test`.`t2` `parent2` on((`test`.`parent2`.`col_int_key` = `test`.`parent1`.`col_int_nokey`))) on(((`test`.`grandparent1`.`col_int_key` = `test`.`t3`.`g1`) and (`test`.`grandparent1`.`col_int_nokey` = `test`.`t3`.`g1`) and (`test`.`parent1`.`col_int_key` = `test`.`t3`.`g1`) and (`test`.`t3`.`g1` <> 3))) where true
 explain format=json SELECT * FROM t3
@@ -10312,119 +10314,145 @@ EXPLAIN
     "cost_info": {
       "query_cost": "3.34"
     },
-    "nested_loop": [
-      {
-        "table": {
-          "table_name": "t3",
-          "access_type": "ALL",
-          "rows_examined_per_scan": 1,
-          "rows_produced_per_join": 1,
-          "filtered": "100.00",
-          "cost_info": {
-            "read_cost": "0.25",
-            "eval_cost": "0.10",
-            "prefix_cost": "0.35",
-            "data_read_per_join": "8"
-          },
-          "used_columns": [
-            "g1"
-          ]
-        }
+    "table": {
+      "table_name": "<gather2>",
+      "access_type": "ALL",
+      "rows_examined_per_scan": 1,
+      "rows_produced_per_join": 1,
+      "filtered": "100.00",
+      "parallel_execute": "1 workers",
+      "cost_info": {
+        "read_cost": "0.25",
+        "eval_cost": "0.10",
+        "prefix_cost": "0.35",
+        "data_read_per_join": "16"
       },
-      {
-        "table": {
-          "table_name": "grandparent1",
-          "access_type": "ref",
-          "possible_keys": [
-            "col_int_key"
-          ],
-          "key": "col_int_key",
-          "used_key_parts": [
-            "col_int_key"
-          ],
-          "key_length": "4",
-          "ref": [
-            "test.t3.g1"
-          ],
-          "rows_examined_per_scan": 1,
-          "rows_produced_per_join": 1,
-          "filtered": "100.00",
-          "not_exists": true,
-          "cost_info": {
-            "read_cost": "0.46",
-            "eval_cost": "0.18",
-            "prefix_cost": "0.99",
-            "data_read_per_join": "29"
+      "used_columns": [
+        "g1"
+      ],
+      "query_block": {
+        "cost_info": {
+          "query_cost": "3.34"
+        },
+        "nested_loop": [
+          {
+            "table": {
+              "select_id": 2,
+              "table_name": "t3",
+              "access_type": "ALL",
+              "rows_examined_per_scan": 1,
+              "rows_produced_per_join": 1,
+              "filtered": "100.00",
+              "cost_info": {
+                "read_cost": "0.25",
+                "eval_cost": "0.10",
+                "prefix_cost": "0.35",
+                "data_read_per_join": "8"
+              },
+              "used_columns": [
+                "g1"
+              ]
+            }
           },
-          "used_columns": [
-            "col_int_nokey",
-            "col_int_key"
-          ],
-          "attached_condition": "(<if>(is_not_null_compl(grandparent1..parent2), <if>(found_match(grandparent1..parent2), false, true), true) and <if>(is_not_null_compl(grandparent1..parent2), ((`test`.`grandparent1`.`col_int_nokey` = `test`.`t3`.`g1`) and (`test`.`t3`.`g1` <> 3)), true))"
-        }
-      },
-      {
-        "table": {
-          "table_name": "parent1",
-          "access_type": "ref",
-          "possible_keys": [
-            "col_int_key"
-          ],
-          "key": "col_int_key",
-          "used_key_parts": [
-            "col_int_key"
-          ],
-          "key_length": "4",
-          "ref": [
-            "test.grandparent1.col_int_nokey"
-          ],
-          "rows_examined_per_scan": 1,
-          "rows_produced_per_join": 3,
-          "filtered": "100.00",
-          "cost_info": {
-            "read_cost": "0.84",
-            "eval_cost": "0.34",
-            "prefix_cost": "2.17",
-            "data_read_per_join": "53"
+          {
+            "table": {
+              "select_id": 2,
+              "table_name": "grandparent1",
+              "access_type": "ref",
+              "possible_keys": [
+                "col_int_key"
+              ],
+              "key": "col_int_key",
+              "used_key_parts": [
+                "col_int_key"
+              ],
+              "key_length": "4",
+              "ref": [
+                "test.t3.g1"
+              ],
+              "rows_examined_per_scan": 1,
+              "rows_produced_per_join": 1,
+              "filtered": "100.00",
+              "not_exists": true,
+              "cost_info": {
+                "read_cost": "0.46",
+                "eval_cost": "0.18",
+                "prefix_cost": "0.99",
+                "data_read_per_join": "29"
+              },
+              "used_columns": [
+                "col_int_nokey",
+                "col_int_key"
+              ],
+              "attached_condition": "(<if>(is_not_null_compl(grandparent1..parent2), <if>(found_match(grandparent1..parent2), false, true), true) and <if>(is_not_null_compl(grandparent1..parent2), ((`test`.`grandparent1`.`col_int_nokey` = `test`.`t3`.`g1`) and (`test`.`t3`.`g1` <> 3)), true))"
+            }
           },
-          "used_columns": [
-            "col_int_nokey",
-            "col_int_key"
-          ],
-          "attached_condition": "<if>(is_not_null_compl(grandparent1..parent2), (`test`.`parent1`.`col_int_key` = `test`.`t3`.`g1`), true)"
-        }
-      },
-      {
-        "table": {
-          "table_name": "parent2",
-          "access_type": "ref",
-          "possible_keys": [
-            "col_int_key"
-          ],
-          "key": "col_int_key",
-          "used_key_parts": [
-            "col_int_key"
-          ],
-          "key_length": "4",
-          "ref": [
-            "test.parent1.col_int_nokey"
-          ],
-          "rows_examined_per_scan": 1,
-          "rows_produced_per_join": 1,
-          "filtered": "100.00",
-          "using_index": true,
-          "cost_info": {
-            "read_cost": "0.84",
-            "eval_cost": "0.10",
-            "prefix_cost": "3.34",
-            "data_read_per_join": "16"
+          {
+            "table": {
+              "select_id": 2,
+              "table_name": "parent1",
+              "access_type": "ref",
+              "possible_keys": [
+                "col_int_key"
+              ],
+              "key": "col_int_key",
+              "used_key_parts": [
+                "col_int_key"
+              ],
+              "key_length": "4",
+              "ref": [
+                "test.grandparent1.col_int_nokey"
+              ],
+              "rows_examined_per_scan": 1,
+              "rows_produced_per_join": 3,
+              "filtered": "100.00",
+              "cost_info": {
+                "read_cost": "0.84",
+                "eval_cost": "0.34",
+                "prefix_cost": "2.17",
+                "data_read_per_join": "53"
+              },
+              "used_columns": [
+                "col_int_nokey",
+                "col_int_key"
+              ],
+              "attached_condition": "<if>(is_not_null_compl(grandparent1..parent2), (`test`.`parent1`.`col_int_key` = `test`.`t3`.`g1`), true)"
+            }
           },
-          "used_columns": [
-            "col_int_key"
-          ]
-        }
+          {
+            "table": {
+              "select_id": 2,
+              "table_name": "parent2",
+              "access_type": "ref",
+              "possible_keys": [
+                "col_int_key"
+              ],
+              "key": "col_int_key",
+              "used_key_parts": [
+                "col_int_key"
+              ],
+              "key_length": "4",
+              "ref": [
+                "test.parent1.col_int_nokey"
+              ],
+              "rows_examined_per_scan": 1,
+              "rows_produced_per_join": 1,
+              "filtered": "100.00",
+              "using_index": true,
+              "cost_info": {
+                "read_cost": "0.84",
+                "eval_cost": "0.10",
+                "prefix_cost": "3.34",
+                "data_read_per_join": "16"
+              },
+              "used_columns": [
+                "col_int_key"
+              ]
+            }
+          }
+        ]
       }
-    ]
+    }
   }
 }
 Warnings:

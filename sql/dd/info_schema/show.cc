@@ -492,6 +492,135 @@ static bool add_table_status_fields(Select_lex_builder *query,
   return false;
 }
 
+// Add for GreatDB: Build a substitute query for SHOW SEQUENCES
+Query_block *build_show_sequences_query(const POS &pos, THD *thd, String *wild,
+                                        Item *where_cond) {
+  DBUG_TRACE;
+  static const LEX_CSTRING system_tbl_name = {STRING_WITH_LEN("sequences")};
+  // Define field name literal used in query to be built.
+  static const LEX_CSTRING field_sequence = {STRING_WITH_LEN("NAME")};
+  static const LEX_CSTRING field_database = {STRING_WITH_LEN("DB")};
+  static const LEX_CSTRING alias_database = {STRING_WITH_LEN("Database")};
+  static const LEX_CSTRING field_start_with = {STRING_WITH_LEN("START_WITH")};
+  static const LEX_CSTRING alias_start_with = {STRING_WITH_LEN("Start_with")};
+  static const LEX_CSTRING field_minvalue = {STRING_WITH_LEN("MINVALUE")};
+  static const LEX_CSTRING alias_minvalue = {STRING_WITH_LEN("Minvalue")};
+  static const LEX_CSTRING field_maxvalue = {STRING_WITH_LEN("MAXVALUE")};
+  static const LEX_CSTRING alias_maxvalue = {STRING_WITH_LEN("Maxvalue")};
+  static const LEX_CSTRING field_increment = {STRING_WITH_LEN("INCREMENT")};
+  static const LEX_CSTRING alias_increment = {STRING_WITH_LEN("Increment_by")};
+  static const LEX_CSTRING field_cycle = {STRING_WITH_LEN("CYCLE_FLAG")};
+  static const LEX_CSTRING alias_cycle = {STRING_WITH_LEN("Cycle")};
+  static const LEX_CSTRING field_cache = {STRING_WITH_LEN("CACHE_NUM")};
+  static const LEX_CSTRING alias_cache = {STRING_WITH_LEN("Cache")};
+  static const LEX_CSTRING field_order = {STRING_WITH_LEN("ORDER_FLAG")};
+  static const LEX_CSTRING alias_order = {STRING_WITH_LEN("Order")};
+
+  // Get the current logged in schema name
+  size_t dummy;
+  if (thd->lex->query_block->db == nullptr &&
+      thd->lex->copy_db_to(&thd->lex->query_block->db, &dummy))
+    return nullptr;
+
+  // Convert IS db and table name to desired form.
+  dd::info_schema::convert_table_name_case(thd->lex->query_block->db,
+                                           wild ? wild->ptr() : nullptr);
+  LEX_STRING cur_db = {thd->lex->query_block->db,
+                       strlen(thd->lex->query_block->db)};
+  if (check_and_convert_db_name(&cur_db, false) != Ident_name_check::OK)
+    return nullptr;
+
+  // Build the alias 'Tables_in_<dbname> %' we are building SHOW SEQUENCES
+  String_type alias;
+  alias.append("Sequences_in_");  // Build the output alias for SHOW SEQUENCES
+  alias.append(cur_db.str);
+  if (wild) {
+    alias.append(" (");
+    alias.append(wild->ptr());
+    alias.append(")");
+  }
+  char *tmp = static_cast<char *>(thd->alloc(alias.length() + 1));
+  memcpy(tmp, alias.c_str(), alias.length());
+  *(tmp + alias.length()) = '\0';
+  LEX_CSTRING alias_lex_string = {tmp, alias.length()};
+
+  /*
+     Build sub query.
+     ...
+  */
+  Select_lex_builder sub_query(&pos, thd);
+  if (sub_query.add_select_item(field_database, alias_database) ||
+      sub_query.add_select_item(field_sequence, alias_lex_string) ||
+      (thd->lex->verbose &&
+       sub_query.add_select_item(field_start_with, alias_start_with)) ||
+      (thd->lex->verbose &&
+       sub_query.add_select_item(field_minvalue, alias_minvalue)) ||
+      (thd->lex->verbose &&
+       sub_query.add_select_item(field_maxvalue, alias_maxvalue)) ||
+      (thd->lex->verbose &&
+       sub_query.add_select_item(field_increment, alias_increment)) ||
+      (thd->lex->verbose &&
+       sub_query.add_select_item(field_cycle, alias_cycle)) ||
+      (thd->lex->verbose &&
+       sub_query.add_select_item(field_cache, alias_cache)) ||
+      (thd->lex->verbose &&
+       sub_query.add_select_item(field_order, alias_order)))
+    return nullptr;
+
+  // ... FROM information_schema.tables ...
+  if (sub_query.add_from_item(INFORMATION_SCHEMA_NAME, system_tbl_name))
+    return nullptr;
+
+  /*
+    Build the top level query
+  */
+
+  Select_lex_builder top_query(&pos, thd);
+
+  // SELECT * FROM <sub_query> ...
+  if (top_query.add_select_item(alias_lex_string, alias_lex_string) ||
+      (thd->lex->verbose &&
+       top_query.add_select_item(alias_start_with, alias_start_with)) ||
+      (thd->lex->verbose &&
+       top_query.add_select_item(alias_minvalue, alias_minvalue)) ||
+      (thd->lex->verbose &&
+       top_query.add_select_item(alias_maxvalue, alias_maxvalue)) ||
+      (thd->lex->verbose &&
+       top_query.add_select_item(alias_increment, alias_increment)) ||
+      (thd->lex->verbose &&
+       top_query.add_select_item(alias_cycle, alias_cycle)) ||
+      (thd->lex->verbose &&
+       top_query.add_select_item(alias_cache, alias_cache)) ||
+      (thd->lex->verbose &&
+       top_query.add_select_item(alias_order, alias_order)) ||
+      top_query.add_from_item(sub_query.prepare_derived_table(system_tbl_name)))
+    return nullptr;
+
+  // ... WHERE 'Database' = <dbname> ...
+  Item *database_condition =
+      top_query.prepare_equal_item(alias_database, to_lex_cstring(cur_db));
+  if (top_query.add_condition(database_condition)) return nullptr;
+
+  // ... [ AND ] Sequence LIKE <value> ...
+  if (wild) {
+    Item *like = top_query.prepare_like_item(alias_lex_string, wild);
+    if (!like || top_query.add_condition(like)) return nullptr;
+  }
+
+  // ... [ AND ] <user provided condition> ...
+  if (where_cond && top_query.add_condition(where_cond)) return nullptr;
+
+  // ... ORDER BY 'Sequence' ...
+  if (top_query.add_order_by(alias_lex_string)) return nullptr;
+
+  Query_block *sl = top_query.prepare_query_block();
+
+  // sql_command is set to SQL_QUERY after above call, so.
+  thd->lex->sql_command = SQLCOM_SHOW_SEQUENCES;
+
+  return sl;
+}
+
 // Build a substitute query for SHOW TABLES / TABLE STATUS.
 
 Query_block *build_show_tables_query(const POS &pos, THD *thd, String *wild,
@@ -975,6 +1104,9 @@ Query_block *build_show_triggers_query(const POS &pos, THD *thd, String *wild,
   static const LEX_CSTRING alias_action_order = {
       STRING_WITH_LEN("action_order")};
 
+  static const LEX_CSTRING field_status = {STRING_WITH_LEN("TRIGGER_STATUS")};
+  static const LEX_CSTRING alias_status = {STRING_WITH_LEN("Status")};
+
   // Get the current logged in schema name
   size_t dummy;
   if (thd->lex->query_block->db == nullptr &&
@@ -1008,7 +1140,8 @@ Query_block *build_show_triggers_query(const POS &pos, THD *thd, String *wild,
       sub_query.add_select_item(field_client_cs, alias_client_cs) ||
       sub_query.add_select_item(field_conn_coll, alias_conn_coll) ||
       sub_query.add_select_item(field_db_coll, alias_db_coll) ||
-      sub_query.add_select_item(field_action_order, alias_action_order))
+      sub_query.add_select_item(field_action_order, alias_action_order) ||
+      sub_query.add_select_item(field_status, alias_status))
     return nullptr;
 
   // ... FROM information_schema.tables ...
@@ -1033,6 +1166,7 @@ Query_block *build_show_triggers_query(const POS &pos, THD *thd, String *wild,
       top_query.add_select_item(alias_client_cs, alias_client_cs) ||
       top_query.add_select_item(alias_conn_coll, alias_conn_coll) ||
       top_query.add_select_item(alias_db_coll, alias_db_coll) ||
+      top_query.add_select_item(alias_status, alias_status) ||
       top_query.add_from_item(
           sub_query.prepare_derived_table(system_view_name)))
     return nullptr;

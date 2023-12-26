@@ -1,0 +1,85 @@
+SET sql_mode=ORACLE;
+
+show variables like '%udt_format_result%';
+set @@udt_format_result='DBA';
+
+CREATE TABLE "CHG_PLAN_INST_BRIDGE" 
+   (  "CP_INST_ID" NUMBER(10,0), 
+        "SVC_CODE" VARCHAR2(64), 
+        "SVC_OPT_CODE" VARCHAR2(64), 
+        "RATE_PKG_ID" NUMBER(10,0), 
+        "PARAM_NAME" VARCHAR2(32), 
+        "PARAM_VALUE" number(10), 
+        "ID" NUMBER(*,0)
+   ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+   
+INSERT INTO CHG_PLAN_INST_BRIDGE VALUES (10001, 'SVC001', 'OPT1', 20001, 'x1', 100, 1);        
+INSERT INTO CHG_PLAN_INST_BRIDGE VALUES (10002, 'SVC002', 'OPT2', 20002, 'x2', 200, 2);
+INSERT INTO CHG_PLAN_INST_BRIDGE VALUES (10003, 'SVC003', 'OPT3', 20003, 'y3', 300, 3);
+INSERT INTO CHG_PLAN_INST_BRIDGE VALUES (10004, 'SVC004', 'OPT1', 20001, NULL, 100, 1);
+INSERT INTO CHG_PLAN_INST_BRIDGE VALUES (10005, 'SVC005', 'OPT2', 20002, 'z5', 200, 2);
+INSERT INTO CHG_PLAN_INST_BRIDGE VALUES (10006, 'SVC006', 'OPT3', 20003, 'z6', 300, 3);
+
+--echo #
+--echo # test of select bulk into
+--echo #
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE p1() As
+     TYPE param_rec_type IS RECORD          
+     (
+       rate_pkg_id      NUMBER(10),
+       param_name      varchar2(32),
+       param_value   number(10)
+     );
+     TYPE array_param_type IS TABLE OF param_rec_type; 
+     param_array   array_param_type;
+     xParam  param_rec_type;
+     xnParam param_rec_type;
+     ynParam param_rec_type;
+     znParam param_rec_type;
+
+BEGIN
+  SELECT rate_pkg_id, param_name, param_value BULK COLLECT INTO param_array  FROM CHG_PLAN_INST_BRIDGE
+  WHERE cp_inst_id >10000 AND substr(param_name, 1, 1) in ('x', 'y', 'z')  order by to_number(nvl(substr(param_name, 2), 0)),   substr(param_name, 1, 1);
+
+  xParam:=param_array(1);
+  FOR i IN 1 .. (param_array.count-1)/2
+  LOOP
+    SELECT param_array(i).rate_pkg_id,param_array(i).param_name;                      
+      END LOOP;                 
+END;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of select into
+--echo #
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE p1() As
+     TYPE param_rec_type IS RECORD          
+     (
+       rate_pkg_id      NUMBER(10),
+       param_name      varchar2(32),
+       param_value   number(10)
+     );
+     param_array   param_rec_type;
+
+BEGIN
+  SELECT rate_pkg_id, param_name, param_value INTO param_array  FROM CHG_PLAN_INST_BRIDGE
+  WHERE cp_inst_id =10001 AND substr(param_name, 1, 1) in ('x', 'y', 'z')  order by to_number(nvl(substr(param_name, 2), 0)),   substr(param_name, 1, 1);
+
+  select param_array;               
+END;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+
+drop table CHG_PLAN_INST_BRIDGE;
+
+
+
+

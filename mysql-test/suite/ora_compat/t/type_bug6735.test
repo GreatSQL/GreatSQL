@@ -1,0 +1,223 @@
+--source include/have_debug.inc
+SET sql_mode=ORACLE;
+
+show variables like '%udt_format_result%';
+set @@udt_format_result='DBA';
+
+create table t1(a int,b varchar(20));
+insert into t1 values(1,'aabb');
+insert into t1 values(2,'qwed');
+
+--echo #
+--echo # test of udt type table set by same table's other row
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(2) := stu_record(10,'a',1);
+ stu_record_val(3).id := stu_record_val(2).id;
+ select stu_record_val(3).id;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table set by same table's other row
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(2) := stu_record(10,'a',1);
+ stu_record_val(3) := stu_record_val(2);
+ select stu_record_val(3);
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table set by same table's other row
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(2) := stu_record(10,'a',1);
+ stu_record_val(3).id := stu_record_val(3).id+stu_record_val(2).id;
+ select stu_record_val(3);
+end;
+$$
+DELIMITER ;$$
+--error ER_SP_NOT_EXIST_OF_RECORD_TABLE
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table set by same table's other row
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name1  varchar(20) ,
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+begin
+stu_record_val.stu_record_val1(9).id :=9;
+  begin
+    stu_record_val.stu_record_val1(0).id := 2;
+    stu_record_val.stu_record_val1(3).id :=  stu_record_val.stu_record_val1(3).id +  stu_record_val.stu_record_val1(9).id + stu_record_val.stu_record_val1(0).id;
+  end;
+   select stu_record_val.stu_record_val1(3).id;
+END;
+$$
+DELIMITER ;$$
+--error ER_SP_NOT_EXIST_OF_RECORD_TABLE
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table used in group by
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(3) := stu_record(10,'a',1);
+ select stu_record_val(3).id from dual group by stu_record_val(3);
+end;
+$$
+DELIMITER ;$$
+--error ER_TYPE_IN_ORDER_BY
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table used in left join
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(3) := stu_record(10,'a',1);
+ select stu_record_val(3).id from t1 a left join t1 b on stu_record_val(3)=1;
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table used in if then
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+id int := 1;
+begin
+ stu_record_val(3) := stu_record(10,'a',1);
+ if  stu_record_val(3) then
+   id := id+1;
+ end if;
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table used in avg()
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(3) := stu_record(10,'a',1);
+ SELECT avg(stu_record_val(3)) FROM dual;
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table used in nth_VALUE()
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(3) := stu_record(10,'a',1);
+ SELECT stu_record_val(3) , nth_VALUE(stu_record_val(3),1) over (order by stu_record_val(3)) a from dual;
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+drop table t1;
+
+

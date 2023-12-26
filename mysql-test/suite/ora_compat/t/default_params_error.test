@@ -1,0 +1,363 @@
+# ----------------------------------------------------------------------------
+# Test for default parameters in procedure and function under sql_mode = oracle
+# ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# normal case
+# ----------------------------------------------------------------------------
+#----------------------------------------
+# type:BIT error case
+#----------------------------------------
+#
+# type:BIT with default: 2
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE PROCEDURE p1(a BIT DEFAULT 2)
+AS BEGIN
+  SELECT a;
+END|
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE FUNCTION f1(a BIT DEFAULT 2) RETURN BIT
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+#----------------------------------------
+# type:BOOL error case
+#----------------------------------------
+#
+# type:BOOL with default: ''
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE PROCEDURE p1(a BOOL DEFAULT '')
+AS BEGIN
+  SELECT a;
+END|
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE FUNCTION f1(a BOOL DEFAULT '') RETURN BOOL
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+#----------------------------------------
+# type:TINYINT error case
+#----------------------------------------
+#
+# type:TINYINT with default: ''
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE PROCEDURE p1(a TINYINT DEFAULT '')
+AS BEGIN
+  SELECT a;
+END|
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE FUNCTION f1(a TINYINT DEFAULT '') RETURN TINYINT
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+#----------------------------------------
+# type:INT error case
+#----------------------------------------
+#
+# type:INT with default: ''
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE PROCEDURE p1(a INT DEFAULT '')
+AS BEGIN
+  SELECT a;
+END|
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE FUNCTION f1(a INT DEFAULT '') RETURN INT
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+#----------------------------------------
+# type:BIGINT error case
+#----------------------------------------
+#
+# type:BIGINT with default: ''
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE PROCEDURE p1(a BIGINT DEFAULT '')
+AS BEGIN
+  SELECT a;
+END|
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE FUNCTION f1(a BIGINT DEFAULT '') RETURN BIGINT
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+#----------------------------------------
+# type:CHAR(2) error case
+#----------------------------------------
+#
+# type:CHAR(2) with default: '123'
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE PROCEDURE p1(a CHAR(2) DEFAULT '123')
+AS BEGIN
+  SELECT a;
+END|
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE FUNCTION f1(a CHAR(2) DEFAULT '123') RETURN CHAR(2)
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+#----------------------------------------
+# type:VARCHAR(2) error case
+#----------------------------------------
+#
+# type:VARCHAR(2) with default: '123'
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE PROCEDURE p1(a VARCHAR(2) DEFAULT '123')
+AS BEGIN
+  SELECT a;
+END|
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE FUNCTION f1(a VARCHAR(2) DEFAULT '123') RETURN VARCHAR(2)
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+#----------------------------------------
+# type:DATE error case
+#----------------------------------------
+#
+# type:DATE with default: ''
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE PROCEDURE p1(a DATE DEFAULT '')
+AS BEGIN
+  SELECT a;
+END|
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE FUNCTION f1(a DATE DEFAULT '') RETURN DATE
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+#----------------------------------------
+# type:TIMESTAMP error case
+#----------------------------------------
+#
+# type:TIMESTAMP with default: ''
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE PROCEDURE p1(a TIMESTAMP DEFAULT '')
+AS BEGIN
+  SELECT a;
+END|
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE FUNCTION f1(a TIMESTAMP DEFAULT '') RETURN TIMESTAMP
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+#----------------------------------------
+# type:YEAR error case
+#----------------------------------------
+#
+# type:YEAR with default: ''
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE PROCEDURE p1(a YEAR DEFAULT '')
+AS BEGIN
+  SELECT a;
+END|
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE FUNCTION f1(a YEAR DEFAULT '') RETURN YEAR
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+#----------------------------------------
+# type:DATETIME error case
+#----------------------------------------
+#
+# type:DATETIME with default: ''
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE PROCEDURE p1(a DATETIME DEFAULT '')
+AS BEGIN
+  SELECT a;
+END|
+
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE FUNCTION f1(a DATETIME DEFAULT '') RETURN DATETIME
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+#----------------------------------------
+# type:ER_SP_INVALID_DEFAULT_PARAM error case
+#----------------------------------------
+--disable_warnings
+DROP PROCEDURE IF EXISTS p1;
+DROP FUNCTION IF EXISTS f1;
+--enable_warnings
+
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_DEFAULT_PARAM
+CREATE PROCEDURE p1(a IN OUT INT DEFAULT 1)
+AS BEGIN
+  SELECT a;
+END|
+DELIMITER ;|
+
+#----------------------------------------
+# type:ER_SP_INVALID_DEFAULT_PARAM error case
+#----------------------------------------
+--disable_warnings
+CREATE DATABASE test_charset CHARACTER SET gbk;
+USE test_charset;
+--enable_warnings
+
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+--error ER_SP_INVALID_DEFAULT_PARAM
+CREATE PROCEDURE p1(a VARCHAR(10) DEFAULT '开源')
+AS BEGIN
+  SELECT a;
+END|
+
+--error ER_SP_INVALID_DEFAULT_PARAM
+CREATE FUNCTION f1(a VARCHAR(10) DEFAULT '开源') RETURN VARCHAR(10)
+AS BEGIN
+  RETURN a;
+END|
+DELIMITER ;|
+
+DROP DATABASE test_charset;
+
+#----------------------------------------
+# error case related to wrong param name with default param
+#----------------------------------------
+--disable_warnings
+CREATE DATABASE d00;
+USE d00;
+--enable_warnings
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+CREATE PROCEDURE p1(a INT :=1, b INT :=2) IS BEGIN
+SELECT a, b;
+END|
+DELIMITER ;|
+
+--error ER_SP_INVALID_DEFAULT_PARAM
+CALL p1(aa=>10);
+DROP PROCEDURE p1;
+
+#----------------------------------------
+# error case related to leak by parsing error
+#----------------------------------------
+--error 1064
+CREATE PROCEDURE p1(a) IS BEGIN END;
+--error ER_SP_DOES_NOT_EXIST
+CALL p1;
+
+--error 1064
+CREATE PROCEDURE p1() IS BEGIN a END;
+--error ER_SP_DOES_NOT_EXIST
+CALL p1;
+
+--error 1064
+CREATE PROCEDURE p1(a INT := 1, b) IS BEGIN END;
+--error ER_SP_DOES_NOT_EXIST
+CALL p1;
+
+--error 1064
+CREATE PROCEDURE p1(a, b) IS BEGIN END;
+--error ER_SP_DOES_NOT_EXIST
+CALL p1;
+
+#----------------------------------------
+# error case related to wrong emoji char
+#----------------------------------------
+SET sql_mode=ORACLE;
+DELIMITER |;
+
+--error ER_SP_INVALID_DEFAULT_PARAM 
+CREATE PROCEDURE p1(a VARCHAR(10) := '🀀') IS BEGIN
+SELECT a;
+END|
+DELIMITER ;|
+
+DROP DATABASE d00;
+#----------------------------------------
+# cleanup
+#----------------------------------------

@@ -24,7 +24,6 @@
 #include "sql/sp_cache.h"
 
 #include <stddef.h>
-#include <atomic>
 #include <memory>
 #include <string>
 
@@ -32,6 +31,7 @@
 #include "m_ctype.h"
 #include "map_helpers.h"
 #include "my_dbug.h"
+#include "sql/mysqld.h"
 #include "sql/psi_memory_key.h"
 #include "sql/sp_head.h"
 
@@ -211,4 +211,94 @@ int64 sp_cache_version() { return atomic_Cversion; }
 */
 void sp_cache_enforce_limit(sp_cache *c, ulong upper_limit_for_elements) {
   if (c) c->enforce_limit(upper_limit_for_elements);
+}
+
+Sp_version_changed *Sp_version_changed::instance = nullptr;
+
+Sp_version_changed::Sp_version_changed() {
+  anonymous_version = 0;
+  mysql_mutex_init(key_LOCK_sp_version_change_mutex,
+                   &LOCK_sp_version_change_mutex, MY_MUTEX_INIT_FAST);
+}
+
+Sp_version_changed::~Sp_version_changed() {
+  mysql_mutex_destroy(&LOCK_sp_version_change_mutex);
+}
+
+bool Sp_version_changed::create_instance() {
+  if (instance == nullptr) instance = new (std::nothrow) Sp_version_changed();
+  return (instance == nullptr);
+}
+
+void Sp_version_changed::destroy_instance() {
+  delete instance;
+  instance = nullptr;
+}
+
+void Sp_version_changed::sp_version_changed(const std::string &db, int type,
+                                            const std::string &name) {
+  mysql_mutex_lock(&LOCK_sp_version_change_mutex);
+  auto it1 = map_version.find(db);
+  if (it1 == map_version.end()) {
+    auto &m1 = map_version[db];
+    auto &m2 = m1[type];
+    m2.emplace(name, 0);
+  } else {
+    auto &m1 = it1->second;
+    auto it2 = m1.find(type);
+    if (it2 == m1.end()) {
+      auto &m2 = m1[type];
+      m2.emplace(name, 0);
+    } else {
+      auto &m2 = it2->second;
+      auto it3 = m2.find(name);
+      if (it3 == m2.end()) {
+        m2.emplace(name, 0);
+      } else {
+        ++it3->second;
+      }
+    }
+  }
+  mysql_mutex_unlock(&LOCK_sp_version_change_mutex);
+}
+
+void Sp_version_changed::sp_version_clear(const std::string &db, int type,
+                                          const std::string &name) {
+  mysql_mutex_lock(&LOCK_sp_version_change_mutex);
+  auto it1 = map_version.find(db);
+  if (it1 != map_version.end()) {
+    auto it2 = it1->second.find(type);
+    if (it2 != it1->second.end()) {
+      auto it3 = it2->second.find(name);
+      if (it3 != it2->second.end()) {
+        it3->second++;
+      }
+    }
+  }
+  mysql_mutex_unlock(&LOCK_sp_version_change_mutex);
+}
+
+int64 Sp_version_changed::sp_version_lookup(const std::string &db, int type,
+                                            const std::string &name) {
+  int64 version = 0;
+  mysql_mutex_lock(&LOCK_sp_version_change_mutex);
+  auto it1 = map_version.find(db);
+  if (it1 == map_version.end()) {
+    version = 0;
+  } else {
+    auto it2 = it1->second.find(type);
+    if (it2 == it1->second.end()) {
+      version = 0;
+    } else {
+      auto it3 = it2->second.find(name);
+      if (it3 == it2->second.end()) {
+        version = 0;
+      } else {
+        version = it3->second;
+      }
+    }
+  }
+  mysql_mutex_unlock(&LOCK_sp_version_change_mutex);
+
+  return version;
 }

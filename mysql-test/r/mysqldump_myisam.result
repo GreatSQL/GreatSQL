@@ -196,9 +196,9 @@ SELECT * FROM `test2`;
 a2
 1
 SHOW TRIGGERS;
-Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
+Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation	Status
 testref	INSERT	test1	BEGIN
-INSERT INTO test2 SET a2 = NEW.a1; END	BEFORE	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+INSERT INTO test2 SET a2 = NEW.a1; END	BEFORE	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	ENABLED
 SELECT * FROM `test1`;
 a1
 1
@@ -504,14 +504,14 @@ CREATE VIEW v2 AS SELECT * FROM t2;
 	</row>
 	</table_data>
 	<triggers name="t2">
-		<trigger Trigger="trig1" sql_mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION" character_set_client="utf8mb4" collation_connection="utf8mb4_0900_ai_ci" Database_Collation="utf8mb4_0900_ai_ci" Created="--TIMESTAMP--">
+		<trigger Trigger="trig1" sql_mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION" character_set_client="utf8mb4" collation_connection="utf8mb4_0900_ai_ci" Database_Collation="utf8mb4_0900_ai_ci" Created="--TIMESTAMP--" Status="ENABLED">
 <![CDATA[
 CREATE DEFINER=`root`@`localhost` TRIGGER `trig1` BEFORE INSERT ON `t2` FOR EACH ROW BEGIN
 INSERT INTO t2 VALUES(1);
 END
 ]]>
 		</trigger>
-		<trigger Trigger="trig2" sql_mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION" character_set_client="utf8mb4" collation_connection="utf8mb4_0900_ai_ci" Database_Collation="utf8mb4_0900_ai_ci" Created="--TIMESTAMP--">
+		<trigger Trigger="trig2" sql_mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION" character_set_client="utf8mb4" collation_connection="utf8mb4_0900_ai_ci" Database_Collation="utf8mb4_0900_ai_ci" Created="--TIMESTAMP--" Status="ENABLED">
 <![CDATA[
 CREATE DEFINER=`root`@`localhost` TRIGGER `trig2` AFTER INSERT ON `t2` FOR EACH ROW BEGIN
 INSERT INTO t2 VALUES(1, ']]]]><![CDATA[>');
@@ -641,14 +641,14 @@ END
 	</row>
 	</table_data>
 	<triggers name="t2">
-		<trigger Trigger="trig1" sql_mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION" character_set_client="utf8mb4" collation_connection="utf8mb4_0900_ai_ci" Database_Collation="utf8mb4_0900_ai_ci" Created="--TIMESTAMP--">
+		<trigger Trigger="trig1" sql_mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION" character_set_client="utf8mb4" collation_connection="utf8mb4_0900_ai_ci" Database_Collation="utf8mb4_0900_ai_ci" Created="--TIMESTAMP--" Status="ENABLED">
 <![CDATA[
 CREATE DEFINER=`root`@`localhost` TRIGGER `trig1` BEFORE INSERT ON `t2` FOR EACH ROW BEGIN
 INSERT INTO t2 VALUES(1);
 END
 ]]>
 		</trigger>
-		<trigger Trigger="trig2" sql_mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION" character_set_client="utf8mb4" collation_connection="utf8mb4_0900_ai_ci" Database_Collation="utf8mb4_0900_ai_ci" Created="--TIMESTAMP--">
+		<trigger Trigger="trig2" sql_mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION" character_set_client="utf8mb4" collation_connection="utf8mb4_0900_ai_ci" Database_Collation="utf8mb4_0900_ai_ci" Created="--TIMESTAMP--" Status="ENABLED">
 <![CDATA[
 CREATE DEFINER=`root`@`localhost` TRIGGER `trig2` AFTER INSERT ON `t2` FOR EACH ROW BEGIN
 INSERT INTO t2 VALUES(1, ']]]]><![CDATA[>');
@@ -780,14 +780,14 @@ GRANT ALL PRIVILEGES ON BUG52792.* TO user1;
 	</row>
 	</table_data>
 	<triggers name="t2">
-		<trigger Trigger="trig1" sql_mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION" character_set_client="utf8mb4" collation_connection="utf8mb4_0900_ai_ci" Database_Collation="utf8mb4_0900_ai_ci" Created="--TIMESTAMP--">
+		<trigger Trigger="trig1" sql_mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION" character_set_client="utf8mb4" collation_connection="utf8mb4_0900_ai_ci" Database_Collation="utf8mb4_0900_ai_ci" Created="--TIMESTAMP--" Status="ENABLED">
 <![CDATA[
 CREATE DEFINER=`root`@`localhost` TRIGGER `trig1` BEFORE INSERT ON `t2` FOR EACH ROW BEGIN
 INSERT INTO t2 VALUES(1);
 END
 ]]>
 		</trigger>
-		<trigger Trigger="trig2" sql_mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION" character_set_client="utf8mb4" collation_connection="utf8mb4_0900_ai_ci" Database_Collation="utf8mb4_0900_ai_ci" Created="--TIMESTAMP--">
+		<trigger Trigger="trig2" sql_mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION" character_set_client="utf8mb4" collation_connection="utf8mb4_0900_ai_ci" Database_Collation="utf8mb4_0900_ai_ci" Created="--TIMESTAMP--" Status="ENABLED">
 <![CDATA[
 CREATE DEFINER=`root`@`localhost` TRIGGER `trig2` AFTER INSERT ON `t2` FOR EACH ROW BEGIN
 INSERT INTO t2 VALUES(1, ']]]]><![CDATA[>');

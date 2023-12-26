@@ -228,6 +228,15 @@ class Table : virtual public Abstract_table {
   virtual void set_subpartition_expression_utf8(
       const String_type &subpartition_expression) = 0;
 
+  /////////////////////////////////////////////////////////////////////////
+  // definition/utf8.
+  /////////////////////////////////////////////////////////////////////////
+  virtual const String_type &definition() const = 0;
+  virtual void set_definition(const String_type &definition) = 0;
+
+  virtual const String_type &definition_utf8() const = 0;
+  virtual void set_definition_utf8(const String_type &definition_utf8) = 0;
+
   /** Dummy method to be able to use Partition and Table interchangeably
   in templates. */
   const Table &table() const { return *this; }

@@ -1,0 +1,1445 @@
+set sql_mode="oracle";
+set @@udt_format_result='DBA';
+CREATE TABLE t1 (a INT, b VARCHAR(3));
+insert into t1 values(1,'aa'),(2,'bb'),(3,'cc'),(4,'dd'),(5,'ee') ;
+#
+# test of function return sys_refcursor
+#
+create or replace function returnacursor return sys_refcursor
+as
+v_csr sys_refcursor;
+begin
+open v_csr for select * from t1 where a<3;
+return v_csr;
+END;
+$$
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+begin
+c:= returnacursor();
+c1 := c;
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+close c1;
+end;
+$$
+call p1;
+a	b
+1	aa
+a	b
+2	bb
+drop PROCEDURE p1;
+#
+# test of c:=c1,close twice.
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+begin
+c:= returnacursor();
+c1 := c;
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+close c1;
+close c;
+end;
+$$
+call p1;
+a	b
+1	aa
+a	b
+2	bb
+ERROR 42000: Undefined CURSOR: c
+drop PROCEDURE p1;
+#
+# test of procedure out sys_refcursor
+#
+create or replace procedure pro_return(ref_rs out sys_refcursor) is
+str varchar(30);
+begin
+str := 'select a,b from t1 where a>2';
+open ref_rs for str;
+end;
+$$
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+a int;
+b varchar(20);
+begin
+call pro_return(c);
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+close c;
+end;
+$$
+call pro_return(@a);
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+call p1;
+a	b
+3	cc
+a	b
+4	dd
+a	b
+5	ee
+drop PROCEDURE p1;
+#
+# test of function return sys_refcursor with close cursor
+#
+create or replace function returnacursor1 return sys_refcursor
+as
+v_csr sys_refcursor;
+begin
+open v_csr for select * from t1;
+close v_csr;
+return v_csr;
+END;
+$$
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+begin
+c:= returnacursor1();
+c1 := c;
+loop
+fetch c1 into a,b;
+exit when c1%notfound;
+select a,b;
+end loop;
+close c1;
+end;
+$$
+call p1;
+ERROR 42000: Undefined CURSOR: c1
+drop function returnacursor1;
+drop PROCEDURE p1;
+#
+# test of procedure out sys_refcursor with close cursor
+#
+create or replace procedure pro_return1(ref_rs out sys_refcursor) is
+str varchar(30);
+begin
+str := 'select a,b from t1';
+open ref_rs for str;
+close ref_rs;
+end;
+$$
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+a int;
+b varchar(20);
+begin
+call pro_return1(c);
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+close c;
+end;
+$$
+call p1;
+ERROR 42000: Undefined CURSOR: c
+drop procedure pro_return1;
+drop PROCEDURE p1;
+#
+# test of out sys_refcursor with for loop
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+a int;
+b varchar(20);
+begin
+for i in returnacursor() loop
+select i;
+end loop;
+end;
+$$
+ERROR 42000: Undefined CURSOR: returnacursor
+#
+# test of out sys_refcursor with set to null
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+a int;
+b varchar(20);
+begin
+call pro_return(c);
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+c:= null;
+fetch c into a,b;
+end;
+$$
+call p1;
+a	b
+3	cc
+a	b
+4	dd
+a	b
+5	ee
+ERROR 42000: Undefined CURSOR: c
+drop PROCEDURE p1;
+#
+# test of out sys_refcursor with set to null
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+a int;
+b varchar(20);
+begin
+call pro_return(c);
+c:= null;
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+end;
+$$
+call p1;
+ERROR 42000: Undefined CURSOR: c
+drop PROCEDURE p1;
+#
+# test of out sys_refcursor with repeatedly open sys_refcursor
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+a int;
+b varchar(20);
+begin
+call pro_return(c);
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+c:= returnacursor();
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+call pro_return(c);
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+end;
+$$
+call p1;
+a	b
+3	cc
+a	b
+4	dd
+a	b
+5	ee
+a	b
+1	aa
+a	b
+2	bb
+a	b
+3	cc
+a	b
+4	dd
+a	b
+5	ee
+drop PROCEDURE p1;
+#
+# test of out sys_refcursor with repeatedly open sys_refcursor
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a1 int;
+b1 varchar(20);
+cursor c2 is select * from t1 where a=2;
+begin
+call pro_return(c);
+loop
+fetch c into a1,b1;
+exit when c%notfound;
+select a1,b1;
+end loop;
+open c for select * from t1 where a=1;
+loop
+fetch c into a1,b1;
+exit when c%notfound;
+select a1,b1;
+end loop;
+open c2;
+fetch c2 into a1,b1;
+select a1,b1;
+end;
+$$
+call p1;
+a1	b1
+3	cc
+a1	b1
+4	dd
+a1	b1
+5	ee
+a1	b1
+1	aa
+a1	b1
+2	bb
+drop PROCEDURE p1;
+#
+# test of repeatedly function return sys_refcursor
+#
+create or replace function returnacursor1 return sys_refcursor
+as
+type dr_cursor is ref cursor;
+cSendCursor dr_cursor;
+begin
+cSendCursor:= returnacursor();
+return cSendCursor;
+END;
+$$
+create or replace procedure pro_return1(ref_rs out sys_refcursor) is
+begin
+select returnacursor1() into ref_rs;
+end;
+$$
+CREATE or replace PROCEDURE p1() as
+type dr_cursor is ref cursor;
+c dr_cursor;
+c1 dr_cursor;
+a int;
+b varchar(20);
+begin
+call pro_return1(c);
+select c into c1;
+loop
+fetch c1 into a,b;
+exit when c1%notfound;
+select a,b;
+end loop;
+close c1;
+end;
+$$
+call p1;
+a	b
+1	aa
+a	b
+2	bb
+drop PROCEDURE p1;
+drop function returnacursor1;
+drop procedure pro_return1;
+#
+# test of out sys_refcursor with sub-block
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a1 int;
+b1 varchar(20);
+cursor c2 is select * from t1 where a=2;
+begin
+call pro_return(c);
+begin
+loop
+fetch c into a1,b1;
+exit when c%notfound;
+select a1,b1;
+end loop;
+open c for select * from t1 where a=1;
+loop
+fetch c into a1,b1;
+exit when c%notfound;
+select a1,b1;
+end loop;
+end;
+open c2;
+fetch c2 into a1,b1;
+select a1,b1;
+end;
+$$
+call p1;
+a1	b1
+3	cc
+a1	b1
+4	dd
+a1	b1
+5	ee
+a1	b1
+1	aa
+a1	b1
+2	bb
+drop PROCEDURE p1;
+#
+# test of refcursor used in function
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+begin
+select returnacursor()+1;
+end;
+$$
+call p1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+drop PROCEDURE p1;
+#
+# test of refcursor used in function
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+begin
+c := returnacursor();
+select c+1;
+end;
+$$
+call p1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+drop PROCEDURE p1;
+#
+# test of refcursor used in where condition
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+begin
+select 1 from dual where c in (1);
+end;
+$$
+call p1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+drop PROCEDURE p1;
+#
+# test of refcursor used in aggregation
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+begin
+select sum(c) over() from dual;
+end;
+$$
+call p1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
+drop PROCEDURE p1;
+#
+# test of refcursor%notfound
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+begin
+for i in 1 .. 2 loop
+exit when c%notfound;
+select a,b;
+end loop;
+end;
+$$
+call p1;
+ERROR 42000: Undefined CURSOR: c
+drop PROCEDURE p1;
+#
+# test of open cursor for and set cursor
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+str varchar(200);
+begin
+str := 'select a,b from t1 where a=3';
+open c for str;
+c:=returnacursor();
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+end;
+$$
+call p1;
+a	b
+1	aa
+a	b
+2	bb
+call p1;
+a	b
+1	aa
+a	b
+2	bb
+drop PROCEDURE p1;
+#
+# test of duplicate open cursor and function with fetch
+#
+create or replace function returnacursor2 return sys_refcursor
+as
+v_csr sys_refcursor;
+a int;
+b varchar(20);
+begin
+open v_csr for select * from t1;
+fetch v_csr into a,b;
+return v_csr;
+END;
+$$
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+str varchar(200);
+begin
+call pro_return(c);
+call pro_return(c);
+c:=returnacursor2();
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+end;
+$$
+call p1;
+a	b
+2	bb
+a	b
+3	cc
+a	b
+4	dd
+a	b
+5	ee
+call p1;
+a	b
+2	bb
+a	b
+3	cc
+a	b
+4	dd
+a	b
+5	ee
+drop function returnacursor2;
+drop PROCEDURE p1;
+#
+# test of duplicate open cursor and fetch 
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+TYPE tklist IS TABLE OF t1%ROWTYPE INDEX BY BINARY_INTEGER;
+a tklist;
+str varchar(200);
+begin
+call pro_return(c);
+call pro_return(c);
+c:=returnacursor();
+c1:=c;
+loop
+fetch c1 BULK COLLECT into a;
+select a(1),a(2);
+exit when c1%notfound;
+end loop;
+end;
+$$
+call p1;
+a(1)	a(2)
+a:1 | b:aa	a:2 | b:bb
+call p1;
+a(1)	a(2)
+a:1 | b:aa	a:2 | b:bb
+drop PROCEDURE p1;
+#
+# test of multi set ref cursor
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+a int;
+b varchar(20);
+str varchar(200);
+begin
+c:=returnacursor();
+c1 := c;
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+close c;
+c2 := c1;
+fetch c2 into a,b;
+end;
+$$
+call p1;
+a	b
+1	aa
+a	b
+2	bb
+ERROR 42000: Undefined CURSOR: c2
+drop PROCEDURE p1;
+#
+# test of duplicate open cursor and function with fetch no data
+#
+create or replace function returnacursor2 return sys_refcursor
+as
+v_csr sys_refcursor;
+a1 int;
+b1 varchar(20);
+begin
+open v_csr for select * from t1 where a=3 ;
+fetch v_csr into a1,b1;
+return v_csr;
+END;
+$$
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+str varchar(200);
+begin
+call pro_return(c);
+call pro_return(c);
+c:=returnacursor2();
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+end;
+$$
+call p1;
+alter table t1 add i int;
+call p1;
+ERROR HY000: Incorrect number of FETCH variables
+alter table t1 drop i;
+drop function returnacursor2;
+drop PROCEDURE p1;
+#
+# test of sp with null sys_refcursor
+#
+create or replace procedure pro_return1(ref_rs out sys_refcursor) is
+str varchar(30);
+begin
+end;
+$$
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+str varchar(200);
+begin
+call pro_return1(c);
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+end;
+$$
+call p1;
+ERROR 42000: Undefined CURSOR: c
+drop procedure pro_return1;
+drop PROCEDURE p1;
+#
+# test of select ref cursor
+#
+create or replace procedure ref_p1(ref_rs out sys_refcursor) is
+str varchar(30);
+begin
+open ref_rs for select ref_rs from t1;
+end;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'SELECT contains ref cursor variable'
+CREATE or replace PROCEDURE p2() as
+c sys_refcursor;
+begin
+select c from t1;
+end;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'SELECT contains ref cursor variable'
+#
+# test of call p1() other type
+#
+create or replace procedure ref_p1(ref_rs out sys_refcursor) is
+str varchar(30);
+begin
+open ref_rs for select * from t1;
+end;
+$$
+CREATE or replace PROCEDURE p1() as
+a int;
+begin
+call ref_p1(a);
+end;
+$$
+call p1();
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+drop PROCEDURE p1;
+drop PROCEDURE ref_p1;
+#
+# test of sp and fetch
+#
+create or replace procedure ref_p1(ref_rs out sys_refcursor) is
+a1 int;
+b varchar(30);
+begin
+open ref_rs for select * from t1 where a<5;
+fetch ref_rs into a1,b;
+end;
+$$
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+a int;
+b varchar(30);
+begin
+call ref_p1(c);
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+end;
+$$
+call p1();
+a	b
+2	bb
+a	b
+3	cc
+a	b
+4	dd
+drop PROCEDURE p1;
+drop PROCEDURE ref_p1;
+#
+# test of null cursor
+#
+create or replace procedure p1() is
+c sys_refcursor;
+c1 sys_refcursor;
+begin
+c := c1;
+end;
+$$
+call p1();
+drop PROCEDURE p1;
+#
+# test of undefined cursor set to defined cursor
+#
+create or replace procedure p1() is
+a int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+begin
+call pro_return(c);
+c1 := c;
+c1 := c2;
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+fetch c1 into a,b;
+end;
+$$
+call p1();
+a	b
+3	cc
+a	b
+4	dd
+a	b
+5	ee
+ERROR 42000: Undefined CURSOR: c1
+drop PROCEDURE p1;
+#
+# test of undefined cursor set to defined cursor
+#
+create or replace procedure p1() is
+a int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+begin
+call pro_return(c);
+c1 := c;
+c := c2;
+loop
+fetch c1 into a,b;
+exit when c1%notfound;
+select a,b;
+end loop;
+end;
+$$
+call p1();
+a	b
+3	cc
+a	b
+4	dd
+a	b
+5	ee
+drop PROCEDURE p1;
+#
+# test of set to null
+#
+create or replace procedure p1() is
+a int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+begin
+call pro_return(c);
+c1 := c;
+c := null;
+loop
+fetch c1 into a,b;
+exit when c1%notfound;
+select a,b;
+end loop;
+end;
+$$
+call p1();
+ERROR 42000: Undefined CURSOR: c1
+drop PROCEDURE p1;
+#
+# test of set destination cursor null
+#
+create or replace procedure p1() is
+a1 int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+begin
+c:= returnacursor();
+SELECT c INTO c1 FROM dual;
+c1 := null;
+loop
+fetch c into a1,b;
+exit when c%notfound;
+select a1,b;
+end loop;
+end;
+$$
+call p1();
+ERROR 42000: Undefined CURSOR: c
+drop PROCEDURE p1;
+#
+# test of change source cursor
+#
+create or replace procedure p1() is
+a1 int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+begin
+c:= returnacursor();
+SELECT c INTO c1 FROM dual;
+OPEN c FOR SELECT * FROM t1 WHERE a=1;
+loop
+fetch c1 into a1,b;
+exit when c1%notfound;
+select a1,b;
+end loop;
+CLOSE c1;
+end;
+$$
+call p1();
+a1	b
+1	aa
+drop PROCEDURE p1;
+#
+# test of change destination cursor
+#
+create or replace procedure p1() is
+a1 int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+begin
+c:= returnacursor();
+SELECT c INTO c1 FROM dual;
+OPEN c1 FOR SELECT * FROM t1 WHERE a=1;
+loop
+fetch c into a1,b;
+exit when c%notfound;
+select a1,b;
+end loop;
+CLOSE c1;
+end;
+$$
+call p1();
+a1	b
+1	aa
+drop PROCEDURE p1;
+#
+# test of change source cursor
+#
+create or replace procedure p1() is
+a1 int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+begin
+c:= returnacursor();
+SELECT c INTO c1 FROM dual;
+OPEN c2 FOR SELECT * FROM t1 WHERE a=1;
+c1 := c2;
+loop
+fetch c into a1,b;
+exit when c%notfound;
+select a1,b;
+end loop;
+CLOSE c1;
+end;
+$$
+call p1();
+a1	b
+1	aa
+a1	b
+2	bb
+drop PROCEDURE p1;
+#
+# test of close destination cursor
+#
+create or replace procedure p1() is
+a1 int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+begin
+c:= returnacursor();
+SELECT c INTO c1 FROM dual;
+close c1;
+OPEN c FOR SELECT * FROM t1 WHERE a=1;
+fetch c into a1,b;
+select a1,b;
+loop
+fetch c1 into a1,b;
+exit when c1%notfound;
+select a1,b;
+end loop;
+end;
+$$
+call p1();
+a1	b
+1	aa
+ERROR 42000: Undefined CURSOR: c1
+drop PROCEDURE p1;
+#
+# test of close source cursor
+#
+create or replace procedure p1() is
+a1 int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+begin
+c:= returnacursor();
+SELECT c INTO c1 FROM dual;
+close c;
+OPEN c FOR SELECT * FROM t1 WHERE a=1;
+fetch c into a1,b;
+select a1,b;
+loop
+fetch c1 into a1,b;
+exit when c1%notfound;
+select a1,b;
+end loop;
+end;
+$$
+call p1();
+a1	b
+1	aa
+ERROR 42000: Undefined CURSOR: c1
+drop PROCEDURE p1;
+#
+# test of open source cursor
+#
+create or replace function returnacursor1 return sys_refcursor
+as
+v_csr sys_refcursor;
+begin
+open v_csr for select * from t1 where a=5;
+return v_csr;
+END;
+$$
+create or replace procedure p1() is
+a1 int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+begin
+c:= returnacursor();
+SELECT c INTO c1 FROM dual;
+c2:=c1;
+OPEN c1 FOR SELECT * FROM t1 WHERE a=1;
+loop
+fetch c2 into a1,b;
+exit when c2%notfound;
+select a1,b;
+end loop;
+end;
+$$
+call p1();
+a1	b
+1	aa
+call p1();
+a1	b
+1	aa
+drop PROCEDURE p1;
+#
+# test of open source cursor
+#
+create or replace procedure p1() is
+a1 int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+begin
+c:= returnacursor();
+SELECT c INTO c1 FROM dual;
+close c;
+c2:=returnacursor1();
+c1:=c2;
+loop
+fetch c1 into a1,b;
+exit when c1%notfound;
+select a1,b;
+end loop;
+end;
+$$
+call p1();
+a1	b
+5	ee
+call p1();
+a1	b
+5	ee
+drop PROCEDURE p1;
+#
+# test of open source cursor
+#
+create or replace procedure p1() is
+a1 int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+begin
+c:= returnacursor();
+SELECT c INTO c1 FROM dual;
+c2:=c1;
+c:=returnacursor1();
+loop
+fetch c2 into a1,b;
+exit when c2%notfound;
+select a1,b;
+end loop;
+end;
+$$
+call p1();
+a1	b
+1	aa
+a1	b
+2	bb
+call p1();
+a1	b
+1	aa
+a1	b
+2	bb
+drop PROCEDURE p1;
+#
+# test of reopen source cursor
+#
+create or replace procedure p1() is
+a1 int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+begin
+c:= returnacursor();
+SELECT c INTO c1 FROM dual;
+c2:=c1;
+c:=returnacursor1();
+open c2 for select * from t1 where a=4;
+loop
+fetch c1 into a1,b;
+exit when c1%notfound;
+select a1,b;
+end loop;
+end;
+$$
+call p1();
+a1	b
+4	dd
+call p1();
+a1	b
+4	dd
+drop PROCEDURE p1;
+#
+# test of change source cursor,dest cursor not change
+#
+CREATE or replace PROCEDURE p1() as
+c sys_refcursor;
+c1 sys_refcursor;
+a int;
+b varchar(20);
+begin
+call pro_return(c);
+c1:=c;
+c:= returnacursor1();
+loop
+fetch c into a,b;
+exit when c%notfound;
+select a,b;
+end loop;
+loop
+fetch c1 into a,b;
+exit when c1%notfound;
+select a,b;
+end loop;
+end;
+$$
+call p1();
+a	b
+5	ee
+a	b
+3	cc
+a	b
+4	dd
+a	b
+5	ee
+call p1();
+a	b
+5	ee
+a	b
+3	cc
+a	b
+4	dd
+a	b
+5	ee
+drop PROCEDURE p1;
+#
+# test of close dest cursor.
+#
+create or replace procedure p1() is
+a1 int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+begin
+open c for select * from t1 where a=4;
+SELECT c INTO c1 FROM dual;
+c2 := c1;
+c:=returnacursor1();
+close c1;
+loop
+fetch c into a1,b;
+exit when c%notfound;
+select a1,b;
+end loop;
+end;
+$$
+call p1();
+a1	b
+5	ee
+call p1();
+a1	b
+5	ee
+drop PROCEDURE p1;
+#
+# test of %found,%rowcount
+#
+create or replace function returnacursor1 return sys_refcursor
+as
+v_csr sys_refcursor;
+a1 int;
+b varchar(30);
+begin
+open v_csr for select * from t1 where a>2;
+fetch v_csr into a1,b;
+return v_csr;
+END;
+$$
+create or replace procedure p1() is
+a1 int;
+b varchar(30);
+c sys_refcursor;
+c1 sys_refcursor;
+c2 sys_refcursor;
+begin
+c:=returnacursor1();
+SELECT c INTO c1 FROM dual;
+c2 := c1;
+select c1%found,c1%rowcount,c1%isopen,c1%notfound;
+fetch c2 into a1,b;
+select c2%found,c2%rowcount,c2%isopen,c2%notfound;
+select c1%found,c1%rowcount,c1%isopen,c1%notfound;
+loop
+fetch c into a1,b;
+exit when c%notfound;
+select a1,b;
+end loop;
+end;
+$$
+call p1();
+c1%found	c1%rowcount	c1%isopen	c1%notfound
+1	1	1	0
+c2%found	c2%rowcount	c2%isopen	c2%notfound
+1	2	1	0
+c1%found	c1%rowcount	c1%isopen	c1%notfound
+1	2	1	0
+a1	b
+5	ee
+call p1();
+c1%found	c1%rowcount	c1%isopen	c1%notfound
+1	1	1	0
+c2%found	c2%rowcount	c2%isopen	c2%notfound
+1	2	1	0
+c1%found	c1%rowcount	c1%isopen	c1%notfound
+1	2	1	0
+a1	b
+5	ee
+drop PROCEDURE p1;
+#
+# test of in sys_refcursor in function return sys_refcursor
+#
+create or replace function returnacursor(c sys_refcursor) return sys_refcursor
+as
+v_csr sys_refcursor;
+begin
+open v_csr for select * from t1 where a<3;
+return v_csr;
+END;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'sys_refcursor type used as function param'
+#
+# test of in sys_refcursor in function return sys_refcursor
+#
+CREATE or replace PROCEDURE p1() as
+p_out_cursor sys_refcursor;
+cc sys_refcursor;
+c1 int;
+c2 varchar(20);
+c3 int;
+begin
+OPEN cc FOR 
+SELECT a, b,
+RANK() OVER (PARTITION BY a ORDER BY b DESC) AS c from t1;
+p_out_cursor := cc;
+loop
+fetch p_out_cursor into c1,c2,c3;
+exit when p_out_cursor%notfound;
+select c1,c2,c3;
+end loop;
+close cc;
+end;
+$$
+call p1();
+c1	c2	c3
+1	aa	1
+c1	c2	c3
+2	bb	1
+c1	c2	c3
+3	cc	1
+c1	c2	c3
+4	dd	1
+c1	c2	c3
+5	ee	1
+call p1();
+c1	c2	c3
+1	aa	1
+c1	c2	c3
+2	bb	1
+c1	c2	c3
+3	cc	1
+c1	c2	c3
+4	dd	1
+c1	c2	c3
+5	ee	1
+call p1();
+c1	c2	c3
+1	aa	1
+c1	c2	c3
+2	bb	1
+c1	c2	c3
+3	cc	1
+c1	c2	c3
+4	dd	1
+c1	c2	c3
+5	ee	1
+call p1();
+c1	c2	c3
+1	aa	1
+c1	c2	c3
+2	bb	1
+c1	c2	c3
+3	cc	1
+c1	c2	c3
+4	dd	1
+c1	c2	c3
+5	ee	1
+drop PROCEDURE p1;
+#
+# test of in sys_refcursor in function return sys_refcursor
+#
+create or replace function returnacursor2 return sys_refcursor
+as
+v_csr sys_refcursor;
+begin
+open v_csr for SELECT a, b,
+avg(a) keep (DENSE_RANK first ORDER BY b) OVER (partition by a) AS c from t1;
+return v_csr;
+END;
+$$
+CREATE or replace PROCEDURE p1() as
+p_out_cursor sys_refcursor;
+cc sys_refcursor;
+c1 int;
+c2 varchar(20);
+c3 int;
+begin
+OPEN cc FOR 
+SELECT a, b,
+RANK() OVER (PARTITION BY a ORDER BY b DESC) AS c from t1;
+p_out_cursor := cc;
+loop
+fetch p_out_cursor into c1,c2,c3;
+exit when p_out_cursor%notfound;
+select c1,c2,c3;
+end loop;
+p_out_cursor := returnacursor2();
+loop
+fetch p_out_cursor into c1,c2,c3;
+exit when p_out_cursor%notfound;
+select c1,c2,c3;
+end loop;
+end;
+$$
+call p1();
+c1	c2	c3
+1	aa	1
+c1	c2	c3
+2	bb	1
+c1	c2	c3
+3	cc	1
+c1	c2	c3
+4	dd	1
+c1	c2	c3
+5	ee	1
+c1	c2	c3
+1	aa	1
+c1	c2	c3
+2	bb	2
+c1	c2	c3
+3	cc	3
+c1	c2	c3
+4	dd	4
+c1	c2	c3
+5	ee	5
+call p1();
+c1	c2	c3
+1	aa	1
+c1	c2	c3
+2	bb	1
+c1	c2	c3
+3	cc	1
+c1	c2	c3
+4	dd	1
+c1	c2	c3
+5	ee	1
+c1	c2	c3
+1	aa	1
+c1	c2	c3
+2	bb	2
+c1	c2	c3
+3	cc	3
+c1	c2	c3
+4	dd	4
+c1	c2	c3
+5	ee	5
+call p1();
+c1	c2	c3
+1	aa	1
+c1	c2	c3
+2	bb	1
+c1	c2	c3
+3	cc	1
+c1	c2	c3
+4	dd	1
+c1	c2	c3
+5	ee	1
+c1	c2	c3
+1	aa	1
+c1	c2	c3
+2	bb	2
+c1	c2	c3
+3	cc	3
+c1	c2	c3
+4	dd	4
+c1	c2	c3
+5	ee	5
+call p1();
+c1	c2	c3
+1	aa	1
+c1	c2	c3
+2	bb	1
+c1	c2	c3
+3	cc	1
+c1	c2	c3
+4	dd	1
+c1	c2	c3
+5	ee	1
+c1	c2	c3
+1	aa	1
+c1	c2	c3
+2	bb	2
+c1	c2	c3
+3	cc	3
+c1	c2	c3
+4	dd	4
+c1	c2	c3
+5	ee	5
+drop function returnacursor2;
+drop PROCEDURE p1;
+drop procedure pro_return;
+drop function returnacursor;
+drop function returnacursor1;
+drop table t1;

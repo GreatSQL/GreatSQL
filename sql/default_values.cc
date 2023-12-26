@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -197,6 +198,15 @@ bool prepare_default_value(THD *thd, uchar *buf, TABLE *table,
 
   // Set if the field may be NULL.
   if (!(field.flags & NOT_NULL_FLAG)) regfield->set_null();
+  if ((field.auto_flags & Field::DEFAULT_NOW) &&
+      field.sql_type == MYSQL_TYPE_VARCHAR) {
+    Field_str *f = dynamic_cast<Field_str *>(regfield);
+    if (!f) goto err;
+    if (f->char_length_cache < 48) {
+      my_error(ER_INVALID_DEFAULT, MYF(0), regfield->field_name);
+      goto err;
+    }
+  }
 
   if (field.constant_default) {
     // Pointless to store the value of a function as it may not be constant.

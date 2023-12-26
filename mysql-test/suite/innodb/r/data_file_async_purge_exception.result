@@ -1,0 +1,89 @@
+[****************abnormal test: purge file rename ibd failed, delete ibd file directly]
+create table t1(c1 int primary key, c2 varchar(40), c3 varchar(40));
+set innodb_data_file_async_purge=ON;
+set global debug='+d,innodb_do_not_purge_file';
+set global debug='+d,innodb_file_purge_rename_fail_1';
+set global debug='+d,innodb_file_purge_rename_fail_2';
+drop table t1;
+select * from information_schema.innodb_async_purge_files;
+log_id	start_time	original_path	original_size	temporary_path	current_size	message
+show tables;
+Tables_in_test
+set global debug='-d,innodb_do_not_purge_file';
+set global debug='-d,innodb_file_purge_rename_fail_1';
+set global debug='-d,innodb_file_purge_rename_fail_2';
+[****************abnormal test: crash before write file purge log]
+create table t1(c1 int primary key, c2 varchar(40), c3 varchar(40));
+set innodb_data_file_async_purge=ON;
+set session debug='+d,ddl_log_crash_before_write_file_purge_log';
+drop table t1;
+Got one of the listed errors
+# restart:<hidden args>
+show tables like 't1';
+Tables_in_test (t1)
+[****************abnormal test: crash after write file purge log]
+create table t1(c1 int primary key, c2 varchar(40), c3 varchar(40));
+set innodb_data_file_async_purge=ON;
+set session debug='+d,ddl_log_crash_after_write_file_purge_log';
+drop table t1;
+Got one of the listed errors
+# restart:<hidden args>
+show tables like 't1';
+Tables_in_test (t1)
+create table t1(c1 int primary key, c2 varchar(40), c3 varchar(40));
+set innodb_data_file_async_purge=ON;
+set session debug='+d,ddl_log_crash_after_rename_file';
+drop table t1;
+Got one of the listed errors
+crash before purge temp data file, there is temp file in purge dir.
+# restart:<hidden args>
+[****************abnormal test: crash after replay file purge log]
+call mtr.add_suppression("temp data file not exist");
+create table t1(c1 int primary key, c2 varchar(40), c3 varchar(40));
+set innodb_data_file_async_purge=ON;
+set session debug='+d,ddl_log_crash_after_replay_file_purge_log';
+drop table t1;
+## wait pid_file deleted
+# restart:<hidden args>
+show tables like 't1';
+Tables_in_test (t1)
+[************** abnormal test: test file operation exception, then purge success]
+call mtr.add_suppression("create file handle failed");
+call mtr.add_suppression("get file size failed");
+call mtr.add_suppression("truncate file failed");
+## generate table t1 which data file size is 9M
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+set innodb_data_file_async_purge=ON;
+set global innodb_data_file_async_purge_max_size=51200;
+set global innodb_data_file_async_purge_error_retry_count=2000;
+set global innodb_data_file_async_purge_interval=1000;
+set global debug='+d,fp_create_file_handle_fail';
+set @pre_message = '';
+drop table t1;
+set global debug='-d,fp_create_file_handle_fail';
+set global debug='+d,fp_get_file_size_fail';
+set global debug='-d,fp_get_file_size_fail';
+set global debug='+d,fp_truncate_file_fail';
+set global debug='-d,fp_truncate_file_fail';
+set global innodb_data_file_async_purge_interval=100;
+[************** abnormal test: test file operation exception, retry count reachs innodb_data_file_async_purge_interval, delete file manually]
+call mtr.add_suppression("file must be manually deleted");
+## generate table t1 which data file size is 9M
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+set innodb_data_file_async_purge=ON;
+set global innodb_data_file_async_purge_max_size=51200;
+set global innodb_data_file_async_purge_error_retry_count=2000;
+set global innodb_data_file_async_purge_interval=1000;
+set global debug='+d,fp_create_file_handle_fail';
+set @pre_message = '';
+drop table t1;
+set global debug='-d,fp_create_file_handle_fail';
+set global debug='+d,fp_get_file_size_fail';
+set global debug='-d,fp_get_file_size_fail';
+set global debug='+d,fp_truncate_file_fail';
+set global innodb_data_file_async_purge_interval=100;
+set global innodb_data_file_async_purge_error_retry_count=5;
+set global debug='-d,fp_truncate_file_fail';
+set innodb_data_file_async_purge=OFF;
+set global innodb_data_file_async_purge_error_retry_count=10;
+set global innodb_data_file_async_purge_max_size=268435456;

@@ -1,0 +1,622 @@
+#
+# Test of oracle trigger
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS `trg`;
+CREATE TABLE `trg` (
+  `id` int DEFAULT NULL,
+  `name` varchar(200) DEFAULT NULL
+);
+
+DROP TABLE IF EXISTS `trg_0`;
+CREATE TABLE `trg_0` (
+  `id` int DEFAULT NULL,
+  `name` varchar(200) DEFAULT NULL
+);
+
+set sql_mode=oracle;
+DELIMITER $$;
+CREATE  TRIGGER trg1 BEFORE insert 
+ON trg FOR EACH ROW
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.name:=  '-insert'||:NEW.name;
+    END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+DELIMITER $$;
+CREATE  TRIGGER trg2 BEFORE update 
+ON trg FOR EACH ROW
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.name:=  '-update'||:old.name;
+    END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+DELIMITER $$;
+CREATE  TRIGGER trg3 BEFORE delete 
+ON trg FOR EACH ROW
+BEGIN
+    IF :old.id < 0 THEN
+    insert into trg_0 values(:old.id,'-delete'||:old.name);
+    END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+
+select * from trg;
+
+update trg set name ='name_1' where id=-1;
+
+select * from trg;
+
+delete from trg where id=-1;
+
+select * from trg_0;
+
+DELIMITER $$;
+CREATE  TRIGGER trg1_1 BEFORE insert or update
+ON trg FOR EACH ROW
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.name:=  '-insert_update_trg1_1_'||:NEW.name;
+    END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+DELIMITER $$;
+CREATE  TRIGGER trg1_2 BEFORE insert or delete
+ON trg FOR EACH ROW
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.name:=  '-insert_delete_trg1_2_'||:NEW.name;
+    END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+DELIMITER $$;
+CREATE  TRIGGER trg1_3 BEFORE update or delete
+ON trg FOR EACH ROW
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.name:=  '-update_delete_trg1_3_'||:NEW.name;
+    END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+delete from trg;
+delete from trg_0;
+
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+
+select * from trg;
+
+update trg set name ='name_1' where id=-1;
+
+select * from trg;
+
+delete from trg where id=-1;
+
+select * from trg_0;
+
+DELIMITER $$;
+CREATE  TRIGGER trg2_1 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.name:=  '-insert_update_delete_trg2_1_'||:NEW.name;
+    END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+delete from trg;
+delete from trg_0;
+
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+
+select * from trg;
+
+update trg set name ='name_1' where id=-1;
+
+select * from trg;
+
+delete from trg where id=-1;
+
+select * from trg_0;
+
+
+DELIMITER $$;
+drop trigger if exists trg2_1;
+CREATE  TRIGGER trg2_1 BEFORE update or insert
+ON trg FOR EACH ROW
+when(NEW.id < 0)
+DECLARE
+a int:=0;
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.id:= - :NEW.id;
+       :NEW.name:=  'insert_when'||:NEW.name;
+     insert into trg_0 values (-88,'-88name');
+   END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+delete from trg;
+delete from trg_0;
+
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+
+select * from trg;
+
+update trg set name ='name_1' where id=-1;
+
+select * from trg;
+
+delete from trg where id=-1;
+
+select * from trg_0;
+
+drop trigger if exists trg2_1;
+delete from trg;
+delete from trg_0;
+DELIMITER $$;
+CREATE  TRIGGER trg BEFORE  insert or update or delete
+ON trg FOR EACH ROW
+when(NEW.id < 0 or old.id <0)
+DECLARE
+a int:=0;
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.id:= :NEW.id;
+       :NEW.name:=  '-insert or update or delete'||:NEW.name;
+     insert into trg_0 values (-88,:NEW.name);
+   END IF;
+   IF :old.id < 0 THEN
+     insert into trg_0 values (-99,'insert or update or delete '|| :old.name);
+   END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+
+select * from trg;
+
+update trg set name ='name_1' where id=-1;
+
+select * from trg;
+
+delete from trg where id=-1;
+
+select * from trg_0;
+
+create view trg_v as select * from trg;
+DELIMITER $$;
+--error ER_WRONG_OBJECT
+CREATE  TRIGGER trg3_1 BEFORE insert or update or delete
+ON trg_v FOR EACH ROW
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.name:=  '-insert_update_delete_trg2_1_'|| :NEW.name;
+    END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+DELIMITER $$;
+create or replace PROCEDURE P1(b int) AS
+a int :=12;
+BEGIN
+    IF b < 0 THEN
+      b:= - a;
+      select b from dual;
+    END IF;
+END $$
+DELIMITER ;$$
+call p1(-1);
+
+DELIMITER $$;
+CREATE  TRIGGER trg3_1 BEFORE update or insert
+ON trg FOR EACH ROW
+when(NEW.id < 0)
+DECLARE
+a int:=0;
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.id:= - :NEW.id;
+       :NEW.name:=  'insert_when'||:NEW.name;
+     call p1(-1);
+     insert into trg_0 values (-88,'-88name');
+   END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+--error ER_SP_NO_RETSET
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+
+
+drop trigger if exists trg0;
+DELIMITER $$;
+CREATE  TRIGGER trg0 BEFORE insert or update 
+ON trg FOR EACH ROW  FOLLOWS trg3_1
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.id:= - :NEW.id;
+       :NEW.name:= concat('trg0',:NEW.name );
+     END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+drop trigger if exists trg3_1;
+drop trigger if exists trg0;
+
+DELIMITER $$;
+--error ER_SP_NO_RETSET
+CREATE  TRIGGER trg3_1 BEFORE update or insert
+ON trg FOR EACH ROW
+when(NEW.id < 0)
+DECLARE
+a int:=0;
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.id:= - :NEW.id;
+       :NEW.name:=  'insert6_ora'||:NEW.name;
+     select * from trg_0;
+   END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+set sql_mode=default;
+drop trigger if exists trg0;
+DELIMITER $$;
+CREATE  TRIGGER trg0 BEFORE insert  
+ON trg FOR EACH ROW  FOLLOWS trg1
+BEGIN
+    IF NEW.id < 0 THEN
+       SET NEW.id = - NEW.id;
+       SET NEW.name = concat('trg0',NEW.name );
+     END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+insert into trg values(-1,'-name1');
+select * from trg;
+
+
+drop trigger if exists trg10;
+DELIMITER $$;
+--error ER_PARSE_ERROR
+CREATE  TRIGGER trg10 BEFORE insert or delete
+ON trg FOR EACH ROW
+BEGIN
+    IF NEW.name < 0 THEN
+       set NEW.id = - NEW.id;
+       set NEW.name = concat('trg10',NEW.name );
+     insert into test.trg_0 values(-1,'trg_0');
+     END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+DELIMITER $$;
+--error ER_PARSE_ERROR
+CREATE  TRIGGER trg10 BEFORE insert or delete
+ON trg FOR EACH ROW
+when(NEW.id < 0)
+BEGIN
+    IF NEW.name < 0 THEN
+       set NEW.id = - NEW.id;
+       set NEW.name = concat('trg10',NEW.name );
+     insert into test.trg_0 values(-1,'trg_0');
+     END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+drop trigger if exists trg10;
+DELIMITER $$;
+--error ER_PARSE_ERROR
+CREATE  TRIGGER trg10 BEFORE insert 
+ON trg FOR EACH ROW
+BEGIN
+    IF :NEW.name < 0 THEN
+       :NEW.id := - :NEW.id;
+       :NEW.name := concat('trg10',:NEW.name );
+     insert into test.trg_0 values(-1,'trg_0');
+     END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+drop trigger if exists trg;
+drop trigger if exists trg0;
+drop trigger if exists trg1;
+drop trigger if exists trg2;
+drop trigger if exists trg3;
+drop trigger if exists trg1_1;
+drop trigger if exists trg1_2;
+drop trigger if exists trg1_3;
+drop trigger if exists trg2_1;
+drop trigger if exists trg3_1;
+drop view if exists trg_v;
+drop procedure if exists p1;
+
+
+--echo test execution order
+delete from trg;
+set sql_mode=oracle;
+DELIMITER $$;
+CREATE  TRIGGER a_trg BEFORE  insert
+ON trg FOR EACH ROW
+when(NEW.id < 0 )
+DECLARE
+a int:=0;
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.id:= :NEW.id;
+       :NEW.name:= concat('(a_trg insert)',:NEW.name);
+   END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+DELIMITER $$;
+CREATE  TRIGGER b_trg BEFORE  insert
+ON trg FOR EACH ROW
+when(NEW.id < 0 )
+DECLARE
+a int:=0;
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.id:= :NEW.id;
+       :NEW.name:= concat('(b_trg insert)',:NEW.name);
+   END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+DELIMITER $$;
+CREATE  TRIGGER c_trg BEFORE  insert
+ON trg FOR EACH ROW
+when(NEW.id < 0 )
+DECLARE
+a int:=0;
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.id:= :NEW.id;
+       :NEW.name:= concat('(c_trg insert)',:NEW.name);
+   END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+DELIMITER $$;
+CREATE  TRIGGER d_trg BEFORE  insert
+ON trg FOR EACH ROW
+when(NEW.id < 0 )
+DECLARE
+a int:=0;
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.id:= :NEW.id;
+       :NEW.name:= concat('(d_trg insert)',:NEW.name);
+   END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+DELIMITER $$;
+CREATE  TRIGGER e_trg BEFORE  insert
+ON trg FOR EACH ROW
+when(NEW.id < 0 )
+DECLARE
+a int:=0;
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.id:= :NEW.id;
+       :NEW.name:= concat('(e_trg insert)',:NEW.name);
+   END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+insert into trg values (-1,'oracle');
+
+select * from trg;
+
+set sql_mode=default;
+
+insert into trg values (-2,'default');
+
+select * from trg;
+
+
+set sql_mode=oracle;
+DELIMITER $$;
+--error ER_ERROR_IN_TRIGGER_BODY
+CREATE  TRIGGER trg1 BEFORE insert
+ON trg FOR EACH ROW
+when(:NEW.id < 0)
+DECLARE
+CURSOR emp_sor IS
+SELECT a.id FROM trg a;
+emp_record NUMBER;
+BEGIN
+  IF :NEW.id < 0 THEN
+    :NEW.name:=  '-insert'||:NEW.name;
+  END IF;
+END$$
+DELIMITER ;$$
+
+DELIMITER $$;
+CREATE  TRIGGER trg1 BEFORE insert
+ON trg FOR EACH ROW
+when(NEW.id < 0)
+DECLARE
+CURSOR emp_sor IS
+SELECT a.id FROM trg a;
+emp_record NUMBER;
+BEGIN
+  IF :NEW.id < 0 THEN
+    :NEW.name:=  '-insert'||:NEW.name;
+  END IF;
+END$$
+DELIMITER ;$$
+
+
+--echo "bugfix 7740 NEW first"
+set sql_mode =oracle;
+create table alt_tri_tab_1 (id int, name varchar(200) DEFAULT NULL);
+create table alt_tri_tab_2 (id int, name varchar(200) DEFAULT NULL);
+DELIMITER $$;
+CREATE TRIGGER alter_trigger_01 BEFORE INSERT OR UPDATE OR DELETE
+ON alt_tri_tab_1 FOR EACH ROW
+DECLARE
+a int:=0;
+BEGIN
+    IF :NEW.id = 1 THEN
+       :NEW.id:= - :NEW.id;
+       :NEW.name:= '** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:NEW.name||'## INSERT **';
+    ELSIF :NEW.id = 2 THEN
+       :NEW.id:= - :NEW.id;
+       :NEW.name:= '** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:NEW.name||'## UPDATE **';
+    ELSE
+       insert into alt_tri_tab_2(name) values ('** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:NEW.name||'## DELETE **');
+    END IF;
+END$$
+do sleep(0.5)$$
+
+CREATE TRIGGER alter_trigger_02 AFTER INSERT OR UPDATE OR DELETE
+ON alt_tri_tab_1 FOR EACH ROW
+DECLARE
+a int:=0;
+BEGIN
+    IF :NEW.id = -1 THEN
+       insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:NEW.name||'## INSERT **');
+    ELSIF :NEW.id = -2 THEN
+       insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:NEW.name||'## UPDATE **');
+    ELSE
+       insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:NEW.name||'## DELETE **');
+    END IF;
+END$$
+DELIMITER ;$$
+
+insert into alt_tri_tab_1 values(1,'aaa');
+select * from alt_tri_tab_1;
+select * from alt_tri_tab_2;
+update alt_tri_tab_1 set id = 3,name ='zgh' where id = -1;
+select * from alt_tri_tab_1;
+select * from alt_tri_tab_2;
+delete from alt_tri_tab_1 where id = 3;
+select * from alt_tri_tab_1;
+select * from alt_tri_tab_2;
+
+--echo "bugfix 7740 NEW second"
+insert into alt_tri_tab_1 values(1,'aaa');
+select * from alt_tri_tab_1;
+select * from alt_tri_tab_2;
+update alt_tri_tab_1 set id = 3,name ='zgh' where id = -1;
+select * from alt_tri_tab_1;
+select * from alt_tri_tab_2;
+delete from alt_tri_tab_1 where id = 3;
+select * from alt_tri_tab_1;
+select * from alt_tri_tab_2;
+
+drop TRIGGER alter_trigger_01;
+drop TRIGGER alter_trigger_02;
+
+--echo "bugfix 7740 OLD first"
+delete from alt_tri_tab_1;
+delete from alt_tri_tab_2;
+
+DELIMITER $$;
+CREATE TRIGGER alter_trigger_01 BEFORE INSERT OR UPDATE OR DELETE
+ON alt_tri_tab_1 FOR EACH ROW
+DECLARE
+a int:=0;
+BEGIN
+    IF :OLD.id = 1 THEN
+       :NEW.id:= - :NEW.id;
+       :NEW.name:= '** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## INSERT **';
+    ELSIF :OLD.id = 2 THEN
+       :NEW.id:= - :NEW.id;
+       :NEW.name:= '** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## UPDATE **';
+    ELSIF :OLD.id = 3 THEN
+       insert into alt_tri_tab_2(name) values ('** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## DELETE OLD 3 **');
+    ELSIF :OLD.id = -1 THEN
+       insert into alt_tri_tab_2(name) values ('** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## UPDATE OLD -1 **');
+    ELSE
+       :NEW.id:= - :NEW.id;
+       insert into alt_tri_tab_2(name) values ('** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## INSERT NO_OLD **');
+    END IF;
+END$$
+do sleep(0.5)$$
+
+CREATE TRIGGER alter_trigger_02 AFTER INSERT OR UPDATE OR DELETE
+ON alt_tri_tab_1 FOR EACH ROW
+DECLARE
+a int:=0;
+BEGIN
+    IF :OLD.id = -1 THEN
+       insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## UPDATE OLD -1 **');
+    ELSIF :OLD.id = -2 THEN
+       insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## INSERT OLD -2**');
+    ELSIF :OLD.id = 3 THEN
+       insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## DELETE OLD 3 **');
+    ELSE
+       insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## INSERT NO_OLD **');
+    END IF;
+END$$
+DELIMITER ;$$
+
+insert into alt_tri_tab_1 values(1,'aaa');
+select * from alt_tri_tab_1;
+select * from alt_tri_tab_2;
+update alt_tri_tab_1 set id = 3,name ='zgh' where id = -1;
+select * from alt_tri_tab_1;
+select * from alt_tri_tab_2;
+delete from alt_tri_tab_1 where id = 3;
+select * from alt_tri_tab_1;
+select * from alt_tri_tab_2;
+
+--echo "bugfix 7740 OLD second"
+insert into alt_tri_tab_1 values(1,'aaa');
+select * from alt_tri_tab_1;
+select * from alt_tri_tab_2;
+update alt_tri_tab_1 set id = 3,name ='zgh' where id = -1;
+select * from alt_tri_tab_1;
+select * from alt_tri_tab_2;
+delete from alt_tri_tab_1 where id = 3;
+select * from alt_tri_tab_1;
+select * from alt_tri_tab_2;
+
+drop TRIGGER alter_trigger_01;
+drop TRIGGER alter_trigger_02;
+drop table alt_tri_tab_1;
+drop table alt_tri_tab_2;
+
+drop trigger if exists trg1;
+drop trigger if exists a_trg;
+drop trigger if exists b_trg;
+drop trigger if exists c_trg;
+drop trigger if exists d_trg;
+drop trigger if exists e_trg;
+
+drop table if exists trg;
+drop table if exists trg_0;
+--enable_warnings

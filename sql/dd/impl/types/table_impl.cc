@@ -90,6 +90,7 @@ Table_impl::Table_impl()
       m_se_private_data(),
       m_row_format(RF_FIXED),
       m_is_temporary(false),
+      m_is_materialized_view(false),
       m_partition_type(PT_NONE),
       m_default_partitioning(DP_NONE),
       m_subpartition_type(ST_NONE),
@@ -399,7 +400,10 @@ bool Table_impl::restore_attributes(const Raw_record &r) {
   {
     enum_table_type table_type =
         static_cast<enum_table_type>(r.read_int(Tables::FIELD_TYPE));
-
+    if (table_type == enum_table_type::MATERIALIZED_VIEW) {
+      m_is_materialized_view = true;
+      table_type = enum_table_type::BASE_TABLE;
+    }
     if (table_type != enum_table_type::BASE_TABLE) return true;
   }
 
@@ -457,6 +461,11 @@ bool Table_impl::restore_attributes(const Raw_record &r) {
   m_subpartition_expression_utf8 =
       r.read_str(Tables::FIELD_SUBPARTITION_EXPRESSION_UTF8, "");
 
+  if (m_is_materialized_view) {
+    m_definition = r.read_str(Tables::FIELD_VIEW_DEFINITION);
+    m_definition_utf8 = r.read_str(Tables::FIELD_VIEW_DEFINITION_UTF8);
+  }
+
   return false;
 }
 
@@ -508,34 +517,42 @@ bool Table_impl::store_attributes(Raw_record *r) {
 
   // Store field values
   return Abstract_table_impl::store_attributes(r) ||
-         r->store(Tables::FIELD_ENGINE, m_engine) ||
-         r->store_ref_id(Tables::FIELD_COLLATION_ID, m_collation_id) ||
-         r->store(Tables::FIELD_COMMENT, m_comment) ||
-         r->store(Tables::FIELD_SE_PRIVATE_DATA, m_se_private_data) ||
-         r->store(Tables::FIELD_SE_PRIVATE_ID, m_se_private_id,
-                  m_se_private_id == (Object_id)-1) ||
-         r->store(Tables::FIELD_ROW_FORMAT, m_row_format) ||
-         r->store_ref_id(Tables::FIELD_TABLESPACE_ID, m_tablespace_id) ||
-         r->store(Tables::FIELD_PARTITION_TYPE, m_partition_type,
-                  m_partition_type == PT_NONE) ||
-         r->store(Tables::FIELD_PARTITION_EXPRESSION, m_partition_expression,
-                  m_partition_expression.empty()) ||
-         r->store(Tables::FIELD_PARTITION_EXPRESSION_UTF8,
-                  m_partition_expression_utf8,
-                  m_partition_expression_utf8.empty()) ||
-         r->store(Tables::FIELD_DEFAULT_PARTITIONING, m_default_partitioning,
-                  m_default_partitioning == DP_NONE) ||
-         r->store(Tables::FIELD_SUBPARTITION_TYPE, m_subpartition_type,
-                  m_subpartition_type == ST_NONE) ||
-         r->store(Tables::FIELD_SUBPARTITION_EXPRESSION,
-                  m_subpartition_expression,
-                  m_subpartition_expression.empty()) ||
-         r->store(Tables::FIELD_SUBPARTITION_EXPRESSION_UTF8,
-                  m_subpartition_expression_utf8,
-                  m_subpartition_expression_utf8.empty()) ||
-         r->store(Tables::FIELD_DEFAULT_SUBPARTITIONING,
-                  m_default_subpartitioning,
-                  m_default_subpartitioning == DP_NONE);
+                 r->store(Tables::FIELD_ENGINE, m_engine) ||
+                 r->store_ref_id(Tables::FIELD_COLLATION_ID, m_collation_id) ||
+                 r->store(Tables::FIELD_COMMENT, m_comment) ||
+                 r->store(Tables::FIELD_SE_PRIVATE_DATA, m_se_private_data) ||
+                 r->store(Tables::FIELD_SE_PRIVATE_ID, m_se_private_id,
+                          m_se_private_id == (Object_id)-1) ||
+                 r->store(Tables::FIELD_ROW_FORMAT, m_row_format) ||
+                 r->store_ref_id(Tables::FIELD_TABLESPACE_ID,
+                                 m_tablespace_id) ||
+                 r->store(Tables::FIELD_PARTITION_TYPE, m_partition_type,
+                          m_partition_type == PT_NONE) ||
+                 r->store(Tables::FIELD_PARTITION_EXPRESSION,
+                          m_partition_expression,
+                          m_partition_expression.empty()) ||
+                 r->store(Tables::FIELD_PARTITION_EXPRESSION_UTF8,
+                          m_partition_expression_utf8,
+                          m_partition_expression_utf8.empty()) ||
+                 r->store(Tables::FIELD_DEFAULT_PARTITIONING,
+                          m_default_partitioning,
+                          m_default_partitioning == DP_NONE) ||
+                 r->store(Tables::FIELD_SUBPARTITION_TYPE, m_subpartition_type,
+                          m_subpartition_type == ST_NONE) ||
+                 r->store(Tables::FIELD_SUBPARTITION_EXPRESSION,
+                          m_subpartition_expression,
+                          m_subpartition_expression.empty()) ||
+                 r->store(Tables::FIELD_SUBPARTITION_EXPRESSION_UTF8,
+                          m_subpartition_expression_utf8,
+                          m_subpartition_expression_utf8.empty()) ||
+                 r->store(Tables::FIELD_DEFAULT_SUBPARTITIONING,
+                          m_default_subpartitioning,
+                          m_default_subpartitioning == DP_NONE) ||
+                 is_materialized_view()
+             ? (r->store(Tables::FIELD_VIEW_DEFINITION, m_definition) ||
+                r->store(Tables::FIELD_VIEW_DEFINITION_UTF8, m_definition_utf8,
+                         m_definition_utf8.empty()))
+             : false;
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -579,6 +596,10 @@ void Table_impl::serialize(Sdi_wcontext *wctx, Sdi_writer *w) const {
   write(w, m_collation_id, STRING_WITH_LEN("collation_id"));
   serialize_tablespace_ref(wctx, w, m_tablespace_id,
                            STRING_WITH_LEN("tablespace_ref"));
+  if (is_materialized_view()) {
+    write(w, m_definition, STRING_WITH_LEN("view_definition"));
+    write(w, m_definition_utf8, STRING_WITH_LEN("view_definition_utf8"));
+  }
   w->EndObject();
 }
 
@@ -626,6 +647,12 @@ bool Table_impl::deserialize(Sdi_rcontext *rctx, const RJ_Value &val) {
   deserialize_each(
       rctx, [this]() { return add_partition(); }, val, "partitions");
   read(&m_collation_id, val, "collation_id");
+
+  if (is_materialized_view()) {
+    read(&m_definition, val, "view_definition");
+    read(&m_definition_utf8, val, "view_definition_utf8");
+  }
+
   return deserialize_tablespace_ref(rctx, &m_tablespace_id, val,
                                     "tablespace_id");
 }
@@ -1026,6 +1053,8 @@ Table_impl::Table_impl(const Table_impl &src)
       m_se_private_id(src.m_se_private_id),
       m_engine(src.m_engine),
       m_comment(src.m_comment),
+      m_definition(src.m_definition),
+      m_definition_utf8(src.m_definition_utf8),
       m_last_checked_for_upgrade_version_id{
           src.m_last_checked_for_upgrade_version_id},
       m_se_private_data(src.m_se_private_data),
@@ -1033,6 +1062,7 @@ Table_impl::Table_impl(const Table_impl &src)
       m_secondary_engine_attribute(src.m_secondary_engine_attribute),
       m_row_format(src.m_row_format),
       m_is_temporary(src.m_is_temporary),
+      m_is_materialized_view(src.m_is_materialized_view),
       m_partition_type(src.m_partition_type),
       m_partition_expression(src.m_partition_expression),
       m_partition_expression_utf8(src.m_partition_expression_utf8),

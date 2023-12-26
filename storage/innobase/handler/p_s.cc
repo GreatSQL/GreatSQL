@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2016, 2022, Oracle and/or its affiliates.
+Copyright (c) 2023, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -587,7 +588,11 @@ bool Innodb_data_lock_iterator::scan(PSI_server_data_lock_container *container,
   /* We want locks reported in a single scan to be a consistent snapshot. */
   locksys::Global_exclusive_latch_guard guard{UT_LOCATION_HERE};
 
-  trx_sys_mutex_enter();
+  /** use guard c++ object to wrapper the trx sys mutex to help release in case
+   * of exception. the trx_sys_mutex_guard_t ctor will call
+   * trx_sys_mutex_enter()
+   */
+  trx_sys_mutex_guard_t trx_sys_mutex_guard;
 
   size_t found = 0;
 
@@ -601,7 +606,6 @@ bool Innodb_data_lock_iterator::scan(PSI_server_data_lock_container *container,
     m_scan_state.prepare_next_scan();
   }
 
-  trx_sys_mutex_exit();
 
   return false;
 }
@@ -629,7 +633,11 @@ bool Innodb_data_lock_iterator::fetch(PSI_server_data_lock_container *container,
   /* scan_trx() requires exclusive global latch to iterate over locks of trx */
   locksys::Global_exclusive_latch_guard guard{UT_LOCATION_HERE};
 
-  trx_sys_mutex_enter();
+  /** use guard c++ object to wrapper the trx sys mutex to help release in case
+   * of exception. the trx_sys_mutex_guard_t ctor will call
+   * trx_sys_mutex_enter()
+   */
+  trx_sys_mutex_guard_t trx_sys_mutex_guard;
 
   trx = fetch_trx_in_trx_list(trx_immutable_id, &trx_sys->rw_trx_list);
 
@@ -641,7 +649,6 @@ bool Innodb_data_lock_iterator::fetch(PSI_server_data_lock_container *container,
     scan_trx(container, with_lock_data, trx, true, lock_immutable_id, heap_id);
   }
 
-  trx_sys_mutex_exit();
 
   return true;
 }
@@ -850,7 +857,11 @@ bool Innodb_data_lock_wait_iterator::scan(
   /* We want locks reported in a single scan to be a consistent snapshot. */
   locksys::Global_exclusive_latch_guard guard{UT_LOCATION_HERE};
 
-  trx_sys_mutex_enter();
+  /** use guard c++ object to wrapper the trx sys mutex to help release in case
+   * of exception. the trx_sys_mutex_guard_t ctor will call
+   * trx_sys_mutex_enter()
+   */
+  trx_sys_mutex_guard_t trx_sys_mutex_guard;
 
   size_t found = 0;
 
@@ -864,7 +875,6 @@ bool Innodb_data_lock_wait_iterator::scan(
     m_scan_state.prepare_next_scan();
   }
 
-  trx_sys_mutex_exit();
 
   return false;
 }
@@ -906,7 +916,11 @@ bool Innodb_data_lock_wait_iterator::fetch(
   /* scan_trx() requires exclusive global latch to iterate over locks of trx */
   locksys::Global_exclusive_latch_guard guard{UT_LOCATION_HERE};
 
-  trx_sys_mutex_enter();
+  /** use guard c++ object to wrapper the trx sys mutex to help release in case
+   * of exception. the trx_sys_mutex_guard_t ctor will call
+   * trx_sys_mutex_enter()
+   */
+  trx_sys_mutex_guard_t trx_sys_mutex_guard;
 
   trx =
       fetch_trx_in_trx_list(requesting_trx_immutable_id, &trx_sys->rw_trx_list);
@@ -921,7 +935,6 @@ bool Innodb_data_lock_wait_iterator::fetch(
              blocking_lock_immutable_id);
   }
 
-  trx_sys_mutex_exit();
 
   return true;
 }

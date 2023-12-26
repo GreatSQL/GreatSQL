@@ -262,26 +262,11 @@ bool Outerjoin_transformer::check_single_outer_join_cond(Item *item) {
   }
 
   if (plus_fields.empty()) {
-    for (std::vector<Item *>::iterator vit = non_plus_fields.begin();
-         vit != non_plus_fields.end(); vit++) {
-      Table_ref *outer_table = dynamic_cast<Item_ident *>(*vit)->cached_table;
-      assert(outer_table);
-
-      std::vector<uint>::iterator it =
-          std::find(m_outer_info.inner_tables.begin(),
-                    m_outer_info.inner_tables.end(), outer_table->tableno());
-      if (it == m_outer_info.inner_tables.end()) {
-        /**
-         * select * from t1, t2 where t1.age(+) < t2.age and t2.name = 'cc';
-         * <t2.name = 'cc'> is processed as filter after left join.
-         * */
-        m_outer_info.where_conds.push_back(item);
-      } else {
-        // select * from t1, t2 where t1.age(+) < t2.age and t1.name = 'cc';
-        m_outer_info.need_to_reset = true;
-      }
-      return false;
-    }
+    // select * from t1, t2 where t1.age(+) < t2.age and t2.name = 'cc';
+    // select * from t1, t2 where t1.age(+) < t2.age and t1.name = 'cc';
+    // select * from t1,t2 where t1.c1=t2.c1(+) and t2.c1 is null;
+    m_outer_info.where_conds.push_back(item);
+    return false;
   }
   if (non_plus_fields.empty()) {
     for (std::vector<Item *>::iterator vit = plus_fields.begin();
@@ -490,11 +475,6 @@ bool Outerjoin_transformer::check_outer_join(THD *thd, Item *item) {
       }
     }
   }
-
-  if (m_outer_info.need_to_reset) {
-    m_outer_info.reset();
-  }
-
   return false;
 }
 

@@ -317,9 +317,10 @@ class HashJoinIterator final : public RowIterator {
                    const std::vector<HashJoinCondition> &join_conditions,
                    bool allow_spill_to_disk, JoinType join_type,
                    const Mem_root_array<Item *> &extra_conditions,
-                   bool probe_input_batch_mode,
-                   uint64_t *hash_table_generation);
+                   bool probe_input_batch_mode, uint64_t *hash_table_generation,
+                   bool foj_attach = false);
 
+  unique_ptr_destroy_only<RowIterator> foj_attach_it;
   bool Init() override;
 
   int Read() override;
@@ -494,6 +495,7 @@ class HashJoinIterator final : public RowIterator {
     READING_FIRST_ROW_FROM_HASH_TABLE,
     // We are reading the remaining rows returned from the hash table lookup.
     READING_FROM_HASH_TABLE,
+    READING_FROM_ATTACH_ITERATOR,
     // No more rows, both inputs are empty.
     END_OF_ROWS
   };
@@ -595,6 +597,8 @@ class HashJoinIterator final : public RowIterator {
   // What kind of join the iterator should execute.
   const JoinType m_join_type;
 
+  // If true, the iterator is marked as an attachment for a full join
+  const bool m_foj_attach{false};
   // If not nullptr, an extra condition that the iterator will evaluate after a
   // lookup in the hash table is done, but before the row is returned. This is
   // needed in case we have a semijoin condition that is not an equi-join

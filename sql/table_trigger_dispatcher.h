@@ -147,17 +147,39 @@ class Table_trigger_dispatcher : public Table_trigger_field_support {
 
   bool has_triggers(enum_trigger_event_type event,
                     enum_trigger_action_time_type action_time) const {
-    return get_triggers(event, action_time) != nullptr;
+    /*
+      Add check or trigger env
+    */
+    if (get_triggers(event, action_time) != nullptr ||
+        get_triggers(TRG_EVENT_INSERT_UPDATE, action_time) != nullptr ||
+        get_triggers(TRG_EVENT_INSERT_DELETE, action_time) != nullptr ||
+        get_triggers(TRG_EVENT_UPDATE_DELETE, action_time) != nullptr ||
+        get_triggers(TRG_EVENT_INSERT_UPDATE_DELETE, action_time) != nullptr)
+      return true;
+    else
+      return false;
   }
 
   bool has_update_triggers() const {
     return get_triggers(TRG_EVENT_UPDATE, TRG_ACTION_BEFORE) ||
-           get_triggers(TRG_EVENT_UPDATE, TRG_ACTION_AFTER);
+           get_triggers(TRG_EVENT_UPDATE, TRG_ACTION_AFTER) ||
+           get_triggers(TRG_EVENT_INSERT_UPDATE, TRG_ACTION_BEFORE) ||
+           get_triggers(TRG_EVENT_INSERT_UPDATE, TRG_ACTION_AFTER) ||
+           get_triggers(TRG_EVENT_UPDATE_DELETE, TRG_ACTION_BEFORE) ||
+           get_triggers(TRG_EVENT_UPDATE_DELETE, TRG_ACTION_AFTER) ||
+           get_triggers(TRG_EVENT_INSERT_UPDATE_DELETE, TRG_ACTION_BEFORE) ||
+           get_triggers(TRG_EVENT_INSERT_UPDATE_DELETE, TRG_ACTION_AFTER);
   }
 
   bool has_delete_triggers() const {
     return get_triggers(TRG_EVENT_DELETE, TRG_ACTION_BEFORE) ||
-           get_triggers(TRG_EVENT_DELETE, TRG_ACTION_AFTER);
+           get_triggers(TRG_EVENT_DELETE, TRG_ACTION_AFTER) ||
+           get_triggers(TRG_EVENT_INSERT_DELETE, TRG_ACTION_BEFORE) ||
+           get_triggers(TRG_EVENT_INSERT_DELETE, TRG_ACTION_AFTER) ||
+           get_triggers(TRG_EVENT_UPDATE_DELETE, TRG_ACTION_BEFORE) ||
+           get_triggers(TRG_EVENT_UPDATE_DELETE, TRG_ACTION_AFTER) ||
+           get_triggers(TRG_EVENT_INSERT_UPDATE_DELETE, TRG_ACTION_BEFORE) ||
+           get_triggers(TRG_EVENT_INSERT_UPDATE_DELETE, TRG_ACTION_AFTER);
   }
 
   bool mark_fields(enum_trigger_event_type event);
@@ -179,6 +201,14 @@ class Table_trigger_dispatcher : public Table_trigger_field_support {
     row-accessors.
   */
   bool has_load_been_finalized() { return m_load_finalized; }
+  bool add_trigger_chain(THD *thd, Trigger *t, enum_trigger_event_type event);
+  bool add_trigger_or_env(THD *thd, Trigger *t);
+
+  /*
+    record now trigger event
+  */
+  enum_trigger_event_type in_event = enum_trigger_event_type::TRG_EVENT_MAX;
+  TABLE *get_trigger_table() { return m_subject_table; }
 
  private:
   Trigger_chain *create_trigger_chain(

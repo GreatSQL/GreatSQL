@@ -26,6 +26,7 @@
 #include <atomic>
 #include <new>
 
+#include <scope_guard.h>
 #include "my_alloc.h"
 #include "my_dbug.h"
 #include "my_sys.h"
@@ -44,6 +45,7 @@
 #include "sql/sql_list.h"
 #include "sql/sql_tmp_table.h"  // create_tmp_table_from_fields
 #include "sql/table_function.h"
+#include "sql/thd_raii.h"    // Prepared_stmt_arena_holder
 #include "template_utils.h"  // delete_container_pointers
 
 class Query_expression;
@@ -87,16 +89,11 @@ sp_rcontext::sp_rcontext(const sp_pcontext *root_parsing_ctx,
       m_in_sub_stmt(in_sub_stmt),
       m_visible_handlers(PSI_INSTRUMENT_ME),
       m_activated_handlers(PSI_INSTRUMENT_ME),
-      m_ccount(0),
-      is_udt_resolved(false) {}
+      m_ccount(0) {}
 
 sp_rcontext::~sp_rcontext() {
   if (m_var_table) {
     free_blobs(m_var_table);
-    if (has_been_destroyed == 0) {
-      destroy_record_table();
-      has_been_destroyed++;
-    }
     destroy(m_var_table);
   }
 
@@ -106,14 +103,6 @@ sp_rcontext::~sp_rcontext() {
 
   // Leave m_var_items and m_case_expr_holders untouched.
   // They are allocated in mem roots and will be freed accordingly.
-}
-
-void sp_rcontext::destroy_record_table() {
-  uint num_vars = m_root_parsing_ctx->max_var_index();
-  for (uint i = 0; i < num_vars; i++) {
-    Item_field *item_field = dynamic_cast<Item_field *>(m_var_items[i]);
-    if (item_field) item_field->field->clear_table_all_field();
-  }
 }
 
 sp_rcontext *sp_rcontext::create(THD *thd, const sp_pcontext *root_parsing_ctx,
@@ -134,22 +123,53 @@ sp_rcontext *sp_rcontext::create(THD *thd, const sp_pcontext *root_parsing_ctx,
 bool sp_rcontext::find_row_field_by_name_or_error(
     uint *field_idx, uint var_idx, const Name_string &field_name) {
   TABLE *vtable = virtual_tmp_table_for_row(var_idx);
+  if (!vtable) return true;
   Field *row = m_var_table->field[var_idx];
   return vtable->sp_find_field_by_name_or_error(
       field_idx, to_lex_cstring(row->field_name),
       to_lex_cstring(field_name.ptr()));
 }
 
-void sp_rcontext::record_field_expand_table(THD *, Field *field, int row_number,
-                                            Item *) {
-  if (field->virtual_record_count_map_key_count(row_number) == 0) {
-    if (field->is_offset_table_fixed()) {
-      field->set_row_count_map(row_number);
-    } else {
-      // If it's first time to create row,must modify the key to real number.
-      field->set_row_count_with_fix(row_number);
+bool sp_rcontext::record_field_expand_table(THD *, Field *field,
+                                            Item *row_index) {
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> tmp_str;
+  String *result = row_index->val_str(&tmp_str);
+  if (!field->udt_value_initialized()) {
+    my_error(ER_UDT_REF_UNINIT_COMPOSITE, MYF(0));
+    return true;
+  }
+  Field_row_table *row_field = dynamic_cast<Field_row_table *>(field);
+  if (!row_field) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "non record table to expand rows");
+    return true;
+  }
+  // varchar type.
+  if (row_field->get_index_length() > 0) {
+    if ((int)result->length() > row_field->get_index_length()) {
+      my_error(ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE, MYF(0), result->ptr());
+      return true;
+    }
+  } else {  // int type.
+    if (!row_field->m_is_index_by) {
+      if (row_field->check_if_row_not_exist(row_index)) {
+        my_error(ER_RECORD_TABLE_OUTSIZE_LIMIT, MYF(0));
+        return true;
+      }
+    }
+    if (row_index->this_item()->result_type() != INT_RESULT) {
+      char *row_str = result->ptr();
+      char *str = row_str;
+      char *end = row_str + result->length();
+      while (str != end) {
+        if (*str == '-') str++;
+        if (!my_isdigit(&my_charset_bin, *str++)) {
+          my_error(ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE, MYF(0), result->ptr());
+          return true;
+        }
+      }
     }
   }
+  return false;
 }
 
 bool sp_rcontext::set_variable_row_field(THD *thd, uint var_idx, uint field_idx,
@@ -157,6 +177,8 @@ bool sp_rcontext::set_variable_row_field(THD *thd, uint var_idx, uint field_idx,
   DBUG_ENTER("sp_rcontext::set_variable_row_field");
   assert(value);
   TABLE *vtable = virtual_tmp_table_for_row(var_idx);
+  if (!vtable) return true;
+  m_var_table->field[var_idx]->set_notnull();
   DBUG_RETURN(sp_eval_expr(thd, vtable->field[field_idx], value));
 }
 
@@ -182,15 +204,17 @@ bool sp_rcontext::set_variable_row_table_by_name(
   ora_simple_ident_def *def = nullptr;
   sp_variable *spv = nullptr;
   ora_simple_ident_def *def_before = nullptr;
+  Item *def_number_before = nullptr;
   LEX_STRING def_name_before{nullptr, 0};
   Field *field = m_var_table->field[var_idx];
   uint m_field_idx = 0;
-  int irow_number = -1;
-  int offset_table = -1;
+  String tmp_str;
   Item_field_row_table *item_table = nullptr;
   uint table_field_idx = 0;
   Create_field *cdf_before = nullptr, *cdf_before_last;
   Item *item = get_item(var_idx);
+  if (!sp_prepare_func_item(thd, value)) return true;
+
   for (uint offset = 0; (def = it++); offset++) {
     // offset[0] is var_idx
     if (offset == 0) {
@@ -203,9 +227,11 @@ bool sp_rcontext::set_variable_row_table_by_name(
                             ? spv->field_def.udt_name
                             : to_lex_string(spv->field_def.nested_table_udt);
       def_before = def;
+      def_number_before = def->number ? def->number : nullptr;
       continue;
     }
 
+    Item *item_number = nullptr;
     if (offset > 0) {
       // It must find the offset of def_before by name.Now it's def_before.def
       spv = m_pcont->find_variable(def_name_before.str, def_name_before.length,
@@ -215,13 +241,12 @@ bool sp_rcontext::set_variable_row_table_by_name(
         return true;
       }
       if (def_before->number == nullptr) {  // a.b
-        if (!spv->field_def.row_field_definitions()) {
+        if (!spv->field_def.ora_record.row_field_definitions()) {
           my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), def_before->ident.str);
           return true;
         }
-        cdf_before =
-            spv->field_def.row_field_definitions()->find_row_field_by_name(
-                to_lex_cstring(def->ident.str), &m_field_idx);
+        cdf_before = spv->field_def.ora_record.row_field_definitions()
+                         ->find_row_field_by_name(def->ident, &m_field_idx);
         if (!cdf_before) {
           my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0),
                    def_before->ident.str, def->ident.str);
@@ -231,47 +256,35 @@ bool sp_rcontext::set_variable_row_table_by_name(
         Item_field *item_field = dynamic_cast<Item_field *>(item);
         field = item_field->field;
       } else {  // a(1).b
-        if (!spv->field_def.row_field_table_definitions()) {
+        if (!spv->field_def.ora_record.row_field_table_definitions()) {
           my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0),
                    def_before->ident.str);
           return true;
         }
-        if (!def_before->number->fixed) {
-          if (def_before->number->fix_fields(thd, &def_before->number)) {
-            return true;
-          }
-        }
-        if (!def_before->number->this_item()->is_null() &&
-            def_before->number->this_item()->result_type() != ROW_RESULT &&
-            def_before->number->this_item()->result_type() != STRING_RESULT) {
-          irow_number = def_before->number->val_int();
+        item_number = sp_prepare_func_item(thd, &def_before->number);
+        if (item_number == nullptr) return true;
+        if (!item_number->is_null() &&
+            item_number->result_type() != ROW_RESULT) {
+          if (record_field_expand_table(thd, field, item_number)) return true;
         } else {
           my_error(ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE, MYF(0),
-                   def_before->number->this_item()->item_name.ptr());
+                   item_number->item_name.ptr());
           return true;
         }
-        record_field_expand_table(thd, field, irow_number, item);
-        cdf_before = spv->field_def.row_field_table_definitions()
-                         ->find_row_field_by_name(
-                             to_lex_cstring(def->ident.str), &m_field_idx);
+
+        cdf_before = spv->field_def.ora_record.row_field_table_definitions()
+                         ->find_row_field_by_name(def->ident, &m_field_idx);
         if (!cdf_before) {
           my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0),
                    def_before->ident.str, def->ident.str);
           return true;
         }
-        if (field->virtual_record_count_map_key_count(irow_number) > 0)
-          offset_table = field->virtual_record_count_map(irow_number);
-        else {
-          my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0),
-                   def_name_before.str);
-          return true;
-        }
         item_table = dynamic_cast<Item_field_row_table *>(item);
         Item *item_tmp =
-            item_table->element_row_index(offset_table, m_field_idx);
+            item_table->element_row_index(item_number, m_field_idx);
         if (!item_tmp) {
           if (!(item = insert_into_table_default_and_set_default(
-                    thd, item, offset_table, m_field_idx)))
+                    thd, item, m_field_idx, item_number)))
             return true;
         } else
           item = item_tmp;
@@ -288,25 +301,28 @@ bool sp_rcontext::set_variable_row_table_by_name(
                              strlen(cdf_before->field_name)};
       def_name_before = def_cdf_str;
     }
+    def_number_before = item_number ? item_number : nullptr;
     def_before = def;
   }  // end of for
   spv = m_pcont->find_variable(def_name_before.str, def_name_before.length,
                                false);
   if (!spv) {
-    spv = search_udt_variable(def_name_before.str, def_name_before.length);
+    spv = search_udt_variable(def_name_before.str, def_name_before.length,
+                              nullptr, 0);
     if (!spv) {
       my_error(ER_SP_UNDECLARED_VAR, MYF(0), def_name_before.str);
       return true;
     }
   }
   if (def_before->number == nullptr) {  // a.b
-    if (!spv->field_def.row_field_definitions()) {
+    if (!spv->field_def.ora_record.row_field_definitions()) {
       my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), def_before->ident.str);
       return true;
     }
     cdf_before_last =
-        spv->field_def.row_field_definitions()->find_row_field_by_name(
-            to_lex_cstring(field_name.ptr()), &m_field_idx);
+        spv->field_def.ora_record.row_field_definitions()
+            ->find_row_field_by_name(
+                to_lex_string(to_lex_cstring(field_name.ptr())), &m_field_idx);
     if (!cdf_before_last) {
       my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0),
                def_before->ident.str, field_name.ptr());
@@ -321,119 +337,118 @@ bool sp_rcontext::set_variable_row_table_by_name(
       if (udt_field->update_field_of_table(thd, m_field_idx, value))
         return true;
       return item_table->update_table_value(thd, nullptr, table_field_idx,
-                                            offset_table, udt_field);
+                                            def_number_before, udt_field);
     } else {
       field = field->virtual_tmp_table_addr()[0]->field[m_field_idx];
       return sp_eval_expr(thd, field, value);
     }
   } else {  // a(1).b
-    if (!spv->field_def.row_field_table_definitions()) {
+    if (!spv->field_def.ora_record.row_field_table_definitions()) {
       my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0), def_before->ident.str);
       return true;
     }
-    if (!def_before->number->fixed) {
-      if (def_before->number->fix_fields(thd, &def_before->number)) {
-        return true;
-      }
-    }
-    if (!def_before->number->this_item()->is_null() &&
-        def_before->number->this_item()->result_type() != ROW_RESULT &&
-        def_before->number->this_item()->result_type() != STRING_RESULT) {
-      irow_number = def_before->number->val_int();
+    Item *item_number = sp_prepare_func_item(thd, &def_before->number);
+    if (item_number == nullptr) return true;
+    if (!item_number->is_null() && item_number->result_type() != ROW_RESULT) {
+      if (record_field_expand_table(thd, field, item_number)) return true;
     } else {
       my_error(ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE, MYF(0),
-               def_before->number->this_item()->item_name.ptr());
+               item_number->item_name.ptr());
       return true;
     }
-    record_field_expand_table(thd, field, irow_number, item);
     cdf_before_last =
-        spv->field_def.row_field_table_definitions()->find_row_field_by_name(
-            to_lex_cstring(field_name.ptr()), &m_field_idx);
+        spv->field_def.ora_record.row_field_table_definitions()
+            ->find_row_field_by_name(
+                to_lex_string(to_lex_cstring(field_name.ptr())), &m_field_idx);
     if (!cdf_before_last) {
       my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0),
                def_before->ident.str, field_name.ptr());
       return true;
     }
-    if (field->virtual_record_count_map_key_count(irow_number) > 0)
-      offset_table = field->virtual_record_count_map(irow_number);
-    else {
-      my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0), def_name_before.str);
-      return true;
-    }
     item_table = dynamic_cast<Item_field_row_table *>(item);
-    Item *item_tmp = item_table->element_row_index(offset_table, m_field_idx);
+    Item *item_tmp = item_table->element_row_index(item_number, m_field_idx);
     if (!item_tmp)
       if (!(item = insert_into_table_default_and_set_default(
-                thd, item, offset_table, m_field_idx)))
+                thd, item, m_field_idx, item_number)))
         return true;
-    return item_table->update_table_value(thd, value, m_field_idx,
-                                          offset_table);
+    return item_table->update_table_value(thd, value, m_field_idx, item_number);
   }
 }
 
 Item *sp_rcontext::insert_into_table_default_and_set_default(THD *thd,
                                                              Item *item,
-                                                             int offset_table,
-                                                             uint m_field_idx) {
+                                                             uint m_field_idx,
+                                                             Item *index_item) {
   // For example:v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1,there is no data
   // in v_t_rec3.v_t_rec2(0),so it must insert new row of all null value.
   Item_field_row_table *item_table = dynamic_cast<Item_field_row_table *>(item);
   if (!item_table) return nullptr;
-  Field_row_table *field_table =
-      dynamic_cast<Field_row_table *>(item_table->field);
-  /*case 1:
-      type stu_record is record(
-      id int := 1,
-      name_d  t_air_table,
-      score float := 0 }
-      type dr_type is table of stu_record index by binary_integer;
-      dr_table dr_type; dr_table->get_udt_name() = dr_type,
-      dr_table->get_nested_table_udt() = stu_record,
-      If name_d is not inited,it gets error.
-    case 2:
-      type dr_type is table of tt_air%ROWTYPE index by binary_integer;
-      dr_table dr_type; dr_table->get_udt_name() = dr_type,
-      dr_table->get_nested_table_udt() = dr_type,
-      so search_udt_variable = nullptr,and it will go through.
-  */
-  if (field_table->get_nested_table_udt().str &&
-      search_udt_variable(field_table->get_nested_table_udt().str,
-                          field_table->get_nested_table_udt().length) &&
-      !field_table->udt_value_initialized()) {
-    my_error(ER_UDT_REF_UNINIT_COMPOSITE, MYF(0));
-    return nullptr;
-  }
-  /*type stu_record is record(
-      id int := 1,
-      name_d  t_air_table,
-      score float := 0
-    );
-    type stu_record1 is record(
-      ii int := 1,
-      stu_record_val1 stu_record:= stu_record(10,t_air_table(t_air(3,'cc')),1.1)
-    ); stu_record_val.stu_record_val1.name_d(2) doesn't init,
-  */
-  if (search_udt_variable(field_table->udt_name().str,
-                          field_table->udt_name().length)) {
-    my_error(ER_UDT_REF_UNINIT_COMPOSITE, MYF(0));
-    return nullptr;
-  }
 
   if (item_table->create_item_for_store_default_value_and_insert_into_table(
-          thd, this))
+          thd, this, index_item))
     return nullptr;
 
-  Item *item_result = item_table->element_row_index(offset_table, m_field_idx);
+  Item *item_result = item_table->element_row_index(index_item, m_field_idx);
+  if (!item_result) {
+    my_error(ER_UDT_REF_UNINIT_COMPOSITE, MYF(0));
+  }
   return item_result;
+}
+
+bool sp_rcontext::set_variable_row_table_by_index(THD *thd, uint var_idx,
+                                                  Item *index, Item **value) {
+  Item *item = get_item(var_idx);
+  Item_field_row_table *item_table = dynamic_cast<Item_field_row_table *>(item);
+  Field *field = item_table->field;
+  if (!field->udt_value_initialized()) {
+    my_error(ER_UDT_REF_UNINIT_COMPOSITE, MYF(0));
+    return true;
+  }
+
+  Item *item_index = sp_prepare_func_item(thd, &index);
+  if (item_index == nullptr) return true;
+  if (item_index->is_null()) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "record table with null index");
+    return true;
+  }
+  // Avoid stu_record_val1(3) := stu_record_val1(3) when stu_record_val1(3) is
+  // empty.
+  if (!sp_prepare_func_item(thd, value)) return true;
+  Field_row_table *row_field = dynamic_cast<Field_row_table *>(field);
+
+  if (search_udt_variable(
+          field->udt_name().str, field->udt_name().length,
+          field->get_udt_db_name(),
+          field->get_udt_db_name() ? strlen(field->get_udt_db_name()) : 0)) {
+    if (row_field->check_if_row_not_exist(item_index)) {
+      my_error(ER_UDT_REF_UNINIT_COMPOSITE, MYF(0));
+      return true;
+    }
+  }
+
+  if (record_field_expand_table(thd, field, item_index)) return true;
+
+  Item *item_tmp = item_table->element_row_index(item_index, 1);
+  if (!item_tmp) {
+    mem_root_deque<Item *> items(thd->mem_root);
+    items.push_back(*value);
+    return item_table->insert_into_table_all_value(thd, items, item_index);
+  }
+
+  return item_table->update_table_value(thd, value, -1, item_index);
 }
 
 bool sp_rcontext::set_variable_row(THD *thd, uint var_idx,
                                    const mem_root_deque<Item *> &items) {
+  Field *field_first = m_var_table->field[var_idx];
+  Field_row *field_row = dynamic_cast<Field_row *>(field_first);
+  field_row->set_notnull();
   TABLE *vtable = virtual_tmp_table_for_row(var_idx);
-
+  if (!vtable) return true;
+  m_var_table->field[var_idx]->set_notnull();
   auto item_iter = VisibleFields(items).begin();
   int count = 0;
-  int size = items.size();
+  int size = CountVisibleFields(items);
   while (count < size) {
     Item *item = *item_iter++;
     if (vtable->field[count]->sp_prepare_and_store_item(thd, &item)) {
@@ -444,36 +459,40 @@ bool sp_rcontext::set_variable_row(THD *thd, uint var_idx,
   return false;
 }
 
+/*It must be inited when it's called from select bulk collect into.*/
 bool sp_rcontext::set_variable_row_table(THD *thd, uint var_idx,
                                          const mem_root_deque<Item *> &items,
-                                         ha_rows row_count) {
+                                         ha_rows row_count, bool is_bulk_into) {
   Item *item_var = get_item(var_idx);
   Field *field_first = m_var_table->field[var_idx];
+  Field_row_table *row_table = dynamic_cast<Field_row_table *>(field_first);
+  auto strict_guard =
+      create_scope_guard([row_table, saved_index = row_table->m_is_index_by]() {
+        row_table->m_is_index_by = saved_index;
+      });
+  if (is_bulk_into) {
+    field_first->set_udt_value_initialized(true);
+    row_table->m_is_index_by = true;
+  }
   Item_field_row_table *item_table =
       dynamic_cast<Item_field_row_table *>(item_var);
-  record_field_expand_table(thd, field_first, row_count, item_var);
-  return item_table->insert_into_table_all_value(thd, items);
+  Item *item_index = new (thd->mem_root) Item_uint(row_count);
+  if (record_field_expand_table(thd, field_first, item_index)) return true;
+  return item_table->insert_into_table_all_value(thd, items, item_index);
 }
 
 void sp_rcontext::cleanup_record_variable_row_table(uint var_idx) {
-  Field *field_first = m_var_table->field[var_idx];
   Item *item = get_item(var_idx);
-  field_first->clear_args_map();
   item->clear_args_table();
 }
 
-TABLE **sp_rcontext::virtual_tmp_table_for_row_table(uint var_idx) {
-  assert(get_item(var_idx)->type() == Item::ROW_ITEM);
-  assert(get_item(var_idx)->result_type_table());
-  Field *field = m_var_table->field[var_idx];
-  TABLE **ptable = field->virtual_tmp_table_addr();
-  assert(ptable);
-  return ptable;
-}
-
 TABLE *sp_rcontext::virtual_tmp_table_for_row(uint var_idx) {
-  assert(get_item(var_idx)->type() == Item::ROW_ITEM);
-  assert(get_item(var_idx)->result_type() == ROW_RESULT);
+  if (get_item(var_idx)->type() != Item::ORACLE_ROWTYPE_ITEM ||
+      get_item(var_idx)->result_type() != ROW_RESULT) {
+    my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0),
+             get_item(var_idx)->item_name.ptr());
+    return nullptr;
+  }
   Field *field = m_var_table->field[var_idx];
   TABLE **ptable = field->virtual_tmp_table_addr();
   assert(ptable[0]);
@@ -503,16 +522,17 @@ bool sp_rcontext::init_var_table(THD *thd) {
   if (!m_root_parsing_ctx->max_var_index()) return false;
 
   m_vars_list.clear();
-  m_root_parsing_ctx->retrieve_field_definitions(&field_def_lst, &m_vars_list);
-  if (!is_udt_resolved) {
-    m_root_parsing_ctx->retrieve_udt_field_definitions(thd, &m_udt_vars_list);
-    is_udt_resolved = true;
-  }
+  m_udt_vars_list.clear();
+  uint udt_var_count_diff = 0;
+  m_root_parsing_ctx->retrieve_field_definitions(
+      &field_def_lst, &m_vars_list, &m_udt_vars_list, &udt_var_count_diff);
+  m_root_parsing_ctx->retrieve_udt_field_definitions(thd, &m_udt_vars_list);
 
   if (field_def_lst.elements != m_root_parsing_ctx->max_var_index())
     return true;
 
-  if (m_udt_vars_list.elements != m_root_parsing_ctx->max_udt_var_index())
+  if (m_udt_vars_list.elements !=
+      m_root_parsing_ctx->max_udt_var_index() + udt_var_count_diff)
     return true;
 
   if (!(m_var_table = create_tmp_table_from_fields(thd, field_def_lst)))
@@ -541,41 +561,55 @@ bool sp_rcontext::init_var_items(THD *thd) {
       m_var_table->field[idx]->set_udt_name(
           to_lex_cstring(vars->field_def.udt_name.str));
     }
-    if (vars->field_def.udt_db_name) {
-      m_var_table->field[idx]->set_udt_db_name(
-          const_cast<char *>(vars->field_def.udt_db_name));
+    if (vars->field_def.udt_db_name.str) {
+      m_var_table->field[idx]->set_udt_db_name(vars->field_def.udt_db_name.str);
     }
-    if (vars->field_def.is_record_define ||
-        vars->field_def.is_record_table_define ||
-        // rec3 rec%type;rec3 must set initialize.
-        !search_udt_variable(vars->field_def.udt_name.str,
-                             vars->field_def.udt_name.length)) {
-      m_var_table->field[idx]->set_udt_value_initialized();
+
+    if (vars->field_def.ora_record.is_record_define ||
+        vars->field_def.ora_record.is_record_table_define ||
+        vars->field_def.ora_record.is_index_by ||
+        (vars->field_def.ora_record.is_row() &&
+         // rec3 rec%type;rec3 must set initialize.
+         !search_udt_variable(vars->field_def.udt_name.str,
+                              vars->field_def.udt_name.length,
+                              vars->field_def.udt_db_name.str,
+                              vars->field_def.udt_db_name.length)) ||
+        vars->field_def.ora_record.is_cursor_rowtype_ref() ||
+        (vars->field_def.ora_record.is_table_rowtype_ref() &&
+         !vars->field_def.ora_record.is_row_table())) {
+      m_var_table->field[idx]->set_udt_value_initialized(true);
       m_var_table->field[idx]->set_notnull();
     }
-    if (vars->field_def.is_cursor_rowtype_ref()) {
-      Item_field_row *item =
-          new (thd->mem_root) Item_field_row(m_var_table->field[idx]);
-      if (!(m_var_items[idx] = item)) return true;
-    } else if (vars->field_def.is_table_rowtype_ref()) {
-      List<Create_field> defs;
-      Item_field_row *item =
-          new (thd->mem_root) Item_field_row(m_var_table->field[idx]);
-      if (!(m_var_items[idx] = item) ||
-          vars->field_def.table_rowtype_ref()->resolve_table_rowtype_ref(
-              thd, defs) ||
-          add_udt_to_sp_var_list(thd, defs) ||
-          item->row_create_items(thd, &defs))
+    if (vars->field_def.ora_record.is_cursor_rowtype_ref() ||
+        (vars->field_def.ora_record.is_ref_cursor &&
+         !vars->field_def.ora_record.is_table_rowtype_ref() &&
+         !vars->field_def.ora_record.is_row())) {
+      if (vars->field_def.ora_record.is_ref_cursor) {
+        m_var_items[idx] =
+            new (thd->mem_root) Item_field_refcursor(m_var_table->field[idx]);
+      } else
+        m_var_items[idx] =
+            new (thd->mem_root) Item_field_row(m_var_table->field[idx]);
+      if (!m_var_items[idx]) return true;
+    } else if ((vars->field_def.ora_record.is_table_rowtype_ref() ||
+                vars->field_def.ora_record.is_row()) &&
+               !vars->field_def.ora_record.is_row_table()) {
+      if (vars->field_def.ora_record.is_ref_cursor) {
+        m_var_items[idx] =
+            new (thd->mem_root) Item_field_refcursor(m_var_table->field[idx]);
+      } else
+        m_var_items[idx] =
+            new (thd->mem_root) Item_field_row(m_var_table->field[idx]);
+      if (!m_var_items[idx] ||
+          m_var_items[idx]->row_create_items(
+              thd, vars->field_def.ora_record.row_field_definitions()))
         return true;
-    } else if (vars->field_def.is_row()) {
-      Item_field_row *item =
-          new (thd->mem_root) Item_field_row(m_var_table->field[idx]);
-      if (!(m_var_items[idx] = item) ||
-          item->row_create_items(thd, vars->field_def.row_field_definitions()))
-        return true;
-    } else if (vars->field_def.is_row_table()) {
+    } else if (vars->field_def.ora_record.is_row_table()) {
       Field_row_table *row_field =
           dynamic_cast<Field_row_table *>(m_var_table->field[idx]);
+      row_field->m_is_record_table_type_define =
+          vars->field_def.ora_record.is_record_table_type_define;
+      row_field->m_is_index_by = vars->field_def.ora_record.is_index_by;
       if (vars->field_def.nested_table_udt.str) {
         row_field->set_nested_table_udt(vars->field_def.nested_table_udt);
       }
@@ -585,40 +619,11 @@ bool sp_rcontext::init_var_items(THD *thd) {
                                                      : -1;
       Item_field_row_table *item =
           new (thd->mem_root) Item_field_row_table(m_var_table->field[idx]);
-      // for type dr_type is table of stu_record,it doesn't have
-      // table_rowtype_ref.
-      if (vars->field_def.is_record_table_ref) {
-        List<Create_field> defs;
-        if (!(m_var_items[idx] = item) ||
-            vars->field_def.table_rowtype_ref()->resolve_table_rowtype_ref(
-                thd, defs) ||
-            add_udt_to_sp_var_list(thd, defs)) {
-          return true;
-        } else {
-          Row_definition_list *rdl = nullptr;
-          List_iterator_fast<Create_field> it(defs);
-          Create_field *def;
-          for (uint i = 0; (def = it++); i++) {
-            if (i == 0)
-              rdl = Row_definition_list::make(thd->mem_root, def);
-            else
-              rdl->append_uniq(thd->mem_root, def);
-          }
-          Row_definition_table_list *row_definition_table_list =
-              Row_definition_table_list::make(thd->mem_root, rdl);
-          vars->field_def.set_row_field_table_definitions(
-              row_definition_table_list);
-          item->set_item_table_name(vars->name.str);
-          if (item->row_create_items(thd, row_definition_table_list))
-            return true;
-        }
-      } else {
         m_var_items[idx] = item;
         item->set_item_table_name(vars->name.str);
-        if (item->row_create_items(
-                thd, vars->field_def.row_field_table_definitions()))
+        if (item->row_table_create_items(
+                thd, vars->field_def.ora_record.row_field_table_definitions()))
           return true;
-      }
     } else {
       if (!(m_var_items[idx] =
                 new (thd->mem_root) Item_field(m_var_table->field[idx])))
@@ -638,8 +643,11 @@ bool sp_rcontext::add_udt_to_sp_var_list(THD *thd,
   Create_field *cdf;
   for (uint i = 0; (cdf = it_cdf++); i++) {
     if (cdf->udt_name.str) {
+      LEX_STRING udt_db_name =
+          cdf->udt_db_name.str ? cdf->udt_db_name : to_lex_string(thd->db());
       sp_variable *spvar_udt = m_root_parsing_ctx->find_udt_variable(
-          cdf->udt_name.str, cdf->udt_name.length, false);
+          cdf->udt_name.str, cdf->udt_name.length, udt_db_name.str,
+          udt_db_name.length, false);
       if (!spvar_udt) {
         spvar_udt = new (thd->mem_root)
             sp_variable(cdf->udt_name, cdf->sql_type, sp_variable::MODE_IN,
@@ -652,14 +660,25 @@ bool sp_rcontext::add_udt_to_sp_var_list(THD *thd,
   return false;
 }
 
-sp_variable *sp_rcontext::search_udt_variable(const char *name,
-                                              size_t name_len) {
+sp_variable *sp_rcontext::search_udt_variable(const char *name, size_t name_len,
+                                              const char *db_name,
+                                              size_t db_name_len) {
+  if (!db_name) {
+    db_name = current_thd->db().str;
+    db_name_len = current_thd->db().length;
+  }
   List_iterator_fast<sp_variable> it(m_udt_vars_list);
   sp_variable *p;
   for (uint i = 0; (p = it++); i++) {
+    LEX_STRING p_db_name = p->field_def.udt_db_name.str
+                               ? p->field_def.udt_db_name
+                               : to_lex_string(current_thd->db());
     if (my_strnncoll(system_charset_info, pointer_cast<const uchar *>(name),
                      name_len, pointer_cast<const uchar *>(p->name.str),
-                     p->name.length) == 0) {
+                     p->name.length) == 0 &&
+        my_strnncoll(system_charset_info, pointer_cast<const uchar *>(db_name),
+                     db_name_len, pointer_cast<const uchar *>(p_db_name.str),
+                     p_db_name.length) == 0) {
       return p;
     }
   }
@@ -689,7 +708,7 @@ bool sp_rcontext::set_return_value(THD *thd, Item **return_value_item) {
   return sp_eval_expr(thd, m_return_value_fld, return_value_item);
 }
 
-bool sp_rcontext::push_cursor(sp_instr_cpush *i) {
+bool sp_rcontext::push_cursor(sp_instr_cpush *i, uint cursor_offset) {
   /*
     We should create cursors on the system heap because:
      - they could be (and usually are) used in several instructions,
@@ -697,15 +716,22 @@ bool sp_rcontext::push_cursor(sp_instr_cpush *i) {
      - a cursor can be pushed/popped many times in a loop, having these objects
        on callers' mem-root would lead to a memory leak in every iteration.
   */
-  sp_cursor *c = new (std::nothrow) sp_cursor(i);
+  sp_cursor *c = new (std::nothrow) sp_cursor(i, cursor_offset);
 
   if (!c) {
     sql_alloc_error_handler();
     return true;
   }
-
   m_cstack[m_ccount++] = c;
   return false;
+}
+
+sp_cursor *sp_rcontext::get_cursor(uint i) const {
+  for (uint j = 0; j < m_ccount; j++) {
+    sp_cursor *c = m_cstack[j];
+    if (c->m_cursor_offset == i) return c;
+  }
+  return nullptr;
 }
 
 void sp_rcontext::pop_cursors(uint count) {
@@ -737,8 +763,9 @@ bool sp_rcontext::push_handler(sp_handler *handler, uint first_ip) {
   return m_visible_handlers.push_back(he);
 }
 
-void sp_rcontext::pop_handlers(sp_pcontext *current_scope) {
-  for (int i = static_cast<int>(m_visible_handlers.size()) - 1; i >= 0; --i) {
+void sp_rcontext::pop_handlers(sp_pcontext *current_scope, uint count) {
+  if (count == 0) count = m_visible_handlers.size();
+  for (int i = count - 1; i >= 0; --i) {
     int handler_level = m_visible_handlers.at(i)->handler->scope->get_level();
 
     if (handler_level >= current_scope->get_level()) {
@@ -958,7 +985,20 @@ bool sp_rcontext::set_variable(THD *thd, Field *field, Item **value) {
     field->set_null();
     return false;
   }
-  return sp_eval_expr(thd, field, value);
+    Item_splocal_row_field_table_by_index *item_index =
+        dynamic_cast<Item_splocal_row_field_table_by_index *>(*value);
+    if (item_index) {
+      Item *expr_item;
+      if (!(expr_item = sp_prepare_func_item(thd, value))) return true;
+      Item_field_row *item_field_row =
+          dynamic_cast<Item_field_row *>(expr_item);
+      if (item_field_row)  // stu_record_val1 :=  stu_record_val(2);
+        return item_field_row->index_item_save_in_field_no_index(field);
+      else  // select stu_record_val(3) into id;
+        return sp_eval_expr(thd, field, value);
+    }
+
+    return sp_eval_expr(thd, field, value);
 }
 
 Item_cache *sp_rcontext::create_case_expr_holder(THD *thd,
@@ -992,10 +1032,20 @@ bool sp_rcontext::set_case_expr(THD *thd, int case_expr_id,
   return false;
 }
 
+/*for close c and c:=null,it must reset all the cursor about c.*/
+void sp_rcontext::reset_refcursor(const Field_refcursor *field_from) {
+  for (uint i = 0; i < m_var_table->visible_field_count(); i++) {
+    Field_refcursor *field =
+        dynamic_cast<Field_refcursor *>(m_var_table->visible_field_ptr()[i]);
+    if (field && field->m_cursor.get() &&
+        field->m_cursor.get() == field_from->m_cursor.get() &&
+        field != field_from)
+      field->m_cursor.reset();
+  }
+}
 ///////////////////////////////////////////////////////////////////////////
 // sp_cursor implementation.
 ///////////////////////////////////////////////////////////////////////////
-
 /**
   Open an SP cursor
 
@@ -1009,7 +1059,6 @@ bool sp_cursor::open(THD *thd) {
     my_error(ER_SP_CURSOR_ALREADY_OPEN, MYF(0));
     return true;
   }
-
   bool rc = mysql_open_cursor(thd, &m_result, &m_server_side_cursor);
 
   Query_block *sl = thd->lex->query_block;
@@ -1022,24 +1071,26 @@ bool sp_cursor::open(THD *thd) {
     m_server_side_cursor->close();
     m_server_side_cursor = nullptr;
   }
+  if (!rc && check_cursor_return_type_count()) rc = true;
   return rc;
 }
 
 bool sp_cursor::close() {
-  if (m_server_side_cursor == nullptr) {
+  if (!is_open()) {
     my_error(ER_SP_CURSOR_NOT_OPEN, MYF(0));
     return true;
   }
-
   m_server_side_cursor->close();
   m_server_side_cursor = nullptr;
   return false;
 }
 
-void sp_cursor::destroy() { assert(m_server_side_cursor == nullptr); }
+void sp_cursor::destroy() {
+  assert(!m_push_instr || m_server_side_cursor == nullptr);
+}
 
 bool sp_cursor::fetch(List<sp_variable> *vars) {
-  if (m_server_side_cursor == nullptr) {
+  if (!is_open()) {
     my_error(ER_SP_CURSOR_NOT_OPEN, MYF(0));
     return true;
   }
@@ -1086,19 +1137,15 @@ bool sp_cursor::fetch(List<sp_variable> *vars) {
     }
   } else {
     if (!m_server_side_cursor->is_open()) {
-      m_found = false;
       return false;
     }
-
-    m_found = true;
-    m_row_count++;
   }
 
   return false;
 }
 
 bool sp_cursor::fetch_bulk(List<sp_variable> *vars, ha_rows row_count) {
-  if (m_server_side_cursor == nullptr) {
+  if (!is_open()) {
     my_error(ER_SP_CURSOR_NOT_OPEN, MYF(0));
     return true;
   }
@@ -1106,8 +1153,8 @@ bool sp_cursor::fetch_bulk(List<sp_variable> *vars, ha_rows row_count) {
   if (vars->elements != m_result.get_field_count() &&
       (vars->elements != 1 ||
        m_result.get_field_count() !=
-           current_thd->sp_runtime_ctx->get_item(vars->head()->offset)
-               ->cols())) {
+           current_thd->sp_runtime_ctx->get_item(vars->head()->offset)->cols() -
+               1)) {
     my_message(ER_SP_WRONG_NO_OF_FETCH_ARGS,
                ER_THD(current_thd, ER_SP_WRONG_NO_OF_FETCH_ARGS), MYF(0));
     return -1;
@@ -1121,27 +1168,73 @@ bool sp_cursor::fetch_bulk(List<sp_variable> *vars, ha_rows row_count) {
   m_result.set_spvar_list(vars);
   m_result.set_row_batch(row_count);
 
-  /* Attempt to fetch one row */
+  /* Attempt to fetch row_count rows */
   if (m_server_side_cursor->is_open()) {
     if (m_server_side_cursor->fetch(row_count)) return true;
   }
 
   if (!m_server_side_cursor->is_open()) {
-    m_found = false;
     return false;
   }
-
-  m_found = true;
-  m_row_count++;
 
   return false;
 }
 
 bool sp_cursor::export_structure(THD *thd, List<Create_field> *list) {
-  bool rc = m_server_side_cursor->export_structure(thd, list);
-  return rc;
+  if (!is_open()) {
+    my_error(ER_SP_CURSOR_NOT_OPEN, MYF(0));
+    return true;
+  }
+  return m_server_side_cursor->export_structure(thd, list);
 }
 
+bool sp_cursor::found() {
+  return m_server_side_cursor && m_server_side_cursor->is_open();
+}
+
+ulonglong sp_cursor::fetch_count() const {
+  return m_server_side_cursor ? m_server_side_cursor->get_fetch_count() : 0;
+}
+
+bool sp_cursor::is_cursor_fetched() {
+  return m_server_side_cursor && m_server_side_cursor->is_cursor_fetched();
+}
+
+// check cursor return type
+bool sp_cursor::check_cursor_return_type_count() {
+  if (!m_server_side_cursor) return false;
+  if (m_result.get_return_table()) {
+    if (m_server_side_cursor->get_field_count() !=
+        m_result.get_return_table_count()) {
+      m_server_side_cursor->close();
+      m_server_side_cursor = nullptr;
+      my_error(ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT, MYF(0));
+      return true;
+    }
+  }
+  return false;
+}
+
+// for static cursor,it needs to create a result table to check.
+bool sp_cursor::make_return_table(THD *thd, List<Create_field> *list) {
+  return m_result.m_return_table->make_return_table(thd, list);
+}
+
+// for static cursor or ref cursor,it's result table is field's return table.
+void sp_cursor::set_return_table_from_cursor(sp_cursor *from_cursor) {
+  m_result.m_return_table = from_cursor->m_result.m_return_table;
+}
+
+// for type is ref cursor,it's result table is field's return table.
+bool sp_cursor::set_return_table_from_pcursor(THD *thd,
+                                              LEX_CSTRING *from_cursor) {
+  sp_variable *spv_define = thd->sp_runtime_ctx->search_variable(
+      from_cursor->str, from_cursor->length);
+  Item *item = thd->sp_runtime_ctx->get_item(spv_define->offset);
+  Item_field_refcursor *item_field = dynamic_cast<Item_field_refcursor *>(item);
+  m_result.m_return_table = item_field->get_refcursor_field()->m_return_table;
+  return false;
+}
 ///////////////////////////////////////////////////////////////////////////
 // sp_cursor::Query_fetch_into_spvars implementation.
 ///////////////////////////////////////////////////////////////////////////
@@ -1158,21 +1251,207 @@ bool sp_cursor::Query_fetch_into_spvars::prepare(
 
 bool sp_cursor::Query_fetch_into_spvars::send_data(
     THD *thd, const mem_root_deque<Item *> &items) {
+  assert(items.size() == CountVisibleFields(items));
+  mem_root_deque<Item *> items_result(thd->mem_root);
+  // check cursor return type
+  if (get_return_table()) {
+    if (m_return_table->check_return_data(thd, items) ||
+        get_return_table()->fill_item_list(&items_result))
+      return true;
+  } else
+    items_result = items;
+  return send_data_after_check(thd, items_result);
+}
+
+bool sp_cursor::Query_fetch_into_spvars::send_data_after_check(
+    THD *thd, const mem_root_deque<Item *> &items) {
   List_iterator_fast<sp_variable> spvar_iter(*spvar_list);
   auto item_iter = VisibleFields(items).begin();
   sp_variable *spvar;
 
   assert(items.size() == CountVisibleFields(items));
-  assert(spvar_list->size() == items.size());
 
   /*
     Assign the row fetched from a server side cursor to stored
     procedure variables.
   */
-  while ((spvar = spvar_iter++)) {
-    Item *item = *item_iter++;
-    if (thd->sp_runtime_ctx->set_variable(thd, spvar->offset, &item))
-      return true;
+  Item *item_tmp = nullptr;
+
+  if (spvar_list->elements == 1 &&
+      (item_tmp = thd->sp_runtime_ctx->get_item(spvar_list->head()->offset)) &&
+      item_tmp->data_type() == MYSQL_TYPE_NULL &&
+      ((item_tmp->result_type_table() &&
+        item_tmp->cols() - 1 == items.size()) ||
+       (!item_tmp->result_type_table() && item_tmp->cols() == items.size()))) {
+    if (item_tmp->result_type() == ROW_RESULT && !item_tmp->is_ora_table() &&
+        !item_tmp->result_type_table()) {
+      if (thd->sp_runtime_ctx->set_variable_row(thd, spvar_list->head()->offset,
+                                                items))
+        return true;
+    } else if (item_tmp->result_type_table()) {  // select bulk collect into
+      uint count = fetch_bulk_count % m_row_batch;
+      if (count >= thd->variables.select_bulk_into_batch) {
+        my_error(ER_WRONG_BATCH_FOR_BULK_INTO, MYF(0));
+        return true;
+      }
+      if (thd->sp_runtime_ctx->set_variable_row_table(
+              thd, spvar_list->head()->offset, items, count + 1))
+        return true;
+      fetch_bulk_count++;
+    }
+  } else {
+    assert(spvar_list->size() == items.size());
+    /*
+      Assign the row fetched from a server side cursor to stored
+      procedure variables.
+    */
+    while ((spvar = spvar_iter++)) {
+      item_tmp = *item_iter++;
+      if (thd->sp_runtime_ctx->set_variable(thd, spvar->offset, &item_tmp))
+        return true;
+    }
   }
   return false;
+}
+
+///////////////////////////////////////////////////////////////////////////
+// sp_refcursor implementation.
+///////////////////////////////////////////////////////////////////////////
+bool sp_refcursor::open_for_sql(THD *thd) {
+  Prepared_stmt_arena_holder ps_arena_holder(thd);
+  thd->stmt_arena = &m_arena;
+  bool rc = mysql_open_cursor(thd, &m_result, &m_server_side_cursor);
+  // thd->lex->result must free in this class,not free after this lex.
+  m_query_result = thd->lex->result;
+  thd->lex->result = nullptr;
+  if (rc && m_server_side_cursor != nullptr) {
+    m_server_side_cursor->close();
+    m_server_side_cursor = nullptr;
+  }
+  if (!rc && check_cursor_return_type_count()) {
+    destroy();
+    rc = true;
+  }
+  return rc;
+}
+
+bool sp_refcursor::open_for_ident(THD *thd, uint m_sql_spv_idx) {
+  Item *item_query = thd->sp_runtime_ctx->get_item(m_sql_spv_idx);
+  String tmp;
+  String *result = item_query->val_str(&tmp);
+  if (item_query->null_value) {
+    my_error(ER_EMPTY_QUERY, MYF(0));
+    return true;
+  }
+  /*
+    In a stored function thd->locked_tables_mode == LTM_PRELOCKED,
+    it won't open table in open_table().So set thd->locked_tables_mode =
+    LTM_NONE first to avoid the error.
+  */
+  uint in_sub_stmt = thd->in_sub_stmt;
+  thd->in_sub_stmt = 0;
+
+  Diagnostics_area tmp_da(false);
+  Open_tables_backup open_tables_state_backup;
+  Query_tables_list table_list_backup;
+  thd->reset_n_backup_open_tables_state(&open_tables_state_backup, 0);
+  thd->lex->reset_n_backup_query_tables_list(&table_list_backup);
+  thd->temporary_tables = open_tables_state_backup.temporary_tables;
+
+  auto backup_guard2 = create_scope_guard([&]() {
+    thd->use_in_dbms_sql = false;
+    thd->in_sub_stmt = in_sub_stmt;
+    open_tables_state_backup.temporary_tables = thd->temporary_tables;
+    thd->temporary_tables = nullptr;
+    thd->lex->restore_backup_query_tables_list(&table_list_backup);
+    thd->restore_backup_open_tables_state(&open_tables_state_backup);
+  });
+
+  bool rc = false;
+
+  stmt = new (m_arena.mem_root) Prepared_statement(thd);
+  m_query_result = new_cursor_result(stmt->m_arena.mem_root, &m_result);
+  if (m_query_result == nullptr) {
+    return true;
+  }
+  stmt->set_sql_prepare();
+  stmt->set_state_for_prepare(thd);
+  stmt->set_query_result(m_query_result);
+
+  rc = stmt->prepare(thd, result->c_ptr_safe(), result->length(), nullptr);
+  if (rc) return true;
+  if (stmt->m_lex->sql_command != SQLCOM_SELECT) {
+    my_error(ER_SP_BAD_CURSOR_QUERY, MYF(0));
+    return true;
+  }
+  if (stmt->m_lex->result) {
+    my_error(ER_SP_BAD_CURSOR_SELECT, MYF(0));
+    return true;
+  }
+
+  /*It must set back the in_sub_stmt for not do close_thread_table in
+   * sp_lex_instr::reset_lex_and_exec_core.*/
+  thd->in_sub_stmt = in_sub_stmt;
+  thd->use_in_dbms_sql = true;
+  thd->push_diagnostics_area(&tmp_da);
+  rc = stmt->execute_loop(thd, result, true);
+
+  if (open_tables_state_backup.lock) {
+    if (thd->lock) {
+      auto merged_lock =
+          mysql_lock_merge(open_tables_state_backup.lock, thd->lock);
+      open_tables_state_backup.lock = merged_lock;
+    }
+  } else {
+    if (thd->lock) {
+      open_tables_state_backup.lock = thd->lock;
+    }
+  }
+
+  thd->lock = nullptr;
+  if (thd->open_tables) {
+    // set all mdl_ticket to nullptr, has already free in prepare trans
+    auto table_ptr = thd->open_tables;
+    while (table_ptr) {
+      table_ptr->mdl_ticket = nullptr;
+      table_ptr = table_ptr->next;
+    }
+  }
+  if (open_tables_state_backup.open_tables) {
+    open_tables_state_backup.open_tables->next = thd->open_tables;
+  } else {
+    open_tables_state_backup.open_tables = thd->open_tables;
+  }
+  thd->open_tables = nullptr;
+  stmt->m_lex->lock_tables_state = Query_tables_list::LTS_NOT_LOCKED;
+  thd->pop_diagnostics_area();
+  if (tmp_da.is_error()) {
+    // Copy the exception condition information.
+    thd->get_stmt_da()->set_error_status(tmp_da.mysql_errno(),
+                                         tmp_da.message_text(),
+                                         tmp_da.returned_sqlstate());
+  }
+  if (!rc) {
+    m_server_side_cursor = m_query_result->cursor();
+    if (check_cursor_return_type_count()) {
+      destroy();
+      rc = true;
+    }
+  }
+  return rc;
+}
+
+void sp_refcursor::destroy() {
+  if (is_open()) {
+    if (m_server_side_cursor->is_open()) m_server_side_cursor->close();
+  }
+  if (stmt)
+    ::destroy(stmt);
+  else if (m_query_result)
+    ::destroy(m_query_result);
+  stmt = nullptr;
+  m_query_result = nullptr;
+  m_server_side_cursor = nullptr;
+  m_arena.free_items();
+  m_mem_root.ClearForReuse();
 }

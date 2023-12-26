@@ -513,7 +513,7 @@ bool filesort(THD *thd, Filesort *filesort, RowIterator *source_iterator,
     if (num_rows_found == HA_POS_ERROR) goto err;
   }
   DEBUG_SYNC(thd, "after_find_all_keys");
-
+  thd->lex->reset_rownum_func();
   size_t num_chunks, num_initial_chunks;
   if (my_b_inited(&chunk_file)) {
     num_chunks =

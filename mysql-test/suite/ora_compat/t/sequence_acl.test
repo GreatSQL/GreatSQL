@@ -1,0 +1,155 @@
+connect (conn1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+--connection conn1
+--echo connect conn1
+
+create database db;
+create user user1;
+flush privileges;
+
+--echo ## test create acl denied ##
+
+change_user user1;
+--ERROR ER_DBACCESS_DENIED_ERROR
+create sequence db.sq1 start with 1 increment by 1;
+
+change_user root;
+
+--echo [ create on db.* ]
+grant create on db.* to user1;
+flush privileges;
+
+change_user user1;
+create sequence db.sq1 start with 1 increment by 1;
+
+--echo [ create on *.* ]
+change_user root;
+drop sequence db.sq1;
+revoke create on db.* from user1;
+grant create on *.* to user1;
+flush privileges;
+
+change_user user1;
+create sequence db.sq1 start with 1 increment by 1;
+
+change_user root;
+revoke create on *.* from user1;
+flush privileges;
+
+--echo ## test drop acl denied ##
+change_user user1;
+--ERROR ER_DBACCESS_DENIED_ERROR
+drop sequence db.sq1;
+
+--echo [ drop on db.* ]
+change_user root;
+grant drop on db.* to user1;
+flush privileges;
+
+change_user user1;
+drop sequence db.sq1;
+
+--echo [ drop on *.* ]
+change_user root;
+create sequence db.sq1 start with 1 increment by 1;
+revoke drop on db.* from user1;
+grant drop on *.* to user1;
+flush privileges;
+
+change_user user1;
+drop sequence db.sq1;
+
+change_user root;
+revoke drop on *.* from user1;
+flush privileges;
+create sequence db.sq1 start with 1 increment by 1;
+
+--echo ## test alter acl denied ##
+change_user user1;
+--ERROR ER_DBACCESS_DENIED_ERROR
+alter sequence db.sq1 increment by 4;
+
+--echo [ alter on db.* ]
+change_user root;
+grant alter on db.* to user1;
+flush privileges;
+
+change_user user1;
+alter sequence db.sq1 increment by 4;
+
+--echo [ alter on *.* ]
+change_user root;
+revoke alter on db.* from user1;
+grant alter on *.* to user1;
+flush privileges;
+
+change_user user1;
+alter sequence db.sq1 increment by 6;
+
+--echo ## test create, alter, drop on db.* ##
+change_user root;
+revoke alter on *.* from user1;
+grant create, alter, drop on db.* to user1;
+flush privileges;
+drop sequence db.sq1;
+
+change_user user1;
+create sequence db.sq1 start with 1 increment by 1;
+alter sequence db.sq1 increment by 4;
+drop sequence db.sq1;
+
+--echo ## test create, alter, drop on *.* ##
+change_user root;
+revoke create, alter, drop on db.* from user1;
+grant create, alter, drop on *.* to user1;
+flush privileges;
+
+change_user user1;
+create sequence db.sq1 start with 1 increment by 1;
+alter sequence db.sq1 increment by 4;
+drop sequence db.sq1;
+
+
+--echo ## test all on db.* ##
+change_user root;
+revoke create, alter, drop on *.* from user1;
+grant all on db.* to user1;
+flush privileges;
+
+change_user user1;
+create sequence db.sq1 start with 1 increment by 1;
+alter sequence db.sq1 increment by 4;
+drop sequence db.sq1;
+
+--echo ## test all on *.* ##
+change_user root;
+revoke all on db.* from user1;
+grant all on *.* to user1;
+flush privileges;
+
+change_user user1;
+create sequence db.sq1 start with 1 increment by 1;
+alter sequence db.sq1 increment by 4;
+drop sequence db.sq1;
+
+change_user root;
+revoke all on *.* from user1;
+
+drop user user1;
+drop database db;
+
+--echo ## test no assign database name ##
+create user user2;
+grant all on test.* to user2;
+flush privileges;
+
+change_user user2;
+use test;
+create sequence sq1 start with 1 increment by 1;
+alter sequence sq1 increment by 4;
+drop sequence sq1;
+
+change_user root;
+drop user user2;
+
+## clean
+--disconnect conn1

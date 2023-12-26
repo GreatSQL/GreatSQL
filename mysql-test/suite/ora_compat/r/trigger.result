@@ -1,0 +1,664 @@
+DROP TABLE IF EXISTS `trg`;
+CREATE TABLE `trg` (
+`id` int DEFAULT NULL,
+`name` varchar(200) DEFAULT NULL
+);
+DROP TABLE IF EXISTS `trg_0`;
+CREATE TABLE `trg_0` (
+`id` int DEFAULT NULL,
+`name` varchar(200) DEFAULT NULL
+);
+set sql_mode=oracle;
+CREATE  TRIGGER trg1 BEFORE insert 
+ON trg FOR EACH ROW
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-insert'||:NEW.name;
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER trg2 BEFORE update 
+ON trg FOR EACH ROW
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-update'||:old.name;
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER trg3 BEFORE delete 
+ON trg FOR EACH ROW
+BEGIN
+IF :old.id < 0 THEN
+insert into trg_0 values(:old.id,'-delete'||:old.name);
+END IF;
+END$$
+do sleep(0.01);
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	-insertname1
+-2	-insertname2
+-3	-insertname3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	-update-insertname1
+-2	-insertname2
+-3	-insertname3
+delete from trg where id=-1;
+select * from trg_0;
+id	name
+-1	-delete-update-insertname1
+CREATE  TRIGGER trg1_1 BEFORE insert or update
+ON trg FOR EACH ROW
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-insert_update_trg1_1_'||:NEW.name;
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER trg1_2 BEFORE insert or delete
+ON trg FOR EACH ROW
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-insert_delete_trg1_2_'||:NEW.name;
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER trg1_3 BEFORE update or delete
+ON trg FOR EACH ROW
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-update_delete_trg1_3_'||:NEW.name;
+END IF;
+END$$
+do sleep(0.01);
+delete from trg;
+delete from trg_0;
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	-insert-insert_update_trg1_1_-insert_delete_trg1_2_name1
+-2	-insert-insert_update_trg1_1_-insert_delete_trg1_2_name2
+-3	-insert-insert_update_trg1_1_-insert_delete_trg1_2_name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	-update-insert-insert_update_trg1_1_-insert_delete_trg1_2_name1
+-2	-insert-insert_update_trg1_1_-insert_delete_trg1_2_name2
+-3	-insert-insert_update_trg1_1_-insert_delete_trg1_2_name3
+delete from trg where id=-1;
+select * from trg_0;
+id	name
+-1	-delete-update-insert-insert_update_trg1_1_-insert_delete_trg1_2_name1
+CREATE  TRIGGER trg2_1 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-insert_update_delete_trg2_1_'||:NEW.name;
+END IF;
+END$$
+do sleep(0.01);
+delete from trg;
+delete from trg_0;
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert_update_delete_trg2_1_name1
+-2	-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert_update_delete_trg2_1_name2
+-3	-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert_update_delete_trg2_1_name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	-update-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert_update_delete_trg2_1_name1
+-2	-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert_update_delete_trg2_1_name2
+-3	-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert_update_delete_trg2_1_name3
+delete from trg where id=-1;
+select * from trg_0;
+id	name
+-1	-delete-update-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert_update_delete_trg2_1_name1
+drop trigger if exists trg2_1;
+CREATE  TRIGGER trg2_1 BEFORE update or insert
+ON trg FOR EACH ROW
+when(NEW.id < 0)
+DECLARE
+a int:=0;
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.id:= - :NEW.id;
+:NEW.name:=  'insert_when'||:NEW.name;
+insert into trg_0 values (-88,'-88name');
+END IF;
+END$$
+do sleep(0.01);
+delete from trg;
+delete from trg_0;
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+1	insert_whenname1
+2	insert_whenname2
+3	insert_whenname3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+1	insert_whenname1
+2	insert_whenname2
+3	insert_whenname3
+delete from trg where id=-1;
+select * from trg_0;
+id	name
+-88	-88name
+-88	-88name
+-88	-88name
+drop trigger if exists trg2_1;
+delete from trg;
+delete from trg_0;
+CREATE  TRIGGER trg BEFORE  insert or update or delete
+ON trg FOR EACH ROW
+when(NEW.id < 0 or old.id <0)
+DECLARE
+a int:=0;
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.id:= :NEW.id;
+:NEW.name:=  '-insert or update or delete'||:NEW.name;
+insert into trg_0 values (-88,:NEW.name);
+END IF;
+IF :old.id < 0 THEN
+insert into trg_0 values (-99,'insert or update or delete '|| :old.name);
+END IF;
+END$$
+do sleep(0.01);
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert or update or deletename1
+-2	-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert or update or deletename2
+-3	-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert or update or deletename3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	-update-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert or update or deletename1
+-2	-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert or update or deletename2
+-3	-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert or update or deletename3
+delete from trg where id=-1;
+select * from trg_0;
+id	name
+-88	-insert or update or deletename1
+-88	-insert or update or deletename2
+-88	-insert or update or deletename3
+-88	-insert or update or deletename_1
+-99	insert or update or delete -insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert or update or deletename1
+-99	insert or update or delete -update-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert or update or deletename1
+-1	-delete-update-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert or update or deletename1
+create view trg_v as select * from trg;
+CREATE  TRIGGER trg3_1 BEFORE insert or update or delete
+ON trg_v FOR EACH ROW
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-insert_update_delete_trg2_1_'|| :NEW.name;
+END IF;
+END$$
+ERROR HY000: 'test.trg_v' is not BASE TABLE
+do sleep(0.01);
+create or replace PROCEDURE P1(b int) AS
+a int :=12;
+BEGIN
+IF b < 0 THEN
+b:= - a;
+select b from dual;
+END IF;
+END $$
+call p1(-1);
+b 
+-12
+CREATE  TRIGGER trg3_1 BEFORE update or insert
+ON trg FOR EACH ROW
+when(NEW.id < 0)
+DECLARE
+a int:=0;
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.id:= - :NEW.id;
+:NEW.name:=  'insert_when'||:NEW.name;
+call p1(-1);
+insert into trg_0 values (-88,'-88name');
+END IF;
+END$$
+do sleep(0.01);
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+ERROR 0A000: Not allowed to return a result set from a trigger
+drop trigger if exists trg0;
+CREATE  TRIGGER trg0 BEFORE insert or update 
+ON trg FOR EACH ROW  FOLLOWS trg3_1
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.id:= - :NEW.id;
+:NEW.name:= concat('trg0',:NEW.name );
+END IF;
+END$$
+do sleep(0.01);
+drop trigger if exists trg3_1;
+drop trigger if exists trg0;
+CREATE  TRIGGER trg3_1 BEFORE update or insert
+ON trg FOR EACH ROW
+when(NEW.id < 0)
+DECLARE
+a int:=0;
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.id:= - :NEW.id;
+:NEW.name:=  'insert6_ora'||:NEW.name;
+select * from trg_0;
+END IF;
+END$$
+ERROR 0A000: Not allowed to return a result set from a trigger
+do sleep(0.01);
+set sql_mode=default;
+drop trigger if exists trg0;
+CREATE  TRIGGER trg0 BEFORE insert  
+ON trg FOR EACH ROW  FOLLOWS trg1
+BEGIN
+IF NEW.id < 0 THEN
+SET NEW.id = - NEW.id;
+SET NEW.name = concat('trg0',NEW.name );
+END IF;
+END$$
+do sleep(0.01);
+insert into trg values(-1,'-name1');
+select * from trg;
+id	name
+-2	-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert or update or deletename2
+-3	-insert-insert_update_trg1_1_-insert_delete_trg1_2_-insert or update or deletename3
+1	trg0-insert or update or delete-insert_delete_trg1_2_-insert_update_trg1_1_-insert-name1
+drop trigger if exists trg10;
+CREATE  TRIGGER trg10 BEFORE insert or delete
+ON trg FOR EACH ROW
+BEGIN
+IF NEW.name < 0 THEN
+set NEW.id = - NEW.id;
+set NEW.name = concat('trg10',NEW.name );
+insert into test.trg_0 values(-1,'trg_0');
+END IF;
+END$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'or delete
+ON trg FOR EACH ROW
+BEGIN
+IF NEW.name < 0 THEN
+set NEW.id = - NEW.id;
+' at line 1
+do sleep(0.01);
+CREATE  TRIGGER trg10 BEFORE insert or delete
+ON trg FOR EACH ROW
+when(NEW.id < 0)
+BEGIN
+IF NEW.name < 0 THEN
+set NEW.id = - NEW.id;
+set NEW.name = concat('trg10',NEW.name );
+insert into test.trg_0 values(-1,'trg_0');
+END IF;
+END$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'or delete
+ON trg FOR EACH ROW
+when(NEW.id < 0)
+BEGIN
+IF NEW.name < 0 THEN
+set NE' at line 1
+do sleep(0.01);
+drop trigger if exists trg10;
+CREATE  TRIGGER trg10 BEFORE insert 
+ON trg FOR EACH ROW
+BEGIN
+IF :NEW.name < 0 THEN
+:NEW.id := - :NEW.id;
+:NEW.name := concat('trg10',:NEW.name );
+insert into test.trg_0 values(-1,'trg_0');
+END IF;
+END$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ':NEW.name < 0 THEN
+:NEW.id := - :NEW.id;
+:NEW.name := concat('trg10',:NEW.name )' at line 4
+do sleep(0.01);
+drop trigger if exists trg;
+drop trigger if exists trg0;
+drop trigger if exists trg1;
+drop trigger if exists trg2;
+drop trigger if exists trg3;
+drop trigger if exists trg1_1;
+drop trigger if exists trg1_2;
+drop trigger if exists trg1_3;
+drop trigger if exists trg2_1;
+drop trigger if exists trg3_1;
+drop view if exists trg_v;
+drop procedure if exists p1;
+test execution order
+delete from trg;
+set sql_mode=oracle;
+CREATE  TRIGGER a_trg BEFORE  insert
+ON trg FOR EACH ROW
+when(NEW.id < 0 )
+DECLARE
+a int:=0;
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.id:= :NEW.id;
+:NEW.name:= concat('(a_trg insert)',:NEW.name);
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER b_trg BEFORE  insert
+ON trg FOR EACH ROW
+when(NEW.id < 0 )
+DECLARE
+a int:=0;
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.id:= :NEW.id;
+:NEW.name:= concat('(b_trg insert)',:NEW.name);
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER c_trg BEFORE  insert
+ON trg FOR EACH ROW
+when(NEW.id < 0 )
+DECLARE
+a int:=0;
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.id:= :NEW.id;
+:NEW.name:= concat('(c_trg insert)',:NEW.name);
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER d_trg BEFORE  insert
+ON trg FOR EACH ROW
+when(NEW.id < 0 )
+DECLARE
+a int:=0;
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.id:= :NEW.id;
+:NEW.name:= concat('(d_trg insert)',:NEW.name);
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER e_trg BEFORE  insert
+ON trg FOR EACH ROW
+when(NEW.id < 0 )
+DECLARE
+a int:=0;
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.id:= :NEW.id;
+:NEW.name:= concat('(e_trg insert)',:NEW.name);
+END IF;
+END$$
+do sleep(0.01);
+insert into trg values (-1,'oracle');
+select * from trg;
+id	name
+-1	(a_trg insert)(b_trg insert)(c_trg insert)(d_trg insert)(e_trg insert)oracle
+set sql_mode=default;
+insert into trg values (-2,'default');
+select * from trg;
+id	name
+-1	(a_trg insert)(b_trg insert)(c_trg insert)(d_trg insert)(e_trg insert)oracle
+-2	(e_trg insert)(d_trg insert)(c_trg insert)(b_trg insert)(a_trg insert)default
+set sql_mode=oracle;
+CREATE  TRIGGER trg1 BEFORE insert
+ON trg FOR EACH ROW
+when(:NEW.id < 0)
+DECLARE
+CURSOR emp_sor IS
+SELECT a.id FROM trg a;
+emp_record NUMBER;
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-insert'||:NEW.name;
+END IF;
+END$$
+ERROR HY000: Trigger 'trg1' has an error in its body: ':NEW.id'
+CREATE  TRIGGER trg1 BEFORE insert
+ON trg FOR EACH ROW
+when(NEW.id < 0)
+DECLARE
+CURSOR emp_sor IS
+SELECT a.id FROM trg a;
+emp_record NUMBER;
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-insert'||:NEW.name;
+END IF;
+END$$
+"bugfix 7740 NEW first"
+set sql_mode =oracle;
+create table alt_tri_tab_1 (id int, name varchar(200) DEFAULT NULL);
+create table alt_tri_tab_2 (id int, name varchar(200) DEFAULT NULL);
+CREATE TRIGGER alter_trigger_01 BEFORE INSERT OR UPDATE OR DELETE
+ON alt_tri_tab_1 FOR EACH ROW
+DECLARE
+a int:=0;
+BEGIN
+IF :NEW.id = 1 THEN
+:NEW.id:= - :NEW.id;
+:NEW.name:= '** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:NEW.name||'## INSERT **';
+ELSIF :NEW.id = 2 THEN
+:NEW.id:= - :NEW.id;
+:NEW.name:= '** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:NEW.name||'## UPDATE **';
+ELSE
+insert into alt_tri_tab_2(name) values ('** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:NEW.name||'## DELETE **');
+END IF;
+END$$
+do sleep(0.5)$$
+CREATE TRIGGER alter_trigger_02 AFTER INSERT OR UPDATE OR DELETE
+ON alt_tri_tab_1 FOR EACH ROW
+DECLARE
+a int:=0;
+BEGIN
+IF :NEW.id = -1 THEN
+insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:NEW.name||'## INSERT **');
+ELSIF :NEW.id = -2 THEN
+insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:NEW.name||'## UPDATE **');
+ELSE
+insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:NEW.name||'## DELETE **');
+END IF;
+END$$
+insert into alt_tri_tab_1 values(1,'aaa');
+select * from alt_tri_tab_1;
+id	name
+-1	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## INSERT **
+select * from alt_tri_tab_2;
+id	name
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## INSERT **## INSERT **
+update alt_tri_tab_1 set id = 3,name ='zgh' where id = -1;
+select * from alt_tri_tab_1;
+id	name
+3	zgh
+select * from alt_tri_tab_2;
+id	name
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## INSERT **## INSERT **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+delete from alt_tri_tab_1 where id = 3;
+select * from alt_tri_tab_1;
+id	name
+select * from alt_tri_tab_2;
+id	name
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## INSERT **## INSERT **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### DELETE **
+"bugfix 7740 NEW second"
+insert into alt_tri_tab_1 values(1,'aaa');
+select * from alt_tri_tab_1;
+id	name
+-1	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## INSERT **
+select * from alt_tri_tab_2;
+id	name
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## INSERT **## INSERT **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## INSERT **## INSERT **
+update alt_tri_tab_1 set id = 3,name ='zgh' where id = -1;
+select * from alt_tri_tab_1;
+id	name
+3	zgh
+select * from alt_tri_tab_2;
+id	name
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## INSERT **## INSERT **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## INSERT **## INSERT **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+delete from alt_tri_tab_1 where id = 3;
+select * from alt_tri_tab_1;
+id	name
+select * from alt_tri_tab_2;
+id	name
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## INSERT **## INSERT **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## INSERT **## INSERT **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### DELETE **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### DELETE **
+drop TRIGGER alter_trigger_01;
+drop TRIGGER alter_trigger_02;
+"bugfix 7740 OLD first"
+delete from alt_tri_tab_1;
+delete from alt_tri_tab_2;
+CREATE TRIGGER alter_trigger_01 BEFORE INSERT OR UPDATE OR DELETE
+ON alt_tri_tab_1 FOR EACH ROW
+DECLARE
+a int:=0;
+BEGIN
+IF :OLD.id = 1 THEN
+:NEW.id:= - :NEW.id;
+:NEW.name:= '** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## INSERT **';
+ELSIF :OLD.id = 2 THEN
+:NEW.id:= - :NEW.id;
+:NEW.name:= '** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## UPDATE **';
+ELSIF :OLD.id = 3 THEN
+insert into alt_tri_tab_2(name) values ('** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## DELETE OLD 3 **');
+ELSIF :OLD.id = -1 THEN
+insert into alt_tri_tab_2(name) values ('** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## UPDATE OLD -1 **');
+ELSE
+:NEW.id:= - :NEW.id;
+insert into alt_tri_tab_2(name) values ('** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## INSERT NO_OLD **');
+END IF;
+END$$
+do sleep(0.5)$$
+CREATE TRIGGER alter_trigger_02 AFTER INSERT OR UPDATE OR DELETE
+ON alt_tri_tab_1 FOR EACH ROW
+DECLARE
+a int:=0;
+BEGIN
+IF :OLD.id = -1 THEN
+insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## UPDATE OLD -1 **');
+ELSIF :OLD.id = -2 THEN
+insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## INSERT OLD -2**');
+ELSIF :OLD.id = 3 THEN
+insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## DELETE OLD 3 **');
+ELSE
+insert into alt_tri_tab_2(name) values ('** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##'||:OLD.name||'## INSERT NO_OLD **');
+END IF;
+END$$
+insert into alt_tri_tab_1 values(1,'aaa');
+select * from alt_tri_tab_1;
+id	name
+-1	aaa
+select * from alt_tri_tab_2;
+id	name
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+update alt_tri_tab_1 set id = 3,name ='zgh' where id = -1;
+select * from alt_tri_tab_1;
+id	name
+3	zgh
+select * from alt_tri_tab_2;
+id	name
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+delete from alt_tri_tab_1 where id = 3;
+select * from alt_tri_tab_1;
+id	name
+select * from alt_tri_tab_2;
+id	name
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE OLD 3 **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE OLD 3 **
+"bugfix 7740 OLD second"
+insert into alt_tri_tab_1 values(1,'aaa');
+select * from alt_tri_tab_1;
+id	name
+-1	aaa
+select * from alt_tri_tab_2;
+id	name
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE OLD 3 **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE OLD 3 **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+update alt_tri_tab_1 set id = 3,name ='zgh' where id = -1;
+select * from alt_tri_tab_1;
+id	name
+3	zgh
+select * from alt_tri_tab_2;
+id	name
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE OLD 3 **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE OLD 3 **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+delete from alt_tri_tab_1 where id = 3;
+select * from alt_tri_tab_1;
+id	name
+select * from alt_tri_tab_2;
+id	name
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE OLD 3 **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE OLD 3 **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE #### INSERT NO_OLD **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##aaa## UPDATE OLD -1 **
+NULL	** alter_trigger_01 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE OLD 3 **
+NULL	** alter_trigger_02 ## BEFORE INSERT OR UPDATE OR DELETE ##zgh## DELETE OLD 3 **
+drop TRIGGER alter_trigger_01;
+drop TRIGGER alter_trigger_02;
+drop table alt_tri_tab_1;
+drop table alt_tri_tab_2;
+drop trigger if exists trg1;
+drop trigger if exists a_trg;
+drop trigger if exists b_trg;
+drop trigger if exists c_trg;
+drop trigger if exists d_trg;
+drop trigger if exists e_trg;
+drop table if exists trg;
+drop table if exists trg_0;

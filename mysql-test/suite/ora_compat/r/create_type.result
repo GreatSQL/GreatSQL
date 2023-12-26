@@ -1,0 +1,176 @@
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+#
+# test of create type
+#
+create or replace type t_air as object(id int,type varchar(20));
+#
+# test of show create type
+#
+show create type t_air;
+Type	sql_mode	Create Type	character_set_client	collation_connection	Database Collation
+t_air	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="root"@"localhost" TYPE "t_air" AS OBJECT(id int,type varchar(20))	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+#
+# test of select type
+#
+create or replace type t_air as object(id int,type varchar(20));
+SELECT t_air(1+1,'aa') FROM dual;
+t_air(1+1,'aa')
+id:2 | type:aa
+#
+# test of select type
+#
+SELECT t_air(1+1,null) FROM dual;
+t_air(1+1,null)
+id:2 | type:NULL
+#
+# test of error ER_SP_INVALID_DEFAULT_PARAM
+#
+SELECT t_air(1+1) FROM dual;
+ERROR HY000: Parameter 'type' is invalid for t_air.
+#
+# test of error ER_SP_WRONG_NO_OF_ARGS
+#
+SELECT t_air(1+1,1,1) FROM dual;
+ERROR 42000: Incorrect number of arguments for TYPE test.t_air; expected 2, got 3
+#
+# test of sp
+#
+create or replace procedure p1 as
+rec int;
+BEGIN
+SELECT t_air(1,1) FROM dual;
+end
+$$
+call p1;
+t_air(1,1)
+id:1 | type:1
+drop procedure p1;
+#
+# test of create type in sp
+#
+create or replace procedure p1 as
+rec int;
+BEGIN
+create or replace type t_air as object(id int,type varchar(20));
+SELECT t_air(1,1) FROM dual;
+end
+$$
+ERROR 2F003: Can't create a TYPE from within another stored routine
+#
+# test of drop type
+#
+drop type t_air;
+#
+# test of object as ident
+#
+SET SQL_MODE=default;
+create table object(id int,object blob);
+drop table object;
+SET SQL_MODE=ORACLE;
+create table object(id int,object blob);
+drop table object;
+#
+# test of duplicate of function name
+#
+create or replace type t_air as object(id int, name varchar(20));
+create or replace function t_air (v int) return int deterministic as begin return 1; end;$$
+ERROR 42000: TYPE t_air already exists
+#
+# test of udt type union non udt type
+#
+SELECT t_air(1,'aa') a FROM dual union select 1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in join sql'
+#
+# test of duplicate name
+#
+drop type t_air;
+create or replace function t_air (v int) return int deterministic as begin return 1; end;$$
+#
+# test of duplicate name
+#
+create or replace type t_air as object(id int, name varchar(20));
+ERROR 42000: FUNCTION t_air already exists
+#
+# test of bug7354
+#
+drop function t_air;
+create or replace type t_air as object(id int, name varchar(20));
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+create view zgh1 as SELECT t_air_table(t_air(1,'aa'),t_air(2,'bb')) from dual;
+ERROR 42000: This version of MySQL doesn't yet support 'create table as select udt_table()'
+create view zgh1 as SELECT t_air(1,'aa') FROM dual;
+select * from zgh1;
+t_air(1,'aa')
+id:1 | name:aa
+#
+# test of bug8849
+#
+select t_air_table(name1) from zgh1 connect by level<2;
+ERROR 42000: This version of MySQL doesn't yet support 'connect by used with udt table'
+CREATE OR REPLACE TYPE int_table AS table OF int;
+select int_table(1,2) from zgh1 connect by level<2;
+ERROR 42000: This version of MySQL doesn't yet support 'connect by used with udt table'
+drop type t_air_table;
+drop type int_table;
+#
+# test of bug8861
+#
+SELECT t_air(1,2) aa from (select t_air(1,2) aa ) where aa=aa=aa;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+SELECT t_air(1,2) aa from (select t_air(1,2) aa ) where 1=aa;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+select aa=aa=aa from (select t_air(1,2) aa );
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+select * from ( select t_air(1,3) a,t_air(2,1) b, 1 c from (select t_air(3,1))) where a in( b, c);
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+select * from ( select t_air(1,3) a,t_air(2,1) b, t_air(1,3) c from (select t_air(3,1))) where a in( b, c);
+a	b	c
+id:1 | name:3	id:2 | name:1	id:1 | name:3
+#
+# test of information_schema.tables_using_type
+#
+create or replace type test_type as object(id int,type varchar(20));
+create or replace type t_type as object(id int,type varchar(20));
+create table tt_air(id int,name1 t_air,name2 t_air);
+create table tt_air1(id int,name1 t_air,name2 t_type);
+create table t_of of test_type;
+create database db1;
+use db1;
+create or replace type t_air as object(id int,type varchar(20));
+create or replace type test_type as object(id int,type varchar(20));
+create or replace type t_type as object(id int,type varchar(20));
+create table tt_air(id int,name1 t_air,name2 t_air);
+create table tt_air1(id int,name1 t_air,name2 t_type);
+create table t_of of test_type;
+create view zgh1 as SELECT * FROM tt_air1;
+select distinct tbl.table_schema,tbl.table_name,tbl.create_options from information_schema.tables tbl where (create_options like '%udt_name=%') union
+select distinct col.table_schema,col.table_name,extra from information_schema.columns col where extra like '%udt_name=%' order by TABLE_SCHEMA,TABLE_NAME,CREATE_OPTIONS;
+TABLE_SCHEMA	TABLE_NAME	CREATE_OPTIONS
+db1	t_of	udt_name="test_type"
+db1	tt_air	udt_name="t_air"
+db1	tt_air1	udt_name="t_air"
+db1	tt_air1	udt_name="t_type"
+db1	zgh1	udt_name="t_air"
+db1	zgh1	udt_name="t_type"
+test	t_of	udt_name="test_type"
+test	tt_air	udt_name="t_air"
+test	tt_air1	udt_name="t_air"
+test	tt_air1	udt_name="t_type"
+test	zgh1	udt_name="t_air"
+drop table tt_air;
+drop table tt_air1;
+drop table t_of;
+drop type test_type;
+drop type t_type;
+drop type t_air;
+drop view zgh1;
+use test;
+drop database db1;
+drop table tt_air;
+drop table tt_air1;
+drop table t_of;
+drop type test_type;
+drop type t_type;
+drop type t_air;
+drop view zgh1;

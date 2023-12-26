@@ -1,0 +1,211 @@
+set sql_mode='oracle';
+BEGIN
+select 'hello world';
+END//
+hello world
+hello world
+DECLARE
+value1 VARCHAR2(250);
+BEGIN
+value1:='world';
+select 'hello '||value1;
+END//
+'hello '||value1
+hello world
+BEGIN
+select 'hello world' as val;
+BEGIN
+select 'php is the best language in the world' as val;
+END;
+END//
+val
+hello world
+val
+php is the best language in the world
+DECLARE
+value1 VARCHAR2(250);
+BEGIN
+value1:='world';
+select 'hello '||value1 as val;
+DECLARE
+value1 VARCHAR2(250);
+BEGIN
+value1:='in the world';
+select 'php is the best '||value1 as val;
+END;
+END//
+val
+hello world
+val
+php is the best in the world
+<<test1>>
+BEGIN
+select 'hello label' as val;
+LEAVE test1;
+select 'hello label2' as val;
+END test1//
+val
+hello label
+<<test2>>
+DECLARE
+value1 VARCHAR2(250);
+BEGIN
+value1:='hello world';
+select value1;
+LEAVE test2;
+set value1='php is the best language in the world';
+select value1;
+END test2//
+value1
+hello world
+<<test2>>
+BEGIN
+select 'hello world';
+END test3//
+ERROR 42000: End-label test3 without match
+begin
+select * from t1;
+exception
+when others then
+select 'get exception others' as res;
+end
+//
+res
+get exception others
+DECLARE
+value1 VARCHAR2(250);
+begin
+set  value1='hello world';
+select * from t1;
+exception
+when others then
+select 'get exception others' as res;
+end
+//
+res
+get exception others
+set sql_mode=oracle;
+begin
+call p1;
+end //
+ERROR 3D000: No database selected
+begin
+select * from t1;
+exception
+when others then
+select 'errcode:' || sqlcode ||' msg:' || sqlerrm as res;
+end;
+//
+res
+errcode:1146 msg:1146 : Table 'test.t1' doesn't exist
+begin
+select * from t1;
+exception
+when others then
+select ' msg:' || sqlerrm(sqlcode) as res;
+end;
+//
+res
+ msg:1146 : Table 'test.t1' doesn't exist
+begin
+select vv  from t2;
+exception
+when others then
+select 'errcode:' || sqlcode ||' msg:' || sqlerrm(1054) as res;
+end;
+//
+res
+errcode:1146 msg:1054 : Unknown column '%-.192s' in '%-.192s'
+begin
+select sqlcode,sqlerrm ;
+select * from t1;
+exception
+when others then
+select 'errcode:' || sqlcode ||' msg:' || SQLERRM as res;
+end;
+//
+sqlcode	sqlerrm 
+0	0 : normal, successful completion
+res
+errcode:1146 msg:1146 : Table 'test.t1' doesn't exist
+begin
+select sqlerrm(1054) ;
+select * from t1;
+exception
+when others then
+select 'errcode:' || sqlcode ||' msg:' || SQLERRM as res;
+end;
+//
+sqlerrm(1054)
+1054 : Unknown column '%-.192s' in '%-.192s'
+res
+errcode:1146 msg:1146 : Table 'test.t1' doesn't exist
+create table t1 (c1 date, c2 date, c3 int, ida int, age int, name varchar(10));
+insert into t1 values ('2023-08-17', '2023-08-17', 1, 1, 10, 'a');
+declare
+a date;
+begin
+explain format=tree select last_day(c1) into a from t1;
+end//
+EXPLAIN
+-> Table scan on t1  (cost=0.35 rows=1)
+
+select @@sql_mode;
+@@sql_mode
+PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+select @@sql_mode;
+@@sql_mode
+PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+declare
+a date;
+begin
+explain format=tree select last_day(c1) into @a from t1;
+end//
+EXPLAIN
+-> Table scan on t1  (cost=0.35 rows=1)
+
+select @@sql_mode;
+@@sql_mode
+PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+select @@sql_mode;
+@@sql_mode
+PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+declare
+a date;
+begin
+explain select last_day(c1) into a from t1;
+end//
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select last_day("test"."t1"."c1") AS "last_day(c1)" from "test"."t1"
+select @@sql_mode;
+@@sql_mode
+PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+select @@sql_mode;
+@@sql_mode
+PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+declare
+a date;
+begin
+explain format=tree select last_day(c1) into a from t1;
+explain format=tree select last_day(c1) into @a from t1;
+explain select last_day(c1) into a from t1;
+end//
+EXPLAIN
+-> Table scan on t1  (cost=0.35 rows=1)
+
+EXPLAIN
+-> Table scan on t1  (cost=0.35 rows=1)
+
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select last_day("test"."t1"."c1") AS "last_day(c1)" from "test"."t1"
+select @@sql_mode;
+@@sql_mode
+PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+select @@sql_mode;
+@@sql_mode
+PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+drop table t1;

@@ -1,4 +1,5 @@
 /* Copyright (c) 2005, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -322,6 +323,7 @@ class Relay_log_info : public Rpl_info {
     where the BINLOG statement can be used to execute "raw" events.
    */
   bool replicate_same_server_id;
+  bool replicate_server_id_mode;
 
   /*
     Protected with internal locks.

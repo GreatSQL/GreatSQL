@@ -25,8 +25,8 @@ Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Da
 p	ALLOW_INVALID_DATES	CREATE DEFINER=`root`@`localhost` PROCEDURE `p`(OUT t DATETIME)
 SELECT now() INTO t	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
 SHOW CREATE TRIGGER trg;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-trg	ALLOW_INVALID_DATES	CREATE DEFINER=`root`@`localhost` TRIGGER `trg` BEFORE INSERT ON `t` FOR EACH ROW SET @i = 1	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+trg	ALLOW_INVALID_DATES	CREATE DEFINER=`root`@`localhost` TRIGGER `trg` BEFORE INSERT ON `t` FOR EACH ROW SET @i = 1	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	#	ENABLED
 ########################################################################
 # Stop the server and do cleanup.
 ########################################################################

@@ -1,0 +1,36 @@
+#
+# Test of problem with while loop..end loop.
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS t;
+DROP PROCEDURE IF EXISTS p1;
+--enable_warnings
+
+CREATE TABLE t (s1 INT, s2 char(100),PRIMARY KEY (s1));
+INSERT INTO t values(1,'aaa');
+INSERT INTO t values(2,'bbb');
+INSERT INTO t values(3,'ccc');
+
+set sql_mode="oracle";
+delimiter //;
+CREATE PROCEDURE p1 is
+begin
+  declare
+      j number;
+BEGIN
+  j := 1;
+  while j<5 loop
+    if j=3 then return;
+    end if;
+    j := j+1;
+    select j;
+  end loop;
+end;
+END//
+delimiter ;//
+CALL p1();
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+drop table t;

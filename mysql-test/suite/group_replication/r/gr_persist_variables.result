@@ -25,6 +25,7 @@ WHERE VARIABLE_NAME LIKE '%group_replication%'
 SET PERSIST group_replication_advertise_recovery_endpoints = @@GLOBAL.group_replication_advertise_recovery_endpoints;
 SET PERSIST group_replication_allow_local_lower_version_join = @@GLOBAL.group_replication_allow_local_lower_version_join;
 SET PERSIST group_replication_applier_batch_size_threshold = @@GLOBAL.group_replication_applier_batch_size_threshold;
+SET PERSIST group_replication_async_auto_failover_channel_read_only_mode = @@GLOBAL.group_replication_async_auto_failover_channel_read_only_mode;
 SET PERSIST group_replication_auto_evict_timeout = @@GLOBAL.group_replication_auto_evict_timeout;
 SET PERSIST group_replication_auto_increment_increment = @@GLOBAL.group_replication_auto_increment_increment;
 SET PERSIST group_replication_autorejoin_tries = @@GLOBAL.group_replication_autorejoin_tries;
@@ -38,6 +39,7 @@ SET PERSIST group_replication_communication_stack = @@GLOBAL.group_replication_c
 SET PERSIST group_replication_components_stop_timeout = @@GLOBAL.group_replication_components_stop_timeout;
 SET PERSIST group_replication_compression_threshold = @@GLOBAL.group_replication_compression_threshold;
 SET PERSIST group_replication_consistency = @@GLOBAL.group_replication_consistency;
+SET PERSIST group_replication_donor_threshold = @@GLOBAL.group_replication_donor_threshold;
 SET PERSIST group_replication_enforce_update_everywhere_checks = @@GLOBAL.group_replication_enforce_update_everywhere_checks;
 SET PERSIST group_replication_exit_state_action = @@GLOBAL.group_replication_exit_state_action;
 SET PERSIST group_replication_flow_control_applier_threshold = @@GLOBAL.group_replication_flow_control_applier_threshold;
@@ -98,7 +100,7 @@ SET PERSIST group_replication_xcom_cache_mode = @@GLOBAL.group_replication_xcom_
 SET PERSIST group_replication_zone_id = @@GLOBAL.group_replication_zone_id;
 SET PERSIST group_replication_zone_id_sync_mode = @@GLOBAL.group_replication_zone_id_sync_mode;
 
-include/assert.inc ['Expect 73 persisted variables.']
+include/assert.inc ['Expect 75 persisted variables.']
 
 ############################################################
 # 2. Restart server, it must bootstrap the group and preserve
@@ -107,9 +109,9 @@ include/assert.inc ['Expect 73 persisted variables.']
 include/rpl_reconnect.inc
 include/gr_wait_for_member_state.inc
 
-include/assert.inc ['Expect 73 persisted variables in persisted_variables table.']
-include/assert.inc ['Expect 72 variables which last value was set through SET PERSIST.']
-include/assert.inc ['Expect 72 variables which last value was set through SET PERSIST is equal to its global value.']
+include/assert.inc ['Expect 75 persisted variables in persisted_variables table.']
+include/assert.inc ['Expect 74 variables which last value was set through SET PERSIST.']
+include/assert.inc ['Expect 74 variables which last value was set through SET PERSIST is equal to its global value.']
 
 ############################################################
 # 3. Test RESET PERSIST.
@@ -117,6 +119,7 @@ include/assert.inc ['Expect 72 variables which last value was set through SET PE
 RESET PERSIST group_replication_advertise_recovery_endpoints;
 RESET PERSIST group_replication_allow_local_lower_version_join;
 RESET PERSIST group_replication_applier_batch_size_threshold;
+RESET PERSIST group_replication_async_auto_failover_channel_read_only_mode;
 RESET PERSIST group_replication_auto_evict_timeout;
 RESET PERSIST group_replication_auto_increment_increment;
 RESET PERSIST group_replication_autorejoin_tries;
@@ -130,6 +133,7 @@ RESET PERSIST group_replication_communication_stack;
 RESET PERSIST group_replication_components_stop_timeout;
 RESET PERSIST group_replication_compression_threshold;
 RESET PERSIST group_replication_consistency;
+RESET PERSIST group_replication_donor_threshold;
 RESET PERSIST group_replication_enforce_update_everywhere_checks;
 RESET PERSIST group_replication_exit_state_action;
 RESET PERSIST group_replication_flow_control_applier_threshold;

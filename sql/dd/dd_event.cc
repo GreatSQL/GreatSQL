@@ -46,7 +46,6 @@
 #include "sql_string.h"
 
 namespace dd {
-
 static const char *failsafe_object = "Event status option";
 
 int get_old_status(Event::enum_event_status event_status) {
@@ -329,8 +328,26 @@ static void set_event_attributes(THD *thd, const dd::Schema &schema,
   } else
     assert(is_update);
 
-  if (event_data->comment.str != nullptr)
-    event->set_comment(String_type(event_data->comment.str));
+  String_type comment;
+  if (event_data->is_dbms_job && event_data->item_expression) {
+    escape(&comment, interval_item_expr_define);
+    comment.append("=");
+    String expression_str;
+    event_data->item_expression->print(thd, &expression_str,
+                                       QT_NO_DATA_EXPANSION);
+    escape(&comment,
+           String_type(expression_str.ptr(), expression_str.length()));
+    comment.append(";");
+  }
+
+  if (event_data->comment.str != nullptr) {
+    comment.append(String_type(event_data->comment.str));
+    event->set_comment(comment);
+  } else {
+    if (!comment.empty()) {
+      event->set_comment(comment);
+    }
+  }
 
   // Set collation relate attributes.
   event->set_client_collation_id(thd->variables.character_set_client->number);
@@ -397,6 +414,20 @@ bool update_event_time_and_status(THD *thd, Event *event,
   event->set_last_executed(last_executed);
 
   return thd->dd_client()->update(event);
+}
+
+bool get_interval_str(const String_type &comment, String_type &interval_str) {
+  if (comment.find(interval_item_expr_define) != std::string::npos) {
+    String_type::const_iterator it = comment.begin();
+    String_type key("");
+    if (eat_str(key, it, comment.end(), '=') ||
+        eat_str(interval_str, it, comment.end(), ';'))
+      return false;
+    assert(strncmp(key.c_str(), STRING_WITH_LEN(interval_item_expr_define)) ==
+           0);
+    return true;
+  }
+  return false;
 }
 
 }  // namespace dd

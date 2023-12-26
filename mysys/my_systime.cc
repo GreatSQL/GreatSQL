@@ -1,4 +1,5 @@
 /* Copyright (c) 2004, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -69,6 +70,25 @@ void set_timespec_nsec(struct timespec *abstime, Timeout_type nsec) {
 #endif
   abstime->tv_sec = static_cast<time_t>(tv_sec);
   abstime->tv_nsec = (now % 10000000ULL) * 100 + (nsec % 100);
+}
+
+/**
+   Set the value of a timespec object to the current time plus a
+   number of millisecond using millisecond.
+
+   @note the sec value is capped at std::chrono::millisecond::max()
+
+   @param[out] abstime time value being modified
+   @param sec number of millisecond to add to current time
+ */
+void set_timespec_msec(struct timespec *abstime, Timeout_type msec) {
+  assert(msec != std::numeric_limits<Timeout_type>::max());
+  if (msec == TIMEOUT_INF) {
+    *abstime = TIMESPEC_POSINF;
+    return;
+  }
+
+  set_timespec_nsec(abstime, msec * 1000000ULL);
 }
 
 /**

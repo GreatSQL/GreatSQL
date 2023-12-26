@@ -1,0 +1,603 @@
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+
+## return object
+
+CREATE OR REPLACE TYPE mydata AS OBJECT(x int, y int);
+
+delimiter //;
+
+create or replace function fr_null_obj1() return mydata
+as
+begin
+	return null;
+end;
+//
+
+create or replace function fr_null_obj2() return mydata
+as
+	val mydata;
+begin
+	return val;
+end;
+//
+
+create or replace function fr_object1(x int, y int) return mydata
+as
+begin
+	return mydata(x,y);
+end;
+//
+
+create or replace function fr_object2(x int, y int) return mydata
+as
+	val mydata;
+begin
+	val := mydata(x, y);
+	return val;
+end;
+//
+
+create or replace function fr_object3(x int, y int) return mydata
+as
+begin
+	return fr_object1(x,y);
+end;
+//
+
+create or replace function fr_object4(x int, y int) return mydata
+as
+	val mydata;
+	val1 mydata;
+begin
+	val := fr_object1(x,y);
+	val1 := fr_object2(x+1,y+1);
+	return fr_object3(val.x+val1.x, val.y+val1.y);
+end;
+//
+
+delimiter ;//
+
+## select directly
+select fr_null_obj1();
+select fr_null_obj2();
+select fr_object1(5,6);
+select fr_object2(5,6);
+select fr_object3(5,6);
+select fr_object4(2,3);
+
+## assign to value;
+delimiter //;
+create or replace procedure p1(x in int, y in int)
+as
+	val mydata;
+begin
+	val := fr_null_obj1();
+	select val;
+	val := fr_null_obj2();
+	select val;
+	val := fr_object1(x, y);
+	select val;
+	val := fr_object2(x, y);
+	select val;
+	val := fr_object3(x, y);
+	select val;
+	val := fr_object4(x, y);
+	select val;
+end
+//
+
+delimiter ;//
+call p1(2,4);
+call p1(2,4);
+drop procedure p1;
+
+## as variable default values
+delimiter //;
+create or replace procedure p1(x in int, y in int)
+as
+	val mydata := fr_object1(x,y);
+begin
+	select val;
+end
+//
+
+create or replace function fr_int() return int
+as
+begin
+    return 5;
+end;
+//
+
+create or replace procedure p2()
+as
+	v1 mydata := fr_int();
+begin
+	select v1;
+end
+// 
+
+delimiter ;//
+call p1(4,5);
+call p1(4,5);
+--error ER_SP_MISMATCH_RECORD_VAR
+call p2();
+drop procedure p1;
+drop procedure p2;
+drop function fr_int;
+
+## as table column
+create table t1(id int, c mydata);
+insert into t1 values(1, mydata(5,6));
+insert into t1 values(2, fr_null_obj1());
+insert into t1 values(3, fr_object1(5,6));
+select * from t1;
+select * from t1 where c is null;
+select * from t1 where c = fr_object2(5,6);
+update t1 set c = fr_object4(2,3) where id = 3;
+select * from t1;
+
+drop table t1;
+
+## select into
+delimiter //;
+create or replace procedure p1(x in int, y in int)
+as
+	val mydata;
+begin
+	select fr_object1(x,y) into val;
+	select val;
+end
+//
+
+delimiter ;//
+call p1(5,6);
+call p1(5,6);
+drop procedure p1;
+
+create table t1(id int, c mydata);
+insert into t1 values(1, mydata(5,6));
+delimiter //;
+create or replace procedure p1()
+as
+	val mydata;
+begin
+	select c into val from t1 where id = 1;
+	select val;
+end
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+drop table t1;
+
+## cant be some function parameter
+--error ER_WRONG_ARGUMENTS
+select sum(fr_object1(5,6));
+--error ER_NOT_SUPPORTED_YET
+select conv(fr_object1(5,6), 10, 2);
+
+
+## as varray/table of object construct parameters
+CREATE OR REPLACE TYPE mydataarr IS varray(3) OF mydata;
+CREATE OR REPLACE TYPE mydatatab IS table OF mydata;
+
+select mydataarr(fr_object1(1, 1),fr_object1(2, 2),fr_object1(4, 4));
+select mydatatab(fr_object1(1, 1),fr_object1(2, 2),fr_object1(4, 4),fr_object1(8, 8));
+
+delimiter //;
+create or replace procedure p1(x in int, y in int)
+as
+	val mydatatab;
+begin
+	val := mydatatab(fr_object1(x,y),fr_object1(x*2,y*2));
+	select val;
+end
+//
+
+delimiter ;//
+call p1(2,2);
+call p1(2,2);
+drop procedure p1;
+
+## singlerow subselect
+create table t1(id int, c mydata);
+insert into t1 values(1, fr_object1(4,4));
+insert into t1 values(2, fr_object1(5,5));
+
+select (select fr_object1(5,6));
+select * from (select fr_object1(5,6));
+select (select fr_object1(5,6) from t1 limit 1);
+select * from (select fr_object1(5,6) from t1);
+select * from (select *,fr_object1(5,6) from t1);
+
+delimiter //;
+create or replace function fr_object5(x int, y int) return mydata
+as
+begin
+	return (select mydata(x,y));
+end;
+//
+
+create or replace function fr_object6(x int, y int) return mydata
+as
+begin
+	return (select (select mydata(x,y)));
+end;
+//
+
+create or replace function fr_object7(x int, y int) return mydata
+as
+begin
+	return (select mydata(x,y) from t1 limit 1);
+end;
+//
+
+create or replace function fr_object8(x int, y int) return mydata
+as
+begin
+	return (select (select mydata(x,y) from t1 limit 1));
+end;
+//
+
+create or replace function fr_object9() return mydata
+as
+begin
+	return (select c from t1 limit 1);
+end;
+//
+
+create or replace function fr_object10() return mydata
+as
+begin
+	return (select (select c from t1 limit 1));
+end;
+//
+
+create or replace function fr_object51(x int, y int) return mydata
+as
+	val mydata;
+begin
+	val := fr_object1(x,y);
+	return (select val from t1 limit 1);
+end;
+//
+
+delimiter ;//
+select fr_object5(5,6);
+select fr_object6(5,6);
+select fr_object7(5,6);
+select fr_object8(5,6);
+select fr_object9();
+select fr_object10();
+select fr_object51(5,6);
+
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+	val mydata := (select (select mydata(5,6) from t1 limit 1));
+begin
+	select val;
+	val := fr_object5(5,6);
+	select val;
+	val := fr_object6(5,6);
+	select val;
+	val := fr_object7(5,6);
+	select val;
+	val := fr_object8(5,6);
+	select val;
+	val := fr_object9();
+	select val;
+	val := fr_object10();
+	select val;
+	val := fr_object51(5,6);
+	select val;
+end;
+//
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+drop table t1;
+
+## bulk collect data source
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+	val mydatatab := mydatatab(mydata(1, 1),mydata(1+1, 1+1));
+begin
+	select fr_object1(5,8) bulk collect into val;
+	select val(1);
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+## return table elements
+delimiter //;
+create or replace function fr_object11() return mydata
+as
+	val mydatatab := mydatatab(mydata(1, 1),mydata(1+1, 1+1));
+begin
+	return val(1);
+end;
+//
+
+CREATE or replace PROCEDURE p1() 
+as
+	val mydata;
+begin
+	val := fr_object11();
+	select val;
+end;
+//
+
+delimiter ;//
+select fr_object11();
+call p1();
+call p1();
+drop procedure p1;
+
+## cursor stmtment
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+	cursor c1 is select fr_object1(5,6);
+	d1 mydata;
+begin
+	open c1;
+  	loop
+    	fetch c1 into d1;
+    	exit when c1%notfound;
+    	select d1;
+  	end loop;
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+## mixed
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+ 	val mydatatab := mydatatab(mydata(1, 2),mydata(1+1, 2+1));
+begin
+	val(1) := fr_object1(5,6);
+	select val;
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+ 	val mydatatab := mydatatab(mydata(1, 2),mydata(1+1, 2+1));
+begin
+	val(1) := fr_null_obj1();
+	select val;
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+	d2 mydatatab;
+	d3 mydata := fr_object1(5, 6);
+begin
+	d2 := mydatatab(d3);
+	select d2;
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+	d2 mydatatab;
+begin
+	d2 := mydatatab(fr_object1(5, 6),fr_object1(4, 5));
+	select d2;
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+select fr_object1(5,6) connect by level<2;
+
+## not support return varray/table yet
+delimiter //;
+--error ER_NOT_SUPPORTED_YET
+create or replace function fr_varray() return mydataarr
+as
+begin
+	return mydataarr(mydata(2,3));
+end;
+//
+
+--error ER_NOT_SUPPORTED_YET
+create or replace function fr_table() return mydatatab
+as
+begin
+	return mydatatab(mydata(2,3));
+end;
+//
+
+delimiter ;//
+
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+	val mydata;
+begin
+	val := fr_object1(5,6);
+	select mydatatab(val);
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+	val mydatatab;
+begin
+	val := mydatatab(mydata(3,4),mydata(5,6));
+	select mydatatab(val(2));
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+	type intvec is table of int;
+	val mydata;
+	val1 intvec;
+begin
+	val := fr_object1(5,6);
+	val1 := intvec(val.x, val.y);
+	select val1;
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+	type mydata1 is record(x int, y int);
+	type mydatatab1 is table of mydata1 index by varchar2(32);
+	type mydatatab2 is table of mydata1;
+	val mydatatab1;
+begin
+	val('abcd') := mydata1(5,6);
+	select mydatatab2(val('abcd'));
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+select * from table(mydatatab(fr_object1(5,6), fr_object1(3,4)));
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+	val mydata := mydata(5,6);
+begin
+	select * from table(mydatatab(val, fr_object1(3,4), mydata(1,2)));
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+#bug 8805
+create or replace  type type_temp1 as object(
+        col35 number,
+        col351 number(10),
+        col352 number(10,2),
+        col36 VARCHAR2(100),
+        col37 PLS_INTEGER);
+create or replace type type_temp_table as table of type_temp1;
+
+delimiter //;
+CREATE OR REPLACE FUNCTION f1() RETURN type_temp1 IS
+	v1 type_temp1; 
+BEGIN
+	v1 := type_temp1( 1.234,1.234,1.234, 'ooooooo', 987);
+    RETURN v1;
+END;
+//
+
+delimiter ;//
+select f1();
+select type_temp_table(null, type_temp1( 1.234,1.234,1.234, 'ooooooo', 987));
+
+drop function f1;
+drop type type_temp_table;
+drop type type_temp1;
+
+# bug8877 charset 
+create or replace type t_air as object(id int,type varchar(20));
+create table tt_air(id int,name1 t_air);
+
+delimiter //;
+
+create or replace function f2 return t_air 
+as
+	type tklist is table of tt_air%rowtype index by binary_integer;
+	stu_record_val tklist;
+begin
+ 	stu_record_val(0).id := 1;
+ 	stu_record_val(0).name1 := t_air(1,'aa');
+ 	stu_record_val(2).id := 2;
+ 	stu_record_val(2).name1 := t_air(2,'aa1');
+	return stu_record_val(2).name1;
+end;
+//
+
+delimiter ;//
+select f2();
+select f2();
+
+drop function f2;
+drop table tt_air;
+drop type t_air;
+
+drop type mydataarr;
+drop type mydatatab;
+drop type mydata;
+drop function fr_null_obj1;
+drop function fr_null_obj2;
+drop function fr_object1;
+drop function fr_object2;
+drop function fr_object3;
+drop function fr_object4;
+drop function fr_object5;
+drop function fr_object6;
+drop function fr_object7;
+drop function fr_object8;
+drop function fr_object9;
+drop function fr_object10;
+drop function fr_object11;
+drop function fr_object51;

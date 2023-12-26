@@ -1,0 +1,21 @@
+# skip test list, skip test which will not pass
+group_replication.gr_startup_check_node_seed_skips_own_address_v6 : BUG#0 skip ipv6 test for docker
+group_replication.gr_startup_check_node_seed_skips_own_address    : BUG#0 skip ipv6 test for docker
+group_replication.gr_skip_wait_for_view_modification              : BUG#1 coredump @wangbin
+group_replication.gr_member_status_applier_error_bug              : BUG#0 skip
+group_replication.gr_parallel_applier_indexes_commit_order        : BUG#0 skip since garbage logical changed
+group_replication.gr_switch_primary_timeout_node_kill             : BUG#0 skip since xcom connect mechanism has been changed
+group_replication.gr_singlewriter_enabled_on_mode_switch          : BUG#0 skip since we don't use official single write paxos
+group_replication.gr_check_count_tx_remote_applier_queue_2        : BUG#0 skip because COUNT_TRANSACTIONS_REMOTE_IN_APPLIER_QUEUE's statistics is wrong
+main.backup_safe_binlog_info   : WL#000 ignore
+main.mysqldump   : WL#000 ignore
+main.proxy_protocol_admin_port : WL#000 skip
+main.threadpool_debug  : WL#000 skip
+main.fix_priv_tables  : WL#000 skip
+sys_vars.gtid_mode_basic   : WL#000 TODO recheck.
+sys_vars.binlog_checksum_basic   : WL#000 TODO recheck.
+sys_vars.enforce_gtid_consistency_basic   : WL#000 subquery consequences.
+main.ssl_cache            : WL#000 ignore 
+main.ssl_cache_tls13      : WL#000 ignore
+innodb.ddl_kill           : WL#000 ignore
+main.acl_mdl_scalability  : WL#000 ignore

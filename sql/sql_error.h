@@ -69,6 +69,8 @@ class Sql_condition {
   */
   const char *message_text() const { return m_message_text.ptr(); }
 
+  const String *GetMessage() const { return &m_message_text; }
+
   /**
     Get the MESSAGE_OCTET_LENGTH of this condition.
     @return the length in bytes of the message text.
@@ -743,9 +745,9 @@ class Dbms_output_package {
   ~Dbms_output_package() {}
   Diagnostics_area *get_dbms_da() { return m_dbms_da_ptr; }
   bool get_buf_enabled() { return m_buf_enabled; }
-  void set_buf_enabled(THD *thd, bool val) {
-    m_buf_enabled = val;
-    if (!val) reset_dbms_output_package(thd);
+  void set_buf_enabled(THD *thd, int val) {
+    if (val == 0 || val == 1) m_buf_enabled = val;
+    if (val != 1) reset_dbms_output_package(thd);
   }
 
   bool get_serveroutput() { return m_server_output; }

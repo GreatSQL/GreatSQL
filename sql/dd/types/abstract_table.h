@@ -54,7 +54,8 @@ enum class enum_table_type {
   INVALID_TABLE,
   BASE_TABLE,
   USER_VIEW,
-  SYSTEM_VIEW
+  SYSTEM_VIEW,
+  MATERIALIZED_VIEW
 };
 
 /**
@@ -138,6 +139,12 @@ class Abstract_table : virtual public Entity_object {
   virtual Properties &options() = 0;
   virtual bool set_options(const Properties &options) = 0;
   virtual bool set_options(const String_type &options_raw) = 0;
+
+  /////////////////////////////////////////////////////////////////////////
+  // is_materialized_view.
+  /////////////////////////////////////////////////////////////////////////
+  virtual bool is_materialized_view() const = 0;
+  virtual void set_is_materialized_view(bool m_is_materialized_view) = 0;
 
   /////////////////////////////////////////////////////////////////////////
   // created.

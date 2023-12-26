@@ -23,8 +23,6 @@
 
 INCLUDE_DIRECTORIES(SYSTEM ${BOOST_PATCHES_DIR} ${BOOST_INCLUDE_DIR})
 
-MY_INCLUDE_SYSTEM_DIRECTORIES(ICU)
-
 ADD_WSHADOW_WARNING()
 
 # Lots of warnings about -Walloc-size-larger-than= from my_malloc.cc
@@ -360,6 +358,12 @@ SET(SQL_GIS_SOURCES
   options_parser.cc
 )
 
+SET(MYSQL_GREATDB_SQL_SOURCES
+  gdb_common.cc
+  gdb_sequence.cc
+  sequence_option.cc
+)
+
 SET(SQL_SHARED_SOURCES
   auth/auth_acls.cc
   auth/auth_common.cc
@@ -433,6 +437,7 @@ SET(SQL_SHARED_SOURCES
   iterators/basic_row_iterators.cc
   iterators/bka_iterator.cc
   iterators/composite_iterators.cc
+  iterators/gdb_connect_by_iterator.cc
   iterators/hash_join_buffer.cc
   iterators/hash_join_chunk.cc
   iterators/hash_join_iterator.cc
@@ -472,6 +477,8 @@ SET(SQL_SHARED_SOURCES
   my_decimal.cc
   mysqld.cc
   mysqld_thd_manager.cc
+  mysqld_dbms_pipe_manager.cc
+  session_package_data.cc
   opt_costconstantcache.cc
   opt_costconstants.cc
   opt_costmodel.cc
@@ -484,8 +491,9 @@ SET(SQL_SHARED_SOURCES
   opt_sum.cc
   opt_trace.cc
   opt_trace2server.cc
-  pack_rows.cc
+  outerjoin_remover.cc
   outerjoin_transformer.cc
+  pack_rows.cc
   parse_file.cc
   parse_tree_handler.cc
   parse_tree_helpers.cc
@@ -495,12 +503,14 @@ SET(SQL_SHARED_SOURCES
   parse_tree_nodes.cc
   query_term.cc
   parse_tree_partitions.cc
+  parse_tree_pivot.cc
   parse_tree_window.cc
   select_lex_visitor.cc
   parser_service.cc
   partition_info.cc
   partitioning/partition_handler.cc
   persisted_variable.cc
+  pivot.cc
   protocol_classic.cc
   psi_memory_key.cc
   query_result.cc
@@ -670,6 +680,7 @@ SET(SQL_SHARED_SOURCES
   exchange_sort.cc
   exchange_nosort.cc
   msg_queue.cc
+  ${MYSQL_GREATDB_SQL_SOURCES}
 )
 
 IF(BUILD_IS_SINGLE_CONFIG)
@@ -1050,10 +1061,6 @@ SET(BINLOG_SOURCE
   basic_ostream.cc
   binlog/global.cc
   binlog/recovery.cc
-  binlog/group_commit/bgc_ticket_manager.cc
-  binlog/group_commit/bgc_ticket.cc
-  binlog/group_commit/atomic_bgc_ticket.cc
-  binlog/group_commit/atomic_bgc_ticket_guard.cc
   binlog/monitoring/context.cc
   binlog/tools/iterators.cc
   binlog.cc

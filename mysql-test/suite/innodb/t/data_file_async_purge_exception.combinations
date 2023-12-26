@@ -1,0 +1,3 @@
+[normal_trx]
+loose-greatdb_enable_xa = OFF
+loose-greatdb_enable_dtm = OFF

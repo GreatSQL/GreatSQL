@@ -1,4 +1,5 @@
 // Copyright (c) 2000, 2022, Oracle and/or its affiliates.
+// Copyright (c) 2023, GreatDB Software Co., Ltd.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0,
@@ -182,6 +183,7 @@ enum {
   OPT_TRACE_EXEC,
   OPT_TRACE_PROTOCOL,
   OPT_VIEW_PROTOCOL,
+  OPT_FORMAT_RESULT,
 };
 
 static int record = 0;
@@ -192,6 +194,7 @@ const char *excluded_string = nullptr;
 static char *shared_memory_base_name = nullptr;
 const char *opt_logdir = "";
 const char *opt_include = nullptr, *opt_charsets_dir;
+static bool opt_format_result = false;
 static int opt_port = 0;
 static int opt_max_connect_retries;
 static int opt_result_format_version;
@@ -7743,6 +7746,10 @@ static struct my_option my_long_options[] = {
     {"character-sets-dir", OPT_CHARSETS_DIR,
      "Directory for character set files.", &opt_charsets_dir, &opt_charsets_dir,
      nullptr, GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
+    {"format-result", OPT_FORMAT_RESULT,
+     "format result with table for every sql", &opt_format_result,
+     &opt_format_result, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0,
+     nullptr},
     {"colored-diff", OPT_COLORED_DIFF, "Colorize the diff outout.",
      &opt_colored_diff, &opt_colored_diff, nullptr, GET_BOOL, NO_ARG, 0, 0, 0,
      nullptr, 0, nullptr},
@@ -8636,6 +8643,149 @@ static int append_warnings(DYNAMIC_STRING *ds, MYSQL *mysql) {
   return ds->length;
 }
 
+#define MAX_COLUMN_LENGTH 1024  // copy from client/mysql.cc
+#define MAX_ALLOCA_SIZE 512  // copy from client/mysql.cc
+#define MY_PRINT_SPS_0 \
+  2 /* Replace 0x00 bytes to space             */  // copy from client/mysql.cc
+#define MY_PRINT_MB \
+  8 /* Recognize multi-byte characters         */  // copy from client/mysql.cc
+
+void tee_write_mysqltest(DYNAMIC_STRING *ds, const char *s, size_t slen,
+                         int flags [[maybe_unused]]) {
+  // this function is copied from client/mysql.cc, disable support about _WIN32
+  // but we do not handle any flags, just print the raw result
+  const char *se;
+  for (se = s + slen; s < se; s++) {
+    dynstr_append_mem(ds, s, 1);
+  }
+}
+
+static void tee_print_sized_data_mysqltest(DYNAMIC_STRING *ds, const char *data,
+                                           unsigned int data_length,
+                                           unsigned int total_bytes_to_send,
+                                           bool right_justified) {
+  // this function is copied from client/mysql.cc:tee_print_sized_data()
+
+  /*
+    For '\0's print ASCII spaces instead, as '\0' is eaten by (at
+    least my) console driver, and that messes up the pretty table
+    grid.  (The \0 is also the reason we can't use fprintf() .)
+  */
+  unsigned int i;
+
+  if (right_justified)
+    for (i = data_length; i < total_bytes_to_send; i++)
+      dynstr_append_mem(ds, " ", 1);
+
+  tee_write_mysqltest(ds, data, data_length, MY_PRINT_SPS_0 | MY_PRINT_MB);
+
+  if (!right_justified)
+    for (i = data_length; i < total_bytes_to_send; i++)
+      dynstr_append_mem(ds, " ", 1);
+}
+
+static void print_table_data_with_border(DYNAMIC_STRING *ds,
+                                         MYSQL_RES *result) {
+  // this function is copied from client/mysql.cc:print_table_data()
+  if (result->row_count == 0) {
+    dynstr_append_mem(ds, "Empty set\n", strlen("Empty set\n"));
+    return;
+  }
+  std::string separator;
+  MYSQL_ROW cur;
+  MYSQL_FIELD *field;
+  bool *num_flag;
+  size_t sz;
+
+  sz = sizeof(bool) * mysql_num_fields(result);
+  num_flag = (bool *)my_safe_alloca(sz, MAX_ALLOCA_SIZE);
+
+  // build separator line when print result in table format, such as
+  // +----+----+----+
+  separator.append("+");
+  while ((field = mysql_fetch_field(result))) {
+    size_t length = std::max<size_t>(field->name_length, field->max_length);
+    if (length < 4 && !IS_NOT_NULL(field->flags))
+      length = 4;  // Room for "NULL"
+    field->max_length = (ulong)length;
+    separator.insert(separator.end(), length + 2, '-');
+    separator.append("+");
+  }
+  separator.append("\n");
+  dynstr_append(ds, separator.c_str());
+
+  mysql_field_seek(result, 0);
+  dynstr_append(ds, "|");
+  for (uint off = 0; (field = mysql_fetch_field(result)); off++) {
+    size_t name_length = strlen(field->name);
+    size_t numcells = charset_info->cset->numcells(charset_info, field->name,
+                                                   field->name + name_length);
+    size_t display_length = field->max_length + name_length - numcells;
+    size_t len = std::min<int>((int)display_length, MAX_COLUMN_LENGTH);
+    char *field_str = new char[len + 3 + 1];
+    size_t str_len = std::sprintf(field_str, " %-*s |", (int)len, field->name);
+    dynstr_append_mem(ds, field_str, str_len);
+    delete[] field_str;
+  }
+  dynstr_append(ds, "\n");
+  dynstr_append(ds, separator.c_str());
+
+  while ((cur = mysql_fetch_row(result))) {
+    ulong *lengths = mysql_fetch_lengths(result);
+    dynstr_append(ds, "| ");
+    mysql_field_seek(result, 0);
+    for (uint off = 0; off < mysql_num_fields(result); off++) {
+      const char *buffer;
+      uint data_length;
+      uint field_max_length;
+      size_t visible_length;
+      uint extra_padding;
+
+      if (off) dynstr_append(ds, " ");
+
+      if (cur[off] == nullptr) {
+        buffer = "NULL";
+        data_length = 4;
+      } else {
+        buffer = cur[off];
+        data_length = (uint)lengths[off];
+      }
+
+      field = mysql_fetch_field(result);
+      field_max_length = field->max_length;
+
+      /*
+       How many text cells on the screen will this string span?  If it
+       contains multibyte characters, then the number of characters we occupy
+       on screen will be fewer than the number of bytes we occupy in memory.
+
+       We need to find how much screen real-estate we will occupy to know how
+       many extra padding-characters we should send with the printing
+       function.
+      */
+      visible_length = charset_info->cset->numcells(charset_info, buffer,
+                                                    buffer + data_length);
+      extra_padding = (uint)(data_length - visible_length);
+
+      if (field_max_length > MAX_COLUMN_LENGTH)
+        tee_print_sized_data_mysqltest(
+            ds, buffer, data_length, MAX_COLUMN_LENGTH + extra_padding, false);
+      else {
+        if (num_flag[off] != 0) /* if it is numeric, we right-justify it */
+          tee_print_sized_data_mysqltest(
+              ds, buffer, data_length, field_max_length + extra_padding, true);
+        else
+          tee_print_sized_data_mysqltest(
+              ds, buffer, data_length, field_max_length + extra_padding, false);
+      }
+      dynstr_append(ds, " |");
+    }
+    dynstr_append(ds, "\n");
+  }
+  dynstr_append(ds, separator.c_str());
+  my_safe_afree((bool *)num_flag, sz, MAX_ALLOCA_SIZE);
+}
+
 /// Run query using MySQL C API
 ///
 /// @param cn          Connection object
@@ -8701,16 +8851,28 @@ static void run_query_normal(struct st_connection *cn,
 
         if (display_metadata) append_metadata(ds, fields, num_fields);
 
-        if (!display_result_vertically)
-          append_table_headings(ds, fields, num_fields);
+        if (opt_format_result) {
+#ifdef _WIN32
+          die("do not support --format-result on Windows");
+#endif
+          print_table_data_with_border(ds, res);
+        } else {
+          if (!display_result_vertically)
+            append_table_headings(ds, fields, num_fields);
 
-        append_result(ds, res);
+          append_result(ds, res);
+        }
       }
 
       // Need to call mysql_affected_rows() before the "new"
       // query to find the warnings.
-      if (!disable_info)
-        append_info(ds, mysql_affected_rows(mysql), mysql_info(mysql));
+      if (!disable_info || opt_format_result) {
+        if (ds->length == strlen("Empty set\n") &&
+            !strncmp(ds->str, "Empty set\n", strlen("Empty set\n"))) {
+        } else {
+          append_info(ds, mysql_affected_rows(mysql), mysql_info(mysql));
+        }
+      }
 
       if (display_session_track_info) append_session_track_info(ds, mysql);
 
@@ -8872,7 +9034,7 @@ static void run_query_stmt(MYSQL *mysql, struct st_command *command,
 
       // Fetch info before fetching warnings, since it will be reset
       // otherwise.
-      if (!disable_info)
+      if (!disable_info || opt_format_result)
         append_info(ds, mysql_affected_rows(stmt->mysql), mysql_info(mysql));
 
       if (display_session_track_info) append_session_track_info(ds, mysql);
@@ -11505,9 +11667,35 @@ void dynstr_append_sorted(DYNAMIC_STRING *ds, DYNAMIC_STRING *ds_input,
 
   if (!*start) return; /* No input */
 
-  /* First line is result header, skip past it */
-  while (*start && *start != '\n') start++;
-  start++; /* Skip past \n */
+  if (opt_format_result) {
+    // example A:
+    // line#1 Empty set
+    // line#2 affected rows: 0
+    if (!strncmp("Empty set", ds_input->str, strlen("Empty set"))) {
+      dynstr_append_mem(ds, ds_input->str, ds_input->length);
+      return;
+    }
+
+    // example B:
+    // line#1 +--------+
+    // line#2 | Field  |
+    // line#3 +--------+
+    // line#4 |  val01 |
+    // line#5 |  val02 |
+    // line#6 +--------+
+    // line#7 affected rows: 2
+    //
+    // in example B, line #1 2 3 6 7 should be skiped when sort
+
+    while (*start && *start != '\n') start++;  // line #1
+    start++;                                   /* Skip past \n */
+    size_t skip_counter = start - ds_input->str;
+    start += skip_counter * 2;  // line #2 #3
+  } else {
+    /* First line is result header, skip past it */
+    while (*start && *start != '\n') start++;
+    start++; /* Skip past \n */
+  }
   dynstr_append_mem(ds, ds_input->str, start - ds_input->str);
 
   /*
@@ -11542,6 +11730,24 @@ void dynstr_append_sorted(DYNAMIC_STRING *ds, DYNAMIC_STRING *ds_input,
     sorted.push_back(result_row);
     start = line_end + 1;
   }
+  std::string affected_rows_line;
+  std::string separator_line;
+  if (opt_format_result) {
+    if (!sorted.empty() &&
+        sorted[sorted.size() - 1].length() > strlen("affected rows: ") &&
+        !strncmp("affected rows: ", sorted[sorted.size() - 1].c_str(),
+                 strlen("affected rows: "))) {
+      affected_rows_line = sorted.back();  // line #7, in above case
+      sorted.pop_back();
+    }
+    if (!sorted.empty() &&
+        sorted[sorted.size() - 1].length() >
+            4 &&  // 4 for the beginning +- and ending -+
+        !strncmp("+-", sorted[sorted.size() - 1].c_str(), 2)) {
+      separator_line = sorted.back();  // line #6, in above case
+      sorted.pop_back();
+    }
+  }
 
   /* Sort array */
   std::stable_sort(sorted.begin() + first_unsorted_row, sorted.end());
@@ -11549,6 +11755,14 @@ void dynstr_append_sorted(DYNAMIC_STRING *ds, DYNAMIC_STRING *ds_input,
   /* Create new result */
   for (auto i : sorted) {
     dynstr_append_mem(ds, i.c_str(), i.length());
+    dynstr_append(ds, "\n");
+  }
+  if (!separator_line.empty()) {
+    dynstr_append(ds, separator_line.c_str());
+    dynstr_append(ds, "\n");
+  }
+  if (!affected_rows_line.empty()) {
+    dynstr_append(ds, affected_rows_line.c_str());
     dynstr_append(ds, "\n");
   }
 }

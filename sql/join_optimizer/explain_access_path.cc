@@ -38,6 +38,7 @@
 #include "sql/iterators/basic_row_iterators.h"
 #include "sql/iterators/bka_iterator.h"
 #include "sql/iterators/composite_iterators.h"
+#include "sql/iterators/gdb_connect_by_iterator.h"
 #include "sql/iterators/hash_join_iterator.h"
 #include "sql/iterators/ref_row_iterators.h"
 #include "sql/iterators/sorting_iterator.h"
@@ -175,6 +176,8 @@ string JoinTypeToString(JoinType join_type) {
       return "inner join";
     case JoinType::OUTER:
       return "left join";
+    case JoinType::FULL_OUTER:
+      return "full join";
     case JoinType::ANTI:
       return "antijoin";
     case JoinType::SEMI:
@@ -197,6 +200,10 @@ string HashJoinTypeToString(RelationalExpression::Type join_type,
       if (explain_json_value)
         *explain_json_value = JoinTypeToString(JoinType::OUTER);
       return "Left hash join";
+    case RelationalExpression::FULL_OUTER_JOIN:
+      if (explain_json_value)
+        *explain_json_value = JoinTypeToString(JoinType::FULL_OUTER);
+      return "Full hash join";
     case RelationalExpression::ANTIJOIN:
       if (explain_json_value)
         *explain_json_value = JoinTypeToString(JoinType::ANTI);
@@ -758,13 +765,6 @@ static std::unique_ptr<Json_object> ExplainQueryPlan(
       case SQLCOM_REPLACE:
         dml_desc = string("Replace into ") +
                    query_plan->get_lex()->insert_table_leaf->table->alias;
-        break;
-      case SQLCOM_INSERT_ALL_SELECT:
-        dml_desc = string("Insert all/first");
-        for (auto tb = query_plan->get_lex()->insert_table_leaf; tb != nullptr;
-             tb = tb->next_leaf) {
-          dml_desc += string(" into ") + tb->table->alias;
-        }
         break;
       default:
         // SELECTs have no top-level node.
@@ -1398,6 +1398,45 @@ static std::unique_ptr<Json_object> SetObjectMembers(
       children->push_back({path->temptable_aggregate().subquery_path});
       break;
     }
+    case AccessPath::CONNECT_BY_SCAN: {
+      error |= AddMemberToObject<Json_string>(obj, "access_type", "connect_by");
+      auto param = &path->connect_by_scan();
+      ret_obj = AssignParentPath(param->table_path, nullptr, std::move(ret_obj),
+                                 join);
+      if (ret_obj == nullptr) return nullptr;
+      description =
+          "connect by scan:";  //+
+                               // param->connect_by_param->ExplainToString();
+      if (param->connect_by_param->nocycle) {
+        description += "(nocycle)";
+      }
+      if (param->connect_by_param->ref) {
+        auto cache_table = param->connect_by_param->cache->tab;
+        auto key = cache_table->key_info + 1;
+        error |= SetIndexInfoInObject(&description, "index_lookup", nullptr,
+                                      cache_table, cache_table->key_info + 1,
+                                      "lookup",
+                                      RefToString(*param->connect_by_param->ref,
+                                                  key, /*include_nulls=*/false),
+                                      /*ranges=*/nullptr, nullptr, true,
+                                      cache_table->file->pushed_idx_cond, obj);
+        if (param->connect_by_param->connect_by_cond) {
+          description += " and filter with: ";
+        }
+      }
+      if (param->connect_by_param->connect_by_cond) {
+        description += ItemToString(param->connect_by_param->connect_by_cond);
+      }
+      if (param->connect_by_param->start_with_cond) {
+        description += string(" start with: ") +
+                       ItemToString(param->connect_by_param->start_with_cond);
+      }
+      children->push_back({param->src_path});
+      if (param->connect_by_param->start_with_cond) {
+        GetAccessPathsFromItem(param->connect_by_param->start_with_cond,
+                               "start_with", children);
+      }
+    } break;
     case AccessPath::LIMIT_OFFSET: {
       error |= AddMemberToObject<Json_string>(obj, "access_type", "limit");
       char buf[256] = {0};

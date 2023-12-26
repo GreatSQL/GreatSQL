@@ -2819,8 +2819,9 @@ ON t1.col_varchar_key = t2.col_varchar_key
 GROUP BY field2
 ORDER BY field1;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	NULL	index	col_int_key,col_varchar_key	col_int_key	4	NULL	ROWS	100.00	Using temporary; Using filesort
-1	SIMPLE	t2	NULL	ref	col_varchar_key	col_varchar_key	6	test.t1.col_varchar_key	ROWS	100.00	NULL
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	ROWS	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	col_int_key,col_varchar_key	col_int_key	4	NULL	ROWS	100.00	Using temporary; Using filesort
+2	SIMPLE	t2	NULL	ref	col_varchar_key	col_varchar_key	6	test.t1.col_varchar_key	ROWS	100.00	NULL
 Warnings:
 Note	1003	/* select#1 */ select min(`test`.`t2`.`col_datetime_key`) AS `field1`,`test`.`t1`.`col_int_key` AS `field2` from `test`.`t1` left join `test`.`t2` FORCE INDEX (`col_varchar_key`) on((`test`.`t2`.`col_varchar_key` = `test`.`t1`.`col_varchar_key`)) where true group by `field2` order by `field1`
 SELECT MIN(t2.col_datetime_key) AS field1,
@@ -2887,9 +2888,8 @@ RIGHT JOIN t2 ON t2.pk = t1.col_int_key
 GROUP BY field1 , field4 
 ORDER BY t1.col_datetime_key ;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	20	100.00	Parallel execute (1 workers)
-2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	20	100.00	Using temporary; Using filesort
-2	SIMPLE	t1	NULL	ref	col_int_key	col_int_key	4	test.t2.pk	1	100.00	NULL
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	20	100.00	Using temporary; Using filesort
+1	SIMPLE	t1	NULL	ref	col_int_key	col_int_key	4	test.t2.pk	1	100.00	NULL
 Warnings:
 Note	1003	/* select#1 */ select `test`.`t2`.`col_varchar_key` AS `field1`,count(distinct `test`.`t1`.`col_varchar_nokey`) AS `COUNT(DISTINCT t1.col_varchar_nokey)`,`test`.`t2`.`pk` AS `field4` from `test`.`t2` left join `test`.`t1` on((`test`.`t1`.`col_int_key` = `test`.`t2`.`pk`)) where true group by `field1`,`field4` order by `test`.`t1`.`col_datetime_key`
 SELECT t2.col_varchar_key AS field1 , COUNT(DISTINCT t1.col_varchar_nokey), t2.pk AS field4
@@ -2898,26 +2898,26 @@ RIGHT JOIN t2 ON t2.pk = t1.col_int_key
 GROUP BY field1 , field4 
 ORDER BY t1.col_datetime_key ;
 field1	COUNT(DISTINCT t1.col_varchar_nokey)	field4
-b	1	13
-c	1	3
-d	1	19
-d	1	5
+b	0	13
+c	4	3
+d	0	19
 d	1	6
-d	1	9
-e	1	20
-g	1	15
-j	1	1
-m	1	12
+d	2	9
+d	3	5
+e	0	20
+g	0	15
+j	2	1
+m	0	12
 m	1	4
-p	1	16
-q	1	17
-r	1	11
-s	1	10
-t	1	8
+p	0	16
+q	0	17
+r	0	11
+s	0	10
+t	0	8
 v	1	2
-w	1	18
-x	1	14
-y	1	7
+w	0	18
+x	0	14
+y	2	7
 DROP TABLE t1,t2;
 
 # BUG#12619868 "JCL: MORE ROWS OF OUTPUT WHEN JCL>=5"

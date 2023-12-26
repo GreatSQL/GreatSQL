@@ -1,0 +1,118 @@
+--source include/have_debug.inc
+SET sql_mode=ORACLE;
+
+show variables like '%udt_format_result%';
+set @@udt_format_result='DBA';
+
+--echo #
+--echo # test of function in type is table of
+--echo #
+DELIMITER $$;
+CREATE or replace  FUNCTION f1 (a VARCHAR(32)) RETURN VARCHAR(32) no sql
+is result VARCHAR(32);
+BEGIN
+  result := CONCAT(a,'y');
+  RETURN(result);
+END;$$
+
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist := tklist(f1(1),f1(2),'cc');
+id1 int := 1;
+begin
+ select stu_record_val(1),stu_record_val(2);
+ stu_record_val(1) := 1;
+ select stu_record_val(1);
+ stu_record_val(3) := 1;
+ select stu_record_val(1), stu_record_val(3);
+ select stu_record_val.count;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of function in type is record of
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := f1(1),
+  score varchar(20) := f1(2)
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>stu_record(10,f1(10),f1(20)));
+BEGIN
+  stu_record_val(2).id := 20;
+  select stu_record_val(1),stu_record_val(2);
+END;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+
+--echo #
+--echo # test of for in inner layer of sp
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := f1(1),
+  score varchar(20) := f1(2)
+);
+stu_record_val stu_record;
+BEGIN
+  stu_record_val.id := 10;
+  select stu_record_val;
+END;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of for in inner layer of sp
+--echo #
+create database db1;
+use db1;
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := test.f1(1),
+  score varchar(20) := test.f1(2)
+);
+stu_record_val stu_record;
+BEGIN
+  stu_record_val.id := 10;
+  select stu_record_val;
+END;
+$$
+
+DELIMITER ;$$
+
+use test;
+DELIMITER $$;
+CREATE or replace PROCEDURE p2() as
+type tklist1 is table of varchar(20);
+stu_record_val1 tklist1 := tklist1();
+begin
+  show procedure code db1.p1;
+  call db1.p1;
+end;
+$$
+DELIMITER ;$$
+
+call p2();
+drop PROCEDURE p2;
+
+drop database db1;
+drop function f1;
+
+
+
+

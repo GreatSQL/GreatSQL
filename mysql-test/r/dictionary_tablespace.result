@@ -3,6 +3,8 @@
 general_log.CSM
 general_log.CSV
 general_log_XXX.sdi
+greatdb_sequences.ibd
+greatdb_sequences_persist.ibd
 slow_log.CSM
 slow_log.CSV
 slow_log_XXX.sdi
@@ -33,6 +35,8 @@ foreign_keys	mysql
 func	mysql
 general_log	\N
 global_grants	mysql
+greatdb_sequences	\N
+greatdb_sequences_persist	\N
 gtid_executed	mysql
 help_category	mysql
 help_keyword	mysql
@@ -198,6 +202,8 @@ t1	CREATE TABLE `t1` (
 general_log.CSM
 general_log.CSV
 general_log_XXX.sdi
+greatdb_sequences.ibd
+greatdb_sequences_persist.ibd
 slow_log.CSM
 slow_log.CSV
 slow_log_XXX.sdi

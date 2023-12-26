@@ -64,6 +64,7 @@
 #include "mysql_com.h"  // NAME_LEN
 #include "mysqld_error.h"
 #include "prealloced_array.h"     // Prealloced_array
+#include "scope_guard.h"          // Variable_scope_guard
 #include "sql/aggregate_check.h"  // Group_check
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_single_table_access
@@ -73,6 +74,7 @@
 #include "sql/enum_query_type.h"
 #include "sql/error_handler.h"  // View_error_handler
 #include "sql/field.h"
+#include "sql/gdb_sequence.h"
 #include "sql/item.h"
 #include "sql/item_cmpfunc.h"
 #include "sql/item_func.h"
@@ -87,6 +89,7 @@
 #include "sql/opt_hints.h"
 #include "sql/opt_trace.h"  // Opt_trace_object
 #include "sql/opt_trace_context.h"
+#include "sql/outerjoin_remover.h"
 #include "sql/outerjoin_transformer.h"
 #include "sql/parse_tree_node_base.h"
 #include "sql/parse_tree_nodes.h"  // PT_order_expr
@@ -185,7 +188,6 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
   assert(this == thd->lex->current_query_block());
   assert(join == nullptr);
   assert(!thd->is_error());
-  if (rewrite_all_rownum(thd)) return true;
 
   // If this query block is a table value constructor, a lot of the preparation
   // done in Query_block::prepare becomes irrelevant. Thus we call our own
@@ -215,6 +217,10 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
                              ? parent_lex->sql_command == SQLCOM_SELECT ||
                                    parent_lex->sql_command == SQLCOM_SET_OPTION
                              : outer_query_block()->allow_merge_derived);
+
+  // Disable merging derived tables if the query block contains full join
+  // Operation(s).
+  allow_merge_derived = allow_merge_derived && !has_foj();
 
   Opt_trace_context *const trace = &thd->opt_trace;
   Opt_trace_object trace_wrapper_prepare(trace);
@@ -291,6 +297,7 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
   resolve_place = RESOLVE_SELECT_LIST;
 
   if (with_wild && setup_wild(thd)) return true;
+  if (m_pivot && m_pivot->setup_pivot(thd)) return true;
   if (setup_base_ref_items(thd)) return true; /* purecov: inspected */
 
   if (setup_fields(thd, thd->want_privilege, /*allow_sum_func=*/true,
@@ -315,6 +322,12 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
 
   // Set up join conditions and WHERE clause
   if (setup_conds(thd)) return true;
+  // Set up select for update of columns
+  if ((thd->variables.sql_mode & MODE_ORACLE) && m_update_of_cond_dq.size() > 0)
+    if (setup_update_of_conds(thd)) return true;
+
+  // set up connect by and  clause
+  if (setup_connect_by(thd)) return true;
 
   // Set up the GROUP BY clause
   int all_fields_count = fields.size();
@@ -567,11 +580,22 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
     if (setup_ftfuncs(thd, this)) return true;
   }
 
+  if (setup_sequence_func(thd, &fields)) {
+    return true;
+  }
+
   if (query_result() && query_result()->prepare(thd, fields, unit)) return true;
 
   if (has_sj_candidates() && flatten_subqueries(thd)) return true;
 
   set_sj_candidates(nullptr);
+
+  // connect by change where_cond filter and join
+  if (connect_by_cond() && where_cond()) {
+    if (transform_filter_with_connect_by(thd)) {
+      return true;
+    }
+  }
 
   /*
     When reaching the top-most query block, or the next-to-top query block for
@@ -583,6 +607,7 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
       (outer_query_block() == nullptr ||
        ((parent_lex->sql_command == SQLCOM_SET_OPTION ||
          parent_lex->sql_command == SQLCOM_END ||
+         parent_lex->sql_command == SQLCOM_EXECUTE_IMMEDIATE ||
          parent_lex->sql_command == SQLCOM_LOAD) &&
         outer_query_block()->outer_query_block() == nullptr)) &&
       !skip_local_transforms) {
@@ -618,6 +643,8 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
 
   // Eliminate unused window definitions, redundant sorts etc.
   if (!m_windows.is_empty()) Window::eliminate_unused_objects(&m_windows);
+
+  if (rewrite_all_rownum(thd)) return true;
 
   // Replace group by field references inside window functions with references
   // in the presence of ROLLUP.
@@ -794,9 +821,24 @@ bool Query_block::apply_local_transforms(THD *thd, bool prune) {
     for (auto qt : unit->query_terms<>())
       if (qt->query_block()->apply_local_transforms(thd, true)) return true;
 
+  if (thd->optimizer_switch_flag(OPTIMIZER_SWITCH_REMOVE_USELESS_OUTERJOIN)) {
+    Outerjoin_remover outer_remover(this, thd);
+    outer_remover.do_remove(&m_table_nest);
+    if (need_to_remap) {
+      // reset tableno for optimize_keyuse.
+      remap_tables(thd);
+      need_to_remap = false;
+      // reset used tables for item.
+      for (auto &item : fields) {
+        item->update_used_tables();
+      }
+    }
+  }
+
   // Convert all outer joins to inner joins if possible
   if (simplify_joins(thd, &m_table_nest, true, false, &m_where_cond))
     return true;
+
   if (record_join_nest_info(&m_table_nest)) return true;
   build_bitmap_for_nested_joins(&m_table_nest, 0);
 
@@ -923,7 +965,7 @@ void Query_block::update_used_tables() {
 
 bool Query_block::resolve_limits(THD *thd) {
   if (offset_limit != nullptr) {
-    if (offset_limit->fix_fields(thd, nullptr))
+    if (offset_limit->fix_fields(thd, &offset_limit))
       return true; /* purecov: inspected */
     if (offset_limit->data_type() == MYSQL_TYPE_INVALID) {
       if (offset_limit->propagate_type(
@@ -939,7 +981,7 @@ bool Query_block::resolve_limits(THD *thd) {
   }
 
   if (select_limit != nullptr) {
-    if (select_limit->fix_fields(thd, nullptr))
+    if (select_limit->fix_fields(thd, &select_limit))
       return true; /* purecov: inspected */
     if (select_limit->data_type() == MYSQL_TYPE_INVALID) {
       if (select_limit->propagate_type(
@@ -1539,6 +1581,7 @@ bool Query_block::resolve_subquery(THD *thd) {
       are compatible with the conversion.
       15. Antijoins are supported, or it's not an antijoin (it's a semijoin).
       16. OFFSET starts from the first row and LIMIT is not 0.
+      17. Connect by not allow semijoin
   */
   SecondaryEngineFlags engine_flags = 0;
   if (const handlerton *secondary_engine = SecondaryEngineHandlerton(thd);
@@ -1570,7 +1613,8 @@ bool Query_block::resolve_subquery(THD *thd) {
       deterministic &&                                                     // 13
       predicate->choose_semijoin_or_antijoin() &&                          // 14
       (!cannot_do_antijoin || !predicate->can_do_aj) &&                    // 15
-      is_row_count_valid_for_semi_join()) {                                // 16
+      is_row_count_valid_for_semi_join() &&                                // 16
+      !(outer->has_connect_by || has_connect_by)) {                        // 17
     DBUG_PRINT("info", ("Subquery is semi-join conversion candidate"));
 
     /* Notify in the subquery predicate where it belongs in the query graph */
@@ -1768,6 +1812,29 @@ bool Query_block::setup_conds(THD *thd) {
 }
 
 /**
+  Resolve select for update of columns condition
+
+  @param  thd     thread handler
+
+  @returns false if success, true if error
+*/
+
+bool Query_block::setup_update_of_conds(THD *thd) {
+  DBUG_TRACE;
+  for (uint i = 0; i < m_update_of_cond_dq.size(); i++) {
+    thd->where = "update of clause";
+    Item *update_item = m_update_of_cond_dq.at(i);
+    if ((!update_item->fixed && update_item->fix_fields(thd, &update_item)))
+      return true;
+
+    assert(update_item->data_type() != MYSQL_TYPE_INVALID);
+  }
+  assert(thd->lex->current_query_block() == this);
+  assert(!thd->is_error());
+  return false;
+}
+
+/**
   Resolve join conditions for a join nest
 
   @param thd    thread handler
@@ -1798,8 +1865,8 @@ bool Query_block::setup_join_cond(THD *thd, mem_root_deque<Table_ref *> *tables,
                  "ROWNUM occur in outer join on conditions.");
         return true;
       }
-      Item::Item_rownum_func_replacement info(this);
-      if (rewrite_rownum_ref(join_cond, info)) return true;
+      if (rownum_func && rewrite_rownum_ref(join_cond, &rownum_func))
+        return true;
 
       resolve_nest = tr;
       thd->where = "on clause";
@@ -2073,8 +2140,10 @@ bool Query_block::simplify_joins(THD *thd,
       table->embedding->nested_join->used_tables |= used_tables;
       table->embedding->nested_join->not_null_tables |= not_null_tables;
     }
-
-    if (!table->outer_join || (used_tables & not_null_tables)) {
+    if (!table->foj_inner &&
+        (!table->outer_join || (used_tables & not_null_tables)) &&
+        !(table->foj_inner && table->has_lnnvl()) &&
+        !(table->outer_join && table->has_lnnvl())) {
       /*
         For some of the inner tables there are conjunctive predicates
         that reject nulls => the outer join can be replaced by an inner join.
@@ -3550,6 +3619,19 @@ bool Query_block::merge_derived(THD *thd, Table_ref *derived_table) {
   if (leaf_table_count + derived_query_block->leaf_table_count - 1 > MAX_TABLES)
     return false;
 
+  // connect by not allow
+  if (derived_query_block->connect_by_cond()) {
+    return false;
+  }
+
+  // lnnvl func not allow
+  Query_block *const master_query_block =
+      derived_query_block->outer_query_block();
+  if (derived_query_block->has_lnnvl_func ||
+      (master_query_block && master_query_block->has_lnnvl_func)) {
+    return false;
+  }
+
   derived_table->set_merged();
 
   DBUG_PRINT("info", ("algorithm: MERGE"));
@@ -4073,7 +4155,8 @@ bool Query_block::flatten_subqueries(THD *thd) {
 */
 void propagate_nullability(mem_root_deque<Table_ref *> *tables, bool nullable) {
   for (Table_ref *tr : *tables) {
-    if (tr->table && !tr->table->is_nullable() && (nullable || tr->outer_join))
+    if (tr->table && !tr->table->is_nullable() &&
+        (nullable || tr->outer_join || tr->foj_outer))
       tr->table->set_nullable();
     if (tr->nested_join == nullptr) continue;
     propagate_nullability(&tr->nested_join->m_tables,
@@ -4285,6 +4368,91 @@ void Query_block::empty_order_list(Query_block *sl) {
   }
 }
 
+/**
+ * @brief  setup_connect_by and setup_start with
+ * 1. remove simple cond
+ * 2. transformer connect_by_func and Item_field to item_ref
+ * 3. transformer connect_by_func in fields
+ * such as:
+ *    select n, (prior id + pid) from t connect by prior id = pid
+ *  ref_item_list:
+ *    id,pid , n                       id->Item_ref
+ *     ^                                ^
+ *     +--------------------------------|
+ * @param thd
+ * @return true
+ * @return false
+ */
+bool Query_block::setup_connect_by(THD *thd) {
+  DBUG_TRACE;
+  if (m_connect_by_cond) {
+    assert(m_connect_by_cond->is_bool_func());
+    resolve_place = Query_block::RESOLVE_CONNECT_BY;
+    thd->where = "connect by clause";
+
+    auto setup_item_func = [thd, this](Item **cond) {
+      auto it = (*cond);
+      if ((!it->fixed && it->fix_fields(thd, &it)) || it->check_cols(1))
+        return true;
+      assert(it->data_type() != MYSQL_TYPE_INVALID);
+      /*
+      Simplify the condition if it is a const item.
+      Leave a TRUE condition if cond is always true, so that query block
+      */
+      if (it->const_item() && !thd->lex->is_view_context_analysis() &&
+          !it->walk(&Item::is_non_const_over_literals, enum_walk::POSTFIX,
+                    nullptr) &&
+          simplify_const_condition(thd, &it, false))
+        return true;
+      auto new_item = CompileItemConnectbyRef(thd, it, this);
+      cond = &new_item;
+      return false;
+    };
+    if (setup_item_func(&m_connect_by_cond)) {
+      return true;
+    }
+
+    if (m_start_with_cond) {
+      assert(m_start_with_cond->is_bool_func());
+      thd->where = "start with clause";
+      if (setup_item_func(&m_start_with_cond)) {
+        return true;
+      }
+      assert(m_start_with_cond->data_type() != MYSQL_TYPE_INVALID);
+    }
+    resolve_place = Query_block::RESOLVE_SELECT_LIST;
+
+    // pesudo column or connect by func should spilte like item_sum
+    for (size_t i = 0; i < fields.size(); i++) {
+      auto it = fields[i];
+      if ((it->has_connect_by_func() &&
+           it->type() != Item::CONNECT_BY_FUNC_ITEM) ||
+          ((it->used_tables() & RAND_TABLE_BIT) &&
+           (it->used_tables() & ~RAND_TABLE_BIT))) {
+        // prior id + id :  prior_item, item_field , item_plus
+        auto old = fields.size();
+        auto new_item = CompileItemConnectbyRef(thd, it, this);
+        if (!new_item) return true;
+        new_item->update_used_tables();
+
+        select_list_tables |= new_item->used_tables();
+        i += (fields.size() - old);
+      }
+    }
+    // always have a level field for index
+    if (!has_connect_by_level) {
+      Item *level_item = new (thd->mem_root) Item_connect_by_func_level(POS());
+      if (!level_item) return true;
+      if (level_item->fix_fields(thd, &level_item)) return true;
+      level_item->update_used_tables();
+      add_hidden_item(level_item);
+    }
+    resolve_place = Query_block::RESOLVE_NONE;
+  }
+
+  return false;
+}
+
 /*****************************************************************************
   Group and order functions
 *****************************************************************************/
@@ -4440,7 +4608,7 @@ bool find_order_in_list(THD *thd, Ref_item_array ref_item_array,
       order->in_field_list = true;
       if (resolution == RESOLVED_AGAINST_ALIAS && from_field == not_found_field)
         order->used_alias = true;
-      if ((*order->item)->is_ora_type() || (*order->item)->is_ora_table()) {
+      if ((*order->item)->this_item()->is_ora_udt_type()) {
         my_error(ER_TYPE_IN_ORDER_BY, MYF(0));
         return true;
       }
@@ -4480,7 +4648,7 @@ bool find_order_in_list(THD *thd, Ref_item_array ref_item_array,
       if (item_ref->cached_table->is_merged() &&
           order_item->eq(item_ref->ref_item(), false)) {
         order->item = &ref_item_array[counter];
-        if ((*order->item)->is_ora_type() || (*order->item)->is_ora_table()) {
+        if ((*order->item)->this_item()->is_ora_udt_type()) {
           my_error(ER_TYPE_IN_ORDER_BY, MYF(0));
           return true;
         }
@@ -4543,8 +4711,12 @@ bool find_order_in_list(THD *thd, Ref_item_array ref_item_array,
   */
   assert(order_item == *order->item);
   order->item = &ref_item_array[el];
-  if ((*order->item)->is_ora_type() || (*order->item)->is_ora_table()) {
+  if ((*order->item)->this_item()->is_ora_udt_type()) {
     my_error(ER_TYPE_IN_ORDER_BY, MYF(0));
+    return true;
+  }
+  if ((*order->item)->this_item()->is_sequence_field()) {
+    my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), "");
     return true;
   }
   return false;
@@ -5207,6 +5379,37 @@ bool Query_block::resolve_rollup_wfs(THD *thd) {
 
   return false;
 }
+
+static bool validate_gc_assignment_check(const Field *rfield, TABLE *table,
+                                         MY_BITMAP *bitmap, Item *value) {
+  if (rfield->table != table) return false;
+
+  // Skip hidden system fields.
+  if (rfield->is_hidden_by_system()) return false;
+
+  // If any of the explicit values is DEFAULT
+  if (rfield->m_default_val_expr && value->type() == Item::DEFAULT_VALUE_ITEM) {
+    // Restore the statement safety flag to current lex
+    current_thd->lex->set_stmt_unsafe_flags(
+        rfield->m_default_val_expr->get_stmt_unsafe_flags());
+    // Mark the columns that this expression reads to rthe ead_set
+    for (uint j = 0; j < table->s->fields; j++) {
+      if (bitmap_is_set(&rfield->m_default_val_expr->base_columns_map, j)) {
+        bitmap_set_bit(table->read_set, j);
+      }
+    }
+  }
+
+  /* skip non marked fields */
+  if (!bitmap_is_set(bitmap, rfield->field_index())) return false;
+  if (rfield->gcol_info && value->type() != Item::DEFAULT_VALUE_ITEM) {
+    my_error(ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN, MYF(0),
+             rfield->field_name, rfield->table->s->table_name.str);
+    return true;
+  }
+  return false;
+}
+
 /**
   @brief  validate_gc_assignment
   Check whether the other values except DEFAULT are assigned
@@ -5242,37 +5445,25 @@ bool validate_gc_assignment(const mem_root_deque<Item *> &fields,
   auto value_it = VisibleFields(values).begin();
   while (value_it != VisibleFields(values).end()) {
     Item *value = *value_it++;
+    Item *rfield_tmp = *field_it++;
     const Field *rfield;
 
-    if (!use_table_field)
-      rfield = (down_cast<Item_field *>((*field_it++)->real_item()))->field;
-    else
-      rfield = *(fld++);
-    if (rfield->table != table) continue;
-
-    // Skip hidden system fields.
-    if (rfield->is_hidden_by_system()) continue;
-
-    // If any of the explicit values is DEFAULT
-    if (rfield->m_default_val_expr &&
-        value->type() == Item::DEFAULT_VALUE_ITEM) {
-      // Restore the statement safety flag to current lex
-      current_thd->lex->set_stmt_unsafe_flags(
-          rfield->m_default_val_expr->get_stmt_unsafe_flags());
-      // Mark the columns that this expression reads to rthe ead_set
-      for (uint j = 0; j < table->s->fields; j++) {
-        if (bitmap_is_set(&rfield->m_default_val_expr->base_columns_map, j)) {
-          bitmap_set_bit(table->read_set, j);
-        }
+    Item_row *item_row = dynamic_cast<Item_row *>(rfield_tmp);
+    if (item_row) {
+      for (uint i = 0; i < item_row->cols(); i++) {
+        rfield = (dynamic_cast<Item_field *>(
+                      item_row->element_index(i)->real_item()))
+                     ->field;
+        if (validate_gc_assignment_check(rfield, table, bitmap, value))
+          return true;
       }
-    }
-
-    /* skip non marked fields */
-    if (!bitmap_is_set(bitmap, rfield->field_index())) continue;
-    if (rfield->gcol_info && value->type() != Item::DEFAULT_VALUE_ITEM) {
-      my_error(ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN, MYF(0),
-               rfield->field_name, rfield->table->s->table_name.str);
-      return true;
+    } else {
+      if (!use_table_field)
+        rfield = (down_cast<Item_field *>((rfield_tmp)->real_item()))->field;
+      else
+        rfield = *(fld++);
+      if (validate_gc_assignment_check(rfield, table, bitmap, value))
+        return true;
     }
   }
   return false;
@@ -6143,6 +6334,7 @@ bool Query_block::transform_grouped_to_derived(THD *thd, bool *break_off) {
     new_derived->select_n_where_fields = select_n_where_fields;
     new_derived->n_sum_items = n_sum_items;
     new_derived->n_child_sum_items = n_child_sum_items;
+    new_derived->n_connect_by_items = n_connect_by_items;
     // update condition counts
     new_derived->cond_count = cond_count;
     // between_count is updated if cond_count gets updated when there are any
@@ -7793,44 +7985,148 @@ bool has_rownum_func(Item *item, THD *thd) {
   return false;
 }
 
+bool Query_block::setup_sequence_func(THD *thd, mem_root_deque<Item *> *input) {
+  DBUG_TRACE;
+  if (!has_sequence) {
+    return false;
+  }
+  if (master_query_expression()->is_union() || outer_query_block() ||
+      is_grouped() || is_distinct() || is_ordered()) {
+    my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), "");
+    return true;
+  }
+
+  // replace sequence field with sequence func.
+  List<Item_func> seq_funcs;
+  Item::Item_sequence_field_replacement replacements(&seq_funcs);
+  for (Item *&item : *input) {
+    Item *new_item = item->transform(&Item::replace_sequence_field,
+                                     pointer_cast<uchar *>(&replacements));
+    if (!new_item) return true;  // may be cased by new (thd->mem_root) failed.
+    if (new_item != item) {
+      item = new_item;
+    }
+  }
+
+  /* Not allow sequence appears in more than one row, such as "insert ...
+     values (seq.nextval, xxx), (seq.nextval, xxx)..." */
+  bool no_seq = seq_funcs.is_empty();
+  if (no_seq) {
+    return false;
+  } else if (!sequence_funcs.empty()) {
+    my_error(ER_GDB_SEQUENCE_POSITION, MYF(0),
+             "sequence appears more than one row!");
+    return true;
+  }
+
+  // set ref_sequence_func for all sequence funcs came from the same sequence.
+  std::map<std::string, Item_func *> sequence_info;
+  List_iterator<Item_func> lfi(seq_funcs);
+  Item *lf;
+  while ((lf = lfi++)) {
+    Item_func_sequence *f = dynamic_cast<Item_func_sequence *>(lf);
+    std::string db = f->db_name;
+    std::string table = f->table_name;
+    std::string key(db + "." + table);
+    transform(key.begin(), key.end(), key.begin(), ::tolower);
+    Item_func_sequence *seq_func;
+    std::map<std::string, Item_func *>::iterator finder =
+        sequence_info.find(key);
+    if (finder != sequence_info.end()) {
+      seq_func = dynamic_cast<Item_func_sequence *>(finder->second);
+    } else {
+      seq_func = new (thd->mem_root)
+          Item_func_sequence(POS(), f->db_name, f->table_name, f->field_name,
+                             f->sequences_metadata_version);
+      if (seq_func == nullptr) return true;
+      sequence_info.insert(std::pair<std::string, Item_func *>(key, seq_func));
+    }
+    if (f->read_next) {
+      seq_func->read_next = true;
+    }
+    f->ref_seq_func = seq_func;
+  }
+  for (std::map<std::string, Item_func *>::iterator it = sequence_info.begin();
+       it != sequence_info.end(); it++) {
+    auto item_func_seq = dynamic_cast<Item_func_sequence *>(it->second);
+    auto db_name = item_func_seq->db_name;
+    auto seq_name = item_func_seq->table_name;
+    assert(item_func_seq);
+    auto seq_def = get_sequence_def(db_name, seq_name);
+    if (seq_def == nullptr) return true;
+    item_func_seq->set_seq_def(seq_def.get());
+
+    /**
+     * @name For compatibility with Oracle, see #4421
+     * @{ */
+    const my_decimal *cached_currval =
+        thd->get_cached_seq_currval(db_name, seq_name, seq_def.get());
+    if (item_func_seq->read_next == false && cached_currval == nullptr) {
+      my_error(ER_GDB_READ_SEQUENCE, MYF(0),
+               "currval is not yet defined in this session");
+      return true;
+    }
+    /**  @} */
+
+    sequence_funcs.push_back(it->second);
+  }
+  return false;
+}
+
+void Query_block::reset_sequence_read_flag() {
+  for (Item_func *func : sequence_funcs) {
+    Item_func_sequence *seq_func = dynamic_cast<Item_func_sequence *>(func);
+    seq_func->reset_read_flag();
+  }
+}
+
 bool Query_block::rewrite_rownum_ref(Item *&item,
-                                     Item::Item_rownum_func_replacement &info) {
-  Item *new_item =
-      item->transform(&Item::replace_rownum_func, pointer_cast<uchar *>(&info));
+                                     Item_func_rownum **rownum_ref) {
+  Item *new_item = item->transform(&Item::replace_rownum_func,
+                                   pointer_cast<uchar *>(rownum_ref));
   if (!new_item) return true;
   if (new_item != item) {
+    new_item->hidden = item->hidden;
     item = new_item;
   }
   return false;
 }
 
 // all rownum funcs of the query block shoud be pointer to the same one.
-bool Query_block::rewrite_all_rownum(THD *) {
-  Item::Item_rownum_func_replacement info(this);
+bool Query_block::rewrite_all_rownum(THD *thd) {
+  if (!rownum_func) return false;
+  thd->lex->m_cmd_rownums.push_back(rownum_func);
   for (Item *&item : fields) {
     // Maybe there was complex expression that has not setted rownum flag.
-    if (rewrite_rownum_ref(item, info)) return true;
+    if (rewrite_rownum_ref(item, &rownum_func)) return true;
   }
 
   if (m_where_cond && has_rownum_in_cond) {
-    if (rewrite_rownum_ref(m_where_cond, info)) return true;
+    if (rewrite_rownum_ref(m_where_cond, &rownum_func)) return true;
+  }
+
+  if (m_connect_by_cond && has_rownum_in_cond) {
+    if (rewrite_rownum_ref(m_connect_by_cond, &rownum_func)) return true;
+    if (m_after_connect_by_where &&
+        rewrite_rownum_ref(m_after_connect_by_where, &rownum_func))
+      return true;
   }
 
   if (group_list.elements) {
     for (ORDER *group = group_list.first; group; group = group->next) {
       Item **gi = group->item;
-      if (rewrite_rownum_ref((*gi), info)) return true;
+      if (rewrite_rownum_ref((*gi), &rownum_func)) return true;
     }
   }
 
   if (order_list.elements) {
     for (ORDER *order = order_list.first; order; order = order->next) {
       Item **oi = order->item;
-      if (rewrite_rownum_ref((*oi), info)) return true;
+      if (rewrite_rownum_ref((*oi), &rownum_func)) return true;
     }
   }
   if (m_having_cond && has_rownum_in_cond) {
-    if (rewrite_rownum_ref(m_having_cond, info)) return true;
+    if (rewrite_rownum_ref(m_having_cond, &rownum_func)) return true;
   }
   return false;
 }
@@ -7909,6 +8205,506 @@ bool Query_block::lift_fulltext_from_having_to_select_list(THD *thd) {
   // predicates in HAVING are made complete. The topmost Item should therefore
   // never be changed in the above calls to TransformItem().
   assert(having_cond == m_having_cond);
+  return false;
+}
+
+bool new_cond_func(THD *thd, Item_func::Functype t, Item **new_cond,
+                   List<Item> &list) {
+  if (list.is_empty()) {
+    *new_cond = nullptr;
+  } else {
+    Item *it;
+    if (t == Item_func::COND_OR_FUNC) {
+      it = new (thd->mem_root) Item_cond_or(list);
+      if (it == nullptr) return true;
+    } else {
+      assert(t == Item_func::COND_AND_FUNC);
+      it = new (thd->mem_root) Item_cond_and(list);
+      if (it == nullptr) return true;
+    }
+    if (it) {
+      if (it->fix_fields(thd, &it)) return true;
+      it->update_used_tables();
+      *new_cond = it;
+    }
+  }
+  return false;
+}
+
+class AccessOrFilter {
+  table_map join_map = {0};
+
+  // from values
+  Table_ref *m_tables;
+  Query_block *select;
+
+ public:
+  AccessOrFilter(Query_block *select) : m_tables(select->get_table_list()) {
+    getUsedTables(select->m_current_table_nest, join_map, false);
+  }
+
+  void getUsedTables(mem_root_deque<Table_ref *> *tables,
+                     table_map &used_tables, bool is_join_cond) {
+    for (auto tl : *tables) {
+      bool access = is_join_cond ? true : false;
+      if (tl->join_cond()) {
+        used_tables |= (tl->join_cond()->used_tables() & ~PSEUDO_TABLE_BITS);
+        access = true;
+      }
+      if (tl->nested_join) {
+        getUsedTables(&tl->nested_join->m_tables, used_tables, tl->join_cond());
+      } else {
+        if (access) {
+          used_tables |= tl->map();
+        }
+      }
+    }
+  }
+
+  bool isFilter(Item *it) {
+    if (!m_tables) return true;
+    if (it->type() == Item::SUBSELECT_ITEM) return true;
+    auto it_used = it->used_tables() & ~PSEUDO_TABLE_BITS;
+    if (it_used == 0) return true;
+    return isNotJoinCond(it_used);
+  }
+
+  bool isNotJoinCond(table_map it_used) {
+    if ((join_map & it_used) == it_used) return true;
+    for (Table_ref *table = m_tables; table; table = table->next_local) {
+      if (it_used == table->map()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool transformItem_in(THD *thd, Item_func_in *it, Item **join_cond,
+                        Item **where_cond) {
+    table_map argsused = 0;
+
+    if ((it->arguments()[0]->used_tables() & (~PSEUDO_TABLE_BITS)) == 0) {
+      *where_cond = it;
+      return false;
+    }
+    for (uint i = 1; i < it->argument_count(); i++) {
+      auto u = it->arguments()[i]->used_tables() & (~PSEUDO_TABLE_BITS);
+      argsused |= u;
+    }
+    if (argsused != 0) {
+      Item *args0 = it->arguments()[0];
+      Item *args0ref = args0;
+      if (args0->const_item()) {
+        args0ref = new (thd->mem_root)
+            Item_ref(&select->context, &args0, args0->item_name.ptr());
+      }
+      PT_item_list pt_item_where;
+      PT_item_list pt_item_join;
+      for (uint i = 1; i < it->argument_count(); i++) {
+        auto args_ptr = it->arguments()[i];
+        auto it_used = (args_ptr->used_tables() & ~PSEUDO_TABLE_BITS);
+
+        if (it_used != 0 && !isNotJoinCond(it_used | args0->used_tables())) {
+          pt_item_join.value.push_back(args_ptr);
+        } else {
+          pt_item_where.value.push_back(args_ptr);
+        }
+      }
+      auto copy_res = [thd, it](PT_item_list *pt_item, Item *a, Item **val) {
+        if (pt_item->elements() != 1) {
+          pt_item->push_front(a);
+          *val = new (thd->mem_root) Item_func_in(POS(), pt_item, it->negated);
+        } else {
+          if (it->negated) {
+            *val = new (thd->mem_root) Item_func_ne(a, pt_item->value.front());
+          } else {
+            *val = new (thd->mem_root) Item_func_eq(a, pt_item->value.front());
+          }
+        }
+        if (*val == nullptr) return true;
+        if ((*val)->fix_fields(thd, val)) return true;
+        return false;
+      };
+      if (copy_res(&pt_item_join, args0, join_cond)) return true;
+      if (copy_res(&pt_item_where, args0ref, where_cond)) return true;
+      return false;
+    }
+
+    *join_cond = it;
+    return false;
+  }
+
+  bool spliteItem(THD *thd, Item_func *t, Item *first_item,
+                  Item_func *args_item, Item **join_cond, Item **where_cond) {
+    PT_item_list pt_item_where;
+    PT_item_list pt_item_join;
+
+    Item *args0 = first_item;
+    Item *args0ref = first_item;
+    for (uint i = 0; i < args_item->argument_count(); i++) {
+      auto args_ptr = args_item->arguments()[i];
+      auto it_used = (args_ptr->used_tables() & ~PSEUDO_TABLE_BITS);
+      if (it_used != 0 && !isNotJoinCond(it_used | first_item->used_tables())) {
+        pt_item_join.value.push_back(args_ptr);
+      } else {
+        pt_item_where.value.push_back(args_ptr);
+      }
+    }
+
+    if (pt_item_where.is_empty()) {
+      *join_cond = t;
+      return false;
+    }
+
+    if (pt_item_join.is_empty()) {
+      assert(0);
+      *where_cond = t;
+      return false;
+    }
+
+    std::function<Item *(PT_item_list *)> create_value_func;
+    if (args_item->functype() == Item_func::LEAST_FUNC) {
+      create_value_func = [thd](PT_item_list *opt_list) {
+        return new (thd->mem_root) Item_func_min(POS(), opt_list);
+      };
+    } else {
+      create_value_func = [thd](PT_item_list *opt_list) {
+        return new (thd->mem_root) Item_func_max(POS(), opt_list);
+      };
+    }
+
+    std::function<Item *(Item *, Item *)> create_comp_func;
+    switch (t->functype()) {
+      case Item_func::GE_FUNC:
+        create_comp_func = [thd](Item *a, Item *b) {
+          return new (thd->mem_root) Item_func_ge(a, b);
+        };
+        break;
+      case Item_func::LE_FUNC:
+        create_comp_func = [thd](Item *a, Item *b) {
+          return new (thd->mem_root) Item_func_le(a, b);
+        };
+        break;
+      case Item_func::GT_FUNC:
+        create_comp_func = [thd](Item *a, Item *b) {
+          return new (thd->mem_root) Item_func_gt(a, b);
+        };
+        break;
+      case Item_func::LT_FUNC:
+        create_comp_func = [thd](Item *a, Item *b) {
+          return new (thd->mem_root) Item_func_lt(a, b);
+        };
+        break;
+      case Item_func::EQ_FUNC:
+        create_comp_func = [thd](Item *a, Item *b) {
+          return new (thd->mem_root) Item_func_eq(a, b);
+        };
+        break;
+      case Item_func::NE_FUNC:
+        create_comp_func = [thd](Item *a, Item *b) {
+          return new (thd->mem_root) Item_func_ne(a, b);
+        };
+        break;
+      default:
+        assert(0);
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                 "where condition use with connect by ");
+        return true;
+    }
+
+    Item *join_val = nullptr;
+    if (pt_item_join.elements() == 1) {
+      join_val = pt_item_join.value.front();
+    } else {
+      join_val = create_value_func(&pt_item_join);
+      if (join_val == nullptr) return true;
+    }
+
+    *join_cond = create_comp_func(args0, join_val);
+    if ((*join_cond) == nullptr) return true;
+    if ((*join_cond)->fix_fields(thd, join_cond)) return true;
+
+    Item *where_val = nullptr;
+    if (pt_item_where.elements() == 1) {
+      where_val = pt_item_where.value.front();
+    } else {
+      where_val = create_value_func(&pt_item_where);
+      if (where_val == nullptr) return true;
+    }
+
+    *where_cond = create_comp_func(args0ref, where_val);
+    if ((*where_cond) == nullptr) return true;
+    if ((*where_cond)->fix_fields(thd, where_cond)) return true;
+    return false;
+  }
+
+  bool transformItem_any(THD *thd, Item_func *it, Item **join_cond,
+                         Item **where_cond) {
+    auto left_item = it->arguments()[0];
+    auto right_item = it->arguments()[1];
+    auto isTransItem = [](Item *cond) {
+      if (cond->type() == Item::FUNC_ITEM) {
+        auto func_it = dynamic_cast<Item_func *>(cond);
+        switch (func_it->functype()) {
+          case Item_func::GREATEST_FUNC:
+          case Item_func::LEAST_FUNC:
+            if ((func_it->used_tables() & (~PSEUDO_TABLE_BITS)) != 0)
+              return true;
+            break;
+          default:
+            break;
+        }
+      }
+      return false;
+    };
+
+    if (isTransItem(left_item)) {
+      if (!isTransItem(right_item) &&
+          ((right_item->used_tables() & (~PSEUDO_TABLE_BITS)) != 0) &&
+          isNotJoinCond(right_item->used_tables())) {
+        if (spliteItem(thd, it, it->arguments()[1],
+                       dynamic_cast<Item_func *>(it->arguments()[0]), join_cond,
+                       where_cond)) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    } else {
+      if (isTransItem(right_item) &&
+          ((left_item->used_tables() & (~PSEUDO_TABLE_BITS)) != 0) &&
+          isNotJoinCond(left_item->used_tables())) {
+        if (spliteItem(thd, it, it->arguments()[0],
+                       dynamic_cast<Item_func *>(it->arguments()[1]), join_cond,
+                       where_cond)) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+    *join_cond = it;
+    return false;
+  }
+
+  bool transformItem_between(THD *thd, Item_func_between *it, Item **join_cond,
+                             Item **where_cond) {
+    // between xx and xx
+    // expr BETWEEN min AND max
+    // expr >= min  and expr <= max
+    // expr between a and b =>   xx >= a and xx <= b
+    // expr not between a and b =>   xx<= a and xx >= b
+    auto args1 = it->arguments()[1]->used_tables() & ~PSEUDO_TABLE_BITS;
+    auto args2 = it->arguments()[2]->used_tables() & ~PSEUDO_TABLE_BITS;
+
+    if ((args1 != 0) != (args2 != 0)) {
+      Item *args0 = it->arguments()[0];
+      Item *args0ref = args0;
+      if (args2) {
+        if (it->negated) {
+          // expr < 0 and expr > b
+          *join_cond =
+              new (thd->mem_root) Item_func_gt(args0, it->arguments()[2]);
+
+          *where_cond =
+              new (thd->mem_root) Item_func_lt(args0ref, it->arguments()[1]);
+        } else {
+          // expr >= 0 and expr  <= b
+          *join_cond =
+              new (thd->mem_root) Item_func_le(args0, it->arguments()[2]);
+
+          *where_cond =
+              new (thd->mem_root) Item_func_ge(args0ref, it->arguments()[1]);
+        }
+      }
+
+      if (args1) {
+        if (it->negated) {
+          // expr < b  and expr > 0
+          *join_cond =
+              new (thd->mem_root) Item_func_lt(args0, it->arguments()[1]);
+          *where_cond =
+              new (thd->mem_root) Item_func_gt(args0ref, it->arguments()[2]);
+        } else {
+          // expr >= b and expr  <= 0
+          *join_cond =
+              new (thd->mem_root) Item_func_ge(args0, it->arguments()[1]);
+
+          *where_cond =
+              new (thd->mem_root) Item_func_le(args0ref, it->arguments()[2]);
+        }
+      }
+      if (*join_cond == nullptr) {
+        return true;
+      } else {
+        if ((*join_cond)->fix_fields(thd, join_cond)) return true;
+      }
+
+      if (*where_cond == nullptr) {
+        return true;
+      } else {
+        if ((*where_cond)->fix_fields(thd, where_cond)) return true;
+      }
+      return false;
+    }
+
+    *join_cond = it;
+    return false;
+  }
+
+  bool transformCompatItem(THD *thd, Item *cond, Item **join_cond,
+                           Item **where_cond) {
+    if (cond->gc_subst_analyzer(nullptr)) {
+      auto it = dynamic_cast<Item_func *>(cond);
+      switch (it->functype()) {
+        case Item_func::BETWEEN: {
+          if (transformItem_between(thd,
+                                    dynamic_cast<Item_func_between *>(cond),
+                                    join_cond, where_cond))
+            return true;
+          return false;
+        }
+        case Item_func::IN_FUNC: {
+          if (transformItem_in(thd, dynamic_cast<Item_func_in *>(it), join_cond,
+                               where_cond))
+            return true;
+          return false;
+        }
+        case Item_func::GE_FUNC:
+        case Item_func::LE_FUNC:
+        case Item_func::GT_FUNC:
+        case Item_func::LT_FUNC:
+        case Item_func::EQ_FUNC:
+        case Item_func::NE_FUNC: {
+          if (transformItem_any(thd, it, join_cond, where_cond)) return true;
+          return false;
+        }
+        default:
+          break;
+      }
+    }
+    *join_cond = cond;
+    return false;
+  }
+
+  /**
+   *  transform_filter_cond with connect by
+   *  spilte condition to join conditon and predicates condition
+   *
+   *  transform:
+   *  t1.id= t2.id and t2.val > 2
+   *
+   *  join_cond:    t1.id= t2.id
+   *  where_cond:   t2.val > 2
+   *
+   * @param thd  [in]
+   * @param cond [in]
+   * @param tables_list [in]
+   * @param where_cond  [out]
+   * @param join_cond   [out]
+   * @return bool
+   *
+   */
+  bool transformFilterCond(THD *thd, Item *cond, Item **where_cond,
+                           Item **join_cond) {
+    if (cond->type() == Item::COND_ITEM) {
+      auto cond_item = dynamic_cast<Item_cond *>(cond);
+      List_iterator<Item> li(*cond_item->argument_list());
+      Item *temp;
+      Item *new_where_cond = nullptr;
+      Item *new_join_cond = nullptr;
+      List<Item> new_where_list;
+      while ((temp = li++)) {
+        new_where_cond = nullptr;
+        new_join_cond = nullptr;
+        if (temp->type() == Item::COND_ITEM) {
+          if (transformFilterCond(thd, temp, &new_where_cond, &new_join_cond)) {
+            return true;
+          }
+          if (new_join_cond) {
+            if (new_join_cond != temp) {
+              li.replace(new_join_cond);
+            }
+          } else {
+            li.remove();
+          }
+        } else {
+          if (isFilter(temp)) {
+            li.remove();
+            new_where_list.push_back(temp);
+          } else {
+            if (transformCompatItem(thd, temp, &new_join_cond,
+                                    &new_where_cond)) {
+              return true;
+            } else {
+              if (new_join_cond && new_join_cond != temp) {
+                li.replace(new_join_cond);
+              }
+            }
+          }
+        }
+        if (new_where_cond) {
+          new_where_list.push_back(new_where_cond);
+        }
+      }
+
+      if (new_cond_func(thd, cond_item->functype(), where_cond, new_where_list))
+        return true;
+
+      if (cond_item->argument_list()->size() != 0) {
+        *join_cond = cond_item->copy_andor_structure(thd);
+        if (*join_cond == nullptr) {
+          return true;
+        }
+      }
+    } else {
+      if (isFilter(cond)) {
+        *where_cond = cond;
+      } else {
+        if (transformCompatItem(thd, cond, join_cond, where_cond)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+};
+
+bool Query_block::transform_filter_with_connect_by(THD *thd) {
+  Item *new_where{nullptr};
+  Item *new_join{nullptr};
+
+  AccessOrFilter transform(this);
+
+  if (transform.transformFilterCond(thd, m_where_cond, &new_where, &new_join)) {
+    return true;
+  }
+
+  if (new_join == nullptr) {
+    m_where_cond = new_join;
+  } else {
+    if (new_join != m_where_cond) {
+      new_join->update_used_tables();
+      new_join->apply_is_true();
+      m_where_cond = new_join;
+    }
+  }
+
+  if (new_where) {
+    auto save_resolve_place = resolve_place;
+    resolve_place = Query_block::RESOLVE_CONDITION;
+    /**
+     *  connect by will use a tmp table
+     *  filter after tmp tmp tables
+     */
+
+    auto new_item = CompileItemConnectbyRef(thd, new_where, this);
+    if (new_item == nullptr) return true;
+    new_item->update_used_tables();
+    new_item->apply_is_true();
+    m_after_connect_by_where = new_item;
+    resolve_place = save_resolve_place;
+  }
   return false;
 }
 

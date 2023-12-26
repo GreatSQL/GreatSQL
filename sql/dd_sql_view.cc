@@ -1,4 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -612,6 +613,14 @@ static bool open_views_and_update_metadata(
         res = trans_commit_stmt(thd) || trans_commit(thd);
     }
     if (res) {
+      if (view->is_force_view) {
+        auto cur_err = thd->get_stmt_da()->mysql_errno();
+        if (cur_err == ER_DUP_ENTRY) {
+          thd->clear_error();
+          thd->get_stmt_da()->reset_condition_info(thd);
+          my_error(ER_VIEW_INVALID, MYF(0), view->db, view->table_name);
+        }
+      }
       thd->lex = org_lex;
       return true;
     }

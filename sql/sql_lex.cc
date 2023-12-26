@@ -56,6 +56,7 @@
 #include "sql/nested_join.h"
 #include "sql/opt_hints.h"
 #include "sql/parse_location.h"
+#include "sql/parse_tree_column_attrs.h"
 #include "sql/parse_tree_nodes.h"  // PT_with_clause
 #include "sql/protocol.h"
 #include "sql/select_lex_visitor.h"
@@ -233,7 +234,17 @@ bool Table_ident::resolve_table_rowtype_ref(THD *thd,
 /**
   This method implementation is very close to fill_schema_table_by_open().
 */
-bool Qualified_column_ident::resolve_type_ref(THD *thd, Create_field *def) {
+bool Qualified_column_ident::resolve_type_ref(THD *thd, Create_field *def,
+                                              bool resolve_action) {
+  if (!resolve_action) {
+    if (def->init(thd, "", MYSQL_TYPE_NULL, nullptr, nullptr, 0, NULL, NULL,
+                  &NULL_CSTR, 0, nullptr, thd->variables.collation_database,
+                  false, 0, nullptr, nullptr, nullptr, {},
+                  dd::Column::enum_hidden_type::HT_VISIBLE)) {
+      return true;
+    }
+    return false;
+  }
   Open_tables_backup open_tables_state_backup;
   thd->reset_n_backup_open_tables_state(&open_tables_state_backup, 0);
 
@@ -550,6 +561,8 @@ void LEX::reset() {
   create_view_mode = enum_view_create_mode::VIEW_CREATE_NEW;
   create_view_algorithm = VIEW_ALGORITHM_UNDEFINED;
   create_view_suid = true;
+  create_force_view_mode = false;
+  create_force_view_table_not_found = false;
 
   // CREATE STORED PRCEDURE/FUNCTION
   create_sp_mode = enum_sp_create_mode::SP_CREATE_NEW;
@@ -564,10 +577,13 @@ void LEX::reset() {
 
   purge_value_list.clear();
 
+  m_cmd_rownums.clear();
+
   kill_value_list.clear();
 
   set_var_list.clear();
   param_list.clear();
+  lock_wait_var = nullptr;
   prepared_stmt_params.clear();
   context_analysis_only = 0;
   safe_to_cache_query = true;
@@ -603,6 +619,7 @@ void LEX::reset() {
   in_sum_func = nullptr;
   create_info = nullptr;
   server_options.reset();
+  seq_option.reset();
   explain_format = nullptr;
   is_explain_analyze = false;
   using_hypergraph_optimizer = false;
@@ -634,6 +651,7 @@ void LEX::reset() {
   grant_if_exists = false;
   ignore_unknown_user = false;
   reset_rewrite_required();
+  set_is_materialized_view(false);
 }
 
 /**
@@ -1475,15 +1493,9 @@ static int lex_token(YYSTYPE *yacc_yylval, YYLTYPE *yylloc, THD *thd) {
     token = lip->lookahead_token;
     lip->lookahead_token = -1;
     *yylval = lip->lookahead_yylval;
-    yylloc->cpp.start = lip->get_cpp_tok_start();
-    yylloc->cpp.end = lip->get_cpp_ptr();
-    yylloc->raw.start = lip->get_tok_start();
-    yylloc->raw.end = lip->get_ptr();
-    lip->add_digest_token(token, yylval);
-    return token;
-  }
-
-  token = lex_one_token(yylval, thd);
+    lip->yylval = nullptr;
+  } else
+    token = lex_one_token(yylval, thd);
   yylloc->cpp.start = lip->get_cpp_tok_start();
   yylloc->raw.start = lip->get_tok_start();
 
@@ -1516,6 +1528,344 @@ static int lex_token(YYSTYPE *yacc_yylval, YYLTYPE *yylloc, THD *thd) {
           return WITH;
       }
       break;
+    case START_SYM: {
+      /*
+        BEGIN_SYM is listed in rule ident_keywords_unambigous.
+        It means the yylval should be kept if the next token is not WORK_SYM.
+        Otherwise, yylval is destroyed in lex_one_token.
+      */
+      auto skip_digest = lip->skip_digest;
+      Lexer_yystype save_yylval = *yylval;
+      token = lex_one_token(yylval, thd);
+      switch (token) {
+        case WITH:
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          if (!lip->skip_digest) lip->add_digest_token(START_WITH_SYM, yylval);
+          lip->skip_digest = false;
+          lip->yylval->optimizer_hints = save_yylval.optimizer_hints;
+          return START_WITH_SYM;
+        default:
+          /*
+            Save the token following 'BEGIN_SYM'
+          */
+          lip->lookahead_yylval = *(lip->yylval);
+          lip->yylval = nullptr;
+          lip->lookahead_token = token;
+
+          // restore the yylval because Lexer_yystype.keyword is destroyed
+          // in previous lex_one_token(yylval, thd) call.
+          // NOTE: lip->yylval also points to yylval. It is necessary to
+          // save current token to lip->lookahead_yyval, before restoring
+          // old token.
+          *yylval = save_yylval;
+
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          if (!skip_digest) lip->add_digest_token(START_SYM, yylval);
+          return START_SYM;
+      }
+    } break;
+    case BEGIN_SYM: {
+      /*
+        BEGIN_SYM is listed in rule ident_keywords_unambigous.
+        It means the yylval should be kept if the next token is not WORK_SYM.
+        Otherwise, yylval is destroyed in lex_one_token.
+      */
+      auto skip_digest = lip->skip_digest;
+      Lexer_yystype save_yylval = *yylval;
+      token = lex_one_token(yylval, thd);
+      switch (token) {
+        case WORK_SYM:
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          if (!lip->skip_digest) lip->add_digest_token(BEGIN_WORK_SYM, yylval);
+          lip->skip_digest = false;
+          // propagate the hints from BEGIN_SYM into BEGIN_WORK_SYM.
+          lip->yylval->optimizer_hints = save_yylval.optimizer_hints;
+          return BEGIN_WORK_SYM;
+        default:
+          /*
+            Save the token following 'BEGIN_SYM'
+          */
+          lip->lookahead_yylval = *(lip->yylval);
+          lip->yylval = nullptr;
+          lip->lookahead_token = token;
+
+          // restore the yylval because Lexer_yystype.keyword is destroyed
+          // in previous lex_one_token(yylval, thd) call.
+          // NOTE: lip->yylval also points to yylval. It is necessary to
+          // save current token to lip->lookahead_yyval, before restoring
+          // old token.
+          *yylval = save_yylval;
+
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          if (!skip_digest) lip->add_digest_token(BEGIN_SYM, yylval);
+          return BEGIN_SYM;
+      }
+    } break;
+    case MERGE_SYM: {
+      /*
+        MERGE_SYM is listed in rule ident_keywords_unambigous.
+        It means the yylval should be kept if the next token is not INTO.
+        Otherwise, yylval is destroyed in lex_one_token.
+      */
+      Lexer_yystype save_yylval = *yylval;
+      auto skip_digest_merge = lip->skip_digest;
+      lip->skip_digest = false;
+      token = lex_one_token(yylval, thd);
+      switch (token) {
+        case INTO:
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          if (!skip_digest_merge) lip->add_digest_token(MERGE_SYM, yylval);
+          if (!lip->skip_digest) lip->add_digest_token(INTO, yylval);
+          lip->skip_digest = false;
+          // propagate the hints from MERGE_SYM into MERGE_INTO_SYM.
+          lip->yylval->optimizer_hints = save_yylval.optimizer_hints;
+          return MERGE_INTO_SYM;
+        default:
+          /*
+            Save the token following 'MERGE_SYM'
+          */
+          lip->lookahead_yylval = *(lip->yylval);
+          lip->yylval = nullptr;
+          lip->lookahead_token = token;
+
+          // restore the yylval because Lexer_yystype.keyword is destroyed
+          // in previous lex_one_token(yylval, thd) call.
+          // NOTE: lip->yylval also points to yylval. It is necessary to
+          // save current token to lip->lookahead_yyval, before restoring
+          // old token.
+          *yylval = save_yylval;
+
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          if (!skip_digest_merge) lip->add_digest_token(MERGE_SYM, yylval);
+          return MERGE_SYM;
+      }
+    } break;
+    case FULL: {
+      Lexer_yystype save_yylval = *yylval;
+      token = lex_one_token(yylval, thd);
+      switch (token) {
+        case JOIN_SYM:
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          lip->add_digest_token(FOJ_SYM, yylval);
+          return FOJ_SYM;
+        case OUTER_SYM: { /* look ahead for 2 more tokens for full join */
+          token = lex_one_token(yylval, thd);
+
+          if (token == JOIN_SYM) {
+            yylloc->cpp.end = lip->get_cpp_ptr();
+            yylloc->raw.end = lip->get_ptr();
+            lip->add_digest_token(FOJ_SYM, yylval);
+            return FOJ_SYM;
+          } else {
+            lip->lookahead_yylval = *(lip->yylval);
+            lip->yylval = nullptr;
+            lip->lookahead_token = token;
+
+            /* restore yylval */
+            *yylval = save_yylval;
+            yylloc->cpp.end = lip->get_cpp_ptr();
+            yylloc->raw.end = lip->get_ptr();
+            lip->add_digest_token(FULL, yylval);
+            return FULL;
+          }
+        }
+        default:
+          lip->lookahead_yylval = *(lip->yylval);
+          lip->yylval = nullptr;
+          lip->lookahead_token = token;
+
+          // restore yylval
+          *yylval = save_yylval;
+
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          lip->add_digest_token(FULL, yylval);
+          return FULL;
+      }
+    } break;
+    case BULK_SYM: {
+      /*
+        BULK_SYM is listed in rule ident_keywords_unambigous.
+        It means the yylval should be kept if the next token is not COLLECT.
+        Otherwise, yylval is destroyed in lex_one_token.
+      */
+      Lexer_yystype save_yylval = *yylval;
+      token = lex_one_token(yylval, thd);
+      switch (token) {
+        case COLLECT_SYM:
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          lip->add_digest_token(BULK_COLLECT_SYM, yylval);
+          return BULK_COLLECT_SYM;
+        default:
+          /*
+            Save the token following 'BULK_SYM'
+          */
+          lip->lookahead_yylval = *(lip->yylval);
+          lip->yylval = nullptr;
+          lip->lookahead_token = token;
+
+          // restore the yylval because Lexer_yystype.keyword is destroyed
+          // in previous lex_one_token(yylval, thd) call.
+          // NOTE: lip->yylval also points to yylval. It is necessary to
+          // save current token to lip->lookahead_yyval, before restoring
+          // old token.
+          *yylval = save_yylval;
+
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          lip->add_digest_token(BULK_SYM, yylval);
+          return BULK_SYM;
+      }
+    } break;
+    case PERCENT_ORACLE_SYM: {
+      /*
+        for a%type and so on,it's PERCENT_ORACLE_SYM.
+      */
+      Lexer_yystype save_yylval = *yylval;
+      token = lex_one_token(yylval, thd);
+      lip->lookahead_yylval = *(lip->yylval);
+      lip->yylval = nullptr;
+      lip->lookahead_token = token;
+      *yylval = save_yylval;
+      yylloc->cpp.end = lip->get_cpp_ptr();
+      yylloc->raw.end = lip->get_ptr();
+      switch (token) {
+        case TYPE_SYM:
+        case ROWTYPE_ORACLE_SYM:
+        case ISOPEN_SYM:
+        case FOUND_SYM:
+        case NOTFOUND_SYM:
+        case ROWCOUNT_SYM:
+          lip->add_digest_token(PERCENT_ORACLE_SYM, yylval);
+          return PERCENT_ORACLE_SYM;
+        default:
+          lip->add_digest_token('%', yylval);
+          return '%';
+      }
+    } break;
+    case IN_SYM: {
+      /*
+        for i in reverse (n) .. n and reverse() conflict when parse.
+        REVERSE_SYM must be resolved.
+      */
+      Lexer_yystype save_yylval = *yylval;
+      token = lex_one_token(yylval, thd);
+      switch (token) {
+        case REVERSE_SYM:
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          lip->add_digest_token(IN_REVERSE_SYM, yylval);
+          return IN_REVERSE_SYM;
+        default:
+          /*
+            Save the token following 'IN_SYM'
+          */
+          lip->lookahead_yylval = *(lip->yylval);
+          lip->yylval = nullptr;
+          lip->lookahead_token = token;
+
+          // restore the yylval because Lexer_yystype.keyword is destroyed
+          // in previous lex_one_token(yylval, thd) call.
+          // NOTE: lip->yylval also points to yylval. It is necessary to
+          // save current token to lip->lookahead_yyval, before restoring
+          // old token.
+          *yylval = save_yylval;
+
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          lip->add_digest_token(IN_SYM, yylval);
+          return IN_SYM;
+      }
+    } break;
+    case BUILD_SYM: {
+      /*
+        BUILD_SYM is listed in rule ident_keywords_unambigous.
+        It means the yylval should be kept if the next token is not IMMEDIATE or
+        DEFERRED. Otherwise, yylval is destroyed in lex_one_token.
+      */
+      Lexer_yystype save_yylval = *yylval;
+      token = lex_one_token(yylval, thd);
+      switch (token) {
+        case IMMEDIATE_SYM:
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          lip->add_digest_token(BUILD_IMMEDIATE_SYM, yylval);
+          // propagate the hints from BUILD_SYM into BUILD_IMMEDIATE_SYM.
+          lip->yylval->optimizer_hints = save_yylval.optimizer_hints;
+          return BUILD_IMMEDIATE_SYM;
+        case DEFERRED_SYM:
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          lip->add_digest_token(BUILD_DEFERRED_SYM, yylval);
+          // propagate the hints from BUILD_SYM into BUILD_DEFERRED_SYM.
+          lip->yylval->optimizer_hints = save_yylval.optimizer_hints;
+          return BUILD_DEFERRED_SYM;
+        default:
+          /*
+            Save the token following 'BUILD_SYM'
+          */
+          lip->lookahead_yylval = *(lip->yylval);
+          lip->yylval = nullptr;
+          lip->lookahead_token = token;
+
+          // restore the yylval because Lexer_yystype.keyword is destroyed
+          // in previous lex_one_token(yylval, thd) call.
+          // NOTE: lip->yylval also points to yylval. It is necessary to
+          // save current token to lip->lookahead_yyval, before restoring
+          // old token.
+          *yylval = save_yylval;
+
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          lip->add_digest_token(BUILD_SYM, yylval);
+          return BUILD_SYM;
+      }
+    } break;
+    case REFRESH_SYM: {
+      /*
+        REFRESH_SYM is listed in rule ident_keywords_unambigous.
+        It means the yylval should be kept if the next token is not COMPLETE.
+        Otherwise, yylval is destroyed in lex_one_token.
+      */
+      Lexer_yystype save_yylval = *yylval;
+      token = lex_one_token(yylval, thd);
+      switch (token) {
+        case COMPLETE_SYM:
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          lip->add_digest_token(REFRESH_COMPLETE_SYM, yylval);
+          // propagate the hints from REFRESH_SYM into REFRESH_COMPLETE_SYM.
+          lip->yylval->optimizer_hints = save_yylval.optimizer_hints;
+          return REFRESH_COMPLETE_SYM;
+        default:
+          /*
+            Save the token following 'REFRESH_SYM'
+          */
+          lip->lookahead_yylval = *(lip->yylval);
+          lip->yylval = nullptr;
+          lip->lookahead_token = token;
+
+          // restore the yylval because Lexer_yystype.keyword is destroyed
+          // in previous lex_one_token(yylval, thd) call.
+          // NOTE: lip->yylval also points to yylval. It is necessary to
+          // save current token to lip->lookahead_yyval, before restoring
+          // old token.
+          *yylval = save_yylval;
+
+          yylloc->cpp.end = lip->get_cpp_ptr();
+          yylloc->raw.end = lip->get_ptr();
+          lip->add_digest_token(REFRESH_SYM, yylval);
+          return REFRESH_SYM;
+      }
+    } break;
   }
 
   yylloc->cpp.end = lip->get_cpp_ptr();
@@ -1586,6 +1936,11 @@ static int lex_one_token(Lexer_yystype *yylval, THD *thd) {
         */
         if (c == '?' && lip->stmt_prepare_mode && !ident_map[lip->yyPeek()])
           return (PARAM_MARKER);
+
+        if (c == '%' && (thd->variables.sql_mode & MODE_ORACLE)) {
+          lip->next_state = MY_LEX_START;
+          return PERCENT_ORACLE_SYM;
+        }
 
         return ((int)c);
 
@@ -2142,7 +2497,11 @@ static int lex_one_token(Lexer_yystype *yylval, THD *thd) {
       case MY_LEX_REAL_OR_POINT:
         if (my_isdigit(cs, lip->yyPeek()))
           state = MY_LEX_REAL;  // Real
-        else {
+        else if (lip->yyPeek() == '.') {
+          /*oracle procedure 1 .. 2*/
+          lip->yySkip();
+          return DOT_DOT_SYM;
+        } else {
           state = MY_LEX_IDENT_SEP;  // return '.'
           lip->yyUnget();            // Put back '.'
         }
@@ -2297,6 +2656,8 @@ Query_expression::Query_expression(enum_parsing_context parsing_context)
     case CTX_WHERE:
     case CTX_DERIVED:
     case CTX_NONE:  // A subquery in a non-select
+    case CTX_START_WITH:
+    case CTX_CONNECT_BY:
       explain_marker = parsing_context;
       break;
     default:
@@ -2316,11 +2677,13 @@ Query_block::Query_block(MEM_ROOT *mem_root, Item *where, Item *having)
       sj_nests(mem_root),
       first_context(&context),
       top_join_list(mem_root),
+      m_update_of_cond_dq(mem_root),
       join_list(&top_join_list),
       m_table_nest(mem_root),
       m_current_table_nest(&m_table_nest),
       m_where_cond(where),
-      m_having_cond(having) {}
+      m_having_cond(having),
+      sequence_funcs(mem_root) {}
 
 /**
   Set the name resolution context for the specified query block.
@@ -2721,6 +3084,18 @@ bool Query_block::setup_base_ref_items(THD *thd) {
     }
     order_group_num += bitcount;
   }
+  if (has_connect_by) {
+    auto has_level = false;
+    for (Item *item : visible_fields()) {
+      if (item->type() == Item::CONNECT_BY_FUNC_ITEM) {
+        if (dynamic_cast<Item_connect_by_func *>(item)->ConnectBy_func() ==
+            Item_connect_by_func::LEVEL_FUNC) {
+          has_level = true;
+        }
+      }
+    }
+    if (!has_level) n_connect_by_items++;
+  }
 
   /*
     We have to create array in prepared statement memory if it is
@@ -2729,7 +3104,7 @@ bool Query_block::setup_base_ref_items(THD *thd) {
   Query_arena *arena = thd->stmt_arena;
   uint n_elems = n_sum_items + n_child_sum_items + fields.size() +
                  select_n_having_items + select_n_where_fields +
-                 order_group_num + n_scalar_subqueries;
+                 order_group_num + n_scalar_subqueries + n_connect_by_items;
 
   /*
     If it is possible that we transform IN(subquery) to a join to a derived
@@ -2975,6 +3350,8 @@ static void print_table_array(const THD *thd, String *str,
       op = " anti join ";
     else if (curr->is_sj_nest())
       op = " semi join ";
+    else if (curr->foj_inner)
+      op = " full join ";
     else if (curr->outer_join) {
       /* MySQL converts right to left joins */
       op = " left join ";
@@ -3222,6 +3599,7 @@ void Query_block::print_query_block(const THD *thd, String *str,
   print_item_list(thd, str, query_type);
   print_from_clause(thd, str, query_type);
   print_where_cond(thd, str, query_type);
+  print_connect_by_cond(thd, str, query_type);
   print_group_by(thd, str, query_type);
   print_having(thd, str, query_type);
   print_windows(thd, str, query_type);
@@ -3233,7 +3611,9 @@ void Query_block::print_query_block(const THD *thd, String *str,
 void Query_block::print_merge(const THD *thd, String *str,
                               enum_query_type query_type) {
   Sql_cmd_update *cmd = (static_cast<Sql_cmd_update *>(parent_lex->m_sql_cmd));
-  str->append(STRING_WITH_LEN("merge into "));
+  str->append(STRING_WITH_LEN("merge "));
+  print_hints(thd, str, query_type);
+  str->append(STRING_WITH_LEN("into "));
 
   Table_ref *s = m_table_list.first;
   Table_ref *t = m_table_list.first->next_local;
@@ -3426,13 +3806,31 @@ void Query_block::print_insert_all(const THD *thd, String *str,
   print_hints(thd, str, enum_query_type(query_type | QT_IGNORE_QB_NAME));
   print_insert_options(str);
 
-  str->append(STRING_WITH_LEN(" all "));
+  if (sql_cmd_insert->break_after_match)
+    str->append(STRING_WITH_LEN("first "));
+  else
+    str->append(STRING_WITH_LEN(" all "));
   auto tb = parent_lex->insert_table_leaf;
 
-  auto val_itr = visible_fields().begin();
+  auto insert_values_list = visible_fields();
+  auto fields_iter = insert_values_list.begin();
 
+  int prev_clause_type = INSERT_INTO_NOT_SET;
   for (uint i = 0; i < sql_cmd_insert->into_table_count;
        i++, tb = tb->next_local) {
+    if (!sql_cmd_insert->unconditional) {
+      if (sql_cmd_insert->clause_type[i] == INSERT_INTO_ELSE) {
+        if (prev_clause_type != INSERT_INTO_ELSE)
+          str->append(STRING_WITH_LEN("else "));
+      } else if (sql_cmd_insert->clause_type[i] == INSERT_INTO_WHEN) {
+        if (sql_cmd_insert->opt_when[i] != nullptr) {
+          str->append(STRING_WITH_LEN("when "));
+          sql_cmd_insert->opt_when[i]->print(thd, str, query_type);
+          str->append(STRING_WITH_LEN(" then "));
+        }
+      }
+      prev_clause_type = sql_cmd_insert->clause_type[i];
+    }
     str->append(STRING_WITH_LEN("into "));
 
     tb->print(thd, str, query_type);  // table identifier
@@ -3448,18 +3846,35 @@ void Query_block::print_insert_all(const THD *thd, String *str,
         }
         field->print(thd, str, query_type);
       }
-      str->append(STRING_WITH_LEN(") VALUES ("));
-      for (uint j = 0; j < sql_cmd_insert->fields_for_table[i]->size();
-           j++, val_itr++) {
+      str->append(STRING_WITH_LEN(") "));
+      for (uint j = 0; fields_iter != insert_values_list.end() &&
+                       j < sql_cmd_insert->fields_for_table[i]->size();
+           j++, fields_iter++) {
         if (j != 0) {
           str->append(',');
+        } else {
+          str->append(STRING_WITH_LEN("VALUES ("));
+          ;
         }
-        (*val_itr)->print(thd, str, query_type);
+        (*fields_iter)->print(thd, str, query_type);
       }
       str->append(STRING_WITH_LEN(") "));
     }
   }
-  print_query_block(thd, str, enum_query_type(query_type | QT_ONLY_QB_NAME));
+
+  // print dervier table
+  if (m_table_list.elements) {
+    for (auto join_tb : top_join_list) {
+      if (join_tb->is_derived() && !join_tb->is_merged()) {
+        join_tb->derived_query_expression()->print(
+            thd, str, enum_query_type(query_type | QT_ONLY_QB_NAME));
+        break;
+      } else {  // SIMPLE table
+        print_query_block(thd, str,
+                          enum_query_type(query_type | QT_ONLY_QB_NAME));
+      }
+    }
+  }
 }
 
 void Query_block::print_hints(const THD *thd, String *str,
@@ -3601,12 +4016,25 @@ void Query_block::print_item_list(const THD *thd, String *str,
 
     if ((master_query_expression()->item &&
          item->item_name.is_autogenerated()) ||
-        (query_type & QT_NORMALIZED_FORMAT)) {
+        (query_type & QT_NORMALIZED_FORMAT) ||
+        thd->lex->create_force_view_table_not_found) {
       /*
         Do not print auto-generated aliases in subqueries. It has no purpose
         in a view definition or other contexts where the query is printed.
       */
       item->print(thd, str, query_type);
+      /*
+       support aliase for create force view, example:
+       create force view t1_view as select ifnull(a,0) AS used from t1;
+       create force view t1_view as select a as a1 from t1 as e,
+       can print 'used','a1' in query statment
+    */
+      if (thd->lex->create_force_view_table_not_found &&
+          item->item_name.is_set() && *(item->item_name.ptr()) != '*') {
+        str->append(STRING_WITH_LEN(" AS "));
+        append_identifier(thd, str, item->item_name.ptr(),
+                          item->item_name.length());
+      }
     } else
       item->print_item_w_name(thd, str, query_type);
     /** @note that 'INTO variable' clauses are not printed */
@@ -3705,13 +4133,56 @@ void Query_block::print_where_cond(const THD *thd, String *str,
   // Where
   Item *const cur_where =
       (join && join->is_optimized()) ? join->where_cond : m_where_cond;
+  Item *const after_where = (join && join->is_optimized())
+                                ? join->after_connect_by_cond
+                                : m_after_connect_by_where;
 
   if (cur_where || cond_value != Item::COND_UNDEF) {
     str->append(STRING_WITH_LEN(" where "));
-    if (cur_where)
+    if (cur_where) {
       cur_where->print(thd, str, query_type);
-    else
+      if (after_where) {
+        // if use the connect by
+        //  a and b  /  a or b => cur_where = a   after_where = b
+        //  so andor is the same
+        str->append(STRING_WITH_LEN(" and /* connect by */ "));
+        after_where->print(thd, str, query_type);
+      }
+    } else if (after_where) {
+      str->append(STRING_WITH_LEN(" /* connect by */ "));
+      after_where->print(thd, str, query_type);
+    } else
       str->append(cond_value != Item::COND_FALSE ? "true" : "false");
+  } else {
+    if (after_where || after_connect_by_value != Item::COND_UNDEF) {
+      str->append(STRING_WITH_LEN(" where /* connect by */ "));
+      if (after_where) {
+        after_where->print(thd, str, query_type);
+      } else
+        str->append(after_connect_by_value != Item::COND_FALSE ? "true"
+                                                               : "false");
+    }
+  }
+}
+
+void Query_block::print_connect_by_cond(const THD *thd, String *str,
+                                        enum_query_type query_type) {
+  Item *const connect_by = (join && join->is_optimized())
+                               ? join->connect_by_cond
+                               : m_connect_by_cond;
+
+  if (connect_by) {
+    str->append(STRING_WITH_LEN(" connect by "));
+    connect_by->print(thd, str, query_type);
+
+    Item *const start_with = (join && join->is_optimized())
+                                 ? join->start_with_cond
+                                 : m_start_with_cond;
+
+    if (start_with) {
+      str->append(STRING_WITH_LEN(" start with "));
+      start_with->print(thd, str, query_type);
+    }
   }
 }
 
@@ -3841,6 +4312,20 @@ bool Query_block::accept(Select_lex_visitor *visitor) {
   // Where clause
   Item *where_condition = join != nullptr ? join->where_cond : m_where_cond;
   if (where_condition != nullptr && walk_item(where_condition, visitor))
+    return true;
+
+  // connect by
+  Item *connect_by_condition =
+      join != nullptr ? join->connect_by_cond : m_connect_by_cond;
+  if (connect_by_condition != nullptr &&
+      walk_item(connect_by_condition, visitor))
+    return true;
+
+  // start with
+  Item *start_with_condition =
+      join != nullptr ? join->start_with_cond : m_start_with_cond;
+  if (start_with_condition != nullptr &&
+      walk_item(start_with_condition, visitor))
     return true;
 
   // Group by and olap clauses
@@ -4026,6 +4511,7 @@ bool LEX::can_use_merged() {
     case SQLCOM_SHOW_KEYS:
     case SQLCOM_SHOW_STATUS_FUNC:
     case SQLCOM_SHOW_STATUS_PROC:
+    case SQLCOM_SHOW_SEQUENCES:
     case SQLCOM_SHOW_TABLES:
     case SQLCOM_SHOW_TABLE_STATUS:
     case SQLCOM_SHOW_TRIGGERS:
@@ -4071,6 +4557,7 @@ bool LEX::can_not_use_merged() {
 bool LEX::need_correct_ident() {
   switch (sql_command) {
     case SQLCOM_SHOW_CREATE:
+    case SQLCOM_SHOW_SEQUENCES:
     case SQLCOM_SHOW_TABLES:
     case SQLCOM_CREATE_VIEW:
       return true;
@@ -4153,6 +4640,13 @@ bool Query_expression::has_any_limit() const {
   return false;
 }
 
+bool Query_expression::has_any_connect_by() const {
+  for (auto qt : query_terms<>())
+    if (qt->query_block()->connect_by_cond()) return true;
+
+  return false;
+}
+
 /**
   Include a query expression below a query block.
 
@@ -4190,9 +4684,13 @@ bool Query_expression::is_mergeable() const {
   Query_block *const parent = outer_query_block();
   bool has_rownum =
       ((select->has_rownum) || (parent && parent->has_rownum)) ? true : false;
+  bool has_lnnvl_func =
+      (select->has_lnnvl_func || (parent && parent->has_lnnvl_func)) ? true
+                                                                     : false;
   return !select->is_grouped() && !select->having_cond() &&
          !select->is_distinct() && select->m_table_list.elements > 0 &&
-         !select->has_limit() && select->m_windows.elements == 0 && !has_rownum;
+         !select->has_limit() && select->m_windows.elements == 0 &&
+         !has_rownum && !has_any_connect_by() && !has_lnnvl_func;
 }
 
 /**
@@ -4393,8 +4891,9 @@ void LEX::set_trg_event_type_for_tables() {
     It is not necessary to lock other tables.
   */
   if (sql_command == SQLCOM_UPDATE_MULTI) {
-    Sql_cmd_update *sql_cmd_update = (static_cast<Sql_cmd_update *>(m_sql_cmd));
-    if (sql_cmd_update->merge_into_stmt) {
+    Sql_cmd_update *sql_cmd_update =
+        (dynamic_cast<Sql_cmd_update *>(m_sql_cmd));
+    if (sql_cmd_update != nullptr && sql_cmd_update->merge_into_stmt) {
       if (sql_cmd_update->merge_when_insert) {
         new_trg_event_map |=
             static_cast<uint8>(1 << static_cast<int>(TRG_EVENT_INSERT));
@@ -4936,6 +5435,33 @@ bool Query_block::get_optimizable_conditions(THD *thd, Item **new_where,
   return get_optimizable_join_conditions(thd, m_table_nest);
 }
 
+bool Query_block::get_optimizable_connect_by(THD *thd, Item **start_with,
+                                             Item **new_connect_by,
+                                             Item **new_where) {
+  assert(!(join && join->is_optimized()));
+
+  if (m_start_with_cond && !thd->stmt_arena->is_regular()) {
+    *start_with = m_start_with_cond->copy_andor_structure(thd);
+    if (!*start_with) return true;
+  } else {
+    *start_with = m_start_with_cond;
+  }
+  if (m_connect_by_cond && !thd->stmt_arena->is_regular()) {
+    *new_connect_by = m_connect_by_cond->copy_andor_structure(thd);
+    if (!*new_connect_by) return true;
+  } else {
+    *new_connect_by = m_connect_by_cond;
+  }
+
+  if (m_after_connect_by_where && !thd->stmt_arena->is_regular()) {
+    *new_where = m_after_connect_by_where->copy_andor_structure(thd);
+    if (!*new_where) return true;
+  } else {
+    *new_where = m_after_connect_by_where;
+  }
+  return false;
+}
+
 Subquery_strategy Query_block::subquery_strategy(const THD *thd) const {
   if (m_windows.elements > 0)
     /*
@@ -5426,7 +5952,8 @@ sp_variable *LEX::find_variable(const char *name, size_t name_len,
   sp_pcontext *spc = get_sp_current_parsing_ctx();
 
   if (spc && ((spv = spc->find_variable(name, name_len, false)) ||
-              (spv = spc->find_udt_variable(name, name_len, false)))) {
+              (spv = spc->find_udt_variable(name, name_len, sphead->m_db.str,
+                                            sphead->m_db.length, false)))) {
     *ctx = spc;
     *rh = &sp_rcontext_handler_local;
     return spv;
@@ -5692,22 +6219,27 @@ bool LEX::sp_variable_declarations_vartype_finalize(THD *thd, int nvars,
     my_error(ER_SP_UNDECLARED_VAR, MYF(0), ref.str);
     return true;
   }
-
+  if (spv->field_def.ora_record.is_ref_cursor) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "the use likes ref_cursor%type");
+    return true;
+  }
   /*case of DECLARE spvar1 spvar0%TYPE; spvar0 cursor%ROWTYPE*/
-  if (spv->field_def.is_cursor_rowtype_ref()) {
-    uint offset = spv->field_def.cursor_rowtype_offset();
-    return sp_variable_declarations_cursor_rowtype_finalize(thd, nvars, offset);
+  if (spv->field_def.ora_record.is_cursor_rowtype_ref()) {
+    uint offset = spv->field_def.ora_record.cursor_rowtype_offset();
+    return sp_variable_declarations_cursor_rowtype_finalize(thd, nvars, offset,
+                                                            nullptr, nullptr);
   }
 
   /*case of DECLARE spvar1 spvar0%TYPE; spvar0 table.col%TYPE*/
-  if (spv->field_def.is_column_type_ref()) {
-    Qualified_column_ident *tmp = spv->field_def.column_type_ref();
+  if (spv->field_def.ora_record.is_column_type_ref()) {
+    Qualified_column_ident *tmp = spv->field_def.ora_record.column_type_ref();
     return sp_variable_declarations_column_type_finalize(thd, nvars, tmp);
   }
 
   /*case of DECLARE spvar1 spvar0%TYPE; spvar0 table%ROWTYPE*/
-  if (spv->field_def.is_table_rowtype_ref()) {
-    const Table_ident *tmp = spv->field_def.table_rowtype_ref();
+  if (spv->field_def.ora_record.is_table_rowtype_ref() &&
+      !spv->field_def.ora_record.is_row_table()) {
+    const Table_ident *tmp = spv->field_def.ora_record.table_rowtype_ref();
     return sp_variable_declarations_table_rowtype_finalize(thd, nvars, tmp->db,
                                                            tmp->table);
   }
@@ -5722,19 +6254,17 @@ bool LEX::sp_variable_declarations_column_type_finalize(
   LEX *lex = thd->lex;
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
   Create_field *def = new (thd->mem_root) Create_field();
-  ref->resolve_type_ref(thd, def);
-  if (def->udt_name.str) {
-    if (resolve_rowtype_udt_field(thd, def)) return true;
-  }
+  ref->resolve_type_ref(thd, def, false);
   for (int i = 0; i < nvars; i++) {
     sp_variable *spvar = pctx->get_last_context_variable((uint)nvars - 1 - i);
     spvar->type = def->sql_type;
 
     spvar->field_def = *def;
-    spvar->field_def.set_column_type_ref(ref);
+    spvar->field_def.ora_record.set_column_type_ref(ref);
     spvar->field_def.field_name = spvar->name.str;
     spvar->field_def.udt_name = def->udt_name.str ? def->udt_name : spvar->name;
-    spvar->field_def.udt_db_name = def->udt_name.str ? thd->db().str : nullptr;
+    spvar->field_def.udt_db_name =
+        def->udt_name.str ? lex->sphead->m_db : NULL_STR;
   }
   return false;
 }
@@ -5773,22 +6303,17 @@ bool LEX::sp_variable_declarations_copy_type_finalize(THD *thd, int nvars,
 */
 bool LEX::sp_variable_declarations_rowtype_finalize(
     THD *thd, int nvars, Qualified_column_ident *ref) {
-  LEX *lex = thd->lex;
-  sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
-  uint offset = 0;
+  int offset = -1;
 
   if (ref->db.str) {
     my_error(ER_SP_MISMATCH_VAR_QUANTITY, MYF(0));
     return true;
   }
 
-  bool cursor_rowtype =
-      ref->table.str && ref->db.str
-          ? false
-          : pctx->find_cursor(to_lex_string(ref->m_column), &offset, false);
-  if (cursor_rowtype) {
-    return sp_variable_declarations_cursor_rowtype_finalize(thd, nvars, offset);
-  }
+  Table_ident *table_ref = nullptr;
+  Row_definition_list *rdl = nullptr;
+  int rc = check_percent_rowtype(thd, ref, &table_ref, &rdl, &offset);
+  if (rc == -1) return true;
   /*
     When parsing a qualified identifier chain, the parser does not know yet
     if it's going to be a qualified column name (for %TYPE),
@@ -5800,16 +6325,22 @@ bool LEX::sp_variable_declarations_rowtype_finalize(
     - ref->m_column becomes table_ref->table
     - ref->table    becomes table_ref->db
   */
-  return sp_variable_declarations_table_rowtype_finalize(thd, nvars, ref->table,
-                                                         ref->m_column);
+  return sp_variable_declarations_cursor_rowtype_finalize(thd, nvars, offset,
+                                                          table_ref, rdl);
 }
 
-bool LEX::sp_variable_declarations_cursor_rowtype_finalize(THD *thd, int nvars,
-                                                           uint offset) {
+bool LEX::sp_variable_declarations_cursor_rowtype_finalize(
+    THD *thd, int nvars, int offset, Table_ident *table_ref,
+    Row_definition_list *rdl) {
   LEX *lex = thd->lex;
   sp_head *sp = lex->sphead;
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
 
+  if (!table_ref && !rdl && offset == -1) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "non structure variable used in %rowtype");
+    return true;
+  }
   // Loop through all variables in the same declaration
   for (int i = 0; i < nvars; i++) {
     sp_variable *spvar = pctx->get_last_context_variable((uint)nvars - 1 - i);
@@ -5824,17 +6355,63 @@ bool LEX::sp_variable_declarations_cursor_rowtype_finalize(THD *thd, int nvars,
     }
 
     spvar->type = MYSQL_TYPE_NULL;
-    spvar->field_def.set_cursor_rowtype_ref(offset);
+    spvar->field_def.ora_record.set_row_field_definitions(rdl);
+    spvar->field_def.ora_record.set_table_rowtype_ref(table_ref);
+    if (offset != -1) {  // it has cursor_rowtype_ref().
+      spvar->field_def.ora_record.set_cursor_rowtype_ref(offset);
+      sp_instr_cursor_copy_struct *copy_struct =
+          new (thd->mem_root) sp_instr_cursor_copy_struct(
+              sp->instructions(), pctx, offset, spvar->offset);
+      if (!copy_struct || sp->add_instr(thd, copy_struct)) return true;
+    } else if (table_ref) {
+      sp->reset_lex(thd);
+      lex = thd->lex;
+      Item *default_tmp = new (thd->mem_root) Item_null();
+
+      sp_instr_set *is = new (thd->mem_root) sp_instr_set(
+          sp->instructions(), lex, spvar->offset, default_tmp, EMPTY_CSTR,
+          ((int)i == nvars - 1), pctx, &sp_rcontext_handler_local);
+
+      if (!is || sp->add_instr(thd, is)) return true;
+      if (sp->restore_lex(thd)) return true;
+      spvar->field_def.udt_name = spvar->name;
+      spvar->field_def.udt_db_name = lex->sphead->m_db;
+      spvar->field_def.ora_record.set_row_field_definitions(
+          new (thd->mem_root) Row_definition_list());
+    }
     if (prepare_sp_create_field(thd, &spvar->field_def)) {
       return true;
     }
     spvar->field_def.field_name = spvar->name.str;
     spvar->field_def.is_nullable = true;
-    sp_instr_cursor_copy_struct *copy_struct =
-        new (thd->mem_root) sp_instr_cursor_copy_struct(
-            sp->instructions(), pctx, offset, spvar->offset);
-    if (!copy_struct || sp->add_instr(thd, copy_struct)) return true;
   }
+  return false;
+}
+
+bool LEX::sp_variable_declarations_table_rowtype_make_field_def(
+    THD *thd, sp_variable *spvar, LEX_CSTRING db, LEX_CSTRING table,
+    Row_definition_list **rdl) {
+  LEX *lex = thd->lex;
+  spvar->type = MYSQL_TYPE_NULL;
+  if (spvar->field_def.init(
+          thd, "", MYSQL_TYPE_NULL, nullptr, nullptr, 0, NULL, NULL, &NULL_CSTR,
+          0, nullptr, thd->variables.collation_database, false, 0, nullptr,
+          nullptr, nullptr, {}, dd::Column::enum_hidden_type::HT_VISIBLE)) {
+    return true;
+  }
+  Table_ident *table_ref;
+  if (unlikely(!(table_ref = new (thd->mem_root) Table_ident(db, table))))
+    return true;
+  *rdl = new (thd->mem_root) Row_definition_list();
+  spvar->field_def.ora_record.set_record_table_rowtype_ref(table_ref);
+
+  if (prepare_sp_create_field(thd, &spvar->field_def)) {
+    return true;
+  }
+  spvar->field_def.field_name = spvar->name.str;
+  spvar->field_def.is_nullable = true;
+  spvar->field_def.udt_name = spvar->name;
+  spvar->field_def.udt_db_name = lex->sphead->m_db;
   return false;
 }
 
@@ -5850,40 +6427,11 @@ bool LEX::sp_variable_declarations_table_rowtype_finalize(
   for (int i = 0; i < nvars; i++) {
     sp_variable *spvar = pctx->get_last_context_variable((uint)nvars - 1 - i);
     if (!spvar) return true;
-    if (spvar->field_def.init(thd, "", MYSQL_TYPE_NULL, nullptr, nullptr, 0,
-                              NULL, NULL, &NULL_CSTR, 0, nullptr,
-                              thd->variables.collation_database, false, 0,
-                              nullptr, nullptr, nullptr, {},
-                              dd::Column::enum_hidden_type::HT_VISIBLE)) {
-      return true;
-    }
-
-    spvar->type = MYSQL_TYPE_NULL;
-    Table_ident *table_ref;
-    List<Create_field> defs;
-    if (unlikely(!(table_ref = new (thd->mem_root) Table_ident(db, table))))
-      return true;
-    spvar->field_def.set_table_rowtype_ref(table_ref);
-    if (table_ref->resolve_table_rowtype_ref(thd, defs)) return true;
-    List_iterator_fast<Create_field> it_cdf(defs);
-    Create_field *cdf;
     Row_definition_list *rdl = nullptr;
-    for (uint j = 0; (cdf = it_cdf++); j++) {
-      if (cdf->udt_name.str) {
-        if (resolve_rowtype_udt_field(thd, cdf)) return true;
-      }
-      if (j == 0)
-        rdl = Row_definition_list::make(thd->mem_root, cdf);
-      else
-        rdl->append_uniq(thd->mem_root, cdf);
-    }
-    spvar->field_def.set_row_field_definitions(rdl);
-    if (prepare_sp_create_field(thd, &spvar->field_def)) return true;
-    spvar->field_def.field_name = spvar->name.str;
-    spvar->field_def.is_nullable = true;
-    spvar->field_def.udt_name = spvar->name;
-    spvar->field_def.udt_db_name = thd->db().str;
-
+    if (sp_variable_declarations_table_rowtype_make_field_def(thd, spvar, db,
+                                                              table, &rdl))
+      return true;
+    spvar->field_def.ora_record.set_row_field_definitions(rdl);
     Item *default_tmp = new (thd->mem_root) Item_null();
 
     sp_instr_set *is = new (thd->mem_root) sp_instr_set(
@@ -5897,14 +6445,21 @@ bool LEX::sp_variable_declarations_table_rowtype_finalize(
 }
 
 bool LEX::sp_for_loop_bounds_set_cursor(THD *thd, const LEX_STRING name,
-                                        PT_item_list *parameters,
-                                        uint *offset) {
+                                        PT_item_list *parameters, uint *offset,
+                                        LEX *lex_expr, Item **args,
+                                        uint arg_count) {
   LEX *lex = thd->lex;
   sp_head *sp = lex->sphead;
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
 
-  uint param_count = parameters ? parameters->elements() : 0;
+  uint param_count = parameters ? parameters->elements() : arg_count;
   sp_pcursor *pcursor;
+  // It's ref cursor.
+  sp_variable *spvar_cursor = pctx->find_variable(name.str, name.length, false);
+  if (spvar_cursor && spvar_cursor->field_def.ora_record.is_ref_cursor) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "wrong type of cursor used here");
+    return true;
+  }
   if (!pctx->find_cursor(name, offset, false)) {
     my_error(ER_SP_CURSOR_MISMATCH, MYF(0), name.str);
     return true;
@@ -5920,20 +6475,71 @@ bool LEX::sp_for_loop_bounds_set_cursor(THD *thd, const LEX_STRING name,
   uint num_vars = pctx_cursor->context_var_count();
 
   if (param_count > 0) {
-    assert(pctx_cursor->context_var_count() == parameters->elements());
-    Item *prm;
+    assert(pctx_cursor->context_var_count() == param_count);
+    Item *prm = nullptr;
     for (uint idx = 0; idx < param_count; idx++) {
-      prm = parameters->value.at(idx);
+      prm = parameters ? parameters->value.at(idx) : args[idx];
       sp_variable *spvar = pctx_cursor->get_context_variable(idx);
       assert(idx < pctx_cursor->context_var_count());
-
       sp_instr_set *is = new (thd->mem_root) sp_instr_set(
-          sp->instructions(), lex, spvar->offset, prm, EMPTY_CSTR,
+          sp->instructions(), lex_expr, spvar->offset, prm, EMPTY_CSTR,
           (idx == num_vars - 1), pctx_cursor, &sp_rcontext_handler_local);
-
       if (!is || sp->add_instr(thd, is)) return true;
     }
   }
+  return false;
+}
+
+bool LEX::sp_for_cursor_in_loop(THD *thd, Item *item_uuid,
+                                const char *loc_start, const char *loc_end,
+                                uint *cursor_offset, LEX_STRING *cursor_ident) {
+  LEX *cursor_lex = thd->lex;
+  sp_head *sp = cursor_lex->sphead;
+
+  assert(cursor_lex->sql_command == SQLCOM_SELECT);
+
+  if (cursor_lex->result) {
+    my_error(ER_SP_BAD_CURSOR_SELECT, MYF(0));
+    return true;
+  }
+  cursor_lex->m_sql_cmd->set_as_part_of_sp();
+  cursor_lex->sp_lex_in_use = true;
+
+  if (sp->restore_lex(thd)) return true;
+
+  LEX *lex = thd->lex;
+  sp_pcontext *pctx_new = lex->get_sp_current_parsing_ctx();
+  LEX_CSTRING cursor_query = EMPTY_CSTR;
+  char temp_ptr[32] = {};
+  memset(temp_ptr, 0, sizeof(temp_ptr));
+  if (!item_uuid) return true;
+  longlong uuid = item_uuid->val_int();
+
+  sprintf(temp_ptr, "cursor_%lld", uuid);
+  char *ptr = thd->strmake(temp_ptr, strlen(temp_ptr));
+  if (!ptr) return true;
+  *cursor_ident = {ptr, strlen(ptr)};
+
+  if (pctx_new->find_cursor(*cursor_ident, cursor_offset, false)) {
+    my_error(ER_SP_DUP_CURS, MYF(0), cursor_ident->str);
+    return true;
+  }
+  if (pctx_new->add_cursor_parameters(thd, *cursor_ident, pctx_new,
+                                      cursor_offset, nullptr)) {
+    return true;
+  }
+
+  if (cursor_lex->is_metadata_used()) {
+    cursor_query = make_string(thd, loc_start, loc_end);
+
+    if (!cursor_query.str) return true;
+  }
+
+  sp_instr_cpush_rowtype *i = new (thd->mem_root) sp_instr_cpush_rowtype(
+      sp->instructions(), pctx_new, cursor_lex, cursor_query, *cursor_offset);
+
+  if (!i || sp->add_instr(thd, i)) return true;
+
   return false;
 }
 
@@ -5943,13 +6549,80 @@ bool LEX::sp_open_cursor(THD *thd, const LEX_STRING name,
   sp_head *sp = lex->sphead;
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
   uint offset;
-  if (sp_for_loop_bounds_set_cursor(thd, name, parameters, &offset))
+  if (sp_for_loop_bounds_set_cursor(thd, name, parameters, &offset, lex))
     return true;
 
   sp_instr_copen *i =
       new (thd->mem_root) sp_instr_copen(sp->instructions(), pctx, offset);
 
   if (!i || sp->add_instr(thd, i)) return true;
+  return false;
+}
+
+bool LEX::sp_open_cursor_for(THD *thd, LEX_STRING sql_ident,
+                             LEX_STRING cursor_ident, const char *loc) {
+  LEX *cursor_lex = thd->lex;
+  sp_head *sp = cursor_lex->sphead;
+  sp_pcontext *pctx = thd->lex->get_sp_current_parsing_ctx();
+  uint offp;
+  sp_variable *spvar_cursor =
+      pctx->find_variable(cursor_ident.str, cursor_ident.length, false);
+  if (!spvar_cursor || !spvar_cursor->field_def.ora_record.is_ref_cursor) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), cursor_ident.str);
+    return true;
+  }
+  if (spvar_cursor->field_def.ora_record.is_ref_cursor_define) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "ref cursor define used as cursor");
+    return true;
+  }
+  if (!pctx->find_cursor(cursor_ident, &offp, false)) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), cursor_ident.str);
+    return true;
+  }
+
+  if (!sql_ident.str) { /*open c for sql*/
+    assert(cursor_lex->sql_command == SQLCOM_SELECT);
+
+    if (cursor_lex->result) {
+      my_error(ER_SP_BAD_CURSOR_SELECT, MYF(0));
+      return true;
+    }
+    cursor_lex->m_sql_cmd->set_as_part_of_sp();
+    cursor_lex->sp_lex_in_use = true;
+
+    if (sp->restore_lex(thd)) return true;
+
+    LEX *lex = thd->lex;
+    sp_pcontext *pctx_new = lex->get_sp_current_parsing_ctx();
+    LEX_CSTRING cursor_query = EMPTY_CSTR;
+
+    cursor_query =
+        make_string(thd, sp->m_parser_data.get_current_stmt_start_ptr(), loc);
+
+    if (!cursor_query.str) return true;
+
+    sp_instr_copen_for_sql *i_open = new (thd->mem_root)
+        sp_instr_copen_for_sql(sp->instructions(), pctx_new, cursor_lex,
+                               cursor_query, spvar_cursor->offset);
+
+    if (!i_open || sp->add_instr(thd, i_open)) return true;
+
+  } else { /*open c for ident*/
+    LEX *lex = thd->lex;
+    sp_pcontext *pctx_new = lex->get_sp_current_parsing_ctx();
+    sp_variable *spvar_sql =
+        pctx->find_variable(sql_ident.str, sql_ident.length, false);
+    if (!spvar_sql) {
+      my_error(ER_SP_UNDECLARED_VAR, MYF(0), sql_ident.str);
+      return true;
+    }
+    sp_instr_copen_for_ident *i_open = new (thd->mem_root)
+        sp_instr_copen_for_ident(sp->instructions(), pctx_new, lex,
+                                 spvar_cursor->offset, spvar_sql->offset);
+
+    if (!i_open || sp->add_instr(thd, i_open)) return true;
+    if (sp->restore_lex(thd)) return true;
+  }
   return false;
 }
 
@@ -5990,7 +6663,7 @@ bool LEX::sp_variable_declarations_row_finalize(THD *thd, LEX_STRING ident,
         rec_tk2_val rec_tk2;
         select rec_tk2_val.cjr_val(1).tkno error!
   */
-  if (pctx->find_variable(ident.str, ident.length, true)) {
+  if (pctx->find_variable(ident.str, ident.length, false)) {
     my_error(ER_SP_DUP_PARAM, MYF(0), ident.str);
     return true;
   }
@@ -6010,16 +6683,16 @@ bool LEX::sp_variable_declarations_row_finalize(THD *thd, LEX_STRING ident,
   }
   spvar->field_def.field_name = spvar->name.str;
   spvar->field_def.is_nullable = true;
-  spvar->field_def.set_row_field_definitions(row);
-  spvar->field_def.is_record_define = true;
+  spvar->field_def.ora_record.set_row_field_definitions(row);
+  spvar->field_def.ora_record.is_record_define = true;
   spvar->field_def.udt_name = ident;
-  spvar->field_def.udt_db_name = thd->db().str;
+  spvar->field_def.udt_db_name = lex->sphead->m_db;
 
   List<Create_field> *sd = reinterpret_cast<List<Create_field> *>(row);
   List_iterator<Create_field> it(*sd);
   Create_field *def;
   for (uint offset = 0; (def = it++); offset++) {
-    Item *item = def->record_default_value;
+    Item *item = def->ora_record.record_default_value;
     if (!item) continue;
     sp->reset_lex(thd);
     lex = thd->lex;
@@ -6047,9 +6720,61 @@ bool LEX::sp_variable_declarations_row_finalize(THD *thd, LEX_STRING ident,
         &sp_rcontext_handler_local, offset);
 
     if (!is || sp->add_instr(thd, is)) return true;
-    def->record_default_value = item;
+    def->ora_record.record_default_value = item;
     if (sp->restore_lex(thd)) return true;
   }
+  return false;
+}
+
+static bool sp_variable_declarations_add_udt_variable(
+    THD *thd, LEX_STRING record, LEX_STRING udt_db_name,
+    Row_definition_list **rdl_out, Row_definition_table_list **rdl_table_out,
+    LEX_CSTRING *nested_table_udt, uint *table_type, ulonglong *varray_limit,
+    List<Create_field> **field_def_list) {
+  LEX *lex = thd->lex;
+  sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
+  sp_variable *spvar_udt = nullptr;
+  // add udt var
+  ulong reclength = 0;
+  sql_mode_t sql_mode;
+  MDL_savepoint mdl_savepoint = thd->mdl_context.mdl_savepoint();
+  if (!sp_find_ora_type_create_fields(
+          thd, udt_db_name, record, false, field_def_list, &reclength,
+          &sql_mode, nested_table_udt, table_type, varray_limit)) {
+    List_iterator_fast<Create_field> it(**field_def_list);
+    Create_field *def;
+    Row_definition_list *rdl = nullptr;
+    for (uint j = 0; (def = it++); j++) {
+      if (j == 0)
+        rdl = Row_definition_list::make(thd->mem_root, def);
+      else
+        rdl->append_uniq(thd->mem_root, def);
+    }
+    if (!nested_table_udt->str && *table_type != 0 && *table_type != 1) {
+      spvar_udt =
+          pctx->add_udt_variable(thd, rdl, record, *table_type, MYSQL_TYPE_NULL,
+                                 *varray_limit, *nested_table_udt, udt_db_name);
+      if (!spvar_udt) {
+        my_error(ER_SP_UNDECLARED_VAR, MYF(0), record.str);
+        return true;
+      }
+      *rdl_out = rdl;
+    } else {
+      Row_definition_list *rdl_result = nullptr;
+      if (rdl->make_new_create_field_to_store_index(thd, 0, false, &rdl_result))
+        return true;
+      spvar_udt = pctx->add_udt_variable(thd, rdl_result, record, *table_type,
+                                         MYSQL_TYPE_NULL, *varray_limit,
+                                         *nested_table_udt, udt_db_name);
+      if (!spvar_udt) {
+        my_error(ER_SP_UNDECLARED_VAR, MYF(0), record.str);
+        return true;
+      }
+      *rdl_table_out =
+          Row_definition_table_list::make(thd->mem_root, rdl_result);
+    }
+  }
+  thd->mdl_context.rollback_to_savepoint(mdl_savepoint);
   return false;
 }
 
@@ -6060,18 +6785,19 @@ bool LEX::sp_variable_declarations_record_finalize(
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
   // First get udt define.
   sp_variable *spvar_udt =
-      pctx->find_udt_variable(record.str, record.length, false);
+      pctx->find_udt_variable(record.str, record.length, lex->sphead->m_db.str,
+                              lex->sphead->m_db.length, false);
   Row_definition_list *rdl = nullptr;
   if (spvar_udt) {
     if (!spvar_udt->field_def.nested_table_udt.str &&
         spvar_udt->field_def.table_type != 0 &&
         spvar_udt->field_def.table_type != 1) {
       return sp_variable_declarations_udt_set_finalize(
-          thd, nvars, spvar_udt->field_def.row_field_definitions(), record,
-          default_value, dflt_value_query);
+          thd, nvars, spvar_udt->field_def.ora_record.row_field_definitions(),
+          record, default_value, dflt_value_query);
     } else {
       List<Row_definition_list> *sd = dynamic_cast<List<Row_definition_list> *>(
-          spvar_udt->field_def.row_field_table_definitions());
+          spvar_udt->field_def.ora_record.row_field_table_definitions());
       if (!sd) return true;
 
       List_iterator_fast<Row_definition_list> it_table(*sd);
@@ -6086,43 +6812,28 @@ bool LEX::sp_variable_declarations_record_finalize(
     }
   } else {
     List<Create_field> *field_def_list = nullptr;
-    ulong reclength = 0;
-    sql_mode_t sql_mode;
-    MDL_savepoint mdl_savepoint = thd->mdl_context.mdl_savepoint();
+    Row_definition_list *rdl_result = nullptr;
+    Row_definition_table_list *rdl_table = nullptr;
     LEX_CSTRING nested_table_udt = NULL_CSTR;
     uint table_type = 255;
     ulonglong varray_limit = 0;
-    if (!sp_find_ora_type_create_fields(thd, to_lex_string(thd->db()), record,
-                                        false, &field_def_list, &reclength,
-                                        &sql_mode, &nested_table_udt,
-                                        &table_type, &varray_limit)) {
-      List<Create_field> defs;
-      List_iterator_fast<Create_field> it(*field_def_list);
-      Create_field *def;
-      for (uint j = 0; (def = it++); j++) {
-        if (j == 0)
-          rdl = Row_definition_list::make(thd->mem_root, def);
-        else
-          rdl->append_uniq(thd->mem_root, def);
-      }
-      spvar_udt =
-          pctx->add_udt_variable(thd, rdl, record, table_type, MYSQL_TYPE_NULL,
-                                 varray_limit, nested_table_udt);
-      if (!spvar_udt) {
-        my_error(ER_SP_UNDECLARED_VAR, MYF(0), record.str);
-        return true;
-      }
-      if (!nested_table_udt.str && table_type != 0 && table_type != 1) {
+    if (sp_variable_declarations_add_udt_variable(
+            thd, record, lex->sphead->m_db, &rdl_result, &rdl_table,
+            &nested_table_udt, &table_type, &varray_limit, &field_def_list))
+      return true;
+    if (rdl_result || rdl_table) {
+      if (rdl_result) {
         return sp_variable_declarations_udt_set_finalize(
             thd, nvars, field_def_list, record, default_value,
             dflt_value_query);
-      } else {
+      }
+      if (rdl_table) {
         return sp_variable_declarations_udt_table_set_finalize(
-            thd, nvars, field_def_list, nested_table_udt, table_type,
-            varray_limit, record, default_value, dflt_value_query);
+            thd, nvars, rdl_table->find_row_fields_by_offset(0),
+            nested_table_udt, table_type, varray_limit, record, default_value,
+            dflt_value_query);
       }
     }
-    thd->mdl_context.rollback_to_savepoint(mdl_savepoint);
   }
 
   // Second get record define.
@@ -6132,14 +6843,21 @@ bool LEX::sp_variable_declarations_record_finalize(
     my_error(ER_SP_UNDECLARED_VAR, MYF(0), record.str);
     return true;
   }
-  if (!spvar_record->field_def.is_record_define &&
-      !spvar_record->field_def.is_record_table_define) {
+
+  if (spvar_record->field_def.ora_record.is_ref_cursor_define) {
+    bool rc = sp_variable_declarations_define_ref_cursor_finalize(
+        thd, nvars, default_value, spvar_record);
+    return rc;
+  }
+
+  if (!spvar_record->field_def.ora_record.is_record_define &&
+      !spvar_record->field_def.ora_record.is_record_table_define) {
     my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), record.str);
     return true;
   }
   // type stu_record_arr is table of stu_record; stu_record_arr_val
   // stu_record_arr;
-  if (spvar_record->field_def.is_record_table_define) {
+  if (spvar_record->field_def.ora_record.is_record_table_define) {
     if (sp_variable_declarations_type_record_table_set_finalize(
             thd, nvars, record, default_value))
       return true;
@@ -6161,8 +6879,6 @@ bool LEX::sp_variable_declarations_udt_table_set_finalize(
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
   sp_variable *spvar = nullptr;
   Row_definition_list *rdl = nullptr;
-  sp->reset_lex(thd);
-  lex = thd->lex;
   pctx->declare_var_boundary(nvars);
 
   // create or replace type t_test is varray(100) of integer;
@@ -6185,10 +6901,10 @@ bool LEX::sp_variable_declarations_udt_table_set_finalize(
       else
         rdl->append_uniq(thd->mem_root, def);
     }
-    spvar->field_def.set_row_field_table_definitions(
+    spvar->field_def.ora_record.set_row_field_table_definitions(
         Row_definition_table_list::make(thd->mem_root, rdl));
     spvar->field_def.udt_name = record;
-    spvar->field_def.udt_db_name = thd->db().str;
+    spvar->field_def.udt_db_name = lex->sphead->m_db;
     spvar->field_def.nested_table_udt = nested_table_udt;
     spvar->field_def.table_type = table_type;
     spvar->field_def.varray_limit = varray_limit;
@@ -6197,18 +6913,17 @@ bool LEX::sp_variable_declarations_udt_table_set_finalize(
     }
     spvar->field_def.field_name = spvar->name.str;
     spvar->field_def.is_nullable = true;
-    spvar->field_def.is_record_table_define = false;
-    spvar->field_def.record_default_value = default_value;
+    spvar->field_def.ora_record.is_record_table_define = false;
+    spvar->field_def.ora_record.record_default_value = default_value;
     if (!default_value) break;
     if (default_value->type() != Item::NULL_ITEM) {
-      if (!default_value->get_udt_name().str) {
-        my_error(ER_UDT_INCONS_DATATYPES, myf(0));
-        return true;
-      } else if (my_strcasecmp(system_charset_info, record.str,
-                               default_value->get_udt_name().str) != 0) {
-        my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), thd->db().str, record.str,
-                 thd->db().str, default_value->get_udt_name().str);
-        return true;
+      if (default_value->get_udt_name().str) {
+        if (my_strcasecmp(system_charset_info, record.str,
+                          default_value->get_udt_name().str) != 0) {
+          my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), thd->db().str, record.str,
+                   thd->db().str, default_value->get_udt_name().str);
+          return true;
+        }
       }
     }
     sp_instr_set *is = new (thd->mem_root) sp_instr_set(
@@ -6218,7 +6933,6 @@ bool LEX::sp_variable_declarations_udt_table_set_finalize(
     if (!is || sp->add_instr(thd, is)) return true;
   }
   pctx->declare_var_boundary(0);
-  if (sp->restore_lex(thd)) return true;
   return false;
 }
 
@@ -6229,8 +6943,6 @@ bool LEX::sp_variable_declarations_udt_set_finalize(
   sp_head *sp = lex->sphead;
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
   sp_variable *spvar = nullptr;
-  sp->reset_lex(thd);
-  lex = thd->lex;
   pctx->declare_var_boundary(nvars);
   // create or replace type t_test as object(id integer);
   // tval t_test;
@@ -6244,7 +6956,7 @@ bool LEX::sp_variable_declarations_udt_set_finalize(
       return true;
     }
     spvar->field_def.udt_name = record;
-    spvar->field_def.udt_db_name = thd->db().str;
+    spvar->field_def.udt_db_name = lex->sphead->m_db;
     if (prepare_sp_create_field(thd, &spvar->field_def)) {
       return true;
     }
@@ -6258,21 +6970,20 @@ bool LEX::sp_variable_declarations_udt_set_finalize(
       else
         rdl->append_uniq(thd->mem_root, def);
     }
-    spvar->field_def.set_row_field_definitions(rdl);
+    spvar->field_def.ora_record.set_row_field_definitions(rdl);
     spvar->field_def.field_name = spvar->name.str;
     spvar->field_def.is_nullable = true;
-    spvar->field_def.is_record_define = false;
-    spvar->field_def.record_default_value = default_value;
+    spvar->field_def.ora_record.is_record_define = false;
+    spvar->field_def.ora_record.record_default_value = default_value;
     if (!default_value) break;
     if (default_value->type() != Item::NULL_ITEM) {
-      if (!default_value->get_udt_name().str) {
-        my_error(ER_UDT_INCONS_DATATYPES, myf(0));
-        return true;
-      } else if (my_strcasecmp(system_charset_info, record.str,
-                               default_value->get_udt_name().str) != 0) {
-        my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), thd->db().str, record.str,
-                 thd->db().str, default_value->get_udt_name().str);
-        return true;
+      if (default_value->get_udt_name().str) {
+        if (my_strcasecmp(system_charset_info, record.str,
+                          default_value->get_udt_name().str) != 0) {
+          my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), thd->db().str, record.str,
+                   thd->db().str, default_value->get_udt_name().str);
+          return true;
+        }
       }
     }
     sp_instr_set *is = new (thd->mem_root) sp_instr_set(
@@ -6282,7 +6993,6 @@ bool LEX::sp_variable_declarations_udt_set_finalize(
     if (!is || sp->add_instr(thd, is)) return true;
   }
   pctx->declare_var_boundary(0);
-  if (sp->restore_lex(thd)) return true;
   return false;
 }
 
@@ -6292,24 +7002,16 @@ bool LEX::sp_variable_declarations_type_record_table_set_finalize(
   sp_head *sp = lex->sphead;
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
 
-  if (dflt_value) {
-    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
-             "record table type with default value");
-    return true;
-  }
   sp_variable *spvar_record =
       pctx->find_variable(record.str, record.length, false);
   if (!spvar_record) {
     my_error(ER_SP_UNDECLARED_VAR, MYF(0), record.str);
     return true;
   }
-  if (!spvar_record->field_def.is_record_table_define) {
+  if (!spvar_record->field_def.ora_record.is_record_table_define) {
     my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), record.str);
     return true;
   }
-  sp->reset_lex(thd);
-  lex = thd->lex;
-  sp = lex->sphead;
   /* type stu_record_arr is table of stu_record;
      stu_record_arr_val stu_record_arr;
      udt_name=stu_record_arr,nested_table_udt=stu_record
@@ -6327,33 +7029,36 @@ bool LEX::sp_variable_declarations_type_record_table_set_finalize(
     if (prepare_sp_create_field(thd, &spvar->field_def)) {
       return true;
     }
+
+    spvar->field_def.ora_record.set_record(&spvar_record->field_def.ora_record);
+    spvar->field_def.ora_record.is_record_table_type_define = false;
     spvar->field_def.field_name = spvar->name.str;
     spvar->field_def.is_nullable = true;
-    spvar->field_def.set_row_field_table_definitions(
-        spvar_record->field_def.row_field_table_definitions());
-    spvar->field_def.m_table_rowtype_ref =
-        spvar_record->field_def.table_rowtype_ref();
-    spvar->field_def.is_record_table_ref =
-        spvar_record->field_def.is_record_table_ref;
-    spvar->field_def.is_record_table_define = false;
+    spvar->field_def.ora_record.is_record_table_define = false;
     spvar->field_def.udt_name = record;
-    spvar->field_def.udt_db_name = thd->db().str;
+    spvar->field_def.udt_db_name = lex->sphead->m_db;
     spvar->field_def.nested_table_udt =
         spvar_record->field_def.nested_table_udt;
-    dflt_value = new (thd->mem_root)
-        Item_splocal(&sp_rcontext_handler_local, spvar_record->name,
-                     spvar_record->offset, spvar_record->type);
+    spvar->field_def.ora_record.is_index_by =
+        spvar_record->field_def.ora_record.is_index_by;
+    if (spvar_record->field_def.ora_record.is_index_by && !dflt_value &&
+        !spvar_record->field_def.ora_record.is_record_table_type_define) {
+      dflt_value = new (thd->mem_root)
+          Item_splocal(&sp_rcontext_handler_local, spvar_record->name,
+                       spvar_record->offset, spvar_record->type);
 #ifndef NDEBUG
-    Item_splocal *splocal = dynamic_cast<Item_splocal *>(dflt_value);
-    if (splocal) splocal->m_sp = thd->lex->sphead;
+      Item_splocal *splocal = dynamic_cast<Item_splocal *>(dflt_value);
+      if (splocal) splocal->m_sp = thd->lex->sphead;
 #endif
-    sp_instr_set *is = new (thd->mem_root) sp_instr_set(
-        sp->instructions(), lex, spvar->offset, dflt_value, EMPTY_CSTR,
-        ((int)i == nvars - 1), pctx, &sp_rcontext_handler_local);
+    }
+    if (dflt_value) {
+      sp_instr_set *is = new (thd->mem_root) sp_instr_set(
+          sp->instructions(), lex, spvar->offset, dflt_value, EMPTY_CSTR,
+          ((int)i == nvars - 1), pctx, &sp_rcontext_handler_local);
 
-    if (!is || sp->add_instr(thd, is)) return true;
+      if (!is || sp->add_instr(thd, is)) return true;
+    }
   }
-  if (sp->restore_lex(thd)) return true;
   return false;
 }
 
@@ -6373,97 +7078,83 @@ Create_field *LEX::sp_variable_declarations_definition_in_record(
     return nullptr;
   }
   // First get udt define.
-  sp_variable *spvar_udt =
-      pctx->find_udt_variable(record.str, record.length, false);
+  sp_variable *spvar_udt = pctx->find_udt_variable(
+      record.str, record.length, thd->lex->sphead->m_db.str,
+      thd->lex->sphead->m_db.length, false);
   if (spvar_udt) {
     if (!spvar_udt->field_def.nested_table_udt.str &&
         spvar_udt->field_def.table_type != 0 &&
         spvar_udt->field_def.table_type != 1) {
-      cdf->set_row_field_definitions(
-          spvar_udt->field_def.row_field_definitions());
+      cdf->ora_record.set_row_field_definitions(
+          spvar_udt->field_def.ora_record.row_field_definitions());
     } else {
-      cdf->set_row_field_table_definitions(
-          spvar_udt->field_def.row_field_table_definitions());
+      cdf->ora_record.set_row_field_table_definitions(
+          spvar_udt->field_def.ora_record.row_field_table_definitions());
       cdf->nested_table_udt = spvar_udt->field_def.nested_table_udt;
       cdf->table_type = spvar_udt->field_def.table_type;
       cdf->varray_limit = spvar_udt->field_def.varray_limit;
     }
     cdf->udt_name = record;
-    cdf->udt_db_name = thd->db().str;
+    cdf->udt_db_name = to_lex_string(thd->db());
     if (prepare_sp_create_field(thd, cdf)) {
       return nullptr;
     }
-    cdf->record_default_value = default_value;
+    cdf->ora_record.record_default_value = default_value;
     return cdf;
   } else {
     // add udt var
     List<Create_field> *field_def_list = nullptr;
-    ulong reclength = 0;
-    sql_mode_t sql_mode;
-    MDL_savepoint mdl_savepoint = thd->mdl_context.mdl_savepoint();
+    Row_definition_list *rdl_result = nullptr;
+    Row_definition_table_list *rdl_table = nullptr;
     LEX_CSTRING nested_table_udt = NULL_CSTR;
     uint table_type = 255;
     ulonglong varray_limit = 0;
-    if (!sp_find_ora_type_create_fields(thd, to_lex_string(thd->db()), record,
-                                        false, &field_def_list, &reclength,
-                                        &sql_mode, &nested_table_udt,
-                                        &table_type, &varray_limit)) {
-      List<Create_field> defs;
-      Row_definition_list *rdl = nullptr;
-      List_iterator_fast<Create_field> it(*field_def_list);
-      Create_field *def;
-      for (uint j = 0; (def = it++); j++) {
-        if (j == 0)
-          rdl = Row_definition_list::make(thd->mem_root, def);
-        else
-          rdl->append_uniq(thd->mem_root, def);
+    if (sp_variable_declarations_add_udt_variable(
+            thd, record, thd->lex->sphead->m_db, &rdl_result, &rdl_table,
+            &nested_table_udt, &table_type, &varray_limit, &field_def_list))
+      return nullptr;
+    if (rdl_result || rdl_table) {
+      if (rdl_result) {
+        cdf->ora_record.set_row_field_definitions(rdl_result);
       }
-      spvar_udt =
-          pctx->add_udt_variable(thd, rdl, record, table_type, MYSQL_TYPE_NULL,
-                                 varray_limit, nested_table_udt);
-      if (!spvar_udt) {
-        my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), record.str);
-        return nullptr;
-      }
-      if (!nested_table_udt.str && table_type != 0 && table_type != 1) {
-        cdf->set_row_field_definitions(rdl);
-      } else {
-        cdf->set_row_field_table_definitions(
-            Row_definition_table_list::make(thd->mem_root, rdl));
+      if (rdl_table) {
+        cdf->ora_record.set_row_field_table_definitions(rdl_table);
         cdf->nested_table_udt = nested_table_udt;
         cdf->table_type = table_type;
         cdf->varray_limit = varray_limit;
       }
       cdf->udt_name = record;
-      cdf->udt_db_name = thd->db().str;
+      cdf->udt_db_name = to_lex_string(thd->db());
       if (prepare_sp_create_field(thd, cdf)) {
         return nullptr;
       }
-      cdf->record_default_value = default_value;
+      cdf->ora_record.record_default_value = default_value;
       return cdf;
     }
-    thd->mdl_context.rollback_to_savepoint(mdl_savepoint);
   }
   // Second get record define.
-  sp_variable *spvar = pctx->find_variable(record.str, record.length, true);
+  sp_variable *spvar = pctx->find_variable(record.str, record.length, false);
   if (!spvar) {
     my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), record.str);
     return nullptr;
   }
 
-  if (spvar->field_def.is_row() && spvar->field_def.is_record_define) {
-    cdf->set_row_field_definitions(spvar->field_def.row_field_definitions());
-  } else if (spvar->field_def.is_row_table() &&
-             spvar->field_def.is_record_table_define) {
-    cdf->set_row_field_table_definitions(
-        spvar->field_def.row_field_table_definitions());
+  if (spvar->field_def.ora_record.is_row() &&
+      spvar->field_def.ora_record.is_record_define) {
+    cdf->ora_record.set_row_field_definitions(
+        spvar->field_def.ora_record.row_field_definitions());
+  } else if (spvar->field_def.ora_record.is_row_table() &&
+             spvar->field_def.ora_record.is_record_table_define) {
+    cdf->ora_record.set_row_field_table_definitions(
+        spvar->field_def.ora_record.row_field_table_definitions());
     cdf->nested_table_udt = spvar->field_def.nested_table_udt;
+    cdf->ora_record.is_index_by = spvar->field_def.ora_record.is_index_by;
   } else {
     my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), record.str);
     return nullptr;
   }
   cdf->udt_name = record;
-  cdf->udt_db_name = thd->db().str;
+  cdf->udt_db_name = to_lex_string(thd->db());
   if (prepare_sp_create_field(thd, cdf)) {
     return nullptr;
   }
@@ -6475,7 +7166,7 @@ Create_field *LEX::sp_variable_declarations_definition_in_record(
     if (item_sp) item_sp->m_sp = thd->lex->sphead;
 #endif
   }
-  cdf->record_default_value = default_value;
+  cdf->ora_record.record_default_value = default_value;
   return cdf;
 }
 
@@ -6492,13 +7183,11 @@ bool LEX::sp_variable_declarations_type_record_set_finalize(
     my_error(ER_SP_UNDECLARED_VAR, MYF(0), record.str);
     return true;
   }
-  if (!spvar_record->field_def.is_record_define) {
+  if (!spvar_record->field_def.ora_record.is_record_define) {
     my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), record.str);
     return true;
   }
 
-  sp->reset_lex(thd);
-  lex = thd->lex;
   // type stu_record_arr is record (); stu_record_arr_val stu_record_arr;
   for (uint i = 0; i < (uint)nvars; i++) {
     sp_variable *spvar = pctx->get_last_context_variable((uint)nvars - 1 - i);
@@ -6515,22 +7204,21 @@ bool LEX::sp_variable_declarations_type_record_set_finalize(
     }
     spvar->field_def.field_name = spvar->name.str;
     spvar->field_def.is_nullable = true;
-    spvar->field_def.set_row_field_definitions(
-        spvar_record->field_def.row_field_definitions());
-    spvar->field_def.is_record_define = false;
+    spvar->field_def.ora_record.set_row_field_definitions(
+        spvar_record->field_def.ora_record.row_field_definitions());
+    spvar->field_def.ora_record.is_record_define = false;
     spvar->field_def.udt_name = record;
-    spvar->field_def.udt_db_name = thd->db().str;
+    spvar->field_def.udt_db_name = lex->sphead->m_db;
     Item *default_tmp = default_value;
     if (default_tmp) {
       if (default_tmp->type() != Item::NULL_ITEM) {
-        if (!default_value->get_udt_name().str) {
-          my_error(ER_UDT_INCONS_DATATYPES, myf(0));
-          return true;
-        } else if (my_strcasecmp(system_charset_info, record.str,
-                                 default_value->get_udt_name().str) != 0) {
-          my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), thd->db().str, record.str,
-                   thd->db().str, default_value->get_udt_name().str);
-          return true;
+        if (default_value->get_udt_name().str) {
+          if (my_strcasecmp(system_charset_info, record.str,
+                            default_value->get_udt_name().str) != 0) {
+            my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), thd->db().str, record.str,
+                     thd->db().str, default_value->get_udt_name().str);
+            return true;
+          }
         }
       }
     } else {
@@ -6548,13 +7236,14 @@ bool LEX::sp_variable_declarations_type_record_set_finalize(
 
     if (!is || sp->add_instr(thd, is)) return true;
   }
-  if (sp->restore_lex(thd)) return true;
   return false;
 }
 
 bool LEX::sp_variable_declarations_type_table_finalize(THD *thd,
                                                        LEX_STRING ident,
-                                                       LEX_STRING table) {
+                                                       LEX_STRING table,
+                                                       const char *length,
+                                                       bool is_index_by) {
   LEX *lex = thd->lex;
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
   /*
@@ -6569,7 +7258,7 @@ bool LEX::sp_variable_declarations_type_table_finalize(THD *thd,
         ...
       END;
   */
-  if (pctx->find_variable(ident.str, ident.length, true)) {
+  if (pctx->find_variable(ident.str, ident.length, false)) {
     my_error(ER_SP_DUP_PARAM, MYF(0), ident.str);
     return true;
   }
@@ -6578,11 +7267,11 @@ bool LEX::sp_variable_declarations_type_table_finalize(THD *thd,
       pctx->add_variable(thd, ident, MYSQL_TYPE_DECIMAL, sp_variable::MODE_IN);
 
   sp_variable *spv_table;
-  if (!(spv_table = pctx->find_variable(table.str, table.length, true))) {
+  if (!(spv_table = pctx->find_variable(table.str, table.length, false))) {
     my_error(ER_SP_UNDECLARED_VAR, MYF(0), table.str);
     return true;
   }
-  if (!spv_table->field_def.is_record_define) {
+  if (!spv_table->field_def.ora_record.is_record_define) {
     my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), table.str);
     return true;
   }
@@ -6596,20 +7285,370 @@ bool LEX::sp_variable_declarations_type_table_finalize(THD *thd,
   if (prepare_sp_create_field(thd, &spvar->field_def)) {
     return true;
   }
+
+  Row_definition_list *row_new = nullptr;
+  if (spv_table->field_def.ora_record.row_field_definitions()
+          ->make_new_create_field_to_store_index(thd, length, is_index_by,
+                                                 &row_new))
+    return true;
+
   spvar->field_def.field_name = spvar->name.str;
   spvar->field_def.is_nullable = true;
-  Row_definition_table_list *list = Row_definition_table_list::make(
-      thd->mem_root, spv_table->field_def.row_field_definitions());
-  spvar->field_def.set_row_field_table_definitions(list);
-  spvar->field_def.is_record_table_define = true;
+  Row_definition_table_list *list =
+      Row_definition_table_list::make(thd->mem_root, row_new);
+  spvar->field_def.ora_record.set_row_field_table_definitions(list);
+  spvar->field_def.ora_record.is_record_table_define = true;
+  spvar->field_def.ora_record.is_index_by = is_index_by;
   spvar->field_def.nested_table_udt = to_lex_cstring(table);
   spvar->field_def.udt_name = spvar->name;
-  spvar->field_def.udt_db_name = thd->db().str;
+  spvar->field_def.udt_db_name = lex->sphead->m_db;
+  spvar->field_def.ora_record.index_length = length ? std::atoi(length) : 0;
+  return false;
+}
+
+bool LEX::sp_variable_declarations_type_table_type_finalize(THD *thd,
+                                                            LEX_STRING ident,
+                                                            PT_type *table_type,
+                                                            const char *length,
+                                                            bool is_index_by) {
+  LEX *lex = thd->lex;
+  sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
+  /*
+    Prepare all row fields.
+    Note, we do it only one time outside of the below loop.
+    The converted list in "row" is further reused by all variable
+    declarations processed by the current call.
+    Example:
+      DECLARE
+        type stu_record_arr is table of stu_record;
+      BEGIN
+        ...
+      END;
+  */
+  if (pctx->find_variable(ident.str, ident.length, false)) {
+    my_error(ER_SP_DUP_PARAM, MYF(0), ident.str);
+    return true;
+  }
+
+  sp_variable *spvar =
+      pctx->add_variable(thd, ident, MYSQL_TYPE_DECIMAL, sp_variable::MODE_IN);
+
+  if (spvar->field_def.init(
+          thd, "", MYSQL_TYPE_NULL, nullptr, nullptr, 0, NULL, NULL, &NULL_CSTR,
+          0, nullptr, thd->variables.collation_database, false, 0, nullptr,
+          nullptr, nullptr, {}, dd::Column::enum_hidden_type::HT_VISIBLE)) {
+    return true;
+  }
+
+  if (prepare_sp_create_field(thd, &spvar->field_def)) {
+    return true;
+  }
+  Create_field *cdf = new (thd->mem_root) Create_field();
+  if (cdf->init(thd, "column_value", table_type->type, table_type->get_length(),
+                table_type->get_dec(), table_type->get_type_flags(), NULL, NULL,
+                &NULL_CSTR, 0, table_type->get_interval_list(),
+                thd->variables.collation_database, false,
+                table_type->get_uint_geom_type(), nullptr, nullptr, nullptr, {},
+                dd::Column::enum_hidden_type::HT_VISIBLE)) {
+    return true;
+  }
+  if (prepare_sp_create_field(thd, cdf)) {
+    return true;
+  }
+  Row_definition_list *rdl = Row_definition_list::make(thd->mem_root, cdf);
+  Row_definition_list *row_new = nullptr;
+  if (rdl->make_new_create_field_to_store_index(thd, length, is_index_by,
+                                                &row_new))
+    return true;
+  spvar->field_def.field_name = spvar->name.str;
+  spvar->field_def.is_nullable = true;
+  Row_definition_table_list *list =
+      Row_definition_table_list::make(thd->mem_root, row_new);
+  spvar->field_def.ora_record.set_row_field_table_definitions(list);
+  spvar->field_def.ora_record.is_record_table_define = true;
+  spvar->field_def.ora_record.is_record_table_type_define = true;
+  spvar->field_def.ora_record.is_index_by = is_index_by;
+  spvar->field_def.udt_name = spvar->name;
+  spvar->field_def.udt_db_name = lex->sphead->m_db;
+  if (length) {
+    spvar->field_def.ora_record.index_length = std::atoi(length);
+  }
+  return false;
+}
+
+bool LEX::sp_variable_declarations_type_refcursor_finalize(
+    THD *thd, LEX_STRING ident, Sp_decl_cursor_return *return_type) {
+  LEX *lex = thd->lex;
+  sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
+  sp_head *sp = lex->sphead;
+  /*
+    type mycur is ref cursor;
+  */
+  if (pctx->find_variable(ident.str, ident.length, true)) {
+    my_error(ER_SP_DUP_PARAM, MYF(0), ident.str);
+    return true;
+  }
+  sp_variable *spvar =
+      pctx->add_variable(thd, ident, MYSQL_TYPE_DECIMAL, sp_variable::MODE_IN);
+  uint offp = 0;
+  if (pctx->find_cursor(ident, &offp, false)) {
+    my_error(ER_SP_DUP_CURS, MYF(0), ident.str);
+    return true;
+  }
+  if (pctx->add_cursor_parameters(thd, ident, pctx, &offp, spvar)) {
+    return true;
+  }
+  sp_pcursor *pcursor = pctx->find_cursor_parameters(offp);
+  if (!pcursor) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), ident.str);
+    return true;
+  }
+  if (spvar->field_def.init(
+          thd, "", MYSQL_TYPE_NULL, nullptr, nullptr, 0, NULL, NULL, &NULL_CSTR,
+          0, nullptr, thd->variables.collation_database, false, 0, nullptr,
+          nullptr, nullptr, {}, dd::Column::enum_hidden_type::HT_VISIBLE)) {
+    return true;
+  }
+
+  if (prepare_sp_create_field(thd, &spvar->field_def)) {
+    return true;
+  }
+  spvar->field_def.ora_record.is_ref_cursor = true;
+  spvar->field_def.ora_record.is_ref_cursor_define = true;
+  if (set_static_cursor_with_return_type(thd, return_type, offp, ident))
+    return true;
+  if (pcursor->get_cursor_rowtype_offset() != -1) {
+    sp_instr_cursor_copy_struct *copy_struct = new (thd->mem_root)
+        sp_instr_cursor_copy_struct(sp->instructions(), pctx,
+                                    pcursor->get_cursor_rowtype_offset(),
+                                    spvar->offset);
+    if (!copy_struct || sp->add_instr(thd, copy_struct)) return true;
+  }
+  spvar->field_def.ora_record.set_row_field_definitions(
+      pcursor->get_row_definition_list());
+  spvar->field_def.ora_record.set_table_rowtype_ref(pcursor->get_table_ref());
+  if (pcursor->get_table_ref())
+    spvar->field_def.ora_record.set_row_field_definitions(
+        new (thd->mem_root) Row_definition_list());
+  return false;
+}
+
+/*
+1.Type is c return record ==> return rdl
+2.Type is c return table%rowtype ==> return table_ref
+3.Type is c return ref_cursor%rowtype ==> return rdl or table_ref
+4.Type is c return static_cursor%rowtype ==> return cursor offset or rdl or
+table_ref
+*/
+bool LEX::sp_variable_declarations_define_cursor_return_type(
+    THD *thd, Sp_decl_cursor_return *return_type, Table_ident **table_ref,
+    Row_definition_list **rdl, int *offset) {
+  // it has no return type.
+  *offset = -1;
+  if (!return_type) return false;
+  LEX *lex = thd->lex;
+  sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
+  // TYPE ref_rs1 IS REF CURSOR RETURN record;
+  if (return_type->ident.length) {
+    // get record define.
+    sp_variable *spv_type = pctx->find_variable(
+        return_type->ident.str, return_type->ident.length, false);
+    if (!spv_type) {
+      my_error(ER_SP_UNDECLARED_VAR, MYF(0), return_type->ident.str);
+      return true;
+    }
+    if (!spv_type->field_def.ora_record.is_record_define &&
+        !spv_type->field_def.ora_record.is_ref_cursor_define) {
+      my_error(
+          ER_NOT_SUPPORTED_YET, MYF(0),
+          "non record_type or non ref_cursor_type used in cursor return type");
+      return true;
+    }
+    if (!(*rdl = spv_type->field_def.ora_record.row_field_definitions())) {
+      my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), spv_type->name.str);
+      return true;
+    }
+  } else if (return_type->type ==
+             1) {  // TYPE ref_rs1 IS REF CURSOR RETURN %rowtype
+    int rc =
+        check_percent_rowtype(thd, return_type->ref, table_ref, rdl, offset);
+    if (rc == -1) return true;
+  } else if (return_type->type ==
+             2) {  // TYPE ref_rs1 IS REF CURSOR RETURN %type
+    if (check_cursor_type(thd, return_type->ref, rdl)) return true;
+  }
+  return false;
+}
+
+/**
+ * for cursor return type
+ e.g:
+  TYPE ref_rs1 IS REF CURSOR RETURN c%rowtype
+  CURSOR c1 return ref_rs1%rowtype IS SELECT a FROM t1 WHERE a>3;
+ @retval -1 on error.
+ @retval 0 return rdl or table_ref
+ @retval 1 return cursor offset.
+*/
+int LEX::check_percent_rowtype(THD *thd, Qualified_column_ident *ref,
+                               Table_ident **table_ref,
+                               Row_definition_list **rdl, int *offset) {
+  LEX *lex = thd->lex;
+  sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
+  if (ref->db.length) {
+    my_error(ER_SP_MISMATCH_VAR_QUANTITY, MYF(0));
+    return -1;
+  }
+  bool cursor_rowtype = ref->table.str && ref->db.str
+                            ? false
+                            : pctx->find_cursor(to_lex_string(ref->m_column),
+                                                (uint *)offset, false);
+  sp_pcursor *pcursor = nullptr;
+  // cursor return cursor%rowtype
+  if (cursor_rowtype) {
+    pcursor = pctx->find_cursor_parameters(*offset);
+    if (!pcursor) {
+      my_error(ER_SP_CURSOR_MISMATCH, MYF(0), ref->m_column.str);
+      return -1;
+    }
+    sp_variable *spv_cursor =
+        pctx->find_variable(ref->m_column.str, ref->m_column.length, false);
+    if (spv_cursor && spv_cursor->field_def.ora_record.is_ref_cursor_define) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "non table, cursor or cursor-variable used in cursor return "
+               "%rowtype");
+      return true;
+    }
+    if ((*rdl = pcursor->get_row_definition_list()))
+      return 0;
+    else
+      return 1;
+  }
+  // cursor return table%rowtype
+  if (unlikely(!(*table_ref = new (thd->mem_root)
+                     Table_ident(ref->table, ref->m_column))))
+    return true;
+
+  return 0;
+}
+
+/**
+ * for cursor return type
+ e.g:
+  TYPE ref_rs1 IS REF CURSOR RETURN record%type / table.column%type
+  CURSOR c1 return ref_rs1%type IS SELECT a FROM t1 WHERE a>3;
+ @retval true on error.
+ @retval false return rdl
+*/
+bool LEX::check_cursor_type(THD *thd, Qualified_column_ident *ref,
+                            Row_definition_list **rdl) {
+  LEX *lex = thd->lex;
+  sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
+
+  sp_variable *record_type =
+      ref->table.str && ref->db.str
+          ? nullptr
+          : pctx->find_variable(ref->m_column.str, ref->m_column.length, false);
+  // cursor return record%type
+  if (record_type && !record_type->field_def.ora_record.is_record_define) {
+    if ((*rdl = record_type->field_def.ora_record.row_field_definitions()))
+      return false;
+    else {
+      my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), ref->m_column.str);
+      return true;
+    }
+  } else {
+    my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), ref->m_column.str);
+    return true;
+  }
+
+  return false;
+}
+
+bool LEX::set_static_cursor_with_return_type(THD *thd,
+                                             Sp_decl_cursor_return *return_type,
+                                             uint off, LEX_STRING ident) {
+  LEX *lex = thd->lex;
+  sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
+  Table_ident *table_ref = nullptr;
+  Row_definition_list *rdl = nullptr;
+  int offset = -1;
+  if (sp_variable_declarations_define_cursor_return_type(
+          thd, return_type, &table_ref, &rdl, &offset))
+    return true;
+  sp_pcursor *pcursor = pctx->find_cursor_parameters(off);
+  if (!pcursor) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), ident.str);
+    return true;
+  }
+  pcursor->set_table_ref(table_ref);
+  pcursor->set_row_definition_list(rdl);
+  pcursor->set_cursor_rowtype_offset(offset);
+  return false;
+}
+
+bool LEX::sp_variable_declarations_define_ref_cursor_finalize(
+    THD *thd, int nvars, Item *default_value, sp_variable *spvar_record) {
+  LEX *lex = thd->lex;
+  sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
+  sp_head *sp = lex->sphead;
+  if (default_value) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "ref cursor variable with default value");
+    return true;
+  }
+  uint offp_record = 0;
+  if (!pctx->find_cursor(spvar_record->name, &offp_record, false)) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), spvar_record->name.str);
+    return true;
+  }
+  sp_pcursor *pcursor_record = pctx->find_cursor_parameters(offp_record);
+  if (!pcursor_record) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), spvar_record->name.str);
+    return true;
+  }
+  uint offp = 0;
+  for (uint i = 0; i < (uint)nvars; i++) {
+    sp_variable *spvar = pctx->get_last_context_variable((uint)nvars - 1 - i);
+    if (pctx->find_cursor(spvar->name, &offp, false)) {
+      my_error(ER_SP_DUP_CURS, MYF(0), spvar->name.str);
+      return true;
+    }
+    if (pctx->add_cursor_parameters(thd, spvar->name, pctx, &offp, spvar)) {
+      return true;
+    }
+    if (spvar->field_def.init(thd, spvar->name.str, MYSQL_TYPE_NULL, nullptr,
+                              nullptr, 0, NULL, NULL, &NULL_CSTR, 0, nullptr,
+                              thd->variables.collation_database, false, 0,
+                              nullptr, nullptr, nullptr, {},
+                              dd::Column::enum_hidden_type::HT_VISIBLE)) {
+      return true;
+    }
+
+    if (prepare_sp_create_field(thd, &spvar->field_def)) return true;
+    spvar->field_def.ora_record.is_ref_cursor = true;
+    spvar->field_def.ora_record.m_cursor_offset = offp;
+    // cursor return type
+    sp_pcursor *pcursor = pctx->find_cursor_parameters(offp);
+    if (!pcursor) {
+      my_error(ER_SP_CURSOR_MISMATCH, MYF(0), spvar->name.str);
+      return -1;
+    }
+
+    if (pcursor_record->has_return_type()) {
+      sp_instr_cursor_copy_struct *copy_struct =
+          new (thd->mem_root) sp_instr_cursor_copy_struct(
+              sp->instructions(), pctx, offp_record, spvar->offset);
+      if (!copy_struct || sp->add_instr(thd, copy_struct)) return true;
+    }
+    spvar->field_def.udt_name = spvar_record->name;
+    spvar->field_def.udt_db_name = lex->sphead->m_db;
+  }
   return false;
 }
 
 bool LEX::sp_variable_declarations_type_table_rowtype_finalize(
-    THD *thd, LEX_STRING ident, Qualified_column_ident *table) {
+    THD *thd, LEX_STRING ident, Qualified_column_ident *table,
+    const char *length, bool is_index_by) {
   LEX *lex = thd->lex;
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
   /*
@@ -6624,7 +7663,7 @@ bool LEX::sp_variable_declarations_type_table_rowtype_finalize(
         ...
       END;
   */
-  if (pctx->find_variable(ident.str, ident.length, true)) {
+  if (pctx->find_variable(ident.str, ident.length, false)) {
     my_error(ER_SP_DUP_PARAM, MYF(0), ident.str);
     return true;
   }
@@ -6632,99 +7671,29 @@ bool LEX::sp_variable_declarations_type_table_rowtype_finalize(
   sp_variable *spvar =
       pctx->add_variable(thd, ident, MYSQL_TYPE_DECIMAL, sp_variable::MODE_IN);
 
-  if (spvar->field_def.init(
-          thd, "", MYSQL_TYPE_NULL, nullptr, nullptr, 0, NULL, NULL, &NULL_CSTR,
-          0, nullptr, thd->variables.collation_database, false, 0, nullptr,
-          nullptr, nullptr, {}, dd::Column::enum_hidden_type::HT_VISIBLE)) {
-    return true;
-  }
-  Table_ident *table_ref;
-  if (unlikely(!(table_ref = new (thd->mem_root)
-                     Table_ident(table->table, table->m_column))))
-    return true;
-  List<Create_field> defs;
-  if (table_ref->resolve_table_rowtype_ref(thd, defs)) return true;
   Row_definition_list *rdl = nullptr;
-  List_iterator_fast<Create_field> it(defs);
-  Create_field *def;
-  for (uint i = 0; (def = it++); i++) {
-    if (def->udt_name.str) {
-      if (resolve_rowtype_udt_field(thd, def)) return true;
-    }
-    if (i == 0)
-      rdl = Row_definition_list::make(thd->mem_root, def);
-    else
-      rdl->append_uniq(thd->mem_root, def);
-  }
-  spvar->field_def.set_row_field_table_definitions(
-      Row_definition_table_list::make(thd->mem_root, rdl));
-  spvar->field_def.set_record_table_rowtype_ref(table_ref);
-
-  if (prepare_sp_create_field(thd, &spvar->field_def)) {
+  if (sp_variable_declarations_table_rowtype_make_field_def(
+          thd, spvar, table->table, table->m_column, &rdl))
     return true;
-  }
-  spvar->field_def.field_name = spvar->name.str;
-  spvar->field_def.is_nullable = true;
-  spvar->field_def.is_record_table_define = true;
+
+  spvar->field_def.ora_record.set_row_field_table_definitions(
+      Row_definition_table_list::make(thd->mem_root, rdl));
+  spvar->field_def.ora_record.is_record_table_define = true;
+  spvar->field_def.ora_record.is_index_by = is_index_by;
   spvar->field_def.nested_table_udt = to_lex_cstring(ident);
-  spvar->field_def.udt_name = spvar->name;
-  spvar->field_def.udt_db_name = thd->db().str;
-  return false;
-}
 
-bool LEX::resolve_rowtype_udt_field(THD *thd, Create_field *def) {
-  LEX *lex = thd->lex;
-  sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
-  sp_variable *spvar_udt =
-      pctx->find_udt_variable(def->udt_name.str, def->udt_name.length, false);
-  if (!spvar_udt) {
-    List<Create_field> *field_def_list = nullptr;
-    ulong reclength = 0;
-    sql_mode_t sql_mode;
-    MDL_savepoint mdl_savepoint = thd->mdl_context.mdl_savepoint();
-    LEX_CSTRING nested_table_udt = NULL_CSTR;
-    uint table_type = 255;
-    ulonglong varray_limit = 0;
-    if (!sp_find_ora_type_create_fields(
-            thd, to_lex_string(thd->db()), def->udt_name, false,
-            &field_def_list, &reclength, &sql_mode, &nested_table_udt,
-            &table_type, &varray_limit)) {
-      Row_definition_list *rdl_tmp = nullptr;
-      List_iterator_fast<Create_field> it_tmp(*field_def_list);
-      Create_field *def_tmp_udt;
-      for (uint j = 0; (def_tmp_udt = it_tmp++); j++) {
-        if (j == 0)
-          rdl_tmp = Row_definition_list::make(thd->mem_root, def_tmp_udt);
-        else
-          rdl_tmp->append_uniq(thd->mem_root, def_tmp_udt);
-      }
-      def->set_row_field_definitions(rdl_tmp);
-      spvar_udt =
-          pctx->add_udt_variable(thd, rdl_tmp, def->udt_name, table_type,
-                                 def->sql_type, varray_limit, nested_table_udt);
-      if (!spvar_udt) {
-        my_error(ER_SP_UNDECLARED_VAR, MYF(0), def->udt_name.str);
-        return true;
-      }
-    } else {
-      thd->mdl_context.rollback_to_savepoint(mdl_savepoint);
-      return true;
-    }
-  } else {
-    def->set_row_field_definitions(
-        spvar_udt->field_def.row_field_definitions());
+  if (length) {
+    spvar->field_def.ora_record.index_length = std::atoi(length);
   }
   return false;
 }
 
-bool LEX::ora_sp_forall_loop_insert_value(THD *thd, LEX_STRING ident,
-                                          LEX_CSTRING query, LEX_STRING ident_i,
-                                          const char *start, const char *end,
-                                          POS &pos) {
+bool LEX::ora_sp_forall_loop_insert_value(THD *thd, LEX_CSTRING query,
+                                          LEX_STRING ident_i, const char *start,
+                                          const char *end, POS &pos) {
   LEX *lex = thd->lex;
   sp_head *sp = lex->sphead;
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
-  sp_variable *spvar = pctx->find_variable(ident.str, ident.length, true);
 
   sp_instr_stmt *i =
       new (thd->mem_root) sp_instr_stmt(sp->instructions(), lex, query);
@@ -6740,10 +7709,9 @@ bool LEX::ora_sp_forall_loop_insert_value(THD *thd, LEX_STRING ident,
       thd, to_lex_cstring(ident_i), &sp_rcontext_handler_local, spvar_ident_i,
       sp->m_parser_data.get_current_stmt_start_ptr(), start, end);
   Item *expr = pctx->make_item_plsql_plus_one(thd, pos, 1, ident_splocal);
-  spvar = pctx->find_variable(ident_i.str, ident_i.length, true);
   sp_instr_set *is = new (thd->mem_root)
-      sp_instr_set(sp->instructions(), lex, spvar->offset, expr, EMPTY_CSTR,
-                   true, pctx, &sp_rcontext_handler_local);
+      sp_instr_set(sp->instructions(), lex, spvar_ident_i->offset, expr,
+                   EMPTY_CSTR, true, pctx, &sp_rcontext_handler_local);
 
   if (!is || sp->add_instr(thd, is)) return true;
   sp_label *lab = pctx->pop_label();
@@ -6760,26 +7728,24 @@ bool LEX::ora_sp_forall_loop_insert_value(THD *thd, LEX_STRING ident,
 bool LEX::ora_sp_for_loop_index_and_bounds(
     THD *thd, LEX_STRING ident, Oracle_sp_for_loop_bounds *sp_for_loop_bounds,
     uint *var_offset, const char *start, const char *end,
-    Item *dflt_value_item_bulk, Item_splocal **cursor_var_item) {
+    Item_splocal **cursor_var_item) {
   LEX *lex = thd->lex;
   sp_head *sp = lex->sphead;
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
 
   uint offset = sp_for_loop_bounds->offset;
 
-  sp_variable *spvar;
+  sp_variable *spvar = nullptr;
+  if (pctx->find_variable(ident.str, ident.length, true)) {
+    my_error(ER_SP_DUP_VAR, MYF(0), ident.str);
+    return true;
+  }
+  sp_assignment_lex *lex_expr_from = sp_for_loop_bounds->from;
+  Item *dflt_value_item = lex_expr_from->get_item();
+
   if (sp_for_loop_bounds->is_cursor) {
-    spvar = pctx->find_variable(ident.str, ident.length, true);
-    // If found spvar,it means it's spvar%ROWTPE.
-    if (!spvar) {
-      spvar =
-          pctx->add_variable(thd, ident, MYSQL_TYPE_NULL, sp_variable::MODE_IN);
-    } else {
-      if (!spvar->field_def.is_cursor_rowtype_ref()) {
-        my_error(ER_SP_MISMATCH_VAR, MYF(0), ident.str);
-        return true;
-      }
-    }
+    spvar =
+        pctx->add_variable(thd, ident, MYSQL_TYPE_NULL, sp_variable::MODE_IN);
 
     *var_offset = spvar->offset;
     if (spvar->field_def.init(thd, "", MYSQL_TYPE_NULL, nullptr, nullptr, 0,
@@ -6796,14 +7762,27 @@ bool LEX::ora_sp_for_loop_index_and_bounds(
     spvar->field_def.field_name = spvar->name.str;
     spvar->field_def.is_nullable = true;
     spvar->field_def.udt_name = spvar->name;
-    spvar->field_def.udt_db_name = thd->db().str;
+    spvar->field_def.udt_db_name = lex->sphead->m_db;
 
-    spvar->field_def.set_cursor_rowtype_ref(offset);
+    sp_pcursor *pcursor = pctx->find_cursor_parameters(offset);
+    if (!pcursor) {
+      my_error(ER_SP_CURSOR_MISMATCH, MYF(0), spvar->name.str);
+      return true;
+    }
+    spvar->field_def.ora_record.set_record_table_rowtype_ref(
+        pcursor->get_table_ref());
+    spvar->field_def.ora_record.set_row_field_definitions(
+        pcursor->get_row_definition_list());
+    if (!pcursor->get_row_definition_list() && !pcursor->get_table_ref()) {
+      spvar->field_def.ora_record.set_cursor_rowtype_ref(offset);
 
-    sp_instr_cursor_copy_struct *copy_struct =
-        new (thd->mem_root) sp_instr_cursor_copy_struct(
-            sp->instructions(), pctx, offset, spvar->offset);
-    if (!copy_struct || sp->add_instr(thd, copy_struct)) return true;
+      sp_instr_cursor_copy_struct *copy_struct =
+          new (thd->mem_root) sp_instr_cursor_copy_struct(
+              sp->instructions(), pctx, offset, spvar->offset);
+      if (!copy_struct || sp->add_instr(thd, copy_struct)) return true;
+    } else if (pcursor->get_table_ref())
+      spvar->field_def.ora_record.set_row_field_definitions(
+          new (thd->mem_root) Row_definition_list());
 
     // OPEN Cursor;
     sp_instr_copen *iOpen =
@@ -6819,17 +7798,11 @@ bool LEX::ora_sp_for_loop_index_and_bounds(
 
     sp_variable *spv = pctx->find_variable(ident.str, ident.length, false);
     i->add_to_varlist(spv);
-  } else if (sp_for_loop_bounds->to) {
-    /*no cursor type,for i in 1 .. 2*/
-    if (pctx->find_variable(ident.str, ident.length, true)) {
-      my_error(ER_SP_DUP_VAR, MYF(0), ident.str);
-      return true;
-    }
-    sp->reset_lex(thd);
-    lex = thd->lex;
-    Item *dflt_value_item = sp_for_loop_bounds->from;
+  } else {
+    /*no cursor type,for i in expr .. expr*/
+    sp_assignment_lex *lex_expr_to = sp_for_loop_bounds->to;
     if (sp_for_loop_bounds->direction < 0)
-      dflt_value_item = sp_for_loop_bounds->to;
+      dflt_value_item = lex_expr_to->get_item();
 
     spvar =
         pctx->add_variable(thd, ident, MYSQL_TYPE_LONG, sp_variable::MODE_IN);
@@ -6850,60 +7823,217 @@ bool LEX::ora_sp_for_loop_index_and_bounds(
     spvar->field_def.is_nullable = true;
 
     *var_offset = spvar->offset;
-    sp_instr_set *is = new (thd->mem_root)
-        sp_instr_set(sp->instructions(), lex, spvar->offset, dflt_value_item,
-                     EMPTY_CSTR, true, pctx, &sp_rcontext_handler_local);
-
-    if (!is || sp->add_instr(thd, is)) return true;
-    if (sp->restore_lex(thd)) return true;
-    *cursor_var_item = create_item_for_sp_var(
-        thd, to_lex_cstring(ident), &sp_rcontext_handler_local, spvar,
-        sp->m_parser_data.get_current_stmt_start_ptr(), start, end);
-    if (*cursor_var_item == nullptr) return true;
-  } else {
-    /*no cursor type,for i in ident.first .. ident.last*/
-    if (pctx->find_variable(ident.str, ident.length, true)) {
-      my_error(ER_SP_DUP_VAR, MYF(0), ident.str);
-      return true;
-    }
-    sp->reset_lex(thd);
-    lex = thd->lex;
-    // for i in var.first,it starts from 1.
-    sp_variable *spvar_ident =
-        pctx->find_variable(sp_for_loop_bounds->cursor_name.str,
-                            sp_for_loop_bounds->cursor_name.length, true);
-    spvar =
-        pctx->add_variable(thd, ident, MYSQL_TYPE_LONG, sp_variable::MODE_IN);
-
-    spvar->type = MYSQL_TYPE_LONG;
-    if (spvar->field_def.init(thd, "", MYSQL_TYPE_LONG, nullptr, nullptr, 0,
-                              NULL, NULL, &NULL_CSTR, 0, nullptr,
-                              thd->variables.collation_database, false, 0,
-                              nullptr, nullptr, nullptr, {},
-                              dd::Column::enum_hidden_type::HT_VISIBLE)) {
-      return true;
-    }
-    if (prepare_sp_create_field(thd, &spvar->field_def)) {
-      return true;
-    }
-    spvar->field_def.field_name = spvar->name.str;
-    spvar->field_def.is_nullable = true;
-    *var_offset = spvar->offset;
     sp_instr_set *is = new (thd->mem_root) sp_instr_set(
-        sp->instructions(), lex, spvar->offset, dflt_value_item_bulk,
-        EMPTY_CSTR, true, pctx, &sp_rcontext_handler_local);
+        sp->instructions(),
+        sp_for_loop_bounds->direction > 0 ? lex_expr_from : lex_expr_to,
+        spvar->offset, dflt_value_item,
+        sp_for_loop_bounds->direction > 0 ? lex_expr_from->get_value_query()
+                                          : lex_expr_to->get_value_query(),
+        true, pctx, &sp_rcontext_handler_local);
 
     if (!is || sp->add_instr(thd, is)) return true;
-    if (sp->restore_lex(thd)) return true;
     *cursor_var_item = create_item_for_sp_var(
         thd, to_lex_cstring(ident), &sp_rcontext_handler_local, spvar,
         sp->m_parser_data.get_current_stmt_start_ptr(), start, end);
     if (*cursor_var_item == nullptr) return true;
-    // used for make_item_plsql_sp_for_record_table_loop_attr.
-    *var_offset = spvar_ident->offset;
   }
 
-  spvar->field_def.is_for_loop_var = true;
+  spvar->field_def.ora_record.is_for_loop_var = true;
+  return false;
+}
+
+bool LEX::make_temp_upper_bound_variable_and_set(THD *thd, Item *item_uuid,
+                                                 int m_direction,
+                                                 sp_assignment_lex *lex_from,
+                                                 sp_assignment_lex *lex_to,
+                                                 Item **item_out) {
+  LEX *lex = thd->lex;
+  sp_head *sp = lex->sphead;
+  sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
+  /* value_to must be evaluated once only, make a temporary int variable to
+   * store the value_to.
+   * 34 = strlen('alias_forto_')+item_uuid->max_length+'\0'
+   * item_uuid->max_length = 21
+   */
+  char temp_ptr[34];
+  memset(temp_ptr, 0, sizeof(temp_ptr));
+  longlong uuid = item_uuid->val_int();
+
+  sprintf(temp_ptr, "alias_forto_%lld", uuid);
+  char *ptr = thd->strmake(temp_ptr, strlen(temp_ptr));
+  LEX_STRING name{ptr, strlen(ptr)};
+  sp_variable *spvar =
+      pctx->add_variable(thd, name, MYSQL_TYPE_LONG, sp_variable::MODE_IN);
+
+  if (spvar->field_def.init(
+          thd, "", MYSQL_TYPE_LONG, nullptr, nullptr, 0, NULL, NULL, &NULL_CSTR,
+          0, nullptr, thd->variables.collation_database, false, 0, nullptr,
+          nullptr, nullptr, {}, dd::Column::enum_hidden_type::HT_VISIBLE)) {
+    return true;
+  }
+  if (prepare_sp_create_field(thd, &spvar->field_def)) {
+    return true;
+  }
+  spvar->field_def.field_name = spvar->name.str;
+  spvar->field_def.is_nullable = true;
+
+  Item *expr = m_direction > 0 ? lex_to->get_item() : lex_from->get_item();
+  sp_assignment_lex *lex_assign = m_direction > 0 ? lex_to : lex_from;
+  sp_instr_set *is = new (thd->mem_root)
+      sp_instr_set(sp->instructions(), lex_assign, spvar->offset, expr,
+                   EMPTY_CSTR, true, pctx, &sp_rcontext_handler_local);
+
+  if (!is || sp->add_instr(thd, is)) return true;
+  *item_out = new (thd->mem_root) Item_splocal(
+      &sp_rcontext_handler_local, spvar->name, spvar->offset, spvar->type);
+#ifndef NDEBUG
+  Item_splocal *splocal = dynamic_cast<Item_splocal *>(*item_out);
+  if (splocal) splocal->m_sp = thd->lex->sphead;
+#endif
+
+  return false;
+}
+
+bool LEX::sp_goto_statement(THD *thd, LEX_CSTRING label_name) {
+  LEX *lex = thd->lex;
+  sp_head *sp = lex->sphead;
+  sp_pcontext *spcont = lex->get_sp_current_parsing_ctx();
+  sp_label *lab = spcont->find_goto_label(label_name, true);
+  if (!lab || lab->ip == 0) {
+    sp_label *delayedlabel;
+    if (!lab) {
+      // Label not found --> add forward jump to an unknown label
+      spcont->push_goto_label(thd, label_name, 0);
+      delayedlabel = spcont->last_goto_label();
+    } else {
+      delayedlabel = lab;
+    }
+    return sp->m_parser_data.add_backpatch_goto(thd, spcont, delayedlabel);
+  } else {
+    // Label found (backward goto)
+    uint ip = sp->instructions();
+    /* 1.for next case,it's unallowed.
+      BEGIN
+        WHILE 1=1 loop
+          <<lab18_1>>
+          a := 2;
+        END LOOP;
+        goto lab18_1; ==> find_label_by_ip() == false
+      END;
+      2.for next case,it's allowed.
+      BEGIN
+        <<lab18_1>>  beginblocklabel->ip > lab->ip,
+        WHILE 1=1 loop
+          a := 2;
+          goto lab18_1; ==> find_label_by_ip() == true
+        END LOOP;
+      END;
+      3.for next case,it's unallowed.
+      BEGIN WHILE 1=1 loop
+        <<lab18_1>>
+          a := 2;
+        END LOOP;
+        WHILE 1=1 loop
+          goto lab18_1; ==> find_label_by_ip() == false
+        END LOOP;
+      END;
+      4.for next case,it's allowed.
+      BEGIN
+        WHILE 1=1 loop
+        <<lab18_1>>
+          WHILE 1=1 loop
+            goto lab18_1; ==> find_label_by_ip() == true
+          END LOOP;
+        END LOOP;
+      END;
+    */
+    if (!spcont->find_label_by_ip(lab->beginblock_label_ip)) {
+      /*
+        only jump target from the beginning of the block where the
+        label is defined.
+      */
+      my_error(ER_SP_LILABEL_MISMATCH, MYF(0), "GOTO", lab->name.str);
+      return true;
+    }
+    /* Inclusive the dest. */
+    size_t n = spcont->diff_handlers(lab->ctx, false);
+    size_t m = spcont->diff_cursors(lab->ctx, false);
+    sp_instr_goto *goto_instr = new (thd->mem_root) sp_instr_goto(ip++, spcont);
+    if (!goto_instr || sp->add_instr(thd, goto_instr)) return true;
+    if (n || m) {
+      if (n) {
+        goto_instr->update_handler_count(n);
+      } else
+        goto_instr->update_ignore_handler_execute(true);
+
+      if (m) {
+        goto_instr->update_cursor_count(m);
+      } else
+        goto_instr->update_ignore_cursor_execute(true);
+    }
+
+    /* Jump back */
+    sp_instr_jump *i = new (thd->mem_root) sp_instr_jump(ip, spcont, lab->ip);
+    if (!i || sp->add_instr(thd, i)) return true;
+  }
+  return false;
+}
+
+bool LEX::sp_push_goto_label(THD *thd, LEX_CSTRING label_name) {
+  LEX *lex = thd->lex;
+  sp_head *sp = lex->sphead;
+  sp_pcontext *spcont = lex->get_sp_current_parsing_ctx();
+  if (!spcont) return false;
+  sp_label *lab = spcont->find_goto_label(label_name, false);
+  if (lab) {
+    if (lab->ip != 0) {
+      my_error(ER_SP_LABEL_REDEFINE, MYF(0), label_name.str);
+      return true;
+    }
+    lab->ip = sp->instructions();
+
+    sp_label *beginblocklabel = spcont->find_label(EMPTY_CSTR);
+    sp->m_parser_data.do_backpatch_goto(thd, lab, beginblocklabel,
+                                        sp->instructions());
+  } else {
+    sp_label *beginblocklabel = spcont->find_label(EMPTY_CSTR);
+    if (!beginblocklabel) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "label used in this block without BEGIN");
+      return true;
+    }
+    spcont->push_goto_label(thd, label_name, sp->instructions());
+    spcont->last_goto_label()->beginblock_label_ip = beginblocklabel->ip;
+  }
+  return false;
+}
+
+bool LEX::sp_if_sp_block_init(THD *thd) {
+  return ((thd->variables.sql_mode & MODE_ORACLE) && sp_block_init(thd))
+             ? true
+             : false;
+}
+
+void LEX::sp_if_sp_block_finalize(THD *thd) {
+  if (thd->variables.sql_mode & MODE_ORACLE)
+    set_sp_current_parsing_ctx(get_sp_current_parsing_ctx()->pop_context());
+}
+
+bool LEX::close_ref_cursor(THD *thd, uint cursor_offset) {
+  LEX *lex = thd->lex;
+  sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
+  sp_head *sp = lex->sphead;
+  sp_instr_cclose *iclose = new (thd->mem_root)
+      sp_instr_cclose(sp->instructions(), pctx, cursor_offset);
+  if (!iclose || sp->add_instr(thd, iclose)) return true;
+  const LEX_STRING *cursor_name = pctx->find_cursor(cursor_offset);
+  sp_variable *spvar =
+      cursor_name
+          ? pctx->find_variable(cursor_name->str, cursor_name->length, false)
+          : nullptr;
+  if (spvar && spvar->field_def.ora_record.is_ref_cursor) {
+    iclose->set_sysrefcursor_spvar(spvar);
+  }
   return false;
 }
 /**oracle sp end **/

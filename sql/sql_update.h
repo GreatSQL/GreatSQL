@@ -119,6 +119,13 @@ class Query_result_update final : public Query_result_interceptor {
   bool merge_into_stmt{false};
   bool merge_when_insert{false};
   bool merge_when_update_delete{false};
+  /*for update set (item_row)=(Item_singlerow_subselect):
+  fields_for_table[offset] = item_row
+  update_operations[position] = item_row
+  tmp_tables[cnt] = item_row->rows->fields -->for create temporary table
+  copy_field = item_row->rows -->copy fields from temporary table
+  */
+  bool ora_update_set_row{false};
   /// The table used for insertion of rows
   Table_ref *insert_table_list{nullptr};
   TABLE *insert_table{nullptr};
@@ -169,7 +176,8 @@ class Query_result_update final : public Query_result_interceptor {
                         Item *opt_merge_update_delete_arg,
                         Item *opt_merge_insert_where_arg,
                         bool const_join_on_arg, bool const_join_on_value_arg,
-                        MY_BITMAP *bitmap_arg) {
+                        MY_BITMAP *bitmap_arg, MY_BITMAP *delete_read_set_arg,
+                        MY_BITMAP *delete_write_set_arg) {
     merge_into_stmt = true;
     merge_when_insert = merge_when_insert_arg;
     opt_merge_update_where = opt_merge_update_where_arg;
@@ -179,6 +187,8 @@ class Query_result_update final : public Query_result_interceptor {
     const_join_on = const_join_on_arg;
     const_join_on_value = const_join_on_value_arg;
     merge_insert_bitmap = bitmap_arg;
+    merge_delete_read_set = delete_read_set_arg;
+    merge_delete_write_set = delete_write_set_arg;
   }
 };
 
@@ -206,7 +216,7 @@ class Sql_cmd_update final : public Sql_cmd_dml {
   bool execute_inner(THD *thd) override;
 
  private:
-  bool update_single_table(THD *thd, bool is_ora_update_set = false);
+  bool update_single_table(THD *thd);
 
   bool multitable;
 
@@ -250,7 +260,6 @@ class Sql_cmd_update final : public Sql_cmd_dml {
   /// Bitmap for delete write_set. To differentiate from the one in update.
   MY_BITMAP merge_delete_write_set;
   MY_BITMAP merge_delete_read_set;
-  bool is_ora_update_set{false};
 };
 
 /// Find out which of the target tables can be updated immediately while

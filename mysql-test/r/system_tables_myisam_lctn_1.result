@@ -76,6 +76,10 @@ MYSQL.GLOBAL_GRANTS
 ERROR
 Storage engine 'MyISAM' does not support system tables. [mysql.global_grants]
 @table_name
+MYSQL.GREATDB_SEQUENCES
+@table_name
+MYSQL.GREATDB_SEQUENCES_PERSIST
+@table_name
 MYSQL.GTID_EXECUTED
 ERROR
 Storage engine 'MyISAM' does not support system tables. [mysql.gtid_executed]

@@ -1,0 +1,82 @@
+--source include/master-slave.inc
+--sync_slave_with_master
+
+connection master;
+use test;
+set sql_mode=oracle;
+set @@udt_format_result='DBA';
+
+create or replace type t_air as object(id int,type varchar(20));
+
+--echo "on master"
+SELECT t_air(1+1,'aa') FROM dual;
+
+show create type t_air;
+
+--sync_slave_with_master
+--echo "on slave"
+connection slave;
+set sql_mode=oracle;
+set @@udt_format_result='DBA';
+SELECT t_air(1+1,'aa') FROM dual;
+
+connection master;
+
+create or replace type t_air as object(id int,type varchar(20),name1 int);
+SELECT t_air(1+1,'aa',2) FROM dual;
+
+--sync_slave_with_master
+--echo "on slave"
+connection slave;
+SELECT t_air(1+1+1,'aa1',20) FROM dual;
+
+--echo "on master"
+connection master;
+create or replace type t_air as object(id int,type varchar(20));
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+
+--sync_slave_with_master
+--echo "on slave"
+connection slave;
+SELECT t_air_table(t_air(1,'aa'),t_air(2,'bb')) from dual;
+
+--echo "on master"
+connection master;
+create table t1 of t_air;
+insert into t1 values(1,'aa');
+select * from t1;
+
+--sync_slave_with_master
+--echo "on slave"
+connection slave;
+select * from t1;
+
+--echo "on master"
+connection master;
+
+CREATE USER 'user_job'@'%' IDENTIFIED BY '123';
+GRANT ALL ON *.* TO 'user_job'@'%';
+--connect (mysqltest_2_con,localhost,user_job,123,test)
+--echo
+--echo ---> connection: mysqltest_2_con
+--connection mysqltest_2_con
+set sql_mode=oracle;
+set @@udt_format_result='DBA';
+create or replace type t_air1 as object(id int,type varchar(20));
+SELECT t_air1(1+1,'aa') FROM dual;
+
+--sync_slave_with_master
+--echo "on slave"
+connection slave;
+SELECT t_air1(1+1,'aa') FROM dual;
+
+connection master;
+
+drop table t1;
+drop type t_air_table;
+drop type t_air;
+drop type t_air1;
+drop user user_job;
+
+--source include/rpl_end.inc
+

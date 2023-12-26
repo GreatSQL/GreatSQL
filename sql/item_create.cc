@@ -86,7 +86,6 @@
 #include "sql/system_variables.h"
 #include "sql_string.h"
 #include "tztime.h"  // convert_time_zone_displacement
-
 /**
   @addtogroup GROUP_PARSER
   @{
@@ -1177,6 +1176,34 @@ class Instr_instantiator {
   }
 };
 
+class Instrb_instantiator {
+ public:
+  static const uint Min_argcount = 2;
+  static const uint Max_argcount = 4;
+
+  Item *instantiate(THD *thd, PT_item_list *args) {
+    switch (args->elements()) {
+      case 2:
+        /* Yes, parameters in that order : 1, 2 */
+        return new (thd->mem_root)
+            Item_func_instrb(POS(), (*args)[0], (*args)[1]);
+      case 3: {
+        Item_int *nth_appearance = new (thd->mem_root) Item_int(1);
+        return new (thd->mem_root) Item_func_instrb(
+            POS(), (*args)[0], (*args)[1], (*args)[2], nth_appearance);
+      }
+      case 4:
+        /* Yes, parameters in that order : 1, 2, 3, 4 */
+        return new (thd->mem_root) Item_func_instrb(
+            POS(), (*args)[0], (*args)[1], (*args)[2], (*args)[3]);
+      default:
+        //         assert(false);
+        my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), "instrb");
+        return nullptr;
+    }
+  }
+};
+
 class Srid_instantiator {
  public:
   static const uint Min_argcount = 1;
@@ -1311,6 +1338,97 @@ class Make_set_instantiator {
   }
 };
 
+class Lpad_instantiator {
+ public:
+  static const uint Min_argcount = 2;
+  static const uint Max_argcount = 3;
+  Item *instantiate(THD *thd, PT_item_list *args) {
+    switch (args->elements()) {
+      case 2: {
+        if (!(thd->variables.sql_mode & MODE_ORACLE)) {
+          my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), "lpad");
+          return nullptr;
+        } else {
+          return new (thd->mem_root)
+              Item_func_lpad(POS(), (*args)[0], (*args)[1]);
+        }
+      }
+      case 3: {
+        return new (thd->mem_root)
+            Item_func_lpad(POS(), (*args)[0], (*args)[1], (*args)[2]);
+      }
+      default:
+        assert(false);
+        return nullptr;
+    }
+  }
+};
+class Lpad_oracle_instantiator {
+ public:
+  static const uint Min_argcount = 2;
+  static const uint Max_argcount = 3;
+  Item *instantiate(THD *thd, PT_item_list *args) {
+    switch (args->elements()) {
+      case 2: {
+        return new (thd->mem_root)
+            Item_func_oracle_lpad(POS(), (*args)[0], (*args)[1]);
+      }
+      case 3: {
+        return new (thd->mem_root)
+            Item_func_oracle_lpad(POS(), (*args)[0], (*args)[1], (*args)[2]);
+      }
+      default:
+        assert(false);
+        return nullptr;
+    }
+  }
+};
+class Rpad_instantiator {
+ public:
+  static const uint Min_argcount = 2;
+  static const uint Max_argcount = 3;
+  Item *instantiate(THD *thd, PT_item_list *args) {
+    switch (args->elements()) {
+      case 2: {
+        if (!(thd->variables.sql_mode & MODE_ORACLE)) {
+          my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), "rpad");
+          return nullptr;
+        } else {
+          return new (thd->mem_root)
+              Item_func_rpad(POS(), (*args)[0], (*args)[1]);
+        }
+      }
+      case 3: {
+        return new (thd->mem_root)
+            Item_func_rpad(POS(), (*args)[0], (*args)[1], (*args)[2]);
+      }
+      default:
+        assert(false);
+        return nullptr;
+    }
+  }
+};
+class Rpad_oracle_instantiator {
+ public:
+  static const uint Min_argcount = 2;
+  static const uint Max_argcount = 3;
+  Item *instantiate(THD *thd, PT_item_list *args) {
+    switch (args->elements()) {
+      case 2: {
+        return new (thd->mem_root)
+            Item_func_oracle_rpad(POS(), (*args)[0], (*args)[1]);
+      }
+      case 3: {
+        return new (thd->mem_root)
+            Item_func_oracle_rpad(POS(), (*args)[0], (*args)[1], (*args)[2]);
+      }
+      default:
+        assert(false);
+        return nullptr;
+    }
+  }
+};
+
 /// Instantiates a call to JSON_LENGTH, which may take either one or
 /// two arguments. The two-argument variant is rewritten from
 /// JSON_LENGTH(doc, path) to JSON_LENGTH(JSON_EXTRACT(doc, path)).
@@ -1331,7 +1449,6 @@ class Json_length_instantiator {
     }
   }
 };
-
 /// @} (end of group Instantiators)
 
 uint arglist_length(const PT_item_list *args) {
@@ -1563,6 +1680,7 @@ Item *Create_sp_func::create(THD *thd, LEX_STRING db, LEX_STRING name,
   List<Create_field> *field_def_list = nullptr;
   ulong reclength = 0;
   sql_mode_t sql_mode;
+  enum_udt_table_of_type enum_table_type;
   if ((thd->variables.sql_mode & MODE_ORACLE)) {
     MDL_savepoint mdl_savepoint = thd->mdl_context.mdl_savepoint();
     LEX_CSTRING nested_table_udt = NULL_CSTR;
@@ -1572,7 +1690,11 @@ Item *Create_sp_func::create(THD *thd, LEX_STRING db, LEX_STRING name,
     if (!sp_find_ora_type_create_fields(
             thd, db, name, use_explicit_name, &field_def_list, &reclength,
             &sql_mode, &nested_table_udt, &table_type, &varray_limit)) {
-      enum_udt_table_of_type enum_table_type;
+      if (item_list && item_list->m_has_assignment_list) {
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                 "the params of udt table like the style e.g: 1=>variable");
+        return nullptr;
+      }
       if (table_type == 0)
         enum_table_type = enum_udt_table_of_type::TYPE_VARRAY;
       else if (table_type == 1)
@@ -1599,19 +1721,66 @@ Item *Create_sp_func::create(THD *thd, LEX_STRING db, LEX_STRING name,
     const Sp_rcontext_handler *rh = nullptr;
     sp_variable *spv = nullptr;
     if ((spv = thd->lex->find_variable(name.str, name.length, &rh))) {
-      if (spv->field_def.is_record_define) {
+      if (spv->field_def.ora_record.is_record_define &&
+          (!item_list || (item_list && !item_list->m_has_assignment_list))) {
         return new (thd->mem_root) Item_func_udt_constructor(
             POS(), db, name, use_explicit_name, item_list,
-            spv->field_def.row_field_definitions(), 0, thd->variables.sql_mode);
+            spv->field_def.ora_record.row_field_definitions(), 0,
+            thd->variables.sql_mode);
+      } else if (spv->field_def.ora_record.is_row_table() && !db.str &&
+                 !spv->field_def.ora_record.is_record_table_define &&
+                 item_list && item_list->value.size() == 1 &&
+                 !item_list->m_has_assignment_list) {
+        return create_item_table_by_index_for_sp_var(
+            thd, to_lex_cstring(name.str), rh, spv, item_list->value.at(0));
+      } else if (spv->field_def.ora_record.is_record_table_define &&
+                 (!item_list ||
+                  (item_list && ((item_list->m_has_assignment_list &&
+                                  spv->field_def.ora_record.is_index_by) ||
+                                 (!item_list->m_has_assignment_list &&
+                                  !spv->field_def.ora_record.is_index_by))))) {
+        enum_table_type = enum_udt_table_of_type::TYPE_TABLE;
+        List<Row_definition_list> *sd =
+            dynamic_cast<List<Row_definition_list> *>(
+                spv->field_def.ora_record.row_field_table_definitions());
+        if (!sd) return nullptr;
+        List_iterator_fast<Row_definition_list> it_table(*sd);
+        Row_definition_list *def_list;
+        for (uint offset = 0; (def_list = it_table++); offset++) {
+          field_def_list = def_list;
+        }
+        if (spv->field_def.ora_record.is_record_table_type_define)
+          return new (thd->mem_root) Item_func_udt_single_type_table(
+              POS(), db, name, enum_table_type, /*varray_limit*/ 0, item_list,
+              field_def_list, /*reclength*/ 0, sql_mode,
+              spv->field_def.ora_record.index_length);
+        else
+          return new (thd->mem_root) Item_func_udt_table(
+              POS(), db, name, spv->field_def.nested_table_udt, reclength,
+              enum_table_type,
+              /*varray_limit*/ 0, item_list, field_def_list,
+              spv->field_def.ora_record.index_length);
       } else {
         // it is an sp variable, but not a type.
-        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
-                 "record table with default value");
+        my_error(
+            ER_NOT_SUPPORTED_YET, MYF(0),
+            "the sp variable used like the style e.g: var(a,b..),1=>var()..");
         return nullptr;
       }
     }
+    // 3. is it a cursor()
+    sp_pcontext *pctx = thd->lex->get_sp_current_parsing_ctx();
+    uint offset;
+    if (pctx && pctx->find_cursor(name, &offset, false)) {
+      return new (thd->mem_root) Item_func_cursor(POS(), name, item_list);
+    }
   }
   // 3. fall back to normal sp function.
+  if (item_list && item_list->m_has_assignment_list) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "the params of sp like the style e.g: 1=>variable");
+    return nullptr;
+  }
   return new (thd->mem_root)
       Item_func_sp(POS(), db, name, use_explicit_name, item_list);
 }
@@ -1816,12 +1985,15 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"FROM_DAYS", SQL_FN(Item_func_from_days, 1)},
     {"FROM_UNIXTIME", SQL_FACTORY(From_unixtime_instantiator)},
     {"GET_LOCK", SQL_FN(Item_func_get_lock, 2)},
+    {"GET_MATERIALIZED_VIEW_DEFINITION",
+     SQL_FN(Item_func_get_materialized_view_definition, 2)},
     {"GREATEST", SQL_FN_V(Item_func_max, 2, MAX_ARGLIST_SIZE)},
     {"GTID_SUBTRACT", SQL_FN(Item_func_gtid_subtract, 2)},
     {"GTID_SUBSET", SQL_FN(Item_func_gtid_subset, 2)},
     {"HEX", SQL_FN(Item_func_hex, 1)},
     {"IFNULL", SQL_FN(Item_func_ifnull, 2)},
     {"NVL", SQL_FN(Item_func_ifnull, 2)},
+    {"NVL2", SQL_FN_LIST(Item_func_ora_nvl2, 3)},
     {"INET_ATON", SQL_FN(Item_func_inet_aton, 1)},
     {"INET_NTOA", SQL_FN(Item_func_inet_ntoa, 1)},
     {"INET6_ATON", SQL_FN(Item_func_inet6_aton, 1)},
@@ -1832,6 +2004,7 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"IS_IPV4_MAPPED", SQL_FN(Item_func_is_ipv4_mapped, 1)},
     {"IS_UUID", SQL_FN(Item_func_is_uuid, 1)},
     {"INSTR", SQL_FACTORY(Instr_instantiator)},
+    {"INSTRB", SQL_FACTORY(Instrb_instantiator)},
     {"ISNULL", SQL_FN(Item_func_isnull, 1)},
     {"JSON_VALID", SQL_FN(Item_func_json_valid, 1)},
     {"JSON_CONTAINS", SQL_FN_V_LIST_THD(Item_func_json_contains, 2, 3)},
@@ -1884,14 +2057,16 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"LIKE_RANGE_MAX", SQL_FN(Item_func_like_range_max, 2)},
 #endif
     {"LN", SQL_FN(Item_func_ln, 1)},
+    {"LNNVL", SQL_FN(Item_func_lnnvl, 1)},
     {"LOAD_FILE", SQL_FN(Item_load_file, 1)},
     {"LOCATE", SQL_FACTORY(Locate_instantiator)},
     {"LOG", SQL_FN_V(Item_func_log, 1, 2)},
     {"LOG10", SQL_FN(Item_func_log10, 1)},
     {"LOG2", SQL_FN(Item_func_log2, 1)},
     {"LOWER", SQL_FN(Item_func_lower, 1)},
-    {"LPAD", SQL_FN(Item_func_lpad, 3)},
-    {"LTRIM", SQL_FN(Item_func_ltrim, 1)},
+    {"LPAD", SQL_FACTORY(Lpad_instantiator)},
+    {"LPAD_ORACLE", SQL_FACTORY(Lpad_oracle_instantiator)},
+    {"LTRIM", SQL_FN_V(Item_func_ltrim, 1, 2)},
     {"MAKEDATE", SQL_FN(Item_func_makedate, 2)},
     {"MAKETIME", SQL_FN(Item_func_maketime, 3)},
     {"MAKE_SET", SQL_FACTORY(Make_set_instantiator)},
@@ -1923,18 +2098,21 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"RADIANS", SQL_FN(Item_func_radians, 1)},
     {"RAND", SQL_FN_V(Item_func_rand, 0, 1)},
     {"RANDOM_BYTES", SQL_FN(Item_func_random_bytes, 1)},
+    {"RAWTOHEX", SQL_FN(Item_func_rawtohex, 1)},
     {"REGEXP_INSTR", SQL_FN_V_LIST(Item_func_regexp_instr, 2, 6)},
     {"REGEXP_LIKE", SQL_FN_V_LIST(Item_func_regexp_like, 2, 3)},
-    {"REGEXP_REPLACE", SQL_FN_V_LIST(Item_func_regexp_replace, 3, 6)},
+    {"REGEXP_REPLACE", SQL_FN_V_LIST(Item_func_regexp_replace, 2, 6)},
     {"REGEXP_SUBSTR", SQL_FN_V_LIST(Item_func_regexp_substr, 2, 5)},
+    {"REGEXP_COUNT", SQL_FN_V_LIST(item_func_regexp_count, 2, 4)},
     {"RELEASE_ALL_LOCKS", SQL_FN(Item_func_release_all_locks, 0)},
     {"RELEASE_LOCK", SQL_FN(Item_func_release_lock, 1)},
     {"REVERSE", SQL_FN(Item_func_reverse, 1)},
     {"TRANSLATE", SQL_FN(Item_func_translate, 3)},
     {"ROLES_GRAPHML", SQL_FN(Item_func_roles_graphml, 0)},
     {"ROUND", SQL_FACTORY(Round_instantiator)},
-    {"RPAD", SQL_FN(Item_func_rpad, 3)},
-    {"RTRIM", SQL_FN(Item_func_rtrim, 1)},
+    {"RPAD", SQL_FACTORY(Rpad_instantiator)},
+    {"RPAD_ORACLE", SQL_FACTORY(Rpad_oracle_instantiator)},
+    {"RTRIM", SQL_FN_V(Item_func_rtrim, 1, 2)},
     {"SEC_TO_TIME", SQL_FN(Item_func_sec_to_time, 1)},
     {"SHA", SQL_FN(Item_func_sha, 1)},
     {"SHA1", SQL_FN(Item_func_sha, 1)},
@@ -1953,6 +2131,7 @@ static const std::pair<const char *, Create_func *> func_array[] = {
      SQL_FN_V(Item_master_gtid_set_wait, 1, 3)},
     {"SQRT", SQL_FN(Item_func_sqrt, 1)},
     {"STRCMP", SQL_FN(Item_func_strcmp, 2)},
+    {"STRCMP_STRICT", SQL_FN(Item_func_strcmp_strict, 2)},
     {"STR_TO_DATE", SQL_FN(Item_func_str_to_date, 2)},
     {"ST_AREA", SQL_FN(Item_func_st_area, 1)},
     {"ST_ASBINARY", SQL_FN_V(Item_func_as_wkb, 1, 2)},
@@ -2054,12 +2233,14 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"ST_Y", SQL_FACTORY(Y_instantiator)},
     {"SUBSTRING_INDEX", SQL_FN(Item_func_substr_index, 3)},
     {"SUBTIME", SQL_FACTORY(Subtime_instantiator)},
+    {"SYS_CONNECT_BY_PATH", SQL_FN(Item_connect_by_func_sys_path, 2)},
     {"TAN", SQL_FN(Item_func_tan, 1)},
     {"TIMEDIFF", SQL_FN(Item_func_timediff, 2)},
     {"TIME_FORMAT", SQL_FACTORY(Time_format_instantiator)},
     {"TIME_TO_SEC", SQL_FN(Item_func_time_to_sec, 1)},
     {"TO_BASE64", SQL_FN(Item_func_to_base64, 1)},
     {"TO_CHAR", SQL_FACTORY(To_char_instantiator)},
+    {"TO_CLOB", SQL_FN_V_THD(Item_to_clob, 1, 1)},
     {"TO_DATE", SQL_FN(Item_func_to_date, 2)},
     {"TO_DAYS", SQL_FN(Item_func_to_days, 1)},
     {"TO_SECONDS", SQL_FN(Item_func_to_seconds, 1)},
@@ -2078,6 +2259,7 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"VALIDATE_PASSWORD_STRENGTH",
      SQL_FN(Item_func_validate_password_strength, 1)},
     {"VERSION", SQL_FN(Item_func_version, 0)},
+    {"VSIZE", SQL_FN(Item_func_vsize, 1)},
     {"WEEKDAY", SQL_FACTORY(Weekday_instantiator)},
     {"WEEKOFYEAR", SQL_FACTORY(Weekofyear_instantiator)},
     {"YEARWEEK", SQL_FACTORY(Yearweek_instantiator)},
@@ -2108,6 +2290,8 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"CAN_ACCESS_RESOURCE_GROUP",
      SQL_FN_INTERNAL(Item_func_can_access_resource_group, 1)},
     {"CONVERT_CPU_ID_MASK", SQL_FN_INTERNAL(Item_func_convert_cpu_id_mask, 1)},
+    {"INITCAP", SQL_FN(Item_func_initcap, 1)},
+    {"NCHR", SQL_FN(Item_func_nchr, 1)},
     {"IS_VISIBLE_DD_OBJECT",
      SQL_FN_INTERNAL_V(Item_func_is_visible_dd_object, 1, 3)},
     {"INTERNAL_TABLE_ROWS",

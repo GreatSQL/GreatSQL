@@ -2827,8 +2827,6 @@ SELECT * from `full` full;
 i
 Warnings:
 Warning	4119	Using FULL as unquoted identifier is deprecated, please use quotes or rename the identifier.
-SELECT * from full outer;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'outer' at line 1
 SET @save_sql_mode=@@sql_mode;
 SET SQL_MODE = 'ANSI_QUOTES';
 SELECT * from `full`;

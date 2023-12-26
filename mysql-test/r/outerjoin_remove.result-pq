@@ -1,0 +1,434 @@
+set optimizer_switch='remove_useless_outerjoin=on';
+create table join_aa(ida int, age int);
+create table join_bb(ida int, age int);
+insert into join_aa values(1, 2);
+insert into join_aa values(1, 3);
+insert into join_aa values(null, 4);
+insert into join_bb values(1, 1);
+insert into join_bb values(1, 2);
+insert into join_bb values(4, 3);
+insert into join_bb values(null, 7);
+insert into join_bb values(null, 7);
+select t1.* from join_aa t1 left join join_bb t2 on t1.ida = t2.ida;
+ida	age
+1	2
+1	2
+1	3
+1	3
+NULL	4
+select * from join_aa;
+ida	age
+1	2
+1	3
+NULL	4
+create table join_cc(ida int, age int);
+alter table join_cc add primary key (ida);
+insert into join_cc values(1, 2);
+insert into join_cc values(2, 2);
+select * from join_cc;
+ida	age
+1	2
+2	2
+select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida;
+ida	age
+1	2
+1	3
+NULL	4
+explain select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1`
+select t1.* from join_aa t1 left join (select ida, count(age) from join_cc group by ida) t2 on t1.ida = t2.ida;
+ida	age
+1	2
+1	3
+NULL	4
+select t1.* from join_aa t1 left join (select age, max(ida), count(*) from join_cc group by age) t2 on t1.ida = t2.age;
+ida	age
+1	2
+1	3
+NULL	4
+explain select t1.* from join_aa t1 left join (select ida, count(age) from join_cc group by ida) t2 on t1.ida = t2.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1`
+explain select t1.* from join_aa t1 left join (select age, max(ida), count(*) from join_cc group by age) t2 on t1.ida = t2.age;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1`
+explain select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida join join_bb t3 on t1.ida = t3.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+2	SIMPLE	t3	NULL	ALL	NULL	NULL	NULL	NULL	#	20.00	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` join `test`.`join_bb` `t3` where (`test`.`t3`.`ida` = `test`.`t1`.`ida`)
+explain select t1.* from join_aa t1 left join join_bb t2 on t1.ida = t2.ida left join join_cc t3 on t1.ida = t3.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+2	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` left join `test`.`join_bb` `t2` on((`test`.`t2`.`ida` = `test`.`t1`.`ida`)) where true
+explain select * from (select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1`
+explain select * from (select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida limit 10) t join join_bb tt on t.ida = tt.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	tt	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Using where
+1	PRIMARY	<derived2>	NULL	ref	<auto_key0>	<auto_key0>	5	test.tt.ida	#	100.00	NULL
+2	DERIVED	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `t`.`ida` AS `ida`,`t`.`age` AS `age`,`test`.`tt`.`ida` AS `ida`,`test`.`tt`.`age` AS `age` from (/* select#2 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` limit 10) `t` join `test`.`join_bb` `tt` where (`t`.`ida` = `test`.`tt`.`ida`)
+explain select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida join join_bb t3 on t1.ida = t3.ida and t2.age = t1.age;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t2	NULL	ALL	PRIMARY	NULL	NULL	NULL	#	100.00	NULL
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	33.33	Using where; Using join buffer (hash join)
+2	SIMPLE	t3	NULL	ALL	NULL	NULL	NULL	NULL	#	20.00	Using where; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` join `test`.`join_cc` `t2` join `test`.`join_bb` `t3` where ((`test`.`t1`.`age` = `test`.`t2`.`age`) and (`test`.`t1`.`ida` = `test`.`t2`.`ida`) and (`test`.`t3`.`ida` = `test`.`t2`.`ida`))
+create table join_dd(ida int, age int, score int);
+create unique index u_key on join_dd(ida);
+create index c_key on join_dd(age);
+create unique index u_key2 on join_dd(ida, score);
+insert into join_dd values(1, 2, 3);
+insert into join_dd values(null, 2, null);
+insert into join_dd values(3, null, 3);
+select * from join_dd;
+ida	age	score
+1	2	3
+NULL	2	NULL
+3	NULL	3
+select t1.* from join_aa t1 left join join_dd t2 on t1.ida = t2.ida;
+ida	age
+1	2
+1	3
+NULL	4
+explain select t1.* from join_aa t1 left join join_dd t2 on t1.ida = t2.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1`
+select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida left join join_dd t3 on t2.ida = t3.ida;
+ida	age
+1	2
+1	3
+NULL	4
+explain select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida left join join_dd t3 on t2.ida = t3.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1`
+explain select t1.* from join_aa t1 left join (select t2.ida, t2.age from join_cc t2 left join join_dd t3 on t2.ida = t3.ida) t2 on t1.ida = t2.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1`
+explain select t1.* from join_aa t1 left join (select t2.ida, t2.age from join_cc t2 left join join_dd t3 on t2.ida = t3.ida) t3 on t1.ida = t3.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1`
+explain select t1.* from join_aa t1 left join (join_cc t2 left join join_dd t3 on t2.ida = t3.ida) on t1.ida = t2.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1`
+create unique index u_key_join_aa on join_aa(ida, age);
+explain select t1.*  from join_aa t1 full  join join_dd t2 on t1.ida = t2.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	u_key_join_aa	10	NULL	#	100.00	Using index
+1	SIMPLE	t2	NULL	index	u_key,u_key2	u_key	5	NULL	#	33.33	Using where; Using index; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` full join `test`.`join_dd` `t2` on((`test`.`t1`.`ida` = `test`.`t2`.`ida`)) where true
+create table join_ee(ida int, age int);
+alter table join_ee add primary key(ida, age);
+insert into join_ee values(1, 2);
+insert into join_ee values(1, 3);
+explain select t1.* from (join_aa t1 left join join_cc t2 on t1.ida = t2.ida) left join (join_dd t3 join join_ee t4 on t3.ida = t4.ida) on t1.ida = t3.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	u_key_join_aa	10	NULL	#	100.00	Using index
+2	SIMPLE	t4	NULL	ref	PRIMARY	PRIMARY	4	test.t1.ida	#	100.00	Using index
+2	SIMPLE	t3	NULL	eq_ref	u_key,u_key2	u_key	5	test.t1.ida	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` left join (`test`.`join_dd` `t3` join `test`.`join_ee` `t4`) on(((`test`.`t4`.`ida` = `test`.`t1`.`ida`) and (`test`.`t3`.`ida` = `test`.`t1`.`ida`))) where true
+explain select t1.* from (join_aa t1 left join join_cc t2 on t1.ida = t2.ida) left join (join_dd t3 join join_ee t4 on t3.ida = t4.ida) on t1.ida = t1.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	u_key_join_aa	10	NULL	#	100.00	Using index
+2	SIMPLE	t4	NULL	index	PRIMARY	PRIMARY	8	NULL	#	100.00	Using where; Using index
+2	SIMPLE	t3	NULL	eq_ref	u_key,u_key2	u_key	5	test.t4.ida	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` left join (`test`.`join_dd` `t3` join `test`.`join_ee` `t4`) on(((`test`.`t3`.`ida` = `test`.`t4`.`ida`) and (`test`.`t1`.`ida` = `test`.`t1`.`ida`))) where true
+explain select t1.* from (join_aa t1 left join join_cc t2 on t1.ida = t2.ida) left join (join_dd t3 left join join_dd t4 on t3.ida = t4.ida) on t1.ida = t1.ida;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	u_key_join_aa	10	NULL	#	100.00	Using index
+2	SIMPLE	t3	NULL	index	NULL	u_key	5	NULL	#	100.00	Using where; Using index; Using join buffer (hash join)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` left join `test`.`join_dd` `t3` on((`test`.`t1`.`ida` = `test`.`t1`.`ida`)) where true
+explain select t1.* from join_aa t1 left join join_dd t2 on t1.ida = t2.age;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	u_key_join_aa	10	NULL	#	100.00	Using index
+2	SIMPLE	t2	NULL	ref	c_key	c_key	5	test.t1.ida	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` left join `test`.`join_dd` `t2` on((`test`.`t2`.`age` = `test`.`t1`.`ida`)) where true
+explain select t1.* from join_aa t1 left join join_dd t2 on t1.ida = t2.ida and t1.age = t2.age;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	u_key_join_aa	10	NULL	#	100.00	Using index
+2	SIMPLE	t2	NULL	eq_ref	u_key,u_key2,c_key	u_key	5	test.t1.ida	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` left join `test`.`join_dd` `t2` on(((`test`.`t2`.`age` = `test`.`t1`.`age`) and (`test`.`t2`.`ida` = `test`.`t1`.`ida`))) where true
+explain select t1.* from join_aa t1 left join join_ee t2 on t1.ida = t2.ida and t1.age = t2.age;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	index	NULL	u_key_join_aa	10	NULL	#	100.00	Using index
+2	SIMPLE	t2	NULL	eq_ref	PRIMARY	PRIMARY	8	test.t1.ida,test.t1.age	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` left join `test`.`join_ee` `t2` on(((`test`.`t2`.`age` = `test`.`t1`.`age`) and (`test`.`t2`.`ida` = `test`.`t1`.`ida`))) where true
+explain select t1.* from join_aa t1 left join (select ida, age from join_cc group by ida, age) t2 on t1.ida = t2.age;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	u_key_join_aa	10	NULL	#	100.00	Using index
+1	PRIMARY	<derived2>	NULL	ref	<auto_key0>	<auto_key0>	5	test.t1.ida	#	100.00	NULL
+2	DERIVED	join_cc	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` left join (/* select#2 */ select `test`.`join_cc`.`ida` AS `ida`,`test`.`join_cc`.`age` AS `age` from `test`.`join_cc` group by `test`.`join_cc`.`ida`,`test`.`join_cc`.`age`) `t2` on((`t2`.`age` = `test`.`t1`.`ida`)) where true
+explain select t1.* from join_aa t1 left join (select distinct ida, age from join_cc) t2 on t1.ida = t2.age;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	u_key_join_aa	10	NULL	#	100.00	Using index
+1	PRIMARY	<derived2>	NULL	ref	<auto_key0>	<auto_key0>	5	test.t1.ida	#	100.00	NULL
+2	DERIVED	join_cc	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`ida` AS `ida`,`test`.`t1`.`age` AS `age` from `test`.`join_aa` `t1` left join (/* select#2 */ select distinct `test`.`join_cc`.`ida` AS `ida`,`test`.`join_cc`.`age` AS `age` from `test`.`join_cc`) `t2` on((`t2`.`age` = `test`.`t1`.`ida`)) where true
+drop table join_aa, join_bb, join_cc, join_dd, join_ee;
+create table t2(grade int,name varchar2(200));
+create unique index idx1 on t2(grade);
+insert into t2 values(1, 'test1');
+insert into t2 values(2, 'test2');
+insert into t2 values(3, 'test3');
+insert into t2 values(4, 'test4');
+create table s1(id int,grade int);
+insert into s1 values(1, -1);
+insert into s1 values(2, 1);
+insert into s1 values(3, 1);
+insert into s1 values(4, 2);
+select s1.id , s1.grade  from s1 left join t2 on s1.id = t2.grade connect by prior s1.id = s1.grade;
+id	grade
+1	-1
+2	1
+4	2
+3	1
+2	1
+4	2
+3	1
+4	2
+explain select s1.id , s1.grade  from s1 left join t2 on s1.id = t2.grade connect by prior s1.id = s1.grade;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	s1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`s1`.`id` AS `id`,`test`.`s1`.`grade` AS `grade` from `test`.`s1` connect by (prior `test`.`s1`.`id` = `test`.`s1`.`grade`)
+create unique index idx2 on s1(id);
+select t2.grade, t2.name from s1 right join t2 on s1.id = t2.grade connect by prior s1.id = s1.grade;
+grade	name
+1	test1
+2	test2
+4	test4
+3	test3
+2	test2
+4	test4
+3	test3
+4	test4
+explain select t2.grade, t2.name from s1 right join t2 on s1.id = t2.grade connect by prior s1.id = s1.grade;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+1	SIMPLE	s1	NULL	eq_ref	idx2	idx2	5	test.t2.grade	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`grade` AS `grade`,`test`.`t2`.`name` AS `name` from `test`.`t2` left join `test`.`s1` on((`test`.`s1`.`id` = `test`.`t2`.`grade`)) where true connect by (prior `test`.`s1`.`id` = `test`.`s1`.`grade`)
+drop table t2, s1;
+set sql_mode=oracle;
+drop table if exists x1,x1_rate;
+Warnings:
+Note	1051	Unknown table 'test.x1'
+Note	1051	Unknown table 'test.x1_rate'
+drop table if exists x2;
+Warnings:
+Note	1051	Unknown table 'test.x2'
+drop view if exists v1;
+Warnings:
+Note	1051	Unknown table 'test.v1'
+create table x1(c1 int, c2 varchar(20));
+insert into x1 values(1,'math');
+insert into x1 values(2,'english');
+insert into x1 values(7,'economic');
+create table x1_rate(c1 int ,c2 double);
+create unique index idx1 on x1_rate(c1);
+insert into x1_rate values(3,'3');
+insert into x1_rate values(2,'2');
+insert into x1_rate values(5,'5');
+create table x2 as select x1.c1, ratio_to_report(x1.c1) over(partition by x1.c1) c2 from x1 left join x1_rate on x1.c1 = x1_rate.c1;
+insert into x2 values(10,100);
+create unique index idx2 on x2(c1);
+update x2 ,(select x1_rate.c1, ratio_to_report(x1_rate.c1) over() c2 from x1_rate left join x2 on x1_rate.c1=x2.c1 ) tmp set x2.c2=tmp.c2 where x2.c1=tmp.c1;
+explain update x2 ,(select x1_rate.c1, ratio_to_report(x1_rate.c1) over() c2 from x1_rate left join x2 on x1_rate.c1=x2.c1 ) tmp set x2.c2=tmp.c2 where x2.c1=tmp.c1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	UPDATE	x2	NULL	ALL	idx2	NULL	NULL	NULL	#	100.00	Using where
+1	PRIMARY	<derived2>	NULL	ref	<auto_key0>	<auto_key0>	5	test.x2.c1	#	100.00	NULL
+2	DERIVED	x1_rate	NULL	index	NULL	idx1	5	NULL	#	100.00	Using index
+2	DERIVED	x2	NULL	eq_ref	idx2	idx2	5	test.x1_rate.c1	#	100.00	Using index
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	update "test"."x2" join (/* select#2 */ select "test"."x1_rate"."c1" AS "c1",ratio_to_report("test"."x1_rate"."c1") OVER ()  AS "c2" from "test"."x1_rate" left join "test"."x2" on(("test"."x2"."c1" = "test"."x1_rate"."c1")) where true) "tmp" set "test"."x2"."c2" = "tmp"."c2" where ("tmp"."c1" = "test"."x2"."c1")
+select * from x2 order by 1,2;
+c1	c2
+1	1
+2	0.2
+7	1
+10	100
+delete from x2 where c2 in (select ratio_to_report(x1.c1) over() c2 from x1 left join x1_rate on x1_rate.c1=x1.c1 );
+explain delete from x2 where c2 in (select ratio_to_report(x1.c1) over() c2 from x1 left join x1_rate on x1_rate.c1=x1.c1 );
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	DELETE	x2	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Using where
+2	SUBQUERY	x1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	delete from "test"."x2" where <in_optimizer>("test"."x2"."c2","test"."x2"."c2" in ( <materialize> (/* select#2 */ select ratio_to_report("test"."x1"."c1") OVER ()  AS "c2" from "test"."x1" having true ), <primary_index_lookup>("test"."x2"."c2" in <temporary table> on <auto_distinct_key> where (("test"."x2"."c2" = "<materialized_subquery>"."c2")))))
+select * from x2 order by 1,2;
+c1	c2
+1	1
+7	1
+10	100
+drop table x1;
+drop table x2;
+drop table x1_rate;
+set sql_mode='';
+create table x1(s1 int , s2 varchar(20)) comment 'shard=sd3';
+insert into x1 values(4000,'0.2');
+insert into x1 values(6000,'0.1');
+insert into x1 values(4000,'0.8');
+insert into x1 values(6000,'0.9');
+create table x2(s1 int primary key , s2 varchar(20)) comment 'shard=sd3';
+insert into x2 values(4000,'0.1');
+insert into x2 values(6000,'0.9');
+insert into x2 values(7000,'1');
+create table x3(c1 int primary key , c2 varchar(20)) comment 'shard=sd3';
+insert into x3 values(4000,'0.1');
+insert into x3 values(6000,'0.9');
+insert into x3 values(7000,'1');
+select x1.*,dt.* from x1 left join (select s1, sum(s1) as s1_sum, s2, max(s2) as s2_max from x2 left join x3 on x2.s1=x3.c1) dt on x1.s2=dt.s1_sum;
+s1	s2	s1	s1_sum	s2	s2_max
+4000	0.2	NULL	NULL	NULL	NULL
+6000	0.1	NULL	NULL	NULL	NULL
+4000	0.8	NULL	NULL	NULL	NULL
+6000	0.9	NULL	NULL	NULL	NULL
+explain select x1.*,dt.* from x1 left join (select s1, sum(s1) as s1_sum, s2, max(s2) as s2_max from x2 left join x3 on x2.s1=x3.c1) dt on x1.s2=dt.s1_sum;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	x1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Using where; Using join buffer (hash join)
+2	DERIVED	x2	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`x1`.`s1` AS `s1`,`test`.`x1`.`s2` AS `s2`,`dt`.`s1` AS `s1`,`dt`.`s1_sum` AS `s1_sum`,`dt`.`s2` AS `s2`,`dt`.`s2_max` AS `s2_max` from `test`.`x1` left join (/* select#2 */ select `test`.`x2`.`s1` AS `s1`,sum(`test`.`x2`.`s1`) AS `s1_sum`,`test`.`x2`.`s2` AS `s2`,max(`test`.`x2`.`s2`) AS `s2_max` from `test`.`x2`) `dt` on((cast(`test`.`x1`.`s2` as double) = cast(`dt`.`s1_sum` as double))) where true
+drop table x1, x2, x3;
+create table x1 (
+id1 int  primary key,
+id2 int ,
+id3 int ,
+name varchar(30),
+name2 varchar(30) 
+);
+insert into x1(id1, id2, id3, name, name2) values(1, 2, 3, 'test1', 'test1');
+insert into x1(id1, id2, id3, name, name2) values(4, 5, 6, 'test2', 'test2');
+create table x2 (
+id1 int  primary key,
+id2 int ,
+id3 int ,
+name varchar(30),
+name2 varchar(30) 
+);
+insert into x2(id1, id2, id3, name, name2) values(1, 2, 3, 'test1', 'test1');
+insert into x2(id1, id2, id3, name, name2) values(4, 5, 6, 'test2', 'test2');
+select sum(1) over() as tmp, d.*
+from (select x1.* from x1) d left join (select x2.* from x2) q on d.id1=q.id1 order by d.name;
+tmp	id1	id2	id3	name	name2
+2	1	2	3	test1	test1
+2	4	5	6	test2	test2
+EXPLAIN select sum(1) over() as tmp, d.*
+from (select x1.* from x1) d left join (select x2.* from x2) q on d.id1=q.id1 order by d.name;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	x1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Using filesort
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select sum(1) OVER ()  AS `tmp`,`test`.`x1`.`id1` AS `id1`,`test`.`x1`.`id2` AS `id2`,`test`.`x1`.`id3` AS `id3`,`test`.`x1`.`name` AS `name`,`test`.`x1`.`name2` AS `name2` from `test`.`x1` order by `test`.`x1`.`name`
+EXPLAIN select sum(1) over() as tmp, d.*
+from (select x1.* from x1) d left join (select x2.* from x2 join x1 on x2.id2 = x1.id2) q on d.id1=q.id1 order by d.name;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	x1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using filesort
+1	SIMPLE	x2	NULL	ALL	PRIMARY	NULL	NULL	NULL	2	100.00	Using where; Using join buffer (hash join)
+1	SIMPLE	x1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where; Using join buffer (hash join)
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select sum(1) OVER ()  AS `tmp`,`test`.`x1`.`id1` AS `id1`,`test`.`x1`.`id2` AS `id2`,`test`.`x1`.`id3` AS `id3`,`test`.`x1`.`name` AS `name`,`test`.`x1`.`name2` AS `name2` from `test`.`x1` left join (`test`.`x2` join `test`.`x1`) on(((`test`.`x1`.`id2` = `test`.`x2`.`id2`) and (`test`.`x2`.`id1` = `test`.`x1`.`id1`))) where true order by `test`.`x1`.`name`
+drop table x1, x2;
+drop table if exists x1,x2,x3;
+Warnings:
+Note	1051	Unknown table 'test.x1'
+Note	1051	Unknown table 'test.x2'
+Note	1051	Unknown table 'test.x3'
+create table x1(id int primary key,a int,b int);
+insert into x1 values(1,1,1);
+insert into x1 values(2,2,2);
+create table x2(id int primary key,a int,b int);
+insert into x2 values(1,1,1);
+insert into x2 values(3,3,3);
+create table x3 as select * from x1;
+EXPLAIN format=tree update x3 set a=a+200 where a in (select x1.a from x1 left join x2 on x1.id=x2.id);
+EXPLAIN
+-> Update x3 (immediate)
+    -> Nested loop semijoin  (cost=*** rows=***)
+        -> Table scan on x3  (cost=*** rows=***)
+        -> Filter: (x1.a = x3.a)  (cost=*** rows=***)
+            -> Table scan on x1  (cost=*** rows=***)
+
+EXPLAIN format=tree delete from  x3 where a in (select x1.a from x1 left join x2 on x1.id=x2.id);
+EXPLAIN
+-> Delete from x3 (immediate)  (cost=*** rows=***)
+    -> Nested loop semijoin  (cost=*** rows=***)
+        -> Table scan on x3  (cost=*** rows=***)
+        -> Filter: (x1.a = x3.a)  (cost=*** rows=***)
+            -> Table scan on x1  (cost=*** rows=***)
+
+EXPLAIN format=tree select * from  x3 where a in (select x1.a from x1 left join x2 on x1.id=x2.id);
+EXPLAIN
+-> Parallel scan on <temporary>
+    -> Hash semijoin (x1.a = x3.a)  (cost=*** rows=***)
+        -> PQblock scan on x3  (cost=*** rows=***)
+        -> Hash
+            -> Table scan on x1  (cost=*** rows=***)
+
+EXPLAIN format=tree insert into x3 select * from x1 where a in (select x1.a from x1 left join x2 on x1.id=x2.id);
+EXPLAIN
+-> Insert into x3
+    -> Hash semijoin (x1.a = x1.a)  (cost=*** rows=***)
+        -> Table scan on x1  (cost=*** rows=***)
+        -> Hash
+            -> Table scan on x1  (cost=*** rows=***)
+
+EXPLAIN format=tree select x1.a from x1 left join x2 on x1.id=x2.id;
+EXPLAIN
+-> Parallel scan on <temporary>
+    -> PQblock scan on x1  (cost=*** rows=***)
+
+drop table x1, x2, x3;

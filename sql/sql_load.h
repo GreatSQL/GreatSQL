@@ -109,7 +109,10 @@ class Sql_cmd_load_table final : public Sql_cmd {
   List<String> *const m_opt_set_expr_strings;
 
   /* parallel load data */
-  bool read_sep_line(THD *thd, COPY_INFO &info, READ_INFO &read_info);
+  String load_str;  // cleanup in cleanup_parallel_load()
+  bool prepare_parallel_load(THD *thd, READ_INFO &read_info);
+  bool do_parallel_load(THD *thd, COPY_INFO &info, READ_INFO &read_info);
+  void cleanup_parallel_load(THD *thd, READ_INFO &read_info);
   bool build_worker_sql_stmt(THD *thd, String &str);
   bool collect_used_session_vars(Item_func::Collect_session_vars &collection);
   bool parse_id_from_filename(const char *file_name);

@@ -1,0 +1,298 @@
+--source include/have_debug.inc
+
+--echo [************** normal test: unlink data file directly]
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 10) {
+    --eval insert into t1 values($row_cnt, $row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890', '1qaz2wsx3edc4rfv5tgb')
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=OFF;
+set global debug='+d,innodb_do_not_purge_file';
+drop table t1;
+--let $data_dir=`select @@datadir`
+--let $db_name = test
+--let $old_ibd_path = $data_dir$db_name/t1.ibd
+--error 1
+--file_exists $old_ibd_path
+
+--replace_column 1 LOG_ID 2 START_TIME 5 TEMP_PATH
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+set global debug='-d,innodb_do_not_purge_file';
+show tables;
+
+--echo [************** normal test: innodb_data_file_async_purge]
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 20) {
+    --eval insert into t1 values($row_cnt, $row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890', '1qaz2wsx3edc4rfv5tgb')
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=ON;
+set global debug='+d,innodb_do_not_purge_file';
+drop table t1;
+--let $old_ibd_path = $data_dir$db_name/t1.ibd
+--error 1
+--file_exists $old_ibd_path
+
+--replace_column 1 LOG_ID 2 START_TIME 5 TEMP_PATH
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+set global debug='-d,innodb_do_not_purge_file';
+--let wait_condition=select count(*) = 0 from information_schema.innodb_async_purge_files
+--source include/wait_condition.inc
+show tables;
+
+--echo [************** normal test: innodb_data_force_async_purge_file_size]
+set innodb_data_file_async_purge=OFF;
+set global innodb_data_force_async_purge_file_size=51200;
+--echo ## generate table t1 which data file size is 112KB
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 100) {
+    --eval insert into t1 values($row_cnt, $row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890', '1qaz2wsx3edc4rfv5tgb')
+    --inc $row_cnt
+}
+--enable_query_log
+set global debug='+d,innodb_do_not_purge_file';
+drop table t1;
+--let $old_ibd_path = $data_dir$db_name/t1.ibd
+--error 1
+--file_exists $old_ibd_path
+
+--replace_column 1 LOG_ID 2 START_TIME 5 TEMP_PATH
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+set global debug='-d,innodb_do_not_purge_file';
+--let wait_condition=select count(*) = 0 from information_schema.innodb_async_purge_files
+--source include/wait_condition.inc
+show tables;
+
+--echo [************** normal test: innodb_data_file_async_purge_all_at_shutdown]
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 100) {
+    --eval insert into t1 values($row_cnt, $row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890', '1qaz2wsx3edc4rfv5tgb')
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=ON;
+set global innodb_data_file_async_purge_all_at_shutdown=ON;
+set global innodb_data_file_async_purge_max_size=51200;
+set global innodb_data_file_async_purge_interval=5000;
+set global debug='+d,innodb_do_not_purge_file';
+drop table t1;
+--let $old_ibd_path = $data_dir$db_name/t1.ibd
+--error 1
+--file_exists $old_ibd_path
+
+--replace_column 1 LOG_ID 2 START_TIME 5 TEMP_PATH
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+
+# file purge dir is datadir/#file_purge
+--let $tmp_file_path = `select temporary_path from information_schema.innodb_async_purge_files`
+--file_exists $tmp_file_path
+
+--echo ## shutdown mysql
+--let $_server_id= `SELECT @@server_id`
+--let $expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.$_server_id.expect
+--source include/expect_crash.inc
+--let mysqld_pid_file=`SELECT @@GLOBAL.pid_file`
+shutdown;
+--echo ## wait pid_file deleted
+perl;
+my $pid_file = $ENV{'mysqld_pid_file'};
+my $retry_times = 60;
+while ($retry_times > 0) {
+    if (-e $pid_file) {
+        sleep(1);
+        $retry_times--;
+    } else {
+        $retry_times = 0;
+    }
+}
+EOF
+--error 1
+--file_exists tmp_file_path
+
+--let $_expect_file_name= $expect_file_name
+--source include/start_mysqld.inc
+show tables;
+--replace_column 1 LOG_ID 2 START_TIME 5 TEMP_PATH
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+
+let $log_error_= `SELECT @@GLOBAL.log_error`;
+if($log_error_ == "stderr")
+{
+    --let $_server_id= `SELECT @@server_id`
+    let $log_error_ = $MYSQLTEST_VARDIR/log/mysqld.$_server_id.err;
+}
+--let LOG_ERROR=$log_error_
+perl;
+   use strict;
+   use File::stat;
+   my $file= $ENV{'LOG_ERROR'} or die("grep file not set");
+   my $pattern_1="cleaning begin, number of tmp files is 1";
+   my $pattern_2="File purge: cleaning end";
+   my $cnt_1 = 0;
+   my $cnt_2 = 0;
+
+   open(FILE, "$file") or die("Unable to open $file: $!");
+   while (<FILE>) {
+     my $line = $_;
+     if ($line =~ /$pattern_1/) {
+       $cnt_1++;
+     }
+     if ($line =~ /$pattern_2/) {
+       $cnt_2++;
+     }
+   }
+   if ($cnt_1 <= 0) {
+    die("file purge list was empty during shutdown.");
+   }
+   if ($cnt_2 <= 0) {
+    die("file purge list was not cleaned during shutdown.");
+   }
+   close(FILE);
+EOF
+
+--echo [************** normal test: partition table file purge]
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30)) partition by hash(c1) partitions 2;
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 10) {
+    --eval insert into t1 values($row_cnt, $row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890', '1qaz2wsx3edc4rfv5tgb')
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=ON;
+set global debug='+d,innodb_do_not_purge_file';
+drop table t1;
+--let $old_ibd_1 = $data_dir$db_name/t1#p#p0.ibd
+--let $old_ibd_2 = $data_dir$db_name/t1#p#p1.ibd
+--error 1
+--file_exists $old_ibd_1
+--error 1
+--file_exists $old_ibd_2
+
+--replace_column 1 LOG_ID 2 START_TIME 5 TEMP_PATH
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+--let $tmp_file_1 = `select temporary_path from information_schema.innodb_async_purge_files order by log_id desc limit 1`
+--let $tmp_file_2 = `select temporary_path from information_schema.innodb_async_purge_files order by log_id asc limit 1`
+--file_exists $tmp_file_1
+--file_exists $tmp_file_2
+set global debug='-d,innodb_do_not_purge_file';
+--let wait_condition=select count(*) = 0 from information_schema.innodb_async_purge_files
+--source include/wait_condition.inc
+--error 1
+--file_exists $tmp_file_1
+--error 1
+--file_exists $tmp_file_2
+show tables;
+
+--echo [************** normal test: truncate table]
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30)) partition by hash(c1) partitions 2;
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 10) {
+    --eval insert into t1 values($row_cnt, $row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890', '1qaz2wsx3edc4rfv5tgb')
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=ON;
+set global debug='+d,innodb_do_not_purge_file';
+truncate table t1;
+--let $old_ibd_1 = $data_dir$db_name/t1#p#p0.ibd
+--let $old_ibd_2 = $data_dir$db_name/t1#p#p1.ibd
+--file_exists $old_ibd_1
+--file_exists $old_ibd_2
+
+--replace_column 1 LOG_ID 2 START_TIME 3 ORIGINAL_PATH 5 TEMP_PATH
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+--let $tmp_file_1 = `select temporary_path from information_schema.innodb_async_purge_files order by log_id desc limit 1`
+--let $tmp_file_2 = `select temporary_path from information_schema.innodb_async_purge_files order by log_id asc limit 1`
+--file_exists $tmp_file_1
+--file_exists $tmp_file_2
+set global debug='-d,innodb_do_not_purge_file';
+--let wait_condition=select count(*) = 0 from information_schema.innodb_async_purge_files
+--source include/wait_condition.inc
+--error 1
+--file_exists $tmp_file_1
+--error 1
+--file_exists $tmp_file_2
+show tables;
+
+--echo [************** normal test: drop database]
+create table t8(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+create table t9(c1 int primary key, c2 int, c3 varchar(20));
+create table t10(c1 int, c2 text, c3 text);
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 100) {
+    --eval insert into t8 values($row_cnt, $row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890', '1qaz2wsx3edc4rfv5tgb')
+    --eval insert into t9 values($row_cnt, $row_cnt, '1234567890asdfgh')
+    --eval insert into t10 values($row_cnt, 'test data file purge', 'test drop database')
+    --inc $row_cnt
+}
+--enable_query_log
+
+set innodb_data_file_async_purge=ON;
+set global debug='+d,innodb_do_not_purge_file';
+drop database test;
+--replace_column 1 LOG_ID 2 START_TIME 5 TEMP_PATH
+select * from information_schema.innodb_async_purge_files order by original_path asc;
+set global debug='-d,innodb_do_not_purge_file';
+--let wait_condition=select count(*) = 0 from information_schema.innodb_async_purge_files
+--source include/wait_condition.inc
+show databases like 'test';
+create database test;
+
+--echo [************** normal test: drop/truncate partition]
+use test;
+create table t3(c1 int primary key, c2 varchar(30), c3 text) engine=innodb partition by hash(c1) partitions 2;
+create table t4(c1 int primary key, c2 varchar(30), c3 text) engine=innodb PARTITION BY RANGE (c1) (PARTITION p0 VALUES LESS THAN (2), PARTITION p1 VALUES LESS THAN (3), PARTITION p2 VALUES LESS THAN (4), PARTITION p3 VALUES LESS THAN (5));
+--disable_query_log
+--let $row_cnt = 1
+while ($row_cnt <=4) {
+    eval insert into t3 values($row_cnt, 'p;/.loik,mju', '1257924680');
+    eval insert into t4 values($row_cnt, 'zxcvbnm,.', '2345612345');
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=ON;
+set global debug='+d,innodb_do_not_purge_file';
+truncate table t3;
+alter table t4 drop partition p1;
+alter table t4 truncate partition p3;
+select * from t3;
+select * from t4;
+--replace_column 1 LOG_ID 2 START_TIME 3 ORIGINAL_PATH 5 TEMP_PATH
+select * from information_schema.innodb_async_purge_files;
+set global debug='-d,innodb_do_not_purge_file';
+--let wait_condition=select count(*) = 0 from information_schema.innodb_async_purge_files
+--source include/wait_condition.inc
+
+--let tmp_file_dir=$data_dir#file_purge
+perl;
+use strict;
+my $dirname = $ENV{'tmp_file_dir'};
+my @dir_files = <$dirname/*>;
+if ( @dir_files ) {   
+    print "$dirname has file:\n";   
+    foreach my $file (@dir_files) {
+        print "$file\n";
+    }
+    die("error, purge file dir is not empty.");
+}
+EOF
+
+drop table t3,t4;
+set innodb_data_file_async_purge=OFF;
+set global innodb_data_file_async_purge_error_retry_count=10;
+set global innodb_data_file_async_purge_max_size=268435456;
+set global innodb_data_file_async_purge_all_at_shutdown=OFF;
+

@@ -40,12 +40,18 @@ class Sql_cmd_call final : public Sql_cmd_dml {
  public:
   explicit Sql_cmd_call(sp_name *proc_name_arg,
                         mem_root_deque<Item *> *prog_args_arg,
-                        enum_sp_type sp_type, sp_name *pkg_name)
+                        enum_sp_type sp_type, sp_name *pkg_name,
+                        sp_signature *sig, LEX_CSTRING db_arg,
+                        LEX_STRING fn_arg, bool explicit_arg)
       : Sql_cmd_dml(),
         proc_name(proc_name_arg),
         proc_args(prog_args_arg),
         m_type(sp_type),
-        m_pkg_name(pkg_name) {}
+        m_pkg_name(pkg_name),
+        m_sig(sig),
+        m_save_db(db_arg),
+        m_save_fn_name(fn_arg),
+        m_save_explicit_name(explicit_arg) {}
 
   enum_sql_command sql_command_code() const override { return SQLCOM_CALL; }
 
@@ -69,6 +75,10 @@ class Sql_cmd_call final : public Sql_cmd_dml {
  public:
   enum_sp_type m_type;
   sp_name *m_pkg_name;
+  sp_signature *m_sig;
+  LEX_CSTRING m_save_db;
+  LEX_STRING m_save_fn_name;
+  bool m_save_explicit_name;
 };
 
 class Sql_cmd_compound : public Sql_cmd_dml {
@@ -86,6 +96,38 @@ class Sql_cmd_compound : public Sql_cmd_dml {
   bool check_privileges(THD *thd) override;
 
   bool prepare_inner(THD *thd) override;
+  bool execute_inner(THD *thd) override;
+};
+
+class Sql_cmd_execute : public Sql_cmd_dml {
+  Query_arena m_arena;
+  Item *m_query;
+  int mode;
+  mem_root_deque<Item *> m_param;
+  // Prepared_statement m_stmt;
+
+ public:
+  Sql_cmd_execute(Item *query_arg, int mode_arg,
+                  mem_root_deque<Item *> *param_arg)
+      : m_arena(*THR_MALLOC, Query_arena::STMT_REGULAR_EXECUTION),
+        m_query(query_arg),
+        mode(mode_arg),
+        m_param(*THR_MALLOC) {
+    if (param_arg) {
+      m_param = std::move(*param_arg);
+    }
+  }
+  enum_sql_command sql_command_code() const override {
+    return SQLCOM_EXECUTE_IMMEDIATE;
+  }
+  bool is_data_change_stmt() const override { return false; }
+
+ protected:
+  bool precheck(THD *thd) override;
+  bool check_privileges(THD *thd) override;
+
+  bool prepare_inner(THD *thd) override;
+
   bool execute_inner(THD *thd) override;
 };
 

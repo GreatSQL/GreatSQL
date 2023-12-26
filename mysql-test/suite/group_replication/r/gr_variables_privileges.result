@@ -31,6 +31,8 @@ SET GLOBAL group_replication_allow_local_lower_version_join = @@GLOBAL.group_rep
 ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
 SET GLOBAL group_replication_applier_batch_size_threshold = @@GLOBAL.group_replication_applier_batch_size_threshold;
 ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
+SET GLOBAL group_replication_async_auto_failover_channel_read_only_mode = @@GLOBAL.group_replication_async_auto_failover_channel_read_only_mode;
+ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
 SET GLOBAL group_replication_auto_evict_timeout = @@GLOBAL.group_replication_auto_evict_timeout;
 ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
 SET GLOBAL group_replication_auto_increment_increment = @@GLOBAL.group_replication_auto_increment_increment;
@@ -56,6 +58,8 @@ ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIA
 SET GLOBAL group_replication_compression_threshold = @@GLOBAL.group_replication_compression_threshold;
 ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
 SET GLOBAL group_replication_consistency = @@GLOBAL.group_replication_consistency;
+ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
+SET GLOBAL group_replication_donor_threshold = @@GLOBAL.group_replication_donor_threshold;
 ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
 SET GLOBAL group_replication_enforce_update_everywhere_checks = @@GLOBAL.group_replication_enforce_update_everywhere_checks;
 ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
@@ -190,6 +194,7 @@ GRANT SYSTEM_VARIABLES_ADMIN, SESSION_VARIABLES_ADMIN ON *.* TO 'no_priv_user'@l
 SET GLOBAL group_replication_advertise_recovery_endpoints = @@GLOBAL.group_replication_advertise_recovery_endpoints;
 SET GLOBAL group_replication_allow_local_lower_version_join = @@GLOBAL.group_replication_allow_local_lower_version_join;
 SET GLOBAL group_replication_applier_batch_size_threshold = @@GLOBAL.group_replication_applier_batch_size_threshold;
+SET GLOBAL group_replication_async_auto_failover_channel_read_only_mode = @@GLOBAL.group_replication_async_auto_failover_channel_read_only_mode;
 SET GLOBAL group_replication_auto_evict_timeout = @@GLOBAL.group_replication_auto_evict_timeout;
 SET GLOBAL group_replication_auto_increment_increment = @@GLOBAL.group_replication_auto_increment_increment;
 SET GLOBAL group_replication_autorejoin_tries = @@GLOBAL.group_replication_autorejoin_tries;
@@ -204,6 +209,7 @@ SET GLOBAL group_replication_components_stop_timeout = @@GLOBAL.group_replicatio
 SET GLOBAL group_replication_compression_threshold = @@GLOBAL.group_replication_compression_threshold;
 SET GLOBAL group_replication_consistency = @@GLOBAL.group_replication_consistency;
 ERROR 42000: Access denied; you need (at least one of) the SUPER or GROUP_REPLICATION_ADMIN privilege(s) for this operation
+SET GLOBAL group_replication_donor_threshold = @@GLOBAL.group_replication_donor_threshold;
 SET GLOBAL group_replication_enforce_update_everywhere_checks = @@GLOBAL.group_replication_enforce_update_everywhere_checks;
 SET GLOBAL group_replication_exit_state_action = @@GLOBAL.group_replication_exit_state_action;
 SET GLOBAL group_replication_flow_control_applier_threshold = @@GLOBAL.group_replication_flow_control_applier_threshold;

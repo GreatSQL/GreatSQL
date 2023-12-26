@@ -757,6 +757,11 @@ struct TABLE_SHARE {
   LEX_STRING compress{nullptr, 0};     /* Compression algorithm */
   LEX_STRING encrypt_type{nullptr, 0}; /* encryption algorithm */
 
+  LEX_STRING definition{nullptr, 0};      /* Save materialized view subquery */
+  LEX_STRING definition_utf8{nullptr, 0}; /* Save the materialized view op */
+  // True, If this is a materialized view
+  bool is_materialized_view{false};
+
   /** Secondary storage engine. */
   LEX_CSTRING secondary_engine{nullptr, 0};
 
@@ -782,7 +787,8 @@ struct TABLE_SHARE {
   LEX_STRING path{nullptr, 0};        /* Path to .frm file (from datadir) */
   LEX_CSTRING normalized_path{nullptr, 0}; /* unpack_filename(path) */
   LEX_STRING connect_string{nullptr, 0};
-
+  bool external_data_dir{false};
+  LEX_CSTRING external_file_name{NULL_CSTR}; /* create external table of name */
   LEX_CSTRING engine_attribute = EMPTY_CSTR;
   LEX_CSTRING secondary_engine_attribute = EMPTY_CSTR;
 
@@ -865,6 +871,11 @@ struct TABLE_SHARE {
   uint varchar_fields{0}; /* number of varchar fields */
   uint udt_fields{0};     /* number of udt fields */
   LEX_CSTRING udt_name{NULL_CSTR}; /* create table of udt name */
+
+  /**
+    The size of this value is the same as HA_CREATE_INFO.ora_tmp_table_options.
+  */
+  uint ora_tmp_table_options{0}; /* OR of HA_ORA_TMP_TABLE_ options */
   /**
     For materialized derived tables; @see add_derived_key().
     'first' means: having the lowest position in key_info.
@@ -934,6 +945,8 @@ struct TABLE_SHARE {
   bool db_low_byte_first{false}; /* Portable row format */
   bool crashed{false};
   bool is_view{false};
+  // create force view
+  bool is_force_view{false};
   bool m_open_in_progress{false}; /* True: alloc'ed, false: def opened */
   Table_id table_map_id;          /* for row-based replication */
 
@@ -1555,6 +1568,8 @@ struct TABLE {
   Field **gen_def_fields_ptr{nullptr};
   /// Field used by unique constraint
   Field *hash_field{nullptr};
+  /// Field used by connect by order
+  Field *connect_by_field{nullptr};
   // ----------------------------------------------------------------------
   // The next few members are used if this (temporary) file is used solely for
   // the materialization/computation of an INTERSECT or EXCEPT set operation
@@ -1820,6 +1835,9 @@ struct TABLE {
   bool autoinc_field_has_explicit_non_null_value{false};
   bool alias_name_used{false};         /* true if table_name is alias */
   bool get_fields_in_item_tree{false}; /* Signal to fix_field */
+
+  // True, If this is a materialized view
+  bool is_materialized_view{false};
 
  private:
   /**
@@ -2475,6 +2493,37 @@ struct TABLE {
      INFORMATION_SCHEMA.GLOBAL_TEMPORARY_TABLES queries.
   */
   const dd::Table *tmp_dd_table_ptr{nullptr};
+
+ public:
+  /**
+     whether this temp table is created by oracle temp table grammar.
+  */
+  bool m_is_ora_tmp{false};
+
+  /**
+     for oracle temp tables, mark this is a global temp table or not.
+     it is necessary to unlock the global meta.
+  */
+  bool m_global_tmp{false};
+
+  /**
+     for oracle temp tables, default is for session level unless m_trans_tmp
+     is true.
+  */
+  bool m_trans_tmp{false};
+
+  /**
+     for oracle global temp tables, if this flag is set, and no record is
+     inserted at end of insert or merge statements, remove this temp table.
+  */
+  bool m_check_inserted_rows{false};
+
+  /**
+     for oracle global temp tables, if no record is inserted at end of insert
+     or merge statements, this flag is set. And close_temporary_table() should
+     be called in its Query_result*::cleanup().
+  */
+  bool m_delete_on_eos{false};
 };
 
 static inline void empty_record(TABLE *table) {
@@ -3345,6 +3394,12 @@ class Table_ref {
   /// Check if we can push outer where condition to this derived table
   bool can_push_condition_to_derived(THD *thd);
 
+  /// check if derived table has connect by
+  bool has_connect_by();
+
+  /// check if derived table has lnnvl function.
+  bool has_lnnvl();
+
   /// Return the number of hidden fields added for the temporary table
   /// created for this derived table.
   uint get_hidden_field_count_for_derived() const;
@@ -3776,12 +3831,19 @@ class Table_ref {
   /// argument of LEFT JOIN, if argument of INNER JOIN; RIGHT JOINs are
   /// converted to LEFT JOIN during contextualization).
   bool outer_join{false};
+  /// for a full join, mark the both sides of the join with foj_inner and
+  /// foj_outer, take `tr1 full join tr2` for example:
+  /// tr1 ---> foj_inner = false, foj_outer = true
+  /// tr2 ---> foj_inner = true , foj_outer = false
+  bool foj_inner{false};
+  bool foj_outer{false};
   /// True if was originally the left argument of a RIGHT JOIN, before we
   /// made it the right argument of a LEFT JOIN.
   bool join_order_swapped{false};
   uint shared{0}; /* Used in multi-upd */
   size_t db_length{0};
   size_t table_name_length{0};
+  bool outerjoin_removed{false};
 
  private:
   /// True if VIEW/TABLE is updatable, based on analysis of query (SQL rules).
@@ -3894,6 +3956,9 @@ class Table_ref {
   LEX_CSTRING view_client_cs_name{nullptr, 0};
   LEX_CSTRING view_connection_cl_name{nullptr, 0};
 
+  /*is force view */
+  bool is_force_view{false};
+
   /*
     View definition (SELECT-statement) in the UTF-form.
   */
@@ -3902,6 +3967,9 @@ class Table_ref {
 
   // True, If this is a system view
   bool is_system_view{false};
+
+  // True, If this is a materialized view
+  bool is_materialized_view{false};
 
   /*
     Set to 'true' if this is a DD table being opened in the context of a

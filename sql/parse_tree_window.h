@@ -50,6 +50,12 @@ class PT_window : public Parse_tree_node, public Window {
 
   PT_window(Item_string *name) : Window(name) {}
 
+  PT_window(int keep_dir_arg, PT_order_list *partition_by,
+            PT_order_list *order_by, PT_frame *frame)
+      : Window(partition_by, order_by, frame) {
+    this->keep_dir = keep_dir_arg;
+  }
+
   bool contextualize(Parse_context *pc) override;
 };
 

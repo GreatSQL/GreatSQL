@@ -464,7 +464,8 @@ class Item_sum : public Item_func {
     FIRST_LAST_VALUE_FUNC,
     NTH_VALUE_FUNC,
     ROLLUP_SUM_SWITCHER_FUNC,
-    GEOMETRY_AGGREGATE_FUNC
+    GEOMETRY_AGGREGATE_FUNC,
+    RATIO_TO_REPORT_VALUE_FUNC  // RATIO_TO_REPORT
   };
 
   /**
@@ -501,6 +502,17 @@ class Item_sum : public Item_func {
   */
   nesting_map save_deny_window_func;
   Item_sum *orig_func{nullptr};
+
+  /**
+    The implementation of the pivot clause is achieved by expanding the
+    parameters of the aggregate function into a 'case ... when' clause, so it is
+    necessary to know which parameter of the aggregate function will be expanded
+    into a 'case ... when' clause.
+
+    In addition, if -1 is returned, it means that the aggregation function does
+    not support the use in the pivot clause
+  */
+  virtual int pivot_arg_idx_for_cond() const { return 0; }
 
  protected:
   /**
@@ -759,6 +771,12 @@ class Item_sum : public Item_func {
     to evaluate LEAD.
   */
   virtual bool needs_partition_cardinality() const { return false; }
+
+  /**
+    Return true if we only need to do the second phase,it's for
+    ratio_to_report().
+  */
+  virtual bool only_need_do_second_phase() const { return false; }
 
   /**
     Common initial actions for window functions. For non-buffered processing
@@ -1338,6 +1356,7 @@ class Item_sum_json_object final : public Item_sum_json {
   Item *copy_or_same(THD *thd) override;
   bool check_wf_semantics1(THD *thd, Query_block *select,
                            Window_evaluation_requirements *reqs) override;
+  int pivot_arg_idx_for_cond() const override { return 1; }
 };
 
 class Item_sum_avg final : public Item_sum_sum {
@@ -1353,7 +1372,11 @@ class Item_sum_avg final : public Item_sum_sum {
       : Item_sum_sum(pos, item_par, distinct, w) {}
 
   Item_sum_avg(THD *thd, Item_sum_avg *item)
-      : Item_sum_sum(thd, item), prec_increment(item->prec_increment) {}
+      : Item_sum_sum(thd, item),
+        prec_increment(item->prec_increment),
+        f_precision(item->f_precision),
+        f_scale(item->f_scale),
+        dec_bin_size(item->dec_bin_size) {}
 
   bool resolve_type(THD *thd) override;
   enum Sumfunctype sum_func() const override {
@@ -1694,6 +1717,7 @@ class Item_sum_hybrid : public Item_sum {
         m_is_min(item->m_is_min),
         value(item->value),
         arg_cache(nullptr),
+        cmp(nullptr),
         hybrid_type(item->hybrid_type),
         was_values(item->was_values),
         m_nulls_first(item->m_nulls_first),
@@ -2206,6 +2230,9 @@ class Item_func_group_concat final : public Item_sum {
   // 0:group_concat, 1:listagg, 2:wm_concat
   uint orafun{0};
 
+  // it is only set to false when order-by clause is specified in over().
+  bool order_in_wm_concat{true};
+
   /**
     Following is 0 normal object and pointer to original one for copy
     (to correctly free resources)
@@ -2293,6 +2320,8 @@ class Item_func_group_concat final : public Item_sum {
   bool result_limitation_check(size_t old_length);
 
   bool open_temp_table(THD *thd);
+
+  int pivot_arg_idx_for_cond() const override { return orafun == 1 ? 0 : -1; }
 };
 
 /**
@@ -2421,6 +2450,16 @@ class Item_rank : public Item_non_framing_wf {
   */
   void clear() override;
   Item_result result_type() const override { return INT_RESULT; }
+  /**
+    For ref cursor,advance clear m_previous to avoid crash when free_lex.
+    for more info turn to sp_instr_copen_for_sql::exec_core.
+  */
+  void clear_previous() {
+    for (Cached_item *ci : m_previous) {
+      destroy(ci);
+    }
+    m_previous.clear();
+  }
 };
 
 /**
@@ -2945,5 +2984,380 @@ class Item_sum_collect : public Item_sum {
   void clear() override;
   const char *func_name() const override { return "st_collect"; }
 };
+
+/**
+  RATIO_TO_REPORT window functions for oracle compatible.
+*/
+class Item_ratio_to_report_value final : public Item_sum_sum {
+  uint prec_increment;
+
+ public:
+  typedef Item_sum_sum super;
+
+  Item_ratio_to_report_value(const POS &pos, Item *item_par, PT_window *w)
+      : Item_sum_sum(pos, item_par, false, w), prec_increment(0) {}
+
+  enum Sumfunctype sum_func() const override {
+    return RATIO_TO_REPORT_VALUE_FUNC;
+  }
+  bool resolve_type(THD *thd) override;
+  bool add() override;
+  double val_real() override;
+  my_decimal *val_decimal(my_decimal *) override;
+  const char *func_name() const override { return "ratio_to_report"; }
+  bool only_need_do_second_phase() const override { return true; }
+};
+
+/***CONNECT BY FUNC BEGIN ****/
+
+Item *CompileItemConnectbyRef(THD *thd, Item *cond, Query_block *select);
+
+class Item_connect_by_func : public Item_func {
+  typedef Item_func super;
+
+ public:
+  Item_connect_by_func(const POS &pos) : Item_func(pos) {}
+  Item_connect_by_func(const POS &pos, Item *a) : Item_func(pos, a) {}
+  Item_connect_by_func(const POS &pos, Item *a, Item *b)
+      : Item_func(pos, a, b) {}
+  bool itemize(Parse_context *pc, Item **res) override;
+  bool fix_fields(THD *thd, Item **ref) override;
+  // bool resolve_type_inner(THD *thd) override;
+  Type type() const override { return CONNECT_BY_FUNC_ITEM; }
+  enum ConnectByfunctype {
+    ROOT_FUNC,
+    LEVEL_FUNC,
+    PRIOR_FUNC,
+    ISCYCLE_FUNC,
+    ISLEAF_FUNC,
+    SYS_PATH_FUNC,
+  };
+
+  virtual bool is_evaluate_value() { return false; }
+
+  virtual enum ConnectByfunctype ConnectBy_func() const = 0;
+
+  table_map get_initial_pseudo_tables() const override {
+    return OUTER_REF_TABLE_BIT;
+  }
+
+  void update_used_tables() override;
+
+  // set ref_item stack tmp table
+  virtual bool setup(THD *) { return false; }
+
+  // preorder dfs reset value if level = 1
+  virtual bool reset() = 0;
+  // update cache level is change
+  virtual bool update_value(longlong val) = 0;
+};
+
+class Item_connect_by_func_value : public Item_connect_by_func {
+  typedef Item_connect_by_func super;
+
+ protected:
+  Item **ref;
+
+ public:
+  Item_connect_by_func_value(const POS &pos, Item *a)
+      : Item_connect_by_func(pos, a) {}
+
+  enum_field_types default_data_type() const override {
+    return MYSQL_TYPE_VARCHAR;
+  }
+  bool itemize(Parse_context *pc, Item **res) override;
+
+  bool resolve_type_inner(THD *thd) override;
+
+  virtual Item *base_expr() const = 0;
+  enum Item_result result_type() const override {
+    return args[0]->result_type();
+  }
+  double val_real() override {
+    auto val = base_expr()->val_real();
+    null_value = base_expr()->null_value;
+    return val;
+  }
+  longlong val_int() override {
+    auto val = base_expr()->val_int();
+    null_value = base_expr()->null_value;
+    return val;
+  }
+  my_decimal *val_decimal(my_decimal *decimal_val) override {
+    decimal_val = base_expr()->val_decimal(decimal_val);
+    null_value = base_expr()->null_value;
+    return decimal_val;
+  }
+  String *val_str(String *str_val) override {
+    String *str_tmp = base_expr()->val_str(str_val);
+    null_value = base_expr()->null_value;
+    return str_tmp;
+  }
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
+    auto date_val = base_expr()->get_date(ltime, fuzzydate);
+    null_value = base_expr()->null_value;
+    return date_val;
+  }
+  bool get_time(MYSQL_TIME *ltime) override {
+    auto time_b = base_expr()->get_time(ltime);
+    null_value = base_expr()->null_value;
+    return time_b;
+  }
+
+  void print(const THD *thd, String *str,
+             enum_query_type query_type) const override {
+    str->append(func_name());
+    str->append(' ');
+    print_args(thd, str, 0, query_type);
+  }
+};
+
+class Item_connect_by_func_root final : public Item_connect_by_func_value {
+  typedef Item_connect_by_func_value super;
+  Item_cache *m_value;
+
+ public:
+  Item_connect_by_func_root(const POS &pos, Item *a)
+      : Item_connect_by_func_value(pos, a), m_value(nullptr) {}
+  enum ConnectByfunctype ConnectBy_func() const override {
+    return Item_connect_by_func::ROOT_FUNC;
+  }
+  const char *func_name() const override { return "connect_by_root"; }
+  bool itemize(Parse_context *pc, Item **res) override;
+  Item *base_expr() const override { return m_value ? m_value : *ref; }
+  bool setup(THD *) override {
+    m_value = Item_cache::get_cache(*ref);
+    if (m_value == nullptr) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "connect_by_root column type");
+      return true;
+    }
+    m_value->setup(*ref);
+    return false;
+  }
+  // level =1  read ref value
+  bool reset() override {
+    m_value->store_null();
+    return false;
+  }
+  bool update_value(longlong level) override {
+    assert(m_value);
+    return level == 2 ? !m_value->cache_value() : false;
+  }
+
+  bool is_evaluate_value() override { return true; }
+};
+
+class Item_func_prior final : public Item_connect_by_func_value {
+  typedef Item_connect_by_func_value super;
+  Item_cache *m_value;
+
+ public:
+  explicit Item_func_prior(const POS &pos, Item *a)
+      : Item_connect_by_func_value(pos, a), m_value(nullptr) {}
+  const char *func_name() const override { return "prior"; }
+
+  enum ConnectByfunctype ConnectBy_func() const override {
+    return Item_connect_by_func::PRIOR_FUNC;
+  }
+  Item *Ref_item() { return ref ? *ref : nullptr; }
+  Item *base_expr() const override { return m_value ? m_value : *ref; }
+
+  bool setup(THD *) override {
+    m_value = Item_cache::get_cache(*ref);
+    if (m_value == nullptr) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "prior column type");
+      return true;
+    }
+    m_value->setup(*ref);
+    return false;
+  }
+
+  bool reset() override {
+    m_value->store_null();
+    return false;
+  }
+
+  bool update_value(longlong) override {
+    assert(m_value);
+    return !m_value->cache_value();
+  }
+  bool collect_connect_by_item_processor(uchar *) override;
+};
+
+class Item_connect_by_func_sys_path final : public Item_connect_by_func {
+  typedef Item_connect_by_func super;
+
+  TABLE *table;
+  Temp_table_param *tmp_table_param;
+  Item *res;
+  bool const_value;
+  Item **ref;
+  longlong level;
+  String tmp_value{"", 0, collation.collation};  // Initialize to empty
+ public:
+  Item_connect_by_func_sys_path(const POS &pos, Item *a, Item *b)
+      : Item_connect_by_func(pos, a, b),
+        table(nullptr),
+        tmp_table_param(nullptr),
+        res(nullptr),
+        const_value(false),
+        ref(nullptr),
+        level(0) {}
+
+  enum ConnectByfunctype ConnectBy_func() const override {
+    return Item_connect_by_func::SYS_PATH_FUNC;
+  }
+  bool itemize(Parse_context *pc, Item **res) override;
+  enum_field_types default_data_type() const override {
+    return MYSQL_TYPE_VARCHAR;
+  }
+  bool is_evaluate_value() override { return true; }
+  const char *func_name() const override { return "sys_connect_by_path"; }
+  bool resolve_type(THD *thd) override;
+
+  Item *base_expr() const { return const_value ? args[0] : *ref; }
+
+  bool setup(THD *thd) override;
+
+  bool reset() override;
+
+  bool update_value(longlong l) override;
+
+  enum Item_result result_type() const override { return STRING_RESULT; }
+
+  longlong val_int() override { return val_int_from_string(); }
+  double val_real() override { return val_real_from_string(); }
+  my_decimal *val_decimal(my_decimal *) override;
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
+    return get_date_from_string(ltime, fuzzydate);
+  }
+  bool get_time(MYSQL_TIME *ltime) override {
+    return get_time_from_string(ltime);
+  }
+  // concat
+  String *val_str(String *str) override;
+  void cleanup() override;
+};
+
+class Item_connect_by_func_int : public Item_connect_by_func {
+ protected:
+  longlong m_val;
+  longlong m_val_def;  // default value
+ public:
+  Item_connect_by_func_int(const POS &pos, longlong value)
+      : Item_connect_by_func(pos), m_val(value), m_val_def(value) {
+    set_data_type_longlong();
+  }
+
+  longlong val_int() override { return m_val; }
+
+  bool resolve_type(THD *) override {
+    set_nullable(false);
+    return false;
+  }
+
+  void print(const THD *, String *str, enum_query_type) const override {
+    str->append(func_name());
+  }
+  enum Item_result result_type() const override { return INT_RESULT; }
+  double val_real() override {
+    assert(fixed == 1);
+    return unsigned_flag ? (double)((ulonglong)val_int()) : (double)val_int();
+  }
+  String *val_str(String *str) override {
+    assert(fixed == 1);
+    longlong nr = val_int();
+    if (null_value) return nullptr;
+    str->set_int(nr, unsigned_flag, collation.collation);
+    return str;
+  }
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
+    return get_date_from_int(ltime, fuzzydate);
+  }
+  bool get_time(MYSQL_TIME *ltime) override { return get_time_from_int(ltime); }
+  //
+  bool reset() override {
+    m_val = m_val_def;
+    return false;
+  }
+};
+class Item_connect_by_func_level final : public Item_connect_by_func_int {
+  typedef Item_connect_by_func_int super;
+
+ public:
+  Item_connect_by_func_level(const POS &pos)
+      : Item_connect_by_func_int(pos, 1) {}
+  const char *func_name() const override { return "level"; }
+
+  bool fix_fields(THD *thd, Item **ref) override;
+  enum ConnectByfunctype ConnectBy_func() const override {
+    return Item_connect_by_func::LEVEL_FUNC;
+  }
+
+  bool update_value(longlong val) override {
+    m_val = val;
+    return false;
+  }
+};
+
+class Item_connect_by_func_iscycle final : public Item_connect_by_func_int {
+  typedef Item_connect_by_func_int super;
+
+ public:
+  Item_connect_by_func_iscycle(const POS &pos)
+      : Item_connect_by_func_int(pos, 0) {}
+  const char *func_name() const override { return "connect_by_iscycle"; }
+  enum ConnectByfunctype ConnectBy_func() const override {
+    return Item_connect_by_func::ISCYCLE_FUNC;
+  }
+
+  bool is_evaluate_value() override { return true; }
+  bool itemize(Parse_context *pc, Item **res) override;
+  bool resolve_type(THD *thd) override {
+    if (super::resolve_type(thd)) return true;
+    if (!thd->lex->current_query_block()->connect_by_nocycle) {
+      my_error(ER_PSEUDOCOLUMN_NOT_ALLOW, MYF(0), func_name(),
+               " without nocycle");
+      return true;
+    }
+    return false;
+  }
+
+  bool update_value(longlong val) override {
+    if (val > 1) val = 1;
+    m_val = val;
+    return false;
+  }
+};
+
+class Item_connect_by_func_isleaf final : public Item_connect_by_func_int {
+  typedef Item_connect_by_func_int super;
+
+ public:
+  Item_connect_by_func_isleaf(const POS &pos)
+      : Item_connect_by_func_int(pos, 1) {}
+  const char *func_name() const override { return "connect_by_isleaf"; }
+
+  bool itemize(Parse_context *pc, Item **res) override;
+
+  enum ConnectByfunctype ConnectBy_func() const override {
+    return Item_connect_by_func::ISLEAF_FUNC;
+  }
+  bool is_evaluate_value() override { return true; }
+  bool update_value(longlong val) override {
+    if (val > 1) val = 1;
+    m_val = val;
+    return false;
+  }
+};
+
+struct Collect_leaf_cycle_info {
+  Collect_leaf_cycle_info(THD *thd)
+      : func_leaf_list(thd->mem_root), func_cycle_list(thd->mem_root) {}
+  mem_root_deque<Item *> func_leaf_list;
+  mem_root_deque<Item *> func_cycle_list;
+};
+
+/***CONNECT BY FUNC END ****/
 
 #endif /* ITEM_SUM_INCLUDED */

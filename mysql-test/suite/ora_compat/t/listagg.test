@@ -1,0 +1,264 @@
+# create test table
+create table plan1 (
+id int PRIMARY key,
+name varchar(255)
+);
+
+create table plandetail(
+id int PRIMARY key,
+name varchar(255),
+state int,
+planId int
+);
+
+#insert data
+
+insert into plan1 values(1,'计划一');
+insert into plan1 values(2,'计划二');
+insert into plan1 values(3,'计划三');
+
+insert into plandetail values(1,'明细一',0,1);
+insert into plandetail values(2,'明细2',1,1);
+insert into plandetail values(3,'明细3',1,1);
+
+insert into plandetail values(4,'明细一',0,2);
+insert into plandetail values(5,'明细2',0,2);
+insert into plandetail values(6,'明细3',1,2);
+
+insert into plandetail values(7,'明细一',1,3);
+insert into plandetail values(8,'明细2',1,3);
+insert into plandetail values(9,'明细3',1,3);
+
+#test  group_concat
+select t1.name ,group_concat(t2.name order by PLANID asc separator ',') from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+#test  LISTAGG  WITHIN GROUP 
+
+select t1.name ,LISTAGG(t2.name,'')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+select t1.name ,LISTAGG(t2.name,'aaaaaa')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+select t1.name ,LISTAGG(t2.name,',')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+select t1.name ,LISTAGG(t2.name,':')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+select t1.name ,LISTAGG(t2.name,';')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+select t1.name ,LISTAGG(t2.name,'\'')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+select t1.name ,LISTAGG(t2.name,1)  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+select t1.name ,LISTAGG(t2.name,-1)  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+select t1.name ,LISTAGG(t2.name,1.0000000001)  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+select t1.name ,LISTAGG(t2.name,-1.0000000001)  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+select t1.name ,LISTAGG(t2.name,-1.0000000001)  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+select t1.name ,LISTAGG(t2.name,'|分割|')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+
+drop table plan1;
+drop table plandetail;
+
+
+-- echo # test window function support
+CREATE TABLE p (population int, nation char (20), city char(20));
+INSERT INTO p VALUES (500, 'China','Guangzhou');
+INSERT INTO p VALUES (1500, 'China','Shanghai');
+INSERT INTO p VALUES (500, 'China','Beijing');
+INSERT INTO p VALUES (1000, 'USA','New York');
+INSERT INTO p VALUES (500, 'USA','Boston');
+INSERT INTO p VALUES (500, 'Japan','Tokyo');
+INSERT INTO p VALUES (1200, 'China','Shanghai');
+--echo # data set in population table p.
+SELECT * FROM p;
+
+--echo # legacy behavior
+SELECT SUM(population),LISTAGG(p.city, ',') la_a_city,
+GROUP_CONCAT(p.city SEPARATOR ',') gc_a_city FROM p;
+SELECT SUM(population),
+LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY p.city) la_a_city,
+GROUP_CONCAT(p.city ORDER BY p.city SEPARATOR ',') gc_a_city FROM p;
+SELECT SUM(population),
+LISTAGG(DISTINCT city, ',') WITHIN GROUP (ORDER BY p.city) la_d_city,
+GROUP_CONCAT(DISTINCT city ORDER BY p.city SEPARATOR ',') gc_d_city FROM p;
+SELECT SUM(population),
+LISTAGG(DISTINCT city, ',') WITHIN GROUP (ORDER BY p.city DESC) la_d_city,
+GROUP_CONCAT(DISTINCT city ORDER BY p.city DESC SEPARATOR ',') gc_d_city FROM p;
+
+--echo # partition behavior for comparision.
+# use sql_mode=oracle, so that '||' concat operator can be used
+
+SET SQL_MODE=DEFAULT;
+
+--error ER_CLAUSE_IN_LISTAGG_NOT_ALLOWED
+SELECT LISTAGG(p.city, ',') OVER (PARTITION BY nation ORDER BY city) la_a_city FROM p;
+
+--error ER_ORDER_BY_MISSING
+SELECT LISTAGG(p.city, ',') WITHIN GROUP () la_a_city FROM p;
+
+SET SQL_MODE=ORACLE;
+
+--error ER_CLAUSE_IN_LISTAGG_NOT_ALLOWED
+SELECT LISTAGG(p.city, ',') OVER (PARTITION BY nation ORDER BY city) la_a_city FROM p;
+
+--error ER_ORDER_BY_MISSING
+SELECT LISTAGG(p.city, ',') WITHIN GROUP () la_a_city FROM p;
+
+SELECT SUM(population) OVER (PARTITION BY nation) sum,
+LISTAGG(p.city, ',') OVER (PARTITION BY nation) la_a_city FROM p;
+
+SELECT SUM(population) OVER (PARTITION BY nation) sum,
+LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY p.city) OVER (PARTITION BY nation) la_a_city FROM p;
+
+SELECT SUM(population) OVER (PARTITION BY nation) sum,
+LISTAGG(DISTINCT city, ',') WITHIN GROUP (ORDER BY p.city) OVER (PARTITION BY nation) la_d_city FROM p;
+
+# non-aggregated columns could be used in projection list
+SELECT NATION,CITY,POPULATION,SUM(population) OVER (PARTITION BY nation ORDER BY city) sum,
+LISTAGG(DISTINCT '<'||city||'>') WITHIN GROUP (ORDER BY p.city ASC) OVER (PARTITION BY nation) la_d_city FROM p;
+
+--echo # listagg/group_concat shares the same partition behavior
+SET SQL_MODE=ORACLE;
+
+SELECT SUM(population) OVER (PARTITION BY nation) sum,
+LISTAGG(p.city, ',') OVER (PARTITION BY nation) la_a_city,
+GROUP_CONCAT(p.city SEPARATOR ',') OVER (PARTITION BY nation) gc_a_city FROM p;
+
+SELECT SUM(population) OVER (PARTITION BY nation) sum,
+LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY p.city) OVER (PARTITION BY nation) la_a_city,
+GROUP_CONCAT(p.city ORDER BY p.city SEPARATOR ',') OVER (PARTITION BY nation) gc_a_city FROM p;
+
+SELECT SUM(population) OVER (PARTITION BY nation) sum,
+LISTAGG(DISTINCT city, ',') WITHIN GROUP (ORDER BY p.city) OVER (PARTITION BY nation) la_d_city,
+GROUP_CONCAT(DISTINCT city ORDER BY p.city SEPARATOR ',') OVER (PARTITION BY nation) gc_d_city FROM p;
+
+# non-aggregated columns could be used in projection list
+SELECT NATION,CITY,POPULATION,SUM(population) OVER (PARTITION BY nation ORDER BY city) sum,
+LISTAGG(DISTINCT '<'||city||'>') WITHIN GROUP (ORDER BY p.city DESC) OVER (PARTITION BY nation) la_d_city,
+GROUP_CONCAT(DISTINCT '<'||city||'>' ORDER BY p.city DESC) OVER (PARTITION BY nation) gc_d_city FROM p;
+
+--echo todo: wrong result due to ps-8.0.30's bug, which should be recorded again after bugfix
+EXPLAIN SELECT NATION,CITY,POPULATION,SUM(population) OVER (PARTITION BY nation ORDER BY city) sum,
+LISTAGG(DISTINCT '<'||city||'>') WITHIN GROUP (ORDER BY p.city DESC) OVER (PARTITION BY nation) la_d_city,
+GROUP_CONCAT(DISTINCT '<'||city||'>' ORDER BY p.city DESC) OVER (PARTITION BY nation) gc_d_city FROM p;
+SHOW WARNINGS;
+
+SELECT NATION,CITY,POPULATION,SUM(population) OVER (PARTITION BY nation ORDER BY city) sum,
+LISTAGG(DISTINCT '<'||city||'>') OVER (PARTITION BY nation) la_d_city,
+GROUP_CONCAT(DISTINCT '<'||city||'>') OVER (PARTITION BY nation) gc_d_city FROM p;
+
+--echo todo: wrong result due to ps-8.0.30's bug, which should be recorded again after bugfix
+EXPLAIN SELECT NATION,CITY,POPULATION,SUM(population) OVER (PARTITION BY nation ORDER BY city) sum,
+LISTAGG(DISTINCT '<'||city||'>') OVER (PARTITION BY nation) la_d_city,
+GROUP_CONCAT(DISTINCT '<'||city||'>') OVER (PARTITION BY nation) gc_d_city FROM p;
+SHOW WARNINGS;
+
+--echo # empty OVER () to analytic functions.
+SELECT NATION,CITY,POPULATION,SUM(population) OVER () sum,
+LISTAGG(DISTINCT city, ',') WITHIN GROUP (ORDER BY p.city DESC) OVER () la_d_city FROM p;
+
+--echo # reference window by name which is defined in query.
+--error ER_CLAUSE_IN_LISTAGG_NOT_ALLOWED
+SELECT nation,GROUP_CONCAT(p.city, ',') OVER w FROM p WINDOW w AS (ORDER BY nation);
+--error ER_CLAUSE_IN_LISTAGG_NOT_ALLOWED
+SELECT nation,WM_CONCAT(p.city, ',') OVER w FROM p WINDOW w AS (ORDER BY nation);
+--error ER_CLAUSE_IN_LISTAGG_NOT_ALLOWED
+SELECT nation,LISTAGG(p.city, ',') OVER w FROM p WINDOW w AS (ORDER BY nation) ;
+SELECT nation,LISTAGG(p.city, ',') OVER w FROM p WINDOW w AS (PARTITION BY nation);
+SELECT nation,LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER w FROM p WINDOW w AS (PARTITION BY nation);
+EXPLAIN SELECT nation,LISTAGG(p.city, ',') OVER w FROM p WINDOW w AS (PARTITION BY nation);
+SHOW WARNINGS;
+EXPLAIN SELECT nation,LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER w FROM p WINDOW w AS (PARTITION BY nation);
+SHOW WARNINGS;
+
+--echo # inherit window definition
+--error ER_CLAUSE_IN_LISTAGG_NOT_ALLOWED
+SELECT nation,LISTAGG(p.city, ',') OVER (w) FROM p WINDOW w AS (ORDER BY nation);
+--error ER_CLAUSE_IN_LISTAGG_NOT_ALLOWED
+SELECT nation,LISTAGG(p.city, ',') OVER (w) FROM p WINDOW w AS (PARTITION BY nation ORDER BY nation);
+--error ER_WINDOW_NO_REDEFINE_ORDER_BY
+SELECT nation,LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER (w) FROM p WINDOW w AS (PARTITION BY nation ORDER BY nation);
+SELECT nation,LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER (w) FROM p WINDOW w AS (PARTITION BY nation);
+EXPLAIN SELECT nation,LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER (w) FROM p WINDOW w AS (PARTITION BY nation);
+SHOW WARNINGS;
+SELECT nation,LISTAGG(p.city, ',') OVER (w) FROM p WINDOW w AS (PARTITION BY nation);
+EXPLAIN SELECT nation,LISTAGG(p.city, ',') OVER (w) FROM p WINDOW w AS (PARTITION BY nation);
+
+
+--echo # other window range clause should be disabled to follow oracle behavior
+--error ER_CLAUSE_IN_LISTAGG_NOT_ALLOWED
+SELECT nation,city,population,LISTAGG(p.city,',') WITHIN GROUP(ORDER BY nation) OVER (ROWS UNBOUNDED PRECEDING) FROM p;
+--error ER_CLAUSE_IN_LISTAGG_NOT_ALLOWED
+SELECT nation, LISTAGG(p.city, ',') WITHIN GROUP(ORDER BY p.city)  over w from p window w AS (ORDER BY nation DESC) ;
+--error ER_CLAUSE_IN_LISTAGG_NOT_ALLOWED
+SELECT nation, LISTAGG(p.city, ',') WITHIN GROUP(ORDER BY p.city)  over w from p window w AS (RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) ;
+
+--error ER_CLAUSE_IN_LISTAGG_NOT_ALLOWED
+SELECT nation, LISTAGG(p.city, ',') WITHIN GROUP(ORDER BY p.city)  over w from p window w AS (ORDER BY nation DESC RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) ;
+
+--echo # prepare
+PREPARE stmt1 FROM 'SELECT SUM(population),LISTAGG(p.city, '','') la_a_city, GROUP_CONCAT(p.city SEPARATOR '','') gc_a_city FROM p';
+
+PREPARE stmt2 FROM 'SELECT NATION,CITY,POPULATION,SUM(population) OVER () sum, LISTAGG(DISTINCT city, '','') WITHIN GROUP (ORDER BY p.city DESC) OVER () la_d_city FROM p';
+
+PREPARE stmt3 FROM 'SELECT SUM(population) OVER (PARTITION BY nation) sum, LISTAGG(p.city, '','') OVER (PARTITION BY nation) la_a_city, GROUP_CONCAT(p.city SEPARATOR '','') OVER (PARTITION BY nation) gc_a_city FROM p';
+
+EXECUTE stmt1;
+EXECUTE stmt2;
+EXECUTE stmt3;
+EXECUTE stmt1;
+EXECUTE stmt2;
+EXECUTE stmt3;
+
+DEALLOCATE PREPARE stmt3;
+DEALLOCATE PREPARE stmt2;
+DEALLOCATE PREPARE stmt1;
+
+--echo # execute immediate
+EXECUTE IMMEDIATE 'SELECT SUM(population),LISTAGG(p.city, '','') la_a_city, GROUP_CONCAT(p.city SEPARATOR '','') gc_a_city FROM p';
+
+EXECUTE IMMEDIATE 'SELECT NATION,CITY,POPULATION,SUM(population) OVER () sum, LISTAGG(DISTINCT city, '','') WITHIN GROUP (ORDER BY p.city DESC) OVER () la_d_city FROM p';
+
+EXECUTE IMMEDIATE 'SELECT SUM(population) OVER (PARTITION BY nation) sum, LISTAGG(p.city, '','') OVER (PARTITION BY nation) la_a_city, GROUP_CONCAT(p.city SEPARATOR '','') OVER (PARTITION BY nation) gc_a_city FROM p';
+
+
+DROP TABLE p;
+
+--echo # user variables
+create table t1(
+    id int,
+    col1 varchar(60),
+    col2 varchar(60),
+    col3 varchar(60)
+) partition by hash(id) partitions 15  ;
+
+insert into t1 values (1,'Anc','Bbc','Ccc');
+insert into t1 values (2,'An','Bbcc','Ccc');
+insert into t1 values (3,'Anc','Bbc','Ccc');
+insert into t1 values (4,'Ancc','Bbcc','Cccc');
+insert into t1 values (5,'Anccc','Bbc','Cccc');
+insert into t1 values (6,'Anccc','Bbcc','Cccc');
+insert into t1 values (7,'','1','');
+insert into t1 values (8,null,'2',null);
+
+set @a='test';
+select col1, group_concat(@a order by col3 asc separator '_') as TOTAL from t1 group by col1; 
+select col1, listagg(@a, '_') within group (order by col3 asc) as TOTAL from t1 group by col1; 
+select col1, wm_concat(@a order by col3 asc separator '_') as TOTAL from t1 group by col1; 
+
+set timestamp=1;
+select col1, group_concat(now(6) order by col3 asc separator '_') as TOTAL from t1 group by col1; 
+set timestamp=1;
+select col1, listagg(now(6), '_') within group (order by col3 asc) as TOTAL from t1 group by col1; 
+set timestamp=1;
+select col1, wm_concat(now(6) order by col3 asc separator '_') as TOTAL from t1 group by col1; 
+set timestamp=1;
+select col1, group_concat(sysdate(6) order by col3 asc separator '_') as TOTAL from t1 group by col1; 
+set timestamp=1;
+select col1, listagg(sysdate(6), '_') within group (order by col3 asc) as TOTAL from t1 group by col1; 
+set timestamp=1;
+select col1, wm_concat(sysdate(6) order by col3 asc separator '_') as TOTAL from t1 group by col1; 
+
+drop table t1;

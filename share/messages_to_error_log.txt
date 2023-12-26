@@ -6278,11 +6278,11 @@ ER_GRP_RPL_FETCH_VIEW_CHANGE_LOG_EVENT_FAILED
   eng "Failed to fetch View_change_log_event containing required info for certification"
   chinese "无法获取包含认证所需信息的View_CHANGE_LOG_EVENT"
 
-OBSOLETE_ER_GRP_RPL_CONTACT_WITH_SRV_FAILED
+ER_GRP_RPL_CONTACT_WITH_SRV_FAILED
   eng "Error when contacting the server to ensure the proper logging of a group change in the binlog"
   chinese "联系服务器以确保在binlog中正确记录组更改时出错"
 
-OBSOLETE_ER_GRP_RPL_SRV_WAIT_TIME_OUT
+ER_GRP_RPL_SRV_WAIT_TIME_OUT
   eng "Timeout when waiting for the server to execute local transactions in order assure the group change proper logging"
   chinese "等待服务器执行本地事务以确保组更改正确记录时超时"
 
@@ -13646,11 +13646,11 @@ ER_SERVER_UPGRADE_HELP_TABLE_STATUS
   eng "Upgrade of help tables %s."
   chinese "升级帮助表%s。"
 
-OBSOLETE_ER_GRP_RPL_SRV_GTID_WAIT_ERROR
+ER_GRP_RPL_SRV_GTID_WAIT_ERROR
   eng "Error when waiting for the server to execute local transactions in order assure the group change proper logging"
   chinese "等待服务器执行本地事务以确保组更改正确记录时出错"
 
-OBSOLETE_ER_GRP_DELAYED_VCLE_LOGGING
+ER_GRP_DELAYED_VCLE_LOGGING
   eng "Unable to log the group change View log event in its exaction position in the log. This will not however affect the group replication recovery process or the overall plugin process."
   chinese "无法在日志中的摘要位置记录组更改视图日志事件。但这不会影响组复制恢复过程或整个插件过程。"
 

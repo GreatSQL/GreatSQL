@@ -155,6 +155,9 @@ class Item_row : public Item {
   bool check_function_as_value_generator(uchar *) override { return false; }
   Item *pq_clone(THD *thd, Query_block *select) override;
   bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
+  /* Format item_name as args[0]_args[1]_...args[n] */
+  void setup_pivot_name(THD *thd);
+  void setup_used_tables();
 };
 
 #endif /* ITEM_ROW_INCLUDED */

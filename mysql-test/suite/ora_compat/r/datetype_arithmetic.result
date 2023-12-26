@@ -76,6 +76,43 @@ NULL	1	NULL
 2021-08-01 23:59:59	1	2021-08-02 23:59:59
 2021-08-01 23:59:59	-1	2021-07-31 23:59:59
 drop table test_date;
+CREATE or replace PROCEDURE p1 as
+dt datetime;
+dt1 datetime;
+diff int;
+BEGIN
+dt := to_date(sysdate, 'yyyy-mm-dd hh24:mi:ss.ff6')-1;
+dt1 := to_date(sysdate, 'yyyy-mm-dd hh24:mi:ss.ff6');
+select dt,dt1,dt-dt1 from dual;
+dt := to_date(sysdate, 'yyyy-mm-dd hh24:mi:ss.ff6') + 10;
+select dt,dt1,dt-dt1 from dual;
+diff:= dt - dt1;
+select diff from dual;
+end
+//
+set timestamp=1631848176;
+call p1();
+dt	dt1	dt-dt1 
+2021-09-16 06:09:36	2021-09-17 06:09:36	-1
+dt	dt1	dt-dt1 
+2021-09-27 06:09:36	2021-09-17 06:09:36	10
+diff 
+10
+drop procedure p1;
+CREATE or replace PROCEDURE p1(par IN datetime) as
+BEGIN
+select par;
+par := to_date(par, 'yyyy-mm-dd hh24:mi:ss')-1;
+select par;
+end;
+//
+set timestamp=1631848176;
+call p1(sysdate);
+par
+2021-09-17 06:09:36
+par
+2021-09-16 06:09:36
+drop procedure p1;
 select to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 1;
 to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 1
 NULL

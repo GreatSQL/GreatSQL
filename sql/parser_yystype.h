@@ -46,6 +46,7 @@
 #include "sql/opt_hints.h"  // opt_hints_enum
 #include "sql/parse_tree_hints.h"
 #include "sql/parse_tree_node_base.h"
+#include "sql/parse_tree_pivot.h"
 #include "sql/resourcegroups/platform/thread_attrs_api.h"  // ...::cpu_id_t
 #include "sql/resourcegroups/resource_group_basic_types.h"  // resourcegroups::Range
 #include "sql/set_var.h"
@@ -150,11 +151,13 @@ enum class enum_jt_column;
 enum class enum_key_algorithm;
 enum class partition_type;
 enum enum_sp_suid_behaviour : int;
+enum temp_table_oc_param : int;
 struct Alter_tablespace_parse_context;
 struct CHARSET_INFO;
 struct LEX;
 struct Sql_cmd_srs_attributes;
 struct udf_func;
+class PT_connect_by;
 class Qualified_column_ident;
 struct ora_simple_ident_def;
 enum class enum_udt_table_of_type;
@@ -169,6 +172,7 @@ typedef Parse_tree_node_tmpl<Alter_tablespace_parse_context>
     PT_alter_tablespace_option_base;
 
 enum enum_yes_no_unknown { TVL_YES, TVL_NO, TVL_UNKNOWN };
+class sp_assignment_lex;
 
 /**
   used by the parser to store internal variable name
@@ -239,6 +243,7 @@ enum PT_joined_table_type {
   JTT_NATURAL = 0x04,
   JTT_LEFT = 0x08,
   JTT_RIGHT = 0x10,
+  JTT_FULL = 0x20,
 
   JTT_STRAIGHT_INNER = JTT_STRAIGHT | JTT_INNER,
   JTT_NATURAL_INNER = JTT_NATURAL | JTT_INNER,
@@ -364,11 +369,11 @@ struct Oracle_sp_for_loop_bounds {
   LEX_STRING cursor_name;
   bool is_cursor;
   int direction;
-  Item *from;
-  Item *to;
+  sp_assignment_lex *from;
+  sp_assignment_lex *to;
   Oracle_sp_for_loop_bounds(uint m_offset, LEX_STRING m_cursor_name,
-                            bool is_cursor_m, int m_direction, Item *m_from,
-                            Item *m_to)
+                            bool is_cursor_m, int m_direction,
+                            sp_assignment_lex *m_from, sp_assignment_lex *m_to)
       : offset(m_offset),
         cursor_name(m_cursor_name),
         is_cursor(is_cursor_m),
@@ -383,14 +388,16 @@ struct Oracle_sp_for_loop_index_and_bounds {
   LEX_STRING cursor_name;
   bool is_cursor;
   int direction;
-  Item *from;
+  sp_assignment_lex *from;
   Item_splocal *cursor_var_item;
-  Item *jump_condition;
+  sp_assignment_lex *jump_condition;
   uint var_index;
+  const char *start_ident_pos;
+  const char *end_ident_pos;
   Oracle_sp_for_loop_index_and_bounds(
       const Oracle_sp_for_loop_bounds oracle_sp_for_loop_bounds,
       LEX_STRING m_cursor_var, Item_splocal *m_cursor_var_item,
-      uint m_var_index)
+      uint m_var_index, const char *m_start_pos, const char *m_end_pos)
       : offset(oracle_sp_for_loop_bounds.offset),
         cursor_var(m_cursor_var),
         cursor_name(oracle_sp_for_loop_bounds.cursor_name),
@@ -399,23 +406,19 @@ struct Oracle_sp_for_loop_index_and_bounds {
         from(oracle_sp_for_loop_bounds.from),
         cursor_var_item(m_cursor_var_item),
         jump_condition(oracle_sp_for_loop_bounds.to),
-        var_index(m_var_index) {}
+        var_index(m_var_index),
+        start_ident_pos(m_start_pos),
+        end_ident_pos(m_end_pos) {}
 };
 
 struct Ora_sp_forall_loop {
-  LEX_STRING ident;
   LEX_STRING ident_i;
   const char *start;
   const char *end;
   LEX_CSTRING query;
-  Ora_sp_forall_loop(LEX_STRING m_ident, LEX_STRING m_ident_i,
-                     const char *m_start, const char *m_end,
-                     LEX_CSTRING m_query)
-      : ident(m_ident),
-        ident_i(m_ident_i),
-        start(m_start),
-        end(m_end),
-        query(m_query) {}
+  Ora_sp_forall_loop(LEX_STRING m_ident_i, const char *m_start,
+                     const char *m_end, LEX_CSTRING m_query)
+      : ident_i(m_ident_i), start(m_start), end(m_end), query(m_query) {}
 };
 
 struct Udt_table_type {
@@ -430,6 +433,26 @@ enum class plsql_cursor_attr_type {
   PLSQL_CURSOR_ATTR_FOUND,
   PLSQL_CURSOR_ATTR_NOTFOUND,
   PLSQL_CURSOR_ATTR_ROWCOUNT
+};
+
+struct Locked_row_action_ora {
+  Locked_row_action locked_row_action;
+  bool is_wait;
+  Item *timeout;
+  Locked_row_action_ora(Locked_row_action m_locked_row_action, bool m_is_wait,
+                        Item *m_timeout)
+      : locked_row_action(m_locked_row_action),
+        is_wait(m_is_wait),
+        timeout(m_timeout) {}
+};
+
+struct Sp_decl_cursor_return {
+  LEX_STRING ident;
+  Qualified_column_ident *ref;
+  int type;
+  Sp_decl_cursor_return(LEX_STRING ident_arg, Qualified_column_ident *ref_arg,
+                        int type_arg)
+      : ident(ident_arg), ref(ref_arg), type(type_arg) {}
 };
 
 struct Bipartite_name {
@@ -620,7 +643,10 @@ union YYSTYPE {
   } lead_lag_info;
   PT_insert_values_list *values_list;
 
-  Mem_root_array<PT_insert_all_into *> *insert_all_into_list;
+  struct {
+    int clause_type;
+    Mem_root_array<PT_insert_all_into *> *insert_list;
+  } insert_all_into_list;
   PT_insert_all_into *insert_all_into;
   Parse_tree_root *top_level_node;
   Table_ident *table_ident;
@@ -842,13 +868,25 @@ union YYSTYPE {
   ora_simple_ident_def *ora_simple_ident_def_field;
   List<ora_simple_ident_def> *ora_simple_ident_def_list;
   Ora_sp_forall_loop *ora_sp_forall_loop_def;
+  Locked_row_action_ora *ora_locked_row_action;
+  Sp_decl_cursor_return *sp_decl_cursor_return;
+
+  PT_connect_by *connect_by;
   /* package */
   enum enum_sp_suid_behaviour sp_suid;
   uint sp_instr_addr;
   PT_merge_when_list *merge_when_list;
-  // Mem_root_array_YY<Qualified_column_ident *> qualified_column_ident_list;
+  Mem_root_array_YY<Qualified_column_ident *> qualified_column_ident_list;
   Udt_table_type *udt_table_type_def;
+  enum temp_table_oc_param temp_table_oc;
   Set_operator query_operator;
+  sp_assignment_lex *assignment_lex;
+  enum_keep_direction keep_dir;
+  struct {
+    int mode;
+    PT_item_list *param_list;
+  } execute_using_param;
+  PT_pivot *pivot;
 };
 
 static_assert(sizeof(YYSTYPE) <= 32, "YYSTYPE is too big");

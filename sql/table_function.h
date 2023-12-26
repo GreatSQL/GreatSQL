@@ -81,7 +81,7 @@ class Table_function {
       true  on error
       false on success
   */
-  bool write_row();
+  virtual bool write_row();
   /**
     Returns a field with given index
 
@@ -507,12 +507,16 @@ class Table_function_sequence final : public Table_function {
 class Table_function_record final : public Table_function {
  public:
   Table_function_record(const char *alias, List<Create_field> vt_list,
-                        uint spv_offset)
+                        uint spv_offset, uint forall_i_offset,
+                        bool is_str_index)
       : Table_function(),
         m_table_alias(alias),
         m_vt_list(vt_list),
+        m_item_field_row(nullptr),
         m_spv_offset(spv_offset),
-        select_row_count(0) {}
+        m_forall_i_offset(forall_i_offset),
+        m_row_count(0),
+        m_is_str_index(is_str_index) {}
   /**
     Returns function's name
   */
@@ -534,13 +538,21 @@ class Table_function_record final : public Table_function {
       false on success
   */
   virtual bool fill_result_table() override;
-  bool fill_result_table_one_col(Item **value, uint field_idx);
-  bool fill_result_table_all_col(THD *thd, const mem_root_deque<Item *> &items);
+  bool fill_result_table_all_col(THD *thd, const mem_root_deque<Item *> &items,
+                                 Item *item_index);
+  /**
+   * @brief
+   *  get ref object
+   *  @param[IN] item_index
+   *  @param[OUT] ref
+   *  @return true if init_ref fail
+   */
+  bool prepare_index_lookup_part(Item *item_index, Index_lookup *ref);
+  bool table_index_read_map(Item *item_index, uint record_offset);
   bool update_result_table_one_col(Item **value, uint field_idx,
-                                   int offset_table,
+                                   Item *item_index,
                                    Field *field_udt = nullptr);
-  bool update_result_table_one_col_without_fix(Item *value, uint field_idx,
-                                               int offset_table);
+  bool update_result_table_all_cols(Item **value, Item *item_index);
   TABLE *get_table() { return table; }
   /**
     Return table_map of tables used by function's data source
@@ -552,16 +564,23 @@ class Table_function_record final : public Table_function {
 
   virtual bool walk(Item_processor processor, enum_walk walk,
                     uchar *arg) override;
+  bool write_row_and_cmp_index(Item *item_index);
 
  public:
   const char *m_table_alias;
 
   List<Create_field> m_vt_list;
 
+  Item *m_item_field_row;  // used for stu_record_val(1),its table is the same
+                           // as this->table.
+  List<String> m_first_last_str_list;
+
  private:
   // copy data from table_from to this.
   uint m_spv_offset;
-  int select_row_count;
+  uint m_forall_i_offset;
+  longlong m_row_count;
+  bool m_is_str_index;
 
  public:
   /**
@@ -570,10 +589,38 @@ class Table_function_record final : public Table_function {
   virtual List<Create_field> *get_field_list() override;
   virtual bool do_init_args() override;
   virtual void do_cleanup() override;
-  Item *select_result_table_one_row_col(int row, int col);
-  bool select_result_table_one_row(mem_root_deque<Item *> *items);
+  Item *select_result_table_one_row_col(Item *item_index, int col);
+  bool select_result_table_one_row(Item *item_index,
+                                   mem_root_deque<Item *> *items);
   bool create_result_table(THD *thd, ulonglong options,
                            const char *table_alias) override;
+  bool copy_to_other_table(Table_function_record *dst_table);
+  longlong get_row_count() { return m_row_count; }
+  String *get_index_first() {
+    return m_first_last_str_list.size() > 0 ? m_first_last_str_list.head()
+                                            : nullptr;
+  }
+  String *get_index_last() {
+    if (m_first_last_str_list.size() == 1) return m_first_last_str_list.head();
+    List_iterator_fast<String> str_iter(m_first_last_str_list);
+    str_iter++;
+    String *str = str_iter++;
+    return m_first_last_str_list.size() > 1 ? str : nullptr;
+  }
+  void clear_first_last_str_list() {
+    if (!m_first_last_str_list.size()) return;
+    List_iterator_fast<String> str_iter(m_first_last_str_list);
+    String *str;
+    while ((str = str_iter++)) {
+      str->mem_free();
+    }
+    m_first_last_str_list.clear();
+  }
+  void init_table() {
+    empty_table();
+    m_row_count = 0;
+    clear_first_last_str_list();
+  }
 };
 
 class Table_function_udt final : public Table_function {

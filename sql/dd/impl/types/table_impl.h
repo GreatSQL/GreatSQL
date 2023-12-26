@@ -122,6 +122,14 @@ class Table_impl : public Abstract_table_impl, virtual public Table {
   }
 
   /////////////////////////////////////////////////////////////////////////
+  // is_materialized_view.
+  /////////////////////////////////////////////////////////////////////////
+  bool is_materialized_view() const override { return m_is_materialized_view; }
+  void set_is_materialized_view(bool is_materialized_view) override {
+    m_is_materialized_view = is_materialized_view;
+  }
+
+  /////////////////////////////////////////////////////////////////////////
   // collation.
   /////////////////////////////////////////////////////////////////////////
 
@@ -544,6 +552,24 @@ class Table_impl : public Abstract_table_impl, virtual public Table {
     return &m_check_constraints;
   }
 
+  /////////////////////////////////////////////////////////////////////////
+  // definition/utf8.
+  /////////////////////////////////////////////////////////////////////////
+
+  const String_type &definition() const override { return m_definition; }
+
+  void set_definition(const String_type &definition) override {
+    m_definition = definition;
+  }
+
+  const String_type &definition_utf8() const override {
+    return m_definition_utf8;
+  }
+
+  void set_definition_utf8(const String_type &definition_utf8) override {
+    m_definition_utf8 = definition_utf8;
+  }
+
  private:
   // Fields.
 
@@ -551,6 +577,9 @@ class Table_impl : public Abstract_table_impl, virtual public Table {
 
   String_type m_engine;
   String_type m_comment;
+  // materialized view statement
+  String_type m_definition;
+  String_type m_definition_utf8;
 
   // Setting this to 0 means that every table will be checked by CHECK
   // TABLE FOR UPGRADE once, even if it was created in this version.
@@ -565,7 +594,8 @@ class Table_impl : public Abstract_table_impl, virtual public Table {
 
   enum_row_format m_row_format;
   bool m_is_temporary;
-
+  // materialized view flag
+  bool m_is_materialized_view;
   // - Partitioning related fields.
 
   enum_partition_type m_partition_type;

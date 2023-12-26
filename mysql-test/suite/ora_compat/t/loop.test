@@ -1,0 +1,526 @@
+#
+# Test of problem with for loop exit/exit when and long separators.
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS t;
+DROP TABLE IF EXISTS t1;
+DROP PROCEDURE IF EXISTS p1;
+DROP TABLE IF EXISTS tab;
+DROP TABLE IF EXISTS loop_test;
+
+CREATE TABLE t (number_type number(65),decimal_type decimal(65,0),s1 INT, varchar_type varchar(2000),timestamp_type timestamp  DEFAULT CURRENT_TIMESTAMP on update current_timestamp,datetime_type datetime,double_type double(65,0),float_type float(65,0),char_type char(255),bit_type bit(64),s2 varchar(100),PRIMARY KEY (s1));
+INSERT INTO t values(1.1,1.1,1,'aaa','2021/5/10 16:44:00.123456','2021-03-25',1,1,'aaa',b'10111','aaa');
+INSERT INTO t values(1.1,2.2,2,'bbb','2021/5/10 16:44:00.123456','2021-07-25',2,2,'bbb',b'101111','bbb');
+INSERT INTO t values(1.1,3.3,3,'ccc','2021/5/10 16:44:00.123456','2021-09-25',3,3,'ccc',b'101111','ccc');
+
+CREATE TABLE t1 (number_type number(60,4),decimal_type decimal(60,4),s1 INT, varchar_type varchar(2000),
+timestamp_type timestamp(6),datetime_type datetime(6),double_type double(60,4),
+float_type float(60,4),char_type char(255),bit_type bit(64),s2 varchar(100),PRIMARY KEY (s1));
+INSERT INTO t1 values(1.1,1.1,1,'aaa','2021/5/10 16:44:00.123456','2021-03-25 16:44:00.123456',1.1,1.1,'aaa',b'1011','aaa');
+INSERT INTO t1 values(2.2,2.2,2,'bbb','2021/5/10 16:44:00.123456','2021-07-25 16:44:00.123456',2.2,2.2,'bbb',b'1011','bbb');
+INSERT INTO t1 values(3.3,3.3,3,'ccc','2021/5/10 16:44:00.123456','2021-09-25 16:44:00.123456',3.3,3.3,'ccc',b'1011','ccc');
+--enable_warnings
+
+CREATE TABLE tab (col1 INT, col2 char(50),PRIMARY KEY (col1));
+INSERT INTO tab values(1,'aaa');
+INSERT INTO tab values(2,'bbb');
+INSERT INTO tab values(3,'ccc');
+
+set sql_mode="oracle";
+delimiter //;
+CREATE PROCEDURE p1() as
+  x int default 1;
+BEGIN
+  Loop
+    select x;
+    SET x = x + 1;
+    exit when x=4;
+  end loop;
+  select 'after exit';
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+BEGIN
+	DECLARE CURSOR stuCursor is SELECT s1,s2 FROM t;
+  begin
+    for rec in  stuCursor loop
+        select rec.s1,rec.s2;
+        exit when rec.s1=2;
+    END LOOP;
+  end;
+  select 'after loop';
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+	cursor stuCursor is select s1,s2 from t;
+BEGIN
+  <<for_loop>>
+  for rec in  stuCursor loop
+      select rec.s1,rec.s2;
+      exit for_loop when stuCursor%FOUND;
+  END LOOP for_loop;
+  select 'after loop';
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+BEGIN
+  <<for_loop>>
+	for x  IN reverse 3 ..1 LOOP
+		select x;
+    exit for_loop;
+	END LOOP for_loop;
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+	cursor stuCursor is select s1,s2 from t;
+BEGIN
+  <<for_loop>>
+  for rec in  stuCursor loop
+      select rec.s1,rec.s2;
+      if stuCursor%ISOPEN then exit for_loop;end if;
+  END LOOP for_loop;
+  select 'after exit';
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+	cursor stuCursor is select s1,s2 from t;
+BEGIN
+  <<for_loop>>
+  for rec in  stuCursor loop
+      select rec.s1,rec.s2;
+      if stuCursor%ISOPEN then exit;end if;
+  END LOOP for_loop;
+  select 'after exit';
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+	cursor stuCursor is select s1,s2 from t;
+BEGIN
+  <<for_loop>>
+  for rec in  stuCursor loop
+      select rec.s1,rec.s2;
+      <<for_loop1>>
+      for x in 1 .. 4 loop
+        select x;
+        exit when x=3;
+      END LOOP for_loop1;
+  END LOOP for_loop;
+  select 'after exit';
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+  num int default 1;
+BEGIN
+  loop
+      set num=num+1;
+      select -1 as a,num as exeuted;
+      if num>=1 then
+        exit when num=2;
+        select num;
+      end if;
+  end loop;
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+  x int default 1;
+  y int default 1;
+BEGIN
+	<<label>>
+  Loop
+    select x;
+    SET x = x + 1;
+    if x=4 then exit when y=1;end if;
+  end loop label;
+  select 'after exit';
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+  x int default 1;
+  y int default 1;
+BEGIN
+	<<label>>
+  Loop
+    select x;
+    SET x = x + 1;
+    if x=4 then exit label when y=1;end if;
+  end loop;
+  select 'after exit';
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+	x int default 1;
+	no_result EXCEPTION;
+BEGIN
+  for i in 2 .. 4 loop
+    select i;
+    SET x = x + 1;
+    if x=4 then RAISE no_result;end if;
+  end loop ;
+EXCEPTION
+   WHEN no_result THEN
+      select '你的数据更新语句失败了!';
+   WHEN OTHERS THEN
+      select SQLCODE;
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+  str1 int;
+  cursor stuCursor1 is select s1,s2 from t;
+  cursor stuCursor2 is select col1,col2 from tab where col1>1;
+BEGIN
+  <<for_loop>>
+  for rec in  stuCursor1 loop
+      select rec.s1,rec.s2;
+      <<for_loop1>>
+      for rec1 in stuCursor2 loop
+        select rec1.col1,rec1.col2;
+        str1:=rec1.col1+1;
+        exit when rec1.col1=3;
+      END LOOP for_loop1;
+  END LOOP for_loop;
+  select str1;
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+  cursor stuCursor1 is select s1,s2 from t;
+  cursor stuCursor2 is select s1,s2 from t where s1>1;
+BEGIN
+  <<for_loop>>
+  for rec in  stuCursor1 loop
+      select rec.s1,rec.s2;
+      <<for_loop1>>
+      for rec1 in stuCursor2 loop
+        select rec1.s1,rec1.s2;
+        exit when rec1.s1=3;
+      END LOOP for_loop1;
+  END LOOP for_loop;
+  select 'after exit';
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+CREATE TABLE loop_test (s1 INT,PRIMARY KEY (s1));
+delimiter //;
+CREATE PROCEDURE p1() as
+  cursor stuCursor1 is select s1,s2 from t;
+  cursor stuCursor2 is select s1 from loop_test;
+BEGIN
+  <<for_loop>>
+  for rec in  stuCursor1 loop
+     select rec.s1,rec.s2;
+     Insert INTO loop_test VALUES (rec.s1);
+  END LOOP for_loop;
+  for rec1 in  stuCursor2 loop
+     select rec1.s1;
+  END LOOP;
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+BEGIN
+  <<for_loop>>
+	for x  IN reverse 3 .. -1 LOOP
+		select x;
+    exit for_loop;
+	END LOOP for_loop;
+END//
+delimiter ;//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+	cursor stuCursor is select s1,s2 from t where s1=1;
+BEGIN
+  <<for_loop>>
+  for rec in  stuCursor loop
+      select rec.s1,rec.s2;
+      select stuCursor%ISOPEN;
+  END LOOP for_loop;
+  select 'after exit';
+END//
+delimiter ;//
+CALL p1();
+CALL p1();
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1(par1 OUT varchar(20)) as
+	cursor stuCursor is select s1,s2 from t where s1=1;
+BEGIN
+  <<for_loop>>
+  for rec in  stuCursor loop
+      par1 := rec.s2;
+  END LOOP for_loop;
+  select 'after exit';
+END//
+delimiter ;//
+call p1(@num);
+select @num;
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1(par1 IN float) as
+	cursor stuCursor is select * from t;
+	par float;
+	par2 varchar(100);
+	dt timestamp;
+	dt1 datetime;
+BEGIN
+  <<for_loop>>
+  for rec in  stuCursor loop
+      par := rec.s1+par1;
+      par2 := rec.s2;
+      dt := rec.timestamp_type;
+      dt1 := rec.datetime_type;
+      select par,par2,dt,dt1;
+  END LOOP for_loop;
+  select 'after exit';
+END//
+delimiter ;//
+set @num=1;
+call p1(@num);
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+	cursor stuCursor is select * from t;
+	par decimal(65);
+BEGIN
+  <<for_loop>>
+  for rec in  stuCursor loop
+      par := rec.decimal_type;
+      select par,rec.number_type,rec.decimal_type,rec.s1,rec.varchar_type,rec.timestamp_type,rec.datetime_type,rec.double_type,rec.float_type,rec.char_type,hex(rec.bit_type);
+  END LOOP for_loop;
+  select 'after exit';
+END//
+delimiter ;//
+call p1();
+DROP PROCEDURE IF EXISTS p1;
+
+delimiter //;
+CREATE PROCEDURE p1() as
+	cursor stuCursor is select * from t1;
+	par decimal(60,4);
+BEGIN
+  <<for_loop>>
+  for rec in  stuCursor loop
+      par := rec.double_type+rec.float_type+rec.decimal_type;
+      select par,rec.number_type,rec.decimal_type,rec.s1,rec.varchar_type,rec.timestamp_type,rec.datetime_type,rec.double_type,rec.float_type,rec.char_type,hex(rec.bit_type);
+  END LOOP for_loop;
+  select 'after exit';
+END//
+delimiter ;//
+call p1();
+DROP PROCEDURE IF EXISTS p1;
+
+drop table t;
+drop table t1;
+drop table tab;
+DROP TABLE loop_test;
+
+--echo #
+--echo # test of for .. loop
+--echo #
+delimiter //;
+CREATE or replace PROCEDURE p1(i float,j float) as
+BEGIN
+  for x  IN i ..j LOOP
+    select x;
+  END LOOP;
+END//
+delimiter ;//
+CALL p1(1.5,3.4);
+CALL p1(1.4,3.5);
+CALL p1(1.5,3.4);
+DROP PROCEDURE IF EXISTS p1;
+
+--echo #
+--echo # test of for reverse .. loop
+--echo #
+delimiter //;
+CREATE or replace PROCEDURE p1(i float,j float) as
+BEGIN
+  for x  IN reverse i ..j LOOP
+    select x;
+  END LOOP;
+END//
+delimiter ;//
+CALL p1(1.5,3.4);
+CALL p1(1.4,3.5);
+CALL p1(1.5,3.4);
+DROP PROCEDURE IF EXISTS p1;
+
+--echo #
+--echo # test of for .. loop
+--echo #
+delimiter //;
+CREATE or replace PROCEDURE p1(i float,j float) as
+  val float := 1.2; 
+BEGIN
+  for x  IN i ..j LOOP
+    val := val+x;
+    select val;
+  END LOOP;
+END//
+delimiter ;//
+CALL p1(1.5,3.4);
+CALL p1(1.4,3.5);
+CALL p1(1.5,3.4);
+DROP PROCEDURE IF EXISTS p1;
+
+--echo #
+--echo # test of for .. loop
+--echo #
+delimiter //;
+CREATE or replace PROCEDURE p1(i float,j float) as
+  val float := 1.2; 
+BEGIN
+  <<lable>>
+  for x  IN i ..j LOOP
+    val := val+x;
+    select val;
+    exit lable;
+  END LOOP lable;
+END//
+delimiter ;//
+CALL p1(1.5,3.4);
+DROP PROCEDURE IF EXISTS p1;
+
+--echo #
+--echo # test of for .. loop
+--echo #
+delimiter //;
+CREATE or replace PROCEDURE p1(i float,j float) as
+  val float := 1.2; 
+BEGIN
+  for x  IN i ..j LOOP
+    val := val+x;
+    select val;
+    exit when val>7;
+  END LOOP;
+END//
+delimiter ;//
+CALL p1(1.4,3.5);
+DROP PROCEDURE IF EXISTS p1;
+
+--echo #
+--echo # test of for .. loop
+--echo #
+delimiter //;
+CREATE or replace PROCEDURE p1(i float,j float) as
+BEGIN
+  for x IN reverse i ..j LOOP
+    select x;
+    exit when x<3;
+  END LOOP;
+END//
+delimiter ;//
+CALL p1(1.4,3.5);
+DROP PROCEDURE IF EXISTS p1;
+
+--echo #
+--echo # test of for cursor() loop
+--echo #
+CREATE TABLE test_cursor_rowcount(id int, salary int);
+delimiter //;
+CREATE or replace PROCEDURE p1() as
+  salary INT;
+  CURSOR cselect IS SELECT * FROM test_cursor_rowcount;
+BEGIN
+    FOR rec in cselect() LOOP
+      SELECT rec.salary;
+    END LOOP;
+    SELECT cselect();
+END//
+delimiter ;//
+--error ER_NOT_SUPPORTED_YET
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+drop table test_cursor_rowcount;
+
+--echo #
+--echo # test of %number
+--echo #
+select 11%3;
+
+--echo #
+--echo # test of create table default mod
+--echo #
+CREATE TABLE tt1(c1 INT DEFAULT (MOD(11, 3)));
+CREATE TABLE tt2(c1 INT DEFAULT (11%3));
+drop table tt1;
+drop table tt2;
+set SQL_MODE=default;
+select 11%3;
+
+--echo #
+--echo # test bug7443
+--echo #
+set SQL_MODE=oracle;
+--error ER_SP_CURSOR_MISMATCH
+BEGIN
+  for rec in c() loop
+  end loop;
+
+--error ER_NOT_SUPPORTED_YET
+BEGIN
+  for rec in to_char('1') loop
+  end loop;
+
+
+

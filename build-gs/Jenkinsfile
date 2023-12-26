@@ -16,7 +16,7 @@ pipeline {
           sudo rm -rf test* source_tarball tarball srpm source_deb rpms debs
           rm -rf test || true
           mkdir test
-          wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-ps/percona-server-8.0_builder.sh -O percona-server_builder.sh
+          wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-gs/percona-server-8.0_builder.sh -O percona-server_builder.sh
           sed -i \'s:sudo::g\' percona-server_builder.sh
           export build_dir=$(pwd -P)
             set -o xtrace
@@ -102,7 +102,7 @@ pipeline {
             }
             sh """
               set -o xtrace
-              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-ps/percona-server-8.0_builder.sh -O percona-server_builder.sh
+              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-gs/percona-server-8.0_builder.sh -O percona-server_builder.sh
               sed -i 's:sudo::g' percona-server_builder.sh
               rm -rf test || true
               mkdir test
@@ -193,7 +193,7 @@ pipeline {
               set -o xtrace
               rm -rf test || true
               mkdir test
-              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-ps/percona-server-8.0_builder.sh -O percona-server_builder.sh
+              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-gs/percona-server-8.0_builder.sh -O percona-server_builder.sh
               sed -i 's:sudo::g' percona-server_builder.sh
               export build_dir=\$(pwd -P)
                 set -o xtrace
@@ -276,7 +276,7 @@ pipeline {
               rm -rf test || true
               mkdir test
 
-              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-ps/percona-server-8.0_builder.sh -O percona-server_builder.sh
+              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-gs/percona-server-8.0_builder.sh -O percona-server_builder.sh
               sed -i 's:sudo::g' percona-server_builder.sh
               export build_dir=\$(pwd -P)
               set -o xtrace
@@ -365,7 +365,7 @@ pipeline {
               set -o xtrace
               rm -rf test || true
               mkdir test
-              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-ps/percona-server-8.0_builder.sh -O percona-server_builder.sh
+              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-gs/percona-server-8.0_builder.sh -O percona-server_builder.sh
               sed -i 's:sudo::g' percona-server_builder.sh
               export build_dir=\$(pwd -P)
                 set -o xtrace
@@ -452,7 +452,7 @@ pipeline {
               set -o xtrace
               rm -rf test || true
               mkdir test
-              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-ps/percona-server-8.0_builder.sh -O percona-server_builder.sh
+              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-gs/percona-server-8.0_builder.sh -O percona-server_builder.sh
               sed -i 's:sudo::g' percona-server_builder.sh
               export build_dir=\$(pwd -P)
                 set -o xtrace
@@ -528,7 +528,7 @@ pipeline {
               set -o xtrace
               rm -rf test || true
               mkdir test
-              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-ps/percona-server-8.0_builder.sh -O percona-server_builder.sh
+              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-gs/percona-server-8.0_builder.sh -O percona-server_builder.sh
               sed -i 's:sudo::g' percona-server_builder.sh
               export build_dir=\$(pwd -P)
                 set -o xtrace
@@ -604,7 +604,7 @@ pipeline {
               set -o xtrace
               rm -rf test || true
               mkdir test
-              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-ps/percona-server-8.0_builder.sh -O percona-server_builder.sh
+              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-gs/percona-server-8.0_builder.sh -O percona-server_builder.sh
               sed -i 's:sudo::g' percona-server_builder.sh
               export build_dir=\$(pwd -P)
                 set -o xtrace
@@ -680,7 +680,7 @@ pipeline {
               set -o xtrace
               rm -rf test || true
               mkdir test
-              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-ps/percona-server-8.0_builder.sh -O percona-server_builder.sh
+              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-gs/percona-server-8.0_builder.sh -O percona-server_builder.sh
               sed -i 's:sudo::g' percona-server_builder.sh
               export build_dir=\$(pwd -P)
                 set -o xtrace
@@ -756,7 +756,7 @@ pipeline {
               set -o xtrace
               rm -rf test || true
               mkdir test
-              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-ps/percona-server-8.0_builder.sh -O percona-server_builder.sh
+              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-gs/percona-server-8.0_builder.sh -O percona-server_builder.sh
               sed -i 's:sudo::g' percona-server_builder.sh
               export build_dir=\$(pwd -P)
                 set -o xtrace
@@ -830,7 +830,7 @@ pipeline {
             sh """
               rm -rf test || true
               mkdir test
-              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-ps/percona-server-8.0_builder.sh -O percona-server_builder.sh
+              wget https://raw.githubusercontent.com/percona/percona-server/${BRANCH}/build-gs/percona-server-8.0_builder.sh -O percona-server_builder.sh
               sed -i 's:sudo::g' percona-server_builder.sh
               export build_dir=\$(pwd -P)
                 cd \${build_dir}

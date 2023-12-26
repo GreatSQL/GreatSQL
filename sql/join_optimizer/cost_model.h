@@ -114,6 +114,7 @@ double EstimateCostForRefAccess(THD *thd, TABLE *table, unsigned key_idx,
                                 double num_output_rows);
 void EstimateSortCost(AccessPath *path);
 void EstimateMaterializeCost(THD *thd, AccessPath *path);
+void EstimateConnectByCost(THD *thd, AccessPath *path);
 
 /**
    Estimate costs and result row count for an aggregate operation.

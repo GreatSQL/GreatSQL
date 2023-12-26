@@ -72,6 +72,9 @@ UPDATE t1 SET a=3 AND b=5 WHERE a=1;
 --echo # group_replication_before_message_broadcast debug sync point.
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
+--disable_query_log
+SET DEBUG_SYNC='now wait_for signal.group_replication_before_message_broadcast_reached';
+--enable_query_log
 --let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE State = 'debug sync point: now'
 --source include/wait_condition.inc
 
@@ -89,7 +92,6 @@ UPDATE t1 SET a=4 AND b=5 WHERE b=2;
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
 SET DEBUG_SYNC='now SIGNAL waiting';
-SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG= @debug_save;
 
 --echo
@@ -106,6 +108,7 @@ SET @@GLOBAL.DEBUG= @debug_save;
 --source include/rpl_connection.inc
 --error ER_TRANSACTION_ROLLBACK_DURING_COMMIT
 --reap
+SET DEBUG_SYNC='RESET';
 
 --echo
 --echo ############################################################
@@ -146,6 +149,9 @@ INSERT INTO t1 VALUE(10, 11);
 --echo # group_replication_before_message_broadcast debug sync point.
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
+--disable_query_log
+SET DEBUG_SYNC='now wait_for signal.group_replication_before_message_broadcast_reached';
+--enable_query_log
 --let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE State = 'debug sync point: now'
 --source include/wait_condition.inc
 
@@ -165,7 +171,6 @@ INSERT INTO t1 VALUE(12, 13);
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
 SET DEBUG_SYNC='now SIGNAL waiting';
-SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG= @debug_save;
 
 --echo
@@ -175,6 +180,7 @@ SET @@GLOBAL.DEBUG= @debug_save;
 --let $rpl_connection_name= server_1
 --source include/rpl_connection.inc
 --reap
+SET DEBUG_SYNC='RESET';
 
 --source include/rpl_sync.inc
 --echo

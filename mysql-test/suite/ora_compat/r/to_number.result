@@ -1109,3 +1109,90 @@ C1
 20220902
  20220902
 DROP TABLE IF EXISTS t1;
+set sql_mode=oracle;
+CREATE OR REPLACE PROCEDURE TEST_BUG_01() AS
+szBeginDay varchar2(8);
+BEGIN
+szBeginDay := '20220901';
+SELECT 'szBeginDay=' || szBeginDay;
+SELECT 'to_number(substr(szBeginDay, 1, 6))=' || to_number(substr(szBeginDay, 1, 6));
+SELECT 'szBeginDay=' || szBeginDay;
+END;
+$$
+CALL TEST_BUG_01();
+'szBeginDay=' || szBeginDay
+szBeginDay=20220901
+'to_number(substr(szBeginDay, 1, 6))=' || to_number(substr(szBeginDay, 1, 6))
+to_number(substr(szBeginDay, 1, 6))=202209
+'szBeginDay=' || szBeginDay
+szBeginDay=20220901
+DROP PROCEDURE IF EXISTS TEST_BUG_01;
+set sql_mode=default;
+create or replace function my_getage(birthst varchar(10)) returns integer
+begin
+declare
+fromyear integer;
+set fromyear = to_number(substr(birthst,2,4));
+return(fromyear);
+end;
+//
+select my_getage('abc');//
+ERROR HY000: Incorrect DECIMAL value: '0' for column '' at row -1
+select my_getage('1234567');//
+my_getage('1234567')
+2345
+select my_getage('');//
+ERROR HY000: Incorrect DECIMAL value: '0' for column '' at row -1
+select my_getage('123abc');//
+ERROR 22003: NUMBER value is out of range in 'to_number'
+select my_getage(NULL);//
+my_getage(NULL)
+NULL
+select to_number(substr('abc',2,4));//
+ERROR 22003: NUMBER value is out of range in 'to_number'
+select to_number(substr('1234567',2,4));//
+to_number(substr('1234567',2,4))
+2345
+select to_number(substr('',2,4));//
+to_number(substr('',2,4))
+NULL
+select to_number(substr('123abc',2,4));//
+ERROR 22003: NUMBER value is out of range in 'to_number'
+select to_number(substr(NULL,2,4));//
+to_number(substr(NULL,2,4))
+NULL
+set sql_mode=oracle;
+create or replace function my_getage(birthst varchar(10)) return integer is
+fromyear integer;
+begin
+fromyear := to_number(substr(birthst,2,4));
+return(fromyear);
+end my_getage;
+//
+select my_getage('abc');//
+ERROR HY000: Incorrect DECIMAL value: '0' for column '' at row -1
+select my_getage('1234567');//
+my_getage('1234567')
+2345
+select my_getage('');//
+my_getage('')
+NULL
+select my_getage('123abc');//
+ERROR 22003: NUMBER value is out of range in 'to_number'
+select my_getage(NULL);//
+my_getage(NULL)
+NULL
+select to_number(substr('abc',2,4));//
+ERROR 22003: NUMBER value is out of range in 'to_number'
+select to_number(substr('1234567',2,4));//
+to_number(substr('1234567',2,4))
+2345
+select to_number(substr('',2,4));//
+to_number(substr('',2,4))
+NULL
+select to_number(substr('123abc',2,4));//
+ERROR 22003: NUMBER value is out of range in 'to_number'
+select to_number(substr(NULL,2,4));//
+to_number(substr(NULL,2,4))
+NULL
+drop function my_getage;//

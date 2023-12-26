@@ -108,7 +108,10 @@ class sp_label {
     BEGIN,
 
     /// Label at iteration control
-    ITERATION
+    ITERATION,
+
+    /// Label for jump
+    GOTO
   };
 
   /// Name of the label.
@@ -123,9 +126,13 @@ class sp_label {
   /// Scope of the label.
   class sp_pcontext *ctx;
 
+  /// ip of begin block label.GOTO stmt can't goto
+  /// IF,CASE,LOOP stmt,use this to control it.
+  uint beginblock_label_ip;
+
  public:
   sp_label(LEX_CSTRING _name, uint _ip, enum_type _type, sp_pcontext *_ctx)
-      : name(_name), ip(_ip), type(_type), ctx(_ctx) {}
+      : name(_name), ip(_ip), type(_type), ctx(_ctx), beginblock_label_ip(0) {}
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -250,16 +257,42 @@ class sp_condition {
 */
 class sp_pcursor : public LEX_CSTRING {
   class sp_pcontext *m_param_context;  // Formal parameters
-  uint m_offset;
+  int m_offset;
+  sp_variable *m_cursor_spv;
+  /* Type c is ref cursor return t1%rowtype/record
+  or cursor c return t1%rowtype/record is select_stmt
+  */
+  Table_ident *m_table_ref;
+  Row_definition_list *m_rdl;
+  int m_cursor_rowtype_offset;
 
  public:
-  sp_pcursor(const LEX_CSTRING name, class sp_pcontext *param_ctx, uint offset)
-      : LEX_CSTRING(name), m_param_context(param_ctx), m_offset(offset) {}
+  sp_pcursor(const LEX_CSTRING name, class sp_pcontext *param_ctx, int offset,
+             sp_variable *cursor_spv)
+      : LEX_CSTRING(name),
+        m_param_context(param_ctx),
+        m_offset(offset),
+        m_cursor_spv(cursor_spv),
+        m_table_ref(nullptr),
+        m_rdl(nullptr),
+        m_cursor_rowtype_offset(-1) {}
   class sp_pcontext *param_context() const {
     return m_param_context;
   }
   bool check_param_count_with_error(uint param_count) const;
   uint get_offset() const { return m_offset; }
+  sp_variable *get_cursor_spv() { return m_cursor_spv; }
+  void set_table_ref(Table_ident *table_ref) { m_table_ref = table_ref; }
+  Table_ident *get_table_ref() { return m_table_ref; }
+  void set_row_definition_list(Row_definition_list *rdl) { m_rdl = rdl; }
+  Row_definition_list *get_row_definition_list() { return m_rdl; }
+  void set_cursor_rowtype_offset(int offset) {
+    m_cursor_rowtype_offset = offset;
+  }
+  int get_cursor_rowtype_offset() { return m_cursor_rowtype_offset; }
+  bool has_return_type() {
+    return m_table_ref || m_rdl || m_cursor_rowtype_offset != -1;
+  }
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -437,12 +470,7 @@ class sp_pcontext {
                             sp_variable::enum_mode mode);
   Item *make_item_plsql_cursor_attr(THD *thd, LEX_CSTRING name, uint offset);
   Item *make_item_plsql_sp_for_loop_attr(THD *thd, int m_direction, Item *var,
-                                         Item *value_from, Item *value_to);
-  Item *make_item_plsql_sp_for_record_table_loop_attr(THD *thd, int m_var_idx,
-                                                      Item *var);
-  Item *make_item_plsql_sp_forall_record_table_loop_attr(THD *thd,
-                                                         int m_var_idx,
-                                                         Item *var);
+                                         Item *value_to);
   Item *make_item_plsql_plus_one(THD *thd, POS &pos, int direction,
                                  Item_splocal *item_splocal);
 
@@ -450,14 +478,46 @@ class sp_pcontext {
   /// context and its children.
   ///
   /// @param [out] field_def_lst Container to store type information.
+  /// @param [out] vars_list Container to store sp_variable information.
+  /// @param [out] vars_udt_list Container to store udt sp_variable information.
+  /// @param [out] udt_var_count_diff udt counts after retrieve.
   void retrieve_field_definitions(List<Create_field> *field_def_lst,
-                                  List<sp_variable> *vars_list) const;
+                                  List<sp_variable> *vars_list,
+                                  List<sp_variable> *vars_udt_list,
+                                  uint *udt_var_count_diff) const;
 
   void retrieve_udt_field_definitions(THD *thd,
                                       List<sp_variable> *vars_list) const;
 
-  bool resolve_udt_create_field_list(THD *thd,
-                                     List<Create_field> *field_def_lst) const;
+  bool resolve_udt_create_field_list(THD *thd, Create_field *def,
+                                     List<sp_variable> *vars_udt_list,
+                                     uint *udt_var_count_diff) const;
+
+  /* ident t1%rowtype and ident t1.udt%type,if there is Field_udt_type,
+    must add it to vars_udt_list.
+  */
+  bool add_udt_to_sp_var_list(THD *thd, List<Create_field> field_def_lst,
+                              Create_field *cdf_mas,
+                              List<sp_variable> *vars_udt_list,
+                              uint *udt_var_count_diff) const;
+
+  /// resolve Row_definition_list's record table members,as table of t1%ROWTYPE
+  /// may be changed before.
+  ///
+  /// @param list   the source Row_definition_list.
+  ///
+  /// @return false if success, or true in case of error.
+  bool resolve_the_definitions(Row_definition_list *list) const;
+
+  /// resolve Row_definition_table_list's member,as table of t1%ROWTYPE
+  /// may be changed before.
+  ///
+  /// @param def   the source Create_field.
+  ///
+  /// @return false if success, or true in case of error.
+  bool resolve_table_definitions(Create_field *def) const;
+
+  bool resolve_create_field_definitions(Create_field *def) const;
 
   /// return the i-th variable on the current context
   sp_variable *get_context_variable(uint i) const {
@@ -486,13 +546,32 @@ class sp_pcontext {
                              bool current_scope_only) const;
 
   sp_variable *find_udt_variable(const char *name, size_t name_len,
+                                 const char *db_name, size_t db_name_len,
                                  bool current_scope_only) const;
+
+  /// Make new udt sp_variable.
+  ///
+  /// @param thd              Thread
+  /// @param rdl              Row_definition_list
+  /// @param name             create_field name.
+  /// @param table_type       create_field type
+  /// @param varray_limit     varray limit
+  /// @param nested_table_udt udt nested name
+  /// @param udt_db_name      db name
+  /// @param spvar            sp_variable.
+  ///
+  /// @return 1 if error,0 if right,-1 if need add new udt var.
+  int make_udt_variable(THD *thd, Row_definition_list *rdl, LEX_STRING name,
+                        uint table_type, ulonglong varray_limit,
+                        LEX_CSTRING nested_table_udt, LEX_STRING udt_db_name,
+                        sp_variable *spvar_udt) const;
 
   sp_variable *add_udt_variable(THD *thd, Row_definition_list *rdl,
                                 LEX_STRING name, uint table_type,
                                 enum enum_field_types type,
                                 ulonglong varray_limit,
-                                LEX_CSTRING nested_table_udt);
+                                LEX_CSTRING nested_table_udt,
+                                LEX_STRING udt_db_name);
 
   /// Find SP-variable by the offset in the root parsing context.
   ///
@@ -535,6 +614,31 @@ class sp_pcontext {
 
   sp_label *find_label(LEX_CSTRING name);
 
+  /*for goto stmt.
+          (1)for next case,it's unallowed.
+          BEGIN
+            WHILE 1=1 loop
+            <<lab18_1>>
+              a := 2;
+            END LOOP;
+            WHILE 1=1 loop
+              goto lab18_1; ==> find_label_by_ip() == false
+            END LOOP;
+          END;
+          (2)for next case,it's allowed.
+          BEGIN
+            WHILE 1=1 loop
+            <<lab18_1>>
+              WHILE 1=1 loop
+                goto lab18_1; ==> find_label_by_ip() == true
+              END LOOP;
+            END LOOP;
+          END;
+    @param name ip of sp_label.
+    @return true if found SP-label, or false if not found.
+  */
+  bool find_label_by_ip(uint ip);
+
   sp_label *last_label() {
     sp_label *label = m_labels.head();
 
@@ -546,6 +650,14 @@ class sp_pcontext {
   sp_label *find_label_current_loop_start();
 
   sp_label *pop_label() { return m_labels.pop(); }
+
+  sp_label *push_goto_label(THD *thd, LEX_CSTRING name, uint ip);
+
+  sp_label *find_goto_label(LEX_CSTRING name, bool recusive);
+
+  sp_label *last_goto_label() { return m_goto_labels.head(); }
+
+  void push_unique_goto_label(sp_label *a);
 
   /////////////////////////////////////////////////////////////////////////
   // Conditions.
@@ -605,7 +717,8 @@ class sp_pcontext {
   sp_pcursor *find_cursor_parameters(uint offset) const;
 
   bool add_cursor_parameters(THD *thd, const LEX_STRING name,
-                             sp_pcontext *param_ctx);
+                             sp_pcontext *param_ctx, uint *offset,
+                             sp_variable *cursor_spv);
 
   /// See comment for find_variable() above.
   bool find_cursor(LEX_STRING name, uint *poff, bool current_scope_only) const;
@@ -702,8 +815,28 @@ class sp_pcontext {
   /// Stack of SQL-handlers.
   Mem_root_array<sp_handler *> m_handlers;
 
+  /*
+   In the below example the label <<lab>> has two meanings:
+   - GOTO lab : must go before the beginning of the loop
+   - CONTINUE lab : must go to the beginning of the loop
+   We solve this by storing block labels and goto labels into separate lists.
+
+   BEGIN
+     <<lab>>
+     FOR i IN a..10 LOOP
+       ...
+       GOTO lab;
+       ...
+       CONTINUE lab;
+       ...
+     END LOOP;
+   END;
+  */
   /// List of labels.
   List<sp_label> m_labels;
+
+  /// List of goto labels
+  List<sp_label> m_goto_labels;
 
   /// Children contexts, used for destruction.
   Mem_root_array<sp_pcontext *> m_children;

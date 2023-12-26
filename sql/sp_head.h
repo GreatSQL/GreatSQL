@@ -42,6 +42,7 @@
 #include "mysqld_error.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/create_field.h"
+#include "sql/field.h"           // enum_osp_base_types
 #include "sql/mem_root_array.h"  // Mem_root_array
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
@@ -70,12 +71,13 @@ class sp_instr;
 class sp_label;
 class sp_lex_branch_instr;
 class sp_pcontext;
+class sp_instr_jump;
 
 /**
   Number of PSI_statement_info instruments
   for internal stored programs statements.
 */
-#define SP_PSI_STATEMENT_INFO_COUNT 16
+#define SP_PSI_STATEMENT_INFO_COUNT 26
 
 #ifdef HAVE_PSI_INTERFACE
 void init_sp_psi_keys(void);
@@ -299,10 +301,23 @@ class sp_parser_data {
 
     @param i      The SP-instruction.
     @param label  The label.
+    @param is_goto  True if use goto.
 
     @return Error flag.
   */
-  bool add_backpatch_entry(sp_branch_instr *i, sp_label *label);
+  bool add_backpatch_entry(sp_branch_instr *i, sp_label *label,
+                           bool is_goto = false);
+
+  /**
+    Used for goto,add hpop,cpop,jump to sp.
+
+    @param thd    The thd.
+    @param ctx    The sp_pcontext.
+    @param label  The label.
+
+    @return Error flag.
+  */
+  bool add_backpatch_goto(THD *thd, sp_pcontext *ctx, sp_label *label);
 
   /**
     Update all instruction with the given label in the backpatch list
@@ -312,6 +327,21 @@ class sp_parser_data {
     @param dest   The instruction pointer.
   */
   void do_backpatch(sp_label *label, uint dest);
+
+  /**
+    Update all instruction with the given label in the goto backpatch list
+    to the given instruction pointer.
+
+    @param label  The label.
+    @param dest   The instruction pointer.
+  */
+  void do_backpatch_goto(THD *thd, sp_label *label, sp_label *lab_begin_block,
+                         uint dest);
+
+  /**
+    Check for unresolved goto label.
+  */
+  bool check_unresolved_goto();
 
   ///////////////////////////////////////////////////////////////////////
   // Backpatch operations for supporting CONTINUE handlers.
@@ -395,6 +425,8 @@ class sp_parser_data {
   /// Instructions needing backpatching
   List<Backpatch_info> m_backpatch;
 
+  List<Backpatch_info> m_backpatch_goto;
+
   /**
     We need a special list for backpatching of instructions with a continue
     destination (in the case of a continue handler catching an error in
@@ -435,6 +467,94 @@ class sp_parser_data {
 ///////////////////////////////////////////////////////////////////////////
 
 struct SP_TABLE;
+
+class sp_argument {
+ public:
+  enum enum_field_types m_fld_type;
+  enum enum_osp_base_types m_osp_type { OSP_INVALID };
+
+  sp_argument(const enum enum_field_types fld_type);
+  sp_argument(const sp_argument *arg) {
+    m_fld_type = arg->m_fld_type;
+    m_osp_type = arg->m_osp_type;
+  }
+};
+
+class sp_signature {
+ public:
+  enum enum_arg {
+    SP_ARG_MATCH = 0,    // match by base type
+    SP_ARG_NOMATCH = 1,  // no match, e.g. different count.
+  };
+
+  enum enum_check_type {
+    SP_CHECK_BASE_TYPE = 0,
+    SP_CHECK_FIELD_TYPE = 1,
+    SP_CHECK_DISTANCE = 2,
+  };
+
+  // NOTE: this is used by sp_head::sp_head only.
+  // m_mem_root is set in sp_head::sp_head function body.
+  sp_signature() { m_inited = false; }
+
+  sp_signature(MEM_ROOT *mem_root) {
+    m_inited = false;
+    m_mem_root = mem_root;
+  }
+  sp_signature *clone(MEM_ROOT *mem_root);
+  sp_signature *copy_to(sp_signature *sig);
+
+  enum_arg compare(const sp_signature *sps, enum_check_type chk,
+                   int *distance = nullptr) const;
+
+  void clear() {
+    m_inited = false;
+    m_define = false;
+    m_lookup_public = false;
+    m_arg_list.clear();
+  }
+  bool is_inited() { return m_inited; }
+
+  MEM_ROOT *m_mem_root{nullptr};
+
+  /// init the signature, called when routine is added through parser.
+  void init_by(const sp_head *sp);
+
+  /// init the signature, called when PT_call::make_cmd() is invoked.
+  void init_by(const mem_root_deque<Item *> *proc_args);
+
+  /// init the signature, called sp function is itemize().
+  void init_by(const uint arg_count, Item **args);
+
+  /// copy params of a sphead.
+  void copy_params(sp_head *sp);
+
+ public:
+  bool m_inited{false};
+
+  /// signature is created on definition
+  bool m_define{false};
+
+  /// signature is created for finding routine
+  bool m_lookup{false};
+
+  /// to search public routine only
+  bool m_lookup_public{false};
+
+  /// any argument is not fixed ? used if m_lookup is true.
+  bool m_not_all_fixed{false};
+
+  /// any parameter in argument ?
+  bool m_has_parameter{false};
+
+  /// number of parameters of this routine.
+  uint m_count{0};
+
+  /// overload index, for key of Sroutine_hash_entry.
+  uint m_overload_index{0};
+
+  List<sp_argument> m_arg_list;
+};
 
 /**
   sp_head represents one instance of a stored program. It might be of any type
@@ -486,6 +606,7 @@ class sp_head {
   /// Stored program type.
   enum_sp_type m_type;
 
+  sp_signature m_sig;
   sp_package *m_parent;
 
   /// Stored program flags.
@@ -614,9 +735,13 @@ class sp_head {
   ulonglong size_limit;
   LEX_STRING nested_table_udt;
   LEX_STRING udt_table_db;
+  uint cur_line;
 
  public:
   static void destroy(sp_head *sp);
+  static std::string get_unit_type(sp_head *sp);
+  static void get_unit_name(sp_head *sp, std::string *pkname,
+                            std::string *unit_name);
 
   /// Is this routine being executed?
   virtual bool is_invoked() const { return m_flags & IS_INVOKED; }
@@ -632,9 +757,9 @@ class sp_head {
     m_sp_cache_version = sp_cache_version;
   }
 
-  bool eq_routine_spec(const sp_head *) const;
+  bool eq_routine_spec(sp_head *);
 
-  bool check_package_routine_end_name(const LEX_STRING &end_name) const;
+  bool check_routine_end_name(const LEX_STRING &end_name) const;
 
   Stored_program_creation_ctx *get_creation_ctx() { return m_creation_ctx; }
 
@@ -680,6 +805,8 @@ class sp_head {
   */
   bool execute_trigger(THD *thd, const LEX_CSTRING &db_name,
                        const LEX_CSTRING &table_name, GRANT_INFO *grant_info);
+  /// Save Query_block
+  Query_block *save_current_query_block = nullptr;
 
   /**
     Execute a function.
@@ -740,9 +867,6 @@ class sp_head {
     @return Error status.
   */
   bool add_instr(THD *thd, sp_instr *instr);
-#if 0
-  bool sp_add_instr_cpush_for_cursors(THD *thd, sp_pcontext *pcontext);
-#endif
 
   bool add_instr_jump(THD *thd, sp_pcontext *spcont);
 
@@ -765,6 +889,16 @@ class sp_head {
   uint instructions() { return static_cast<uint>(m_instructions.size()); }
 
   sp_instr *last_instruction() { return m_instructions.back(); }
+
+  /**
+    Reset sp_assignment_lex-object during parsing, before we parse a sub
+    statement. used for for i in loop stmt.
+
+    @param thd  Thread context.
+
+    @return Error status.
+  */
+  bool setup_sp_assignment_lex(THD *thd, LEX *assign_lex);
 
   /**
     Reset LEX-object during parsing, before we parse a sub statement.
@@ -901,7 +1035,8 @@ class sp_head {
     Return the routine instructions as a result set.
     @return Error status.
   */
-  bool show_routine_code(THD *thd);
+  bool show_routine_code(THD *thd, bool show_header = true,
+                         bool show_eof = true);
 #endif
 
   /*
@@ -1111,16 +1246,15 @@ class sp_package : public sp_head {
    public:
     LexList() { elements = 0; }
     // Find a package routine by a non qualified name
-    LEX *find(const LEX_STRING &name, enum_sp_type sp_type);
+    LEX *find(const LEX_STRING &name, enum_sp_type sp_type, sp_signature *sig);
     // Find a package routine by a package-qualified name, e.g. 'pkg.proc'
-    LEX *find_qualified(const LEX_STRING &name, enum_sp_type sp_type);
-    // Check if a routine with the given qualified name already exists
-    bool check_dup_qualified(const LEX_STRING &name, enum_sp_type sp_type);
-    bool check_dup_qualified(const sp_head *sp) {
-      enum_sp_type sp_type = (enum_sp_type)sp->m_type;
-      return check_dup_qualified(sp->m_name, sp_type);
-    }
+    LEX *find_qualified(const LEX_STRING &name, enum_sp_type sp_type,
+                        sp_signature *sig);
     void cleanup();
+
+   private:
+    LEX *find_common(const LEX_STRING &name, enum_sp_type sp_type,
+                     sp_signature *sig, bool qualified);
   };
 
   /*
@@ -1145,6 +1279,7 @@ class sp_package : public sp_head {
   bool m_is_cloning_routine;
   bool m_is_spec;
   Query_arena m_arena;
+  bool m_sig_resolved{false};
 
   sp_package(MEM_ROOT &&mem_root, enum_sp_type sp_type, LEX *top_level_lex,
              bool is_spec)
@@ -1158,14 +1293,9 @@ class sp_package : public sp_head {
         m_arena(&main_mem_root, Query_arena::STMT_INITIALIZED_FOR_SP) {}
   ~sp_package() override;
 
-  bool add_routine_declaration(LEX *lex) {
-    return m_routine_declarations.check_dup_qualified(lex->sphead) ||
-           m_routine_declarations.push_back(lex, &main_mem_root);
-  }
-  bool add_routine_implementation(LEX *lex) {
-    return m_routine_implementations.check_dup_qualified(lex->sphead) ||
-           m_routine_implementations.push_back(lex, &main_mem_root);
-  }
+  bool add_routine(LexList *routines, LEX *lex_arg, bool base_check);
+  bool add_routine_declaration(LEX *lex);
+  bool add_routine_implementation(LEX *lex);
 
   sp_package *get_package() override { return this; }
   bool is_invoked() const override {

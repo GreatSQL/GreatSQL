@@ -135,6 +135,7 @@ void sp_pcontext::init(uint var_offset, uint cursor_offset, uint udt_var_offset,
   m_num_case_exprs = num_case_expressions;
 
   m_labels.clear();
+  m_goto_labels.clear();
 }
 
 sp_pcontext::sp_pcontext(THD *thd)
@@ -190,6 +191,19 @@ sp_pcontext *sp_pcontext::push_context(THD *thd,
   return child;
 }
 
+void sp_pcontext::push_unique_goto_label(sp_label *a) {
+  sp_label *label;
+  List_iterator_fast<sp_label> li(m_goto_labels);
+  if (m_goto_labels.size() == 0) m_goto_labels.push_back(a);
+  while ((label = li++)) {
+    if (!(my_strcasecmp(system_charset_info, a->name.str, label->name.str) ==
+              0 &&
+          a->type == label->type)) {
+      m_goto_labels.push_back(a);
+    }
+  }
+}
+
 sp_pcontext *sp_pcontext::pop_context() {
   m_parent->m_max_var_index += m_max_var_index;
   m_parent->m_max_udt_var_index += m_max_udt_var_index;
@@ -201,6 +215,16 @@ sp_pcontext *sp_pcontext::pop_context() {
   if (m_num_case_exprs > m_parent->m_num_case_exprs)
     m_parent->m_num_case_exprs = m_num_case_exprs;
 
+  /*
+  ** Push unresolved goto label to parent context
+  */
+  sp_label *label;
+  List_iterator_fast<sp_label> li(m_goto_labels);
+  while ((label = li++)) {
+    if (label->ip == 0) {
+      m_parent->push_unique_goto_label(label);
+    }
+  }
   return m_parent;
 }
 
@@ -254,6 +278,8 @@ sp_variable *sp_pcontext::find_variable(const char *name, size_t name_len,
 }
 
 sp_variable *sp_pcontext::find_udt_variable(const char *name, size_t name_len,
+                                            const char *db_name,
+                                            size_t db_name_len,
                                             bool current_scope_only) const {
   size_t i = m_udt_vars.size();
 
@@ -262,67 +288,105 @@ sp_variable *sp_pcontext::find_udt_variable(const char *name, size_t name_len,
 
     if (my_strnncoll(system_charset_info, pointer_cast<const uchar *>(name),
                      name_len, pointer_cast<const uchar *>(p->name.str),
-                     p->name.length) == 0) {
+                     p->name.length) == 0 &&
+        my_strnncoll(system_charset_info, pointer_cast<const uchar *>(db_name),
+                     db_name_len,
+                     pointer_cast<const uchar *>(p->field_def.udt_db_name.str),
+                     p->field_def.udt_db_name.length) == 0) {
       return p;
     }
   }
 
   return (!current_scope_only && m_parent)
-             ? m_parent->find_variable(name, name_len, false)
+             ? m_parent->find_udt_variable(name, name_len, db_name, db_name_len,
+                                           false)
              : nullptr;
+}
+
+int sp_pcontext::make_udt_variable(THD *thd, Row_definition_list *rdl,
+                                   LEX_STRING name, uint table_type,
+                                   ulonglong varray_limit,
+                                   LEX_CSTRING nested_table_udt,
+                                   LEX_STRING udt_db_name,
+                                   sp_variable *spvar_udt) const {
+  if (!spvar_udt) return 1;
+  if (spvar_udt->field_def.init(
+          thd, "", MYSQL_TYPE_NULL, nullptr, nullptr, 0, NULL, NULL, &NULL_CSTR,
+          0, nullptr, thd->variables.collation_database, false, 0, nullptr,
+          nullptr, nullptr, {}, dd::Column::enum_hidden_type::HT_VISIBLE)) {
+    return 1;
+  }
+  if (!nested_table_udt.str) {
+    if (table_type == 0 || table_type == 1) {
+      spvar_udt->field_def.ora_record.set_row_field_table_definitions(
+          Row_definition_table_list::make(thd->mem_root, rdl));
+      spvar_udt->field_def.varray_limit = varray_limit;
+      spvar_udt->field_def.ora_record.is_record_table_define = true;
+      spvar_udt->field_def.nested_table_udt = nested_table_udt;
+    } else {
+      spvar_udt->field_def.ora_record.set_row_field_definitions(rdl);
+      spvar_udt->field_def.ora_record.is_record_define = true;
+    }
+  } else {
+    spvar_udt->field_def.ora_record.set_row_field_table_definitions(
+        Row_definition_table_list::make(thd->mem_root, rdl));
+    spvar_udt->field_def.nested_table_udt = nested_table_udt;
+    spvar_udt->field_def.varray_limit = varray_limit;
+    spvar_udt->field_def.ora_record.is_record_table_define = true;
+    sp_variable *spvar_udt_table =
+        find_udt_variable(nested_table_udt.str, nested_table_udt.length,
+                          udt_db_name.str, udt_db_name.length, false);
+    if (!spvar_udt_table) {
+      return -1;
+    }
+  }
+  spvar_udt->field_def.table_type = table_type;
+  spvar_udt->field_def.udt_name = name;
+  spvar_udt->field_def.udt_db_name = udt_db_name;
+  spvar_udt->field_def.field_name = name.str;
+  spvar_udt->field_def.is_nullable = true;
+  if (prepare_sp_create_field(thd, &spvar_udt->field_def)) {
+    return 1;
+  }
+
+  return 0;
 }
 
 sp_variable *sp_pcontext::add_udt_variable(THD *thd, Row_definition_list *rdl,
                                            LEX_STRING name, uint table_type,
                                            enum enum_field_types type,
                                            ulonglong varray_limit,
-                                           LEX_CSTRING nested_table_udt) {
+                                           LEX_CSTRING nested_table_udt,
+                                           LEX_STRING udt_db_name) {
   sp_variable *spvar_udt = new (thd->mem_root) sp_variable(
       name, type, sp_variable::MODE_IN, m_udt_var_offset + m_max_udt_var_index);
+  int result = make_udt_variable(thd, rdl, name, table_type, varray_limit,
+                                 nested_table_udt, udt_db_name, spvar_udt);
 
-  if (!spvar_udt) return nullptr;
-  if (spvar_udt->field_def.init(
-          thd, "", MYSQL_TYPE_NULL, nullptr, nullptr, 0, NULL, NULL, &NULL_CSTR,
-          0, nullptr, thd->variables.collation_database, false, 0, nullptr,
-          nullptr, nullptr, {}, dd::Column::enum_hidden_type::HT_VISIBLE)) {
-    return nullptr;
-  }
-  if (!nested_table_udt.str) {
-    if (table_type == 0 || table_type == 1) {
-      spvar_udt->field_def.set_row_field_table_definitions(
-          Row_definition_table_list::make(thd->mem_root, rdl));
-      spvar_udt->field_def.varray_limit = varray_limit;
-      spvar_udt->field_def.is_record_table_define = true;
-      spvar_udt->field_def.nested_table_udt = nested_table_udt;
-    } else {
-      spvar_udt->field_def.set_row_field_definitions(rdl);
-      spvar_udt->field_def.is_record_define = true;
-    }
-  } else {
-    spvar_udt->field_def.set_row_field_table_definitions(
-        Row_definition_table_list::make(thd->mem_root, rdl));
-    spvar_udt->field_def.nested_table_udt = nested_table_udt;
-    spvar_udt->field_def.varray_limit = varray_limit;
-    spvar_udt->field_def.is_record_table_define = true;
-    sp_variable *spvar_udt_table =
-        find_udt_variable(nested_table_udt.str, nested_table_udt.length, false);
-    if (!spvar_udt_table) {
-      spvar_udt_table = add_udt_variable(
-          thd, rdl, to_lex_string(nested_table_udt), 255, type, 0, NULL_CSTR);
-      if (!spvar_udt_table) {
-        my_error(ER_SP_UNDECLARED_VAR, MYF(0), nested_table_udt.str);
-        return nullptr;
+  if (result == -1) {
+    Row_definition_list *list = nullptr;
+    List_iterator_fast<Create_field> it(*rdl);
+    Create_field *def;
+    for (uint i = 0; (def = it++); i++) {
+      if (i == 0) {
+        continue;  // don't need index column
+      } else if (i == 1) {
+        list = Row_definition_list::make(thd->mem_root, def);
+      } else {
+        list->append_uniq(thd->mem_root, def);
       }
     }
-  }
-  spvar_udt->field_def.table_type = table_type;
-  spvar_udt->field_def.udt_name = name;
-  spvar_udt->field_def.udt_db_name = thd->db().str;
-  spvar_udt->field_def.field_name = name.str;
-  spvar_udt->field_def.is_nullable = true;
-  if (prepare_sp_create_field(thd, &spvar_udt->field_def)) {
+
+    sp_variable *spvar_udt_table =
+        add_udt_variable(thd, list, to_lex_string(nested_table_udt), 255, type,
+                         0, NULL_CSTR, udt_db_name);
+    if (!spvar_udt_table) {
+      my_error(ER_SP_UNDECLARED_VAR, MYF(0), nested_table_udt.str);
+      return nullptr;
+    }
+  } else if (result == 1)
     return nullptr;
-  }
+
   ++m_max_udt_var_index;
 
   return m_udt_vars.push_back(spvar_udt) ? nullptr : spvar_udt;
@@ -411,6 +475,17 @@ sp_label *sp_pcontext::push_label(THD *thd, LEX_CSTRING name, uint ip) {
   return label;
 }
 
+sp_label *sp_pcontext::push_goto_label(THD *thd, LEX_CSTRING name, uint ip) {
+  sp_label *label =
+      new (thd->mem_root) sp_label(name, ip, sp_label::GOTO, this);
+
+  if (!label) return nullptr;
+
+  m_goto_labels.push_front(label);
+
+  return label;
+}
+
 sp_label *sp_pcontext::find_label(LEX_CSTRING name) {
   List_iterator_fast<sp_label> li(m_labels);
   sp_label *lab;
@@ -430,6 +505,48 @@ sp_label *sp_pcontext::find_label(LEX_CSTRING name) {
   */
   return (m_parent && (m_scope == REGULAR_SCOPE)) ? m_parent->find_label(name)
                                                   : nullptr;
+}
+
+bool sp_pcontext::find_label_by_ip(uint ip) {
+  List_iterator_fast<sp_label> li(m_labels);
+  sp_label *lab;
+
+  while ((lab = li++)) {
+    if (lab->ip == ip) return true;
+  }
+
+  return m_parent ? m_parent->find_label_by_ip(ip) : false;
+}
+
+sp_label *sp_pcontext::find_goto_label(LEX_CSTRING name, bool recusive) {
+  List_iterator_fast<sp_label> li(m_goto_labels);
+  sp_label *lab;
+
+  while ((lab = li++)) {
+    if (my_strcasecmp(system_charset_info, name.str, lab->name.str) == 0)
+      return lab;
+  }
+
+  if (!recusive) return nullptr;
+
+  /*
+    Note about exception handlers.
+    See SQL:2003 SQL/PSM (ISO/IEC 9075-4:2003),
+    section 13.1 <compound statement>,
+    syntax rule 4.
+    In short, a DECLARE HANDLER block can not refer
+    to labels from the parent context, as they are out of scope.
+  */
+  if (m_scope == HANDLER_SCOPE && m_parent) {
+    if (m_parent->m_parent) {
+      // Skip the parent context
+      return m_parent->m_parent->find_goto_label(name, true);
+    }
+  }
+
+  return m_parent && (m_scope == REGULAR_SCOPE)
+             ? m_parent->find_goto_label(name, true)
+             : nullptr;
 }
 
 sp_label *sp_pcontext::find_label_current_loop_start() {
@@ -509,8 +626,9 @@ static sp_condition sp_predefined_conditions[] = {
     PREDEFINE_CONDITION("CURSOR_ALREADY_OPEN", ER_SP_CURSOR_ALREADY_OPEN),
     PREDEFINE_CONDITION("VALUE_ERROR", ER_WRONG_VALUE),
     PREDEFINE_CONDITION("STORAGE_ERROR", ER_GET_ERRNO),
-    PREDEFINE_CONDITION("ZERO_DIVIDE", ER_DIVISION_BY_ZERO)  // 1365
-};
+    PREDEFINE_CONDITION("ZERO_DIVIDE", ER_DIVISION_BY_ZERO),  // 1365
+    PREDEFINE_CONDITION("WRONG_VALUE_FOR_TYPE", ER_WRONG_VALUE_FOR_TYPE),
+    PREDEFINE_CONDITION("CANNOT_CONVERT_STRING", ER_CANNOT_CONVERT_STRING)};
 
 bool sp_pcontext::declared_or_predefined_condition(LEX_STRING name,
                                                    sp_instr *i) {
@@ -647,7 +765,10 @@ sp_handler *sp_pcontext::find_handler(
           break;
 
         case sp_condition_value::EXCEPTION:
-          if (is_sqlstate_exception(sql_state) &&
+          // others raise used define
+          if ((is_sqlstate_exception(sql_state) ||
+               (current_thd->variables.sql_mode & MODE_ORACLE &&
+                user_defined)) &&
               severity == Sql_condition::SL_ERROR && !found_cv) {
             found_cv = cv;
             found_handler = h;
@@ -702,17 +823,17 @@ bool sp_pcontext::add_cursor(LEX_STRING name) {
 }
 
 bool sp_pcontext::add_cursor_parameters(THD *thd, const LEX_STRING name,
-                                        sp_pcontext *param_ctx) {
+                                        sp_pcontext *param_ctx, uint *offset,
+                                        sp_variable *cursor_spv) {
   if (m_cursors.size() == m_max_cursor_index) ++m_max_cursor_index;
 
   m_cursors.push_back(name);
-  uint offset;
-  if (!find_cursor(name, &offset, false)) {
+  if (!find_cursor(name, offset, false)) {
     my_error(ER_SP_DUP_CURS, MYF(0), name.str);
     return true;
   }
-  sp_pcursor *spcur =
-      new (thd->mem_root) sp_pcursor(to_lex_cstring(name), param_ctx, offset);
+  sp_pcursor *spcur = new (thd->mem_root)
+      sp_pcursor(to_lex_cstring(name), param_ctx, *offset, cursor_spv);
   return m_cursor_vars.push_back(spcur);
 }
 
@@ -749,29 +870,258 @@ bool sp_pcontext::find_cursor(LEX_STRING name, uint *poff,
              : false;
 }
 
-void sp_pcontext::retrieve_field_definitions(
-    List<Create_field> *field_def_lst, List<sp_variable> *vars_list) const {
+/* ident t1%rowtype and ident t1.udt%type,if there is Field_udt_type,
+  must add it to m_udt_vars_list.
+*/
+bool sp_pcontext::add_udt_to_sp_var_list(THD *thd,
+                                         List<Create_field> field_def_lst,
+                                         Create_field *cdf_mas,
+                                         List<sp_variable> *vars_udt_list,
+                                         uint *udt_var_count_diff) const {
+  if (cdf_mas) {
+    if (cdf_mas->ora_record.row_field_definitions())
+      cdf_mas->ora_record.row_field_definitions()->clear();
+    if (cdf_mas->ora_record.row_field_table_definitions()) {
+      cdf_mas->ora_record.row_field_table_definitions()->clear();
+      cdf_mas->ora_record.row_field_table_definitions()->append_uniq(
+          thd->mem_root, new (thd->mem_root) Row_definition_list());
+    }
+  }
+  List_iterator_fast<Create_field> it_cdf(field_def_lst);
+  Create_field *cdf;
+  for (uint i = 0; (cdf = it_cdf++); i++) {
+    if (cdf->udt_name.str) {
+      // rec tt_air%rowtype,table tt_air includes (name t_air),it must add t_air
+      // to m_udt_vars_list
+      if (resolve_udt_create_field_list(thd, cdf, vars_udt_list,
+                                        udt_var_count_diff))
+        return true;
+      // resolve name as Field_udt_type,not Field_row.
+      cdf->ora_record.set_row_field_definitions(nullptr);
+    }
+    if (cdf_mas) {
+      if (cdf_mas->ora_record.row_field_definitions())
+        cdf_mas->ora_record.row_field_definitions()->append_uniq(thd->mem_root,
+                                                                 cdf);
+      else
+        cdf_mas->ora_record.row_field_table_definitions()
+            ->find_row_fields_by_offset(0)
+            ->append_uniq(current_thd->mem_root, cdf);
+    }
+  }
+  return false;
+}
+
+bool sp_pcontext::resolve_udt_create_field_list(
+    THD *thd, Create_field *def, List<sp_variable> *vars_udt_list,
+    uint *udt_var_count_diff) const {
+  LEX_STRING udt_db_name =
+      def->udt_db_name.str ? def->udt_db_name : to_lex_string(thd->db());
+  sp_variable *spvar_udt =
+      find_udt_variable(def->udt_name.str, def->udt_name.length,
+                        udt_db_name.str, udt_db_name.length, false);
+  if (!spvar_udt) {
+    List<Create_field> *field_def_list = nullptr;
+    ulong reclength = 0;
+    sql_mode_t sql_mode;
+    MDL_savepoint mdl_savepoint = thd->mdl_context.mdl_savepoint();
+    LEX_CSTRING nested_table_udt = NULL_CSTR;
+    uint table_type = 255;
+    ulonglong varray_limit = 0;
+    if (!sp_find_ora_type_create_fields(
+            thd, to_lex_string(thd->db()), def->udt_name, false,
+            &field_def_list, &reclength, &sql_mode, &nested_table_udt,
+            &table_type, &varray_limit)) {
+      List_iterator_fast<Create_field> it_tmp(*field_def_list);
+      Create_field *def_tmp_udt;
+      Row_definition_list *rdl_tmp = nullptr;
+      for (uint j = 0; (def_tmp_udt = it_tmp++); j++) {
+        if (j == 0)
+          rdl_tmp = Row_definition_list::make(thd->mem_root, def_tmp_udt);
+        else
+          rdl_tmp->append_uniq(thd->mem_root, def_tmp_udt);
+      }
+      def->ora_record.set_row_field_definitions(rdl_tmp);
+      if (vars_udt_list) {
+        sp_variable *spvar_udt_new = new (thd->mem_root)
+            sp_variable(def->udt_name, def->sql_type, sp_variable::MODE_IN,
+                        m_udt_vars.size() + 1);
+        int result = make_udt_variable(thd, rdl_tmp, def->udt_name, table_type,
+                                       varray_limit, nested_table_udt,
+                                       udt_db_name, spvar_udt_new);
+        if (result == -1) {
+          sp_variable *spvar_udt_new_nest = new (thd->mem_root)
+              sp_variable(to_lex_string(nested_table_udt), def->sql_type,
+                          sp_variable::MODE_IN, m_udt_vars.size() + 2);
+          result = make_udt_variable(
+              thd, rdl_tmp, to_lex_string(nested_table_udt), 255, 0, NULL_CSTR,
+              udt_db_name, spvar_udt_new_nest);
+          if (result == 1) return true;
+          vars_udt_list->push_back(spvar_udt_new_nest);
+          (*udt_var_count_diff)++;
+        } else if (result == 1)
+          return true;
+        vars_udt_list->push_back(spvar_udt_new);
+        (*udt_var_count_diff)++;
+      }
+    } else {
+      thd->mdl_context.rollback_to_savepoint(mdl_savepoint);
+      return true;
+    }
+  } else
+    def->ora_record.set_row_field_definitions(
+        spvar_udt->field_def.ora_record.row_field_definitions());
+  return false;
+}
+
+bool sp_pcontext::resolve_table_definitions(Create_field *def) const {
+  LEX_CSTRING name = def->nested_table_udt;
+  LEX_STRING udt_db_name = def->udt_db_name.str
+                               ? def->udt_db_name
+                               : to_lex_string(current_thd->db());
+  /*for the type table that include table of t1%ROWTYPE.
+  e.g:
+    type table_type is table of t1%ROWTYPE;
+    a table_type;
+  */
+  if (name.str && def->udt_name.str &&
+      !my_strcasecmp(system_charset_info, name.str, def->udt_name.str)) {
+    sp_variable *spv = find_variable(name.str, name.length, false);
+    if (!spv) {
+      spv = find_udt_variable(name.str, name.length, udt_db_name.str,
+                              udt_db_name.length, false);
+      if (!spv) {
+        my_error(ER_SP_UNDECLARED_VAR, MYF(0), name.str);
+        return true;
+      }
+    }
+    if (spv->field_def.ora_record.row_field_table_definitions() &&
+        my_strcasecmp(system_charset_info, name.str, def->field_name)) {
+      def->ora_record.set_row_field_table_definitions(
+          spv->field_def.ora_record.row_field_table_definitions());
+      return false;
+    }
+
+    Row_definition_table_list *list = nullptr;
+    Row_definition_list *row_old = nullptr;
+    // it's type table_type is table of t1%ROWTYPE;
+    if (spv->field_def.ora_record.row_field_table_definitions()) {
+      row_old = spv->field_def.ora_record.row_field_table_definitions()
+                    ->find_row_fields_by_offset(0);
+      list = spv->field_def.ora_record.row_field_table_definitions();
+    }
+    if (spv->field_def.ora_record.row_field_definitions()) {
+      list = def->ora_record.row_field_table_definitions();
+      row_old = spv->field_def.ora_record.row_field_definitions();
+    }
+    Row_definition_list *row_new = nullptr;
+    if (row_old->make_new_create_field_to_store_index(
+            current_thd,
+            def->ora_record.index_length > 0
+                ? std::to_string(def->ora_record.index_length).c_str()
+                : nullptr,
+            def->ora_record.is_index_by, &row_new))
+      return true;
+    list->clear();
+    list->append_uniq(current_thd->mem_root, row_new);
+  }
+  return false;
+}
+
+bool sp_pcontext::resolve_the_definitions(Row_definition_list *list) const {
+  List_iterator_fast<Create_field> it(*list);
+  Create_field *def;
+  for (uint i = 0; (def = it++); i++) {
+    /*for the rowtype that include table of t1%ROWTYPE.
+    e.g:
+      type table_type is table of t1%ROWTYPE;
+      TYPE contact IS RECORD (
+        v_contact table_type
+      );
+    */
+    if (def->nested_table_udt.str && def->udt_name.str &&
+        !my_strcasecmp(system_charset_info, def->nested_table_udt.str,
+                       def->udt_name.str)) {
+      if (resolve_create_field_definitions(def)) return true;
+    }
+  }
+  return false;
+}
+
+bool sp_pcontext::resolve_create_field_definitions(Create_field *def) const {
+  LEX_STRING udt_db_name = def->udt_db_name.str
+                               ? def->udt_db_name
+                               : to_lex_string(current_thd->db());
+  sp_variable *spv = find_variable(def->nested_table_udt.str,
+                                   def->nested_table_udt.length, false);
+  if (!spv) {
+    spv = find_udt_variable(def->nested_table_udt.str,
+                            def->nested_table_udt.length, udt_db_name.str,
+                            udt_db_name.length, false);
+    if (!spv) {
+      my_error(ER_SP_UNDECLARED_VAR, MYF(0), def->nested_table_udt.str);
+      return true;
+    }
+  }
+  def->ora_record.set_row_field_definitions(
+      spv->field_def.ora_record.row_field_definitions());
+  def->ora_record.set_row_field_table_definitions(
+      spv->field_def.ora_record.row_field_table_definitions());
+  return false;
+}
+
+void sp_pcontext::retrieve_field_definitions(List<Create_field> *field_def_lst,
+                                             List<sp_variable> *vars_list,
+                                             List<sp_variable> *vars_udt_list,
+                                             uint *udt_var_count_diff) const {
   /* Put local/context fields in the result list. */
   size_t next_child = 0;
 
   for (size_t i = 0; i < m_vars.size(); ++i) {
     sp_variable *var_def = m_vars.at(i);
     var_def->reset_ref_actual_param();
-    if (var_def->field_def.column_type_ref()) {
-      Qualified_column_ident *ref_back = var_def->field_def.column_type_ref();
+    if (var_def->field_def.ora_record.column_type_ref()) {
+      Qualified_column_ident *ref_back =
+          var_def->field_def.ora_record.column_type_ref();
       Create_field *def_tmp = new (current_thd->mem_root) Create_field();
-      if (var_def->field_def.column_type_ref()->resolve_type_ref(current_thd,
-                                                                 def_tmp))
+      if (var_def->field_def.ora_record.column_type_ref()->resolve_type_ref(
+              current_thd, def_tmp, true))
         return;
       if (def_tmp->udt_name.str) {
-        List<Create_field> def_tmp_list;
-        def_tmp_list.push_back(def_tmp);
-        if (resolve_udt_create_field_list(current_thd, &def_tmp_list)) return;
+        // rec tt_air.name%type,table tt_air includes (name t_air),it must add
+        // t_air to m_udt_vars_list
+        if (resolve_udt_create_field_list(current_thd, def_tmp, vars_udt_list,
+                                          udt_var_count_diff))
+          return;
+        var_def->field_def.ora_record.set_row_field_definitions(
+            def_tmp->ora_record.row_field_definitions());
       }
       var_def->type = def_tmp->sql_type;
       var_def->field_def = *def_tmp;
-      var_def->field_def.set_column_type_ref(ref_back);
+      var_def->field_def.ora_record.set_column_type_ref(ref_back);
       var_def->field_def.field_name = var_def->name.str;
+    }
+    if (var_def->field_def.ora_record.table_rowtype_ref()) {
+      List<Create_field> defs;
+      if (!var_def->field_def.ora_record.is_row_table() ||
+          (var_def->field_def.ora_record.is_row_table() &&
+           !my_strcasecmp(system_charset_info, var_def->field_def.field_name,
+                          var_def->field_def.udt_name.str))) {
+        if (var_def->field_def.ora_record.table_rowtype_ref()
+                ->resolve_table_rowtype_ref(current_thd, defs) ||
+            add_udt_to_sp_var_list(current_thd, defs, &var_def->field_def,
+                                   vars_udt_list, udt_var_count_diff))
+          return;
+      }
+      if (var_def->field_def.ora_record.is_row_table()) {
+        if (resolve_table_definitions(&var_def->field_def)) return;
+      }
+    }
+    if (var_def->field_def.ora_record.is_row()) {
+      // resolve the source row_field_definitions() to get new structure.
+      if (resolve_the_definitions(
+              var_def->field_def.ora_record.row_field_definitions()))
+        return;
     }
     /*
       The context can have holes in run-time offsets,
@@ -802,7 +1152,8 @@ void sp_pcontext::retrieve_field_definitions(
       */
       assert(child->get_context_variable(0)->offset < var_def->offset);
       assert(child->get_last_context_variable(0)->offset < var_def->offset);
-      child->retrieve_field_definitions(field_def_lst, vars_list);
+      child->retrieve_field_definitions(field_def_lst, vars_list, vars_udt_list,
+                                        udt_var_count_diff);
     }
     field_def_lst->push_back(&var_def->field_def);
     vars_list->push_back(var_def);
@@ -810,8 +1161,10 @@ void sp_pcontext::retrieve_field_definitions(
 
   /* Put the fields of the enclosed contexts in the result list. */
 
-  for (size_t i = next_child; i < m_children.size(); ++i)
-    m_children.at(i)->retrieve_field_definitions(field_def_lst, vars_list);
+  for (size_t n = next_child; n < m_children.size(); ++n) {
+    m_children.at(n)->retrieve_field_definitions(
+        field_def_lst, vars_list, vars_udt_list, udt_var_count_diff);
+  }
 }
 
 void sp_pcontext::retrieve_udt_field_definitions(
@@ -842,49 +1195,6 @@ void sp_pcontext::retrieve_udt_field_definitions(
     m_children.at(i)->retrieve_udt_field_definitions(thd, vars_list);
 }
 
-bool sp_pcontext::resolve_udt_create_field_list(
-    THD *thd, List<Create_field> *field_def_lst) const {
-  List_iterator_fast<Create_field> it_cdf(*field_def_lst);
-  Create_field *cdf;
-  for (uint i = 0; (cdf = it_cdf++); i++) {
-    if (cdf->udt_name.str) {
-      sp_variable *spvar_udt =
-          find_udt_variable(cdf->udt_name.str, cdf->udt_name.length, false);
-      if (!spvar_udt) {
-        List<Create_field> *field_def_list = nullptr;
-        ulong reclength = 0;
-        sql_mode_t sql_mode;
-        MDL_savepoint mdl_savepoint = thd->mdl_context.mdl_savepoint();
-        LEX_CSTRING nested_table_udt = NULL_CSTR;
-        uint table_type = 255;
-        ulonglong varray_limit = 0;
-        if (!sp_find_ora_type_create_fields(
-                thd, to_lex_string(thd->db()), cdf->udt_name, false,
-                &field_def_list, &reclength, &sql_mode, &nested_table_udt,
-                &table_type, &varray_limit)) {
-          Row_definition_list *rdl = nullptr;
-          List_iterator_fast<Create_field> it(*field_def_list);
-          Create_field *def_tmp_udt;
-          for (uint j = 0; (def_tmp_udt = it++); j++) {
-            if (j == 0)
-              rdl = Row_definition_list::make(thd->mem_root, def_tmp_udt);
-            else
-              rdl->append_uniq(thd->mem_root, def_tmp_udt);
-          }
-          cdf->set_row_field_definitions(rdl);
-        } else {
-          thd->mdl_context.rollback_to_savepoint(mdl_savepoint);
-          return true;
-        }
-      } else {
-        cdf->set_row_field_definitions(
-            spvar_udt->field_def.row_field_definitions());
-      }
-    }
-  }
-  return false;
-}
-
 const LEX_STRING *sp_pcontext::find_cursor(uint offset) const {
   if (m_cursor_offset <= offset &&
       offset < m_cursor_offset + m_cursors.size()) {
@@ -897,38 +1207,17 @@ const LEX_STRING *sp_pcontext::find_cursor(uint offset) const {
 
 Item *sp_pcontext::make_item_plsql_cursor_attr(THD *thd, LEX_CSTRING name,
                                                uint offset) {
-  Item *expr = new (thd->mem_root) Item_func_cursor_found(name, offset);
+  Item *expr =
+      new (thd->mem_root) Item_func_cursor_found(name, offset, nullptr);
 
   return expr;
 }
 
 Item *sp_pcontext::make_item_plsql_sp_for_loop_attr(THD *thd, int m_direction,
-                                                    Item *var, Item *value_from,
-                                                    Item *value_to) {
+                                                    Item *var, Item *value_to) {
   Item *expr = m_direction > 0
                    ? (Item *)new (thd->mem_root) Item_func_le(var, value_to)
-                   : (Item *)new (thd->mem_root) Item_func_ge(var, value_from);
-
-  return expr;
-}
-
-// for i in var.first .. var.last,it means compare between i and var.last.
-Item *sp_pcontext::make_item_plsql_sp_for_record_table_loop_attr(THD *thd,
-                                                                 int m_var_idx,
-                                                                 Item *var) {
-  sp_variable *spvar_ident = find_variable(m_var_idx);
-  Item *expr = new (thd->mem_root) Item_func_record_table_found_bool(
-      var, spvar_ident->name, spvar_ident->offset);
-
-  return expr;
-}
-
-// forall i in var.first .. var.last,it means compare between i and var.last.
-Item *sp_pcontext::make_item_plsql_sp_forall_record_table_loop_attr(
-    THD *thd, int m_var_idx, Item *var) {
-  sp_variable *spvar_ident = find_variable(m_var_idx);
-  Item *expr = new (thd->mem_root) Item_func_record_table_forall_bool(
-      var, spvar_ident->name, spvar_ident->offset);
+                   : (Item *)new (thd->mem_root) Item_func_ge(var, value_to);
 
   return expr;
 }

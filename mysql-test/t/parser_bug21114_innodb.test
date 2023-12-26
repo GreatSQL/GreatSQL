@@ -101,6 +101,9 @@ let $FCT=dayofweek;
 -- source include/parser_bug21114.inc
 let $FCT=dayofyear;
 -- source include/parser_bug21114.inc
+# `decode` is a keyword now.
+#let $FCT=decode;
+#-- source include/parser_bug21114.inc
 let $FCT=degrees;
 -- source include/parser_bug21114.inc
 let $FCT=des_decrypt;
@@ -409,7 +412,7 @@ let $FCT=weekday;
 -- source include/parser_bug21114.inc
 let $FCT=weekofyear;
 -- source include/parser_bug21114.inc
-let $FCT=within;
+let $FCT=within1;
 -- source include/parser_bug21114.inc
 let $FCT=x;
 -- source include/parser_bug21114.inc

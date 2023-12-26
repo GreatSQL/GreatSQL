@@ -1,0 +1,35 @@
+DROP TABLE IF EXISTS `test1`;
+CREATE TABLE `test1` (
+  `id` int NOT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  `test_dec` decimal(10,5) DEFAULT NULL,
+  `test_blob` blob,
+  `c5` varchar(255) NOT NULL,
+  `c6` timestamp NULL DEFAULT NULL,
+  `c7` char(255) DEFAULT NULL,
+  `c8` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO `test1` VALUES (1, '1', 11.32000, NULL, 'c5', NULL, 'c71', NULL);
+INSERT INTO `test1` VALUES (2, '2', 22.24500, NULL, '', '2022-03-17 16:08:57', NULL, 'c82');
+INSERT INTO `test1` VALUES (3, '3', 3.00000, NULL, '', '2022-03-17 16:04:15', NULL, NULL);
+INSERT INTO `test1` VALUES (4, '3', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (5, '', NULL, NULL, '', '2022-03-09 16:04:19', NULL, NULL);
+INSERT INTO `test1` VALUES (6, '', NULL, NULL, '', NULL, NULL, '1');
+INSERT INTO `test1` VALUES (7, '20', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (8, '8', NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (9, NULL, NULL, NULL, '', NULL, NULL, NULL);
+INSERT INTO `test1` VALUES (10, NULL, NULL, NULL, 'c510', NULL, '', '');
+
+--echo test default  mode
+delete from test1 where id=1;
+
+--error 1064
+delete  test1 where id=2;
+
+--echo test oracle  mode
+set sql_mode=oracle;
+delete  test1 where id=3;
+
+drop table test1;

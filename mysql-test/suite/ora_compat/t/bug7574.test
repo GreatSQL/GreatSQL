@@ -1,0 +1,42 @@
+set sql_mode=default;
+DELIMITER $$;
+CREATE PROCEDURE p1()
+begin
+declare a VARCHAR(200) DEFAULT 'Only MyISAM tables';
+declare b LONGTEXT DEFAULT 'support collections';
+
+set @bb = match(a,b) AGAINST('collections');
+prepare stmt1 from 'select * from t1 where ?';
+EXECUTE stmt1 using @bb;
+end;
+$$
+DELIMITER ;$$
+
+--error ER_WRONG_ARGUMENTS
+call p1;
+
+--error ER_WRONG_ARGUMENTS
+call p1;
+
+set sql_mode=default;
+DELIMITER $$;
+CREATE  PROCEDURE p2()
+ begin
+declare a VARCHAR(200) DEFAULT 'Only MyISAM tables';
+declare b LONGTEXT DEFAULT 'support collections';
+
+set @bb = grouping(b) ;
+prepare stmt1 from 'select * from t1 where ?';
+EXECUTE stmt1 using @bb;
+end;
+$$
+DELIMITER ;$$
+
+--error ER_INVALID_GROUP_FUNC_USE
+call p2;
+
+--error ER_INVALID_GROUP_FUNC_USE
+call p2;
+
+drop procedure p1;
+drop procedure p2;

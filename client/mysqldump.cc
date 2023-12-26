@@ -1,5 +1,6 @@
 /*
-   Copyright (c) 2000, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -143,7 +144,7 @@ static bool verbose = false, opt_no_create_info = false, opt_no_data = false,
             opt_comments_used = false, opt_alltspcs = false,
             opt_notspcs = false, opt_drop_trigger = false,
             opt_network_timeout = false, stats_tables_included = false,
-            column_statistics = false,
+            column_statistics = false, opt_sequences = false,
             opt_show_create_table_skip_secondary_engine = false;
 static bool opt_compressed_columns = false,
             opt_compressed_columns_with_dictionaries = false,
@@ -636,6 +637,8 @@ static struct my_option my_long_options[] = {
     {"routines", 'R', "Dump stored routines (functions and procedures).",
      &opt_routines, &opt_routines, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr,
      0, nullptr},
+    {"sequences", OPT_SEQUENCES, "Dump sequences.", &opt_sequences,
+     &opt_sequences, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"set-charset", OPT_SET_CHARSET,
      "Add 'SET NAMES default_character_set' to the output.", &opt_set_charset,
      &opt_set_charset, nullptr, GET_BOOL, NO_ARG, 1, 0, 0, nullptr, 0, nullptr},
@@ -1220,12 +1223,6 @@ static bool get_one_option(int optid, const struct my_option *opt,
       /* Store the supplied list of errors into an array. */
       if (parse_ignore_error()) exit(EX_EOM);
       break;
-    case (int)OPT_LONG_QUERY_TIME:
-      long_query_time_opt_provided = true;
-      break;
-    case 'C':
-      CLIENT_WARN_DEPRECATED("--compress", "--compression-algorithms");
-      break;
     case (int)OPT_ENCRYPT: {
       opt_encrypt =
           find_type_or_exit(argument, &set_encrypt_mode_typelib, opt->name);
@@ -1236,6 +1233,12 @@ static bool get_one_option(int optid, const struct my_option *opt,
           find_type_or_exit(argument, &set_encrypt_mode_typelib, opt->name);
       break;
     }
+    case (int)OPT_LONG_QUERY_TIME:
+      long_query_time_opt_provided = true;
+      break;
+    case 'C':
+      CLIENT_WARN_DEPRECATED("--compress", "--compression-algorithms");
+      break;
   }
   return false;
 }
@@ -1348,6 +1351,13 @@ static int get_options(int *argc, char ***argv) {
       ((*argc < 1 && !opt_alldbs) || (*argc > 0 && opt_alldbs))) {
     short_usage();
     return EX_USAGE;
+  }
+
+  // NOTE: sequence not support use xml format yet.
+  if (opt_xml && opt_sequences) {
+    fprintf(stderr, "%s: --sequences not compatible with --xml.\n",
+            my_progname);
+    return (EX_USAGE);
   }
   return (0);
 } /* get_options */
@@ -1788,7 +1798,6 @@ static FILE *open_sql_file_for_table(const char *table, int flags) {
 static void free_resources() {
   if (md_result_file && md_result_file != stdout)
     my_fclose(md_result_file, MYF(0));
-  free_passwords();
   if (opt_encrypt_key_file_key) {
     my_free(opt_encrypt_key_file_key);
     opt_encrypt_key_file_key = nullptr;
@@ -1798,6 +1807,7 @@ static void free_resources() {
     opt_decrypt_key_file_key = nullptr;
   }
   if (opt_encrypt) dynstr_free(&dump_buff);
+  free_passwords();
   if (ignore_table != nullptr) {
     delete ignore_table;
     ignore_table = nullptr;
@@ -2796,16 +2806,19 @@ static void print_blob_as_hex(FILE *output_file, const char *str, ulong len) {
 
 static uint dump_routines_for_db(char *db) {
   char query_buff[QUERY_LENGTH];
-  const char *routine_type[] = {"FUNCTION", "PROCEDURE"};
+  const char *routine_type[] = {"FUNCTION", "PROCEDURE", "TYPE"};
+  const char *create_caption_xml[] = {"Create Function", "Create Procedure",
+                                      "Create Type"};
   char db_name_buff[NAME_LEN * 2 + 3], name_buff[NAME_LEN * 2 + 3];
   char *routine_name;
-  int i;
+  uint i;
   FILE *sql_file = md_result_file;
   MYSQL_RES *routine_res, *routine_list_res;
   MYSQL_ROW row, routine_list_row;
 
   char db_cl_name[MY_CS_NAME_SIZE];
   int db_cl_altered = false;
+  uint upper_bound = array_elements(routine_type);
 
   DBUG_TRACE;
   DBUG_PRINT("enter", ("db: '%s'", db));
@@ -2838,12 +2851,20 @@ static uint dump_routines_for_db(char *db) {
   if (opt_xml) dump_fputs(sql_file, "\t<routines>\n");
 
   /* 0, retrieve and dump functions, 1, procedures */
-  for (i = 0; i <= 1; i++) {
+  for (i = 0; i < upper_bound; i++) {
+    if (i >= 2)
+      mysql_query_with_error_report(mysql, nullptr, "SET SQL_MODE=ORACLE");
+
     snprintf(query_buff, sizeof(query_buff), "SHOW %s STATUS WHERE Db = '%s'",
              routine_type[i], db_name_buff);
 
-    if (mysql_query_with_error_report(mysql, &routine_list_res, query_buff))
+    // how about check the return status for package related queries ?
+    if (mysql_query_with_error_report(mysql, &routine_list_res, query_buff)) {
+      // package is not supported by earilier version
+      // if so, break on this.
+      if (i == 2) break;
       return 1;
+    }
 
     if (mysql_num_rows(routine_list_res)) {
       while ((routine_list_row = mysql_fetch_row(routine_list_res))) {
@@ -2880,17 +2901,10 @@ static uint dump_routines_for_db(char *db) {
                       current_user, query_buff);
           } else if (strlen(row[2])) {
             if (opt_xml) {
-              if (i)  // Procedures.
-                print_xml_row(sql_file, "routine", routine_res, &row,
-                              "Create Procedure");
-              else  // Functions.
-                print_xml_row(sql_file, "routine", routine_res, &row,
-                              "Create Function");
+              print_xml_row(sql_file, "routine", routine_res, &row,
+                            create_caption_xml[i]);
               continue;
             }
-            if (opt_drop)
-              fprintf(sql_file, "/*!50003 DROP %s IF EXISTS %s */;\n",
-                      routine_type[i], routine_name);
 
             if (mysql_num_fields(routine_res) >= 6) {
               if (switch_db_collation(sql_file, db_name_buff, ";", db_cl_name,
@@ -2922,6 +2936,11 @@ static uint dump_routines_for_db(char *db) {
 
             switch_sql_mode(sql_file, ";", row[1]);
 
+            // 'drop package' syntax is enabled after sql_mode is changed.
+            if (opt_drop)
+              dump_fprintf(sql_file, "/*!50003 DROP %s IF EXISTS %s */;\n",
+                           routine_type[i], routine_name);
+
             dump_fprintf(sql_file,
                          "DELIMITER ;;\n"
                          "%s ;;\n"
@@ -2947,11 +2966,89 @@ static uint dump_routines_for_db(char *db) {
     }
     mysql_free_result(routine_list_res);
   } /* end of for i (0 .. 1)  */
+  if (i >= 2)
+    mysql_query_with_error_report(mysql, nullptr, "SET SQL_MODE=DEFAULT");
 
   if (opt_xml) {
     dump_fputs(sql_file, "\t</routines>\n");
     check_io(sql_file);
   }
+
+  if (switch_character_set_results(mysql, default_charset)) return 1;
+
+  if (lock_tables)
+    (void)mysql_query_with_error_report(mysql, nullptr, "UNLOCK TABLES");
+  return 0;
+}
+
+static uint dump_sequences_for_db(char *db) {
+  char query_buff[QUERY_LENGTH];
+  char db_name_buff[NAME_LEN * 2 + 3], name_buff[NAME_LEN * 2 + 3];
+  char db_name_buff_ident[NAME_LEN * 2 + 3];
+  char *sequence_name;
+  FILE *sql_file = md_result_file;
+  MYSQL_RES *sequence_res, *sequence_list_res;
+  MYSQL_ROW row, sequence_list_row;
+
+  DBUG_TRACE;
+  DBUG_PRINT("enter", ("db: '%s'", db));
+
+  mysql_real_escape_string_quote(mysql, db_name_buff, db, (ulong)strlen(db),
+                                 '\'');
+  mysql_real_escape_string_quote(mysql, db_name_buff_ident, db,
+                                 (ulong)strlen(db), '`');
+
+  /* nice comments */
+  bool sequences_freemem = false;
+  char const *sequences_text =
+      fix_identifier_with_newline(db, &sequences_freemem);
+  print_comment(sql_file, false,
+                "\n--\n-- Dumping sequences for database '%s'\n--\n",
+                sequences_text);
+  if (sequences_freemem) my_free(const_cast<char *>(sequences_text));
+
+  /*
+    not using "mysql_query_with_error_report" because we may have not
+    enough privileges to lock mysql.greatdb_sequences.
+  */
+  if (lock_tables)
+    mysql_query(mysql, "LOCK TABLES mysql.greatdb_sequences READ");
+
+  if (switch_character_set_results(mysql, "binary")) return 1;
+
+  /* start dump sequences */
+  {
+    snprintf(query_buff, sizeof(query_buff), "SHOW SEQUENCES in `%s`",
+             db_name_buff_ident);
+
+    if (mysql_query_with_error_report(mysql, &sequence_list_res, query_buff)) {
+      return 1;
+    }
+
+    if (mysql_num_rows(sequence_list_res)) {
+      while ((sequence_list_row = mysql_fetch_row(sequence_list_res))) {
+        sequence_name = quote_name(sequence_list_row[0], name_buff, false);
+        DBUG_PRINT("info", ("retrieving CREATE SEQUENCE for %s", name_buff));
+        snprintf(query_buff, sizeof(query_buff), "SHOW CREATE SEQUENCE %s",
+                 sequence_name);
+
+        if (mysql_query_with_error_report(mysql, &sequence_res, query_buff))
+          return 1;
+
+        while ((row = mysql_fetch_row(sequence_res))) {
+          if (opt_drop)
+            dump_fprintf(sql_file, "/*!80032 DROP SEQUENCE IF EXISTS %s */;\n",
+                         sequence_name);
+
+          dump_fprintf(sql_file, "%s ;\n", (const char *)row[1]);
+
+        } /* end of routine printing */
+        mysql_free_result(sequence_res);
+
+      } /* end of list of sequences */
+    }
+    mysql_free_result(sequence_list_res);
+  } /* end of for i (0 .. 1)  */
 
   if (switch_character_set_results(mysql, default_charset)) return 1;
 
@@ -5642,6 +5739,10 @@ static int dump_all_tables_in_db(char *database) {
     DBUG_PRINT("info", ("Dumping routines for database %s", database));
     dump_routines_for_db(database);
   }
+  if (opt_sequences && mysql_get_server_version(mysql) >= 80032) {
+    DBUG_PRINT("info", ("Dumping sequences for database %s", database));
+    dump_sequences_for_db(database);
+  }
   if (opt_xml) {
     dump_fputs(md_result_file, "</database>\n");
     check_io(md_result_file);
@@ -5906,6 +6007,10 @@ static int dump_selected_tables(char *db, char **table_names, int tables) {
   if (opt_routines && mysql_get_server_version(mysql) >= 50009) {
     DBUG_PRINT("info", ("Dumping routines for database %s", db));
     dump_routines_for_db(db);
+  }
+  if (opt_sequences && mysql_get_server_version(mysql) >= 80032) {
+    DBUG_PRINT("info", ("Dumping sequences for database %s", db));
+    dump_sequences_for_db(db);
   }
   root.Clear();
   if (opt_xml) {
@@ -6605,7 +6710,7 @@ static bool process_set_gtid_purged(MYSQL *mysql_con, bool ftwrl_done) {
               "those that changed suppressed parts of the database. If "
               "you don't want to restore GTIDs, pass "
               "--set-gtid-purged=OFF. To make a complete dump, pass "
-              "--all-databases --triggers --routines --events. \n");
+              "--all-databases --triggers --routines --events --sequences. \n");
     }
 
     set_session_binlog(false);

@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2023, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -46,6 +47,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0dd.h"
 #include "dict0mem.h"
 #include "dict0stats.h"
+#include "fil0purge.h"
 #include "ha_innodb.h"
 #include "log0chkp.h"
 #include "log0ddl.h"
@@ -77,6 +79,7 @@ bool innodb_ddl_log_crash_reset_debug;
 2. DELETE SPACE
 3. RENAME SPACE
 4. DROP
+5. FILE ASYNC PURGE
 Other RENAME_TABLE and REMOVE CACHE doesn't touch the data files at all,
 so would be skipped */
 
@@ -155,7 +158,8 @@ DDL_Record::DDL_Record()
       m_old_file_path(nullptr),
       m_new_file_path(nullptr),
       m_heap(nullptr),
-      m_deletable(true) {}
+      m_deletable(true),
+      m_removable(true) {}
 
 DDL_Record::~DDL_Record() {
   if (m_heap != nullptr) {
@@ -233,6 +237,9 @@ std::ostream &DDL_Record::print(std::ostream &out) const {
       break;
     case Log_Type::ALTER_UNENCRYPT_TABLESPACE_LOG:
       out << "ALTER UNENCRYPT TABLESPACE";
+      break;
+    case Log_Type::FILE_ASYNC_PURGE_LOG:
+      out << "PURGE DATA FILE ASYNC";
       break;
     default:
       ut_d(ut_error);
@@ -813,7 +820,7 @@ dberr_t DDL_Log_Table::remove(const DDL_Records &records) {
   dberr_t ret = DB_SUCCESS;
 
   for (auto record : records) {
-    if (record->get_deletable()) {
+    if (record->get_deletable() && record->get_removable()) {
       dberr_t err = remove(record->get_id());
 
       ut_ad(err == DB_SUCCESS || err == DB_TOO_MANY_CONCURRENT_TRXS);
@@ -1484,6 +1491,12 @@ dberr_t Log_DDL::replay_all() {
     if (err != DB_SUCCESS) {
       break;
     }
+
+    /* FILE_ASYNC_PURGE_LOG will be deleted by background thread, so front
+    thread set its removable = false */
+    if (record->get_type() == Log_Type::FILE_ASYNC_PURGE_LOG) {
+      record->set_removable(false);
+    }
   }
 
   if (err != DB_SUCCESS) {
@@ -1614,6 +1627,10 @@ dberr_t Log_DDL::replay(DDL_Record &record) {
       err = replay_alter_encrypt_space_log(record);
       break;
 
+    case Log_Type::FILE_ASYNC_PURGE_LOG:
+      replay_file_async_purge_log(record.get_id(), record.get_thread_id(),
+                                  record.get_new_file_path());
+      break;
     default:
       ut_error;
   }
@@ -1705,7 +1722,7 @@ void Log_DDL::replay_delete_space_log(space_id_t space_id,
   fil_update_partition_name(space_id, 0, false, space_name, path_str);
   file_path = path_str.c_str();
 
-  row_drop_tablespace(space_id, file_path);
+  row_drop_or_purge_single_table_tablespace(thd, space_id, file_path);
 
   /* If this is an undo space_id, allow the undo number for it
   to be reused. */
@@ -1901,6 +1918,79 @@ void Log_DDL::replay_remove_cache_log(table_id_t table_id,
     dict_table_remove_from_cache(table);
     dict_sys_mutex_exit();
   }
+}
+
+dberr_t Log_DDL::insert_file_async_purge_log(uint64_t id, ulint thread_id,
+                                             const char *file_path) {
+  dberr_t error;
+  trx_t *trx = trx_allocate_for_background();
+  trx_start_internal(trx, UT_LOCATION_HERE);
+  trx->ddl_operation = true;
+
+  DDL_Record record;
+  record.set_id(id);
+  record.set_thread_id(thread_id);
+  record.set_type(Log_Type::FILE_ASYNC_PURGE_LOG);
+  record.set_new_file_path(file_path);
+
+  DBUG_EXECUTE_IF("ddl_log_crash_before_write_file_purge_log", DBUG_SUICIDE(););
+
+  {
+    DDL_Log_Table ddl_log(trx);
+    error = ddl_log.insert(record);
+    ut_ad(error == DB_SUCCESS);
+  }
+
+  DBUG_EXECUTE_IF("ddl_log_crash_after_write_file_purge_log", DBUG_SUICIDE(););
+
+  trx_commit_for_mysql(trx);
+  trx_free_for_background(trx);
+
+  if (srv_print_ddl_logs) {
+    ib::info(ER_IB_MSG_649) << "DDL log insert : " << record;
+  }
+  return (error);
+}
+
+void Log_DDL::replay_file_async_purge_log(uint64_t id, ulint thread_id,
+                                          const char *file_path) {
+  char *path = mem_strdup(file_path);
+  file_purge_sys->add_file(id, path, nullptr);
+}
+
+dberr_t Log_DDL::write_purge_file_log(uint64_t *id, ulint thread_id,
+                                      const char *file_path) {
+  *id = next_id();
+
+  dberr_t err;
+  err = insert_file_async_purge_log(*id, thread_id, file_path);
+  ut_ad(err == DB_SUCCESS);
+
+  return (err);
+}
+
+dberr_t Log_DDL::remove_by_id(uint64_t id) {
+  dberr_t error;
+  trx_t *trx = trx_allocate_for_background();
+  trx_start_internal(trx, UT_LOCATION_HERE);
+  trx->ddl_operation = true;
+
+  DBUG_EXECUTE_IF("ddl_log_crash_after_replay_file_purge_log", DBUG_SUICIDE(););
+
+  {
+    DDL_Log_Table ddl_log(trx);
+    error = ddl_log.remove(id);
+    ut_ad(error == DB_SUCCESS);
+  }
+
+  trx_commit_for_mysql(trx);
+  trx_free_for_background(trx);
+
+  if (srv_print_ddl_logs && error == DB_SUCCESS) {
+    ib::info(ER_IB_MSG_DDL_LOG_DELETE_BY_ID_OK) << "DDL log remove : " << id;
+  }
+
+  return (error);
 }
 
 dberr_t Log_DDL::post_ddl(THD *thd) {

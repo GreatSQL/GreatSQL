@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -195,7 +196,18 @@ String *Regexp_facade::Replace(Item *subject_expr, Item *replacement_expr,
   String replacement_buf;
   std::u16string replacement(MAX_FIELD_WIDTH, '\0');
 
-  if (EvalExprToCharset(replacement_expr, &replacement)) return nullptr;
+  if (EvalExprToCharset(replacement_expr, &replacement)) {
+    /**
+      In Oracle mode, when 'replace_string' is empty, replace the substring
+      matched by the regular expression with an empty string
+    */
+    if ((current_thd->variables.sql_mode & MODE_ORACLE) &&
+        replacement_expr->is_null()) {
+      replacement.clear();
+    } else {
+      return nullptr;
+    }
+  }
 
   if (Reset(subject_expr)) return nullptr;
 
@@ -255,6 +267,22 @@ bool Regexp_facade::SetupEngine(Item *pattern_expr, uint flags) {
   if (EvalExprToCharset(pattern_expr, &pattern)) {
     m_engine = nullptr;
     return false;
+  }
+
+  if ((current_thd->variables.sql_mode & MODE_ORACLE) &&
+      (flags & (UREGEX_ERROR_ON_UNKNOWN_ESCAPES << 1))) {
+    /**
+      The match_param parameter specifies the 'x' flag so spaces in 'pattern'
+      are ignored
+    */
+    std::u16string::size_type pos = 0;
+    while ((pos = pattern.find_first_of(u' ', pos)) != std::u16string::npos) {
+      if (pos == 0 || pattern[pos - 1] != u'\\') {
+        pattern.erase(pos, 1);
+      }
+      pos += 1;
+    }
+    flags &= ~(UREGEX_ERROR_ON_UNKNOWN_ESCAPES << 1);
   }
 
   // Actually compile the regular expression.

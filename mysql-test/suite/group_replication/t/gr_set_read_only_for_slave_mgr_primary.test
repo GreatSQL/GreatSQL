@@ -1,0 +1,146 @@
+################################################################################
+# Validate that list of senders is updated when the sources are (fake) 5.7
+# servers.
+#
+# Test:
+#  0. The test requires 6 servers:
+#       server1: group1 primary
+#       server2: group1 secondary
+#       server3: group1 secondary
+#       server4: group2 primary
+#       server5: group2 secondary
+#       server5: group2 secondary
+#  1. Deploy two groups which have 3 members in single primary mode.
+#  2. Create and start a failover channel from mgr group2 two group1
+#  3. let server5 be group2's primary, check server5's read_only value
+#  4. Clean up.
+################################################################################
+
+--disable_query_log
+CALL mtr.add_suppression("Sending passwords in plain text without SSL/TLS is extremely insecure");
+--enable_query_log
+
+--source include/big_test.inc
+--source include/have_debug.inc
+--source include/have_group_replication_plugin.inc
+--let $group_replication_group_name= aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_server_count= 3
+--source include/group_replication.inc
+
+--echo
+--echo ############################################################
+--echo # 1. Deploy two groups which have 3 members in single primary mode.
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--let $server1_uuid= `SELECT @@server_uuid`
+--source include/start_and_bootstrap_group_replication.inc
+
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--source include/start_group_replication.inc
+
+--let $rpl_connection_name= server3
+--source include/rpl_connection.inc
+--source include/start_group_replication.inc
+
+--let $group_replication_group_name= bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_server_count= 3
+
+--let $group_replication_number_of_members= 3
+--source include/gr_wait_for_number_of_members.inc
+
+--let $rpl_connection_name= server4
+--source include/rpl_connection.inc
+--let $server4_uuid= `SELECT @@server_uuid`
+--source include/start_and_bootstrap_group_replication.inc
+
+--let $rpl_connection_name= server5
+--source include/rpl_connection.inc
+--source include/start_group_replication.inc
+
+--let $rpl_connection_name= server6
+--source include/rpl_connection.inc
+--source include/start_group_replication.inc
+
+--let $group_replication_number_of_members= 3
+--source include/gr_wait_for_number_of_members.inc
+
+--echo
+--echo ############################################################
+--echo # 2. Create and start a failover channel from mgr group2 to group1
+--let $rpl_connection_name= server4
+--source include/rpl_connection.inc
+--replace_result $SERVER_MYPORT_1 SERVER_1_PORT
+--eval CHANGE REPLICATION SOURCE TO SOURCE_USER='root', SOURCE_PASSWORD='', SOURCE_HOST='127.0.0.1', SOURCE_PORT=$SERVER_MYPORT_1, SOURCE_RETRY_COUNT=2, SOURCE_AUTO_POSITION=1 FOR CHANNEL 'ch1';
+
+--let $rpl_connection_name= server5
+--source include/rpl_connection.inc
+--replace_result $SERVER_MYPORT_1 SERVER_1_PORT
+--eval CHANGE REPLICATION SOURCE TO SOURCE_USER='root', SOURCE_PASSWORD='', SOURCE_HOST='127.0.0.1', SOURCE_PORT=$SERVER_MYPORT_1, SOURCE_RETRY_COUNT=2, SOURCE_AUTO_POSITION=1 FOR CHANNEL 'ch1';
+
+--let $rpl_connection_name= server6
+--source include/rpl_connection.inc
+--replace_result $SERVER_MYPORT_1 SERVER_1_PORT
+--eval CHANGE REPLICATION SOURCE TO SOURCE_USER='root', SOURCE_PASSWORD='', SOURCE_HOST='127.0.0.1', SOURCE_PORT=$SERVER_MYPORT_1, SOURCE_RETRY_COUNT=2, SOURCE_AUTO_POSITION=1 FOR CHANNEL 'ch1';
+
+--let $rpl_connection_name= server4
+--source include/rpl_connection.inc
+CHANGE REPLICATION SOURCE TO SOURCE_CONNECTION_AUTO_FAILOVER=1 FOR CHANNEL 'ch1';
+--replace_result $SERVER_MYPORT_1 SERVER_1_PORT
+--eval SELECT asynchronous_connection_failover_add_managed('ch1', 'GroupReplication', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '127.0.0.1', $SERVER_MYPORT_1, '', 80, 60);
+START REPLICA;
+
+--sleep 2
+
+--echo
+--echo ############################################################
+--echo # 3. let server5 be group2's primary, check server5's read_only value
+--let $rpl_connection_name= server4
+--source include/rpl_connection.inc
+--let $rpl_channel_name='ch1'
+--source include/stop_slave.inc
+--let $rpl_reset_slave_all= 1
+--let $rpl_multi_source= 1
+--source include/rpl_reset_slave.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server5
+--source include/rpl_connection.inc
+--let $group_replication_number_of_members= 2
+--source include/gr_wait_for_number_of_members.inc
+show variables like "%read_only%";
+
+--echo
+--echo ############################################################
+--echo # 4. clean up
+--let $rpl_connection_name= server6
+--source include/rpl_connection.inc
+--source include/rpl_reset_slave.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server5
+--source include/rpl_connection.inc
+--source include/stop_slave.inc
+--source include/rpl_reset_slave.inc
+--let $rpl_channel_name=
+--let $rpl_reset_slave_all=
+--let $rpl_multi_source=
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server3
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+
+
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_group_replication_reset_persistent_vars=1
+--source include/group_replication_end.inc

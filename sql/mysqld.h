@@ -260,7 +260,6 @@ extern char *default_tz_name;
 extern Time_zone *default_tz;
 extern const char *default_storage_engine;
 extern const char *default_tmp_storage_engine;
-extern char *opt_fake_serv_vers_num;
 extern ulonglong temptable_max_ram;
 extern ulonglong temptable_max_mmap;
 extern bool temptable_use_mmap;
@@ -433,6 +432,7 @@ extern char *opt_log_error_suppression_list;
 extern char *opt_log_error_services;
 extern bool encrypt_tmp_files;
 extern ulonglong tf_sequence_table_max_upper_bound;
+extern ulonglong tf_udt_table_max_rows;
 extern char *opt_protocol_compression_algorithms;
 /** The size of the host_cache. */
 extern uint host_cache_size;
@@ -519,6 +519,8 @@ extern PSI_mutex_key key_thd_timer_mutex;
 extern PSI_mutex_key key_monitor_info_run_lock;
 extern PSI_mutex_key key_LOCK_delegate_connection_mutex;
 extern PSI_mutex_key key_LOCK_group_replication_connection_mutex;
+extern PSI_mutex_key key_LOCK_dbms_pipe_map_mutex;
+extern PSI_mutex_key key_LOCK_sp_version_change_mutex;
 
 extern PSI_mutex_key key_commit_order_manager_mutex;
 extern PSI_mutex_key key_mutex_replica_worker_hash;
@@ -565,6 +567,7 @@ extern PSI_thread_key key_thread_parser_service;
 extern PSI_thread_key key_thread_handle_con_admin_sockets;
 extern PSI_cond_key key_monitor_info_run_cond;
 extern PSI_thread_key key_thread_parallel_query;
+extern PSI_cond_key key_COND_dbms_pipe_cond_var;
 
 extern PSI_file_key key_file_binlog;
 extern PSI_file_key key_file_binlog_index;
@@ -704,6 +707,7 @@ extern PSI_stage_info stage_rpl_failover_updating_source_member_details;
 extern PSI_stage_info stage_rpl_failover_wait_before_next_fetch;
 extern PSI_stage_info stage_communication_delegation;
 extern PSI_stage_info stage_restoring_secondary_keys;
+extern PSI_stage_info stage_dbms_pipe_receive_message;
 #ifdef HAVE_PSI_STATEMENT_INTERFACE
 /**
   Statement instrumentation keys (sql).
@@ -743,7 +747,6 @@ extern MYSQL_PLUGIN_IMPORT char *mysql_data_home;
 extern "C" MYSQL_PLUGIN_IMPORT char server_version[SERVER_VERSION_LENGTH];
 extern "C" MYSQL_PLUGIN_IMPORT char
     server_version_suffix[SERVER_VERSION_LENGTH];
-extern "C" MYSQL_PLUGIN_IMPORT char fake_serv_vers[SERVER_VERSION_LENGTH];
 extern MYSQL_PLUGIN_IMPORT char mysql_real_data_home[];
 extern char mysql_unpacked_real_data_home[];
 extern MYSQL_PLUGIN_IMPORT struct System_variables global_system_variables;

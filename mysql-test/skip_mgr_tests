@@ -6,4 +6,3 @@ group_replication.gr_member_status_applier_error_bug              : BUG#0 skip
 group_replication.gr_parallel_applier_indexes_commit_order        : BUG#0 skip since garbage logical changed
 group_replication.gr_switch_primary_timeout_node_kill             : BUG#0 skip since xcom connect mechanism has been changed
 group_replication.gr_singlewriter_enabled_on_mode_switch          : BUG#0 skip since we don't use official single write paxos
-group_replication.gr_consistent_delayed_view_change_resume_error  : BUG#0 skip since we don't use patch for after

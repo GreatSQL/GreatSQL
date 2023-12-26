@@ -321,6 +321,9 @@ static int create_query_string(THD *thd, String *buf) {
   @param[in]      parse_data     Event's data from parsing stage
   @param[in]      if_not_exists  Whether IF NOT EXISTS was
                                  specified
+  @param[in]      char *job      // spacial job str
+  @param[in]      char *job_utf8      // spacial job str
+
   In case there is an event with the same name (db) and
   IF NOT EXISTS is specified, an warning is put into the stack.
   @sa Events::drop_event for the notes about locking, pre-locking
@@ -331,7 +334,7 @@ static int create_query_string(THD *thd, String *buf) {
 */
 
 bool Events::create_event(THD *thd, Event_parse_data *parse_data,
-                          bool if_not_exists) {
+                          bool if_not_exists, String *job) {
   bool event_already_exists;
   bool event_added_to_event_queue = false;
   std::unique_ptr<Event_queue_element> new_element(nullptr);
@@ -370,7 +373,7 @@ bool Events::create_event(THD *thd, Event_parse_data *parse_data,
 
   dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   if (Event_db_repository::create_event(thd, parse_data, if_not_exists,
-                                        &event_already_exists)) {
+                                        &event_already_exists, job)) {
     /* On error conditions my_error() is called so no need to handle here */
     goto err_with_rollback;
   }
@@ -400,19 +403,28 @@ bool Events::create_event(THD *thd, Event_parse_data *parse_data,
 
   // Binlog the create event.
   {
-    assert(thd->query().str && thd->query().length);
     String log_query;
-    if (create_query_string(thd, &log_query)) {
-      LogErr(ERROR_LEVEL, ER_EVENT_ERROR_CREATING_QUERY_TO_WRITE_TO_BINLOG);
-      goto err_with_rollback;
+    if (parse_data->is_dbms_job && job) {
+      if (parse_data->get_create_event_str(thd, true, &log_query) ||
+          log_query.append(job->ptr(), job->length())) {
+        LogErr(ERROR_LEVEL, ER_EVENT_ERROR_CREATING_QUERY_TO_WRITE_TO_BINLOG);
+        goto err_with_rollback;
+      }
     } else {
+      assert(thd->query().str && thd->query().length);
+      if (create_query_string(thd, &log_query)) {
+        LogErr(ERROR_LEVEL, ER_EVENT_ERROR_CREATING_QUERY_TO_WRITE_TO_BINLOG);
+        goto err_with_rollback;
+      }
+    }
+    {
       thd->add_to_binlog_accessed_dbs(parse_data->dbname.str);
       /*
         If the definer is not set or set to CURRENT_USER, the value of
         CURRENT_USER will be written into the binary log as the definer for the
         SQL thread.
       */
-      if (write_bin_log(thd, true, log_query.c_ptr(), log_query.length(),
+      if (write_bin_log(thd, true, log_query.ptr(), log_query.length(),
                         !event_already_exists))
         goto err_with_rollback;
     }
@@ -465,6 +477,7 @@ err_with_rollback:
                              ALTER EVENT RENAME, otherwise is NULL.
   @param[in]     new_name    A new name for the event. Set in the case of
                              ALTER EVENT RENAME
+  @param[in]     job str
 
   Parameter 'et' contains data about dbname and event name.
   Parameter 'new_name' is the new name of the event, if not null
@@ -477,7 +490,7 @@ err_with_rollback:
 
 bool Events::update_event(THD *thd, Event_parse_data *parse_data,
                           const LEX_CSTRING *new_dbname,
-                          const LEX_CSTRING *new_name) {
+                          const LEX_CSTRING *new_name, bool run, String *job) {
   std::unique_ptr<Event_queue_element> new_element(nullptr);
 
   DBUG_TRACE;
@@ -527,8 +540,8 @@ bool Events::update_event(THD *thd, Event_parse_data *parse_data,
   Save_and_Restore_binlog_format_state binlog_format_state(thd);
 
   dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
-  if (Event_db_repository::update_event(thd, parse_data, new_dbname,
-                                        new_name)) {
+  if (Event_db_repository::update_event(thd, parse_data, new_dbname, new_name,
+                                        job)) {
     /* On error conditions my_error() is called so no need to handle here */
     goto err_with_rollback;
   }
@@ -550,13 +563,33 @@ bool Events::update_event(THD *thd, Event_parse_data *parse_data,
 
   /* Binlog the alter event. */
   {
-    assert(thd->query().str && thd->query().length);
-
     thd->add_to_binlog_accessed_dbs(parse_data->dbname.str);
     if (new_dbname) thd->add_to_binlog_accessed_dbs(new_dbname->str);
 
-    if (write_bin_log(thd, true, thd->query().str, thd->query().length, true))
-      goto err_with_rollback;
+    if (parse_data->is_dbms_job && !thd->slave_thread) {
+      String log_query;
+
+      if (parse_data->get_create_event_str(thd, false, &log_query)) {
+        LogErr(ERROR_LEVEL, ER_EVENT_ERROR_CREATING_QUERY_TO_WRITE_TO_BINLOG);
+        goto err_with_rollback;
+      }
+
+      if (parse_data->body_changed) {
+        assert(job);
+        if (log_query.append(job->ptr(), job->length())) {
+          LogErr(ERROR_LEVEL, ER_EVENT_ERROR_CREATING_QUERY_TO_WRITE_TO_BINLOG);
+          goto err_with_rollback;
+        }
+      }
+
+      if (write_bin_log(thd, true, log_query.ptr(), log_query.length(), true))
+        goto err_with_rollback;
+
+    } else {
+      assert(thd->query().str && thd->query().length);
+      if (write_bin_log(thd, true, thd->query().str, thd->query().length, true))
+        goto err_with_rollback;
+    }
   }
 
   // Commit changes to the data-dictionary and binary log.
@@ -573,6 +606,11 @@ bool Events::update_event(THD *thd, Event_parse_data *parse_data,
 
   // Update element in event queue.
   if (event_queue && new_element != nullptr) {
+    //  dbms run, update next exec  current will exec imm
+    if (run && new_element->m_status == Event_parse_data::ENABLED) {
+      new_element->m_starts_null = false;
+      new_element->m_starts = (my_time_t)thd->query_start_in_secs();
+    }
     /*
       TODO: check if an update actually has inserted an entry into the queue.
             If not, and the element is ON COMPLETION NOT PRESERVE, delete
@@ -636,7 +674,7 @@ err_with_rollback:
 */
 
 bool Events::drop_event(THD *thd, LEX_CSTRING dbname, LEX_CSTRING name,
-                        bool if_exists) {
+                        bool if_exists, bool is_dbms_job) {
   DBUG_TRACE;
 
   if (check_access(thd, EVENT_ACL, dbname.str, nullptr, nullptr, false, false))
@@ -658,11 +696,20 @@ bool Events::drop_event(THD *thd, LEX_CSTRING dbname, LEX_CSTRING name,
   // Binlog the drop event.
   {
     assert(thd->query().str && thd->query().length);
-
     thd->add_to_binlog_accessed_dbs(dbname.str);
-    if (write_bin_log(thd, true, thd->query().str, thd->query().length,
-                      event_exists))
-      goto err_with_rollback;
+    if (is_dbms_job) {
+      String log_query;
+      log_query.append(STRING_WITH_LEN("DROP EVENT "));
+      log_query.append(name);
+      if (write_bin_log(thd, true, log_query.ptr(), log_query.length(),
+                        event_exists))
+        goto err_with_rollback;
+
+    } else {
+      if (write_bin_log(thd, true, thd->query().str, thd->query().length,
+                        event_exists))
+        goto err_with_rollback;
+    }
   }
 
   // Commit changes to the data-dictionary and binary log.

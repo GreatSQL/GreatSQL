@@ -1,0 +1,396 @@
+SET sql_mode=ORACLE;
+
+show variables like '%udt_format_result%';
+set @@udt_format_result='DBA';
+--disable_warnings
+
+create or replace type t_air as object(id int,type varchar(20));
+CREATE TABLE `test_type` (
+  `c1` int NOT NULL,
+  `c2` tinyint DEFAULT NULL,
+  `c3` smallint DEFAULT NULL,
+  `c4` mediumint DEFAULT NULL,
+  `c5` int DEFAULT NULL,
+  `c6` bigint DEFAULT NULL,
+  `c7` bit(64) DEFAULT NULL,
+  `c8` real(50,10) DEFAULT NULL,
+  `c9` double(50,10) DEFAULT NULL,
+  `c10` float(50,10) DEFAULT NULL,
+  `c11` number(50,10) DEFAULT NULL,
+  `c12` decimal(50,14) DEFAULT NULL,
+  `c13` char(255) DEFAULT NULL,
+  `c14` varchar(255) DEFAULT NULL,
+  `c15` date DEFAULT NULL,
+  `c16` time(6) DEFAULT NULL,
+  `c17` year DEFAULT NULL,
+  `c18` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  `c19` datetime(6) DEFAULT NULL,
+  `c20` tinyblob,
+  `c21` blob,
+  `c22` mediumblob,
+  `c23` longblob,
+  `c24` tinytext,
+  `c25` text,
+  `c26` mediumtext,
+  `c27` longtext,
+  `c28` enum('','28c','-28b','288a') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `c29` set('29c','29b','29a') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `c30` binary(255) DEFAULT NULL,
+  `c31` varbinary(255) DEFAULT NULL,
+  `c32` point DEFAULT NULL,
+  `c33` linestring DEFAULT NULL,
+  `c34` polygon DEFAULT NULL,
+  `c35` geometry DEFAULT NULL,
+  `c36` multipoint DEFAULT NULL,
+  `c37` multilinestring DEFAULT NULL,
+  `c38` multipolygon DEFAULT NULL,
+  `c39` geomcollection DEFAULT NULL,
+  `json_value` json DEFAULT NULL,
+  `name1` t_air
+) CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci engine=innodb;
+
+INSERT INTO `test_type` VALUES ('111', '21', '331', '444', '555', '6626', '77', '888.11', '999.1222', '101010.101011', '111111.222', '121212.111', '131313', '141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '242424', '252525', '262626', '272727', '28c', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门1", "deptId": "1", "deptLeaderId": "3"}',t_air(10,'aabb1'));
+INSERT INTO `test_type` VALUES ('111', '22', '332', '4444', '5525', '66622', '177', '88811.12', '9991.23333', '1010101.34', '11111111.222', '121212.222', '131313', '141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '242424', '252525', '262626', '272727', '288a', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门1", "deptId": "1", "deptLeaderId": "3"}',t_air(10,'aabb1'));
+INSERT INTO `test_type` VALUES ('111', null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, NULL,null,null);
+INSERT INTO `test_type` VALUES ('-111', '-23', '-333', '-4144', '-1555', '-666', '-1177', '-8881.33333', '-999.00002', '-101010.9999', '-11221111.999', '-121212122.2222', '-131313', '-141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '-28b', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门2", "deptId": "2", "deptLeaderId": "4"}',t_air(11,'aabb2'));
+INSERT INTO `test_type` VALUES ('-111', '-21', '-334', '-4424', '-5525', '-6636', '-1177', '88800.222', '9999.1222', '10101099.99111', '1111110.111100', '121212.98', '131313', '141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '288a', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门2", "deptId": "2", "deptLeaderId": "4"}',t_air(11,'aabb2'));
+INSERT INTO `test_type` VALUES ('-111', '-21', '-335', '-4414', '-5255', '-6166', '-7227', '-88800.10999', '-999.9876', '-10101099.98765', '-11111122.222', '-12121200.9876', '-131313', '-141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '-28b', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门2", "deptId": "2", "deptLeaderId": "4"}',t_air(11,'aabb2'));
+INSERT INTO `test_type` VALUES ('-111', '-22', '3330', '-44004', '5553', '-6', '-7227', '-88822.0097', '-999000.9999', '-101010111.9987', '-111111111.111', '-12121200.9987', '-131313', '-141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '-28b', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门2", "deptId": "2", "deptLeaderId": "4"}',t_air(11,'aabb2'));
+INSERT INTO `test_type` VALUES ('-112', '22', '-3311', '-44884', '-5553', '-666', '-717', '-888.888', '-999098.9876', '-101010987.98765', '-111111.0987', '-12121222.98765', '-131313', '\"name14\"', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '28c', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门3", "deptId": "3", "deptLeaderId": "5"}',t_air(12,'aabb3'));
+INSERT INTO `test_type` VALUES ('0', '22', '-3333', '-4144', '-5552', '-66116', '-7700', '-888986.234', '-999345.987', '-101010098.87609', '-1111112.987', '-121212234.56432', '-131313', '\"name14\"', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '-28b', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门3", "deptId": "3", "deptLeaderId": "5"}',t_air(12,'aabb3'));
+
+--echo #
+--echo # test of int type
+--echo #
+SELECT  c5, c1, ratio_to_report(c5) over (partition by c1) c from test_type;
+SELECT  c5, c1, ratio_to_report(c5) over () c from test_type;
+
+--echo #
+--echo # test of bit type
+--echo #
+--error ER_WRONG_ARGUMENTS
+SELECT  c7, c1, ratio_to_report(c7) over (partition by c1) c from test_type;
+--error ER_WRONG_ARGUMENTS
+SELECT  c7, c1, ratio_to_report(c7) over () c from test_type;
+
+--echo #
+--echo # test of multiple columns
+--echo #
+SELECT  c5, c8, c1, ratio_to_report(c5) over (partition by c1) c1,ratio_to_report(c8) over (partition by c1) c2 from test_type;
+SELECT  c5, c8, c1, ratio_to_report(c5) over () c1,ratio_to_report(c8) over () c2 from test_type;
+
+--echo #
+--echo # test of real type
+--echo #
+SELECT  c8, c1, ratio_to_report(c8) over (partition by c1) c from test_type;
+SELECT  c8, c1, ratio_to_report(c8) over () c from test_type;
+
+--echo #
+--echo # test of double type
+--echo #
+SELECT  c9, c1, ratio_to_report(c9) over (partition by c1) c from test_type;
+SELECT  c9, c1, ratio_to_report(c9) over () c from test_type;
+
+--echo #
+--echo # test of float type
+--echo #
+SELECT  c10, c1, ratio_to_report(c10) over (partition by c1) c from test_type;
+SELECT  c10, c1, ratio_to_report(c10) over () c from test_type;
+
+--echo #
+--echo # test of decimal type
+--echo #
+SELECT  c12, c1, ratio_to_report(c12) over (partition by c1) c from test_type;
+SELECT  c12, c1, ratio_to_report(c12) over () c from test_type;
+
+--echo #
+--echo # test of varchar type
+--echo #
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+SELECT  c14, c1, ratio_to_report(c14) over (partition by c1) c from test_type;
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+SELECT  c14, c1, ratio_to_report(c14) over () c from test_type;
+
+--echo #
+--echo # test of date type
+--echo #
+--error ER_WRONG_ARGUMENTS
+SELECT  c15, c1, ratio_to_report(c15) over (partition by c1) c from test_type;
+--error ER_WRONG_ARGUMENTS
+SELECT  c15, c1, ratio_to_report(c15) over () c from test_type;
+
+--echo #
+--echo # test of blob type
+--echo #
+--error ER_WRONG_ARGUMENTS
+SELECT  c21, c1, ratio_to_report(c21) over (partition by c1) c from test_type;
+--error ER_WRONG_ARGUMENTS
+SELECT  c21, c1, ratio_to_report(c21) over () c from test_type;
+
+--echo #
+--echo # test of enum type
+--echo #
+--error ER_WRONG_ARGUMENTS
+SELECT  c28, c1, ratio_to_report(c28) over (partition by c1) c from test_type;
+--error ER_WRONG_ARGUMENTS
+SELECT  c28, c1, ratio_to_report(c28) over () c from test_type;
+--error ER_WRONG_ARGUMENTS
+SELECT  c29, c1, ratio_to_report(c29) over (partition by c1) c from test_type;
+--error ER_WRONG_ARGUMENTS
+SELECT  c29, c1, ratio_to_report(c29) over () c from test_type;
+
+--echo #
+--echo # test of geometry type
+--echo #
+--error ER_WRONG_ARGUMENTS
+SELECT  c35, c1, ratio_to_report(c35) over (partition by c1) c from test_type;
+--error ER_WRONG_ARGUMENTS
+SELECT  c35, c1, ratio_to_report(c35) over () c from test_type;
+
+--echo #
+--echo # test of json type
+--echo #
+--error ER_WRONG_ARGUMENTS
+SELECT  json_value, c1, ratio_to_report(json_value) over (partition by c1) c from test_type;
+--error ER_WRONG_ARGUMENTS
+SELECT  json_value, c1, ratio_to_report(json_value) over () c from test_type;
+
+--echo #
+--echo # test of definate type
+--echo #
+--error ER_WRONG_ARGUMENTS
+SELECT  name1, c1, ratio_to_report(name1) over (partition by c1) c from test_type;
+--error ER_WRONG_ARGUMENTS
+SELECT  name1, c1, ratio_to_report(name1) over () c from test_type;
+
+--echo #
+--echo # test of engine=myIsam
+--echo #
+alter table test_type engine=myIsam;
+SELECT  c5, c1, ratio_to_report(c5) over (partition by c1) c from test_type;
+SELECT  c5, c1, ratio_to_report(c5) over () c from test_type;
+
+alter table test_type engine=innodb;
+
+--echo #
+--echo # test of error
+--echo #
+--error ER_NOT_SUPPORTED_YET
+SELECT  c5, c1, ratio_to_report(c5) over (order by c1) c from test_type;
+--error ER_NOT_SUPPORTED_YET
+SELECT  c5, c1, ratio_to_report(c5) over (aa) c from test_type;
+--error ER_WINDOW_INVALID_WINDOW_FUNC_USE
+SELECT  c5, c1, ratio_to_report(ratio_to_report(c5) over ()) over (partition by c1) c from test_type;
+
+--echo #
+--echo # test of ratio_to_report after insert new value
+--echo #
+INSERT INTO `test_type` VALUES ('111', '21', '331', '444', '555', '6626', '77', '888.11', '999.1222', '101010.101011', '111111.222', '121212.111', '131313', '141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '242424', '252525', '262626', '272727', '28c', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门1", "deptId": "1", "deptLeaderId": "3"}',t_air(10,'aabb1'));
+SELECT  c5, c1, ratio_to_report(c5) over (partition by c1) c from test_type;
+SELECT  c5, c1, ratio_to_report(c5) over () c from test_type;
+
+--echo #
+--echo # test of GENERATED VIRTUAL column
+--echo #
+CREATE TABLE `triangle1` (
+  `sidea` INT DEFAULT NULL,
+  `sideb` INT DEFAULT NULL,
+  `sidec` decimal(50,10) GENERATED ALWAYS AS (SQRT(((`sidea` * `sidea`) + (`sideb` * `sideb`)))) VIRTUAL
+) ENGINE=INNODB DEFAULT CHARSET=utf8mb4;
+insert into triangle1(sidea,sideb) values(1,2),(10,20),(null,null),(-1,20),(10,-100),(10,-123);
+SELECT  sidec, sidea, ratio_to_report(sidec) over (partition by sidea) c from triangle1;
+SELECT  sidec, sidea, ratio_to_report(sidec) over () c from triangle1;
+SELECT  sideb, sidea, ratio_to_report(sideb) over (partition by sidea) c from triangle1;
+select @@div_precision_increment;
+set  @@div_precision_increment=8;
+SELECT  sideb, sidea, ratio_to_report(sideb) over (partition by sidea) c from triangle1;
+set  @@div_precision_increment=4;
+SELECT  sideb, sidea, cast(ratio_to_report(sideb) over (partition by sidea) as varchar) c from triangle1;
+EXPLAIN SELECT  sidec, sidea, ratio_to_report(sidec) over (partition by sidea) c from triangle1;
+
+--echo #
+--echo # test of ratio_to_report int data and prepare
+--echo #
+SELECT  sideb, sidea, ratio_to_report(1) over (partition by sidea) c from triangle1;
+SELECT  ratio_to_report(1) over () c from dual;
+PREPARE p FROM 'SELECT  sideb, sidea, ratio_to_report(sideb) over (partition by sidea) c from triangle1';
+EXECUTE p;
+EXECUTE p;
+DROP PREPARE p;
+
+--echo #
+--echo # test of ratio_to_report with other window function
+--echo #
+SELECT  sidec, sidea, sideb, ratio_to_report(sidec) over (partition by sidea) c from triangle1 WHERE substr(sideb, 1, 1) in ('2','-') order by to_number(nvl(substr(sideb, 2), 0)),substr(sideb, 1, 1);
+SELECT sideb, sidea, ratio_to_report((SELECT triangle1.sideb FROM triangle1 limit 1)) OVER (partition by sidea) as c FROM triangle1;
+SELECT  sidec, sidea, sideb, ratio_to_report(sidec) over (partition by sidea) c,first_value(sidec) over (partition by sidea) d from triangle1 WHERE substr(sideb, 1, 1) in ('2','-') order by to_number(nvl(substr(sideb, 2), 0)),substr(sideb, 1, 1);
+SELECT  sideb, sidea, sidea+ratio_to_report(sidec) over (partition by sidea) c from triangle1;
+SELECT  sideb, sidea, sidea+ratio_to_report(sidea+sidec) over (partition by sidea) c from triangle1;
+SELECT  sidec, sidea, ratio_to_report(sidec) over (partition by sidea) c from triangle1 GROUP BY sidea,sideb;
+SELECT sideb,sidec, (SELECT ratio_to_report(upper.sideb) OVER (partition BY upper.sidea) FROM triangle1 LIMIT 1) as b, ratio_to_report(sidec) OVER (partition BY 0 + (SELECT ratio_to_report(upper.sideb) OVER (partition BY upper.sidea) FROM triangle1 LIMIT 1))
+as c FROM triangle1 AS upper;
+
+--echo #
+--echo # test of select into
+--echo #
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE p1() As
+  id int;
+BEGIN
+  SELECT ratio_to_report(sidec) over (partition by sidea) INTO id FROM triangle1 where sidea=-1;
+  select id;
+  SELECT ratio_to_report(id) over (partition by id) from dual;
+  select id;
+END;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of select bulk into
+--echo #
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE p1() As
+  TYPE param_rec_type IS RECORD          
+  (
+    a int,
+    b decimal(50,10)
+  );
+  TYPE array_param_type IS TABLE OF param_rec_type;
+  dr_table array_param_type;
+BEGIN
+  SELECT sidea,ratio_to_report(sidec) over (partition by sidea) bulk collect INTO dr_table FROM triangle1;
+  for i in dr_table.first .. dr_table.last loop
+    select dr_table(i);
+  end loop;               
+END;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of ratio_to_report with function
+--echo #
+DELIMITER $$;
+CREATE or replace  FUNCTION f1 (a VARCHAR(32),b VARCHAR(32)) RETURN VARCHAR(32) no sql
+is result VARCHAR(32);
+BEGIN
+  result := concat(a,b);
+  result := replace(result,'-','');
+  RETURN(result);
+END;
+$$
+DELIMITER ;$$
+SELECT  f1(sideb, sidea), sidea, ratio_to_report(f1(sideb,sidea)) over (partition by sidea) c from triangle1;
+drop function f1;
+
+--echo #
+--echo # test of dml with ratio_to_report values
+--echo #
+CREATE TABLE `triangle2` (
+  `sidea` INT DEFAULT NULL,
+  `sideb` INT DEFAULT NULL,
+  `sidec` decimal(50,30) DEFAULT NULL
+) ENGINE=INNODB DEFAULT CHARSET=utf8mb4;
+insert into triangle2 select sidea,sideb,ratio_to_report(sidec) over (partition by sidea) from 
+triangle1;
+select * from triangle2;
+UPDATE triangle2 SET sidec=(select ratio_to_report(sidec) over (partition by sidea) from triangle1 where sideb=-100) WHERE sideb > (SELECT ratio_to_report(2) OVER () FROM DUAL);
+select * from triangle2;
+DELETE FROM triangle2 WHERE sidec <= ANY (SELECT ratio_to_report(sidec) OVER () FROM triangle1);
+select * from triangle2;
+drop table triangle2;
+
+--echo #
+--echo # test of view with ratio_to_report values
+--echo #
+create view v1 as select sideb, sidea, ratio_to_report(sideb) over (partition by sidea) c from triangle1;
+select * from v1;
+drop view v1;
+
+--echo #
+--echo # test of global temp table with ratio_to_report values
+--echo #
+CREATE GLOBAL TEMPORARY TABLE gt_t_t1 (
+  `sidea` INT DEFAULT NULL,
+  `sideb` INT DEFAULT NULL,
+  `sidec` decimal(50,30) DEFAULT NULL
+) on commit preserve rows ENGINE=innodb AUTO_INCREMENT=10;
+insert into gt_t_t1 select sidea,sideb,ratio_to_report(sidec) over (partition by sidea) from triangle1;
+select * from gt_t_t1;
+drop TABLE gt_t_t1;
+--enable_warnings
+
+
+drop table test_type;
+drop type t_air;
+drop table triangle1;
+
+--echo #
+--echo # test of bug7442
+--echo #
+create table test_double(col1 double);
+insert into test_double values(1),('1.7976931348623157E+308');
+insert into test_double values(1),('1.7976931348623157E+308');
+--error ER_DATA_OUT_OF_RANGE
+select col1, ratio_to_report(col1) over() from test_double;
+
+drop table test_double;
+
+--echo #
+--echo # test of bug7708
+--echo #
+CREATE TABLE dept (
+  id varchar(11) NOT NULL,
+  PRIMARY KEY (id)
+);
+insert into dept VALUES(1);
+insert into dept VALUES(2);
+insert into dept VALUES(3);
+select id, ratio_to_report(id) over() from dept;
+insert into dept VALUES('a');
+insert into dept VALUES('b');
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select id, ratio_to_report(id) over() from dept;
+
+create table x1(c9 tinytext);
+insert into x1 values('');
+insert into x1 values(repeat('a',255));
+--error ER_WRONG_ARGUMENTS
+select ratio_to_report(c9) over() from x1;
+
+drop table dept;
+drop table x1;
+
+--echo #
+--echo # test of bug7719
+--echo #
+create table x1(id int);
+insert into x1 values(1);
+
+select ratio_to_report(null) over() from x1;
+select ratio_to_report(null) over() from dual;
+select ratio_to_report(null) over() from dual connect by level<=5;
+
+select ratio_to_report('') over() from x1;
+select ratio_to_report('') over() from dual;
+select ratio_to_report('') over() from dual connect by level<=5;
+drop table x1;
+
+CREATE TABLE dept (
+  id varchar(11) NOT NULL,
+  PRIMARY KEY (id)
+);
+insert into dept VALUES('1.2.3');
+--error ER_WRONG_PARAMETERS_TO_NATIVE_FCT
+select ratio_to_report(id) over() from dept;
+drop table dept;
+
+
+
+
+
+
+

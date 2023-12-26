@@ -58,6 +58,7 @@
 #include "sql/strfunc.h"
 #include "sql/system_variables.h"  // system_variables
 #include "sql/table.h"             // table
+#include "sql/table_cache.h"
 #include "sql/thd_raii.h"          // Prepared_stmt_arena_holder
 #include "thr_lock.h"
 
@@ -158,6 +159,7 @@ bool Sql_cmd_create_table::execute(THD *thd) {
   }
 
   if (((lex->create_info->used_fields & HA_CREATE_USED_DATADIR) != 0 ||
+       (lex->create_info->used_fields & HA_CREATE_USED_EXTERNAL_TABLE) != 0 ||
        (lex->create_info->used_fields & HA_CREATE_USED_INDEXDIR) != 0) &&
       check_access(thd, FILE_ACL, any_db, nullptr, nullptr, false, false)) {
     my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0), "FILE");
@@ -210,12 +212,19 @@ bool Sql_cmd_create_table::execute(THD *thd) {
   if (validate_partition_tablespace_name_lengths(part_info) ||
       validate_partition_tablespace_names(part_info, create_info.db_type))
     return true;
-
-  /* Fix names if symlinked or relocated tables */
-  if (prepare_index_and_data_dir_path(thd, &create_info.data_file_name,
-                                      &create_info.index_file_name,
-                                      create_table->table_name))
-    return true;
+  if (!(create_info.used_fields & HA_CREATE_USED_EXTERNAL_TABLE)) {
+    /* Fix names if symlinked or relocated tables */
+    if (prepare_index_and_data_dir_path(thd, &create_info.data_file_name,
+                                        &create_info.index_file_name,
+                                        create_table->table_name))
+      return true;
+  } else {
+    if (create_info.used_fields & HA_CREATE_USED_DATADIR) {
+      if (append_dir_to_file(thd, create_info.data_file_name,
+                             &create_info.external_file_name))
+        return true;
+    }
+  }
 
   {
     partition_info *part = thd->lex->part_info;
@@ -389,6 +398,68 @@ bool Sql_cmd_create_table::execute(THD *thd) {
     }
     if (validate_use_secondary_engine(lex)) return true;
 
+    // store create materialized view sql
+    if (lex->is_materialized_view()) {
+      char is_query_buff[4096];
+      String is_query(is_query_buff, sizeof(is_query_buff),
+                      system_charset_info);
+      /* Generate view definition and IS queries. */
+      is_query.length(0);
+      {
+        // Turn off ANSI_QUOTES and other SQL modes which affect printing of
+        // view definition.
+        Sql_mode_parse_guard parse_guard(thd);
+
+        lex->unit->print(
+            thd, &is_query,
+            enum_query_type(QT_TO_SYSTEM_CHARSET | QT_WITHOUT_INTRODUCERS));
+      }
+
+      if (is_invalid_string(LEX_CSTRING{is_query.ptr(), is_query.length()},
+                            system_charset_info))
+        return true;
+
+      if (lex_string_strmake(thd->mem_root,
+                             &create_info.create_view_query_block,
+                             is_query.ptr(), is_query.length())) {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        return true;
+      }
+
+      if (lex_string_strmake(thd->mem_root,
+                             &create_info.create_view_query_block_utf8,
+                             lex->create_materialized_view_info.str,
+                             lex->create_materialized_view_info.length)) {
+        my_error(ER_OUT_OF_RESOURCES, MYF(0));
+        return true;
+      }
+      // Set materialized view column aliases
+      create_info.is_materialized_view = lex->is_materialized_view();
+      if (query_expression_tables->derived_column_names() &&
+          query_expression_tables->derived_column_names()->size()) {
+        const mem_root_deque<Item *> &unit_items =
+            *lex->unit->get_unit_column_types();
+        const Create_col_name_list &tmp_table_col_names =
+            *query_expression_tables->derived_column_names();
+        {
+          if (CountVisibleFields(unit_items) != tmp_table_col_names.size())
+            // check_duplicate_names() will find and report error
+            return true;
+          uint fieldnr = 0;
+          for (Item *item : VisibleFields(unit_items)) {
+            const char *s = item->item_name.ptr();
+            size_t l = item->item_name.length();
+            LEX_CSTRING &other_name =
+                const_cast<LEX_CSTRING &>(tmp_table_col_names[fieldnr]);
+            item->item_name.set(other_name.str, other_name.length);
+            other_name.str = s;
+            other_name.length = l;
+            fieldnr++;
+          }
+        }
+      }
+    }
+
     result->set_two_fields(&create_info, &alter_info);
 
     // For objects acquired during table creation.
@@ -516,6 +587,20 @@ bool Sql_cmd_create_or_drop_index_base::execute(THD *thd) {
   Query_block *const query_block = lex->query_block;
   Table_ref *const first_table = query_block->get_table_list();
   Table_ref *const all_tables = first_table;
+
+  if (is_temporary_table(first_table) && first_table->table->m_is_ora_tmp) {
+    if (!first_table->table->m_global_tmp) {
+      my_error(ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE, MYF(0));
+      return true;
+    }
+  }
+  /* if first_table is a MySQL tmp table, don't check global temp table cache */
+  if (!(is_temporary_table(first_table) && !first_table->table->m_is_ora_tmp) &&
+      is_in_global_temp_table_cache(thd, first_table->db,
+                                    first_table->table_name)) {
+    my_error(ER_GLOBAL_TEMP_TABLE_IN_USE, MYF(0));
+    return true;
+  }
 
   /* Prepare stack copies to be re-execution safe */
   HA_CREATE_INFO create_info;

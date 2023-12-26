@@ -101,6 +101,7 @@
 #include "sql/dd/dd_table.h"    // dd::drop_table, dd::update_keys...
 #include "sql/dd/dictionary.h"  // dd::Dictionary
 #include "sql/dd/impl/types/index_impl.h"
+#include "sql/dd/impl/utils.h"
 #include "sql/dd/properties.h"  // dd::Properties
 #include "sql/dd/sdi_api.h"     // dd::sdi::drop_sdis
 #include "sql/dd/string_type.h"
@@ -143,6 +144,7 @@
 #include "sql/mem_root_array.h"
 #include "sql/my_decimal.h"
 #include "sql/mysqld.h"  // lower_case_table_names
+#include "sql/parse_tree_nodes.h"
 #include "sql/partition_element.h"
 #include "sql/partition_info.h"                  // partition_info
 #include "sql/partitioning/partition_handler.h"  // Partition_handler
@@ -185,6 +187,7 @@
 #include "sql/strfunc.h"  // find_type2
 #include "sql/system_variables.h"
 #include "sql/table.h"
+#include "sql/table_cache.h"  // global_temp_table_cache
 #include "sql/thd_raii.h"
 #include "sql/thr_malloc.h"
 #include "sql/transaction.h"  // trans_commit_stmt
@@ -228,8 +231,11 @@ bool is_engine_specified(const HA_CREATE_INFO &ci) {
 }
 
 handlerton *default_handlerton(THD *thd, const HA_CREATE_INFO &ci) {
-  return is_temp_table(ci) ? ha_default_temp_handlerton(thd)
-                           : ha_default_handlerton(thd);
+  /* for global temp table instance, is_temp_table(ci) is true */
+  /* for global temp table meta, HA_ORA_TMP_TABLE is set */
+  return is_temp_table(ci) || ci.ora_tmp_table_options & HA_ORA_TMP_TABLE
+             ? ha_default_temp_handlerton(thd)
+             : ha_default_handlerton(thd);
 }
 
 handlerton *requested_handlerton(THD *thd, const HA_CREATE_INFO &ci) {
@@ -349,6 +355,9 @@ handlerton *get_viable_handlerton_for_create_like(THD *thd,
                                                   const char *table_name,
                                                   const HA_CREATE_INFO &ci,
                                                   handlerton *source) {
+  /* for global temp table instance, let default_handlerton() dominate */
+  if (thd->m_ora_create_global_temp_instance)
+    source = default_handlerton(thd, ci);
   return get_viable_handlerton_for_create_impl(
       thd, table_name, ci,
       {source, is_engine_substitution_allowed(thd) || is_temp_table(ci)
@@ -1031,6 +1040,11 @@ static bool rea_create_tmp_table(
     return true;
   }
 
+  if (table->m_global_tmp) {
+    global_temp_table_cache.add_used_table(db, table_name);
+    table->m_check_inserted_rows = true;
+  }
+
   // Transfer ownership of dd::Table object to TABLE_SHARE.
   table->s->tmp_table_def = tmp_table_ptr.release();
 
@@ -1599,7 +1613,28 @@ bool mysql_rm_table(THD *thd, Table_ref *tables, bool if_exists,
   }
 
   if (!drop_temporary) {
+    /*
+      For global temp table, 'drop table' in Oracle will remove both the
+      session instance and global definition.
+      Session instance is always removed no matter global definition can be
+      removed or not.
+    */
+    for (table = tables; table; table = table->next_local) {
+      if (is_temporary_table(table) && table->table->m_global_tmp) {
+        table->table->file->ha_reset();
+        close_temporary_table(thd, table->table, true, true);
+        table->table = nullptr;
+      }
+    }
     if (!thd->locked_tables_mode) {
+      for (table = tables; table; table = table->next_local) {
+        if (!(is_temporary_table(table) && !table->table->m_is_ora_tmp) &&
+            is_in_global_temp_table_cache(thd, table->db, table->table_name)) {
+          my_error(ER_GLOBAL_TEMP_TABLE_IN_USE, MYF(0));
+          return true;
+        }
+      }
+      // @@NOTE@@ possible gap here
       if (lock_table_names(thd, tables, nullptr,
                            thd->variables.lock_wait_timeout, 0) ||
           lock_trigger_names(thd, tables))
@@ -2834,6 +2869,15 @@ static bool drop_base_table(THD *thd, const Drop_tables_ctx &drop_ctx,
   const dd::Table *table_def = nullptr;
   if (thd->dd_client()->acquire(table->db, table->table_name, &table_def))
     return true;
+
+  if (thd->lex->is_materialized_view() != table_def->is_materialized_view()) {
+    String tbl_name(table->db, system_charset_info);
+    tbl_name.append('.');
+    tbl_name.append(String(table->table_name, system_charset_info));
+    my_error(ER_BAD_TABLE_ERROR, MYF(0), tbl_name.c_ptr());
+    return true;
+  }
+
   assert(table_def != nullptr);
 
   if (table_def && table_def->hidden() == dd::Abstract_table::HT_HIDDEN_SE) {
@@ -4167,7 +4211,7 @@ TYPELIB *create_typelib(MEM_ROOT *mem_root, Create_field *field_def) {
 }
 
 TYPELIB *create_typelib_from_field(MEM_ROOT *mem_root, Field_enum *field) {
-  if (!field->typelib) return nullptr;
+  if (!field || !field->typelib) return nullptr;
 
   TYPELIB *result =
       reinterpret_cast<TYPELIB *>(mem_root->Alloc(sizeof(TYPELIB)));
@@ -4177,7 +4221,8 @@ TYPELIB *create_typelib_from_field(MEM_ROOT *mem_root, Field_enum *field) {
   if (field->typelib->name) {
     result->name = strmake_root(mem_root, field->typelib->name,
                                 strlen(field->typelib->name));
-  }
+  } else
+    result->name = nullptr;
 
   // Allocate type_names and type_lengths as one block.
   size_t nbytes = (sizeof(char *) + sizeof(uint)) * (result->count + 1);
@@ -4192,6 +4237,7 @@ TYPELIB *create_typelib_from_field(MEM_ROOT *mem_root, Field_enum *field) {
     result->type_names[i] =
         strmake_root(mem_root, field->typelib->type_names[i],
                      field->typelib->type_lengths[i]);
+    if (!result->type_names[i]) return nullptr;
     result->type_lengths[i] = field->typelib->type_lengths[i];
   }
   result->type_names[result->count] = nullptr;  // End marker (char*)
@@ -6620,6 +6666,12 @@ static bool prepare_foreign_key(THD *thd, HA_CREATE_INFO *create_info,
                                 FOREIGN_KEY *fk_info) {
   DBUG_TRACE;
 
+  // FKs are not supported for ora global/private temporary tables.
+  if (create_info->ora_tmp_table_options) {
+    my_error(ER_CANNOT_ADD_FOREIGN, MYF(0), table_name);
+    return true;
+  }
+
   // FKs are not supported for temporary tables.
   if (create_info->options & HA_LEX_CREATE_TMP_TABLE) {
     my_error(ER_CANNOT_ADD_FOREIGN, MYF(0), table_name);
@@ -6910,6 +6962,16 @@ static bool prepare_foreign_key(THD *thd, HA_CREATE_INFO *create_info,
         */
         assert(fk_info->unique_index_name == nullptr);
       } else {
+        const dd::Properties &table_options = parent_table_def->options();
+        if (table_options.exists("ora_temp")) {
+          uint ora_tmp_table_options = 0;
+          table_options.get("ora_temp", &ora_tmp_table_options);
+          if (ora_tmp_table_options) {
+            my_error(ER_FK_REFERENCE_TMP_TABLE, MYF(0));
+            return true;
+          }
+        }
+
         /*
           Check that parent table is not partitioned or storage engine
           supports foreign keys over partitioned tables.
@@ -8336,6 +8398,11 @@ bool mysql_prepare_create_table(
 
   // First prepare non-foreign keys so that they are ready when
   // we prepare foreign keys.
+  if (alter_info->key_list.size() > 0 &&
+      create_info->ora_tmp_table_options & HA_ORA_TMP_TABLE_PRIV) {
+    my_error(ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE, MYF(0));
+    return true;
+  }
   for (size_t i = 0; i < alter_info->key_list.size(); i++) {
     if (redundant_keys[i]) continue;  // Skip redundant keys
 
@@ -9417,6 +9484,14 @@ bool mysql_create_table_no_lock(THD *thd, const char *db,
   }
 
   for (const Create_field &sql_field : alter_info->create_list) {
+    if (create_info->ora_tmp_table_options & HA_ORA_TMP_TABLE_PRIV) {
+      if (sql_field.constant_default != nullptr ||
+          sql_field.auto_flags != Field::NONE ||
+          (sql_field.flags & NOT_NULL_FLAG)) {
+        my_error(ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE, MYF(0));
+        return true;
+      }
+    }
     warn_on_deprecated_float_auto_increment(thd, sql_field);
   }
 
@@ -11037,6 +11112,13 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
 
   DBUG_TRACE;
 
+  // For oracle mode, disable support of such prefix in target table.
+  if (thd->variables.sql_mode & MODE_ORACLE &&
+      PT_create_table_stmt::is_private_temp_table_prefix(table->table_name)) {
+    my_error(ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX, MYF(0));
+    return true;
+  }
+
   /*
     We the open source table to get its description in HA_CREATE_INFO
     and Alter_info objects. This also acquires a shared metadata lock
@@ -11066,6 +11148,15 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
     assert(src_table_obj != nullptr);
   }
 
+  if (src_table_obj && (thd->lex->is_materialized_view() !=
+                        src_table_obj->is_materialized_view())) {
+    String tbl_name(src_table->db, system_charset_info);
+    tbl_name.append('.');
+    tbl_name.append(String(src_table->table_name, system_charset_info));
+    my_error(ER_BAD_TABLE_ERROR, MYF(0), tbl_name.c_ptr());
+    return true;
+  }
+
   DEBUG_SYNC(thd, "create_table_like_after_open");
 
   /* Fill HA_CREATE_INFO and Alter_info with description of source table. */
@@ -11078,10 +11169,27 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
   // row_type denontes the desired row_type, and a different row_type may be
   // assigned to real_row_type later.
   local_create_info.row_type = src_table->table->s->row_type;
+
   if (mysql_prepare_alter_table(thd, src_table_obj, src_table->table,
                                 &local_create_info, &local_alter_info,
                                 &local_alter_ctx))
     return true;
+
+  /*
+    In MySQL, 'create temporary table t1 (a int); create table t2 like t1;',
+    t2 will be a normal table.
+
+    Only 'create temporary table gt like gt' should carry the
+    ora_tmp_table_options from source table.
+    Otherwise, it should create the target table as the
+    'create [temporary] table ... like' behaves.
+
+    btw, don't move this piece of code into mysql_prepare_alter_table()
+    which may be called by 'alter table'.
+  */
+  if (!thd->m_ora_create_global_temp_instance) {
+    local_create_info.ora_tmp_table_options = 0;
+  }
 
   if (prepare_check_constraints_for_create_like_table(thd, src_table, table,
                                                       &local_alter_info))
@@ -12772,7 +12880,19 @@ static bool fill_alter_inplace_info(THD *thd, TABLE *table,
         /* Candidate key or primary key! */
         if (candidate_key_count == 0 || is_pk)
           ha_alter_info->handler_flags |= Alter_inplace_info::ADD_PK_INDEX;
-        else
+        /* new_key promoted to pk
+          Example:
+            create table t1 (a int not null, b int not null, unique key(a));
+            alter table t1 add unique key(b), drop key a, add unique key(a),
+              algorithm=inplace;
+        */
+        else if (!is_pk &&
+                 new_key == ha_alter_info->key_info_buffer /*first*/) {
+          assert(candidate_key_count > 0);
+          assert(is_candidate_key(new_key));
+          ha_alter_info->handler_flags |= Alter_inplace_info::ADD_PK_INDEX |
+                                          Alter_inplace_info::DROP_PK_INDEX;
+        } else
           ha_alter_info->handler_flags |= Alter_inplace_info::ADD_UNIQUE_INDEX;
         candidate_key_count++;
       } else {
@@ -12783,6 +12903,70 @@ static bool fill_alter_inplace_info(THD *thd, TABLE *table,
         ha_alter_info->handler_flags |= Alter_inplace_info::ADD_SPATIAL_INDEX;
       } else {
         ha_alter_info->handler_flags |= Alter_inplace_info::ADD_INDEX;
+      }
+    }
+  }
+
+  /* check pk changed implicitly */
+  bool need_check_old_pk = false;
+  if (table->s->primary_key != MAX_KEY) {
+    /* maybe:
+       create table t2 (a int not null, b int not null, c int not null,
+         unique key(a), unique key (b));
+       alter table t2 add unique key(c), drop key a, add unique key(a),
+         algorithm=inplace;
+    */
+    for (const Alter_drop *drop : alter_info->drop_list) {
+      if (drop->type == Alter_drop::KEY &&
+          !strcmp(drop->name, table->key_info[table->s->primary_key].name)) {
+        need_check_old_pk = true;
+        break;
+      }
+    }
+
+    /* maybe:
+       create table t3 (a int not null, b int not null, c int not null,
+         unique key(a), unique key(b));
+       alter table t3 drop column a, add unique key(c), algorithm=inplace;
+    */
+    if (!need_check_old_pk &&
+        (ha_alter_info->handler_flags & Alter_inplace_info::DROP_PK_INDEX)) {
+      need_check_old_pk = true;
+    }
+  }
+  if (need_check_old_pk &&
+      !(ha_alter_info->handler_flags & Alter_inplace_info::ADD_PK_INDEX)) {
+    KEY *new_first_key = (ha_alter_info->key_count > 0)
+                             ? ha_alter_info->key_info_buffer
+                             : nullptr;
+    if (new_first_key && is_candidate_key(new_first_key)) {
+      bool is_new_added_pk = (ha_alter_info->index_add_count) &&
+                             (ha_alter_info->index_add_buffer[0] == 0);
+      /* must be ori key or renamed from ori key */
+      if (!is_new_added_pk) {
+        KEY *ori_key = nullptr;
+        if (new_first_key->flags & HA_KEY_RENAMED) {
+          KEY_PAIR *key_pair = ha_alter_info->index_rename_buffer;
+          KEY_PAIR *key_pair_end = key_pair + ha_alter_info->index_rename_count;
+          for (KEY_PAIR *pair = key_pair; pair != key_pair_end; pair++) {
+            if (pair->new_key == new_first_key) {
+              ori_key = pair->old_key;
+              break;
+            }
+          }
+        } else {
+          for (KEY *key = table->key_info; key != nullptr; key++) {
+            if (!strcmp(key->name, new_first_key->name)) {
+              ori_key = key;
+              break;
+            }
+          }
+        }
+
+        /* new_first_key is not pk of ori table */
+        if (ori_key && ori_key != (table->key_info + table->s->primary_key))
+          ha_alter_info->handler_flags |= Alter_inplace_info::ADD_PK_INDEX |
+                                          Alter_inplace_info::DROP_PK_INDEX;
       }
     }
   }
@@ -15675,6 +15859,16 @@ bool mysql_prepare_alter_table(THD *thd, const dd::Table *src_table,
 
   DBUG_TRACE;
 
+  if (table->s->is_materialized_view) {
+    create_info->create_view_query_block.str = table->s->definition.str;
+    create_info->create_view_query_block.length = table->s->definition.length;
+    create_info->create_view_query_block_utf8.str =
+        table->s->definition_utf8.str;
+    create_info->create_view_query_block_utf8.length =
+        table->s->definition_utf8.length;
+    create_info->is_materialized_view = table->s->is_materialized_view;
+  }
+
   // Prepare data in HA_CREATE_INFO shared by ALTER and upgrade code.
   create_info->init_create_options_from_share(table->s, used_fields);
 
@@ -15729,6 +15923,8 @@ bool mysql_prepare_alter_table(THD *thd, const dd::Table *src_table,
   create_info->table_options |= db_create_options;
 
   if (table->s->tmp_table) create_info->options |= HA_LEX_CREATE_TMP_TABLE;
+
+  create_info->ora_tmp_table_options = table->s->ora_tmp_table_options;
 
   return false;
 }
@@ -17016,6 +17212,13 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
 
   if (error) return true;
 
+  if (table_list->table->s->ora_tmp_table_options & HA_ORA_TMP_TABLE_GLOBAL &&
+      is_in_global_temp_table_cache(thd, table_list->db,
+                                    table_list->table_name)) {
+    my_error(ER_GLOBAL_TEMP_TABLE_IN_USE, MYF(0));
+    return true;
+  }
+
   // If we are removing a functional index, add any related hidden generated
   // columns to the drop list as well.
   if (handle_drop_functional_index(thd, alter_info, table_list)) {
@@ -17078,6 +17281,17 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
   if (thd->locked_tables_mode &&
       get_and_lock_tablespace_names(thd, table_list, nullptr,
                                     thd->variables.lock_wait_timeout, MYF(0))) {
+    return true;
+  }
+
+  if (table_list->table->s->is_materialized_view &&
+      ((alter_info->flags & Alter_info::ALTER_ADD_COLUMN) ||
+       (alter_info->flags & Alter_info::ALTER_DROP_COLUMN) ||
+       (alter_info->flags & Alter_info::ALTER_CHANGE_COLUMN) ||
+       (alter_info->flags & Alter_info::ALTER_RENAME) ||
+       (alter_info->flags & Alter_info::ALTER_COLUMN_ORDER) ||
+       (alter_info->flags & Alter_info::ALTER_COLUMN_VISIBILITY))) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), " alter materialized view column");
     return true;
   }
 
@@ -17192,8 +17406,23 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     }
   }
 
+  /* alter from udt type are unallowed*/
+  if (((alter_info->flags & Alter_info::ALTER_CHANGE_COLUMN) ||
+       (alter_info->flags & Alter_info::ALTER_CHANGE_COLUMN_DEFAULT)) &&
+      check_unsupport_alter_with_udt_columns(table, alter_info->create_list)) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "alter to or from udt type column");
+    return true;
+  }
+
   /* Check that we are not trying to rename to an existing table */
   if (alter_ctx.is_table_renamed()) {
+    const char *table_name = alter_ctx.new_name;
+    // if oracle mode, disable support of such prefix.
+    if (thd->variables.sql_mode & MODE_ORACLE &&
+        PT_create_table_stmt::is_private_temp_table_prefix(table_name)) {
+      my_error(ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX, MYF(0));
+      return true;
+    }
     if (table->s->tmp_table != NO_TMP_TABLE) {
       if (find_temporary_table(thd, alter_ctx.new_db, alter_ctx.new_name)) {
         my_error(ER_TABLE_EXISTS_ERROR, MYF(0), alter_ctx.new_alias);
@@ -17237,6 +17466,12 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
         return true;
       }
     }
+  }
+
+  /* Check that rename to an existing sequence */
+  if (has_sequence_def(thd, alter_ctx.new_db, alter_ctx.new_name)) {
+    my_error(ER_GDB_DUPLICATE_SEQ_NAME, MYF(0), alter_ctx.new_name);
+    return true;
   }
 
   if (!create_info->db_type) {
@@ -17841,6 +18076,10 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     set_check_constraints_alter_mode(table_def, alter_info);
 
     assert(table_def);
+  }
+
+  if (old_table_def && old_table_def->is_materialized_view()) {
+    table_def->set_is_materialized_view(old_table_def->is_materialized_view());
   }
 
   if (!is_tmp_table) {
@@ -20681,4 +20920,41 @@ bool check_unsupport_alter_with_udt_table(ulonglong check_flags) {
     return true;
   }
   return false;
+}
+
+bool check_unsupport_alter_with_udt_columns(TABLE *old_table,
+                                            List<Create_field> create_fields) {
+  List_iterator_fast<Create_field> it(create_fields);
+  Create_field *def;
+  Field **flds = old_table->visible_field_ptr();
+  for (uint offset = 0; (def = it++); offset++) {
+    /* Alter modify/change udt type column to non udt type column. */
+    if (def->change) {
+      for (uint i = 0; i < old_table->visible_field_count(); i++) {
+        /* my_strcasecmp_mb2_or_mb4() can't use. */
+        if (my_strnncoll(flds[i]->charset(), (const uchar *)flds[i]->field_name,
+                         strlen(flds[i]->field_name),
+                         (const uchar *)def->change,
+                         strlen(def->change)) == 0 &&
+            flds[i]->udt_name().str)
+          return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool tmp_table_prepare_key(
+    THD *thd, const char *error_schema_name, const char *error_table_name,
+    HA_CREATE_INFO *create_info, List<Create_field> *create_list,
+    const Key_spec *key, KEY **key_info_buffer, KEY *key_info,
+    KEY_PART_INFO **key_part_info, Mem_root_array<const KEY *> &keys_to_check,
+    uint key_number, const handler *file, int *auto_increment) {
+  bool rc =
+      prepare_key(thd, error_schema_name, error_table_name, create_info,
+                  create_list, key, key_info_buffer, key_info, key_part_info,
+                  keys_to_check, key_number, file, auto_increment);
+  /* Sort keys in optimized order */
+  std::sort(*key_info_buffer, *key_info_buffer + 1, sort_keys());
+  return rc;
 }

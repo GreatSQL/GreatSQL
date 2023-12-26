@@ -186,6 +186,7 @@ char slave_skip_error_names[SHOW_VAR_FUNC_BUFF_SIZE];
 
 char *replica_load_tmpdir = nullptr;
 bool replicate_same_server_id;
+bool replicate_server_id_mode;
 ulonglong relay_log_space_limit = 0;
 
 const char *relay_log_index = nullptr;

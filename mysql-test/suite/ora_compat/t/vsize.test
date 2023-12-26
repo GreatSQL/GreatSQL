@@ -1,0 +1,195 @@
+#1.table test_vsize
+--disable_warnings
+DROP TABLE IF EXISTS `test_vsize`;
+CREATE TABLE `test_vsize` (
+  `c1` int NOT NULL,
+  `c2` tinyint DEFAULT NULL,
+  `c3` smallint DEFAULT NULL,
+  `c4` mediumint DEFAULT NULL,
+  `c5` int DEFAULT NULL,
+  `c6` bigint DEFAULT NULL,
+  `c7` bit(64) DEFAULT NULL,
+  `c8` double(255,0) DEFAULT NULL,
+  `c9` double(255,0) DEFAULT NULL,
+  `c10` float(255,0) DEFAULT NULL,
+  `c11` double(65,0) DEFAULT NULL,
+  `c12` decimal(65,0) DEFAULT NULL,
+  `c13` char(255) DEFAULT NULL,
+  `c14` varchar(255) DEFAULT NULL,
+  `c15` date DEFAULT NULL,
+  `c16` time(6) DEFAULT NULL,
+  `c17` year DEFAULT NULL,
+  `c18` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  `c19` datetime(6) DEFAULT NULL,
+  `c20` tinyblob,
+  `c21` blob,
+  `c22` mediumblob,
+  `c23` longblob,
+  `c24` tinytext,
+  `c25` text,
+  `c26` mediumtext,
+  `c27` longtext,
+  `c28` enum('','28c','28b','28a') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `c29` set('29c','29b','29a') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `c30` binary(255) DEFAULT NULL,
+  `c31` varbinary(255) DEFAULT NULL,
+  `c32` point DEFAULT NULL,
+  `c33` linestring DEFAULT NULL,
+  `c34` polygon DEFAULT NULL,
+  `c35` geometry DEFAULT NULL,
+  `c36` multipoint DEFAULT NULL,
+  `c37` multilinestring DEFAULT NULL,
+  `c38` multipolygon DEFAULT NULL,
+  `c39` geomcollection DEFAULT NULL,
+  PRIMARY KEY (`c1`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+#2.insert data
+INSERT INTO `test_vsize` VALUES ('111', '22', '333', '444', '555', '666', '\0\0\0\0\0\0\0', '888', '999', '101010', '111111', '121212', '131313', '141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-26 12:06:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '242424', '252525', '262626', '272727', '28c', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, null);
+INSERT INTO `test_vsize` VALUES ('-111', '-22', '-333', '-444', '-555', '-666', '\0\0\0\0\0\0\0', '-888', '-999', '-101010', '-111111', '-121212', '-131313', '-141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-26 12:06:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '28c', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, null);
+
+
+# constant literals
+select vsize(true), vsize(false);
+select vsize('123456');
+
+select vsize(123456);
+
+select c15, vsize(date('2021-05-15')), vsize(c15) from test_vsize;
+select c19, vsize(STR_TO_DATE('2021-05-19 19:19:19.000000','%Y-%m-%d %H:%i:%s')), vsize(c19) from test_vsize;
+
+#int------------------------------------------------
+select c1, vsize(NULL) from test_vsize;
+select c1, vsize(c1) from test_vsize;
+
+#tinyint------------------------------------------------
+select c2, vsize(c2) from test_vsize;
+
+#smallint------------------------------------------------
+select c3, vsize(c3) from test_vsize;
+
+#smallint------------------------------------------------
+select c4, vsize(c4) from test_vsize;
+
+#int---------------------------------------------------
+select c5, vsize(c5) from test_vsize;
+
+#bigint-------------------------------------------------
+select c6, vsize(c6) from test_vsize;
+
+#bit---------------------------------------------------
+select c7, vsize(c7) from test_vsize;
+
+#real--------------------------------------------------
+select c8, vsize(c8) from test_vsize;
+
+#double------------------------------------------------
+select c9, vsize(c9) from test_vsize;
+
+#float-------------------------------------------------
+select c10, vsize(c10) from test_vsize;
+
+#double------------------------------------------------
+select c11, vsize(c11) from test_vsize;
+
+#decimal-----------------------------------------------
+select c12, vsize(c12) from test_vsize;
+
+#char--------------------------------------------------
+select c13, vsize(c13) from test_vsize;
+
+#varchar-----------------------------------------------
+select c14, vsize(c14) from test_vsize;
+
+#date--------------------------------------------------
+select c15, vsize(c15) from test_vsize;
+
+#time--------------------------------------------------
+select c16, vsize(c16) from test_vsize;
+#year--------------------------------------------------
+select c17, vsize(c17) from test_vsize;
+#timestamp---------------------------------------------
+select c18, vsize(c18) from test_vsize;
+
+#datetime----------------------------------------------
+select c19, vsize(c19) from test_vsize;
+
+#tinyblob----------------------------------------------
+--error 1690
+select c20, vsize(c20) from test_vsize;
+
+#blob--------------------------------------------------
+--error 1690
+select c21, vsize(c21) from test_vsize;
+
+#mediumblob--------------------------------------------
+--error 1690
+select c22, vsize(c22) from test_vsize;
+
+#longblob----------------------------------------------
+--error 1690
+select c23, vsize(c23) from test_vsize;
+
+#tinytext----------------------------------------------
+--error 1690
+select c24, vsize(c24) from test_vsize;
+
+#text--------------------------------------------------
+--error 1690
+select c25, vsize(c25) from test_vsize;
+
+#mediumtext--------------------------------------------
+--error 1690
+select c26, vsize(c26) from test_vsize;
+
+#longtext----------------------------------------------
+--error 1690
+select c27, vsize(c27) from test_vsize;
+
+#enum--------------------------------------------------
+select c28, vsize(c28) from test_vsize;
+
+#set---------------------------------------------------
+select c29, vsize(c29) from test_vsize;
+
+#binary------------------------------------------------
+select c30, vsize(c30) from test_vsize;
+
+#varbinary---------------------------------------------
+select c31, vsize(c31) from test_vsize;
+
+#point-------------------------------------------------
+--error 1690
+select c32, vsize(c32) from test_vsize;
+
+#linestring--------------------------------------------
+select c33, vsize(c33) from test_vsize;
+
+#polygon-----------------------------------------------
+select c34, vsize(c34) from test_vsize;
+
+#geometry----------------------------------------------
+select c35, vsize(c35) from test_vsize;
+
+#multipoint--------------------------------------------
+select c36, vsize(c36) from test_vsize;
+
+#multilinestring---------------------------------------
+select c37, vsize(c37) from test_vsize;
+
+#multipolygon------------------------------------------
+select c38, vsize(c38) from test_vsize;
+
+#geomcollection----------------------------------------
+select c39, vsize(c39) from test_vsize;
+
+select vsize('');
+
+set @a = 1.5;
+--error 1690
+select vsize(@a);
+
+--enable_warnings
+drop table if exists test_vsize;
+
+

@@ -2,6 +2,7 @@
 #define SQL_REGEXP_REGEXP_ENGINE_H_
 
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -243,6 +244,15 @@ class Regexp_engine {
     way, the tail's full size is returned.
   */
   int TryToAppendTail();
+
+  /**
+    Performs two jobs:
+    - Replace the backreferences of subexpressions of the form '\n' in
+    'replacement' with the actual string matched.
+    - Insert escape characters to preserve escape characters in the result.
+  */
+  bool ReplaceReplacementORA(int32_t group_count, const std::u16string &src,
+                             std::u16string &replacement);
 
   /**
     Our handle to ICU's compiled regular expression, owned by instances of

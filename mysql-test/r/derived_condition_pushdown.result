@@ -2183,3 +2183,40 @@ WHERE dt.str LIKE _latin1'P%' ESCAPE _latin1'\\';
 str
 Patch
 DROP TABLE t1, t2;
+#
+# Bug#34996488: utf8mb4 identifiers stopped working since
+#               8.0.32 release
+#
+SELECT * FROM (SELECT 'å' AS x) AS dt WHERE x = 'å';
+x
+å
+CREATE TABLE t1 (f1 VARCHAR(10));
+INSERT INTO t1 VALUES('å');
+SELECT * FROM (SELECT f1 FROM t1 UNION SELECT f1 FROM t1) AS dt WHERE f1 = 'å';
+f1
+å
+DROP TABLE t1;
+create table ta(product_id varchar(16), product_name varchar(256), t_type varchar(256));
+insert into ta values(4900787800, '定制1', '定制服务');
+create table tb(product_id  varchar(16), service_name varchar(256));
+insert into tb values(4900115200, '通用1');
+insert into tb values(4900712500, '通用2');
+SELECT * FROM (
+SELECT
+ta.product_id   AS product_id,
+ta.product_name AS product_name,
+T_TYPE       AS `T_TYPE`
+  FROM ta
+WHERE ta.product_id NOT IN('4900115200','4900712500')
+union all 
+SELECT
+tb.product_id                     AS product_id,
+tb.`service_name`                 AS product_name,
+'通用服务'            AS `T_TYPE`
+   FROM tb
+WHERE tb.product_id IN('4900115200','4900712500')
+) c where c.T_TYPE LIKE '定制%';
+product_id	product_name	T_TYPE
+4900787800	定制1	定制服务
+drop table ta;
+drop table tb;

@@ -46,6 +46,14 @@ Preparing deadlock scenario for mysql.func
 ROLLBACK;
 ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
 ROLLBACK;
+Preparing deadlock scenario for mysql.greatdb_sequences
+ROLLBACK;
+ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
+ROLLBACK;
+Preparing deadlock scenario for mysql.greatdb_sequences_persist
+ROLLBACK;
+ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
+ROLLBACK;
 Preparing deadlock scenario for mysql.gtid_executed
 ROLLBACK;
 ERROR 40001: Deadlock found when trying to get lock; try restarting transaction

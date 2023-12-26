@@ -99,9 +99,8 @@ ERROR HY000: The table does not comply with the requirements by an external plug
 DELETE FROM t1;
 ERROR HY000: The table does not comply with the requirements by an external plugin.
 DELETE FROM tn;
-Check that INSERT...SELECT statement on InnoDB table(tn) from a non-transactional table(Eg:MyISAM t2) fails
+Check that INSERT...SELECT statement on InnoDB table(tn) from a non-transactional table(Eg:MyISAM t2) succeeds
 INSERT INTO tn (c1) SELECT (t2.c1) FROM t2;
-ERROR HY000: The table does not comply with the requirements by an external plugin.
 change storage engine to "InnoDB" on t2 and check INSERT...SELECT on tn succeeds
 ALTER TABLE t2 ENGINE=INNODB;
 INSERT INTO tn (c1) SELECT (t2.c1) FROM t2;

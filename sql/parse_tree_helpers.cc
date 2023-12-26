@@ -39,6 +39,7 @@
 #include "mysql/mysql_lex_string.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
+#include "sql/auth/auth_acls.h"
 #include "sql/current_thd.h"
 #include "sql/dd/info_schema/show.h"
 #include "sql/derror.h"
@@ -216,6 +217,35 @@ create_item_for_sp_var_row_field_table_for_loop(
       new (thd->mem_root) Item_splocal_row_field_table_by_ident(
           rh, spv_ident->name, to_lex_cstring(field), spv_ident->offset,
           spv_for->offset, pctx, spv_pos_in_query, spv_len_in_query);
+
+#ifndef NDEBUG
+  if (item) item->m_sp = lex->sphead;
+#endif
+
+  return item;
+}
+
+/* type tklist is table of varchar(20) INDEX BY pls_integer;
+   select stu_record_val('1')
+*/
+Item_splocal_row_field_table_by_index *create_item_table_by_index_for_sp_var(
+    THD *thd, LEX_CSTRING name, const Sp_rcontext_handler *rh, sp_variable *spv,
+    Item *index) {
+  LEX *lex = thd->lex;
+
+  /* If necessary, look for the variable. */
+  if (!rh || !spv) spv = lex->find_variable(name.str, name.length, &rh);
+
+  if (!spv) {
+    my_error(ER_SP_UNDECLARED_VAR, MYF(0), name.str);
+    return nullptr;
+  }
+
+  assert(spv);
+
+  Item_splocal_row_field_table_by_index *item =
+      new (thd->mem_root) Item_splocal_row_field_table_by_index(
+          rh, name, spv->offset, index, spv->type);
 
 #ifndef NDEBUG
   if (item) item->m_sp = lex->sphead;

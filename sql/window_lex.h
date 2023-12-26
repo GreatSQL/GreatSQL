@@ -62,4 +62,10 @@ enum enum_null_treatment { NT_NONE, NT_RESPECT_NULLS, NT_IGNORE_NULLS };
 */
 enum enum_from_first_last { NFL_NONE, NFL_FROM_FIRST, NFL_FROM_LAST };
 
+enum enum_keep_direction {
+  KEEP_DIR_NONE = 0,
+  KEEP_DIR_FIRST = 1,
+  KEEP_DIR_LAST = 2,
+};
+
 #endif /* WINDOW_LEX_INCLUDED */

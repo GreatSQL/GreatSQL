@@ -44,6 +44,7 @@
 #include "sql/dd/types/table.h"              // dd::Table
 #include "sql/dd_sql_view.h"                 // View_metadata_updater
 #include "sql/derror.h"                      // ER_THD
+#include "sql/gdb_sequence.h"
 #include "sql/handler.h"
 #include "sql/log.h"          // query_logger
 #include "sql/mysqld.h"       // lower_case_table_names
@@ -156,6 +157,17 @@ static void find_and_set_explicit_duration_for_schema_mdl(
 bool mysql_rename_tables(THD *thd, Table_ref *table_list) {
   Table_ref *ren_table = nullptr;
   DBUG_TRACE;
+
+  for (ren_table = table_list; ren_table; ren_table = ren_table->next_local) {
+    assert((nullptr != ren_table) && (nullptr != ren_table->db) &&
+           (nullptr != ren_table->table_name));
+
+    // check if sequence name is already exist
+    if (has_sequence_def(thd, ren_table->db, ren_table->table_name)) {
+      my_error(ER_GDB_DUPLICATE_SEQ_NAME, MYF(0), ren_table->table_name);
+      return true;
+    }
+  }
 
   mysql_ha_rm_tables(thd, table_list);
 

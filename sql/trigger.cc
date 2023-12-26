@@ -145,9 +145,14 @@ bool Trigger::construct_create_trigger_stmt_with_definer(
 static const LEX_CSTRING trg_action_time_type_names[] = {
     {STRING_WITH_LEN("BEFORE")}, {STRING_WITH_LEN("AFTER")}};
 
-static const LEX_CSTRING trg_event_type_names[] = {{STRING_WITH_LEN("INSERT")},
-                                                   {STRING_WITH_LEN("UPDATE")},
-                                                   {STRING_WITH_LEN("DELETE")}};
+static const LEX_CSTRING trg_event_type_names[] = {
+    {STRING_WITH_LEN("INSERT")},
+    {STRING_WITH_LEN("UPDATE")},
+    {STRING_WITH_LEN("DELETE")},
+    {STRING_WITH_LEN("INSERT OR UPDATE")},
+    {STRING_WITH_LEN("INSERT OR DELETE")},
+    {STRING_WITH_LEN("UPDATE OR DELETE")},
+    {STRING_WITH_LEN("INSERT OR UPDATE OR DELETE")}};
 
 const LEX_CSTRING &Trigger::get_action_time_as_string() const {
   return trg_action_time_type_names[m_action_time];
@@ -297,6 +302,7 @@ Trigger *Trigger::create_from_parser(THD *thd, TABLE *subject_table,
   @param [in] trg_time_type        trigger action timing
   @param [in] action_order         action order
   @param [in] created_timestamp    trigger creation time stamp.
+  @param [in] trg_event_status     trigger status.
 
   @return Pointer to a new Trigger instance, NULL in case of OOM error.
 */
@@ -310,12 +316,12 @@ Trigger *Trigger::create_from_dd(
     const LEX_CSTRING &connection_cl_name, const LEX_CSTRING &db_cl_name,
     enum_trigger_event_type trg_event_type,
     enum_trigger_action_time_type trg_time_type, uint action_order,
-    my_timeval created_timestamp) {
+    my_timeval created_timestamp, enum_trigger_event_status trg_event_status) {
   return new (mem_root)
       Trigger(trigger_name, mem_root, db_name, subject_table_name, definition,
               definition_utf8, sql_mode, definer_user, definer_host,
               client_cs_name, connection_cl_name, db_cl_name, trg_event_type,
-              trg_time_type, action_order, created_timestamp);
+              trg_time_type, action_order, created_timestamp, trg_event_status);
 }
 
 /**
@@ -331,7 +337,7 @@ Trigger *Trigger::clone_shallow(MEM_ROOT *mem_root) const {
       m_trigger_name, mem_root, m_db_name, m_subject_table_name, m_definition,
       m_definition_utf8, m_sql_mode, m_definer_user, m_definer_host,
       m_client_cs_name, m_connection_cl_name, m_db_cl_name, m_event,
-      m_action_time, m_action_order, m_created_timestamp);
+      m_action_time, m_action_order, m_created_timestamp, m_event_status);
 }
 
 /**
@@ -346,7 +352,7 @@ Trigger::Trigger(
     const LEX_CSTRING &connection_cl_name, const LEX_CSTRING &db_cl_name,
     enum_trigger_event_type event_type,
     enum_trigger_action_time_type action_time, uint action_order,
-    my_timeval created_timestamp)
+    my_timeval created_timestamp, enum_trigger_event_status event_status)
     : m_mem_root(mem_root),
       m_db_name(db_name),
       m_subject_table_name(subject_table_name),
@@ -359,6 +365,7 @@ Trigger::Trigger(
       m_connection_cl_name(connection_cl_name),
       m_db_cl_name(db_cl_name),
       m_event(event_type),
+      m_event_status(event_status),
       m_action_time(action_time),
       m_created_timestamp(created_timestamp),
       m_action_order(action_order),
@@ -398,10 +405,15 @@ bool Trigger::execute(THD *thd) {
     in case of failure during trigger execution.
   */
   save_current_query_block = thd->lex->current_query_block();
+  /*
+    save Query_block from trigger predicate function
+  */
+  m_sp->save_current_query_block = thd->lex->current_query_block();
   thd->lex->set_current_query_block(nullptr);
   err_status = m_sp->execute_trigger(thd, m_db_name, m_subject_table_name,
                                      &m_subject_table_grant);
   thd->lex->set_current_query_block(save_current_query_block);
+  m_sp->save_current_query_block = nullptr;
 
   thd->restore_sub_statement_state(&statement_state);
 

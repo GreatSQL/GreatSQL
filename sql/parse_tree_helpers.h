@@ -106,9 +106,10 @@ class PT_item_list : public Parse_tree_node {
   typedef Parse_tree_node super;
 
  public:
-  PT_item_list() : value(*THR_MALLOC) {}
+  PT_item_list() : value(*THR_MALLOC), m_has_assignment_list(false) {}
 
   mem_root_deque<Item *> value;
+  bool m_has_assignment_list;
 
   bool contextualize(Parse_context *pc) override {
     if (super::contextualize(pc)) return true;
@@ -251,6 +252,12 @@ create_item_for_sp_var_row_field_table_for_loop(
     THD *thd, const char *field, const Sp_rcontext_handler *rh,
     sp_variable *spv_ident, sp_variable *spv_for, sp_pcontext *pctx,
     const char *query_start_ptr, const char *start, const char *end);
+Item_splocal_row_field_table_by_index *create_item_table_by_index_for_sp_var(
+    THD *thd, LEX_CSTRING name, const Sp_rcontext_handler *rh, sp_variable *spv,
+    Item *index);
+bool find_sys_var_null_base(THD *thd, struct sys_var_with_base *tmp);
+bool set_system_variable(THD *thd, struct sys_var_with_base *tmp,
+                         enum enum_var_type var_type, Item *val);
 LEX_CSTRING make_string(THD *thd, const char *start_ptr, const char *end_ptr);
 void sp_create_assignment_lex(THD *thd, const char *option_ptr);
 bool sp_create_assignment_instr(THD *thd, const char *expr_end_ptr);

@@ -1,0 +1,452 @@
+set sql_mode="oracle";
+set @@udt_format_result='DBA';
+
+create or replace type t_air as object(id int,type varchar(20));
+CREATE TABLE t1 (a INT, b VARCHAR(3));
+insert into t1 values(1,'aa'),(2,'bb'),(3,'cc'),(4,'dd'),(5,'ee') ;
+
+--echo #
+--echo # test of procedure in sys_refcursor
+--echo #
+DELIMITER $$;
+ create or replace procedure pro_return(ref_rs in sys_refcursor) is
+ str varchar(30);
+  a1 int;
+  b varchar(30);
+  begin
+  fetch ref_rs into a1,b;
+  select a1,b;
+ end;
+$$
+
+CREATE or replace PROCEDURE p1() as
+  c sys_refcursor;
+  c1 sys_refcursor;
+  a int;
+  b varchar(20);
+begin
+  open c for select * from t1;
+  call pro_return(c);
+  select 'after call';
+  loop
+    fetch c into a,b;
+    exit when c%notfound;
+    select a,b;
+  end loop;
+  close c;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of procedure in out sys_refcursor
+--echo #
+DELIMITER $$;
+ create or replace procedure pro_return(ref_rs in out sys_refcursor) is
+ str varchar(30);
+  a1 int;
+  b varchar(30);
+  begin
+  open ref_rs for select * from t1;
+  fetch ref_rs into a1,b;
+  select a1,b;
+ end;
+$$
+CREATE or replace PROCEDURE p1() as
+  c sys_refcursor;
+  c1 sys_refcursor;
+  a int;
+  b varchar(20);
+begin
+  call pro_return(c);
+  select 'after call';
+  loop
+    fetch c into a,b;
+    exit when c%notfound;
+    select a,b;
+  end loop;
+  close c;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of reopen cursor in procedure out sys_refcursor
+--echo #
+DELIMITER $$;
+ create or replace procedure pro_return(ref_rs out sys_refcursor) is
+ str varchar(30);
+  a1 int;
+  b varchar(30);
+  begin
+  open ref_rs for select * from t1 where a=1;
+  open ref_rs for select * from t1 where a=2;
+ end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of change procedure out sys_refcursor
+--echo #
+DELIMITER $$;
+ create or replace procedure pro_return(ref_rs out sys_refcursor) is
+ str varchar(30);
+  a1 int;
+  b varchar(30);
+  c1 sys_refcursor;
+  begin
+  open ref_rs for select * from t1 where a=1;
+  open c1 for select * from t1 where a=2;
+  ref_rs:=c1;
+ end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of change procedure out sys_refcursor
+--echo #
+DELIMITER $$;
+ create or replace procedure pro_return(ref_rs out sys_refcursor) is
+ str varchar(30);
+  a1 int;
+  b varchar(30);
+  c1 sys_refcursor;
+  c2 sys_refcursor;
+  begin
+  open c1 for select * from t1 where a=1;
+  ref_rs:=c1;
+  close c1;
+  open c2 for select * from t1 where a=2;
+  select c2 into ref_rs;
+ end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of change procedure in sys_refcursor
+--echo #
+DELIMITER $$;
+ create or replace procedure pro_return(ref_rs in sys_refcursor) is
+ str varchar(30);
+  a1 int;
+  b varchar(30);
+  c1 sys_refcursor;
+  c2 sys_refcursor;
+  begin
+  open ref_rs for select * from t1 where a=1;
+ end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1;
+
+--echo #
+--echo # test of change procedure in sys_refcursor
+--echo #
+DELIMITER $$;
+ create or replace procedure pro_return(ref_rs in sys_refcursor) is
+ str varchar(30);
+  a1 int;
+  b varchar(30);
+  c1 sys_refcursor;
+  c2 sys_refcursor;
+  begin
+  open c1 for select * from t1 where a=1;
+  ref_rs := c1;
+ end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1;
+
+--echo #
+--echo # test of procedure in sys_refcursor
+--echo #
+DELIMITER $$;
+ create or replace procedure pro_return(ref_rs out sys_refcursor) is
+ str varchar(30);
+  a1 int;
+  b varchar(30);
+  begin
+  open ref_rs for select * from t1 where a=1;
+ end;
+$$
+
+CREATE or replace PROCEDURE p1() as
+  c sys_refcursor;
+  c1 sys_refcursor;
+  a1 int;
+  b varchar(20);
+begin
+  open c for select * from t1 where a=2;
+  call pro_return(c);
+  select 'after call';
+  loop
+    fetch c into a1,b;
+    exit when c%notfound;
+    select a1,b;
+  end loop;
+  close c;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of execute immediate 'call sp' using cursor
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  c sys_refcursor;
+  c1 sys_refcursor;
+  a int;
+  b varchar(20);
+begin
+  execute immediate 'call pro_return(?)' using c1;
+  loop
+    fetch c1 into a,b;
+    exit when c1%notfound;
+    select a,b;
+  end loop;
+  close c1;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_ARGUMENTS
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of execute immediate 'select function()' into
+--echo #
+DELIMITER $$;
+create or replace function returnacursor return sys_refcursor
+as
+  v_csr sys_refcursor;
+begin
+  open v_csr for select * from t1 where a<3;
+  return v_csr;
+END;
+$$
+
+CREATE or replace PROCEDURE p1() as
+  c sys_refcursor;
+  c1 sys_refcursor;
+  a int;
+  b varchar(20);
+begin
+  execute immediate 'select returnacursor()' into c1;
+  loop
+    fetch c1 into a,b;
+    exit when c1%notfound;
+    select a,b;
+  end loop;
+  close c1;
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of open cursor for select 1
+--echo #
+DELIMITER $$;
+create or replace function returnacursor1 return sys_refcursor
+as
+  v_csr sys_refcursor;
+begin
+  open v_csr for select 1,'aa';
+  return v_csr;
+END;
+$$
+
+CREATE or replace PROCEDURE p1() as
+  c sys_refcursor;
+  c1 sys_refcursor;
+  a int;
+  b varchar(20);
+begin
+  c1:=returnacursor1();
+  loop
+    fetch c1 into a,b;
+    exit when c1%notfound;
+    select a,b;
+  end loop;
+  close c1;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+drop function returnacursor1;
+
+--echo #
+--echo # test of open c1 for select returnacursor()
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  c sys_refcursor;
+  c1 sys_refcursor;
+  a int;
+  b varchar(20);
+begin
+  open c1 for select returnacursor();
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of select returnacursor() into from table
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  c sys_refcursor;
+  c1 sys_refcursor;
+  a int;
+  b varchar(20);
+begin
+  select returnacursor() into c from t1;
+end;
+$$
+DELIMITER ;$$
+--error ER_TOO_MANY_ROWS
+call p1;
+drop PROCEDURE p1;
+
+--error ER_NOT_SUPPORTED_YET
+prepare stmt1 from 'select returnacursor()';
+--error ER_NOT_SUPPORTED_YET
+select returnacursor() from t1;
+--error ER_NOT_SUPPORTED_YET
+create table tt as select returnacursor();
+--error ER_NOT_SUPPORTED_YET
+select * from t1 where returnacursor() is null;
+--error ER_WRONG_ARGUMENTS
+select sum(returnacursor()) from t1;
+
+--echo #
+--echo # test of procedure in sys_refcursor
+--echo #
+DELIMITER $$;
+ create or replace procedure pro_return(ref_rs in sys_refcursor) is
+ str varchar(30);
+  a1 int;
+  b varchar(30);
+  begin
+  select * from t1 where a=5;
+ end;
+$$
+DELIMITER ;$$
+call pro_return(returnacursor());
+
+drop function returnacursor;
+drop procedure pro_return;
+
+--echo #
+--echo # test of for loop
+--echo #
+DELIMITER $$;
+create or replace procedure p1()
+as
+  CURSOR c return t1%rowtype IS SELECT * FROM t1 WHERE a>2;
+  a1 char(20);
+begin  
+for i in c loop
+    select i.a,i.b;
+  end loop;
+END;
+$$
+DELIMITER ;$$
+call p1;
+call p1;
+drop procedure p1;
+
+drop table t1;
+
+--echo #
+--echo # test of open for select stmt
+--echo #
+DELIMITER $$;
+create or replace function f1 return sys_refcursor
+as
+  v_csr sys_refcursor;
+begin
+  open v_csr for select 1,'aa';
+  return v_csr;
+END;
+$$
+
+CREATE or replace PROCEDURE p1() as
+c1 sys_refcursor;
+c2 sys_refcursor;
+  a int;
+  b varchar(20);
+begin
+c1:=f1();
+c2:=f1();
+  loop
+    fetch c1 into a,b;
+    exit when c1%notfound;
+    select a,b;
+  end loop;
+  close c1;
+end;
+$$
+DELIMITER ;$$
+call p1;
+call p1;
+drop procedure p1;
+drop function f1;
+
+--echo #
+--echo # test of open for select function
+--echo #
+DELIMITER $$;
+create or replace function f1() return t_air
+as
+  var2 t_air:=t_air(1,'aa');
+begin
+    return var2;
+END;
+$$
+
+CREATE or replace PROCEDURE p1() as
+c1 sys_refcursor;
+c2 sys_refcursor;
+  a int;
+  b varchar(20);
+begin
+  open c1 for select f1();
+end;
+$$
+
+CREATE or replace PROCEDURE p2() as
+begin
+ for i in f1() .. f1() loop
+ select i;
+ end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+call p1;
+--error ER_NOT_SUPPORTED_YET
+call p2;
+--error ER_NOT_SUPPORTED_YET
+call p2;
+
+drop procedure p2;
+drop procedure p1;
+drop function f1;
+drop type t_air;
+

@@ -310,12 +310,19 @@ extern synode_no executed_msg;
 extern synode_no max_synode;
 
 static site_def *last_x_site = nullptr;
+static int wait_for_node_left = 0;
 
 void invalidate_detector_sites(site_def *site) {
   if (last_x_site == site) {
     last_x_site = nullptr;
   }
 }
+
+void notify_detector_when_removed() { wait_for_node_left = 1; }
+
+void notify_detector_when_actually_removed() { wait_for_node_left = 0; }
+
+int ask_for_detector_if_added_ok() { return !wait_for_node_left; }
 
 /* Notify others about our current view */
 int detector_task(task_arg arg [[maybe_unused]]) {

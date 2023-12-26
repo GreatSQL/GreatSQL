@@ -48,3 +48,13 @@ SELECT @query;
 @query
 11
 DROP PROCEDURE p1;
+set sql_mode='oracle';
+CREATE PROCEDURE p1(a varchar(255)) as
+begin
+SET @query = length(a);
+END//
+CALL p1('ABC123万AH');
+SELECT @query;
+@query
+9
+DROP PROCEDURE p1;

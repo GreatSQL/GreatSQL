@@ -535,6 +535,24 @@ bool Sql_cmd_dml::execute(THD *thd) {
     */
     cleanup(thd);
     if (open_tables_for_query(thd, lex->query_tables, 0)) goto err;
+
+    /* add for GreatDB sequence: if current query block contains sequence func
+       item, recheck version and do re-prepare if not pass */
+    {
+      auto *qb = thd->lex->current_query_block();
+      if (qb && qb->has_sequence) {
+        for (auto *item_func : qb->sequence_funcs) {
+          assert(item_func != nullptr);
+          auto *item_seq_func = pointer_cast<Item_func_sequence *>(item_func);
+          if (item_seq_func->recheck_sequence_version(thd)) {
+            ask_to_reprepare(thd);
+            close_thread_tables(thd);
+            goto err;
+          }
+        }
+      }
+    }
+
 #ifndef NDEBUG
     if (sql_command_code() == SQLCOM_SELECT)
       DEBUG_SYNC(thd, "after_table_open");
@@ -1650,7 +1668,8 @@ void JOIN::reset() {
 
   if (tmp_tables) {
     for (uint tmp = primary_tables; tmp < primary_tables + tmp_tables; tmp++) {
-      (void)qep_tab[tmp].table()->empty_result_table();
+      if (qep_tab && qep_tab[tmp].table())
+        (void)qep_tab[tmp].table()->empty_result_table();
     }
   }
   clear_sj_tmp_tables();
@@ -3412,7 +3431,8 @@ void QEP_TAB::cleanup(bool is_free) {
     if (op_type == QEP_TAB::OT_MATERIALIZE ||
         op_type == QEP_TAB::OT_AGGREGATE_THEN_MATERIALIZE ||
         op_type == QEP_TAB::OT_AGGREGATE_INTO_TMP_TABLE ||
-        op_type == QEP_TAB::OT_WINDOWING_FUNCTION) {
+        op_type == QEP_TAB::OT_WINDOWING_FUNCTION ||
+        op_type == QEP_TAB::OT_CONNECT_BY) {
       // free only tmp table
       if (old_t != nullptr) {
         close_tmp_table(old_t);
@@ -3427,6 +3447,10 @@ void QEP_TAB::cleanup(bool is_free) {
 
       destroy(tmp_table_param);
       tmp_table_param = nullptr;
+      if (connect_by != nullptr) {
+        destroy(connect_by);
+        connect_by = nullptr;
+      }
     } else {
       if (t != nullptr && old_t != nullptr &&
           t->s->table_category == TABLE_CATEGORY_TEMPORARY) {
@@ -4015,7 +4039,10 @@ bool test_if_subpart(ORDER *a, ORDER *b) {
   // If the second argument is not subpart of the first return false
   if (second) return false;
   // Else assign the direction of the second argument to the first
-  for (; a && b; a = a->next, b = b->next) a->direction = b->direction;
+  for (; a && b; a = a->next, b = b->next) {
+    a->nulls_pos = b->nulls_pos;
+    a->direction = b->direction;
+  }
   return true;
 }
 
@@ -4955,6 +4982,9 @@ bool JOIN::make_tmp_tables_info() {
             free_tmp_table(table);
             qep_tab[table_idx].set_table(nullptr);
           }
+          if (qep_tab[table_idx].connect_by) {
+            ::destroy(qep_tab[table_idx].connect_by);
+          }
         }
       });
 
@@ -4962,7 +4992,8 @@ bool JOIN::make_tmp_tables_info() {
     If the plan is constant, we will not do window tmp table processing
     cf. special code path for handling const plans.
   */
-  m_windowing_steps = m_windows.elements > 0 && !plan_is_const() &&
+  m_windowing_steps = m_windows.elements > 0 &&
+                      (!plan_is_const() || connect_by_cond) &&
                       !implicit_grouping && !group_optimized_away;
   const bool may_trace =  // just to avoid an empty trace block
       need_tmp_before_win || implicit_grouping || m_windowing_steps ||
@@ -5000,23 +5031,24 @@ bool JOIN::make_tmp_tables_info() {
     tmp_table_param->precomputed_group_by =
         !is_agg_loose_index_scan(qep_tab[0].range_scan());
 
-  /*
-    Create the first temporary table if distinct elimination is requested or
-    if the sort is too complicated to be evaluated as a filesort.
-  */
-  if (need_tmp_before_win) {
+  if (qep_tab && connect_by_cond) {
     curr_tmp_table = primary_tables;
+    if (plan_is_const()) {
+      curr_tmp_table += 1;
+      tmp_tables++;
+    }
+
     Opt_trace_object trace_this_outer(trace);
     trace_this_outer.add("adding_tmp_table_in_plan_at_position",
                          curr_tmp_table);
     tmp_tables++;
 
     /*
-      Make a copy of the base slice in the save slice.
-      This is needed because later steps will overwrite the base slice with
-      another slice (1-3).
-      After this slice has been used, overwrite the base slice again with
-      the copy in the save slice.
+    Make a copy of the base slice in the save slice.
+    This is needed because later steps will overwrite the base slice with
+    another slice (1-3 or window slice).
+    After this slice has been used, overwrite the base slice again with
+    the copy in the save slice.
     */
     if (alloc_ref_item_slice(thd, REF_SLICE_SAVED_BASE)) return true;
 
@@ -5024,6 +5056,47 @@ bool JOIN::make_tmp_tables_info() {
     current_ref_item_slice = REF_SLICE_SAVED_BASE;
 
     tmp_table_param->hidden_field_count = CountHiddenFields(*fields);
+    if (SetupConnectByTmp(thd, this, curr_tmp_table, curr_fields,
+                          *tmp_table_param)) {
+      return true;
+    }
+    curr_fields = &tmp_fields[REF_SLICE_CONNECT_BY_RES];
+    set_ref_item_slice(REF_SLICE_CONNECT_BY_RES);
+    qep_tab[curr_tmp_table].ref_item_slice = REF_SLICE_CONNECT_BY_RES;
+    setup_tmptable_write_func(&qep_tab[curr_tmp_table], &trace_this_outer);
+  }
+
+  /*
+    Create the first temporary table if distinct elimination is requested or
+    if the sort is too complicated to be evaluated as a filesort.
+  */
+  if (need_tmp_before_win) {
+    Opt_trace_object trace_this_outer(trace);
+
+    if (!tmp_tables) {
+      curr_tmp_table = primary_tables;
+      trace_this_outer.add("adding_tmp_table_in_plan_at_position",
+                           curr_tmp_table);
+      tmp_tables++;
+      if (ref_items[REF_SLICE_SAVED_BASE].is_null()) {
+        /*
+          Make a copy of the base slice in the save slice.
+          This is needed because later steps will overwrite the base slice with
+          another slice (1-3).
+          After this slice has been used, overwrite the base slice again with
+          the copy in the save slice.
+        */
+        if (alloc_ref_item_slice(thd, REF_SLICE_SAVED_BASE)) return true;
+
+        copy_ref_item_slice(REF_SLICE_SAVED_BASE, REF_SLICE_ACTIVE);
+        current_ref_item_slice = REF_SLICE_SAVED_BASE;
+      }
+    } else {
+      curr_tmp_table++;
+      trace_this_outer.add("adding_tmp_table_in_plan_at_position",
+                           curr_tmp_table);
+      tmp_tables++;
+    }
     /*
       Create temporary table for use in a single execution.
       (Will be reused if this is a subquery that is executed several times
@@ -5037,7 +5110,8 @@ bool JOIN::make_tmp_tables_info() {
 
     tmp_table_param->hidden_field_count = CountHiddenFields(*curr_fields);
 
-    if (create_intermediate_table(&qep_tab[curr_tmp_table], *fields, tmp_group,
+    if (create_intermediate_table(&qep_tab[curr_tmp_table], *curr_fields,
+                                  tmp_group,
                                   !group_list.empty() && simple_group))
       return true;
     exec_tmp_table = qep_tab[curr_tmp_table].table();
@@ -5071,7 +5145,7 @@ bool JOIN::make_tmp_tables_info() {
         return true;
     } else {
       if (change_to_use_tmp_fields_except_sums(
-              fields, thd, query_block, ref_items[REF_SLICE_TMP1],
+              curr_fields, thd, query_block, ref_items[REF_SLICE_TMP1],
               &tmp_fields[REF_SLICE_TMP1],
               query_block->m_added_non_hidden_fields))
         return true;
@@ -5299,6 +5373,7 @@ bool JOIN::make_tmp_tables_info() {
         + LIMIT 1 is specified, or
         + ROLLUP is specified, or
         + <some unknown condition>.
+        + connect_by
   */
 
   if ((grouped || implicit_grouping) && !m_windowing_steps) {
@@ -5501,39 +5576,6 @@ bool JOIN::make_tmp_tables_info() {
       if (having_cond != nullptr) {
         tab->having = having_cond;
         having_cond = nullptr;
-      }
-    }
-  }
-  {
-    // In the case of rollup (only): After the base slice list was made, we may
-    // have modified the field list to add rollup group items and sum switchers.
-    // Since there may be HAVING filters with refs that refer to the base slice,
-    // we need to refresh that slice (and its copy, REF_SLICE_SAVED_BASE) so
-    // that it includes the updated items.
-    //
-    // Note that we do this after we've made the TMP1 and TMP2 slices, since
-    // there's a lot of logic that looks through the GROUP BY list, which refers
-    // to the base slice and expects _not_ to find rollup items there.
-    unsigned num_hidden_fields = CountHiddenFields(*fields);
-    const size_t num_select_elements = fields->size() - num_hidden_fields;
-    const size_t orig_num_select_elements =
-        num_select_elements - query_block->m_added_non_hidden_fields;
-
-    for (unsigned i = 0; i < fields->size(); ++i) {
-      Item *item = (*fields)[i];
-      size_t pos;
-      // See change_to_use_tmp_fields_except_sums for an explanation of how
-      // the visible fields, hidden fields and additonal fields added by
-      // transformations are organized in fields and ref_item_array.
-      if (i < num_hidden_fields) {
-        pos = fields->size() - i - 1 - query_block->m_added_non_hidden_fields;
-      } else {
-        pos = i - num_hidden_fields;
-        if (pos >= orig_num_select_elements) pos += num_hidden_fields;
-      }
-      query_block->base_ref_items[pos] = item;
-      if (!ref_items[REF_SLICE_SAVED_BASE].is_null()) {
-        ref_items[REF_SLICE_SAVED_BASE][pos] = item;
       }
     }
   }

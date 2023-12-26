@@ -1,0 +1,141 @@
+SET sql_mode=ORACLE;
+show variables like '%udt_format_result%';
+Variable_name	Value
+udt_format_result	BINARY
+set @@udt_format_result='DBA';
+CREATE TABLE `t` (
+`order_id` int DEFAULT NULL,
+`cp_arg_name` varchar(20) DEFAULT NULL,
+`parameter_value` varchar(20) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+insert into t values(1,'aa1','bb2');
+insert into t values(2,'aa1','bb2');
+#
+# test of for in inner layer of sp
+#
+CREATE or replace PROCEDURE p1(nReturn OUT NUMBER(2)) As
+TYPE param_rec_type IS RECORD 
+(
+param_name  VARCHAR2(5),
+param_value VARCHAR2(20) 
+);
+TYPE array_param_type IS TABLE OF param_rec_type index by BINARY_INTEGER; 
+param_array array_param_type; 
+BEGIN
+insert into t values(3,'c',1);
+begin
+SELECT cp_arg_name, parameter_value
+BULK COLLECT
+INTO param_array
+FROM t t
+WHERE t.order_id = 1; 
+FOR i IN param_array.first .. param_array.last LOOP 
+select param_array(i).param_name as param_name, param_array(i).param_value as param_value;
+END LOOP;
+exception when no_data_found THEN
+nReturn:=-1;
+end;
+exception when others THEN
+nReturn:=-1;
+rollback;
+end;
+$$
+set @a=1;
+call p1(@a);
+param_name	param_value
+aa1	bb2
+drop PROCEDURE p1;
+#
+# test of forall in inner layer of sp
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score varchar(20) := 'a'
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>stu_record(10,'bb','cc'));
+BEGIN
+select * from t;
+begin
+FORALL i IN stu_record_val.first .. stu_record_val.last
+insert into t values stu_record_val (i);
+select * from t;
+end;
+END;
+$$
+call p1();
+order_id	cp_arg_name	parameter_value
+1	aa1	bb2
+2	aa1	bb2
+3	c	1
+order_id	cp_arg_name	parameter_value
+1	aa1	bb2
+2	aa1	bb2
+3	c	1
+10	bb	cc
+drop PROCEDURE p1;
+#
+# test of for in inner layer of sp
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score varchar(20) := 'a'
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>stu_record(10,'bb','cc'));
+BEGIN
+begin
+stu_record_val(2) := stu_record(11,'bb1','cc1');
+select stu_record_val(2);
+end;
+END;
+$$
+call p1();
+stu_record_val(2)
+id:11 | name_d:bb1 | score:cc1
+drop PROCEDURE p1;
+#
+# test of for in inner layer of sp
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score varchar(20) := 'a'
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>stu_record(10,'bb','cc'));
+BEGIN
+declare stu_record_val tklist:= tklist(1=>stu_record(10,'bb','cc'));
+begin
+stu_record_val(1) := stu_record(11,'bb1','cc1');
+select stu_record_val(1);
+end;
+END;
+$$
+call p1();
+stu_record_val(1)
+id:11 | name_d:bb1 | score:cc1
+drop PROCEDURE p1;
+#
+# test of for in inner layer of sp
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>'aa');
+BEGIN
+begin
+stu_record_val(2) := 'bb';
+select stu_record_val(2);
+end;
+END;
+$$
+call p1();
+stu_record_val(2)
+bb
+drop PROCEDURE p1;
+drop table t;

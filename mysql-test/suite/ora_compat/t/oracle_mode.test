@@ -100,7 +100,28 @@ set shrink_sql_mode='';
 --error ER_DIVISION_BY_ZERO
 select 1/0;
 
+
+--echo # test proc creation.
+delimiter $$;
+
+set sql_mode=oracle $$
+set shrink_sql_mode='STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY' $$
+
+delimiter ;$$
+
+ 
 --echo "clean up"
 set global sql_mode=default;
 set global shrink_sql_mode=default;
 RESET PERSIST;
+
+
+--echo "create old oracle_mode show upgrade note"
+delimiter $$;
+set sql_mode=oracle $$
+set shrink_sql_mode='STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY' $$
+
+delimiter ;$$
+
+set shrink_sql_mode='';
+set sql_mode=oracle;

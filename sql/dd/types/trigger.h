@@ -32,8 +32,9 @@
 
 #include "my_inttypes.h"
 #include "my_time_t.h"
-#include "sql/dd/sdi_fwd.h"              // dd::Sdi_wcontext
-#include "sql/dd/types/entity_object.h"  // dd::Entity_object
+#include "sql/dd/impl/properties_impl.h"  // Properties_impl
+#include "sql/dd/sdi_fwd.h"               // dd::Sdi_wcontext
+#include "sql/dd/types/entity_object.h"   // dd::Entity_object
 
 struct MDL_key;
 struct CHARSET_INFO;
@@ -43,6 +44,7 @@ namespace dd {
 ///////////////////////////////////////////////////////////////////////////
 
 class Trigger_impl;
+class Properties;
 
 namespace tables {
 class Triggers;
@@ -57,7 +59,17 @@ class Trigger : virtual public Entity_object {
   typedef tables::Triggers DD_table;
 
  public:
-  enum class enum_event_type { ET_INSERT = 1, ET_UPDATE, ET_DELETE };
+  enum class enum_event_type {
+    ET_INSERT = 1,
+    ET_UPDATE,
+    ET_DELETE,
+    ET_INSERT_UPDATE,
+    ET_INSERT_DELETE,
+    ET_UPDATE_DELETE,
+    ET_INSERT_UPDATE_DELETE
+  };
+
+  enum enum_trigger_status { ES_ENABLED = 1, ES_DISABLED };
 
   enum class enum_action_timing { AT_BEFORE = 1, AT_AFTER };
 
@@ -82,6 +94,12 @@ class Trigger : virtual public Entity_object {
 
   virtual enum_event_type event_type() const = 0;
   virtual void set_event_type(enum_event_type event_type) = 0;
+
+  /////////////////////////////////////////////////////////////////////////
+  // event_status.
+  /////////////////////////////////////////////////////////////////////////
+  virtual enum_trigger_status event_status() const = 0;
+  virtual void set_event_status(enum_trigger_status event_status) = 0;
 
   /////////////////////////////////////////////////////////////////////////
   // action_timing.
@@ -155,6 +173,16 @@ class Trigger : virtual public Entity_object {
   static void create_mdl_key(const String_type &schema_name,
                              const String_type &name, MDL_key *key);
   static const CHARSET_INFO *name_collation();
+
+  /////////////////////////////////////////////////////////////////////////
+  // Options.
+  /////////////////////////////////////////////////////////////////////////
+
+  virtual const Properties &options() const = 0;
+
+  virtual Properties &options() = 0;
+
+  virtual bool set_options(const String_type &) = 0;
 };
 
 ///////////////////////////////////////////////////////////////////////////

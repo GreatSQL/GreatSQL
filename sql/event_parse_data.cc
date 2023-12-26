@@ -34,6 +34,7 @@
 #include "mysql/thread_type.h"
 #include "mysql_time.h"
 #include "mysqld_error.h"  // ER_INVALID_CHARACTER_STRING
+#include "sql/dd/impl/utils.h"
 #include "sql/dd/types/event.h"
 #include "sql/derror.h"  // ER_THD
 #include "sql/item.h"
@@ -231,6 +232,17 @@ int Event_parse_data::init_interval(THD *thd) {
   if (!item_expression->fixed &&
       item_expression->fix_fields(thd, &item_expression))
     goto wrong_value;
+
+  if (is_dbms_job) {
+    if (!item_expression->is_temporal()) {
+      goto wrong_value;
+    } else {
+      // use to ignore other check
+      expression = 1;
+      // generator expr string ,save and binlog will use
+      return 0;
+    }
+  }
 
   if (get_interval_value(item_expression, interval, &value, &interval_tmp))
     goto wrong_value;
@@ -452,6 +464,10 @@ bool Event_parse_data::check_parse_data(THD *thd) {
     return true;
   }
 
+  if (!is_dbms_job) {
+    init_comment_expr_interval();
+  }
+
   init_name(thd, identifier);
 
   init_definer(thd);
@@ -528,4 +544,118 @@ void Event_parse_data::check_originator_id(THD *thd) {
     originator = thd->server_id;
   } else
     originator = server_id;
+}
+
+const char *interval_item_expr_define = "interval_expr";
+
+/**
+ * @brief
+ *   secondary get  item_expression from comment
+ *
+ *
+ * @return int
+ */
+int Event_parse_data::init_comment_expr_interval() {
+  if (comment.length == 0 && comment.str == nullptr) return 0;
+
+  if (strstr(comment.str, interval_item_expr_define)) {
+    is_dbms_job = true;
+    // interval_expr=xxxx ; xxxx
+    dd::String_type comment_str(comment.str, comment.length);
+    auto ptr = strstr(comment.str, ";");
+    comment.length = comment.length - (ptr - comment.str) - 1;
+    comment.str = ptr + 1;
+  }
+  return 0;
+}
+
+/**
+ * @brief
+ *
+ * generator to create event secondary data
+ *
+ * @param thd
+ * @param buf
+ * @return true
+ * @return false
+ */
+bool Event_parse_data::get_create_event_str(THD *thd, bool created,
+                                            String *buf) {
+  DBUG_TRACE;
+  MYSQL_TIME time;
+  char dtime_buff[20 * 2 + 32] = {0};
+  if (created) {
+    buf->append(STRING_WITH_LEN("CREATE "));
+    append_definer(thd, buf, thd->lex->definer->user, thd->lex->definer->host);
+  } else {
+    buf->append(STRING_WITH_LEN("ALTER "));
+  }
+
+  buf->append(STRING_WITH_LEN(" EVENT "));
+
+  append_identifier(thd, buf, name.str, name.length);
+
+  if (status_changed && !created) {
+    if (status == Event_parse_data::ENABLED)
+      buf->append(STRING_WITH_LEN(" ENABLE "));
+    else if (status == Event_parse_data::SLAVESIDE_DISABLED)
+      buf->append(STRING_WITH_LEN(" DISABLE ON SLAVE "));
+    else
+      buf->append(STRING_WITH_LEN(" DISABLE "));
+  } else {
+    String expression_str;
+    if (item_expression) {
+      buf->append(STRING_WITH_LEN(" ON SCHEDULE EVERY "));
+      item_expression->print(thd, &expression_str, QT_NO_DATA_EXPANSION);
+      buf->append(expression_str);
+      buf->append(STRING_WITH_LEN(" SECOND "));
+    } else {
+      buf->append(STRING_WITH_LEN(" ON SCHEDULE EVERY 1 SECOND"));
+    }
+
+    if (!starts_null) {
+      buf->append(STRING_WITH_LEN(" STARTS '"));
+      thd->variables.time_zone->gmt_sec_to_TIME(&time, starts);
+      buf->append(dtime_buff, my_datetime_to_str(time, dtime_buff, 0));
+      buf->append(STRING_WITH_LEN("'"));
+    }
+
+    if (on_completion != Event_parse_data::ON_COMPLETION_DEFAULT) {
+      if (on_completion == Event_parse_data::ON_COMPLETION_DROP)
+        buf->append(STRING_WITH_LEN(" ON COMPLETION NOT PRESERVE "));
+      else
+        buf->append(STRING_WITH_LEN(" ON COMPLETION PRESERVE "));
+    }
+
+    if (created) {
+      if (status == Event_parse_data::ENABLED)
+        buf->append(STRING_WITH_LEN(" ENABLE "));
+      else if (status == Event_parse_data::SLAVESIDE_DISABLED)
+        buf->append(STRING_WITH_LEN(" DISABLE ON SLAVE "));
+      else
+        buf->append(STRING_WITH_LEN(" DISABLE "));
+    }
+
+    if (item_expression) {
+      dd::String_type expr_comment;
+      dd::escape(&expr_comment, interval_item_expr_define);
+      expr_comment.append("=");
+      dd::escape(&expr_comment, expression_str.c_ptr_quick());
+      expr_comment.append(";");
+      buf->append(STRING_WITH_LEN(" COMMENT "));
+      append_unescaped(buf, expr_comment.c_str(), expr_comment.length());
+      if (comment.length) {
+        append_unescaped(buf, comment.str, comment.length);
+      }
+    } else {
+      if (comment.str) {
+        buf->append(STRING_WITH_LEN(" COMMENT "));
+        append_unescaped(buf, comment.str, comment.length);
+      }
+    }
+  }
+  if (body_changed) {
+    buf->append(STRING_WITH_LEN(" DO "));
+  }
+  return false;
 }

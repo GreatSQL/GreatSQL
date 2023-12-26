@@ -73,6 +73,7 @@
 #include <utility>
 
 #include "ft_global.h"
+#include "greatdb_version.h"  // for greatdb dd version
 #include "libbinlogevents/include/binlog_event.h"
 #include "m_string.h"
 #include "my_aes.h"  // my_aes_opmode_names
@@ -872,7 +873,7 @@ static Sys_var_ulong Sys_pfs_max_statement_classes(
     "performance_schema_max_statement_classes",
     "Maximum number of statement instruments.",
     READ_ONLY GLOBAL_VAR(pfs_param.m_statement_class_sizing),
-    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 256),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 256 * 2),
     DEFAULT((ulong)SQLCOM_END + (ulong)COM_END + 5 +
             SP_PSI_STATEMENT_INFO_COUNT + CLONE_PSI_STATEMENT_COUNT),
     BLOCK_SIZE(1), PFS_TRAILING_PROPERTIES);
@@ -1166,6 +1167,18 @@ static Sys_var_charptr Sys_my_proxy_protocol_networks(
     "directive on the line.",
     READ_ONLY GLOBAL_VAR(my_proxy_protocol_networks), CMD_LINE(REQUIRED_ARG),
     IN_FS_CHARSET, DEFAULT(""));
+
+static Sys_var_bool Sys_sql_lock_ddl_polling_mode(
+    "lock_ddl_polling_mode", "lock ddl polling mode in session",
+    HINT_UPDATEABLE SESSION_VAR(lock_ddl_polling_mode), CMD_LINE(OPT_ARG),
+    DEFAULT(0));
+
+static Sys_var_ulong Sys_lock_ddl_polling_runtime(
+    "lock_ddl_polling_runtime",
+    "Timeout in millisecond to wait for a lock before returning an error.",
+    HINT_UPDATEABLE SESSION_VAR(lock_ddl_polling_runtime),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(200, LONG_TIMEOUT), DEFAULT(1000),
+    BLOCK_SIZE(1));
 
 /**
   Checks,
@@ -1836,6 +1849,30 @@ static Sys_var_uint Sys_select_into_disk_sync_delay(
     VALID_RANGE(0, LONG_TIMEOUT), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(check_session_admin_no_super));
 
+static Sys_var_uint Sys_select_bulk_into_batch(
+    "select_bulk_into_batch", "Batch size for SELECT BULK COLLECT INTO VAR.",
+    HINT_UPDATEABLE SESSION_VAR(select_bulk_into_batch), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, UINT_MAX16), DEFAULT(10000), BLOCK_SIZE(1));
+
+static bool set_serveroutput(sys_var *, THD *thd, enum_var_type) {
+  thd->get_dbmsotpt()->set_serveroutput(thd, thd->variables.serveroutput);
+  return false;
+}
+
+static Sys_var_bool Sys_serveroutput("serveroutput",
+                                     "dbms_output serveroutput switch",
+                                     SESSION_VAR(serveroutput),
+                                     CMD_LINE(OPT_ARG), DEFAULT(false),
+                                     NO_MUTEX_GUARD, NOT_IN_BINLOG,
+                                     ON_CHECK(nullptr),
+                                     ON_UPDATE(set_serveroutput), NULL);
+
+static Sys_var_ulong Sys_max_dbmsotpt_count(
+    "max_dbmsotpt_count",
+    "Max number of dbmsoutput buffer  to store for a session",
+    HINT_UPDATEABLE SESSION_VAR(max_dbmsotpt_count), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1024, 8192), DEFAULT(2048), BLOCK_SIZE(1));
+
 static bool check_not_null(sys_var *, THD *, set_var *var) {
   return var->value && var->value->is_null();
 }
@@ -2109,6 +2146,15 @@ static Sys_var_enum Sys_udt_format_result(
     "either BINARY (default) for binary style, DBA for utf8mb4 style.",
     SESSION_ONLY(udt_format_result), NO_CMD_LINE, udt_format_result_names,
     DEFAULT(static_cast<ulong>(UDT_FORMAT_RESULT_BINARY)));
+
+char *ora_private_temp_table_prefix;
+static Sys_var_charptr Sys_private_temp_table_prefix(
+    "private_temp_table_prefix",
+    "The name of private temporary tables must always be prefixed with "
+    "whatever is defined with the parameter private_temp_table_prefix. "
+    "The default is ORA$PTT_",
+    READ_ONLY GLOBAL_VAR(ora_private_temp_table_prefix), CMD_LINE(REQUIRED_ARG),
+    IN_FS_CHARSET, DEFAULT("ORA$PTT_"), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static const char *concurrent_insert_names[] = {"NEVER", "AUTO", "ALWAYS",
                                                 nullptr};
@@ -3650,6 +3696,7 @@ static const char *optimizer_switch_names[] = {
     "hypergraph_optimizer",  // Deliberately not documented below.
     "derived_condition_pushdown",
     "favor_range_scan",
+    "remove_useless_outerjoin",
     "default",
     NullS};
 static Sys_var_flagset Sys_optimizer_switch(
@@ -3663,7 +3710,8 @@ static Sys_var_flagset Sys_optimizer_switch(
     " block_nested_loop, batched_key_access, use_index_extensions,"
     " condition_fanout_filter, derived_merge, hash_join,"
     " subquery_to_derived, prefer_ordering_index,"
-    " derived_condition_pushdown, favor_range_scan} and val is one of "
+    " derived_condition_pushdown, favor_range_scan, remove_useless_outerjoin} "
+    "and val is one of "
     "{on, off, default}",
     HINT_UPDATEABLE SESSION_VAR(optimizer_switch), CMD_LINE(REQUIRED_ARG),
     optimizer_switch_names, DEFAULT(OPTIMIZER_SWITCH_DEFAULT), NO_MUTEX_GUARD,
@@ -4380,6 +4428,15 @@ static Sys_var_bool Sys_replica_sql_verify_checksum(
 
 static Sys_var_deprecated_alias Sys_slave_sql_verify_checksum(
     "slave_sql_verify_checksum", Sys_replica_sql_verify_checksum);
+
+static Sys_var_bool Sys_replicate_server_mode(
+    "replicate_server_mode",
+    "In replication, if set to 1, do only replicate events having the server "
+    "id of master,skip the events which has the different server id from "
+    "master Default value is 0 (to replicate all the events from master).",
+    READ_ONLY GLOBAL_VAR(replicate_server_id_mode), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
+    ON_UPDATE(nullptr));
 
 static bool check_not_null_not_empty(sys_var *self, THD *thd, set_var *var) {
   String str, *res;
@@ -5828,11 +5885,6 @@ static Sys_var_plugin Sys_default_tmp_storage_engine(
     MYSQL_STORAGE_ENGINE_PLUGIN, DEFAULT(&default_tmp_storage_engine),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_storage_engine));
 
-static Sys_var_charptr Sys_fake_serv_vers_num(
-    "fake_serv_vers_num", "user defined version to display.",
-    READ_ONLY NON_PERSIST NOT_VISIBLE GLOBAL_VAR(opt_fake_serv_vers_num),
-    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(MYSQL_SERVER_VERSION));
-
 static Sys_var_charptr Sys_enforce_storage_engine(
     "enforce_storage_engine",
     "Force the use of a storage engine for new tables",
@@ -6024,14 +6076,21 @@ static Sys_var_bool Sys_gdb_parallel_load(
 static Sys_var_uint Sys_gdb_parallel_load_workers(
     "gdb_parallel_load_workers", "parallel workers when paralell load data",
     HINT_UPDATEABLE SESSION_VAR(gdb_parallel_load_workers), NO_CMD_LINE,
-    VALID_RANGE(1, 32), DEFAULT(8), BLOCK_SIZE(1));
+    VALID_RANGE(1, 16), DEFAULT(6), BLOCK_SIZE(1));
 
 static Sys_var_uint Sys_gdb_parallel_load_chunk_size(
     "gdb_parallel_load_chunk_size",
     "the file chunk size for each worker when parallel load data ",
     HINT_UPDATEABLE SESSION_VAR(gdb_parallel_load_chunk_size), NO_CMD_LINE,
-    VALID_RANGE(64 * 1024, 128 * 1024 * 1024), DEFAULT(1 * 1024 * 1024),
+    VALID_RANGE(64 * 1024, 128 * 1024 * 1024), DEFAULT(4 * 1024 * 1024),
     BLOCK_SIZE(1));
+
+static char *glob_gdb_sqld_version_ptr;
+const char *gdb_sqld_version_str = const_cast<char *>(GREATDB_VERSION_STR);
+static Sys_var_charptr Sys_gdb_sqld_version(
+    "gdb_sqld_version", "version of mysqld for greatdb",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(glob_gdb_sqld_version_ptr), NO_CMD_LINE,
+    IN_FS_CHARSET, DEFAULT(gdb_sqld_version_str));
 
 static Sys_var_bit Sys_sql_warnings("sql_warnings", "sql_warnings",
                                     SESSION_VAR(option_bits), NO_CMD_LINE,
@@ -8365,6 +8424,13 @@ static Sys_var_ulonglong Sys_tf_sequence_table_max_upper_bound(
     GLOBAL_VAR(tf_sequence_table_max_upper_bound), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(1024, ULLONG_MAX), DEFAULT(1048576), BLOCK_SIZE(1));
 
+static Sys_var_ulonglong Sys_tf_udt_table_max_rows(
+    "tf_udt_table_max_rows",
+    "Maximum number of records UDT_TABLE() table function "
+    "is allowed to generate.",
+    GLOBAL_VAR(tf_udt_table_max_rows), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1024, ULLONG_MAX), DEFAULT(1048576), BLOCK_SIZE(1));
+
 static bool check_authentication_policy(sys_var *, THD *, set_var *var) {
   if (!(var->save_result.string_value.str)) return true;
   return validate_authentication_policy(var->save_result.string_value.str);
@@ -8528,3 +8594,17 @@ static Sys_var_enum Sys_explain_format(
     SESSION_VAR(explain_format), CMD_LINE(OPT_ARG), explain_format_names,
     DEFAULT(static_cast<ulong>(Explain_format_type::TRADITIONAL)),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
+static Sys_var_uint Dbms_profiler_max_units_len(
+    "dbms_profiler_max_units_size",
+    "The maximum number of different functions,trigger,procedure can be "
+    "executed in one dbms_profiler profiled",
+    HINT_UPDATEABLE SESSION_VAR(dbms_profiler_max_units_size),
+    CMD_LINE(OPT_ARG), VALID_RANGE(1, 5000), DEFAULT(100), BLOCK_SIZE(1));
+
+static Sys_var_uint Dbms_profiler_max_data_size(
+    "dbms_profiler_max_data_size",
+    "The maximum number of lines can be profiled in a "
+    "function,trigger,procedure",
+    HINT_UPDATEABLE SESSION_VAR(dbms_profiler_max_data_size), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, 10000), DEFAULT(1000), BLOCK_SIZE(1));

@@ -1,0 +1,937 @@
+SET sql_mode=ORACLE;
+SET SESSION debug='+d,skip_dd_table_access_check';
+show variables like '%udt_format_result%';
+Variable_name	Value
+udt_format_result	BINARY
+set @@udt_format_result='DBA';
+#
+# test of create type
+#
+create or replace type t_air as object(id int,type varchar(20));
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=0;udt_size=86;
+#
+# test of create table with udt column
+#
+create table tt_air(id int,name1 t_air2);
+ERROR 42000: TYPE t_air2 does not exist
+create table tt_air(id int,name1 t_air);
+show create table tt_air;
+Table	Create Table
+tt_air	CREATE TABLE "tt_air" (
+  "id" int DEFAULT NULL,
+  "name1" t_air DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT name,type,options FROM mysql.columns where name='name1';
+name	type	options
+name1	MYSQL_TYPE_VARCHAR	interval_count=0;udt_name=t_air;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=1;udt_size=86;
+#
+# test of replace type when table used the type
+#
+create or replace type t_air as object(id int,type varchar(30));
+ERROR HY000: Failed to drop or replace type t_air with type or table dependents.
+#
+# test of insert into table with udt column
+#
+insert into tt_air values(1,'sadf');
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+insert into tt_air values(1,t_air(10,'aabb'));
+insert into tt_air values(2,t_air(20,'qwed'));
+select * from tt_air;
+id	name1
+1	id:10 | type:aabb
+2	id:20 | type:qwed
+#
+# test of alter table add udt column 
+#
+alter table tt_air add name2 t_air;
+select * from tt_air;
+id	name1	name2
+1	id:10 | type:aabb	NULL
+2	id:20 | type:qwed	NULL
+SELECT name,type,options FROM mysql.columns where name='name2';
+name	type	options
+name2	MYSQL_TYPE_VARCHAR	interval_count=0;udt_name=t_air;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=2;udt_size=86;
+insert into tt_air values(3,t_air(30,'12eg'),t_air(31,'name2'));
+select * from tt_air;
+id	name1	name2
+1	id:10 | type:aabb	NULL
+2	id:20 | type:qwed	NULL
+3	id:30 | type:12eg	id:31 | type:name2
+#
+# test of alter table drop udt column 
+#
+alter table tt_air drop name2;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=1;udt_size=86;
+select * from tt_air;
+id	name1
+1	id:10 | type:aabb
+2	id:20 | type:qwed
+3	id:30 | type:12eg
+#
+# test of alter table modify udt column 
+#
+alter table tt_air modify name1 varchar(100);
+ERROR 42000: This version of MySQL doesn't yet support 'alter to or from udt type column'
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=1;udt_size=86;
+select * from tt_air;
+id	name1
+1	id:10 | type:aabb
+2	id:20 | type:qwed
+3	id:30 | type:12eg
+#
+# test of subquery of udt table
+#
+select name1 from tt_air where name1;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+select b.name1 from tt_air b left join  tt_air a on  a.name1;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+select * from (select * from tt_air)  where name1>1;
+ERROR HY000: Incorrect arguments to >
+#
+# test of create index on udt column 
+#
+create index idx1 on tt_air(name1);
+ERROR 42000: Udf type column 'name1' can't be used in key specification with the used table type
+create index idx1 on tt_air(id,name1);
+ERROR 42000: Udf type column 'name1' can't be used in key specification with the used table type
+#
+# test of create view on udt column 
+#
+CREATE VIEW vv as SELECT * FROM tt_air;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=1;udt_size=86;
+select * from vv;
+id	name1
+1	id:10 | type:aabb
+2	id:20 | type:qwed
+3	id:30 | type:12eg
+CREATE ALGORITHM=TEMPTABLE VIEW vv1 as SELECT * FROM tt_air;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=1;udt_size=86;
+select * from vv1;
+id	name1
+1	id:10 | type:aabb
+2	id:20 | type:qwed
+3	id:30 | type:12eg
+CREATE ALGORITHM=MERGE VIEW vv2 as SELECT * FROM tt_air;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=1;udt_size=86;
+select * from vv2;
+id	name1
+1	id:10 | type:aabb
+2	id:20 | type:qwed
+3	id:30 | type:12eg
+#
+# test of alter view on udt column 
+#
+create table tt_air1(id int,name1 t_air,name2 t_air);
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=3;udt_size=86;
+alter VIEW vv as SELECT * FROM tt_air1;
+select * from vv;
+id	name1	name2
+drop view vv;
+drop view vv1;
+drop view vv2;
+#
+# test of drop table with udt column 
+#
+drop table tt_air1;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=1;udt_size=86;
+#
+# test of drop type
+#
+drop type t_air;
+ERROR HY000: Failed to drop or replace type t_air with type or table dependents.
+drop table tt_air;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=0;udt_size=86;
+drop type t_air;
+#
+# test of update set table with udt column
+#
+create or replace type t_air as object(id int,type varchar(30));
+create table tt_air1(id int,name1 t_air,name2 t_air);
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=2;udt_size=126;
+insert into tt_air1 values(1,t_air(10,'aaebb1'),t_air(20,'2edf2'));
+insert into tt_air1 values(2,t_air(100,'aabb2'),t_air(200,'2edf3'));
+select * from tt_air1;
+id	name1	name2
+1	id:10 | type:aaebb1	id:20 | type:2edf2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+update tt_air1 set name1=t_air(50,'name1') where id=1;
+UPDATE tt_air1 SET (tt_air1.name1)=(2,9);
+ERROR 42000: This version of MySQL doesn't yet support 'update set with different column size.'
+update tt_air1 set tt_air1.name1 = (select * from tt_air1 limit 1);
+ERROR 21000: Operand should contain 1 column(s)
+select * from tt_air1;
+id	name1	name2
+1	id:50 | type:name1	id:20 | type:2edf2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+select * from (select * from tt_air1)  where name1<name2;
+ERROR HY000: Incorrect arguments to <
+#
+# test of insert into select from
+#
+create table tt_air2(id int,name1 t_air,name2 t_air);
+insert into tt_air2 select * from tt_air1;
+select * from tt_air2;
+id	name1	name2
+1	id:50 | type:name1	id:20 | type:2edf2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+drop table tt_air2;
+#
+# test of insert into table with null udt column
+#
+insert into tt_air1 values(3,null,null);
+insert into tt_air1 values(2,t_air(null,null),t_air(null,null));
+select * from tt_air1;
+id	name1	name2
+1	id:50 | type:name1	id:20 | type:2edf2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+3	NULL	NULL
+2	id:NULL | type:NULL	id:NULL | type:NULL
+#
+# test of select from table with udt column in where-clause
+#
+SELECT * FROM tt_air1 WHERE name1=t_air(100,'aabb2');
+id	name1	name2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+#
+# test of select expr about udt value from table with udt column
+#
+select name1 || t_air(10,'sdgh') from tt_air1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+select nvl(name1,id) from tt_air1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+SELECT * FROM tt_air1 WHERE isnull(name2);
+id	name1	name2
+3	NULL	NULL
+SELECT * FROM tt_air1 WHERE name2 is not null;
+id	name1	name2
+1	id:50 | type:name1	id:20 | type:2edf2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+2	id:NULL | type:NULL	id:NULL | type:NULL
+select name1 > name2 from tt_air1;
+ERROR HY000: Incorrect arguments to >
+#
+# test of using udt column in order-by clause
+#
+SELECT * FROM tt_air1 order BY name1;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+#
+# test of using udt column in GROUP-BY clause
+#
+SELECT name1 FROM tt_air1 GROUP BY name1;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+#
+# test of using udt column in partition-by clause
+#
+select *, rank()over(partition by name1 order by name1 desc) m from tt_air1;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+#
+# test of setting non-udt column using udt value.
+#
+create table blob1(id int,bb blob);
+insert into blob1 values(1,'aacc');
+insert into blob1 values(1,t_air(1,'aabb'));
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+update blob1 set bb=t_air(50,'name1') where id=1;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+drop table blob1;
+#
+# test of create tmp table with udt column
+#
+create TEMPORARY table tt_air_tmp(id int,nametmp t_air);
+ERROR 42000: This version of MySQL doesn't yet support 'udt column in temporary table'
+#
+# test of cursor fetch into
+#
+CREATE or replace PROCEDURE p1(min INT,max INT) as
+CURSOR cur(pmin INT, pmax INT) is SELECT name1 FROM tt_air1 WHERE id BETWEEN pmin AND pmax;
+va tt_air1.name1%type;
+BEGIN
+OPEN cur(min,max);
+LOOP
+FETCH cur INTO va;
+EXIT WHEN cur%NOTFOUND;
+select va;
+END LOOP;
+CLOSE cur;
+END;
+$$
+call p1(1,10);
+va
+id:50 | type:name1
+va
+id:100 | type:aabb2
+va
+NULL
+va
+id:NULL | type:NULL
+call p1(1,10);
+va
+id:50 | type:name1
+va
+id:100 | type:aabb2
+va
+NULL
+va
+id:NULL | type:NULL
+drop PROCEDURE p1;
+#
+# test of cursor for in
+#
+CREATE PROCEDURE p2() as
+CURSOR c_country (ii int) IS SELECT * FROM tt_air1 WHERE id =ii;
+rec c_country%ROWTYPE;
+BEGIN
+FOR rec IN c_country(1)
+loop
+SELECT rec.id,rec.name1,rec.name2;
+END loop;
+END;
+$$
+call p2;
+rec.id	rec.name1	rec.name2
+1	id:50 | type:name1	id:20 | type:2edf2
+call p2;
+rec.id	rec.name1	rec.name2
+1	id:50 | type:name1	id:20 | type:2edf2
+drop PROCEDURE p2;
+#
+# test of select into
+#
+CREATE or replace PROCEDURE p3() as
+rec tt_air1.name1%type;
+BEGIN
+SELECT name1 into rec FROM tt_air1 WHERE id =1;
+select rec;
+END;
+$$
+call p3;
+rec
+id:50 | type:name1
+call p3;
+rec
+id:50 | type:name1
+drop PROCEDURE p3;
+#
+# test of BULK COLLECT into
+#
+CREATE or replace PROCEDURE p4() as
+type dr_type is table of tt_air1%ROWTYPE index by binary_integer;
+dr_table dr_type;
+begin
+select * BULK COLLECT into dr_table from tt_air1;
+for i IN dr_table.first .. dr_table.last loop
+select dr_table(i).id,dr_table(i).name1,dr_table(i).name2;
+end loop;
+end;
+$$
+call p4;
+dr_table(i).id	dr_table(i).name1	dr_table(i).name2
+1	id:50 | type:name1	id:20 | type:2edf2
+dr_table(i).id	dr_table(i).name1	dr_table(i).name2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+dr_table(i).id	dr_table(i).name1	dr_table(i).name2
+3	NULL	NULL
+dr_table(i).id	dr_table(i).name1	dr_table(i).name2
+2	id:NULL | type:NULL	id:NULL | type:NULL
+call p4;
+dr_table(i).id	dr_table(i).name1	dr_table(i).name2
+1	id:50 | type:name1	id:20 | type:2edf2
+dr_table(i).id	dr_table(i).name1	dr_table(i).name2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+dr_table(i).id	dr_table(i).name1	dr_table(i).name2
+3	NULL	NULL
+dr_table(i).id	dr_table(i).name1	dr_table(i).name2
+2	id:NULL | type:NULL	id:NULL | type:NULL
+drop PROCEDURE p4;
+#
+# test of subquery of table with udt column
+#
+SELECT * FROM (select * from tt_air1 where name1=t_air(100,'aabb2'));
+id	name1	name2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+SELECT * FROM (select * from tt_air1 where name1 is not null);
+id	name1	name2
+1	id:50 | type:name1	id:20 | type:2edf2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+2	id:NULL | type:NULL	id:NULL | type:NULL
+select name1 from tt_air1 union select name1 from  tt_air1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in join sql'
+select name1 from tt_air1 minus select name1 from tt_air1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in join sql'
+select name1 from tt_air1 union select id from tt_air1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in join sql'
+select name1 from tt_air1 minus select id from tt_air1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in join sql'
+#
+# create table as table with udt column
+#
+create table tmp_sele as select * from tt_air1;
+select * from tmp_sele;
+id	name1	name2
+1	id:50 | type:name1	id:20 | type:2edf2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+3	NULL	NULL
+2	id:NULL | type:NULL	id:NULL | type:NULL
+#
+# insert into select from table with udt column
+#
+insert into tmp_sele select * from tt_air1;
+select * from tmp_sele;
+id	name1	name2
+1	id:50 | type:name1	id:20 | type:2edf2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+3	NULL	NULL
+2	id:NULL | type:NULL	id:NULL | type:NULL
+1	id:50 | type:name1	id:20 | type:2edf2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+3	NULL	NULL
+2	id:NULL | type:NULL	id:NULL | type:NULL
+drop table tmp_sele;
+#
+# create table like
+#
+create table table_like like tt_air1;
+show create table table_like;
+Table	Create Table
+table_like	CREATE TABLE "table_like" (
+  "id" int DEFAULT NULL,
+  "name1" t_air DEFAULT NULL,
+  "name2" t_air DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into table_like values(1,t_air(1,'aabb'),t_air(2,null));
+select * from table_like;
+id	name1	name2
+1	id:1 | type:aabb	id:2 | type:NULL
+drop table table_like;
+#
+# test different charset of client
+#
+show variables like '%udt_format_result%';
+Variable_name	Value
+udt_format_result	DBA
+select * from tt_air1;
+id	name1	name2
+1	id:50 | type:name1	id:20 | type:2edf2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+3	NULL	NULL
+2	id:NULL | type:NULL	id:NULL | type:NULL
+SELECT t_air(1+1,'aabb') FROM dual;
+t_air(1+1,'aabb')
+id:2 | type:aabb
+set @@udt_format_result='BINARY';
+select * from tt_air1;
+id	name1	name2
+1	¸2   name1                                                                                                                   	¸   2edf2                                                                                                                   
+2	¸d   aabb2                                                                                                                   	¸»   2edf3                                                                                                                   
+3	NULL	NULL
+2	ˇ                                                                                                                             	ˇ                                                                                                                             
+SELECT t_air(1+1,'aabb') FROM dual;
+t_air(1+1,'aabb')
+¸   aabb                                                                                                                    
+set @@udt_format_result='DBA';
+select * from tt_air1;
+id	name1	name2
+1	id:50 | type:name1	id:20 | type:2edf2
+2	id:100 | type:aabb2	id:200 | type:2edf3
+3	NULL	NULL
+2	id:NULL | type:NULL	id:NULL | type:NULL
+SELECT t_air(1+1,'aabb') FROM dual;
+t_air(1+1,'aabb')
+id:2 | type:aabb
+#
+# test of bug8889
+#
+SELECT 1 as a from dual where lnnvl(t_air(1,1));
+a
+SELECT 1 as a from tt_air1 where lnnvl(name1);
+a
+1
+CREATE or replace PROCEDURE p4() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+stu_record1 stu_record;
+type dr_type is table of tt_air1%ROWTYPE index by binary_integer;
+dr_table dr_type;
+begin
+SELECT 1 as a from dual where lnnvl(dr_table);
+SELECT 1 as a from dual where lnnvl(stu_record1);
+end;
+$$
+call p4;
+a
+a
+call p4;
+a
+a
+drop PROCEDURE p4;
+drop table tt_air1;
+#
+# test of create type with blob column
+#
+create or replace type t_air as object(id int,type blob);
+ERROR 42000: This version of MySQL doesn't yet support 'udf type with Blob type'
+drop type t_air;
+#
+# test of error ER_TOO_BIG_FIELDLENGTH
+#
+create or replace type t_air1 as object(id varchar(10000),type varchar(10000));
+create table t2(id int,name t_air1);
+ERROR 42000: Column length too big for column 'name' (max = 65535); use BLOB or TEXT instead
+drop type t_air1;
+#
+# test of type set
+#
+create or replace type t_air_set as object(id int,type set('a', 'b', 'c', 'd'));
+create table t3(id int,name1 t_air_set);
+insert into t3 values(1,t_air_set(1,'a'));
+select * from t3;
+id	name1
+1	id:1 | type:a
+drop table t3;
+drop type t_air_set;
+#
+# test of create table over schema
+#
+create database db1;
+create or replace type t_air as object(id int,type varchar(20));
+use db1;
+create or replace type t_air as object(id int,type varchar(20),j int);
+use test;
+create table db1.tabl1 (id int, u1 t_air);
+ERROR HY000: inconsistent datatypes: expected 'db1'.'t_air' got 'test'.'t_air'
+create table tabl1 (id int, u1 db1.t_air);
+ERROR HY000: inconsistent datatypes: expected 'test'.'t_air' got 'db1'.'t_air'
+create table db1.tabl1 (id int, u1 db1.t_air);
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=0;udt_size=86;
+t_air	TYPE	ref_count=1;udt_size=90;
+insert into db1.tabl1 values(1,t_air(1,'a'));
+ERROR HY000: inconsistent datatypes: expected 'db1'.'t_air' got 'test'.'t_air'
+insert into db1.tabl1 values(1,test.t_air(1,'a'));
+ERROR HY000: inconsistent datatypes: expected 'db1'.'t_air' got 'test'.'t_air'
+insert into db1.tabl1 values(1,db1.t_air(1,'a',2));
+select * from db1.tabl1;
+id	u1
+1	id:1 | type:a | j:2
+#
+# test of alter table over schema
+#
+alter table db1.tabl1 add u2 t_air;
+ERROR HY000: inconsistent datatypes: expected 'db1'.'t_air' got 'test'.'t_air'
+alter table db1.tabl1 add u2 db1.t_air;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=0;udt_size=86;
+t_air	TYPE	ref_count=2;udt_size=90;
+select * from db1.tabl1;
+id	u1	u2
+1	id:1 | type:a | j:2	NULL
+insert into db1.tabl1 values(1,db1.t_air(1,'a',2),db1.t_air(10,'aee',20));
+select * from db1.tabl1;
+id	u1	u2
+1	id:1 | type:a | j:2	NULL
+1	id:1 | type:a | j:2	id:10 | type:aee | j:20
+alter table db1.tabl1 drop u2;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=0;udt_size=86;
+t_air	TYPE	ref_count=1;udt_size=90;
+#
+# test of db2.t%rowtype
+#
+CREATE or replace PROCEDURE p4() as
+type dr_type is table of db1.tabl1%ROWTYPE index by binary_integer;
+dr_table dr_type;
+begin
+select * BULK COLLECT into dr_table from db1.tabl1;
+for i IN dr_table.first .. dr_table.last loop
+select dr_table(i).id,dr_table(i).u1;
+end loop;
+end;
+$$
+call p4;
+dr_table(i).id	dr_table(i).u1
+1	id:1 | type:a | j:2
+dr_table(i).id	dr_table(i).u1
+1	id:1 | type:a | j:2
+call p4;
+dr_table(i).id	dr_table(i).u1
+1	id:1 | type:a | j:2
+dr_table(i).id	dr_table(i).u1
+1	id:1 | type:a | j:2
+drop PROCEDURE p4;
+#
+# test of db2.cursor%rowtype
+#
+CREATE or replace PROCEDURE p4() AS 
+CURSOR cur1 IS SELECT * FROM db1.tabl1;
+rec1 cur1%ROWTYPE;
+BEGIN
+OPEN cur1;
+LOOP
+fetch cur1 INTO rec1;
+EXIT WHEN cur1%NOTFOUND; 
+select rec1.id,rec1.u1;
+END LOOP;
+close cur1;
+END;
+$$
+call p4;
+rec1.id	rec1.u1
+1	id:1 | type:a | j:2
+rec1.id	rec1.u1
+1	id:1 | type:a | j:2
+call p4;
+rec1.id	rec1.u1
+1	id:1 | type:a | j:2
+rec1.id	rec1.u1
+1	id:1 | type:a | j:2
+drop PROCEDURE p4;
+#
+# test of db2.t1.col%type
+#
+CREATE or replace PROCEDURE p4() AS 
+rec1 db1.tabl1.u1%TYPE;
+BEGIN
+rec1 := db1.t_air(10,'eee',10);
+select rec1;
+END;
+$$
+call p4;
+rec1
+id:10 | type:eee | j:10
+call p4;
+rec1
+id:10 | type:eee | j:10
+drop PROCEDURE p4;
+drop table db1.tabl1;
+drop type db1.t_air;
+drop database db1;
+#
+# test of t1.type=t2.type
+#
+create table tabl1 (id int, u1 t_air);
+create table tabl2 (id int, u1 t_air);
+insert into tabl1 values (1,NULL),(2,t_air(2,2));
+insert into tabl2 values (1,NULL),(2,t_air(2,2));
+select * from tabl1,tabl2 where tabl1.id=tabl2.u1;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+#
+# test of bug5696
+#
+create table t2(id int AUTO_INCREMENT,f1 t_air default null,primary key (id)) partition by hash(id) partitions 15;
+drop table t2;
+create table t2(id int,f1 t_air default null);
+insert into t2 values(11,t_air(22,'SWWW'));
+select * from t2 a where a.f1 in (select b.f1 from t2 b) and a.f1 not in (select b.f1 from t2 b);
+id	f1
+select (select f1 from t2)+1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+select (select * from t2)+1;
+ERROR 21000: Operand should contain 1 column(s)
+drop table t2;
+drop table tabl1;
+drop table tabl2;
+drop type t_air;
+#
+# test of bug5754
+#
+create or replace type type1 is object(id1 int,name1 varchar(20));
+create table t1 (i int, f1 type1);
+insert into t1 values(1,type1(1,'aaaaa')),(null,type1(2,'bbbbb')),(null,type1(3,'ccccc')) ;
+CREATE VIEW v_t1 as select * from t1;
+SELECT * FROM v_t1;
+i	f1
+1	id1:1 | name1:aaaaa
+NULL	id1:2 | name1:bbbbb
+NULL	id1:3 | name1:ccccc
+create table s1(id int ,f1 type1);
+insert into s1 values(1,type1(777,'bbbbb')),(2,type1(888,'222aaa')),(3,type1(999,'bbb303')),(4,type1(404,'aaa404aaa'));
+WITH ali_s1 AS(SELECT id,f1 FROM s1 )   
+SELECT a.id,a.f1,b.id,b.f1 FROM ali_s1 a,s1 b WHERE a.f1=b.f1;
+id	f1	id	f1
+1	id1:777 | name1:bbbbb	1	id1:777 | name1:bbbbb
+2	id1:888 | name1:222aaa	2	id1:888 | name1:222aaa
+3	id1:999 | name1:bbb303	3	id1:999 | name1:bbb303
+4	id1:404 | name1:aaa404aaa	4	id1:404 | name1:aaa404aaa
+SELECT MAX(f1),MIN(f1) FROM t1;
+ERROR HY000: Incorrect arguments to max
+SELECT f1 , FIRST_VALUE(f1) over (order by i) a from t1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
+SELECT avg(f1) FROM t1;
+ERROR HY000: Incorrect arguments to avg
+SELECT MAX(f1),MIN(f1) FROM t1;
+ERROR HY000: Incorrect arguments to max
+SELECT f1 , nth_VALUE(f1,1) over (order by i) a from t1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
+select VAR_SAMP(f1) as a from t1;
+ERROR HY000: Incorrect arguments to var_samp
+SELECT DATE_SUB(f1,INTERVAL 1 MONTH) from t1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+drop VIEW v_t1;
+drop table t1;
+drop table s1;
+#
+# test of bug7331
+#
+CREATE OR REPLACE TYPE MingXiType AS OBJECT
+(GoodID varchar2(20),
+InCount int,
+ProviderID varchar(20));
+CREATE TABLE InStockTable (
+OrderID varchar(15) Not Null Primary Key,
+InDate date,
+OperatorID varchar(15),
+MingXi MingXiType);
+INSERT INTO InStockTable VALUES('20071012001',TO_DATE('2007-10-12','YYYY-MM-DD'),'007',MingXiType('G003',666,'1001'));
+INSERT INTO InStockTable VALUES('20071012002',TO_DATE('2007-10-12','YYYY-MM-DD'),'006',MingXiType('G004',888,'1002'));
+INSERT INTO InStockTable VALUES('20071012003',TO_DATE('2007-10-12','YYYY-MM-DD'),'005',MingXiType('G005',8888,'1003'));
+select * from InStockTable where MingXi in (1,2);
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+select * from InStockTable where MingXi in (type1(777,'bbbbb'),type1(777,'bbbbb'));
+ERROR HY000: inconsistent datatypes: expected 'test'.'MingXiType' got 'test'.'type1'
+select * from InStockTable where MingXiType('G001',200,'1001') in (MingXiType('G001',200,'1001'),MingXiType('G002',8888,'1002'));
+OrderID	InDate	OperatorID	MingXi
+20071012001	2007-10-12	007	GoodID:G003 | InCount:666 | ProviderID:1001
+20071012002	2007-10-12	006	GoodID:G004 | InCount:888 | ProviderID:1002
+20071012003	2007-10-12	005	GoodID:G005 | InCount:8888 | ProviderID:1003
+select * from InStockTable where MingXiType('G001',200,'1001') in (null,null);
+OrderID	InDate	OperatorID	MingXi
+delete from InStockTable where MingXi in (MingXiType('G001',200,'1001'),MingXiType('G002',8888,'1002'));
+select * from InStockTable;
+OrderID	InDate	OperatorID	MingXi
+20071012001	2007-10-12	007	GoodID:G003 | InCount:666 | ProviderID:1001
+20071012002	2007-10-12	006	GoodID:G004 | InCount:888 | ProviderID:1002
+20071012003	2007-10-12	005	GoodID:G005 | InCount:8888 | ProviderID:1003
+delete from InStockTable where MingXi in (MingXiType('G001',200,'1001'),MingXiType('G005',8888,'1003'));
+select * from InStockTable;
+OrderID	InDate	OperatorID	MingXi
+20071012001	2007-10-12	007	GoodID:G003 | InCount:666 | ProviderID:1001
+20071012002	2007-10-12	006	GoodID:G004 | InCount:888 | ProviderID:1002
+update InStockTable set MingXi=MingXiType('G001',111,'10011') where MingXi in (MingXiType('G001',200,'1001'),MingXiType('G004',888,'1002'));
+select * from InStockTable;
+OrderID	InDate	OperatorID	MingXi
+20071012001	2007-10-12	007	GoodID:G003 | InCount:666 | ProviderID:1001
+20071012002	2007-10-12	006	GoodID:G001 | InCount:111 | ProviderID:10011
+create or replace type type_table is varray(10) of type1;
+select * from InStockTable where type_table(type1(777,'bbbbb'),type1(778,'bbbbb1')) in (type_table(type1(777,'bbbbb'),type1(778,'bbbbb1')),type_table(type1(778,'bbbbb1')));
+OrderID	InDate	OperatorID	MingXi
+20071012001	2007-10-12	007	GoodID:G003 | InCount:666 | ProviderID:1001
+20071012002	2007-10-12	006	GoodID:G001 | InCount:111 | ProviderID:10011
+select * from InStockTable where MingXiType('G001',200,'1001') in (type_table(type1(777,'bbbbb'),type1(778,'bbbbb1')),type_table(type1(778,'bbbbb1')));
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+select * from InStockTable where MingXiType('G001',111,'10011')=MingXiType('G001',111,'10011');
+OrderID	InDate	OperatorID	MingXi
+20071012001	2007-10-12	007	GoodID:G003 | InCount:666 | ProviderID:1001
+20071012002	2007-10-12	006	GoodID:G001 | InCount:111 | ProviderID:10011
+select * from InStockTable where type_table(type1(777,'bbbbb'),type1(778,'bbbbb1'))=type_table(type1(777,'bbbbb'),type1(778,'bbbbb1'));
+OrderID	InDate	OperatorID	MingXi
+20071012001	2007-10-12	007	GoodID:G003 | InCount:666 | ProviderID:1001
+20071012002	2007-10-12	006	GoodID:G001 | InCount:111 | ProviderID:10011
+drop type type_table;
+drop table InStockTable;
+drop type MingXiType;
+drop type type1;
+#
+# test of create view tv as select
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+stu_record_val(0).id := 2;
+stu_record_val(0).score := 1;
+create or replace view tv as select stu_record_val(0).id,stu_record_val(0).name_d,stu_record_val(0).score;
+end;
+$$
+ERROR HY000: View's SELECT contains a variable or parameter
+#
+# test of create table tv as select
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+stu_record_val(0).id := 2;
+stu_record_val(0).score := 1;
+create table tv as select stu_record_val(0).id,stu_record_val(0).name_d,stu_record_val(0).score;
+select * from tv;
+end;
+$$
+call p1;
+id	name_d	score
+2	a	1
+drop table tv;
+drop PROCEDURE p1;
+#
+# test of create table tv as select
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+stu_record_val(0).id := 2;
+stu_record_val(0).score := 1;
+create table tv as select stu_record_val(0);
+end;
+$$
+call p1;
+ERROR 42000: This version of MySQL doesn't yet support 'create table as select udt/nested_table/ref_cursor'
+drop PROCEDURE p1;
+#
+# test of create table tv as select
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+stu_record_val(0).id := 2;
+stu_record_val(0).score := 1;
+create table tv as select stu_record_val;
+end;
+$$
+call p1;
+ERROR 42000: This version of MySQL doesn't yet support 'create table as select udt/nested_table/ref_cursor'
+drop PROCEDURE p1;
+#
+# test of create table tv as select
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+stu_record_val(0).id := 2;
+stu_record_val(0).score := 1;
+select * from (select stu_record_val);
+end;
+$$
+call p1;
+ERROR 42000: This version of MySQL doesn't yet support 'create table as select udt/nested_table/ref_cursor'
+drop PROCEDURE p1;
+#
+# test of create table tv as select
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+stu_record_val(0).id := 2;
+stu_record_val(0).score := 1;
+select * from (select stu_record_val);
+end;$$
+call p1;
+ERROR 42000: This version of MySQL doesn't yet support 'create table as select udt/nested_table/ref_cursor'
+drop PROCEDURE p1;
+#
+# test of bug7696
+#
+CREATE OR REPLACE type cb_type1 AS OBJECT(ID int,NAME VARCHAR2(20),PID NUMBER);
+create or replace type udt_test1 as object(
+col0 tinyint,
+col1 smallint,
+col2 mediumint,
+col3 int,
+col4 integer,
+col5 bigint,
+col6 decimal(10, 2),
+col7 dec(10, 2),
+col8 numeric(10, 2),
+col9 float,
+col10 double,
+col11 real,
+col12 bool,
+col13 boolean,
+col14 DATE,
+col15 DATETIME,
+col16 TIMESTAMP,
+col17 TIME,
+col18 YEAR,
+col19 CHAR(10),
+col20 VARCHAR(20),
+col21 BINARY(10),
+col22 VARBINARY(50),
+col31 bit,
+col32 enum('Êò•', 'Â§è', 'Áßã', 'ÂÜ¨', 'unknow'),
+col33 SET('A', 'B', 'C'),
+col35 number,
+col36 VARCHAR2(100),
+col37 PLS_INTEGER);
+CREATE  TABLE t_cb ( ID int,NAME VARCHAR2(20),PID NUMBER,f1  cb_type1);
+create table tab_of_object3 (a udt_test1);
+select * from (select * from t_cb) t5 full join (select * from tab_of_object3) t3 on t5.f1<>cb_type1(1,10,0);
+ID	NAME	PID	f1	a
+drop table t_cb;
+drop table tab_of_object3;
+drop type udt_test1;
+drop type cb_type1;
+#
+# test of bug8837
+#
+create database `db/1`;
+use `db/1`;
+create or replace type t_air as object(id int,type varchar(20));
+create table t21(id int AUTO_INCREMENT,f1 t_air default null,primary key (id)) partition by hash(id) partitions 15;
+drop table t21;
+drop type t_air;
+use test;
+drop database `db/1`;

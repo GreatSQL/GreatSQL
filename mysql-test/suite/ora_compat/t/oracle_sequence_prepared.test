@@ -1,0 +1,98 @@
+connect (conn1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn1_2,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+--connection conn1
+--echo [connect conn1]
+
+create sequence seq cache 2;
+create table t1(c1 int primary key, c2 int);
+insert into t1 values (1,1);
+
+--echo [# create sp and prepared statement]
+
+delimiter $$;
+
+create procedure sp_seq1()
+begin
+select seq.nextval from t1;
+end$$
+
+create procedure sp_seq2()
+begin
+select seq.nextval;
+end$$
+
+delimiter ;$$
+prepare prep_seq1 from 'select seq.nextval from t1';
+prepare prep_seq2 from 'select seq.nextval';
+
+--echo [# test sequence works well]
+call sp_seq1();
+call sp_seq1();
+call sp_seq1();
+call sp_seq2();
+call sp_seq2();
+call sp_seq2();
+execute prep_seq1;
+execute prep_seq1;
+execute prep_seq1;
+execute prep_seq2;
+execute prep_seq2;
+execute prep_seq2;
+
+--echo [# test drop sequence in other session]
+--connection conn1_2
+--echo [connect conn1_2]
+drop sequence seq;
+--connection conn1
+--echo [connect conn1]
+--error ER_BAD_FIELD_ERROR
+call sp_seq1();
+--error ER_UNKNOWN_TABLE
+call sp_seq2();
+--error ER_BAD_FIELD_ERROR
+execute prep_seq1;
+--error ER_UNKNOWN_TABLE
+execute prep_seq2;
+
+--echo [# test re-create sequence in other session]
+--connection conn1_2
+--echo [connect conn1_2]
+create sequence seq cache 2 start with 1000 increment by 10;
+--connection conn1
+--echo [connect conn1]
+call sp_seq1();
+call sp_seq2();
+execute prep_seq1;
+execute prep_seq2;
+
+--echo [# test alter sequence in other session]
+--connection conn1_2
+--echo [connect conn1_2]
+alter sequence seq increment by 100;
+--connection conn1
+--echo [connect conn1]
+call sp_seq1();
+call sp_seq1();
+call sp_seq1();
+call sp_seq2();
+call sp_seq2();
+call sp_seq2();
+execute prep_seq1;
+execute prep_seq1;
+execute prep_seq1;
+execute prep_seq2;
+execute prep_seq2;
+execute prep_seq2;
+
+--echo
+--echo [# clean up]
+drop procedure sp_seq1;
+drop procedure sp_seq2;
+drop prepare prep_seq1;
+drop prepare prep_seq2;
+drop sequence seq;
+drop table t1;
+
+--disconnect conn1
+--disconnect conn1_2

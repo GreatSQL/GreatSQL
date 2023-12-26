@@ -1,0 +1,1185 @@
+set sql_mode="oracle";
+
+--echo #
+--echo # test syntax
+--echo #
+create table cust_sales_category(location varchar2(1024), prod_category varchar(1024), customer_id int, sale_amount int);
+
+insert into cust_sales_category values('north',    'furniture',   2, 875);
+insert into cust_sales_category values('south',    'electronics', 2, 378);
+insert into cust_sales_category values('east',     'gardening',   4, 136);
+insert into cust_sales_category values('west',     'electronics', 3, 236);
+insert into cust_sales_category values('central',  'furniture',   3, 174);
+insert into cust_sales_category values('north',    'electronics', 1, 729);
+insert into cust_sales_category values('east',     'gardening',   2, 147);
+insert into cust_sales_category values('west',     'electronics', 3, 200);
+insert into cust_sales_category values('north',    'furniture',   4, 987);
+insert into cust_sales_category values('central',  'gardening',   4, 584);
+insert into cust_sales_category values('south',    'electronics', 3, 714);
+insert into cust_sales_category values('east',     'furniture',   1, 192);
+insert into cust_sales_category values('west',     'gardening',   3, 946);
+insert into cust_sales_category values('east',     'electronics', 4, 649);
+insert into cust_sales_category values('south',    'furniture',   2, 503);
+insert into cust_sales_category values('north',    'electronics', 1, 399);
+insert into cust_sales_category values('central',  'gardening',   3, 259);
+insert into cust_sales_category values('east',     'electronics', 3, 407);
+insert into cust_sales_category values('west',     'furniture',   1, 545);
+
+select * from cust_sales_category order by location;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+) order by location;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+) order by location, 3;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1 as one, 2, 3, 4, 5, 6)
+) order by location, one;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1 as one, 2, 3, 4, 5, 6)
+) where one = 192 order by location;
+
+(select * from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+)) union (select * from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+));
+
+select location, prod_category from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+) order by location;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount) as amount
+  for customer_id
+  in (1, 2, 3, 4)
+) order by location;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1 as a, 2 as b, 3 as c, 4 as d, 5 as e, 6 as f)
+) order by location;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount) as amount
+  for customer_id
+  in (1 as a, 2 as b, 3 as c, 4 as d, 5 as e, 6 as f)
+) order by location;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount) as sum_sales,
+  count(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+) order by location;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount) as sum_sales,
+  count(sale_amount) as count_sales
+  for customer_id
+  in (1, 2, 3, 4)
+) order by location;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount) as sum_sales,
+  count(sale_amount) as count_sales
+  for customer_id
+  in (1 as a, 2 as b, 3 as c, 4 as d, 5 as e, 6 as f)
+) order by location;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+)
+where location <> 'south' order by location;
+
+select * from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for (customer_id, prod_category)
+  in (
+    (1, 'furniture') as furn1,
+    (2, 'furniture') as furn2,
+    (1, 'electronics') as elec1,
+    (2, 'electronics') as elec2,
+    (3, 'central') as cent2
+  )
+) order by location;
+
+select * from (select * from cust_sales_category)
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+) order by location;
+
+select * from (select location, customer_id, sale_amount from cust_sales_category)
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+) order by location;
+
+select * from (select * from cust_sales_category where location <> 'south')
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+)  order by location;
+
+--error 1054
+select location, prod_category, sale_amount from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+);
+
+--error 1054
+select location, customer_id, sale_amount from cust_sales_category
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+);
+
+--error 1064
+select * from cust_sales_category
+where location <> 'south'
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+);
+
+--error 1064
+select * from cust_sales_category
+order by location
+pivot (
+  sum(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+);
+
+--error 1111
+select * from cust_sales_category
+pivot (
+  sum(sale_amount),
+  count(sale_amount)
+  for customer_id
+  in (1, 2, 3, 4)
+) order by location;
+
+drop table cust_sales_category;
+
+--echo #
+--echo # test aggrgate function
+--echo #
+create table pivot1(a int, b int, c int);
+insert into pivot1 values (1, 1, 1);
+insert into pivot1 values (2, 1, 2);
+insert into pivot1 values (3, 2, 1);
+insert into pivot1 values (4, 2, 2);
+insert into pivot1 values (5, 3, 1);
+insert into pivot1 values (6, 3, 2);
+insert into pivot1 values (null, 4, 1);
+insert into pivot1 values (null, 4, 2);
+
+create table pivot2(a int, b int, c int);
+insert into pivot2 values (1, 1, 1);
+insert into pivot2 values (2, 1, 2);
+insert into pivot2 values (3, 2, 1);
+insert into pivot2 values (4, 2, 2);
+insert into pivot2 values (5, 3, 1);
+insert into pivot2 values (6, 3, 2);
+
+insert into pivot2 values (1, 1, 11);
+insert into pivot2 values (1, 1, 11);
+insert into pivot2 values (2, 1, 12);
+insert into pivot2 values (2, 1, 12);
+insert into pivot2 values (3, 2, 11);
+insert into pivot2 values (3, 2, 11);
+insert into pivot2 values (4, 2, 12);
+insert into pivot2 values (4, 2, 12);
+insert into pivot2 values (5, 3, 11);
+insert into pivot2 values (5, 3, 11);
+insert into pivot2 values (6, 3, 12);
+insert into pivot2 values (6, 3, 12);
+
+create table pivot3(a int, b int, c int, d int);
+insert into pivot3 values (1, 1, 1, 1);
+insert into pivot3 values (2, 1, 2, 2);
+insert into pivot3 values (3, 2, 1, 1);
+insert into pivot3 values (4, 2, 2, 2);
+insert into pivot3 values (5, 3, 1, 1);
+insert into pivot3 values (6, 3, 2, 2);
+
+
+select * from pivot1 pivot(sum(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(sum(distinct c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(count(*) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(count(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(count(distinct c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(min(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(min(distinct c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(max(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(max(distinct c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(avg(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(avg(distinct c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(stddev(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(variance(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(listagg(c, ',') for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(json_arrayagg(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(json_objectagg('json_objectagg', c) for (a) in (1, 2, 3)) order by b;
+
+select * from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(sum(distinct c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(count(*) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(count(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(count(distinct c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(min(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(min(distinct c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(max(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(max(distinct c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(avg(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(avg(distinct c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(stddev(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(variance(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(listagg(c, ',') for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(json_arrayagg(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot1 pivot(json_objectagg('json_objectagg', c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+
+select * from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(sum(distinct c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(count(*) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(count(c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(count(distinct c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(min(c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(min(distinct c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(max(c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(max(distinct c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(avg(c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(avg(distinct c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(stddev(c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(variance(c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(listagg(c, ',') for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(json_arrayagg(c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+select * from pivot1 pivot(json_objectagg('json_objectagg', c) for (a) in (1, 2, 3, 4, 5, 6, null)) order by b;
+
+select * from pivot2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(sum(distinct c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(count(*) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(count(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(count(distinct c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(min(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(min(distinct c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(max(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(max(distinct c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(avg(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(avg(distinct c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(stddev(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(variance(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(listagg(c, ',') for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(json_arrayagg(c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+select * from pivot2 pivot(json_objectagg('json_objectagg', c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+
+select * from pivot3 pivot(sum(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(sum(distinct c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(count(*) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(count(distinct c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(min(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(min(distinct c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(max(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(max(distinct c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(avg(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(avg(distinct c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(stddev(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(variance(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(listagg(c, ',') for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(json_arrayagg(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(json_objectagg('json_objectagg', c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+
+select * from pivot3 pivot(sum(c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(sum(distinct c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(count(*) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(count(c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(count(distinct c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(min(c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(min(distinct c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(max(c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(max(distinct c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(avg(c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(avg(distinct c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(stddev(c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(variance(c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(listagg(c, ',') for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(json_arrayagg(c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(json_objectagg('json_objectagg', c) for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+
+
+create table pivot4(a int, b int, c int, d varchar2(64));
+insert into pivot4 values (1, 1, 1, 'one_1');
+insert into pivot4 values (2, 1, 2, 'two_2');
+insert into pivot4 values (3, 2, 1, 'one_3');
+insert into pivot4 values (4, 2, 2, 'two_4');
+insert into pivot4 values (5, 3, 1, 'one_5');
+insert into pivot4 values (6, 3, 2, 'two_6');
+
+select * from pivot4 pivot(json_objectagg(d, c) for (a) in (1, 2, 3, 4, 5, 6)) order by b;
+
+select * from pivot1 pivot(sum(c) for (a) in (1 as one, 2 as two, 3 three));
+select * from pivot1 pivot(sum(distinct c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(count(*) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(count(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(count(distinct c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(min(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(min(distinct c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(max(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(max(distinct c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(avg(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(avg(distinct c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(stddev(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(variance(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(listagg(c, ',') as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(json_arrayagg(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(json_objectagg('json_objectagg', c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+
+select * from pivot1 pivot(sum(c) as aggr for (a) in (1, 2, 3));
+select * from pivot1 pivot(sum(distinct c) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(count(*) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(count(c) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(count(distinct c) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(min(c) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(min(distinct c) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(max(c) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(max(distinct c) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(avg(c) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(avg(distinct c) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(stddev(c) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(variance(c) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(listagg(c, ',') as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(json_arrayagg(c) as aggr for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(json_objectagg('json_objectagg', c) as aggr for (a) in (1, 2, 3)) order by b;
+
+select * from pivot1 pivot(sum(c) as aggr for (a) in (1 as one, 2 as two, 3 three));
+select * from pivot1 pivot(sum(distinct c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(count(*) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(count(c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(count(distinct c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(min(c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(min(distinct c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(max(c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(max(distinct c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(avg(c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(avg(distinct c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(stddev(c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(variance(c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(listagg(c, ',') as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(json_arrayagg(c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(json_objectagg('json_objectagg', c) as aggr for (a) in (1 as one, 2 as two, 3 three)) order by b;
+
+select * from pivot1 pivot(sum(c) as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three));
+select * from pivot1 pivot(sum(distinct c) as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(count(*) as aggr1,sum(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(count(c) as aggr1,sum(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(count(distinct c) as aggr1,sum(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(min(c) as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(min(distinct c) as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(max(c) as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(max(distinct c) as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(avg(c) as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(avg(distinct c) as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(stddev(c) as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(variance(c) as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(listagg(c, ',') as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(json_arrayagg(c) as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+select * from pivot1 pivot(json_objectagg('json_objectagg', c) as aggr1,count(c) as aggr2 for (a) in (1 as one, 2 as two, 3 three)) order by b;
+
+
+select * from pivot1 pivot(sum(c) as aggr for (a) in (1+0, 1+1, 1+2));
+select * from pivot1 pivot(sum(distinct c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(count(*) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(count(c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(count(distinct c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(min(c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(min(distinct c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(max(c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(max(distinct c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(avg(c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(avg(distinct c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(stddev(c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(variance(c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(listagg(c, ',') as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(json_arrayagg(c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+select * from pivot1 pivot(json_objectagg('json_objectagg', c) as aggr for (a) in (1+0, 1+1, 1+2)) order by b;
+
+select * from pivot1 pivot(sum(c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2')));
+select * from pivot1 pivot(sum(distinct c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(count(*) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(count(c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(count(distinct c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(min(c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(min(distinct c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(max(c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(max(distinct c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(avg(c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(avg(distinct c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(stddev(c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(variance(c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(listagg(c, ',') as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(json_arrayagg(c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+select * from pivot1 pivot(json_objectagg('json_objectagg', c) as aggr for (a) in (upper('1')+upper('0'), upper('1')+upper('1'), upper('1')+upper('2'))) order by b;
+
+select * from pivot3 pivot(sum(c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(sum(distinct c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(count(*) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(count(c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(count(distinct c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(min(c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(min(distinct c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(max(c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(max(distinct c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(avg(c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(avg(distinct c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(stddev(c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(variance(c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(listagg(c, ',') as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(json_arrayagg(c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(json_objectagg('json_objectagg', c) as aggr for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+
+select * from pivot3 pivot(sum(c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(sum(distinct c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(count(*) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(count(c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(count(distinct c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(min(c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(min(distinct c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(max(c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(max(distinct c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(avg(c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(avg(distinct c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(stddev(c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(variance(c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(listagg(c, ',') as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(json_arrayagg(c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+select * from pivot3 pivot(json_objectagg('json_objectagg', c) as aggr for (a, d) in ((upper('1'),upper('1')), (upper('2'),upper('2')), (upper('3'),upper('1')), (upper('4'),upper('2')), (upper('5'),upper('1')), (upper('6'),upper('2')))) order by b;
+
+select * from pivot3 pivot(sum(c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(sum(distinct c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(count(*) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(count(c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(count(distinct c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(min(c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(min(distinct c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(max(c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(max(distinct c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(avg(c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(avg(distinct c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(stddev(c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(variance(c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(listagg(c, ',') as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(json_arrayagg(c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(json_objectagg('json_objectagg', c) as aggr,count(c) for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+
+select * from pivot3 pivot(sum(c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(sum(distinct c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(count(*) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(count(c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(count(distinct c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(min(c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(min(distinct c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(max(c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(max(distinct c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(avg(c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(avg(distinct c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(stddev(c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(variance(c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(listagg(c, ',') as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(json_arrayagg(c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+select * from pivot3 pivot(json_objectagg('json_objectagg', c) as aggr1,count(c) as aggr2 for (a, d) in ((1,1), (2,2), (3,1), (4,2), (5,1), (6,2))) order by b;
+
+--error 1111
+select * from pivot1 pivot(sum(c),count(c) for (a) in (1 as one, 2 as two, 3 three));
+--error 1111
+select * from pivot1 pivot(sum(distinct c),count(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+--error 1111
+select * from pivot1 pivot(count(*),sum(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+--error 1111
+select * from pivot1 pivot(count(c),sum(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+--error 1111
+select * from pivot1 pivot(count(distinct c),sum(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+--error 1111
+select * from pivot1 pivot(min(c),count(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+--error 1111
+select * from pivot1 pivot(min(distinct c),count(c) for (a) in (1 as one, 2 as two, 3 three)) order by b;
+--error 1111
+select * from pivot1 pivot(max(c),count(c) for (a) in (1, 2, 3)) order by b;
+--error 1111
+select * from pivot1 pivot(max(distinct c),count(c) for (a) in (1, 2, 3)) order by b;
+--error 1111
+select * from pivot1 pivot(avg(c),count(c) for (a) in (1, 2, 3)) order by b;
+--error 1111
+select * from pivot1 pivot(avg(distinct c),count(c) for (a) in (1, 2, 3)) order by b;
+--error 1111
+select * from pivot1 pivot(stddev(c),count(c) for (a) in (1, 2, 3)) order by b;
+--error 1111
+select * from pivot1 pivot(variance(c),count(c) for (a) in (1, 2, 3)) order by b;
+--error 1111
+select * from pivot1 pivot(listagg(c, ','),count(c) for (a) in (1, 2, 3)) order by b;
+--error 1111
+select * from pivot1 pivot(json_arrayagg(c),count(c) for (a) in (1, 2, 3)) order by b;
+--error 1111
+select * from pivot1 pivot(json_objectagg('json_objectagg', c),count(c) for (a) in (1, 2, 3)) order by b;
+
+--error 3994
+select * from pivot1 pivot(sum(c) for (a) in (a));
+--error 3994
+select * from pivot1 pivot(sum(distinct c) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(count(*) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(count(c) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(count(distinct c) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(min(c) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(min(distinct c) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(max(c) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(max(distinct c) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(avg(c) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(avg(distinct c) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(stddev(c) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(variance(c) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(listagg(c, ',') for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(json_arrayagg(c) for (a) in (a)) order by b;
+--error 3994
+select * from pivot1 pivot(json_objectagg('json_objectagg', c) for (a) in (a)) order by b;
+--error 3593
+select * from pivot1 pivot( sum(c) over(partition by b) for(a) in(1, 2, 3, 4, 5, 6));
+
+
+--echo #
+--echo # test mysql-specific aggregate functions
+--echo #
+select * from pivot1 pivot(bit_and(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(bit_or(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(bit_xor(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot1 pivot(std(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot2 pivot(stddev_pop(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot2 pivot(stddev_samp(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot2 pivot(var_pop(c) for (a) in (1, 2, 3)) order by b;
+select * from pivot2 pivot(var_samp(c) for (a) in (1, 2, 3)) order by b;
+--error 1111
+select * from pivot1 pivot(group_concat(c) for (a) in (1, 2, 3)) order by b;
+--error 1111
+select * from pivot1 pivot(wm_concat(c) for (a) in (1, 2, 3)) order by b;
+
+--echo #
+--echo # test routine
+--echo #
+create type t_pair as object(id int, name varchar2(1024));
+--error 1235
+select * from pivot1 pivot(sum(t_pair(1, 'wang')) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
+--error 7537
+select * from pivot1 pivot(sum(t_pair(1, 'wang').id) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
+drop type t_pair;
+
+delimiter |;
+
+create or replace procedure p1 as
+begin
+  select * from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
+end |
+call p1()|
+call p1()|
+drop procedure p1|
+
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 0,
+  na  varchar2(20) := '',
+  score float := 0
+);
+stu_record_val stu_record;
+begin
+  stu_record_val.id := 1;
+  stu_record_val.na := 'aaa';
+  stu_record_val.score := 3.22;
+  select * from pivot1 pivot(sum(stu_record_val) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
+end |
+--error 1235
+call p1()|
+--error 1235
+call p1()|
+drop procedure p1|
+
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 0,
+  na  varchar2(20) := '',
+  score float := 0
+);
+stu_record_val stu_record;
+begin
+  stu_record_val.id := 1;
+  stu_record_val.na := 'aaa';
+  stu_record_val.score := 3.22;
+  select * from pivot1 pivot(sum(stu_record_val.score) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
+end |
+call p1()|
+call p1()|
+drop procedure p1|
+
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 0,
+  na  varchar2(20) := '',
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+  stu_record_val(0).id := 1;
+  stu_record_val(0).na := 'aaa';
+  stu_record_val(0).score := 3.22;
+  stu_record_val(1).id := 1;
+  stu_record_val(1).na := 'aaa';
+  stu_record_val(1).score := 3.22;
+  select * from pivot1 pivot(sum(stu_record_val(0)) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
+end |
+--error 1235
+call p1()|
+--error 1235
+call p1()|
+drop procedure p1|
+
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 0,
+  na  varchar2(20) := '',
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+  stu_record_val(0).id := 1;
+  stu_record_val(0).na := 'aaa';
+  stu_record_val(0).score := 3.22;
+  stu_record_val(1).id := 2;
+  stu_record_val(1).na := 'aaa';
+  stu_record_val(1).score := 4.22;
+  select * from pivot1 pivot(sum(stu_record_val(0).score) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
+  select * from pivot1 pivot(sum(stu_record_val(1).score) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
+end |
+call p1()|
+call p1()|
+drop procedure p1|
+
+create or replace function f1() return float as
+  n float := 0;
+begin
+  select `1` from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) where b = 1 order by b into n;
+  return n;
+end |
+select f1()|
+select f1()|
+drop function f1|
+
+create or replace function f1() return float as
+  n float := 0;
+  type stu_record is record(
+    id int := 0,
+    na  varchar2(20) := '',
+    score float := 0
+  );
+  stu_record_val stu_record;
+begin
+  stu_record_val.id := 1;
+  stu_record_val.na := 'aaa';
+  stu_record_val.score := 3.22;
+  select `1` from pivot1 pivot(sum(stu_record_val) for (a) in (1, 2, 3, 4, 5 ,6)) where b = 1 and c = 1 order by b into n;
+  return n;
+end |
+--error 1235
+select f1()|
+--error 1235
+select f1()|
+drop function f1|
+
+create or replace function f1() return float as
+  n float := 0;
+  type stu_record is record(
+    id int := 0,
+    na  varchar2(20) := '',
+    score float := 0
+  );
+  stu_record_val stu_record;
+begin
+  stu_record_val.id := 1;
+  stu_record_val.na := 'aaa';
+  stu_record_val.score := 3.22;
+  select `1` from pivot1 pivot(sum(stu_record_val.score) for (a) in (1, 2, 3, 4, 5 ,6)) where b = 1 and c = 1 order by b into n;
+  return n;
+end |
+select f1()|
+select f1()|
+drop function f1|
+
+create or replace function f1() return float as
+  n float := 0;
+  type stu_record is record(
+    id int := 0,
+    na  varchar2(20) := '',
+    score float := 0
+  );
+  type tklist is table of stu_record index by binary_integer;
+  stu_record_val tklist;
+begin
+  stu_record_val(0).id := 1;
+  stu_record_val(0).na := 'aaa';
+  stu_record_val(0).score := 3.22;
+  select `1` from pivot1 pivot(sum(stu_record_val) for (a) in (1, 2, 3, 4, 5 ,6)) where b = 1 and c = 1 order by b into n;
+  return n;
+end |
+--error 1235
+select f1()|
+--error 1235
+select f1()|
+drop function f1|
+
+create or replace function f1() return float as
+  n float := 0;
+  type stu_record is record(
+    id int := 0,
+    na  varchar2(20) := '',
+    score float := 0
+  );
+  type tklist is table of stu_record index by binary_integer;
+  stu_record_val tklist;
+begin
+  stu_record_val(0).id := 1;
+  stu_record_val(0).na := 'aaa';
+  stu_record_val(0).score := 3.22;
+  select `1` from pivot1 pivot(sum(stu_record_val(0)) for (a) in (1, 2, 3, 4, 5 ,6)) where b = 1 and c = 1 order by b into n;
+  return n;
+end |
+--error 1235
+select f1()|
+--error 1235
+select f1()|
+drop function f1|
+
+create or replace function f1() return float as
+  n float := 0;
+  type stu_record is record(
+    id int := 0,
+    na  varchar2(20) := '',
+    score float := 0
+  );
+  type tklist is table of stu_record index by binary_integer;
+  stu_record_val tklist;
+begin
+  stu_record_val(0).id := 1;
+  stu_record_val(0).na := 'aaa';
+  stu_record_val(0).score := 3.22;
+  stu_record_val(1).id := 2;
+  stu_record_val(1).na := 'bbb';
+  stu_record_val(1).score := 4.22;
+  select `1` from pivot1 pivot(sum(stu_record_val(1).score) for (a) in (1, 2, 3, 4, 5 ,6)) where b = 1 and c = 1 order by b into n;
+  return n;
+end |
+select f1()|
+select f1()|
+drop function f1|
+
+delimiter ;|
+
+create view pivot_view as select * from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
+select * from pivot_view;
+drop view pivot_view;
+
+create table pivot_tmp select * from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+select * from pivot_tmp;
+insert into pivot_tmp select * from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)); 
+select * from pivot_tmp;
+drop table pivot_tmp;
+
+--echo #
+--echo # test other
+--echo #
+select sum(`1`) from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+--error 1054
+select sum(a) from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+--error 1054
+select sum(c) from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+
+# where、order、limit
+select * from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) where b > 2;
+--error 1064
+select * from pivot1 where b > 1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+select * from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
+--error 1064
+select * from pivot1 order by b pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+select * from pivot1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) limit 1;
+--error 1064
+select * from pivot1 limit 1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+
+# join
+select * from pivot1 join pivot2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+--error 1054
+select * from pivot1 t1 join pivot2 t1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) t1 on t1.a=t2.a;
+--error 1054
+select * from pivot1 t1 join pivot2 t2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) t1 on t1.a=t2.a;
+select * from pivot1 t1 join pivot2 t1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) t2 on t1.a=t2.b;
+select * from pivot1 t1 join pivot2 t2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) t2 on t1.a=t2.b;
+select * from pivot1 t1 join pivot2 t1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) t1 on t1.a=t1.a;
+select * from pivot1 t1 join pivot2 t2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) t1 on t1.a=t1.a;
+--error 1052
+select * from pivot1 t1 join pivot2 t1 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) t1 on t1.a=t1.b;
+--error 1052
+select * from pivot1 t1 join pivot2 t2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) t1 on t1.a=t1.b;
+select * from pivot1,pivot2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+--error 1052
+select * from (pivot1,pivot2) pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+
+select * from pivot1 t1 join pivot2 t2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+select * from pivot1 t1 natural join pivot2 t2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+select * from pivot1 t1 natural inner join pivot2 t2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6))  order by 1;
+select * from pivot1 t1 natural left join pivot2 t2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6))  order by 1;
+select * from pivot1 t1 natural right join pivot2 t2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+
+select * from pivot1 t1 join pivot2 t2 using(a, b, c) pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+select * from pivot1 t1 left join pivot2 t2 using(a, b, c) pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+select * from pivot1 t1 right join pivot2 t2 using(a, b, c) pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+--error 1235
+select * from pivot1 t1 full join pivot2 t2 using(a, b, c) pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+
+# There are multiple columns with the same name in the table
+--error 1060
+select * from pivot1 t1 join pivot2 t2 using(a, c) pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1; 
+--error 1060
+select * from pivot1 t1 left join pivot2 t2 using(a, c) pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+--error 1060
+select * from pivot1 t1 right join pivot2 t2 using(a, c) pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+--error 1235
+select * from pivot1 t1 full join pivot2 t2 using(a, c) pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+
+
+create table pivot_join(d int, e int, f int);
+insert into pivot_join values (1, 1, 1);
+insert into pivot_join values (2, 1, 2);
+insert into pivot_join values (3, 2, 1);
+insert into pivot_join values (4, 2, 2);
+insert into pivot_join values (5, 3, 1);
+insert into pivot_join values (6, 3, 2);
+select * from pivot_join;
+select * from pivot1 t1 join pivot_join t2 on t1.a=t2.d pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+select * from pivot1 t1 left join pivot_join t2 on t1.a=t2.d pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+select * from pivot1 t1 right join pivot_join t2 on t1.a=t2.d pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+select * from pivot1 t1 full join  pivot_join t2 on t1.a=t2.d pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+SELECT * FROM {OJ pivot1} pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+SELECT * FROM {OJ pivot1 t1 join pivot_join t2 on t1.a=t2.d} pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+SELECT * FROM {OJ pivot1 t1 left join pivot_join t2 on t1.a=t2.d} pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+SELECT * FROM {OJ pivot1 t1 right join pivot_join t2 on t1.a=t2.d} pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+SELECT * FROM {OJ pivot1 t1 full join pivot_join t2 on t1.a=t2.d} pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) order by 1;
+drop table pivot_join;
+
+# union
+select b,c from pivot1 where b = 1 union select b,`1` from pivot2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+select * from (select * from pivot1 where b = 1 union select * from pivot2) pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6));
+
+# subquery
+select * from (select * from pivot2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)));
+select * from pivot1 where b in (select b from pivot2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)));
+select * from pivot1 where exists (select b from pivot2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)));
+select b, (select `1` from pivot2 pivot(sum(c) for (a) in (1, 2, 3, 4, 5 ,6)) where b = 1) from pivot1;
+select *
+    from
+      json_table(
+        '[{"a":"3"},{"a":2},{"b":1},{"a":0},{"a":888}]',
+        '$[*]'
+        columns(
+          rowid for ordinality,
+          ac varchar(100) path '$.a' default '111' on empty default '999' on error,
+          aj json path '$.a' default '{"x": 333}' on empty,
+          bx int exists path '$.b'
+        )
+      ) as tt pivot(sum(bx) for (rowid) in (1, 2, 3, 4, 5)) order by ac;
+
+--echo #
+--echo # Review Case
+--echo #
+create table t1(id varchar(10));
+insert into t1 values('B');
+insert into t1 values('A');
+
+create table SalesOrder
+(
+  shop varchar(50),
+  product varchar(50),
+  sales double
+) engine=MyISAM;
+insert into SalesOrder values('shopA', 'A', 10);
+insert into SalesOrder values('shopA', 'B', 1.7976931348623157E+10);
+insert into SalesOrder values('shopA', 'B', 2.7976931348623157E-10);
+insert into SalesOrder values('shopA', 'B', 75);
+insert into SalesOrder values('shopA', 'C', 39);
+insert into SalesOrder values('shopB', 'A', 25);
+insert into SalesOrder values('shopB', 'B', 9801);
+--error 1060
+select * from SalesOrder pivot(sum(sales) for product in ('A', ('A')));
+select * from SalesOrder pivot(sum(sales) for product in ('A', (select * from t1 where id='A')));
+drop table t1;
+
+delimiter |;
+create or replace procedure p1() as    
+  a varchar(200):='A';  
+  b varchar(200):='B';  
+begin   
+  execute immediate 'select * from SalesOrder pivot(max(sales) for product in (?, ?))' using a,b;
+end;|
+--error 3994
+call p1()|
+--error 3994
+call p1()|
+drop procedure p1|
+
+create or replace procedure p1() as    
+  a varchar(200):='A';  
+  b varchar(200):='B';  
+begin  
+  set @a := 'A';
+  set @b := 'B';
+  prepare stmt1 from 'select * from SalesOrder pivot(max(sales) for product in (?, ?))';
+  execute stmt1 using @a, @b;
+end;|
+--error 3994
+call p1()|
+--error 3994
+call p1()|
+drop procedure p1|
+delimiter ;|
+
+create table test(
+  shop varchar(50),
+  product varchar(50),
+  sales double,
+  name varchar(50) default 'greatdb',
+  datet timestamp null default null on update current_timestamp
+);
+--error 1052
+select t1.*,t2.* from { oj SalesOrder t1 left outer join test t2 on (t1.shop=t2.shop) } pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from { oj SalesOrder t1 left outer join test t2 on (t1.shop=t2.shop) } pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from { oj SalesOrder t1 left outer join test t2 on (t1.shop=t2.shop) } pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from { oj SalesOrder t1 left outer join test t2 on (t1.shop=t2.shop) } pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from { oj SalesOrder t1 left outer join test t2 on (t1.shop=t2.shop) } pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from { oj SalesOrder t1 left outer join test t2 on (t1.shop=t2.shop) } pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from { oj SalesOrder t1 left outer join test t2 on (t1.shop=t2.shop) } pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from { oj SalesOrder t1 left outer join test t2 on (t1.shop=t2.shop) } pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from { oj SalesOrder t1 left outer join test t2 on (t1.shop=t2.shop) } pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from { oj SalesOrder t1 left outer join test t2 on (t1.shop=t2.shop) } pivot(max(sales) for product in ('A', 'B'));
+
+--error 1052
+select t1.*,t2.* from SalesOrder t1 left join test t2 on t1.shop=t2.shop  pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from SalesOrder t1 left join test t2 on t1.shop=t2.shop  pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from SalesOrder t1 left join test t2 on t1.shop=t2.shop  pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from SalesOrder t1 left join test t2 on t1.shop=t2.shop  pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from SalesOrder t1 left join test t2 on t1.shop=t2.shop  pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from SalesOrder t1 left join test t2 on t1.shop=t2.shop  pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from SalesOrder t1 left join test t2 on t1.shop=t2.shop  pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from SalesOrder t1 left join test t2 on t1.shop=t2.shop  pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from SalesOrder t1 left join test t2 on t1.shop=t2.shop  pivot(max(sales) for product in ('A', 'B'));
+--error 1052
+select t1.*,t2.* from SalesOrder t1 left join test t2 on t1.shop=t2.shop  pivot(max(sales) for product in ('A', 'B'));
+
+--error 1111
+select * from test pivot(max(max(sales)) for product in ('A', 'B')) a;
+--error 1111
+select * from test pivot(max(max(sales)) for product in ('A', 'B')) a;
+--error 1111
+select * from test pivot(max(max(sales)) for product in ('A', 'B')) a;
+--error 1111
+select * from test pivot(max(max(sales)) for product in ('A', 'B')) a;
+--error 1111
+select * from test pivot(max(max(sales)) for product in ('A', 'B')) a;
+--error 1111
+select * from test pivot(max(max(sales)) for product in ('A', 'B')) a;
+--error 1111
+select * from test pivot(max(max(sales)) for product in ('A', 'B')) a;
+--error 1111
+select * from test pivot(max(max(sales)) for product in ('A', 'B')) a;
+--error 1111
+select * from test pivot(max(max(sales)) for product in ('A', 'B')) a;
+--error 1111
+select * from test pivot(max(max(sales)) for product in ('A', 'B')) a;
+
+--error 1241
+select * from test pivot(max(sales) for (product,shop) in ('A', 'shopA')) a;
+--error 1241
+select * from test pivot(max(sales) for (product,shop) in ('A', 'shopA')) a;
+--error 1241
+select * from test pivot(max(sales) for (product,shop) in ('A', 'shopA')) a;
+--error 1241
+select * from test pivot(max(sales) for (product,shop) in ('A', 'shopA')) a;
+--error 1241
+select * from test pivot(max(sales) for (product,shop) in ('A', 'shopA')) a;
+--error 1241
+select * from test pivot(max(sales) for (product,shop) in ('A', 'shopA')) a;
+--error 1241
+select * from test pivot(max(sales) for (product,shop) in ('A', 'shopA')) a;
+--error 1241
+select * from test pivot(max(sales) for (product,shop) in ('A', 'shopA')) a;
+--error 1241
+select * from test pivot(max(sales) for (product,shop) in ('A', 'shopA')) a;
+--error 1241
+select * from test pivot(max(sales) for (product,shop) in ('A', 'shopA')) a;
+
+create table pivot5(aa varchar2(64), bb varchar2(64), cc varchar2(64), dd int);
+insert into pivot5 values ('aa', 'bb', 'x', 1);
+insert into pivot5 values ('aa', 'bb', 'y', 2);
+insert into pivot5 values ('aa', 'bb', 'z', 3);
+insert into pivot5 values ('aa', 'bb', 'x', 3);
+insert into pivot5 values ('aa', 'bb', 'y', 2);
+insert into pivot5 values ('aa', 'bb', 'z', 1);
+insert into pivot5 values ('cc', 'dd', 'x', 1);
+insert into pivot5 values ('cc', 'dd', 'y', 2);
+insert into pivot5 values ('cc', 'dd', 'z', 3);
+insert into pivot5 values ('cc', 'dd', 'x', 3);
+insert into pivot5 values ('cc', 'dd', 'y', 2);
+insert into pivot5 values ('cc', 'dd', 'z', 1);
+select * from pivot5;
+select * from pivot5 pivot(sum(dd) for aa in ('aa', 'cc')) order by 1, 2;
+select * from pivot5 pivot(sum(dd) for (aa, bb) in (('aa', 'bb'), ('cc', 'dd'))) order by 1, 2;
+
+drop table test;
+drop table SalesOrder;
+drop table pivot1;
+drop table pivot2;
+drop table pivot3;
+drop table pivot4;
+drop table pivot5;
+
+--error 1064
+create table pivot(id int);
+--error 1064
+create table t1(pivot int);
+
+delimiter |;
+--error 1064
+create procedure pivot() as begin select 'abc'; end;|
+--error 1064
+create procedure p1(pivot varchar2(64)) as begin select pivot; end;|
+--error 1064
+create function pivot() return varchar2(64) as begin return 'abc'; end;|
+--error 1064
+create function f1(pivot varchar2(64)) return varchar2(64) as begin return pivot; end;|
+
+set sql_mode=default;|
+
+create table pivot(id int)|
+insert into pivot(id) values(10)|
+select * from pivot|
+drop table pivot|
+
+create table t1(pivot int)|
+insert into t1(pivot) values(10)|
+select pivot from t1|
+drop table t1|
+
+create table pivot(pivot int)|
+insert into pivot(pivot) values(10)|
+select pivot from pivot|
+drop table pivot|
+
+create procedure pivot() begin select 'abc'; end;|
+call pivot()|
+call pivot()|
+drop procedure pivot|
+
+create procedure p1(pivot varchar2(64)) begin select pivot; end;|
+call p1('abc')|
+call p1('abc')|
+drop procedure p1|
+
+create procedure pivot(pivot varchar2(64)) begin select pivot; end;|
+call pivot('abc')|
+call pivot('abc')|
+drop procedure pivot|
+
+create function pivot() returns varchar2(64) begin return 'abc'; end;|
+select test.pivot()|
+select test.pivot()|
+drop function pivot|
+
+create function f1(pivot varchar2(64)) returns varchar2(64) begin return pivot; end;|
+select f1('abc')|
+select f1('abc')|
+drop function f1|
+
+create function pivot(pivot varchar2(64)) returns varchar2(64) begin return pivot; end;|
+select test.pivot('abc')|
+select test.pivot('abc')|
+drop function pivot|
+
+delimiter ;|

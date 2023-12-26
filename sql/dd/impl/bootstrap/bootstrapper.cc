@@ -1168,15 +1168,22 @@ bool initialize_dd_properties(THD *thd) {
   uint actual_version = dd::DD_VERSION;
   uint actual_server_version = MYSQL_VERSION_ID;
   uint upgraded_server_version = MYSQL_VERSION_ID;
+  uint actual_greatdb_dd_version = GREATDB_DD_VERSION_ID;
+  uint upgraded_greatdb_dd_version = GREATDB_DD_VERSION_ID;
 
   bootstrap::DD_bootstrap_ctx::instance().set_actual_dd_version(actual_version);
   bootstrap::DD_bootstrap_ctx::instance().set_upgraded_server_version(
       actual_server_version);
+  bootstrap::DD_bootstrap_ctx::instance().set_actual_greatdb_dd_version(
+      actual_greatdb_dd_version);
+  bootstrap::DD_bootstrap_ctx::instance().set_upgraded_greatdb_dd_version(
+      upgraded_greatdb_dd_version);
 
   if (!opt_initialize) {
     bool exists = false;
     bool exists_server = false;
     bool exists_upgraded_version = false;
+    bool exists_upgraded_greatdb_dd_version = false;
 
     // Check 'DD_version' too in order to catch an upgrade from 8.0.3.
     if (dd::tables::DD_properties::instance().get(thd, "DD_VERSION",
@@ -1225,13 +1232,41 @@ bool initialize_dd_properties(THD *thd) {
         !exists_server)
       return true;
 
+    /* if 'GREATDB_DD_VERSION' is empty, it's upgrade from 8.0.25.1, use 1. */
+    if (dd::tables::DD_properties::instance().get(thd, "GREATDB_DD_VERSION",
+                                                  &actual_greatdb_dd_version,
+                                                  &exists_server) ||
+        actual_greatdb_dd_version == 0)
+      actual_greatdb_dd_version = GREATDB_INITIAL_DD_VERSION_ID;
+
+    if (actual_greatdb_dd_version != GREATDB_DD_VERSION_ID) {
+      if (actual_greatdb_dd_version < GREATDB_DD_VERSION_ID &&
+          opt_no_dd_upgrade) {
+        push_deprecated_warn(thd, "--no-dd-upgrade", "--upgrade=NONE");
+        LogErr(ERROR_LEVEL, ER_DD_UPGRADE_OFF);
+        return true;
+      }
+
+      bootstrap::DD_bootstrap_ctx::instance().set_actual_greatdb_dd_version(
+          actual_greatdb_dd_version);
+    }
+
     if (dd::tables::DD_properties::instance().get(
             thd, "MYSQLD_VERSION_UPGRADED", &upgraded_server_version,
             &exists_upgraded_version) ||
         !exists_upgraded_version)
       upgraded_server_version = actual_server_version;
+
+    if (dd::tables::DD_properties::instance().get(
+            thd, "GREATDB_DD_VERSION_UPGRADED", &upgraded_greatdb_dd_version,
+            &exists_upgraded_greatdb_dd_version) ||
+        !exists_upgraded_greatdb_dd_version)
+      upgraded_greatdb_dd_version = GREATDB_INITIAL_DD_VERSION_ID;
+
     bootstrap::DD_bootstrap_ctx::instance().set_upgraded_server_version(
         upgraded_server_version);
+    bootstrap::DD_bootstrap_ctx::instance().set_upgraded_greatdb_dd_version(
+        upgraded_greatdb_dd_version);
 
     if (DBUG_EVALUATE_IF("simulate_mysql_upgrade_skip_pending", true,
                          actual_server_version != upgraded_server_version &&
@@ -1859,7 +1894,9 @@ bool update_versions(THD *thd, bool is_dd_upgrade_57) {
         dd::tables::DD_properties::instance().set(thd, "MYSQLD_VERSION_HI",
                                                   MYSQL_VERSION_ID) ||
         dd::tables::DD_properties::instance().set(thd, "MYSQLD_VERSION",
-                                                  MYSQL_VERSION_ID))
+                                                  MYSQL_VERSION_ID) ||
+        dd::tables::DD_properties::instance().set(thd, "GREATDB_DD_VERSION",
+                                                  GREATDB_DD_VERSION_ID))
       return dd::end_transaction(thd, true);
 
     if (is_dd_upgrade_57) {
@@ -1870,19 +1907,25 @@ bool update_versions(THD *thd, bool is_dd_upgrade_57) {
           bootstrap::SERVER_VERSION_50700);
     } else {
       if (dd::tables::DD_properties::instance().set(
-              thd, "MYSQLD_VERSION_UPGRADED", MYSQL_VERSION_ID))
+              thd, "MYSQLD_VERSION_UPGRADED", MYSQL_VERSION_ID) ||
+          dd::tables::DD_properties::instance().set(
+              thd, "GREATDB_DD_VERSION_UPGRADED", GREATDB_DD_VERSION_ID))
         return true;
       bootstrap::DD_bootstrap_ctx::instance().set_upgraded_server_version(
           MYSQL_VERSION_ID);
+      bootstrap::DD_bootstrap_ctx::instance().set_upgraded_greatdb_dd_version(
+          GREATDB_DD_VERSION_ID);
     }
   } else {
     uint mysqld_version_lo = 0;
     uint mysqld_version_hi = 0;
     uint mysqld_version = 0;
+    uint greatdb_dd_version = 0;
     uint upgraded_server_version = 0;
     bool exists_lo = false;
     bool exists_hi = false;
     bool exists = false;
+    bool exists_greatdb_dd_version = false;
     bool exists_upgraded_version = false;
     if ((dd::tables::DD_properties::instance().get(
              thd, "MYSQLD_VERSION_LO", &mysqld_version_lo, &exists_lo) ||
@@ -1894,6 +1937,11 @@ bool update_versions(THD *thd, bool is_dd_upgrade_57) {
                                                    &mysqld_version, &exists) ||
          !exists))
       return dd::end_transaction(thd, true);
+
+    /* read greatdb_dd_version. Maybe not exists (retrun true) */
+    dd::tables::DD_properties::instance().get(thd, "GREATDB_DD_VERSION",
+                                              &greatdb_dd_version,
+                                              &exists_greatdb_dd_version);
 
     if (dd::tables::DD_properties::instance().get(
             thd, "MYSQLD_VERSION_UPGRADED", &upgraded_server_version,
@@ -1915,7 +1963,11 @@ bool update_versions(THD *thd, bool is_dd_upgrade_57) {
                                                    MYSQL_VERSION_ID)) ||
         (mysqld_version != MYSQL_VERSION_ID &&
          dd::tables::DD_properties::instance().set(thd, "MYSQLD_VERSION",
-                                                   MYSQL_VERSION_ID)))
+                                                   MYSQL_VERSION_ID)) ||
+        ((!exists_greatdb_dd_version ||
+          greatdb_dd_version != GREATDB_DD_VERSION_ID) &&
+         dd::tables::DD_properties::instance().set(thd, "GREATDB_DD_VERSION",
+                                                   GREATDB_DD_VERSION_ID)))
       return dd::end_transaction(thd, true);
 
     /*

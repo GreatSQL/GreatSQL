@@ -42,6 +42,7 @@
 
 class Item;
 class Item_param;
+class Item_cache;
 class Prepared_statement;
 class Query_result_send;
 class String;
@@ -124,9 +125,10 @@ void mysqld_stmt_execute(THD *thd, Prepared_statement *stmt, bool has_new_types,
 void mysqld_stmt_close(THD *thd, Prepared_statement *stmt);
 void mysql_sql_stmt_prepare(THD *thd);
 void mysql_sql_stmt_execute(THD *thd);
-void mysql_sql_stmt_execute_immediate(THD *thd);
 void mysql_sql_stmt_close(THD *thd);
 void mysqld_stmt_fetch(THD *thd, Prepared_statement *stmt, ulong num_rows);
+bool dbms_sql_stmt_fetch(THD *thd, Prepared_statement *stmt);
+bool dbms_sql_stmt_reset(Prepared_statement *stmt);
 void mysqld_stmt_reset(THD *thd, Prepared_statement *stmt);
 void mysql_stmt_get_longdata(THD *thd, Prepared_statement *stmt,
                              uint param_number, uchar *longdata, ulong length);
@@ -349,6 +351,11 @@ class Prepared_statement final {
   /// Memory allocation arena, for permanent allocations to statement.
   Query_arena m_arena;
 
+  // true need reset param after execute , false when execute immediate will
+  // clean param;
+  bool reset_param{true};
+  bool has_into_clause{false};
+
   /// Array of parameters used for statement, may be NULL if there are none.
   Item_param **m_param_array{nullptr};
 
@@ -375,12 +382,18 @@ class Prepared_statement final {
   /// The query string associated with this statement.
   LEX_CSTRING m_query_string{NULL_CSTR};
 
-  /// Performance Schema interface for a prepared statement.
+  /* Performance Schema interface for a prepared statement. */
   PSI_prepared_stmt *m_prepared_stmt{nullptr};
+
+  bool dbms_fake_result{false};
+  mem_root_unordered_map<longlong, Item_cache *> *m_dbms_sql_define_column{
+      nullptr};
 
  private:
   /// True if statement is used with cursor, false if used in regular execution
   bool m_used_as_cursor{false};
+  /// Query result used when execute immediate into
+  Query_result *m_into_result{nullptr};
 
   /// Query result used when statement is used in regular execution.
   Query_result *m_regular_result{nullptr};
@@ -438,17 +451,17 @@ class Prepared_statement final {
   void deallocate(THD *thd);
   bool prepare(THD *thd, const char *packet, size_t packet_length,
                Item_param **orig_param_array);
-  bool execute_immediate(THD *thd, const char *query, uint query_length);
   bool execute_loop(THD *thd, String *expanded_query, bool open_cursor);
   bool execute_server_runnable(THD *thd, Server_runnable *server_runnable);
 #ifdef HAVE_PSI_PS_INTERFACE
   PSI_prepared_stmt *get_PS_prepared_stmt() { return m_prepared_stmt; }
 #endif
   /* Destroy this statement */
-  void deallocate_immediate(THD *thd);
   bool set_parameters(THD *thd, String *expanded_query, bool has_new_types,
                       PS_PARAM *parameters);
   bool set_parameters(THD *thd, String *expanded_query);
+  bool set_parameters(THD *thd, String *expanded_query,
+                      mem_root_deque<Item *> *parameters);
   void trace_parameter_types(THD *thd);
   void close_cursor();
 
@@ -456,6 +469,15 @@ class Prepared_statement final {
   void set_state_for_prepare(THD *);
   /// whether if state is inconsistent for prepare statement
   bool is_state_inconsistent(THD *);
+  void set_query_result(Query_result *res) { m_into_result = res; }
+
+  void swap_prepared_statement(Prepared_statement *copy);
+
+  bool define_column(longlong pos, Item *it);
+
+  bool column_value(longlong pos, Item_cache **ref);
+
+  void clear_column_cache();
 
  private:
   void cleanup_stmt(THD *thd);
@@ -467,11 +489,14 @@ class Prepared_statement final {
   bool execute(THD *thd, String *expanded_query, bool open_cursor);
   bool reprepare(THD *thd);
   bool validate_metadata(THD *thd, Prepared_statement *copy);
-  void swap_prepared_statement(Prepared_statement *copy);
+
   bool insert_parameters_from_vars(THD *thd, List<LEX_STRING> &varnames,
                                    String *query);
   bool insert_parameters(THD *thd, String *query, bool has_new_types,
                          PS_PARAM *parameters);
+  bool insert_parameters_from_expr(THD *thd, mem_root_deque<Item *> *parameters,
+                                   String *query);
 };
+
 
 #endif  // SQL_PREPARE_H

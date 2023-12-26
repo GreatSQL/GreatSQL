@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2023, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -69,8 +70,11 @@ enum class Log_Type : uint32_t {
   /** Alter Unencrypt a tablespace */
   ALTER_UNENCRYPT_TABLESPACE_LOG,
 
+  /** Purge data file async */
+  FILE_ASYNC_PURGE_LOG,
+
   /** Biggest log type */
-  BIGGEST_LOG = ALTER_UNENCRYPT_TABLESPACE_LOG
+  BIGGEST_LOG = FILE_ASYNC_PURGE_LOG
 };
 
 /** DDL log record */
@@ -146,6 +150,14 @@ class DDL_Record {
   /** If this record can be deleted.
   @return true if record is deletable. */
   bool get_deletable() const { return (m_deletable); }
+
+  /** If this record can be removed.
+  @return true if record is removed. */
+  bool get_removable() const { return (m_removable); }
+
+  /** Set removability of this record.
+  @param[in] removable removability. */
+  void set_removable(bool removable) { m_removable = removable; }
 
   /** Get encryption operation type */
   Encryption::Progress get_encryption_type() const {
@@ -223,6 +235,9 @@ class DDL_Record {
 
   /** If this record can be deleted */
   bool m_deletable;
+
+  /** If this record can be removed */
+  bool m_removable;
 };
 
 /** Forward declaration */
@@ -497,6 +512,19 @@ class Log_DDL {
   @return       true if it's in ddl recover */
   static bool is_in_recovery() { return (s_in_recovery); }
 
+  /** Write a PURGE file log record
+  @param[out] id          record id
+  @param[in]  thread id   Purge thread
+  @param[in]  file path   New file path
+  @return DB_SUCCESS or error */
+  dberr_t write_purge_file_log(uint64_t *id, ulint thread_id,
+                               const char *file_path);
+
+  /** Remove the record by id
+  @param[in]  id          record id
+  @return DB_SUCCESS or error */
+  dberr_t remove_by_id(uint64_t id);
+
  private:
   /** Insert a FREE log record
   @param[in,out]        trx             transaction
@@ -609,6 +637,21 @@ class Log_DDL {
   @param[in]    table_id        table id
   @param[in]    table_name      table name */
   void replay_remove_cache_log(table_id_t table_id, const char *table_name);
+
+  /** Insert a FILE ASYNC PURGE log record
+  @param[out] id                  log id
+  @param[in]  thread_id id        Purge thread
+  @param[in]  file_path path      New file path
+  @return DB_SUCCESS or error */
+  dberr_t insert_file_async_purge_log(uint64_t id, ulint thread_id,
+                                      const char *file_path);
+
+  /** Replay file async purge log
+  @param[out] id                  log id
+  @param[in]  thread_id id        Purge thread
+  @param[in]  file_path path      New file path*/
+  void replay_file_async_purge_log(uint64_t id, ulint thread_id,
+                                   const char *file_path);
 
   /** Delete log record by id
   @param[in]    trx             transaction instance

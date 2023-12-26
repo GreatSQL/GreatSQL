@@ -788,6 +788,7 @@ MySQL clients support the protocol:
 #include "sql/derror.h"
 #include "sql/event_data_objects.h"  // init_scheduler_psi_keys
 #include "sql/events.h"              // Events
+#include "sql/gdb_sequence.h"
 #include "sql/handler.h"
 #include "sql/hostname_cache.h"  // hostname_cache_init
 #include "sql/init.h"            // unireg_init
@@ -979,6 +980,8 @@ MySQL clients support the protocol:
 #include "sql/server_component/mysql_server_keyring_lockable_imp.h"
 #include "sql/server_component/persistent_dynamic_loader_imp.h"
 #include "sql/srv_session.h"
+#include "sql/mysqld_dbms_pipe_manager.h"
+#include "sql/sp_cache.h"
 
 using std::max;
 using std::min;
@@ -1094,7 +1097,6 @@ static PSI_mutex_key key_BINLOG_LOCK_binlog_end_pos;
 static PSI_mutex_key key_BINLOG_LOCK_sync;
 static PSI_mutex_key key_BINLOG_LOCK_sync_queue;
 static PSI_mutex_key key_BINLOG_LOCK_xids;
-static PSI_mutex_key key_BINLOG_LOCK_wait_for_group_turn;
 static PSI_rwlock_key key_rwlock_global_sid_lock;
 PSI_rwlock_key key_rwlock_gtid_mode_lock;
 static PSI_rwlock_key key_rwlock_LOCK_system_variables_hash;
@@ -1106,7 +1108,6 @@ static PSI_cond_key key_BINLOG_update_cond;
 static PSI_cond_key key_BINLOG_prep_xids_cond;
 static PSI_cond_key key_COND_manager;
 static PSI_cond_key key_COND_compress_gtid_table;
-static PSI_cond_key key_BINLOG_COND_wait_for_group_turn;
 static PSI_thread_key key_thread_signal_hand;
 static PSI_thread_key key_thread_main;
 static PSI_file_key key_file_casetest;
@@ -1169,7 +1170,6 @@ char *my_proxy_protocol_networks;
 static const char *default_collation_name;
 const char *default_storage_engine;
 const char *default_tmp_storage_engine;
-char *opt_fake_serv_vers_num;
 ulonglong temptable_max_ram;
 ulonglong temptable_max_mmap;
 bool temptable_use_mmap;
@@ -1520,7 +1520,6 @@ const char *mysql_real_data_home_ptr = mysql_real_data_home;
 char *opt_protocol_compression_algorithms;
 char server_version[SERVER_VERSION_LENGTH];
 char server_version_suffix[SERVER_VERSION_LENGTH];
-char fake_serv_vers[SERVER_VERSION_LENGTH];  // add for greatdb
 const char *mysqld_unix_port;
 char *opt_mysql_tmpdir;
 
@@ -1536,6 +1535,7 @@ std::vector<plugin_ref> authentication_policy_plugin_ref;
 bool encrypt_tmp_files;
 
 ulonglong tf_sequence_table_max_upper_bound = 0;
+ulonglong tf_udt_table_max_rows = 0;
 
 /** name of reference on left expression in rewritten IN subquery */
 const char *in_left_expr_name = "<left expr>";
@@ -2636,6 +2636,7 @@ static void clean_up(bool print_message) {
   if (use_slave_mask) bitmap_free(&slave_error_mask);
   my_tz_free();
   servers_free(true);
+  sequences_free(true);
   acl_free(true);
   grant_free();
   hostname_cache_free();
@@ -2688,7 +2689,7 @@ static void clean_up(bool print_message) {
 
   if (print_message && my_default_lc_messages && server_start_time)
     LogErr(SYSTEM_LEVEL, ER_SERVER_SHUTDOWN_COMPLETE, my_progname,
-           fake_serv_vers, MYSQL_COMPILATION_COMMENT_SERVER);
+           server_version, MYSQL_COMPILATION_COMMENT_SERVER);
   cleanup_errmsgs();
 
   sysd::notify("STATUS=Server shutdown complete");
@@ -2701,6 +2702,8 @@ static void clean_up(bool print_message) {
   mysql_client_plugin_deinit();
 
   Global_THD_manager::destroy_instance();
+  Global_dbms_pipe_manager::destroy_instance();
+  Sp_version_changed::destroy_instance();
 
   my_free(const_cast<char *>(log_bin_basename));
   my_free(const_cast<char *>(log_bin_index));
@@ -3867,7 +3870,7 @@ extern "C" void *signal_hand(void *arg [[maybe_unused]]) {
           sql_print_information(
               "Received signal SIGUSR2."
               " Restarting mysqld (Version %s)",
-              fake_serv_vers);
+              server_version);
         }
 #endif             // __APPLE__
         [[fallthrough]];
@@ -3876,10 +3879,10 @@ extern "C" void *signal_hand(void *arg [[maybe_unused]]) {
 #ifndef __APPLE__  // Mac OS doesn't have sigwaitinfo.
         if (sig_info.si_pid != getpid())
           LogErr(SYSTEM_LEVEL, ER_SERVER_SHUTDOWN_INFO, "<via user signal>",
-                 fake_serv_vers, MYSQL_COMPILATION_COMMENT_SERVER);
+                 server_version, MYSQL_COMPILATION_COMMENT_SERVER);
 #else
         LogErr(SYSTEM_LEVEL, ER_SERVER_SHUTDOWN_INFO, "<via user signal>",
-               fake_serv_vers, MYSQL_COMPILATION_COMMENT_SERVER);
+               server_version, MYSQL_COMPILATION_COMMENT_SERVER);
 #endif  // __APPLE__
         // Switch to the file log message processing.
         query_logger.set_handlers((log_output_options != LOG_NONE) ? LOG_FILE
@@ -4200,6 +4203,9 @@ SHOW_VAR com_status_vars[] = {
     {"alter_tablespace",
      (char *)offsetof(System_status_var,
                       com_stat[(uint)SQLCOM_ALTER_TABLESPACE]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"alter_trigger",
+     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_ALTER_TRIGGER]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"alter_user",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_ALTER_USER]),
@@ -4698,6 +4704,9 @@ SHOW_VAR com_status_vars[] = {
      (char *)offsetof(System_status_var,
                       com_stat[(uint)SQLCOM_SHOW_TABLE_STATUS]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"show_sequences",
+     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_SHOW_SEQUENCES]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"show_tables",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_SHOW_TABLES]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
@@ -4799,6 +4808,16 @@ SHOW_VAR com_status_vars[] = {
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"xa_start",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_XA_START]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"create_sequence",
+     (char *)offsetof(System_status_var,
+                      com_stat[(uint)SQLCOM_CREATE_SEQUENCE]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"drop_sequence",
+     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_DROP_SEQUENCE]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"alter_sequence",
+     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_ALTER_SEQUENCE]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
@@ -5102,12 +5121,10 @@ int init_common_variables() {
       key_BINLOG_LOCK_commit_queue, key_BINLOG_LOCK_done,
       key_BINLOG_LOCK_flush_queue, key_BINLOG_LOCK_log,
       key_BINLOG_LOCK_binlog_end_pos, key_BINLOG_LOCK_sync,
-      key_BINLOG_LOCK_sync_queue, key_BINLOG_LOCK_xids,
-      key_BINLOG_LOCK_wait_for_group_turn, key_BINLOG_COND_done,
+      key_BINLOG_LOCK_sync_queue, key_BINLOG_LOCK_xids, key_BINLOG_COND_done,
       key_BINLOG_COND_flush_queue, key_BINLOG_update_cond,
-      key_BINLOG_prep_xids_cond, key_BINLOG_COND_wait_for_group_turn,
-      key_file_binlog, key_file_binlog_index, key_file_binlog_cache,
-      key_file_binlog_index_cache);
+      key_BINLOG_prep_xids_cond, key_file_binlog, key_file_binlog_index,
+      key_file_binlog_cache, key_file_binlog_index_cache);
 #endif
 
   /*
@@ -5253,10 +5270,10 @@ int init_common_variables() {
     LogErr(INFORMATION_LEVEL, ER_BASEDIR_SET_TO, mysql_home);
   }
   if (!opt_validate_config && (opt_initialize || opt_initialize_insecure)) {
-    LogErr(SYSTEM_LEVEL, ER_STARTING_INIT, my_progname, fake_serv_vers,
+    LogErr(SYSTEM_LEVEL, ER_STARTING_INIT, my_progname, server_version,
            (ulong)getpid());
   } else if (!is_help_or_validate_option()) {
-    LogErr(SYSTEM_LEVEL, ER_STARTING_AS, my_progname, fake_serv_vers,
+    LogErr(SYSTEM_LEVEL, ER_STARTING_AS, my_progname, server_version,
            (ulong)getpid());
   }
   if (opt_help && !opt_verbose) unireg_abort(MYSQLD_SUCCESS_EXIT);
@@ -8505,6 +8522,10 @@ int mysqld_main(int argc, char **argv)
                           opt_upgrade_mode == UPGRADE_MINIMAL))
     servers_init(nullptr);
 
+  // add for Greatdb: support oracle sequence
+  init_sequence_global_var();
+  sequences_init(opt_initialize);
+
   if (!opt_noacl) {
     udf_read_functions_table();
   }
@@ -8586,7 +8607,7 @@ int mysqld_main(int argc, char **argv)
       .type(LOG_TYPE_ERROR)
       .subsys(LOG_SUBSYSTEM_TAG)
       .prio(SYSTEM_LEVEL)
-      .lookup(ER_SERVER_STARTUP_MSG, my_progname, fake_serv_vers,
+      .lookup(ER_SERVER_STARTUP_MSG, my_progname, server_version,
 #ifdef HAVE_SYS_UN_H
               (opt_initialize ? "" : mysqld_unix_port),
 #else
@@ -10574,7 +10595,7 @@ void add_terminator(vector<my_option> *options) {
 static void print_server_version(void) {
   set_server_version();
 
-  print_explicit_version(fake_serv_vers);
+  print_explicit_version(server_version);
 }
 
 /** Compares two options' names, treats - and _ the same */
@@ -11712,6 +11733,14 @@ static int get_options(int *argc_ptr, char ***argv_ptr) {
     LogErr(ERROR_LEVEL, ER_THREAD_HANDLING_OOM);
     return 1;
   }
+  if (Global_dbms_pipe_manager::create_instance()) {
+    LogErr(ERROR_LEVEL, ER_OOM);
+    return 1;
+  }
+  if (Sp_version_changed::create_instance()) {
+    LogErr(ERROR_LEVEL, ER_OOM);
+    return 1;
+  }
 
   /* If --super-read-only was specified, set read_only to 1 */
   read_only = super_read_only ? super_read_only : read_only;
@@ -11773,14 +11802,6 @@ static void set_server_version(void) {
   assert(end < server_version + SERVER_VERSION_LENGTH);
   my_stpcpy(server_version_suffix,
             server_version + strlen(MYSQL_SERVER_VERSION));
-
-  // add for greatdb
-  end = strxmov(fake_serv_vers, opt_fake_serv_vers_num, MYSQL_SERVER_SUFFIX_STR,
-                NullS);
-#ifndef NDEBUG
-  if (!strstr(MYSQL_SERVER_SUFFIX_STR, "-debug"))
-    end = my_stpcpy(end, "-debug");
-#endif
 }
 
 static const char *get_relative_path(const char *path) {
@@ -12435,6 +12456,8 @@ PSI_mutex_key key_mutex_replica_worker_hash;
 PSI_mutex_key key_monitor_info_run_lock;
 PSI_mutex_key key_LOCK_delegate_connection_mutex;
 PSI_mutex_key key_LOCK_group_replication_connection_mutex;
+PSI_mutex_key key_LOCK_dbms_pipe_map_mutex;
+PSI_mutex_key key_LOCK_sp_version_change_mutex;
 
 /* clang-format off */
 static PSI_mutex_info all_server_mutexes[]=
@@ -12450,7 +12473,6 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_BINLOG_LOCK_sync, "MYSQL_BIN_LOG::LOCK_sync", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_LOCK_sync_queue, "MYSQL_BIN_LOG::LOCK_sync_queue", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_LOCK_xids, "MYSQL_BIN_LOG::LOCK_xids", 0, 0, PSI_DOCUMENT_ME},
-  { &key_BINLOG_LOCK_wait_for_group_turn, "MYSQL_BIN_LOG::LOCK_wait_for_group_turn", 0, 0, PSI_DOCUMENT_ME},
   { &key_RELAYLOG_LOCK_commit, "MYSQL_RELAY_LOG::LOCK_commit", 0, 0, PSI_DOCUMENT_ME},
   { &key_RELAYLOG_LOCK_index, "MYSQL_RELAY_LOG::LOCK_index", 0, 0, PSI_DOCUMENT_ME},
   { &key_RELAYLOG_LOCK_log, "MYSQL_RELAY_LOG::LOCK_log", 0, 0, PSI_DOCUMENT_ME},
@@ -12535,7 +12557,9 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_group_replication_connection_mutex, "LOCK_group_replication_connection_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_authentication_policy, "LOCK_authentication_policy", PSI_FLAG_SINGLETON, 0, "A lock to ensure execution of CREATE USER or ALTER USER sql and SET @@global.authentication_policy variable are serialized"},
   { &key_LOCK_global_conn_mem_limit, "LOCK_global_conn_mem_limit", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-  { &key_LOCK_pq_threads_running, "LOCK_pq_threads_running", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
+  { &key_LOCK_pq_threads_running, "LOCK_pq_threads_running", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_LOCK_dbms_pipe_map_mutex, "LOCK_dbms_pipe_map_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_LOCK_sp_version_change_mutex, "LOCK_sp_version_change_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
 };
 /* clang-format on */
 
@@ -12608,6 +12632,7 @@ PSI_cond_key key_cond_slave_worker_hash;
 PSI_cond_key key_monitor_info_run_cond;
 PSI_cond_key key_COND_delegate_connection_cond_var;
 PSI_cond_key key_COND_group_replication_connection_cond_var;
+PSI_cond_key key_COND_dbms_pipe_cond_var;
 
 /* clang-format off */
 static PSI_cond_info all_server_conds[]=
@@ -12619,7 +12644,6 @@ static PSI_cond_info all_server_conds[]=
   { &key_BINLOG_COND_flush_queue, "MYSQL_BIN_LOG::COND_flush_queue", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_update_cond, "MYSQL_BIN_LOG::update_cond", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_prep_xids_cond, "MYSQL_BIN_LOG::prep_xids_cond", 0, 0, PSI_DOCUMENT_ME},
-  { &key_BINLOG_COND_wait_for_group_turn, "MYSQL_BIN_LOG::COND_wait_for_group_turn", 0, 0, PSI_DOCUMENT_ME},
   { &key_RELAYLOG_update_cond, "MYSQL_RELAY_LOG::update_cond", 0, 0, PSI_DOCUMENT_ME},
 #if defined(_WIN32)
   { &key_COND_handler_count, "COND_handler_count", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
@@ -12652,7 +12676,8 @@ static PSI_cond_info all_server_conds[]=
   { &key_monitor_info_run_cond, "Source_IO_monitor::run_cond", 0, 0, PSI_DOCUMENT_ME},
   { &key_COND_delegate_connection_cond_var, "THD::COND_delegate_connection_cond_var", 0, 0, PSI_DOCUMENT_ME},
   { &key_COND_group_replication_connection_cond_var, "THD::COND_group_replication_connection_cond_var", 0, 0, PSI_DOCUMENT_ME},
-  { &key_COND_pq_threads_running, "COND_pq_threads_running", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
+  { &key_COND_pq_threads_running, "COND_pq_threads_running", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_COND_dbms_pipe_cond_var, "Global_dbms_pipe_manager::cond", 0, 0, PSI_DOCUMENT_ME}
 };
 /* clang-format on */
 
@@ -12844,6 +12869,7 @@ PSI_stage_info stage_rpl_failover_updating_source_member_details= { 0, "Updating
 PSI_stage_info stage_rpl_failover_wait_before_next_fetch= { 0, "Wait before trying to fetch next membership changes from source", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_communication_delegation= { 0, "Connection delegated to Group Replication", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_restoring_secondary_keys= { 0, "restoring secondary keys", 0, PSI_DOCUMENT_ME};
+PSI_stage_info stage_dbms_pipe_receive_message= { 0, "dbms_pipe receive message", 0, PSI_DOCUMENT_ME};
 /* clang-format on */
 
 extern PSI_stage_info stage_waiting_for_disk_space;
@@ -12948,7 +12974,8 @@ PSI_stage_info *all_server_stages[] = {
     &stage_rpl_failover_updating_source_member_details,
     &stage_rpl_failover_wait_before_next_fetch,
     &stage_communication_delegation,
-    &stage_restoring_secondary_keys};
+    &stage_restoring_secondary_keys,
+    &stage_dbms_pipe_receive_message};
 
 PSI_socket_key key_socket_tcpip;
 PSI_socket_key key_socket_unix;

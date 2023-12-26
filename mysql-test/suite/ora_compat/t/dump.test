@@ -1,0 +1,1281 @@
+#1.table test_dump
+--disable_warnings
+DROP TABLE IF EXISTS `test_dump`;
+CREATE TABLE `test_dump` (
+  `c1` int NOT NULL,
+  `c2` tinyint DEFAULT NULL,
+  `c3` smallint DEFAULT NULL,
+  `c4` mediumint DEFAULT NULL,
+  `c5` int DEFAULT NULL,
+  `c6` bigint DEFAULT NULL,
+  `c7` bit(64) DEFAULT NULL,
+  `c8` double(255,0) DEFAULT NULL,
+  `c9` double(255,0) DEFAULT NULL,
+  `c10` float(255,0) DEFAULT NULL,
+  `c11` double(65,0) DEFAULT NULL,
+  `c12` decimal(65,0) DEFAULT NULL,
+  `c13` char(255) DEFAULT NULL,
+  `c14` varchar(255) DEFAULT NULL,
+  `c15` date DEFAULT NULL,
+  `c16` time(6) DEFAULT NULL,
+  `c17` year DEFAULT NULL,
+  `c18` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  `c19` datetime(6) DEFAULT NULL,
+  `c20` tinyblob,
+  `c21` blob,
+  `c22` mediumblob,
+  `c23` longblob,
+  `c24` tinytext,
+  `c25` text,
+  `c26` mediumtext,
+  `c27` longtext,
+  `c28` enum('','28c','28b','28a') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `c29` set('29c','29b','29a') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `c30` binary(255) DEFAULT NULL,
+  `c31` varbinary(255) DEFAULT NULL,
+  `c32` point DEFAULT NULL,
+  `c33` linestring DEFAULT NULL,
+  `c34` polygon DEFAULT NULL,
+  `c35` geometry DEFAULT NULL,
+  `c36` multipoint DEFAULT NULL,
+  `c37` multilinestring DEFAULT NULL,
+  `c38` multipolygon DEFAULT NULL,
+  `c39` geomcollection DEFAULT NULL,
+  PRIMARY KEY (`c1`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+#2.insert data
+INSERT INTO `test_dump` VALUES ('111', '22', '333', '444', '555', '666', '\0\0\0\0\0\0\0', '888', '999', '101010', '111111', '121212', '131313', '141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-26 12:06:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '242424', '252525', '262626', '272727', '28c', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, null);
+INSERT INTO `test_dump` VALUES ('-111', '-22', '-333', '-444', '-555', '-666', '\0\0\0\0\0\0\0', '-888', '-999', '-101010', '-111111', '-121212', '-131313', '-141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-26 12:06:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '28c', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, null);
+
+
+select dump(true), dump(false);
+select dump('123456',1600);
+select dump('123456',16);
+select dump('123456',10,1,2);
+select dump('123456',1600,1,2);
+
+select dump(123456,1600);
+select dump(123456,16);
+select dump(123456,10,1,2);
+select dump(123456,1600,1,2);
+
+select c15, dump(date('2021-05-15') ,16) ,dump(c15,16) from test_dump;
+select c19, dump(STR_TO_DATE('2021-05-19 19:19:19.000000','%Y-%m-%d %H:%i:%s'),16),dump(c19,16) from test_dump;
+
+#int------------------------------------------------
+select c1, dump(NULL) from test_dump;
+select c1, dump(c1) from test_dump;
+select c1, dump(c1,2) from test_dump;
+select c1, dump(c1,8) from test_dump;
+select c1, dump(c1,10) from test_dump;
+select c1, dump(c1,16) from test_dump;
+
+select c1, dump(c1,2,2) from test_dump;
+select c1, dump(c1,8,2) from test_dump;
+select c1, dump(c1,10,2) from test_dump;
+select c1, dump(c1,16,2) from test_dump;
+
+select c1, dump(c1,2,2,2) from test_dump;
+select c1, dump(c1,8,2,2) from test_dump;
+select c1, dump(c1,10,2,2) from test_dump;
+select c1, dump(c1,16,2,2) from test_dump;
+
+select c1, dump(c1,2,2,9999) from test_dump;
+select c1, dump(c1,8,2,9999) from test_dump;
+select c1, dump(c1,10,2,9999) from test_dump;
+select c1, dump(c1,16,2,9999) from test_dump;
+
+select c1, dump(c1,2,-2,2) from test_dump;
+select c1, dump(c1,8,-2,2) from test_dump;
+select c1, dump(c1,10,-2,2) from test_dump;
+select c1, dump(c1,16,-2,2) from test_dump;
+
+select c1, dump(c1,2,-2,-2) from test_dump;
+select c1, dump(c1,8,-2,-2) from test_dump;
+select c1, dump(c1,10,-2,-2) from test_dump;
+select c1, dump(c1,16,-2,-2) from test_dump;
+
+select c1, dump(c1,-2,-2,-2) from test_dump;
+select c1, dump(c1,-8,-2,-2) from test_dump;
+select c1, dump(c1,-10,-2,-2) from test_dump;
+select c1, dump(c1,-16,-2,-2) from test_dump;
+
+select c1, dump(c1,1002,-2,-2) from test_dump;
+select c1, dump(c1,1008,-2,-2) from test_dump;
+select c1, dump(c1,1010,-2,-2) from test_dump;
+select c1, dump(c1,1016,-2,-2) from test_dump;
+
+select c1, dump(c1,-9999,-2,-2) from test_dump;
+
+#tinyint------------------------------------------------
+select c2, dump(c2) from test_dump;
+select c2, dump(c2,2) from test_dump;
+select c2, dump(c2,8) from test_dump;
+select c2, dump(c2,10) from test_dump;
+select c2, dump(c2,16) from test_dump;
+
+select c2, dump(c2,2,2) from test_dump;
+select c2, dump(c2,8,2) from test_dump;
+select c2, dump(c2,10,2) from test_dump;
+select c2, dump(c2,16,2) from test_dump;
+
+select c2, dump(c2,2,2,2) from test_dump;
+select c2, dump(c2,8,2,2) from test_dump;
+select c2, dump(c2,10,2,2) from test_dump;
+select c2, dump(c2,16,2,2) from test_dump;
+
+select c2, dump(c2,2,2,9999) from test_dump;
+select c2, dump(c2,8,2,9999) from test_dump;
+select c2, dump(c2,10,2,9999) from test_dump;
+select c2, dump(c2,16,2,9999) from test_dump;
+
+select c2, dump(c2,2,-2,2) from test_dump;
+select c2, dump(c2,8,-2,2) from test_dump;
+select c2, dump(c2,10,-2,2) from test_dump;
+select c2, dump(c2,16,-2,2) from test_dump;
+
+select c2, dump(c2,2,-2,-2) from test_dump;
+select c2, dump(c2,8,-2,-2) from test_dump;
+select c2, dump(c2,10,-2,-2) from test_dump;
+select c2, dump(c2,16,-2,-2) from test_dump;
+
+select c2, dump(c2,-2,-2,-2) from test_dump;
+select c2, dump(c2,-8,-2,-2) from test_dump;
+select c2, dump(c2,-10,-2,-2) from test_dump;
+select c2, dump(c2,-16,-2,-2) from test_dump;
+
+select c2, dump(c2,1002,-2,-2) from test_dump;
+select c2, dump(c2,1008,-2,-2) from test_dump;
+select c2, dump(c2,1010,-2,-2) from test_dump;
+select c2, dump(c2,1016,-2,-2) from test_dump;
+select c2, dump(c2,-9999,-2,-2) from test_dump;
+
+
+#smallint------------------------------------------------
+select c3, dump(c3) from test_dump;
+select c3, dump(c3,2) from test_dump;
+select c3, dump(c3,8) from test_dump;
+select c3, dump(c3,10) from test_dump;
+select c3, dump(c3,16) from test_dump;
+
+select c3, dump(c3,2,2) from test_dump;
+select c3, dump(c3,8,2) from test_dump;
+select c3, dump(c3,10,2) from test_dump;
+select c3, dump(c3,16,2) from test_dump;
+
+select c3, dump(c3,2,2,2) from test_dump;
+select c3, dump(c3,8,2,2) from test_dump;
+select c3, dump(c3,10,2,2) from test_dump;
+select c3, dump(c3,16,2,2) from test_dump;
+
+select c3, dump(c3,2,2,9999) from test_dump;
+select c3, dump(c3,8,2,9999) from test_dump;
+select c3, dump(c3,10,2,9999) from test_dump;
+select c3, dump(c3,16,2,9999) from test_dump;
+
+select c3, dump(c3,2,-2,2) from test_dump;
+select c3, dump(c3,8,-2,2) from test_dump;
+select c3, dump(c3,10,-2,2) from test_dump;
+select c3, dump(c3,16,-2,2) from test_dump;
+
+select c3, dump(c3,2,-2,-2) from test_dump;
+select c3, dump(c3,8,-2,-2) from test_dump;
+select c3, dump(c3,10,-2,-2) from test_dump;
+select c3, dump(c3,16,-2,-2) from test_dump;
+
+select c3, dump(c3,-2,-2,-2) from test_dump;
+select c3, dump(c3,-8,-2,-2) from test_dump;
+select c3, dump(c3,-10,-2,-2) from test_dump;
+select c3, dump(c3,-16,-2,-2) from test_dump;
+
+select c3, dump(c3,1002,-2,-2) from test_dump;
+select c3, dump(c3,1008,-2,-2) from test_dump;
+select c3, dump(c3,1010,-2,-2) from test_dump;
+select c3, dump(c3,1016,-2,-2) from test_dump;
+
+select c3, dump(c3,-9999,-2,-2) from test_dump;
+
+#smallint------------------------------------------------
+select c4, dump(c4) from test_dump;
+select c4, dump(c4,2) from test_dump;
+select c4, dump(c4,8) from test_dump;
+select c4, dump(c4,10) from test_dump;
+select c4, dump(c4,16) from test_dump;
+
+select c4, dump(c4,2,2) from test_dump;
+select c4, dump(c4,8,2) from test_dump;
+select c4, dump(c4,10,2) from test_dump;
+select c4, dump(c4,16,2) from test_dump;
+
+select c4, dump(c4,2,2,2) from test_dump;
+select c4, dump(c4,8,2,2) from test_dump;
+select c4, dump(c4,10,2,2) from test_dump;
+select c4, dump(c4,16,2,2) from test_dump;
+
+select c4, dump(c4,2,2,9999) from test_dump;
+select c4, dump(c4,8,2,9999) from test_dump;
+select c4, dump(c4,10,2,9999) from test_dump;
+select c4, dump(c4,16,2,9999) from test_dump;
+
+select c4, dump(c4,2,-2,2) from test_dump;
+select c4, dump(c4,8,-2,2) from test_dump;
+select c4, dump(c4,10,-2,2) from test_dump;
+select c4, dump(c4,16,-2,2) from test_dump;
+
+select c4, dump(c4,2,-2,-2) from test_dump;
+select c4, dump(c4,8,-2,-2) from test_dump;
+select c4, dump(c4,10,-2,-2) from test_dump;
+select c4, dump(c4,16,-2,-2) from test_dump;
+
+select c4, dump(c4,-2,-2,-2) from test_dump;
+select c4, dump(c4,-8,-2,-2) from test_dump;
+select c4, dump(c4,-10,-2,-2) from test_dump;
+select c4, dump(c4,-16,-2,-2) from test_dump;
+
+select c4, dump(c4,1002,-2,-2) from test_dump;
+select c4, dump(c4,1008,-2,-2) from test_dump;
+select c4, dump(c4,1010,-2,-2) from test_dump;
+select c4, dump(c4,1016,-2,-2) from test_dump;
+
+select c4, dump(c4,-9999,-2,-2) from test_dump;
+
+#int---------------------------------------------------
+select c5, dump(c5) from test_dump;
+select c5, dump(c5,2) from test_dump;
+select c5, dump(c5,8) from test_dump;
+select c5, dump(c5,10) from test_dump;
+select c5, dump(c5,16) from test_dump;
+
+select c5, dump(c5,2,2) from test_dump;
+select c5, dump(c5,8,2) from test_dump;
+select c5, dump(c5,10,2) from test_dump;
+select c5, dump(c5,16,2) from test_dump;
+
+select c5, dump(c5,2,2,2) from test_dump;
+select c5, dump(c5,8,2,2) from test_dump;
+select c5, dump(c5,10,2,2) from test_dump;
+select c5, dump(c5,16,2,2) from test_dump;
+
+select c5, dump(c5,2,2,9999) from test_dump;
+select c5, dump(c5,8,2,9999) from test_dump;
+select c5, dump(c5,10,2,9999) from test_dump;
+select c5, dump(c5,16,2,9999) from test_dump;
+
+select c5, dump(c5,2,-2,2) from test_dump;
+select c5, dump(c5,8,-2,2) from test_dump;
+select c5, dump(c5,10,-2,2) from test_dump;
+select c5, dump(c5,16,-2,2) from test_dump;
+
+select c5, dump(c5,2,-2,-2) from test_dump;
+select c5, dump(c5,8,-2,-2) from test_dump;
+select c5, dump(c5,10,-2,-2) from test_dump;
+select c5, dump(c5,16,-2,-2) from test_dump;
+
+select c5, dump(c5,-2,-2,-2) from test_dump;
+select c5, dump(c5,-8,-2,-2) from test_dump;
+select c5, dump(c5,-10,-2,-2) from test_dump;
+select c5, dump(c5,-16,-2,-2) from test_dump;
+
+select c5, dump(c5,1002,-2,-2) from test_dump;
+select c5, dump(c5,1008,-2,-2) from test_dump;
+select c5, dump(c5,1010,-2,-2) from test_dump;
+select c5, dump(c5,1016,-2,-2) from test_dump;
+
+select c5, dump(c5,-9999,-2,-2) from test_dump;
+
+#bigint-------------------------------------------------
+select c7, dump(c6) from test_dump;
+select c6, dump(c6,2) from test_dump;
+select c6, dump(c6,8) from test_dump;
+select c6, dump(c6,10) from test_dump;
+select c6, dump(c6,16) from test_dump;
+
+select c6, dump(c6,2,2) from test_dump;
+select c6, dump(c6,8,2) from test_dump;
+select c6, dump(c6,10,2) from test_dump;
+select c6, dump(c6,16,2) from test_dump;
+
+select c6, dump(c6,2,2,2) from test_dump;
+select c6, dump(c6,8,2,2) from test_dump;
+select c6, dump(c6,10,2,2) from test_dump;
+select c6, dump(c6,16,2,2) from test_dump;
+
+select c6, dump(c6,2,2,9999) from test_dump;
+select c6, dump(c6,8,2,9999) from test_dump;
+select c6, dump(c6,10,2,9999) from test_dump;
+select c6, dump(c6,16,2,9999) from test_dump;
+
+select c6, dump(c6,2,-2,2) from test_dump;
+select c6, dump(c6,8,-2,2) from test_dump;
+select c6, dump(c6,10,-2,2) from test_dump;
+select c6, dump(c6,16,-2,2) from test_dump;
+
+select c6, dump(c6,2,-2,-2) from test_dump;
+select c6, dump(c6,8,-2,-2) from test_dump;
+select c6, dump(c6,10,-2,-2) from test_dump;
+select c6, dump(c6,16,-2,-2) from test_dump;
+
+select c6, dump(c6,-2,-2,-2) from test_dump;
+select c6, dump(c6,-8,-2,-2) from test_dump;
+select c6, dump(c6,-10,-2,-2) from test_dump;
+select c6, dump(c6,-16,-2,-2) from test_dump;
+
+select c6, dump(c6,1002,-2,-2) from test_dump;
+select c6, dump(c6,1008,-2,-2) from test_dump;
+select c6, dump(c6,1010,-2,-2) from test_dump;
+select c6, dump(c6,1016,-2,-2) from test_dump;
+
+select c6, dump(c6,-9999,-2,-2) from test_dump;
+
+#bit---------------------------------------------------
+select c5, dump(c7) from test_dump;
+select c7, dump(c7,2) from test_dump;
+select c7, dump(c7,8) from test_dump;
+select c7, dump(c7,10) from test_dump;
+select c7, dump(c7,16) from test_dump;
+
+select c7, dump(c7,2,2) from test_dump;
+select c7, dump(c7,8,2) from test_dump;
+select c7, dump(c7,10,2) from test_dump;
+select c7, dump(c7,16,2) from test_dump;
+
+select c7, dump(c7,2,2,2) from test_dump;
+select c7, dump(c7,8,2,2) from test_dump;
+select c7, dump(c7,10,2,2) from test_dump;
+select c7, dump(c7,16,2,2) from test_dump;
+
+select c7, dump(c7,2,2,9999) from test_dump;
+select c7, dump(c7,8,2,9999) from test_dump;
+select c7, dump(c7,10,2,9999) from test_dump;
+select c7, dump(c7,16,2,9999) from test_dump;
+
+select c7, dump(c7,2,-2,2) from test_dump;
+select c7, dump(c7,8,-2,2) from test_dump;
+select c7, dump(c7,10,-2,2) from test_dump;
+select c7, dump(c7,16,-2,2) from test_dump;
+
+select c7, dump(c7,2,-2,-2) from test_dump;
+select c7, dump(c7,8,-2,-2) from test_dump;
+select c7, dump(c7,10,-2,-2) from test_dump;
+select c7, dump(c7,16,-2,-2) from test_dump;
+
+select c7, dump(c7,-2,-2,-2) from test_dump;
+select c7, dump(c7,-8,-2,-2) from test_dump;
+select c7, dump(c7,-10,-2,-2) from test_dump;
+select c7, dump(c7,-16,-2,-2) from test_dump;
+
+select c7, dump(c7,1002,-2,-2) from test_dump;
+select c7, dump(c7,1008,-2,-2) from test_dump;
+select c7, dump(c7,1010,-2,-2) from test_dump;
+select c7, dump(c7,1016,-2,-2) from test_dump;
+
+select c7, dump(c7,-9999,-2,-2) from test_dump;
+
+#real--------------------------------------------------
+select c8, dump(c8) from test_dump;
+select c8, dump(c8,2) from test_dump;
+select c8, dump(c8,8) from test_dump;
+select c8, dump(c8,10) from test_dump;
+select c8, dump(c8,16) from test_dump;
+
+select c8, dump(c8,2,2) from test_dump;
+select c8, dump(c8,8,2) from test_dump;
+select c8, dump(c8,10,2) from test_dump;
+select c8, dump(c8,16,2) from test_dump;
+
+select c8, dump(c8,2,2,2) from test_dump;
+select c8, dump(c8,8,2,2) from test_dump;
+select c8, dump(c8,10,2,2) from test_dump;
+select c8, dump(c8,16,2,2) from test_dump;
+
+select c8, dump(c8,2,2,9999) from test_dump;
+select c8, dump(c8,8,2,9999) from test_dump;
+select c8, dump(c8,10,2,9999) from test_dump;
+select c8, dump(c8,16,2,9999) from test_dump;
+
+select c8, dump(c8,2,-2,2) from test_dump;
+select c8, dump(c8,8,-2,2) from test_dump;
+select c8, dump(c8,10,-2,2) from test_dump;
+select c8, dump(c8,16,-2,2) from test_dump;
+
+select c8, dump(c8,2,-2,-2) from test_dump;
+select c8, dump(c8,8,-2,-2) from test_dump;
+select c8, dump(c8,10,-2,-2) from test_dump;
+select c8, dump(c8,16,-2,-2) from test_dump;
+
+select c8, dump(c8,-2,-2,-2) from test_dump;
+select c8, dump(c8,-8,-2,-2) from test_dump;
+select c8, dump(c8,-10,-2,-2) from test_dump;
+select c8, dump(c8,-16,-2,-2) from test_dump;
+
+select c8, dump(c8,1002,-2,-2) from test_dump;
+select c8, dump(c8,1008,-2,-2) from test_dump;
+select c8, dump(c8,1010,-2,-2) from test_dump;
+select c8, dump(c8,1016,-2,-2) from test_dump;
+
+select c8, dump(c8,-9999,-2,-2) from test_dump;
+
+#double------------------------------------------------
+select c9, dump(c9) from test_dump;
+select c9, dump(c9,2) from test_dump;
+select c9, dump(c9,8) from test_dump;
+select c9, dump(c9,10) from test_dump;
+select c9, dump(c9,16) from test_dump;
+
+select c9, dump(c9,2,2) from test_dump;
+select c9, dump(c9,8,2) from test_dump;
+select c9, dump(c9,10,2) from test_dump;
+select c9, dump(c9,16,2) from test_dump;
+
+select c9, dump(c9,2,2,2) from test_dump;
+select c9, dump(c9,8,2,2) from test_dump;
+select c9, dump(c9,10,2,2) from test_dump;
+select c9, dump(c9,16,2,2) from test_dump;
+
+select c9, dump(c9,2,2,9999) from test_dump;
+select c9, dump(c9,8,2,9999) from test_dump;
+select c9, dump(c9,10,2,9999) from test_dump;
+select c9, dump(c9,16,2,9999) from test_dump;
+
+select c9, dump(c9,2,-2,2) from test_dump;
+select c9, dump(c9,8,-2,2) from test_dump;
+select c9, dump(c9,10,-2,2) from test_dump;
+select c9, dump(c9,16,-2,2) from test_dump;
+
+select c9, dump(c9,2,-2,-2) from test_dump;
+select c9, dump(c9,8,-2,-2) from test_dump;
+select c9, dump(c9,10,-2,-2) from test_dump;
+select c9, dump(c9,16,-2,-2) from test_dump;
+
+select c9, dump(c9,-2,-2,-2) from test_dump;
+select c9, dump(c9,-8,-2,-2) from test_dump;
+select c9, dump(c9,-10,-2,-2) from test_dump;
+select c9, dump(c9,-16,-2,-2) from test_dump;
+
+select c9, dump(c9,1002,-2,-2) from test_dump;
+select c9, dump(c9,1008,-2,-2) from test_dump;
+select c9, dump(c9,1010,-2,-2) from test_dump;
+select c9, dump(c9,1016,-2,-2) from test_dump;
+
+select c9, dump(c9,-9999,-2,-2) from test_dump;
+
+#float-------------------------------------------------
+select c10, dump(c10) from test_dump;
+select c10, dump(c10,2) from test_dump;
+select c10, dump(c10,8) from test_dump;
+select c10, dump(c10,10) from test_dump;
+select c10, dump(c10,16) from test_dump;
+
+select c10, dump(c10,2,2) from test_dump;
+select c10, dump(c10,8,2) from test_dump;
+select c10, dump(c10,10,2) from test_dump;
+select c10, dump(c10,16,2) from test_dump;
+
+select c10, dump(c10,2,2,2) from test_dump;
+select c10, dump(c10,8,2,2) from test_dump;
+select c10, dump(c10,10,2,2) from test_dump;
+select c10, dump(c10,16,2,2) from test_dump;
+
+select c10, dump(c10,2,2,9999) from test_dump;
+select c10, dump(c10,8,2,9999) from test_dump;
+select c10, dump(c10,10,2,9999) from test_dump;
+select c10, dump(c10,16,2,9999) from test_dump;
+
+select c10, dump(c10,2,-2,2) from test_dump;
+select c10, dump(c10,8,-2,2) from test_dump;
+select c10, dump(c10,10,-2,2) from test_dump;
+select c10, dump(c10,16,-2,2) from test_dump;
+
+select c10, dump(c10,2,-2,-2) from test_dump;
+select c10, dump(c10,8,-2,-2) from test_dump;
+select c10, dump(c10,10,-2,-2) from test_dump;
+select c10, dump(c10,16,-2,-2) from test_dump;
+
+select c10, dump(c10,-2,-2,-2) from test_dump;
+select c10, dump(c10,-8,-2,-2) from test_dump;
+select c10, dump(c10,-10,-2,-2) from test_dump;
+select c10, dump(c10,-16,-2,-2) from test_dump;
+
+select c10, dump(c10,1002,-2,-2) from test_dump;
+select c10, dump(c10,1008,-2,-2) from test_dump;
+select c10, dump(c10,1010,-2,-2) from test_dump;
+select c10, dump(c10,1016,-2,-2) from test_dump;
+
+select c10, dump(c10,-9999,-2,-2) from test_dump;
+
+#double------------------------------------------------
+select c11, dump(c11) from test_dump;
+select c11, dump(c11,2) from test_dump;
+select c11, dump(c11,8) from test_dump;
+select c11, dump(c11,10) from test_dump;
+select c11, dump(c11,16) from test_dump;
+
+select c11, dump(c11,2,2) from test_dump;
+select c11, dump(c11,8,2) from test_dump;
+select c11, dump(c11,10,2) from test_dump;
+select c11, dump(c11,16,2) from test_dump;
+
+select c11, dump(c11,2,2,2) from test_dump;
+select c11, dump(c11,8,2,2) from test_dump;
+select c11, dump(c11,10,2,2) from test_dump;
+select c11, dump(c11,16,2,2) from test_dump;
+
+select c11, dump(c11,2,2,9999) from test_dump;
+select c11, dump(c11,8,2,9999) from test_dump;
+select c11, dump(c11,10,2,9999) from test_dump;
+select c11, dump(c11,16,2,9999) from test_dump;
+
+select c11, dump(c11,2,-2,2) from test_dump;
+select c11, dump(c11,8,-2,2) from test_dump;
+select c11, dump(c11,10,-2,2) from test_dump;
+select c11, dump(c11,16,-2,2) from test_dump;
+
+select c11, dump(c11,2,-2,-2) from test_dump;
+select c11, dump(c11,8,-2,-2) from test_dump;
+select c11, dump(c11,10,-2,-2) from test_dump;
+select c11, dump(c11,16,-2,-2) from test_dump;
+
+select c11, dump(c11,-2,-2,-2) from test_dump;
+select c11, dump(c11,-8,-2,-2) from test_dump;
+select c11, dump(c11,-10,-2,-2) from test_dump;
+select c11, dump(c11,-16,-2,-2) from test_dump;
+
+select c11, dump(c11,1002,-2,-2) from test_dump;
+select c11, dump(c11,1008,-2,-2) from test_dump;
+select c11, dump(c11,1010,-2,-2) from test_dump;
+select c11, dump(c11,1016,-2,-2) from test_dump;
+
+select c11, dump(c11,-9999,-2,-2) from test_dump;
+
+#decimal-----------------------------------------------
+select c12, dump(c12) from test_dump;
+select c12, dump(c12,2) from test_dump;
+select c12, dump(c12,8) from test_dump;
+select c12, dump(c12,10) from test_dump;
+select c12, dump(c12,16) from test_dump;
+
+select c12, dump(c12,2,2) from test_dump;
+select c12, dump(c12,8,2) from test_dump;
+select c12, dump(c12,10,2) from test_dump;
+select c12, dump(c12,16,2) from test_dump;
+
+select c12, dump(c12,2,2,2) from test_dump;
+select c12, dump(c12,8,2,2) from test_dump;
+select c12, dump(c12,10,2,2) from test_dump;
+select c12, dump(c12,16,2,2) from test_dump;
+
+select c12, dump(c12,2,2,9999) from test_dump;
+select c12, dump(c12,8,2,9999) from test_dump;
+select c12, dump(c12,10,2,9999) from test_dump;
+select c12, dump(c12,16,2,9999) from test_dump;
+
+select c12, dump(c12,2,-2,2) from test_dump;
+select c12, dump(c12,8,-2,2) from test_dump;
+select c12, dump(c12,10,-2,2) from test_dump;
+select c12, dump(c12,16,-2,2) from test_dump;
+
+select c12, dump(c12,2,-2,-2) from test_dump;
+select c12, dump(c12,8,-2,-2) from test_dump;
+select c12, dump(c12,10,-2,-2) from test_dump;
+select c12, dump(c12,16,-2,-2) from test_dump;
+
+select c12, dump(c12,-2,-2,-2) from test_dump;
+select c12, dump(c12,-8,-2,-2) from test_dump;
+select c12, dump(c12,-10,-2,-2) from test_dump;
+select c12, dump(c12,-16,-2,-2) from test_dump;
+
+select c12, dump(c12,1002,-2,-2) from test_dump;
+select c12, dump(c12,1008,-2,-2) from test_dump;
+select c12, dump(c12,1010,-2,-2) from test_dump;
+select c12, dump(c12,1016,-2,-2) from test_dump;
+
+select c12, dump(c12,-9999,-2,-2) from test_dump;
+
+#char--------------------------------------------------
+select c13, dump(c13) from test_dump;
+select c13, dump(c13,2) from test_dump;
+select c13, dump(c13,8) from test_dump;
+select c13, dump(c13,10) from test_dump;
+select c13, dump(c13,16) from test_dump;
+
+select c13, dump(c13,2,2) from test_dump;
+select c13, dump(c13,8,2) from test_dump;
+select c13, dump(c13,10,2) from test_dump;
+select c13, dump(c13,16,2) from test_dump;
+
+select c13, dump(c13,2,2,2) from test_dump;
+select c13, dump(c13,8,2,2) from test_dump;
+select c13, dump(c13,10,2,2) from test_dump;
+select c13, dump(c13,16,2,2) from test_dump;
+
+select c13, dump(c13,2,2,9999) from test_dump;
+select c13, dump(c13,8,2,9999) from test_dump;
+select c13, dump(c13,10,2,9999) from test_dump;
+select c13, dump(c13,16,2,9999) from test_dump;
+
+select c13, dump(c13,2,-2,2) from test_dump;
+select c13, dump(c13,8,-2,2) from test_dump;
+select c13, dump(c13,10,-2,2) from test_dump;
+select c13, dump(c13,16,-2,2) from test_dump;
+
+select c13, dump(c13,2,-2,-2) from test_dump;
+select c13, dump(c13,8,-2,-2) from test_dump;
+select c13, dump(c13,10,-2,-2) from test_dump;
+select c13, dump(c13,16,-2,-2) from test_dump;
+
+select c13, dump(c13,-2,-2,-2) from test_dump;
+select c13, dump(c13,-8,-2,-2) from test_dump;
+select c13, dump(c13,-10,-2,-2) from test_dump;
+select c13, dump(c13,-16,-2,-2) from test_dump;
+
+select c13, dump(c13,1002,-2,-2) from test_dump;
+select c13, dump(c13,1008,-2,-2) from test_dump;
+select c13, dump(c13,1010,-2,-2) from test_dump;
+select c13, dump(c13,1016,-2,-2) from test_dump;
+
+select c13, dump(c13,-9999,-2,-2) from test_dump;
+
+#varchar-----------------------------------------------
+select c14, dump(c14) from test_dump;
+select c14, dump(c14,2) from test_dump;
+select c14, dump(c14,8) from test_dump;
+select c14, dump(c14,10) from test_dump;
+select c14, dump(c14,16) from test_dump;
+
+select c14, dump(c14,2,2) from test_dump;
+select c14, dump(c14,8,2) from test_dump;
+select c14, dump(c14,10,2) from test_dump;
+select c14, dump(c14,16,2) from test_dump;
+
+select c14, dump(c14,2,2,2) from test_dump;
+select c14, dump(c14,8,2,2) from test_dump;
+select c14, dump(c14,10,2,2) from test_dump;
+select c14, dump(c14,16,2,2) from test_dump;
+
+select c14, dump(c14,2,2,9999) from test_dump;
+select c14, dump(c14,8,2,9999) from test_dump;
+select c14, dump(c14,10,2,9999) from test_dump;
+select c14, dump(c14,16,2,9999) from test_dump;
+
+select c14, dump(c14,2,-2,2) from test_dump;
+select c14, dump(c14,8,-2,2) from test_dump;
+select c14, dump(c14,10,-2,2) from test_dump;
+select c14, dump(c14,16,-2,2) from test_dump;
+
+select c14, dump(c14,2,-2,-2) from test_dump;
+select c14, dump(c14,8,-2,-2) from test_dump;
+select c14, dump(c14,10,-2,-2) from test_dump;
+select c14, dump(c14,16,-2,-2) from test_dump;
+
+select c14, dump(c14,-2,-2,-2) from test_dump;
+select c14, dump(c14,-8,-2,-2) from test_dump;
+select c14, dump(c14,-10,-2,-2) from test_dump;
+select c14, dump(c14,-16,-2,-2) from test_dump;
+
+select c14, dump(c14,1002,-2,-2) from test_dump;
+select c14, dump(c14,1008,-2,-2) from test_dump;
+select c14, dump(c14,1010,-2,-2) from test_dump;
+select c14, dump(c14,1016,-2,-2) from test_dump;
+
+select c14, dump(c14,-9999,-2,-2) from test_dump;
+
+#date--------------------------------------------------
+select c15, dump(c15) from test_dump;
+select c15, dump(c15,2) from test_dump;
+select c15, dump(c15,8) from test_dump;
+select c15, dump(c15,10) from test_dump;
+select c15, dump(c15,16) from test_dump;
+
+select c15, dump(c15,2,2) from test_dump;
+select c15, dump(c15,8,2) from test_dump;
+select c15, dump(c15,10,2) from test_dump;
+select c15, dump(c15,16,2) from test_dump;
+
+select c15, dump(c15,2,2,2) from test_dump;
+select c15, dump(c15,8,2,2) from test_dump;
+select c15, dump(c15,10,2,2) from test_dump;
+select c15, dump(c15,16,2,2) from test_dump;
+
+select c15, dump(c15,2,2,9999) from test_dump;
+select c15, dump(c15,8,2,9999) from test_dump;
+select c15, dump(c15,10,2,9999) from test_dump;
+select c15, dump(c15,16,2,9999) from test_dump;
+
+select c15, dump(c15,2,-2,2) from test_dump;
+select c15, dump(c15,8,-2,2) from test_dump;
+select c15, dump(c15,10,-2,2) from test_dump;
+select c15, dump(c15,16,-2,2) from test_dump;
+
+select c15, dump(c15,2,-2,-2) from test_dump;
+select c15, dump(c15,8,-2,-2) from test_dump;
+select c15, dump(c15,10,-2,-2) from test_dump;
+select c15, dump(c15,16,-2,-2) from test_dump;
+
+select c15, dump(c15,-2,-2,-2) from test_dump;
+select c15, dump(c15,-8,-2,-2) from test_dump;
+select c15, dump(c15,-10,-2,-2) from test_dump;
+select c15, dump(c15,-16,-2,-2) from test_dump;
+
+select c15, dump(c15,1002,-2,-2) from test_dump;
+select c15, dump(c15,1008,-2,-2) from test_dump;
+select c15, dump(c15,1010,-2,-2) from test_dump;
+select c15, dump(c15,1016,-2,-2) from test_dump;
+
+select c15, dump(c15,-9999,-2,-2) from test_dump;
+
+#time--------------------------------------------------
+select c16, dump(c16) from test_dump;
+select c16, dump(c16,2) from test_dump;
+select c16, dump(c16,8) from test_dump;
+select c16, dump(c16,10) from test_dump;
+select c16, dump(c16,16) from test_dump;
+
+select c16, dump(c16,2,2) from test_dump;
+select c16, dump(c16,8,2) from test_dump;
+select c16, dump(c16,10,2) from test_dump;
+select c16, dump(c16,16,2) from test_dump;
+
+select c16, dump(c16,2,2,2) from test_dump;
+select c16, dump(c16,8,2,2) from test_dump;
+select c16, dump(c16,10,2,2) from test_dump;
+select c16, dump(c16,16,2,2) from test_dump;
+
+select c16, dump(c16,2,2,9999) from test_dump;
+select c16, dump(c16,8,2,9999) from test_dump;
+select c16, dump(c16,10,2,9999) from test_dump;
+select c16, dump(c16,16,2,9999) from test_dump;
+
+select c16, dump(c16,2,-2,2) from test_dump;
+select c16, dump(c16,8,-2,2) from test_dump;
+select c16, dump(c16,10,-2,2) from test_dump;
+select c16, dump(c16,16,-2,2) from test_dump;
+
+select c16, dump(c16,2,-2,-2) from test_dump;
+select c16, dump(c16,8,-2,-2) from test_dump;
+select c16, dump(c16,10,-2,-2) from test_dump;
+select c16, dump(c16,16,-2,-2) from test_dump;
+
+select c16, dump(c16,-2,-2,-2) from test_dump;
+select c16, dump(c16,-8,-2,-2) from test_dump;
+select c16, dump(c16,-10,-2,-2) from test_dump;
+select c16, dump(c16,-16,-2,-2) from test_dump;
+
+select c16, dump(c16,1002,-2,-2) from test_dump;
+select c16, dump(c16,1008,-2,-2) from test_dump;
+select c16, dump(c16,1010,-2,-2) from test_dump;
+select c16, dump(c16,1016,-2,-2) from test_dump;
+select c16, dump(c16,-9999,-2,-2) from test_dump;
+
+#year--------------------------------------------------
+select c17, dump(c17) from test_dump;
+select c17, dump(c17,2) from test_dump;
+select c17, dump(c17,8) from test_dump;
+select c17, dump(c17,10) from test_dump;
+select c17, dump(c17,16) from test_dump;
+
+select c17, dump(c17,2,1) from test_dump;
+select c17, dump(c17,8,1) from test_dump;
+select c17, dump(c17,10,1) from test_dump;
+select c17, dump(c17,16,1) from test_dump;
+
+select c17, dump(c17,2,1,2) from test_dump;
+select c17, dump(c17,8,1,2) from test_dump;
+select c17, dump(c17,10,1,2) from test_dump;
+select c17, dump(c17,16,1,2) from test_dump;
+
+select c17, dump(c17,2,1,9999) from test_dump;
+select c17, dump(c17,8,1,9999) from test_dump;
+select c17, dump(c17,10,1,9999) from test_dump;
+select c17, dump(c17,16,1,9999) from test_dump;
+
+select c17, dump(c17,2,-2,2) from test_dump;
+select c17, dump(c17,8,-1,2) from test_dump;
+select c17, dump(c17,10,-1,2) from test_dump;
+select c17, dump(c17,16,-1,2) from test_dump;
+
+select c17, dump(c17,2,-1,-2) from test_dump;
+select c17, dump(c17,8,-1,-2) from test_dump;
+select c17, dump(c17,10,-1,-2) from test_dump;
+select c17, dump(c17,16,-1,-2) from test_dump;
+
+select c17, dump(c17,-2,-1,-2) from test_dump;
+select c17, dump(c17,-8,-1,-2) from test_dump;
+select c17, dump(c17,-10,-1,-2) from test_dump;
+select c17, dump(c17,-16,-1,-2) from test_dump;
+
+select c17, dump(c17,1002,-1,-2) from test_dump;
+select c17, dump(c17,1008,-1,-2) from test_dump;
+select c17, dump(c17,1010,-1,-2) from test_dump;
+select c17, dump(c17,1016,-1,-2) from test_dump;
+select c17, dump(c17,-9999,-1,-2) from test_dump;
+
+#timestamp---------------------------------------------
+select c18, dump(c18) from test_dump;
+select c18, dump(c18,2) from test_dump;
+select c18, dump(c18,8) from test_dump;
+select c18, dump(c18,10) from test_dump;
+select c18, dump(c18,16) from test_dump;
+
+select c18, dump(c18,2,2) from test_dump;
+select c18, dump(c18,8,2) from test_dump;
+select c18, dump(c18,10,2) from test_dump;
+select c18, dump(c18,16,2) from test_dump;
+
+select c18, dump(c18,2,2,2) from test_dump;
+select c18, dump(c18,8,2,2) from test_dump;
+select c18, dump(c18,10,2,2) from test_dump;
+select c18, dump(c18,16,2,2) from test_dump;
+
+select c18, dump(c18,2,2,9999) from test_dump;
+select c18, dump(c18,8,2,9999) from test_dump;
+select c18, dump(c18,10,2,9999) from test_dump;
+select c18, dump(c18,16,2,9999) from test_dump;
+
+select c18, dump(c18,2,-2,2) from test_dump;
+select c18, dump(c18,8,-2,2) from test_dump;
+select c18, dump(c18,10,-2,2) from test_dump;
+select c18, dump(c18,16,-2,2) from test_dump;
+
+select c18, dump(c18,2,-2,-2) from test_dump;
+select c18, dump(c18,8,-2,-2) from test_dump;
+select c18, dump(c18,10,-2,-2) from test_dump;
+select c18, dump(c18,16,-2,-2) from test_dump;
+
+select c18, dump(c18,-2,-2,-2) from test_dump;
+select c18, dump(c18,-8,-2,-2) from test_dump;
+select c18, dump(c18,-10,-2,-2) from test_dump;
+select c18, dump(c18,-16,-2,-2) from test_dump;
+
+select c18, dump(c18,1002,-2,-2) from test_dump;
+select c18, dump(c18,1008,-2,-2) from test_dump;
+select c18, dump(c18,1010,-2,-2) from test_dump;
+select c18, dump(c18,1016,-2,-2) from test_dump;
+
+select c18, dump(c18,-9999,-2,-2) from test_dump;
+
+#datetime----------------------------------------------
+select c19, dump(c19) from test_dump;
+select c19, dump(c19,2) from test_dump;
+select c19, dump(c19,8) from test_dump;
+select c19, dump(c19,10) from test_dump;
+select c19, dump(c19,16) from test_dump;
+
+select c19, dump(c19,2,2) from test_dump;
+select c19, dump(c19,8,2) from test_dump;
+select c19, dump(c19,10,2) from test_dump;
+select c19, dump(c19,16,2) from test_dump;
+
+select c19, dump(c19,2,2,2) from test_dump;
+select c19, dump(c19,8,2,2) from test_dump;
+select c19, dump(c19,10,2,2) from test_dump;
+select c19, dump(c19,16,2,2) from test_dump;
+
+select c19, dump(c19,2,2,9999) from test_dump;
+select c19, dump(c19,8,2,9999) from test_dump;
+select c19, dump(c19,10,2,9999) from test_dump;
+select c19, dump(c19,16,2,9999) from test_dump;
+
+select c19, dump(c19,2,-2,2) from test_dump;
+select c19, dump(c19,8,-2,2) from test_dump;
+select c19, dump(c19,10,-2,2) from test_dump;
+select c19, dump(c19,16,-2,2) from test_dump;
+
+select c19, dump(c19,2,-2,-2) from test_dump;
+select c19, dump(c19,8,-2,-2) from test_dump;
+select c19, dump(c19,10,-2,-2) from test_dump;
+select c19, dump(c19,16,-2,-2) from test_dump;
+
+select c19, dump(c19,-2,-2,-2) from test_dump;
+select c19, dump(c19,-8,-2,-2) from test_dump;
+select c19, dump(c19,-10,-2,-2) from test_dump;
+select c19, dump(c19,-16,-2,-2) from test_dump;
+
+select c19, dump(c19,1002,-2,-2) from test_dump;
+select c19, dump(c19,1008,-2,-2) from test_dump;
+select c19, dump(c19,1010,-2,-2) from test_dump;
+select c19, dump(c19,1016,-2,-2) from test_dump;
+
+select c19, dump(c19,-9999,-2,-2) from test_dump;
+
+#tinyblob----------------------------------------------
+--error 1690
+select c20, dump(c20) from test_dump;
+--error 1690
+select c20, dump(c20,2) from test_dump;
+--error 1690
+select c20, dump(c20,8) from test_dump;
+--error 1690
+select c20, dump(c20,10) from test_dump;
+--error 1690
+select c20, dump(c20,16) from test_dump;
+--error 1690
+
+#blob--------------------------------------------------
+--error 1690
+select c21, dump(c21) from test_dump;
+--error 1690
+select c21, dump(c21,2) from test_dump;
+--error 1690
+select c21, dump(c21,8) from test_dump;
+--error 1690
+--error 1690
+select c21, dump(c21,16) from test_dump;
+--error 1690
+
+#mediumblob--------------------------------------------
+--error 1690
+select c22, dump(c22) from test_dump;
+--error 1690
+select c22, dump(c22,2) from test_dump;
+--error 1690
+select c22, dump(c22,8) from test_dump;
+--error 1690
+select c22, dump(c22,10) from test_dump;
+--error 1690
+select c22, dump(c22,16) from test_dump;
+
+#longblob----------------------------------------------
+--error 1690
+select c23, dump(c23) from test_dump;
+--error 1690
+select c23, dump(c23,2) from test_dump;
+--error 1690
+select c23, dump(c23,8) from test_dump;
+--error 1690
+select c23, dump(c23,10) from test_dump;
+--error 1690
+select c23, dump(c23,16) from test_dump;
+
+#tinytext----------------------------------------------
+--error 1690
+select c24, dump(c24) from test_dump;
+--error 1690
+select c24, dump(c24,2) from test_dump;
+--error 1690
+select c24, dump(c24,8) from test_dump;
+--error 1690
+select c24, dump(c24,10) from test_dump;
+--error 1690
+select c24, dump(c24,16) from test_dump;
+
+#text--------------------------------------------------
+--error 1690
+select c25, dump(c25) from test_dump;
+--error 1690
+select c25, dump(c25,2) from test_dump;
+--error 1690
+select c25, dump(c25,8) from test_dump;
+--error 1690
+select c25, dump(c25,10) from test_dump;
+--error 1690
+select c25, dump(c25,16) from test_dump;
+
+#mediumtext--------------------------------------------
+--error 1690
+select c26, dump(c26) from test_dump;
+--error 1690
+select c26, dump(c26,2) from test_dump;
+--error 1690
+select c26, dump(c26,8) from test_dump;
+--error 1690
+select c26, dump(c26,10) from test_dump;
+--error 1690
+select c26, dump(c26,16) from test_dump;
+
+#longtext----------------------------------------------
+--error 1690
+select c27, dump(c27) from test_dump;
+--error 1690
+select c27, dump(c27,2) from test_dump;
+--error 1690
+select c27, dump(c27,8) from test_dump;
+--error 1690
+select c27, dump(c27,10) from test_dump;
+--error 1690
+select c27, dump(c27,16) from test_dump;
+
+#enum--------------------------------------------------
+select c28, dump(c28) from test_dump;
+select c28, dump(c28,2) from test_dump;
+select c28, dump(c28,8) from test_dump;
+select c28, dump(c28,10) from test_dump;
+select c28, dump(c28,16) from test_dump;
+
+select c28, dump(c28,2,1) from test_dump;
+select c28, dump(c28,8,1) from test_dump;
+select c28, dump(c28,10,1) from test_dump;
+select c28, dump(c28,16,1) from test_dump;
+
+select c28, dump(c28,2,1,2) from test_dump;
+select c28, dump(c28,8,1,2) from test_dump;
+select c28, dump(c28,10,1,2) from test_dump;
+select c28, dump(c28,16,1,2) from test_dump;
+
+select c28, dump(c28,2,1,9999) from test_dump;
+select c28, dump(c28,8,1,9999) from test_dump;
+select c28, dump(c28,10,1,9999) from test_dump;
+select c28, dump(c28,16,1,9999) from test_dump;
+
+select c28, dump(c28,2,-2,2) from test_dump;
+select c28, dump(c28,8,-2,2) from test_dump;
+select c28, dump(c28,10,-2,2) from test_dump;
+select c28, dump(c28,16,-2,2) from test_dump;
+
+select c28, dump(c28,2,-2,-2) from test_dump;
+select c28, dump(c28,8,-2,-2) from test_dump;
+select c28, dump(c28,10,-2,-2) from test_dump;
+select c28, dump(c28,16,-2,-2) from test_dump;
+
+select c28, dump(c28,-2,-2,-2) from test_dump;
+select c28, dump(c28,-8,-2,-2) from test_dump;
+select c28, dump(c28,-10,-2,-2) from test_dump;
+select c28, dump(c28,-16,-2,-2) from test_dump;
+
+select c28, dump(c28,1002,-2,-2) from test_dump;
+select c28, dump(c28,1008,-2,-2) from test_dump;
+select c28, dump(c28,1010,-2,-2) from test_dump;
+select c28, dump(c28,1016,-2,-2) from test_dump;
+
+select c28, dump(c28,-9999,-2,-2) from test_dump;
+select c28, dump(c28,-9999,-2,-2) from test_dump;
+select c28, dump(c28,-9999,-2,-2) from test_dump;
+select c28, dump(c28,-9999,-2,-2) from test_dump;
+
+#set---------------------------------------------------
+select c29, dump(c29) from test_dump;
+select c29, dump(c29,2) from test_dump;
+select c29, dump(c29,8) from test_dump;
+select c29, dump(c29,10) from test_dump;
+select c29, dump(c29,16) from test_dump;
+
+select c29, dump(c29,2,2) from test_dump;
+select c29, dump(c29,8,2) from test_dump;
+select c29, dump(c29,10,2) from test_dump;
+select c29, dump(c29,16,2) from test_dump;
+
+select c29, dump(c29,2,2,2) from test_dump;
+select c29, dump(c29,8,2,2) from test_dump;
+select c29, dump(c29,10,2,2) from test_dump;
+select c29, dump(c29,16,2,2) from test_dump;
+
+select c29, dump(c29,2,2,9999) from test_dump;
+select c29, dump(c29,8,2,9999) from test_dump;
+select c29, dump(c29,10,2,9999) from test_dump;
+select c29, dump(c29,16,2,9999) from test_dump;
+
+select c29, dump(c29,2,-2,2) from test_dump;
+select c29, dump(c29,8,-2,2) from test_dump;
+select c29, dump(c29,10,-2,2) from test_dump;
+select c29, dump(c29,16,-2,2) from test_dump;
+
+select c29, dump(c29,2,-2,-2) from test_dump;
+select c29, dump(c29,8,-2,-2) from test_dump;
+select c29, dump(c29,10,-2,-2) from test_dump;
+select c29, dump(c29,16,-2,-2) from test_dump;
+
+select c29, dump(c29,-2,-2,-2) from test_dump;
+select c29, dump(c29,-8,-2,-2) from test_dump;
+select c29, dump(c29,-10,-2,-2) from test_dump;
+select c29, dump(c29,-16,-2,-2) from test_dump;
+
+select c29, dump(c29,1002,-2,-2) from test_dump;
+select c29, dump(c29,1008,-2,-2) from test_dump;
+select c29, dump(c29,1010,-2,-2) from test_dump;
+select c29, dump(c29,1016,-2,-2) from test_dump;
+
+select c29, dump(c29,-9999,-2,-2) from test_dump;
+select c29, dump(c29,-9999,-2,-2) from test_dump;
+select c29, dump(c29,-9999,-2,-2) from test_dump;
+select c29, dump(c29,-9999,-2,-2) from test_dump;
+
+#binary------------------------------------------------
+select c30, dump(c30) from test_dump;
+select c30, dump(c30,2) from test_dump;
+select c30, dump(c30,8) from test_dump;
+select c30, dump(c30,10) from test_dump;
+select c30, dump(c30,16) from test_dump;
+
+select c30, dump(c30,2,2) from test_dump;
+select c30, dump(c30,8,2) from test_dump;
+select c30, dump(c30,10,2) from test_dump;
+select c30, dump(c30,16,2) from test_dump;
+
+select c30, dump(c30,2,2,2) from test_dump;
+select c30, dump(c30,8,2,2) from test_dump;
+select c30, dump(c30,10,2,2) from test_dump;
+select c30, dump(c30,16,2,2) from test_dump;
+
+select c30, dump(c30,2,2,9999) from test_dump;
+select c30, dump(c30,8,2,9999) from test_dump;
+select c30, dump(c30,10,2,9999) from test_dump;
+select c30, dump(c30,16,2,9999) from test_dump;
+
+select c30, dump(c30,2,-2,2) from test_dump;
+select c30, dump(c30,8,-2,2) from test_dump;
+select c30, dump(c30,10,-2,2) from test_dump;
+select c30, dump(c30,16,-2,2) from test_dump;
+
+select c30, dump(c30,2,-2,-2) from test_dump;
+select c30, dump(c30,8,-2,-2) from test_dump;
+select c30, dump(c30,10,-2,-2) from test_dump;
+select c30, dump(c30,16,-2,-2) from test_dump;
+
+select c30, dump(c30,-2,-2,-2) from test_dump;
+select c30, dump(c30,-8,-2,-2) from test_dump;
+select c30, dump(c30,-10,-2,-2) from test_dump;
+select c30, dump(c30,-16,-2,-2) from test_dump;
+
+select c30, dump(c30,1002,-2,-2) from test_dump;
+select c30, dump(c30,1008,-2,-2) from test_dump;
+select c30, dump(c30,1010,-2,-2) from test_dump;
+select c30, dump(c30,1016,-2,-2) from test_dump;
+
+select c30, dump(c30,-9999,-2,-2) from test_dump;
+select c30, dump(c30,-9999,-2,-2) from test_dump;
+select c30, dump(c30,-9999,-2,-2) from test_dump;
+select c30, dump(c30,-9999,-2,-2) from test_dump;
+
+#varbinary---------------------------------------------
+select c31, dump(c31) from test_dump;
+select c31, dump(c31,2) from test_dump;
+select c31, dump(c31,8) from test_dump;
+select c31, dump(c31,10) from test_dump;
+select c31, dump(c31,16) from test_dump;
+
+select c31, dump(c31,2,2) from test_dump;
+select c31, dump(c31,8,2) from test_dump;
+select c31, dump(c31,10,2) from test_dump;
+select c31, dump(c31,16,2) from test_dump;
+
+select c31, dump(c31,2,2,2) from test_dump;
+select c31, dump(c31,8,2,2) from test_dump;
+select c31, dump(c31,10,2,2) from test_dump;
+select c31, dump(c31,16,2,2) from test_dump;
+
+select c31, dump(c31,2,2,9999) from test_dump;
+select c31, dump(c31,8,2,9999) from test_dump;
+select c31, dump(c31,10,2,9999) from test_dump;
+select c31, dump(c31,16,2,9999) from test_dump;
+
+select c31, dump(c31,2,-2,2) from test_dump;
+select c31, dump(c31,8,-2,2) from test_dump;
+select c31, dump(c31,10,-2,2) from test_dump;
+select c31, dump(c31,16,-2,2) from test_dump;
+
+select c31, dump(c31,2,-2,-2) from test_dump;
+select c31, dump(c31,8,-2,-2) from test_dump;
+select c31, dump(c31,10,-2,-2) from test_dump;
+select c31, dump(c31,16,-2,-2) from test_dump;
+
+select c31, dump(c31,-2,-2,-2) from test_dump;
+select c31, dump(c31,-8,-2,-2) from test_dump;
+select c31, dump(c31,-10,-2,-2) from test_dump;
+select c31, dump(c31,-16,-2,-2) from test_dump;
+
+select c31, dump(c31,1002,-2,-2) from test_dump;
+select c31, dump(c31,1008,-2,-2) from test_dump;
+select c31, dump(c31,1010,-2,-2) from test_dump;
+select c31, dump(c31,1016,-2,-2) from test_dump;
+
+select c31, dump(c31,-9999,-2,-2) from test_dump;
+select c31, dump(c31,-9999,-2,-2) from test_dump;
+select c31, dump(c31,-9999,-2,-2) from test_dump;
+select c31, dump(c31,-9999,-2,-2) from test_dump;
+
+#point-------------------------------------------------
+--error 1690
+select c32, dump(c32) from test_dump;
+--error 1690
+select c32, dump(c32,2) from test_dump;
+--error 1690
+select c32, dump(c32,8) from test_dump;
+--error 1690
+select c32, dump(c32,10) from test_dump;
+--error 1690
+select c32, dump(c32,16) from test_dump;
+
+#linestring--------------------------------------------
+select c33, dump(c33) from test_dump;
+select c33, dump(c33,2) from test_dump;
+select c33, dump(c33,8) from test_dump;
+select c33, dump(c33,10) from test_dump;
+select c33, dump(c33,16) from test_dump;
+
+#polygon-----------------------------------------------
+select c34, dump(c34) from test_dump;
+select c34, dump(c34,2) from test_dump;
+select c34, dump(c34,8) from test_dump;
+select c34, dump(c34,10) from test_dump;
+select c34, dump(c34,16) from test_dump;
+
+#geometry----------------------------------------------
+select c35, dump(c35) from test_dump;
+select c35, dump(c35,2) from test_dump;
+select c35, dump(c35,8) from test_dump;
+select c35, dump(c35,10) from test_dump;
+select c35, dump(c35,16) from test_dump;
+
+#multipoint--------------------------------------------
+select c36, dump(c36) from test_dump;
+select c36, dump(c36,2) from test_dump;
+select c36, dump(c36,8) from test_dump;
+select c36, dump(c36,10) from test_dump;
+select c36, dump(c36,16) from test_dump;
+
+#multilinestring---------------------------------------
+select c37, dump(c37) from test_dump;
+select c37, dump(c37,2) from test_dump;
+select c37, dump(c37,8) from test_dump;
+select c37, dump(c37,10) from test_dump;
+select c37, dump(c37,16) from test_dump;
+
+#multipolygon------------------------------------------
+select c38, dump(c38) from test_dump;
+select c38, dump(c38,2) from test_dump;
+select c38, dump(c38,8) from test_dump;
+select c38, dump(c38,10) from test_dump;
+select c38, dump(c38,16) from test_dump;
+
+#geomcollection----------------------------------------
+select c39, dump(c39) from test_dump;
+select c39, dump(c39,2) from test_dump;
+select c39, dump(c39,8) from test_dump;
+select c39, dump(c39,10) from test_dump;
+select c39, dump(c39,16) from test_dump;
+
+set @a='';
+--error 1690
+select dump(@a) from dual;
+
+set @a=1.5555;
+--error 1690
+select dump(@a) from dual;
+
+
+set sql_mode=oracle;
+
+CREATE TABLE t19(
+id int,
+col8 timestamp(6) default sysdate
+);
+
+set timestamp=12345;
+insert into t19 values  (1,systimestamp);
+insert into t19 values  (2,null);
+
+--error ER_TRUNCATED_WRONG_VALUE
+insert into t19 values  (3,'');
+
+select col8, dump(col8,16,100,100), dump(col8 ,10,1,1),dump(col8 ,10,1,99),dump(col8 ,10,1,1) from t19;
+
+--echo test union
+select  dump('test') from dual union select dump('test') from dual;
+select  dump('test',1016),'test' from dual union all select dump('test',1016),'test' from dual;
+
+select  dump('test',1016) from dual union select dump('test',1016) from dual;
+select  dump('test',1016),'test' from dual union all select dump('test',1016),'test' from dual;
+
+--enable_warnings
+drop table if exists test_dump;
+drop table if exists t19;
+

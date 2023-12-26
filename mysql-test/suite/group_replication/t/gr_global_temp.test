@@ -1,0 +1,180 @@
+################################################################################
+# Validate that global temporary table instance created in a function
+# will not be replicated in Group Replication.
+# Validate create [temporary] table ... like ... behavior.
+#
+# Test:
+# 0. The test requires two servers: M1 and M2.
+# 1. With both the members ONLINE. Create a global temporary table gt_t1
+#    without primary key on M1.
+#    create a function f1 which triggers gt_t1 instance creation.
+#    Run it twice in a transaction.
+#    'create [temporary] table ... like ..' test.
+# 2. Run the function twice in a trancaction.
+#    'create [temporary] table ... like ..' test.
+# 3. Clean up.
+################################################################################
+--let $group_replication_group_name= 8a94f357-aab4-11df-86ab-c80aa9420003
+--source include/have_group_replication_plugin.inc
+--source include/group_replication.inc
+
+--echo
+--echo ############################################################
+--echo #  1. Create the test table without primary key on
+--echo #     members.
+--connection server1
+SET SESSION sql_log_bin=0;
+call mtr.add_suppression("Table.*does not have any PRIMARY KEY. This is not compatible with Group Replication.");
+SET SESSION sql_log_bin=1;
+
+set sql_mode=oracle;
+create private temporary table ora$ptt_t1 (a int) on commit preserve definition;
+create global temporary table gt_t1 (a int);
+create global temporary table gt_t2 (a int primary key) on commit preserve rows;
+show create table ora$ptt_t1;
+show create table gt_t1;
+show create table gt_t2;
+
+delimiter //;
+create or replace function f1() return int deterministic as
+  c int := 0;
+begin
+  insert into gt_t1 values (1);
+  select count(*) into c from gt_t1;
+  return c;
+end //
+
+delimiter ;//
+
+--source include/rpl_sync.inc
+
+begin;
+select f1();
+select f1();
+commit;
+
+create table a1 (a int);
+show create table a1;
+--error ER_BEFORE_DML_VALIDATION_ERROR
+insert into a1 values (1);
+drop table a1;
+
+create table a1 (a int primary key);
+show create table a1;
+insert into a1 values (1);
+drop table a1;
+
+create table a1 like ora$ptt_t1;
+show create table a1;
+--error ER_BEFORE_DML_VALIDATION_ERROR
+insert into a1 values (1);
+drop table a1;
+
+create table a1 like gt_t1;
+show create table a1;
+--error ER_BEFORE_DML_VALIDATION_ERROR
+insert into a1 values (1);
+drop table a1;
+
+create table a1 like gt_t2;
+show create table a1;
+insert into a1 values (1);
+drop table a1;
+
+create temporary table a1 like ora$ptt_t1;
+show create table a1;
+insert into a1 values (1);
+drop table a1;
+
+create temporary table a1 like gt_t1;
+show create table a1;
+insert into a1 values (1);
+drop table a1;
+
+create temporary table a1 like gt_t2;
+show create table a1;
+insert into a1 values (1);
+drop table a1;
+
+# SET SESSION sql_log_bin=0;
+# call mtr.add_suppression("Table.*does not have any PRIMARY KEY. This is not compatible with Group Replication.");
+# SET SESSION sql_log_bin=1;
+
+--echo
+--echo ############################################################
+--echo #  1. Create the test table without primary key on
+--echo #     members.
+--connection server1
+
+--source include/rpl_sync.inc
+
+--echo
+--echo ############################################################
+--echo #  2. Run the function twice in a transaction.
+--connection server2
+
+SET SESSION sql_log_bin=0;
+call mtr.add_suppression("Table.*does not have any PRIMARY KEY. This is not compatible with Group Replication.");
+SET SESSION sql_log_bin=1;
+
+set sql_mode=oracle;
+create private temporary table ora$ptt_t1 (a int) on commit preserve definition;
+begin;
+select f1();
+select f1();
+commit;
+
+create table a1 (a int);
+show create table a1;
+--error ER_BEFORE_DML_VALIDATION_ERROR
+insert into a1 values (1);
+drop table a1;
+
+create table a1 (a int primary key);
+show create table a1;
+insert into a1 values (1);
+drop table a1;
+
+create table a1 like ora$ptt_t1;
+show create table a1;
+--error ER_BEFORE_DML_VALIDATION_ERROR
+insert into a1 values (1);
+drop table a1;
+
+create table a1 like gt_t1;
+show create table a1;
+--error ER_BEFORE_DML_VALIDATION_ERROR
+insert into a1 values (1);
+drop table a1;
+
+create table a1 like gt_t2;
+show create table a1;
+insert into a1 values (1);
+drop table a1;
+
+create temporary table a1 like ora$ptt_t1;
+show create table a1;
+insert into a1 values (1);
+drop table a1;
+
+create temporary table a1 like gt_t1;
+show create table a1;
+insert into a1 values (1);
+drop table a1;
+
+create temporary table a1 like gt_t2;
+show create table a1;
+insert into a1 values (1);
+drop table a1;
+
+--source include/rpl_sync.inc
+
+--echo
+--echo ############################################################
+--echo #  3. Clean data.
+--connection server1
+drop function f1;
+drop table gt_t2;
+drop table gt_t1;
+
+--source include/group_replication_end.inc

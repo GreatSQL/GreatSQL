@@ -250,7 +250,17 @@ bool Item_sum::init_sum_func_check(THD *thd) {
 
 bool Item_sum::check_sum_func(THD *thd, Item **ref) {
   DBUG_TRACE;
-
+  for (uint i = 0; i < arg_count; i++) {
+    if (args[i]->this_item()->is_ora_udt_type()) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "udt value in aggregate function");
+      return true;
+    }
+    // this commit only fix the window func with sequnce
+    if (m_is_window_function && args[i]->this_item()->is_sequence_field()) {
+      my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), "");
+      return true;
+    }
+  }
   if (m_is_window_function) {
     update_used_tables();
     thd->lex->m_deny_window_func = save_deny_window_func;
@@ -656,7 +666,9 @@ bool Item_sum::aggregate_check_group(uchar *arg) {
       If it is outer, analyzing its arguments should not cause a problem, we
       will meet outer references which we will ignore.
     */
-    return false;
+    if (!m_window || m_window->get_keep_dir() == KEEP_DIR_NONE) {
+      return false;
+    }
   }
 
   if (gc->is_fd_on_source(this)) {
@@ -883,6 +895,12 @@ bool Item_sum::fix_fields(THD *thd, Item **ref [[maybe_unused]]) {
     if (Window::resolve_reference(thd, this, &m_window)) return true;
 
     m_window_resolved = true;
+  }
+  for (uint i = 0; i < arg_count; i++) {
+    if (args[i]->this_item()->is_ora_udt_type()) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "udt value in aggregate function");
+      return true;
+    }
   }
   return false;
 }
@@ -2748,6 +2766,9 @@ bool Item_sum_variance::add() {
   }
 
   null_value = (count <= sample);
+  if (m_is_window_function && m_window->get_keep_dir() != KEEP_DIR_NONE) {
+    null_value = false;
+  }
   return false;
 }
 
@@ -3149,7 +3170,9 @@ void Item_sum_hybrid::no_rows_in_result() {
 Item *Item_sum_hybrid::copy_or_same(THD *thd) {
   if (m_is_window_function) return this;
   Item_sum_hybrid *item = clone_hybrid(thd);
-  if (item == nullptr || item->setup_hybrid(args[0], value)) return nullptr;
+  if (!m_is_pivot_ref &&
+      (item == nullptr || item->setup_hybrid(args[0], value)))
+    return nullptr;
   return item;
 }
 
@@ -4311,6 +4334,7 @@ Item_func_group_concat::Item_func_group_concat(const POS &pos,
       assert(!(m_order_arg_count && w->effective_order_by()));
     // For group_concat in windowing, don't handle order_list locally, but
     // handle it using window-function mechanism.
+    if (orafun == 2 && m_order_arg_count == 0) order_in_wm_concat = false;
     if (m_order_arg_count) w->set_order_list(opt_order_list);
     m_order_arg_count = 0;
     opt_order_list = nullptr;
@@ -4368,7 +4392,8 @@ Item_func_group_concat::Item_func_group_concat(THD *thd,
       group_concat_max_len(item->group_concat_max_len),
       warning_for_row(item->warning_for_row),
       force_copy_fields(item->force_copy_fields),
-      original(item) {
+      orafun(item->orafun),
+      original(m_is_pivot_ref ? nullptr : item) {
   allow_group_via_temp_table = item->allow_group_via_temp_table;
   result.set_charset(collation.collation);
 
@@ -4393,6 +4418,9 @@ Item_func_group_concat::Item_func_group_concat(THD *thd,
   if (m_order_arg_count > 0) {
     for (ORDER *ord = order_array.begin(); ord < order_array.end(); ++ord)
       ord->next = ord != &order_array.back() ? ord + 1 : nullptr;
+  }
+  if (item->tmp_table_param == nullptr) {
+    original = nullptr;
   }
 }
 
@@ -4563,7 +4591,7 @@ bool Item_func_group_concat::fix_fields(THD *thd, Item **ref) {
       return true;
     }
     m_window->set_order_list(ord);
-    m_window->set_order_list_print(false);
+    if (order_in_wm_concat) m_window->set_order_list_print(false);
   }
 
   if (init_sum_func_check(thd)) return true;
@@ -4963,7 +4991,7 @@ bool Item_func_group_concat::check_wf_semantics1(
   m_window->set_order_list(nullptr);
   eord = m_window->effective_order_by();
   m_window->set_order_list(ord);
-  if (orafun != 2) m_window->set_order_list_print(false);
+  if (orafun != 2 || order_in_wm_concat) m_window->set_order_list_print(false);
   if (eord != nullptr) {
     my_error(ER_CLAUSE_IN_LISTAGG_NOT_ALLOWED, MYF(0), "ORDER BY", func_name());
     return true;
@@ -5027,11 +5055,12 @@ void Item_func_group_concat::print(const THD *thd, String *str,
       str->append(STRING_WITH_LEN(")"));
     }
   } else {
+    // orafun is 0 or 1
     for (uint i = 0; i < m_field_arg_count; i++) {
       if (i) str->append(',');
       args[i]->print(thd, str, query_type);
     }
-    if (m_window && orafun == 0) {
+    if (m_window && (orafun == 0 || order_in_wm_concat)) {
       // In group_concat, Window::m_order_by is not set by window_spec, but it
       // is set by within-group-order-by clause.
       // Here output order-by using group_concat syntax.
@@ -6390,6 +6419,8 @@ bool Item_sum_json_array::add() {
                               &m_conversion_buffer, &value_wrapper))
       return error_json();
 
+    if (m_is_pivot_ref && enum_json_type::J_NULL == value_wrapper.type())
+      return false;
     Json_dom_ptr value_dom(value_wrapper.to_dom());
     value_wrapper.set_alias();  // release the DOM
 
@@ -6486,6 +6517,8 @@ bool Item_sum_json_object::add() {
                               &m_conversion_buffer, &value_wrapper))
       return error_json();
 
+    if (m_is_pivot_ref && enum_json_type::J_NULL == value_wrapper.type())
+      return false;
     /*
       The m_wrapper always points to m_json_object or the result of
       deserializing the result_field in reset/update_field.
@@ -6589,6 +6622,7 @@ bool Item_func_grouping::fix_fields(THD *thd, Item **ref) {
 
   if (select->olap == UNSPECIFIED_OLAP_TYPE ||
       select->resolve_place == Query_block::RESOLVE_JOIN_NEST ||
+      select->resolve_place == Query_block::RESOLVE_CONNECT_BY ||
       select->resolve_place == Query_block::RESOLVE_CONDITION) {
     my_error(ER_INVALID_GROUP_FUNC_USE, MYF(0));
     return true;
@@ -7071,6 +7105,572 @@ void Item_sum_collect::reset_field() {
   store_result_field();
 }
 
+bool Item_ratio_to_report_value::resolve_type(THD *thd) {
+  if (Item_sum_sum::resolve_type(thd)) return true;
+  set_nullable(true);
+  null_value = true;
+
+  Item_field *item = dynamic_cast<Item_field *>(args[0]);
+  Field *field = item ? item->field : nullptr;
+  if (is_temporal_type(real_type_to_type(args[0]->data_type())) ||
+      (field &&
+       (field->real_type() == MYSQL_TYPE_ENUM ||
+        field->real_type() == MYSQL_TYPE_SET ||
+        field->real_type() == MYSQL_TYPE_JSON ||
+        field->real_type() == MYSQL_TYPE_BIT || is_blob(field->real_type())))) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+    return true;
+  }
+  prec_increment = thd->variables.div_precincrement;
+  if (hybrid_type == DECIMAL_RESULT) {
+    int precision = args[0]->decimal_precision() + prec_increment;
+    int scale =
+        min<uint>(args[0]->decimals + prec_increment, DECIMAL_MAX_SCALE);
+    set_data_type_decimal(precision, scale);
+  } else {
+    assert(hybrid_type == REAL_RESULT);
+    // If type has specified precision and scale, adjust according to increment:
+    if (decimals != DECIMAL_NOT_SPECIFIED) {
+      decimals = min<uint>(decimals + prec_increment, DECIMAL_NOT_SPECIFIED);
+      max_length = float_length(decimals);
+    }
+  }
+  return false;
+}
+
+bool Item_ratio_to_report_value::add() {
+  DBUG_TRACE;
+  null_value = true;
+  String tmp_str;
+  String *str = args[0]->val_str(&tmp_str);
+  if (hybrid_type == DECIMAL_RESULT) {
+    my_decimal value;
+    const my_decimal *argd = args[0]->val_decimal(&dec_buffs[0]);
+    if (!args[0]->null_value && !str->is_empty()) {
+      my_decimal tmp;
+      my_decimal_add(E_DEC_FATAL_ERROR, &tmp, &dec_buffs[1], argd);
+      tmp.swap(dec_buffs[1]);
+      null_value = false;
+    }
+  } else {
+    uint cc_before = current_thd->get_stmt_da()->cond_count();
+    if (args[0]->this_item()->result_type() == STRING_RESULT) {
+      StringBuffer<STRING_BUFFER_USUAL_SIZE> tmp;
+      const String *res = args[0]->val_str(&tmp);
+      sum += res ? double_from_string_with_check(res->charset(), res->ptr(),
+                                                 res->ptr() + res->length())
+                 : args[0]->val_real();
+    } else
+      sum += args[0]->val_real();
+    uint cc_after = current_thd->get_stmt_da()->cond_count();
+    if (cc_after > cc_before) {
+      my_error(ER_WRONG_PARAMETERS_TO_NATIVE_FCT, MYF(0), func_name());
+      return true;
+    }
+    check_float_overflow(sum);
+    if (current_thd->is_error()) return true;
+    if (!args[0]->null_value && !str->is_empty()) null_value = false;
+  }
+  return false;
+}
+
+double Item_ratio_to_report_value::val_real() {
+  DBUG_TRACE;
+  double result = 0.0;
+  null_value = true;
+  if (wf_common_init()) return result;
+  if (hybrid_type == DECIMAL_RESULT) {
+    my_decimal tmp;
+    my_decimal *r = val_decimal(&tmp);
+    if (r != nullptr && !null_value) {
+      my_decimal2double(E_DEC_FATAL_ERROR, r, &result);
+    }
+  } else {
+    if (!m_window->do_second_phase() && add()) return 0.0;
+    double d = args[0]->val_real();
+    if (!args[0]->null_value && sum != 0.0) {
+      result = d / sum;
+      null_value = false;
+    }
+  }
+  return result;
+}
+
+my_decimal *Item_ratio_to_report_value::val_decimal(my_decimal *val) {
+  if (hybrid_type != DECIMAL_RESULT) return val_decimal_from_real(val);
+  null_value = true;
+  if (wf_common_init()) {
+    return error_decimal(val);
+  }
+  my_decimal tmp_dec;
+  prec_increment = current_thd->variables.div_precincrement;
+
+  my_decimal *const argd = args[0]->val_decimal(&tmp_dec);
+
+  if (!m_window->do_second_phase() && add()) return nullptr;
+  if (!args[0]->null_value && !my_decimal_is_zero(&dec_buffs[1])) {
+    my_decimal_div(E_DEC_FATAL_ERROR, &dec_buffs[0], argd, &dec_buffs[1],
+                   prec_increment);
+    null_value = false;
+  }
+  return &dec_buffs[0];
+}
+
+/***CONNECT BY BEGIN ***/
+bool Item_connect_by_func::itemize(Parse_context *pc, Item **res) {
+  if (super::itemize(pc, res)) return true;
+
+  if (pc->select->parsing_place == CTX_ON) {
+    my_error(ER_PSEUDOCOLUMN_NOT_ALLOW, MYF(0), func_name(), pc->thd->where);
+    return true;
+  }
+  pc->select->n_connect_by_items++;
+  set_connect_by_func();
+  return false;
+}
+
+bool Item_connect_by_func::fix_fields(THD *thd, Item **ref) {
+  if (!thd->lex->current_query_block()->connect_by_cond()) {
+    my_error(ER_PSEUDOCOLUMN_NOT_ALLOW, MYF(0), func_name(),
+             "without connect by");
+    return true;
+  }
+  return super::fix_fields(thd, ref);
+}
+
+void Item_connect_by_func::update_used_tables() {
+  super::update_used_tables();
+  set_connect_by_func();
+  if (is_evaluate_value()) {
+    set_connect_by_value();
+  }
+  /*
+    GROUPING function can never be a constant item. It's
+    result always depends on ROLLUP result.
+  */
+  used_tables_cache |=
+      current_thd->lex->current_query_block()->all_tables_map();
+}
+
+/**
+ * @brief
+ * Item_connect_by_func all like pseudo columns
+ * if in after_where_cond, should change to  result field
+ *
+ * select x from t where prior id = 1 connect by xxx
+ *
+ * Filtering： xx = 1
+ *  (select x, （prior id） xx from t connect by xxx)
+ *
+ * @param select_arg
+ * @return Item*
+ */
+
+Item *CompileItemConnectbyRef(THD *thd, Item *cond, Query_block *select) {
+  auto new_it = CompileItem(
+      cond,
+      [](Item *it) {
+        if (it->type() == Item::REF_ITEM &&
+            it->used_tables() & OUTER_REF_TABLE_BIT)
+          return false;
+        return true;
+      },
+      [thd, select](Item *it) -> Item * {
+        // subquery
+        switch (it->type()) {
+          case Item::CONNECT_BY_FUNC_ITEM:
+            [[fallthrough]];
+          case Item::FIELD_ITEM: {
+            uint counter = 0;
+            enum_resolution_type resolution;
+            Item **select_item =
+                find_item_in_list(thd, it, select->get_fields_list(), &counter,
+                                  REPORT_EXCEPT_NOT_FOUND, &resolution);
+            if (select_item == nullptr) return nullptr;
+            if (select_item == not_found_item) {
+              select_item = select->add_hidden_item(it);
+            } else {
+              select_item = &select->base_ref_items[counter];
+            }
+            return new (thd->mem_root)
+                Item_ref(&select->context, select_item, it->item_name.ptr());
+          } break;
+          default:
+            return it;
+        }
+      });
+  return new_it;
+}
+
+bool Item_connect_by_func_value::itemize(Parse_context *pc, Item **res) {
+  if (super::itemize(pc, res)) return true;
+  if (pc->select->parsing_place == CTX_START_WITH) {
+    my_error(ER_PSEUDOCOLUMN_NOT_ALLOW, MYF(0), func_name(), pc->thd->where);
+    return true;
+  }
+  return false;
+}
+
+bool Item_connect_by_func_value::resolve_type_inner(THD *thd) {
+  assert(arg_count == 1);
+  if (args[0]->has_connect_by_func() || args[0]->has_aggregation() ||
+      args[0]->has_wf() || args[0]->has_subquery() ||
+      args[0]->has_rownum_expr()) {
+    my_error(ER_PSEUDOCOLUMN_NOT_ALLOW, MYF(0), func_name(),
+             args[0]->item_name.is_set() ? args[0]->item_name.ptr()
+             : (dynamic_cast<Item_func *>(args[0]))
+                 ? dynamic_cast<Item_func *>(args[0])->func_name()
+                 : "");
+    return true;
+  }
+
+  set_data_type(args[0]->data_type());
+  set_nullable(true);
+  max_length = args[0]->max_length;
+  decimals = args[0]->decimals;
+  collation.set(args[0]->collation);
+  unsigned_flag = args[0]->unsigned_flag;
+
+  // add field if not in select_fields
+  // item to Item_ref
+  auto select = thd->lex->current_query_block();
+  Item **select_ref = nullptr;
+  uint counter = 0;
+  enum_resolution_type resolution;
+  /*
+    Search for a column or derived column named as 'ref' in the SELECT
+    clause of the current select.
+  */
+  if (!(select_ref =
+            find_item_in_list(thd, args[0], select->get_fields_list(), &counter,
+                              REPORT_EXCEPT_NOT_FOUND, &resolution)))
+    return true; /* Some error occurred. */
+
+  if (select_ref == not_found_item) {
+    ref = select->add_hidden_item(args[0]);
+  } else {
+    ref = &select->base_ref_items[counter];
+  }
+  return false;
+}
+
+bool Item_connect_by_func_root::itemize(Parse_context *pc, Item **res) {
+  if (super::itemize(pc, res)) return true;
+  if (pc->select->parsing_place == CTX_CONNECT_BY) {
+    my_error(ER_PSEUDOCOLUMN_NOT_ALLOW, MYF(0), func_name(), pc->thd->where);
+    return true;
+  }
+  return false;
+}
+
+bool Item_func_prior::collect_connect_by_item_processor(uchar *arg) {
+  auto item_list = reinterpret_cast<mem_root_deque<Item_func_prior *> *>(arg);
+  if (!item_list) return true;
+  item_list->push_back(this);
+  return false;
+}
+
+bool Item_connect_by_func_sys_path::itemize(Parse_context *pc, Item **res) {
+  if (super::itemize(pc, res)) return true;
+
+  if (pc->select->parsing_place != CTX_SELECT_LIST) {
+    my_error(ER_PSEUDOCOLUMN_NOT_ALLOW, MYF(0), func_name(), pc->thd->where);
+    return true;
+  }
+  set_connect_by_value();
+  return false;
+}
+
+// set to ref item if not find in fields_list
+bool Item_connect_by_func_sys_path::resolve_type(THD *thd) {
+  assert(arg_count == 2);
+
+  collation.set(args[0]->collation);
+  auto group_concat_max_len = thd->variables.group_concat_max_len;
+  uint32 max_chars = group_concat_max_len / collation.collation->mbminlen;
+  uint max_byte_length = max_chars * collation.collation->mbmaxlen;
+  max_chars > CONVERT_IF_BIGGER_TO_BLOB ? set_data_type_blob(max_byte_length)
+                                        : set_data_type_string(max_chars);
+
+  if (!args[0]->const_item()) {
+    // add field if not in select_fields
+    // item to Item_ref
+    auto select = thd->lex->current_query_block();
+    Item **select_ref = nullptr;
+    uint counter = 0;
+    enum_resolution_type resolution;
+    /*
+      Search for a column or derived column named as 'ref' in the SELECT
+      clause of the current select.
+    */
+
+    if (!(select_ref = find_item_in_list(thd, args[0],
+                                         select->get_fields_list(), &counter,
+                                         REPORT_EXCEPT_NOT_FOUND, &resolution)))
+      return true; /* Some error occurred. */
+
+    if (select_ref == not_found_item) {
+      ref = select->add_hidden_item(args[0]);
+    } else {
+      ref = &select->base_ref_items[counter];
+    }
+    const_value = false;
+  } else {
+    const_value = true;
+  }
+  return false;
+}
+
+bool Item_connect_by_func_sys_path::setup(THD *thd) {
+  if (!table && !const_value) {
+    mem_root_deque<Item *> fields(thd->mem_root);
+    auto it = base_expr();
+    fields.push_back(it);
+
+    if (it->type() == Item::FIELD_ITEM &&
+        down_cast<Item_field *>(it)->field->type() == FIELD_TYPE_BIT)
+      it->marker = Item::MARKER_BIT;
+
+    tmp_table_param = new (thd->mem_root) Temp_table_param;
+    if (tmp_table_param == nullptr) return true;
+    count_field_types(nullptr, tmp_table_param, fields, false, true);
+    tmp_table_param->hidden_field_count = 0;
+    table = create_tmp_table(thd, tmp_table_param, fields, nullptr, false,
+                             false, TMP_TABLE_ALL_COLUMNS, HA_POS_ERROR, "");
+    if (!table) return true;
+    table->file->ha_extra(HA_EXTRA_NO_ROWS);
+    table->no_rows = true;
+    if (table->s->blob_fields) {
+      table->blob_storage = new (thd->mem_root) Blob_mem_storage();
+      if (table->blob_storage == nullptr) return true;
+    }
+    // only the single field
+    res = new (thd->mem_root) Item_field(*table->field);
+    if (!res) return true;
+  } else {
+    // const_items
+    res = args[0];
+  }
+  return false;
+}
+
+bool Item_connect_by_func_sys_path::reset() {
+  if (table) {
+    if (table->file->inited) {
+      table->file->ha_index_or_rnd_end();
+    }
+    table->file->ha_delete_all_rows();
+  }
+  return false;
+}
+
+bool Item_connect_by_func_sys_path::update_value(longlong l) {
+  auto thd = current_thd;
+  int err = 0;
+
+  l--;
+  level = l;
+  if (!const_value && table) {
+    if (l == 1) {
+      err = table->file->ha_delete_all_rows();
+      if (err != 0) {
+        table->file->print_error(err, MYF(0));
+        return true;
+      }
+      if (table->blob_storage) table->blob_storage->reset();
+    } else {
+      err = table->file->ha_rnd_init(true);
+      if (err != 0) {
+        table->file->print_error(err, MYF(0));
+        return true;
+      }
+      for (auto i = (l - 1); i > 0; i--) {
+        err = table->file->ha_rnd_next(table->record[0]);
+        if (err != 0) {
+          if (thd->killed) {
+            thd->send_kill_message();
+            return true;
+          }
+          if (err == HA_ERR_END_OF_FILE || err == HA_ERR_KEY_NOT_FOUND) {
+            table->set_no_row();
+            break;
+          } else {
+            table->file->print_error(err, MYF(0));
+            return true;
+          }
+        }
+      }
+      while (1) {
+        err = table->file->ha_rnd_next(table->record[0]);
+        if (err != 0) {
+          if (thd->killed) {
+            thd->send_kill_message();
+            return true;
+          }
+          if (err == HA_ERR_END_OF_FILE || err == HA_ERR_KEY_NOT_FOUND) {
+            table->set_no_row();
+            break;
+          } else {
+            table->file->print_error(err, MYF(0));
+            return true;
+          }
+        }
+        err = table->file->ha_delete_row(table->record[0]);
+        if (err != 0) {
+          table->file->print_error(err, MYF(0));
+          return true;
+        }
+      }
+      err = table->file->ha_rnd_end();
+      if (err != 0) {
+        table->file->print_error(err, MYF(0));
+        return true;
+      }
+    }
+
+    if (copy_funcs(tmp_table_param, thd)) return true;
+
+    auto error = table->file->ha_write_row(table->record[0]);
+    if (error != 0) {
+      if (!table->file->is_ignorable_error(error)) {
+        bool is_duplicate;
+        if (create_ondisk_from_heap(thd, table, error, true, true,
+                                    &is_duplicate)) {
+          return true; /* purecov: inspected */
+        }
+      }
+    }
+  }
+  return false;
+}
+
+String *Item_connect_by_func_sys_path::val_str(String *str) {
+  auto thd = current_thd;
+  null_value = false;
+  tmp_value.length(0);
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> buf;
+  String *sep = eval_string_arg(collation.collation, args[1], &buf);
+  if (sep == nullptr) {
+    sep = make_empty_result();
+  }
+  if (table) {
+    auto err = table->file->ha_rnd_init(true);
+    if (err != 0) {
+      table->file->print_error(err, MYF(0));
+      return error_str();
+    }
+    while (1) {
+      err = table->file->ha_rnd_next(table->record[0]);
+      if (err != 0) {
+        if (thd->killed) {
+          thd->send_kill_message();
+          goto error;
+        }
+        if (err == HA_ERR_END_OF_FILE || err == HA_ERR_KEY_NOT_FOUND) {
+          break;
+        } else {
+          table->file->print_error(err, MYF(0));
+          goto error;
+        }
+      }
+
+      String *val = eval_string_arg(collation.collation, res, str);
+      if (val == nullptr) {
+        val = make_empty_result();
+      }
+      if (tmp_value.append(*sep)) goto error;
+      if (tmp_value.append(*val)) goto error;
+    }
+    table->file->ha_index_or_rnd_end();
+  } else {
+    if (const_value) {
+      auto l = level;
+      while (l--) {
+        if (tmp_value.append(*sep)) goto error;
+        String *val = eval_string_arg(collation.collation, res, str);
+        if (val == nullptr) {
+          val = make_empty_result();
+        }
+        if (tmp_value.append(*val)) goto error;
+      }
+    }
+  }
+  if (tmp_value.length() > thd->variables.max_allowed_packet) {
+    push_warning_printf(thd, Sql_condition::SL_WARNING,
+                        ER_WARN_ALLOWED_PACKET_OVERFLOWED,
+                        ER_THD(thd, ER_WARN_ALLOWED_PACKET_OVERFLOWED),
+                        func_name(), thd->variables.max_allowed_packet);
+  }
+
+  tmp_value.set_charset(collation.collation);
+  if (tmp_value.is_empty()) {
+    null_value = true;
+    return nullptr;
+  }
+
+  return &tmp_value;
+
+error:
+  if (table) table->file->ha_index_or_rnd_end();
+  return error_str();
+}
+
+my_decimal *Item_connect_by_func_sys_path::val_decimal(
+    my_decimal *decimal_value) {
+  assert(fixed == 1);
+  char buff[64];
+  String *res, tmp(buff, sizeof(buff), &my_charset_bin);
+  res = val_str(&tmp);
+  if (!res) return nullptr;
+  (void)str2my_decimal(E_DEC_FATAL_ERROR, res->ptr(), res->length(),
+                       res->charset(), decimal_value);
+  return decimal_value;
+}
+
+void Item_connect_by_func_sys_path::cleanup() {
+  if (tmp_table_param) {
+    destroy(tmp_table_param);
+    tmp_table_param = nullptr;
+  }
+
+  if (table) {
+    if (table->blob_storage) destroy(table->blob_storage);
+    close_tmp_table(table);
+    free_tmp_table(table);
+    table = nullptr;
+  }
+  Item_func::cleanup();
+}
+
+bool Item_connect_by_func_iscycle::itemize(Parse_context *pc, Item **res) {
+  if (super::itemize(pc, res)) return true;
+  if (pc->select->parsing_place == CTX_START_WITH ||
+      pc->select->parsing_place == CTX_CONNECT_BY) {
+    my_error(ER_PSEUDOCOLUMN_NOT_ALLOW, MYF(0), func_name(), pc->thd->where);
+    return true;
+  }
+  set_connect_by_value();
+  return false;
+}
+
+bool Item_connect_by_func_isleaf::itemize(Parse_context *pc, Item **res) {
+  if (super::itemize(pc, res)) return true;
+  if (pc->select->parsing_place == CTX_START_WITH ||
+      pc->select->parsing_place == CTX_CONNECT_BY) {
+    my_error(ER_PSEUDOCOLUMN_NOT_ALLOW, MYF(0), func_name(), pc->thd->where);
+    return true;
+  }
+  set_connect_by_value();
+  return false;
+}
+
+bool Item_connect_by_func_level::fix_fields(THD *thd, Item **ref) {
+  if (super::fix_fields(thd, ref)) return true;
+  thd->lex->current_query_block()->has_connect_by_level = true;
+  return false;
+}
+
+/*******CONNECT BY END ********/
 bool need_extra(Item_sum *ref_item) {
   return ref_item->sum_func() == Item_sum::AVG_FUNC;
 }

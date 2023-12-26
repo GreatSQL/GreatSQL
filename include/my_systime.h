@@ -1,5 +1,6 @@
 /*
    Copyright (c) 2016, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -129,6 +130,7 @@ constexpr const Timeout_type TIMEOUT_INF =
 
 void set_timespec_nsec(struct timespec *abstime, Timeout_type nsec);
 void set_timespec(struct timespec *abstime, Timeout_type sec);
+void set_timespec_msec(struct timespec *abstime, Timeout_type msec);
 timespec timespec_now();
 
 /**

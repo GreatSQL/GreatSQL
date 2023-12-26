@@ -112,7 +112,15 @@ sql_mode	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERR
 set shrink_sql_mode='';
 select 1/0;
 ERROR 22012: Division by 0
+# test proc creation.
+set sql_mode=oracle $$
+set shrink_sql_mode='STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY' $$
 "clean up"
 set global sql_mode=default;
 set global shrink_sql_mode=default;
 RESET PERSIST;
+"create old oracle_mode show upgrade note"
+set sql_mode=oracle $$
+set shrink_sql_mode='STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY' $$
+set shrink_sql_mode='';
+set sql_mode=oracle;

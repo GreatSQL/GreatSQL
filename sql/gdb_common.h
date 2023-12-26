@@ -25,6 +25,7 @@
 #define _gdb_common_h
 
 #include "errmsg.h"
+#include "include/greatdb_version.h"
 #include "my_dbug.h"
 #include "my_dir.h"
 #include "my_inttypes.h"

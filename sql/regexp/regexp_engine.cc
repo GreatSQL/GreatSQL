@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -63,6 +64,11 @@ bool Regexp_engine::Matches(int start, int occurrence) {
 
 const std::u16string &Regexp_engine::Replace(const std::u16string &replacement,
                                              int start, int occurrence) {
+  if ((current_thd->variables.sql_mode & MODE_ORACLE) &&
+      (std::u16string::value_type)start > m_current_subject.length()) {
+    m_replace_buffer.assign(m_current_subject);
+    return m_replace_buffer;
+  }
   // Find the first match, starting at the chosen position, ...
   bool found = uregex_find(m_re, start, &m_error_code);
 
@@ -87,10 +93,41 @@ const std::u16string &Regexp_engine::Replace(const std::u16string &replacement,
 
   m_replace_buffer.resize(std::min(m_current_subject.size(), HardLimit()));
 
+  /**
+    If 'replacement' contains the escape character '\', 'replacement' needs to
+    be modified, because in many scenarios of oracle, escape characters are
+    treated as ordinary characters, but escape processing is performed in the
+    ICU library. Another reason is that subexpression references of the form
+    '\n' need to be replaced with matching strings
+
+    In addition, if 'replacement' contains '$' characters, you need to modify
+    'replacement', because the icu library treats '$n' as a reference to a
+    regular subexpression, but oracle does not, so you need to escape the '$'
+    characters into normal characters
+  */
+  bool need_modify_replacement =
+      (current_thd->variables.sql_mode & MODE_ORACLE) &&
+      (std::find(replacement.begin(), replacement.end(), u'\\') !=
+           replacement.end() ||
+       std::find(replacement.begin(), replacement.end(), u'$') !=
+           replacement.end());
+
   // ... replacing all occurrences if 'occurrence' is 0, and finally ...
   AppendHead(std::max(end_of_previous_match, start));
   if (found) {
     do {
+      if (need_modify_replacement) {
+        std::u16string new_replacement{0};
+        new_replacement.reserve(m_current_subject.size());
+        int32_t group_count = uregex_groupCount(m_re, &m_error_code);
+        if (check_icu_status(m_error_code) ||
+            ReplaceReplacementORA(group_count, replacement, new_replacement)) {
+          m_replace_buffer.clear();
+          return m_replace_buffer;
+        }
+        AppendReplacement(new_replacement);
+        continue;
+      }
       AppendReplacement(replacement);
     } while (occurrence == 0 && uregex_findNext(m_re, &m_error_code));
   }
@@ -199,6 +236,85 @@ void Regexp_engine::AppendTail() {
     TryToAppendTail();
   }
   m_replace_buffer_pos += tail_size;
+}
+
+bool Regexp_engine::ReplaceReplacementORA(int32_t group_count,
+                                          const std::u16string &src,
+                                          std::u16string &replacement) {
+  replacement.clear();
+  auto add_backslash = [](std::u16string &r, std::u16string::value_type ch) {
+    std::u16string::size_type pos = 0;
+    while ((pos = r.find_first_of(ch, pos)) != std::u16string::npos) {
+      r.insert(pos, 1, u'\\');
+      pos += 2;
+    }
+  };
+
+  for (auto it = src.begin(); it != src.end(); ++it) {
+    if (*it == u'\\') { /* Handle escape characters */
+      auto next = std::next(it);
+      if (next != src.end()) {
+        if (group_count > 0 && (std::isdigit(*next) && (*next != u'0'))) {
+          if (*next - u'0' <= group_count) {
+            /**
+              Replace the specified matching subexpression represented by '\n'
+              with the matched string. If 'n' > group_count then '\n' replace
+              with "".
+            */
+            std::u16string subexpr_str;
+            subexpr_str.resize(m_current_subject.size());
+            size_t length = uregex_group(
+                m_re, *next - u'0', pointer_cast<UChar *>(&subexpr_str.at(0)),
+                subexpr_str.size(), &m_error_code);
+            if (m_error_code == U_BUFFER_OVERFLOW_ERROR) {
+              if (length >= HardLimit()) {
+                my_error(ER_REGEXP_BUFFER_OVERFLOW, myf(0));
+                return true;
+              }
+              subexpr_str.resize(length);
+              m_error_code = U_ZERO_ERROR;
+              length = uregex_group(m_re, *next - u'0',
+                                    pointer_cast<UChar *>(&subexpr_str.at(0)),
+                                    subexpr_str.size(), &m_error_code);
+              if (check_icu_status(m_error_code)) return true;
+            }
+            subexpr_str.resize(length);
+            /**
+              Since the icu library just put out escape characters for backslash
+              escapes, but oracle requires to retain backslash, therefore, it is
+              necessary to insert backslash escape before the backslash
+            */
+            add_backslash(subexpr_str, u'\\');
+            add_backslash(subexpr_str, u'$');
+            replacement.append(subexpr_str);
+          }
+        } else {
+          /**
+            If it is not a matching subexpression, the backslash is required to
+            be preserved, but '\\' is special and is only treated as a backslash
+            character
+          */
+          if (*next != u'\\') {
+            replacement.push_back(u'\\');
+          }
+          replacement.push_back(*it);
+          replacement.push_back(*next);
+        }
+        it = next;
+      } else {
+        /** the backslash is required to be preserved */
+        replacement.push_back(u'\\');
+        replacement.push_back(*it);
+      }
+    } else {
+      if (*it == u'$') { /* Insert '\' to escape '$' */
+        replacement.push_back(u'\\');
+      }
+      /* Copy the characters in the original string */
+      replacement.push_back(*it);
+    }
+  }
+  return false;
 }
 
 }  // namespace regexp

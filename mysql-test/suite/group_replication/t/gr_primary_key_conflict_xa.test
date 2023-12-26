@@ -70,8 +70,9 @@ XA END 'trx';
 --echo # group_replication_before_message_broadcast debug sync point.
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
---let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE State = 'debug sync point: now'
---source include/wait_condition.inc
+--disable_query_log
+SET DEBUG_SYNC='now wait_for signal.group_replication_before_message_broadcast_reached';
+--enable_query_log
 
 --echo
 --echo ############################################################
@@ -93,7 +94,6 @@ INSERT INTO t1 VALUES (1);
 --source include/wait_condition.inc
 
 SET DEBUG_SYNC='now SIGNAL waiting';
-SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG= @debug_save;
 
 --echo
@@ -105,6 +105,7 @@ SET @@GLOBAL.DEBUG= @debug_save;
 --source include/rpl_connection.inc
 --error ER_TRANSACTION_ROLLBACK_DURING_COMMIT
 --reap
+SET DEBUG_SYNC='RESET';
 
 --error ER_XAER_NOTA
 XA COMMIT 'trx';
@@ -149,8 +150,9 @@ XA END 'trx2';
 --echo # group_replication_before_message_broadcast debug sync point.
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
---let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE State = 'debug sync point: now'
---source include/wait_condition.inc
+--disable_query_log
+SET DEBUG_SYNC='now wait_for signal.group_replication_before_message_broadcast_reached';
+--enable_query_log
 
 --echo
 --echo ############################################################
@@ -168,7 +170,6 @@ INSERT INTO t1 VALUES (3);
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
 SET DEBUG_SYNC='now SIGNAL waiting';
-SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG= @debug_save;
 
 --echo
@@ -178,6 +179,7 @@ SET @@GLOBAL.DEBUG= @debug_save;
 --let $rpl_connection_name= server_1
 --source include/rpl_connection.inc
 --reap
+SET DEBUG_SYNC='RESET';
 XA COMMIT 'trx2';
 
 --source include/rpl_sync.inc

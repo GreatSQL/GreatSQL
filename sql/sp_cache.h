@@ -26,8 +26,11 @@
 #define _SP_CACHE_H_
 
 #include <sys/types.h>
-
+#include <atomic>
+#include <map>
+#include <string>
 #include "my_inttypes.h"
+#include "mysql/psi/mysql_mutex.h"
 
 /*
   Stored procedures/functions cache. This is used as follows:
@@ -66,5 +69,38 @@ void sp_cache_invalidate();
 void sp_cache_flush_obsolete(sp_cache **cp, sp_head **sp);
 int64 sp_cache_version();
 void sp_cache_enforce_limit(sp_cache *cp, ulong upper_limit_for_elements);
+
+// sp_change_version
+class Sp_version_changed {
+ public:
+  static Sp_version_changed *get_instance() {
+    assert(instance);
+    return instance;
+  }
+
+  static bool create_instance();
+  static void destroy_instance();
+
+  void sp_version_changed(const std::string &db, int type,
+                          const std::string &name);
+  void sp_version_clear(const std::string &db, int type,
+                        const std::string &name);
+  int64 sp_version_lookup(const std::string &db, int type,
+                          const std::string &name);
+
+  int64 sp_anonymous_version() { return anonymous_version++; }
+
+ private:
+  Sp_version_changed();
+  ~Sp_version_changed();
+
+  static Sp_version_changed *instance;
+  std::atomic<int64> anonymous_version;
+
+  mysql_mutex_t LOCK_sp_version_change_mutex;
+  // key:db, type, name   value:version
+  std::map<std::string, std::map<int, std::map<std::string, int64>>>
+      map_version;
+};
 
 #endif /* _SP_CACHE_H_ */

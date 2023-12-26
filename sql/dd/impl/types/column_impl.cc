@@ -75,7 +75,8 @@ static const std::set<String_type> default_valid_option_keys = {
     "zip_dict_id",
     "is_array",
     "gipk" /* generated implicit primary key column */,
-    "udt_name"};
+    "udt_name",
+    "varchar_default_ct"};
 
 ///////////////////////////////////////////////////////////////////////////
 // Column_impl implementation.

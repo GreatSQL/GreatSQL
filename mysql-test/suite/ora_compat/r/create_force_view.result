@@ -1,0 +1,715 @@
+drop table if exists t1,t2,t3;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+Note	1051	Unknown table 'test.t2'
+Note	1051	Unknown table 'test.t3'
+drop view if exists t1_view,t2_view,t3_view;
+Warnings:
+Note	1051	Unknown table 'test.t1_view'
+Note	1051	Unknown table 'test.t2_view'
+Note	1051	Unknown table 'test.t3_view'
+create force view t1_view (c,d) as select a,b from t1;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` (`c`,`d`) AS select `a` AS `a`,`b` AS `b` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'test.t1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+describe t1_view;
+ERROR HY000: View 'test.t1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+desc t1_view;
+ERROR HY000: View 'test.t1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from t1;
+a	b
+1	2
+1	3
+2	4
+2	5
+3	10
+select * from t1_view;
+c	d
+1	2
+1	3
+2	4
+2	5
+3	10
+describe t1_view;
+Field	Type	Null	Key	Default	Extra
+c	int	YES		NULL	
+d	int	YES		NULL	
+desc t1_view;
+Field	Type	Null	Key	Default	Extra
+c	int	YES		NULL	
+d	int	YES		NULL	
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` (`c`,`d`) AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+drop table t1;
+drop view t1_view;
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+create force view t1_view (c,d) as select a,b from t1;
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` (`c`,`d`) AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+describe t1_view;
+Field	Type	Null	Key	Default	Extra
+c	int	YES		NULL	
+d	int	YES		NULL	
+desc t1_view;
+Field	Type	Null	Key	Default	Extra
+c	int	YES		NULL	
+d	int	YES		NULL	
+select * from t1;
+a	b
+1	2
+1	3
+2	4
+2	5
+3	10
+select * from t1_view;
+c	d
+1	2
+1	3
+2	4
+2	5
+3	10
+describe t1_view;
+Field	Type	Null	Key	Default	Extra
+c	int	YES		NULL	
+d	int	YES		NULL	
+describe t1_view;
+Field	Type	Null	Key	Default	Extra
+c	int	YES		NULL	
+d	int	YES		NULL	
+desc t1_view;
+Field	Type	Null	Key	Default	Extra
+c	int	YES		NULL	
+d	int	YES		NULL	
+drop table t1;
+drop view t1_view;
+create or replace force view t1_view (c,d) as select a,b from t1;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from t1;
+a	b
+1	2
+1	3
+2	4
+2	5
+3	10
+select * from t1_view;
+c	d
+1	2
+1	3
+2	4
+2	5
+3	10
+describe t1_view;
+Field	Type	Null	Key	Default	Extra
+c	int	YES		NULL	
+d	int	YES		NULL	
+drop table t1;
+drop view t1_view;
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+create or replace force view t1_view (c,d) as select a,b from t1;
+select * from t1;
+a	b
+1	2
+1	3
+2	4
+2	5
+3	10
+select * from t1_view;
+c	d
+1	2
+1	3
+2	4
+2	5
+3	10
+describe t1_view;
+Field	Type	Null	Key	Default	Extra
+c	int	YES		NULL	
+d	int	YES		NULL	
+drop table t1;
+drop view t1_view;
+create or replace force view t2_view (c,d) as select * from t2;
+Warnings:
+Error	1146	Table 'test.t2' doesn't exist
+Warning	7564	View created with compilation errors.
+show create view t2_view;
+View	Create View	character_set_client	collation_connection
+t2_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t2_view` (`c`,`d`) AS select  *  from `t2`	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'test.t2_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+describe t2_view;
+ERROR HY000: View 'test.t2_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+desc t2_view;
+ERROR HY000: View 'test.t2_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table t2 (a int, b int);
+insert into t2 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from t2;
+a	b
+1	2
+1	3
+2	4
+2	5
+3	10
+select * from t2_view;
+c	d
+1	2
+1	3
+2	4
+2	5
+3	10
+describe t2_view;
+Field	Type	Null	Key	Default	Extra
+c	int	YES		NULL	
+d	int	YES		NULL	
+desc t2_view;
+Field	Type	Null	Key	Default	Extra
+c	int	YES		NULL	
+d	int	YES		NULL	
+drop table t2;
+drop view t2_view;
+create or replace force view t3_view as select * from t3;
+Warnings:
+Error	1146	Table 'test.t3' doesn't exist
+Warning	7564	View created with compilation errors.
+show create view t3_view;
+View	Create View	character_set_client	collation_connection
+t3_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t3_view` AS select  *  from `t3`	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'test.t3_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+describe t3_view;
+ERROR HY000: View 'test.t3_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+desc t3_view;
+ERROR HY000: View 'test.t3_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table t3 (a int, b int);
+insert into t3 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from t3;
+a	b
+1	2
+1	3
+2	4
+2	5
+3	10
+select * from t3_view;
+a	b
+1	2
+1	3
+2	4
+2	5
+3	10
+describe t3_view;
+Field	Type	Null	Key	Default	Extra
+a	int	YES		NULL	
+b	int	YES		NULL	
+desc t3_view;
+Field	Type	Null	Key	Default	Extra
+a	int	YES		NULL	
+b	int	YES		NULL	
+drop table t3;
+drop view t3_view;
+drop table if exists tt1;
+Warnings:
+Note	1051	Unknown table 'test.tt1'
+drop view if exists vtt1;
+Warnings:
+Note	1051	Unknown table 'test.vtt1'
+create force view vtt1 as select * from tt1;
+Warnings:
+Error	1146	Table 'test.tt1' doesn't exist
+Warning	7564	View created with compilation errors.
+select * from vtt1;
+ERROR HY000: View 'test.vtt1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table tt1 (id1 int, id2 int);
+insert into tt1 values (1,2);
+insert into tt1 values (10,20);
+select * from vtt1;
+id1	id2
+1	2
+10	20
+drop table tt1;
+select * from vtt1;
+ERROR HY000: View 'test.vtt1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table tt1 (id2 int);
+select * from vtt1;
+ERROR HY000: View 'test.vtt1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+drop table tt1;
+create table tt1 (id2 int, id1 int);
+insert into tt1 values (1,2);
+insert into tt1 values (10,20);
+select * from vtt1;
+id1	id2
+2	1
+20	10
+drop table tt1;
+create table tt1 (id3 int, id2 int, id1 int);
+insert into tt1 values (1,2,300);
+insert into tt1 values (10,20,300);
+select * from vtt1;
+id1	id2
+300	2
+300	20
+drop table if exists tt1;
+drop view if exists vtt1;
+CREATE PROCEDURE force_view()
+BEGIN
+create force view vtt1 as select * from tt1;
+END//
+call force_view();
+Warnings:
+Error	1146	Table 'test.tt1' doesn't exist
+Warning	7564	View created with compilation errors.
+create table tt1 (id2 int, id1 int);
+select * from vtt1;
+id2	id1
+DROP PROCEDURE force_view;
+drop table if exists tt1;
+drop view if exists vtt1;
+CREATE PROCEDURE force_view()
+BEGIN
+create force view vtt1 as select * from tt1;
+create table tt1 (id2 int, id1 int);
+insert into tt1 values (1,2);
+insert into tt1 values (10,20);
+select * from vtt1;
+END//
+call force_view();
+id2	id1
+1	2
+10	20
+DROP PROCEDURE force_view;
+drop table if exists tt1;
+drop view if exists vtt1;
+prepare stmt FROM 'create or replace force view t1_view as select * from t1 union select * from t2';
+ERROR HY000: This command is not supported in the prepared statement protocol yet
+prepare stmt FROM 'create or replace force view t1_view as select * from t1';
+ERROR HY000: This command is not supported in the prepared statement protocol yet
+EXECUTE IMMEDIATE 'create or replace force view t1_view as select * from t1 union select * from t2';
+ERROR HY000: This command is not supported in the prepared statement protocol yet
+EXECUTE IMMEDIATE 'create or replace force view t1_view as select * from t1';
+ERROR HY000: This command is not supported in the prepared statement protocol yet
+drop table if exists t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+drop view if exists v1_view;
+Warnings:
+Note	1051	Unknown table 'test.v1_view'
+drop view if exists v2_view;
+Warnings:
+Note	1051	Unknown table 'test.v2_view'
+create view v1_view as select 'a',1;
+create force view v2_view as select * from t1 union all select * from v1_view;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+select * from v2_view;
+ERROR HY000: View 'test.v2_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from v2_view;
+a	b
+1	2
+1	3
+2	4
+2	5
+3	10
+a	1
+drop table if exists t1;
+drop view if exists v1_view;
+drop view if exists v2_view;
+create force view v1_view as select * from t1;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+select * from v1_view;
+ERROR HY000: View 'test.v1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+show create view v1_view;
+View	Create View	character_set_client	collation_connection
+v1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1_view` AS select  *  from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'test.v1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table t1 (a int);
+insert into t1 values (1), (2), (3), (4), (5);
+select * from v1_view;
+a
+1
+2
+3
+4
+5
+create table t2 (b int);
+insert into t1 values (11), (12), (13), (14), (15);
+create or replace view v1_view as select * from t2;
+select * from v1_view;
+b
+show create view v1_view;
+View	Create View	character_set_client	collation_connection
+v1_view	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1_view` AS select `t2`.`b` AS `b` from `t2`	utf8mb4	utf8mb4_0900_ai_ci
+drop view v1_view;
+drop table t1;
+drop table t2;
+create force view v1_view as select * from t1;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+select * from v1_view;
+ERROR HY000: View 'test.v1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+show create view v1_view;
+View	Create View	character_set_client	collation_connection
+v1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1_view` AS select  *  from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'test.v1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table t1 (a int);
+insert into t1 values (1), (2), (3), (4), (5);
+select * from v1_view;
+a
+1
+2
+3
+4
+5
+create table t2 (b int);
+insert into t2 values (11), (12), (13), (14), (15);
+alter view v1_view as select * from t2;
+select * from v1_view;
+b
+11
+12
+13
+14
+15
+show create view v1_view;
+View	Create View	character_set_client	collation_connection
+v1_view	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1_view` AS select `t2`.`b` AS `b` from `t2`	utf8mb4	utf8mb4_0900_ai_ci
+drop view v1_view;
+drop table t1;
+drop table t2;
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+create view t1_view as select * from t1;
+select * from t1_view;
+a	b
+1	2
+1	3
+2	4
+2	5
+3	10
+create force view t1_view as select * from t1;
+ERROR 42S01: Table 't1_view' already exists
+create force view t1_view as select * from t2;
+ERROR 42S01: Table 't1_view' already exists
+create force view t1_view as select * from t1_view;
+ERROR 42S02: Table 'test.t1_view' doesn't exist
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+drop table t1;
+drop view t1_view;
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+create view t1_view as select * from t1;
+drop view t1_view;
+create force view t1_view as select * from t1_view;
+ERROR HY000: `test`.`t1_view` contains view recursion
+create or replace force view t1_view as select * from t2;
+Warnings:
+Error	1146	Table 'test.t2' doesn't exist
+Warning	7564	View created with compilation errors.
+create or replace force view t1_view as select * from t1;
+describe t1_view;
+Field	Type	Null	Key	Default	Extra
+a	int	YES		NULL	
+b	int	YES		NULL	
+desc t1_view;
+Field	Type	Null	Key	Default	Extra
+a	int	YES		NULL	
+b	int	YES		NULL	
+select * from t1;
+a	b
+1	2
+1	3
+2	4
+2	5
+3	10
+select * from t1_view;
+a	b
+1	2
+1	3
+2	4
+2	5
+3	10
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+drop table t1;
+drop view t1_view;
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+create or replace force view t1_view as select a,b from t1;
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+create or replace view t1_view as select a,b from t1;
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+create or replace force view t1_view as select a,b from t1;
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+drop table t1;
+drop view t1_view;
+create or replace force view t1_view as select a,b from t1;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` AS select `a` AS `a`,`b` AS `b` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'test.t1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table t1 (a int, b int);
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+drop table t1;
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'test.t1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+drop view t1_view;
+create or replace force view t1_view as select d.a,e.b,e.avge,ifnull(e.b,0) as used from t1 as d inner join (select a b ,avg(a) as avge from t1 group by a) as e on d.a=e.b;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` AS select `d`.`a` AS `a`,`e`.`b` AS `b`,`e`.`avge` AS `avge`,ifnull(`e`.`b`,0) AS `used` from (`t1` `d` join (select `a` AS `b`,avg(`a`) AS `avge` from `t1` group by `a`) `e` on((`d`.`a` = `e`.`b`)))	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'test.t1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from t1_view;
+a	b	avge	used
+1	1	1.0000	1
+1	1	1.0000	1
+2	2	2.0000	2
+2	2	2.0000	2
+3	3	3.0000	3
+drop table t1;
+drop view t1_view;
+drop table if exists t2;
+Warnings:
+Note	1051	Unknown table 'test.t2'
+drop view if exists t2_view;
+Warnings:
+Note	1051	Unknown table 'test.t2_view'
+create or replace force view t1_view as select * from t1,t2 where t2.c1=1;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` AS select  *  from (`t1` join `t2`) where (`t2`.`c1` = 1)	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'test.t1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+select * from t1_view;
+ERROR HY000: View 'test.t1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table t1 (a int, b int);
+create table t2 (c1 int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+insert into t2 values (1),(2),(3),(4);
+create or replace view t2_view as select * from t1,t2 where t2.c1=1;
+select * from t1_view;
+a	b	c1
+1	2	1
+1	3	1
+2	4	1
+2	5	1
+3	10	1
+select * from t2_view;
+a	b	c1
+1	2	1
+1	3	1
+2	4	1
+2	5	1
+3	10	1
+drop table if exists t1,t2;
+drop view if exists t1_view,t2_view;
+create or replace force view t1_view as WITH  cte1 AS (SELECT b FROM t1), cte2 AS (SELECT a FROM t2) SELECT a,b FROM cte1 JOIN cte2 WHERE cte1.b = cte2.a;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` AS with `cte1` as (select `b` AS `b` from `t1`), `cte2` as (select `a` AS `a` from `t2`) select `a` AS `a`,`b` AS `b` from (`cte1` join `cte2`) where (`cte1`.`b` = `cte2`.`a`)	utf8mb4	utf8mb4_0900_ai_ci
+Warnings:
+Warning	1356	View 'test.t1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table t2 (aa int, bb int);
+insert into t2 values (1,2), (1,3), (2,4), (2,5), (3,10);
+create table t1 (a int, b int);
+insert into t1(a,b) values (11,null), (22,4), (4,5), (5,11);
+select * from t1_view;
+ERROR HY000: View 'test.t1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create or replace force view t1_view as select * from t1;
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `t1_view` AS select `t1`.`a` AS `a`,`t1`.`b` AS `b` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+select * from t1_view;
+a	b
+11	NULL
+22	4
+4	5
+5	11
+create or replace view t2_view as WITH  cte1 AS (SELECT b FROM t1), cte2 AS (SELECT a FROM t2) SELECT a,b FROM cte1 JOIN cte2 WHERE cte1.b = cte2.a;
+ERROR 42S22: Unknown column 'a' in 'field list'
+drop table if exists t1,t2;
+drop view if exists t1_view,t2_view;
+Warnings:
+Note	1051	Unknown table 'test.t2_view'
+create or replace force view t1_view as SELECT a FROM t1 where a=1 GROUP BY a HAVING IFNULL((SELECT b FROM t2 WHERE b > 2),
+(SELECT c FROM t2 WHERE c=a AND b > 2 ORDER BY b)) > 3;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+CREATE TABLE t1 (a int);
+INSERT INTO t1 VALUES (2), (4), (1), (3);
+select * from t1_view;
+ERROR HY000: View 'test.t1_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+CREATE TABLE t2 (b int, c int);
+INSERT INTO t2 VALUES (2,1), (1,3), (2,1), (4,4), (2,2), (1,4);
+select * from t1_view;
+a
+1
+drop table if exists t1,t2;
+drop view if exists t1_view;
+drop table if exists t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+drop view if exists t1_view;
+Warnings:
+Note	1051	Unknown table 'test.t1_view'
+create or replace force view t1_view as select * from t1 a join t1 b;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+create table tX (a int, b int);
+ERROR HYXXX: View 'test.tX_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+show warnings;
+Level	Code	Message
+Error	XXXX	View 'test.tX_view' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+drop view t1_view;
+create table t1 (a int, b int);
+drop table t1;
+create or replace force view t1_view as select a,b from t1 a join t1 b;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+create table t1 (a int, b int);
+show warnings;
+Level	Code	Message
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from t1;
+a	b
+1	2
+1	3
+2	4
+2	5
+3	10
+select * from t1_view;
+ERROR 23000: Column 'a' in field list is ambiguous
+drop table t1;
+drop view t1_view;
+set sql_mode = oracle;
+drop table if exists gt_t_t1;
+Warnings:
+Note	1051	Unknown table 'test.gt_t_t1'
+drop view if exists t1_view;
+Warnings:
+Note	1051	Unknown table 'test.t1_view'
+CREATE GLOBAL TEMPORARY TABLE gt_t_t1 (a int, b int) on commit preserve rows;
+insert into gt_t_t1 values (111,2), (111,3), (222,4), (222,5), (333,10);
+create or replace force view t1_view as select * from gt_t_t1;
+select * from t1_view;
+a	b
+111	2
+111	3
+222	4
+222	5
+333	10
+show create view t1_view;
+View	Create View	character_set_client	collation_connection
+t1_view	CREATE FORCE DEFINER="root"@"localhost" SQL SECURITY DEFINER VIEW "t1_view" AS select "gt_t_t1"."a" AS "a","gt_t_t1"."b" AS "b" from "gt_t_t1"	utf8mb4	utf8mb4_0900_ai_ci
+drop table gt_t_t1;
+drop view t1_view;
+create force view t1_view as select a,b from t1_view;
+ERROR HY000: `test`.`t1_view` contains view recursion
+create force view t1_view as select * from t1_view;
+ERROR HY000: `test`.`t1_view` contains view recursion
+create force view t1_view as select co1,co1 from t1;
+ERROR 42S21: Duplicate column name 'co1'
+create force view t1_view(co1,co1) as select * from t1;
+ERROR 42S21: Duplicate column name 'co1'
+create or replace force view t1_view as select a.a,b.a from t1 a join t1 b;
+ERROR 42S21: Duplicate column name 'a'
+drop table if exists t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+drop view if exists t1_view;
+Warnings:
+Note	1051	Unknown table 'test.t1_view'
+create or replace force view t1_view as select (select c1 from t1),(select c1 from t1) from t1 ;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+CREATE TABLE t1 (
+id int NOT NULL,
+c1 varchar(200) DEFAULT NULL,
+c2 varchar(200) DEFAULT NULL,
+PRIMARY KEY (id)
+);
+insert into t1 values(1,1,1);
+select * from t1_view;
+(select c1 from t1)	Name_exp_(select c1 from t1)
+1	1
+drop table if exists t1;
+drop view if exists t1_view;
+CREATE OR REPLACE FORCE VIEW t1_view (col0,col0) AS select col0,col0 from t1;
+ERROR 42S21: Duplicate column name 'col0'
+CREATE OR REPLACE FORCE VIEW t1_view (col0,col0) AS select col0,col1 from t1;
+ERROR 42S21: Duplicate column name 'col0'
+CREATE OR REPLACE FORCE VIEW t1_view (col0,col1) AS select col0,col0 from t1;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+drop view if exists t1_view;
+create or replace force view t1_view(c1,c2) as select 2*8,2*8,2*8 from t1;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+create table t1 (a int);
+drop table if exists t1;
+drop view if exists t1_view;
+create or replace force view t1_view(c1,c2) as select a1,a1,a1 from t1;
+Warnings:
+Error	1146	Table 'test.t1' doesn't exist
+Warning	7564	View created with compilation errors.
+create table t1 (a int);
+drop table if exists t1;
+drop view if exists t1_view;
+create table t1 (a int);
+create or replace force view t1_view(c1,c2) as select 2*8,2*8,2*8 from t1;
+drop table if exists t1;
+drop view if exists t1_view;

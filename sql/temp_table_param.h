@@ -144,6 +144,8 @@ class Temp_table_param {
     an index.
    */
   bool allow_group_via_temp_table{true};
+
+  longlong allow_connect_by_tmp_table{0};
   /**
     Number of outer_sum_funcs i.e the number of set functions that are
     aggregated in a query block outer to this subquery.

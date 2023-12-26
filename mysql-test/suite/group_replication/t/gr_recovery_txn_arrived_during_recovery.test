@@ -140,6 +140,7 @@ SET DEBUG_SYNC= "now SIGNAL continue_commit";
 --let $assert_cond= "[SELECT COUNT(*) from performance_schema.replication_group_members WHERE MEMBER_STATE=\"ONLINE\"]" = 2
 --source include/assert.inc
 
+--sleep 3
 --let $assert_text= On the recovered member, the table should contain 4 elements
 --let $assert_cond= [select count(*) as count from t1] = 4;
 --source include/assert.inc

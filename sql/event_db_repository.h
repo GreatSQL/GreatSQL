@@ -29,6 +29,8 @@
 #include "lex_string.h"
 #include "my_inttypes.h"
 #include "my_time_t.h"  // my_time_t
+#include "sql_string.h"
+
 class Event_basic;
 class Event_parse_data;
 class THD;
@@ -89,17 +91,19 @@ class Event_db_repository {
 
  public:
   static bool create_event(THD *thd, Event_parse_data *parse_data,
-                           bool create_if_not, bool *event_already_exists);
+                           bool create_if_not, bool *event_already_exists,
+                           String *job = nullptr);
 
   static bool update_event(THD *thd, Event_parse_data *parse_data,
                            const LEX_CSTRING *new_dbname,
-                           const LEX_CSTRING *new_name);
+                           const LEX_CSTRING *new_name, String *job = nullptr);
 
   static bool drop_event(THD *thd, LEX_CSTRING db, LEX_CSTRING name,
                          bool drop_if_exists, bool *event_exists);
 
   static bool drop_schema_events(THD *thd, const dd::Schema &schema);
-
+  static bool load_named_event(THD *thd, const char *dbname, const char *name,
+                               Event_basic *et);
   static bool load_named_event(THD *thd, LEX_CSTRING dbname, LEX_CSTRING name,
                                Event_basic *et);
 

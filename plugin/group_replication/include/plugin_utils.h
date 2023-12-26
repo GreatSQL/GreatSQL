@@ -198,10 +198,22 @@ class Synchronized_queue : public Synchronized_queue_interface<T> {
 
   bool push(const T &value) override {
     mysql_mutex_lock(&lock);
-    queue.push(value);
+    queue.push_back(value);
     mysql_cond_broadcast(&cond);
     mysql_mutex_unlock(&lock);
 
+    return false;
+  }
+
+  bool push_all(std::deque<T> *delayed_queue) {
+    mysql_mutex_lock(&lock);
+    while (!delayed_queue->empty()) {
+      T out = delayed_queue->back();
+      delayed_queue->pop_back();
+      queue.push_front(out);
+    }
+    mysql_cond_broadcast(&cond);
+    mysql_mutex_unlock(&lock);
     return false;
   }
 
@@ -211,7 +223,7 @@ class Synchronized_queue : public Synchronized_queue_interface<T> {
     while (queue.empty())
       mysql_cond_wait(&cond, &lock); /* purecov: inspected */
     *out = queue.front();
-    queue.pop();
+    queue.pop_front();
     mysql_mutex_unlock(&lock);
 
     return false;
@@ -221,7 +233,7 @@ class Synchronized_queue : public Synchronized_queue_interface<T> {
     mysql_mutex_lock(&lock);
     while (queue.empty())
       mysql_cond_wait(&cond, &lock); /* purecov: inspected */
-    queue.pop();
+    queue.pop_front();
     mysql_mutex_unlock(&lock);
 
     return false;
@@ -249,7 +261,7 @@ class Synchronized_queue : public Synchronized_queue_interface<T> {
  protected:
   mysql_mutex_t lock;
   mysql_cond_t cond;
-  std::queue<T, std::list<T, Malloc_allocator<T>>> queue;
+  std::deque<T, Malloc_allocator<T>> queue;
 };
 
 /**
@@ -281,7 +293,7 @@ class Abortable_synchronized_queue : public Synchronized_queue<T> {
     if (m_abort) {
       res = true;
     } else {
-      this->queue.push(value);
+      this->queue.push_back(value);
       mysql_cond_broadcast(&this->cond);
     }
 
@@ -306,7 +318,7 @@ class Abortable_synchronized_queue : public Synchronized_queue<T> {
 
     if (!m_abort) {
       *out = this->queue.front();
-      this->queue.pop();
+      this->queue.pop_front();
     }
 
     const bool result = m_abort;
@@ -327,7 +339,7 @@ class Abortable_synchronized_queue : public Synchronized_queue<T> {
       mysql_cond_wait(&this->cond, &this->lock);
 
     if (!m_abort) {
-      this->queue.pop();
+      this->queue.pop_front();
     }
 
     const bool result = m_abort;
@@ -373,7 +385,7 @@ class Abortable_synchronized_queue : public Synchronized_queue<T> {
     while (this->queue.size()) {
       T elem;
       elem = this->queue.front();
-      this->queue.pop();
+      this->queue.pop_front();
       if (delete_elements) {
         delete elem;
       }

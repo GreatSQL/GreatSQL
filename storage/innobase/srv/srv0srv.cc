@@ -86,6 +86,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_psi_config.h"
 
 #endif /* !UNIV_HOTBACKUP */
+#include "srv0file_purge.h"
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "sync0sync.h"
@@ -1354,6 +1355,7 @@ void srv_free(void) {
   ut_d(os_event_destroy(srv_threads.m_shutdown_cleanup_dbg));
 
   srv_threads = {};
+  srv_file_purge_destroy();
 }
 
 /** Initializes the synchronization primitives, memory system, and the thread
@@ -1367,6 +1369,7 @@ static void srv_general_init() {
   que_init();
   row_mysql_init();
   undo_spaces_init();
+  srv_file_purge_init();
 }
 
 /** Boots the InnoDB server. */

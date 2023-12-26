@@ -1,0 +1,19 @@
+SET sql_mode=ORACLE;
+SET SESSION debug='+d,skip_dd_table_access_check';
+CREATE PROCEDURE p1(a INT DEFAULT 12345)
+AS BEGIN
+SELECT a, b, c;
+END|
+CREATE FUNCTION f1(a INT DEFAULT 54321) RETURN INT
+AS BEGIN
+RETURN a;
+END|
+SELECT b.options FROM mysql.parameters b, mysql.routines a WHERE a.id=b.routine_id AND a.name LIKE 'p1' ;
+options
+default_value=12345;
+SELECT b.options FROM mysql.parameters b, mysql.routines a WHERE a.id=b.routine_id AND a.name LIKE 'f1' ;
+options
+NULL
+default_value=54321;
+DROP PROCEDURE p1;
+DROP FUNCTION f1;

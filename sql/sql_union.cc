@@ -780,6 +780,10 @@ bool Query_expression::prepare(THD *thd, Query_result *sel_result,
                     Item_ref::OUTER_REF));
         if (!item_tmp->fixed) item_tmp = item_tmp->real_item();
 
+        if (item_tmp->is_ora_udt_type()) {
+          my_error(ER_NOT_SUPPORTED_YET, MYF(0), "udt value in join sql");
+          return true;
+        }
         auto holder = new Item_type_holder(thd, item_tmp);
         if (!holder) return true; /* purecov: inspected */
         if (is_recursive()) {
@@ -1793,6 +1797,23 @@ bool Query_expression::ExecuteIteratorQuery(THD *thd) {
 
   thd->get_stmt_da()->reset_current_row_for_condition();
 
+  auto dbms_output_displayer = create_scope_guard([this, thd] {
+    if (!this->master) {
+      switch (thd->lex->sql_command) {
+        case SQLCOM_INSERT_ALL_SELECT:
+        case SQLCOM_INSERT_SELECT:
+        case SQLCOM_DELETE_MULTI:
+        case SQLCOM_UPDATE_MULTI:
+        case SQLCOM_CREATE_TABLE:
+          thd->show_dbms_output(true);
+          break;
+        default:
+          thd->show_dbms_output(false);
+          break;
+      }
+    }
+  });
+
   {
     auto join_cleanup = create_scope_guard([this, thd] {
       /** for parallel scan, we should end the pq iterator */
@@ -1847,6 +1868,9 @@ bool Query_expression::ExecuteIteratorQuery(THD *thd) {
         break;
       }
       Query_block *sl = thd->lex->query_block;
+      if (sl->has_sequence && sl->need_to_reset_flag) {
+        sl->reset_sequence_read_flag();
+      }
       if (sl->rownum_func && sl->need_to_reset_flag) {
         sl->reset_rownum_read_flag();
       }

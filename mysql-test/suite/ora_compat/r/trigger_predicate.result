@@ -1,0 +1,785 @@
+set serveroutput on;
+set sql_mode=oracle;
+DROP TABLE IF EXISTS `trg`;
+CREATE TABLE `trg` (
+`id` int DEFAULT NULL,
+`name` varchar(200) DEFAULT NULL
+);
+DROP TABLE IF EXISTS `trg1`;
+CREATE TABLE `trg1` (
+`id` int DEFAULT NULL,
+`name` varchar(200) DEFAULT NULL
+);
+DROP TABLE IF EXISTS `tt_air`;
+create or replace type t_air as object(id int,type varchar(200));
+CREATE TABLE `tt_air` (
+`id` int DEFAULT NULL,
+`name1` t_air DEFAULT NULL
+);
+CREATE TABLE `t#n` (
+`id` int DEFAULT NULL,
+`name` varchar(200) DEFAULT NULL
+);
+CREATE  TRIGGER trg1 BEFORE insert 
+ON trg FOR EACH ROW
+BEGIN
+IF inserting THEN
+:NEW.name:=  '-inserting_'||:NEW.name;
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER trg2 BEFORE update 
+ON trg FOR EACH ROW
+BEGIN
+IF updating THEN
+:NEW.name:=  '-updating_'||:NEW.name;
+END IF;
+END$$
+do sleep(0.01);
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	-inserting_name1
+-2	-inserting_name2
+-3	-inserting_name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	-inserting_name2
+-3	-inserting_name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	-inserting_name2
+-3	-inserting_name3
+drop trigger if exists trg1;
+drop trigger if exists trg2;
+drop trigger if exists trg3;
+delete from trg;
+CREATE  TRIGGER trg1_1 BEFORE insert or update
+ON trg FOR EACH ROW
+BEGIN
+IF inserting  THEN
+:NEW.name:=  '-inserting_trg1_1_'||:NEW.name;
+END IF;
+IF updating  THEN
+:NEW.name:=  '-updating_trg1_1_'||:NEW.name;
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER trg1_2 BEFORE insert or delete
+ON trg FOR EACH ROW
+BEGIN
+IF inserting THEN
+:NEW.name:=  '-inserting_trg1_2_'||:NEW.name;
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER trg1_3 BEFORE update or delete
+ON trg FOR EACH ROW
+BEGIN
+IF updating THEN
+:NEW.name:=  '-updating_trg1_3_'||:NEW.name;
+END IF;
+END$$
+do sleep(0.01);
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	-inserting_trg1_1_-inserting_trg1_2_name1
+-2	-inserting_trg1_1_-inserting_trg1_2_name2
+-3	-inserting_trg1_1_-inserting_trg1_2_name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	-inserting_trg1_1_-inserting_trg1_2_name2
+-3	-inserting_trg1_1_-inserting_trg1_2_name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	-inserting_trg1_1_-inserting_trg1_2_name2
+-3	-inserting_trg1_1_-inserting_trg1_2_name3
+drop trigger if exists trg1_1;
+drop trigger if exists trg1_2;
+drop trigger if exists trg1_3;
+delete from trg;
+CREATE  TRIGGER trg2_1 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+BEGIN
+IF inserting THEN
+:NEW.name:=  '-inserting_trg2_1_'||:NEW.name;
+END IF;
+IF updating THEN
+:NEW.name:=  '-updating_trg2_1_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	-inserting_trg2_1_name1
+-2	-inserting_trg2_1_name2
+-3	-inserting_trg2_1_name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	-inserting_trg2_1_name2
+-3	-inserting_trg2_1_name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	-inserting_trg2_1_name2
+-3	-inserting_trg2_1_name3
+drop trigger if exists trg2_1;
+delete from trg;
+CREATE  TRIGGER trg2_2 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+BEGIN
+IF inserting THEN
+:NEW.name:=  '-inserting_trg2_2_'||:NEW.name;
+END IF;
+IF updating('name') THEN
+:NEW.name:=  '-updating_trg2_2_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	-inserting_trg2_2_name1
+-2	-inserting_trg2_2_name2
+-3	-inserting_trg2_2_name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	-updating_trg2_2_name_1
+-2	-inserting_trg2_2_name2
+-3	-inserting_trg2_2_name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	-inserting_trg2_2_name2
+-3	-inserting_trg2_2_name3
+drop trigger if exists trg2_2;
+delete from trg;
+CREATE  TRIGGER trg2_3 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+BEGIN
+IF inserting THEN
+:NEW.name:=  '-inserting_trg2_3_'||:NEW.name;
+END IF;
+IF updating('name1') THEN
+:NEW.name:=  '-updating_name1_trg2_3_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	-inserting_trg2_3_name1
+-2	-inserting_trg2_3_name2
+-3	-inserting_trg2_3_name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	-inserting_trg2_3_name2
+-3	-inserting_trg2_3_name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	-inserting_trg2_3_name2
+-3	-inserting_trg2_3_name3
+drop trigger if exists trg2_3;
+delete from trg;
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	name2
+-3	name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	name2
+-3	name3
+drop trigger if exists trg2_4;
+delete from trg;
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	name2
+-3	name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	name2
+-3	name3
+drop trigger if exists trg2_5;
+delete from trg;
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	name2
+-3	name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	name2
+-3	name3
+drop trigger if exists trg2_6;
+delete from trg;
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	name2
+-3	name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	name2
+-3	name3
+drop trigger if exists trg2_7;
+delete from trg;
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	name2
+-3	name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	name2
+-3	name3
+drop trigger if exists trg2_7;
+delete from trg;
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	name2
+-3	name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	name2
+-3	name3
+drop trigger if exists trg2_8;
+delete from trg;
+CREATE  TRIGGER trg2_9 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+DECLARE
+a int :=1;
+BEGIN
+IF updating(to_char('name')) THEN
+:NEW.name:=  '-updating_trg2_9_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	-updating_trg2_9_name_1
+-2	name2
+-3	name3
+update trg a set a.name ='name_2' where a.id=-2;
+select * from trg;
+id	name
+-1	-updating_trg2_9_name_1
+-2	-updating_trg2_9_name_2
+-3	name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	-updating_trg2_9_name_2
+-3	name3
+drop trigger if exists trg2_9;
+delete from trg;
+CREATE  TRIGGER trg2_9 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+DECLARE
+name varchar2(200) :='name';
+BEGIN
+IF updating(name) THEN
+:NEW.name:=  '-updating_trg2_9_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	-updating_trg2_9_name_1
+-2	name2
+-3	name3
+delete from trg where id=-1;
+select * from trg;
+id	name
+-2	name2
+-3	name3
+drop trigger if exists trg2_9;
+delete from trg;
+CREATE  TRIGGER trg2_10 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+DECLARE
+a int :=1;
+BEGIN
+IF updating(updating('name')) THEN
+:NEW.name:=  '-updating_trg2_10_'||:NEW.name;
+END IF;
+END$$
+drop trigger if exists trg2_10;
+CREATE  TRIGGER trg2_10 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+DECLARE
+a int :=1;
+BEGIN
+IF updating(updating('name')) THEN
+:NEW.name:=  '-updating_trg2_10_'||:NEW.name;
+END IF;
+END$$
+drop trigger if exists trg2_10;
+CREATE  TRIGGER trg2_10 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+DECLARE
+a int :=1;
+BEGIN
+IF updating(updating('name') +1) THEN
+:NEW.name:=  '-updating_trg2_10_'||:NEW.name;
+END IF;
+END$$
+drop trigger if exists trg2_10;
+CREATE  TRIGGER trg2_10 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+DECLARE
+a int:=-1;
+BEGIN
+IF updating(lnnvl('' is null)) THEN
+:NEW.name:=  '-updating_trg2_10_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	name2
+-3	name3
+delete from trg ;
+drop trigger if exists trg2_10;
+CREATE  TRIGGER trg2_10 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+DECLARE
+a int:=-1;
+BEGIN
+IF updating(null) THEN
+:NEW.name:=  '-updating_trg2_10_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	name2
+-3	name3
+delete from trg ;
+drop trigger if exists trg2_10;
+CREATE  TRIGGER trg2_10 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+DECLARE
+a int:=-1;
+BEGIN
+IF updating('') THEN
+:NEW.name:=  '-updating_trg2_10_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	name2
+-3	name3
+delete from trg ;
+drop trigger if exists trg2_10;
+CREATE  TRIGGER trg2_10 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+DECLARE
+a int:=-1;
+BEGIN
+IF updating(' ') THEN
+:NEW.name:=  '-updating_trg2_10_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	name2
+-3	name3
+delete from trg ;
+drop trigger if exists trg2_10;
+'Multiple tables update'
+CREATE  TRIGGER trg2_10 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+DECLARE
+a int:=-1;
+BEGIN
+IF updating('name') THEN
+:NEW.name:=  '-updating_trg2_10_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+CREATE  TRIGGER trg2_11 BEFORE insert or update or delete
+ON trg1 FOR EACH ROW
+DECLARE
+a int:=-1;
+BEGIN
+IF updating('name') THEN
+:NEW.name:=  '-updating_trg2_11_'||:NEW.name;
+END IF;
+END$$
+insert into trg1 values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+select * from trg1;
+id	name
+-1	name1
+-2	name2
+-3	name3
+update trg,trg1 set trg.name ='name_1_trg',trg1.name='name_1_trg1',trg1.id=-10 where trg.id=trg1.id and trg.id=-1;
+select * from trg;
+id	name
+-1	-updating_trg2_10_name_1_trg
+-2	name2
+-3	name3
+select * from trg1;
+id	name
+-10	-updating_trg2_11_name_1_trg1
+-2	name2
+-3	name3
+delete from trg ;
+delete from trg1 ;
+drop trigger if exists trg2_10;
+drop trigger if exists trg2_11;
+CREATE  TRIGGER trg2_10 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+DECLARE
+a int:=-1;
+BEGIN
+IF updating('name') THEN
+:NEW.name:=  '-updating_trg2_10_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+execute immediate 'update trg set name=1 where id=-1;';
+select * from trg;
+id	name
+-1	-updating_trg2_10_1
+-2	name2
+-3	name3
+delete from trg ;
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+prepare stam1 from 'update trg set name=1 where id=-1;';
+execute stam1;
+select * from trg;
+id	name
+-1	-updating_trg2_10_1
+-2	name2
+-3	name3
+delete from trg ;
+drop trigger if exists trg2_10;
+CREATE  TRIGGER trg2_10 BEFORE insert or update or delete
+ON `t#n` FOR EACH ROW
+DECLARE
+a int:=-1;
+BEGIN
+IF updating('name') THEN
+:NEW.name:=  '-updating_trg2_11_'||:NEW.name;
+END IF;
+IF updating('id') THEN
+:NEW.id:= :OLD.id + :NEW.id;
+END IF;
+END$$
+insert into `t#n` values(1,'name1');
+select * from `t#n`;
+id	name
+1	name1
+update `t#n` set name='name_update' where id=1;
+select * from `t#n`;
+id	name
+1	-updating_trg2_11_name_update
+update `t#n` set id=100 where id=1;
+select * from `t#n`;
+id	name
+101	-updating_trg2_11_name_update
+delete from `t#n`;
+drop trigger if exists trg2_10;
+set @@udt_format_result='DBA';
+CREATE  TRIGGER trg2_10 BEFORE insert or update or delete
+ON tt_air FOR EACH ROW
+DECLARE
+a int:=-1;
+BEGIN
+IF updating('name1') THEN
+:NEW.name1:=  '-updating_trg2_10_'||:NEW.name1;
+END IF;
+END$$
+insert into tt_air values(1,t_air(10,'aabb'));
+insert into tt_air values(2,t_air(20,'qwed'));
+select * from tt_air;
+id	name1
+1	id:10 | type:aabb
+2	id:20 | type:qwed
+prepare stam1 from 'update tt_air set name1=t_air(10,\'dd\') where id=1;';
+execute stam1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+select * from tt_air;
+id	name1
+1	id:10 | type:aabb
+2	id:20 | type:qwed
+delete from tt_air;
+drop trigger if exists trg2_10;
+CREATE  TRIGGER trg3_1 BEFORE delete
+ON trg FOR EACH ROW
+BEGIN
+IF deleting THEN
+:NEW.name:=  '-deleteing_trg1_3_'||:NEW.name;
+END IF;
+END$$
+ERROR HY000: There is no NEW row in on DELETE trigger
+CREATE  TRIGGER trg3_1 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+BEGIN
+IF deleting THEN
+:NEW.name:=  '-deleteing_trg1_3_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+delete from trg where id=-2;
+ERROR HY000: There is no NEW row in on DELETE trigger
+drop trigger if exists trg3_1;
+delete from trg where id=-2;
+drop trigger if exists trg3_3;
+CREATE  TRIGGER trg3_2 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+BEGIN
+IF inserting THEN
+:old.name:=  '-inserting_trg3_2_'||:NEW.name;
+END IF;
+END$$
+ERROR HY000: Updating of OLD row is not allowed in trigger
+CREATE  TRIGGER trg3_2 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+DECLARE
+a varchar(100) :='';
+BEGIN
+select inserting into a from dual;
+END$$
+CREATE  TRIGGER trg3_4 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+DECLARE
+a varchar(100) :='';
+BEGIN
+select updating into a from dual;
+END$$
+CREATE  TRIGGER trg3_5 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+DECLARE
+a varchar(100) :='';
+BEGIN
+select deleting into a from dual;
+END$$
+CREATE  TRIGGER trg3_7 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+DECLARE
+a varchar(100) :=inserting;
+BEGIN
+END$$
+CREATE  TRIGGER trg3_8 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+DECLARE
+a int :=updating;
+BEGIN
+END$$
+CREATE  TRIGGER trg3_9 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+when(inserting)
+DECLARE
+a int :=1;
+BEGIN
+END$$
+CREATE  TRIGGER trg3_10 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+when(updating('name'))
+DECLARE
+a int :=1;
+BEGIN
+END$$
+CREATE  TRIGGER trg3_11 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+when(deleting)
+DECLARE
+a int :=1;
+BEGIN
+END$$
+CREATE  TRIGGER trg3_12 BEFORE insert or update or delete 
+ON trg FOR EACH ROW
+DECLARE
+a int :=1;
+BEGIN
+IF inserting() THEN
+:NEW.name:=  '-insert_trg3_12_'||:NEW.name;
+END IF;
+END$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ') THEN
+:NEW.name:=  '-insert_trg3_12_'||:NEW.name;
+END IF;
+END' at line 6
+CREATE  TRIGGER trg3_12 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+DECLARE
+name varchar(100) :='name';
+BEGIN
+IF updating(name) THEN
+:NEW.name:=  '-updating_trg3_12_'||:NEW.name;
+END IF;
+END$$
+CREATE OR REPLACE FUNCTION f1 RETURN int
+as
+b int:=0;
+BEGIN
+return updating(b);
+END$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'updating(b);
+END' at line 5
+CREATE or replace PROCEDURE p1() as
+BEGIN
+select inserting into @a;
+END$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'inserting into @a;
+END' at line 3
+CREATE  TRIGGER trg3_13 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+DECLARE
+a int :=1;
+BEGIN
+IF (select inserting from dual) THEN
+:NEW.name:=  '-insert_trg3_13_'||:NEW.name;
+END IF;
+END$$
+CREATE  TRIGGER trg3_14 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+DECLARE
+a int :=1;
+BEGIN
+IF (select updating(name) from trg limit 1) THEN
+:NEW.name:=  '-insert_trg3_14_'||:NEW.name;
+END IF;
+END$$
+CREATE  TRIGGER trg3_135 BEFORE insert or update or delete
+ON trg FOR EACH ROW
+DECLARE
+a int :=1;
+BEGIN
+IF updating((select name from trg limit 1)) THEN
+:NEW.name:=  '-insert_trg1_3_'||:NEW.name;
+END IF;
+END$$
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-3	name3
+-1	-insert_trg3_13_name1
+-2	-insert_trg3_13_name2
+-3	-insert_trg3_13_name3
+execute immediate 'update trg set name=1 where id=-1;';
+select * from trg;
+id	name
+-1	-updating_trg3_12_1
+-3	name3
+-1	-updating_trg3_12_1
+-2	-insert_trg3_13_name2
+-3	-insert_trg3_13_name3
+delete from trg ;
+select inserting from dual;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'inserting from dual' at line 1
+select inserting() from dual;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ') from dual' at line 1
+select inserting('a') from dual;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'inserting('a') from dual' at line 1
+drop table if exists trg;
+drop table if exists trg1;
+drop table if exists `t#n`;
+drop table if exists tt_air;
+drop type  if exists t_air;

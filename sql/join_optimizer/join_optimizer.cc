@@ -3405,6 +3405,7 @@ void CostingReceiver::ProposeHashJoin(
   join_path.hash_join().rewrite_semi_to_inner = rewrite_semi_to_inner;
   join_path.hash_join().tables_to_get_rowid_for = 0;
   join_path.hash_join().allow_spill_to_disk = true;
+  join_path.hash_join().is_foj = false;
 
   // The rows from the inner side of a hash join come in different order from
   // that of the underlying scan, so we need to store row IDs for any
@@ -4392,6 +4393,9 @@ string PrintAccessPath(const AccessPath &path, const JoinHypergraph &graph,
     case AccessPath::ROWNUM_FILTER:
       str += "ROWNUM_FILTER";
       break;
+    case AccessPath::CONNECT_BY_SCAN:
+      str += "CONNECT BY";
+      break;
     case AccessPath::PARALLEL_SCAN:
       str += "PARALLEL_SCAN";
       break;
@@ -4858,7 +4862,7 @@ void CostingReceiver::ProposeAccessPathWithOrderings(
   }
 }
 
-bool CheckSupportedQuery(THD *thd) {
+bool CheckSupportedQuery(THD *thd, JOIN *join) {
   if (thd->lex->m_sql_cmd != nullptr &&
       thd->lex->m_sql_cmd->using_secondary_storage_engine() &&
       !Overlaps(EngineFlags(thd),
@@ -4869,6 +4873,12 @@ bool CheckSupportedQuery(THD *thd) {
              "the secondary engine in use");
     return true;
   }
+
+  if (join->query_block->connect_by_cond()) {
+    my_error(ER_HYPERGRAPH_NOT_SUPPORTED_YET, MYF(0), "connect by");
+    return true;
+  }
+
   return false;
 }
 
@@ -6390,7 +6400,7 @@ static void CacheCostInfoForJoinConditions(THD *thd,
 AccessPath *FindBestQueryPlan(THD *thd, Query_block *query_block,
                               string *trace) {
   JOIN *join = query_block->join;
-  if (CheckSupportedQuery(thd)) return nullptr;
+  if (CheckSupportedQuery(thd, join)) return nullptr;
 
   // The hypergraph optimizer does not do const tables,
   // nor does it evaluate subqueries during optimization.

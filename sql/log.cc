@@ -853,7 +853,9 @@ bool File_query_log::write_slow(THD *thd, ulonglong current_utime,
 
   if (opt_log_slow_sp_statements == 1 && thd->sp_runtime_ctx &&
       my_b_printf(&log_file, "# Stored_routine: %s\n",
-                  thd->sp_runtime_ctx->sp->m_qname.str) == (uint)-1)
+                  thd->sp_runtime_ctx->sp->m_qname.str
+                      ? thd->sp_runtime_ctx->sp->m_qname.str
+                      : "anonymous") == (uint)-1)
     goto err;
 
 #if defined(ENABLED_PROFILING)

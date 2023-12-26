@@ -1441,7 +1441,7 @@ int Clone_Handle::receive_data(Clone_Task *task, uint64_t offset,
 
   if (is_log_file || is_page_copy ||
       file_meta->m_space_id == dict_sys_t::s_invalid_space_id ||
-      file_meta->m_punch_hole) {
+      file_meta->m_punch_hole || callback->encryption()) {
     file_type = OS_CLONE_LOG_FILE;
   }
 

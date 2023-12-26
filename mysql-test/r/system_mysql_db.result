@@ -8,6 +8,8 @@ engine_cost
 func
 general_log
 global_grants
+greatdb_sequences
+greatdb_sequences_persist
 gtid_executed
 help_category
 help_keyword

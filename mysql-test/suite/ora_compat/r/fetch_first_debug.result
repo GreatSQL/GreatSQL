@@ -1,0 +1,19 @@
+create table t (id int);
+insert into t values (1),(2),(3);
+set debug='+debug,oracmp_offset_fetch_read_failed';
+select * from t fetch next 49 percent rows only;
+ERROR HY000: Can't find record in 't'
+set debug='-debug,oracmp_offset_fetch_read_failed';
+select * from t fetch next 49 percent rows only;
+id
+1
+2
+set debug='+debug,oracmp_offset_fetch_init_failed';
+select * from t fetch next 49 percent rows only;
+ERROR HY000: Incorrect partition name
+set debug='-debug,oracmp_offset_fetch_init_failed';
+select * from t fetch next 49 percent rows only;
+id
+1
+2
+drop table t;

@@ -62,6 +62,10 @@ bool Find_thd_with_id::operator()(THD *thd) {
   return (thd->thread_id() == m_thread_id);
 }
 
+void Dbms_alert_get_all_thd::operator()(THD *thd) {
+  m_all_sids.insert(thd->m_dbms_alert_sid);
+}
+
 /**
   Internal class used in do_for_all_thd() and do_for_all_thd_copy()
   implementation.

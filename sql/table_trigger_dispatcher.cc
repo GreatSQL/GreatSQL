@@ -277,6 +277,11 @@ bool Table_trigger_dispatcher::create_trigger(
     destroy(t);
     return true;
   }
+  // add or env
+  if (add_trigger_or_env(thd, t)) {
+    destroy(t);
+    return true;
+  }
 
   return dd::create_trigger(thd, t, lex->sphead->m_trg_chistics.ordering_clause,
                             lex->sphead->m_trg_chistics.anchor_trigger_name);
@@ -314,6 +319,124 @@ bool Table_trigger_dispatcher::prepare_record1_accessors() {
 
   *old_fld = nullptr;
 
+  return false;
+}
+
+/**
+  compare triggers
+
+  @param a  Trigger
+  @param b  Trigger
+
+  @return Operation status.
+    @retval false Success
+    @retval true  Failure
+*/
+
+bool com_trg_asc(Trigger *a, Trigger *b) {
+  if ((a->get_created_timestamp().m_tv_sec >
+       b->get_created_timestamp().m_tv_sec) ||
+      (a->get_created_timestamp().m_tv_sec ==
+           b->get_created_timestamp().m_tv_sec &&
+       a->get_created_timestamp().m_tv_usec >
+           b->get_created_timestamp().m_tv_usec)) {
+    return true;
+  }
+  return false;
+}
+
+bool com_trg_desc(Trigger *a, Trigger *b) {
+  if ((a->get_created_timestamp().m_tv_sec >
+       b->get_created_timestamp().m_tv_sec) ||
+      (a->get_created_timestamp().m_tv_sec ==
+           b->get_created_timestamp().m_tv_sec &&
+       a->get_created_timestamp().m_tv_usec >
+           b->get_created_timestamp().m_tv_usec)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+  Add or env to trigger chain
+
+  @param thd     thread context
+  @param t       Trigger
+  @param event   enum_trigger_event_type
+
+  @return Operation status.
+    @retval false Success
+    @retval true  Failure
+*/
+
+bool Table_trigger_dispatcher::add_trigger_chain(
+    THD *thd, Trigger *t, enum_trigger_event_type event) {
+  Trigger_chain *tc = nullptr;
+
+  // clone trigger
+  ::Trigger *trigger_to_add = dd::clone_trigger(
+      &m_subject_table->mem_root, t, m_subject_table->s->db.str,
+      m_subject_table->s->table_name.str);
+
+  List<Trigger> triggers;
+  if (!trigger_to_add ||
+      triggers.push_back(trigger_to_add, &m_subject_table->mem_root))
+    goto error;
+
+  parse_triggers(thd, &triggers, false);
+
+  if (!trigger_to_add->get_sp() ||
+      trigger_to_add->get_sp()->setup_trigger_fields(
+          thd, this, trigger_to_add->get_subject_table_grant(), false))
+    goto error;
+
+  tc = create_trigger_chain(&m_subject_table->mem_root, event,
+                            t->get_action_time());
+
+  if (!tc || tc->add_trigger(&m_subject_table->mem_root, trigger_to_add))
+    goto error;
+
+  if (thd->variables.sql_mode & MODE_ORACLE) {
+    tc->get_trigger_list().sort(&com_trg_desc);
+    tc->execute_asc = false;
+  } else {
+    tc->get_trigger_list().sort(&com_trg_asc);
+    tc->execute_asc = true;
+  }
+  return false;
+
+error:
+  destroy(trigger_to_add);
+  return true;
+}
+
+/**
+  Add or env to insert, update, delete env
+
+  @param thd     thread context
+  @param t       Trigger
+
+  @return Operation status.
+    @retval false Success
+    @retval true  Failure
+*/
+
+bool Table_trigger_dispatcher::add_trigger_or_env(THD *thd, Trigger *t) {
+  if (t->get_event() == TRG_EVENT_INSERT_UPDATE ||
+      t->get_event() == TRG_EVENT_INSERT_DELETE ||
+      t->get_event() == TRG_EVENT_INSERT_UPDATE_DELETE) {
+    if (add_trigger_chain(thd, t, TRG_EVENT_INSERT)) return true;
+  }
+  if (t->get_event() == TRG_EVENT_INSERT_UPDATE ||
+      t->get_event() == TRG_EVENT_UPDATE_DELETE ||
+      t->get_event() == TRG_EVENT_INSERT_UPDATE_DELETE) {
+    if (add_trigger_chain(thd, t, TRG_EVENT_UPDATE)) return true;
+  }
+  if (t->get_event() == TRG_EVENT_INSERT_DELETE ||
+      t->get_event() == TRG_EVENT_UPDATE_DELETE ||
+      t->get_event() == TRG_EVENT_INSERT_UPDATE_DELETE) {
+    if (add_trigger_chain(thd, t, TRG_EVENT_DELETE)) return true;
+  }
   return false;
 }
 
@@ -364,6 +487,8 @@ bool Table_trigger_dispatcher::finalize_load(THD *thd) {
                                    t->get_action_time());
 
     if (!tc || tc->add_trigger(&m_subject_table->mem_root, t)) return true;
+    // add or env
+    if (add_trigger_or_env(thd, t)) return true;
   }
 
   // Prepare fields for the OLD-row.
@@ -550,6 +675,11 @@ bool Table_trigger_dispatcher::process_triggers(
     enum_trigger_action_time_type action_time, bool old_row_is_record1) {
   if (check_for_broken_triggers()) return true;
 
+  /*
+    record now trigger event
+  */
+  this->in_event = event;
+
   Trigger_chain *tc = get_triggers(event, action_time);
 
   if (!tc) return false;
@@ -569,6 +699,14 @@ bool Table_trigger_dispatcher::process_triggers(
   */
   assert(m_subject_table->pos_in_table_list->trg_event_map &
          static_cast<uint>(1 << static_cast<int>(event)));
+
+  if (thd->variables.sql_mode & MODE_ORACLE && tc->execute_asc) {
+    tc->get_trigger_list().sort(&com_trg_desc);
+    tc->execute_asc = false;
+  } else if (!(thd->variables.sql_mode & MODE_ORACLE) && !tc->execute_asc) {
+    tc->get_trigger_list().sort(&com_trg_asc);
+    tc->execute_asc = true;
+  }
 
   bool rc = tc->execute_triggers(thd);
 

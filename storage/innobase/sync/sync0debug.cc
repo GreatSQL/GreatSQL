@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2012, 2022, Oracle and/or its affiliates.
+Copyright (c) 2023, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -46,6 +47,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <string>
 #include <vector>
 
+#include "srv0file_purge.h"
 #include "sync0rw.h"
 #include "ut0mutex.h"
 
@@ -1485,6 +1487,9 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
                   PFS_NOT_INSTRUMENTED);
 
   LATCH_ADD_MUTEX(DBLWR, SYNC_DBLWR, dblwr_mutex_key);
+
+  LATCH_ADD_MUTEX(FILE_ASYNC_PURGE_LIST, SYNC_NO_ORDER_CHECK,
+                  file_async_purge_list_mutex_key);
 
   LATCH_ADD_MUTEX(TEST_MUTEX, SYNC_NO_ORDER_CHECK, PFS_NOT_INSTRUMENTED);
 

@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -267,8 +268,9 @@ void ReplaceOrderItemsWithTempTableFields(THD *thd, ORDER *order,
       //
       // TODO(sgunders): When we get rid of slices altogether,
       // we can skip this.
-      thd->change_item_tree(pointer_cast<Item **>(&order->item),
-                            pointer_cast<Item *>(new (thd->mem_root) Item *));
+      thd->change_item_tree(
+          pointer_cast<Item **>(order->item),
+          pointer_cast<Item *>(new (thd->mem_root) Item_int(0)));
       thd->change_item_tree(order->item, temp_field_item);
     }
   }

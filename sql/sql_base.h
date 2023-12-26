@@ -113,6 +113,8 @@ void table_def_free(void);
 void table_def_start_shutdown(void);
 void assign_new_table_id(TABLE_SHARE *share);
 uint cached_table_definitions(void);
+std::string create_table_def_key_string(const char *db_name,
+                                        const char *table_name);
 size_t get_table_def_key(const Table_ref *table_list, const char **key);
 TABLE_SHARE *get_table_share(THD *thd, const char *db, const char *table_name,
                              const char *key, size_t key_length, bool open_view,
@@ -186,7 +188,11 @@ TABLE *open_ltable(THD *thd, Table_ref *table_list, thr_lock_type update,
 
 struct ORDER;
 
-bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx);
+#define close_temporary_tables_for_eos(T) close_temporary_tables(T, 2)
+#define close_temporary_tables_for_trans(T) close_temporary_tables(T, 1)
+
+bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx,
+                bool try_global_temp = false);
 
 TABLE *open_table_uncached(THD *thd, const char *path, const char *db,
                            const char *table_name,
@@ -210,8 +216,7 @@ bool fill_record_n_invoke_before_triggers(
     THD *thd, COPY_INFO *optype_info, const mem_root_deque<Item *> &fields,
     const mem_root_deque<Item *> &values, TABLE *table,
     enum enum_trigger_event_type event, int num_fields,
-    bool raise_autoinc_has_expl_non_null_val, bool *is_row_changed,
-    bool is_ora_update_set = false);
+    bool raise_autoinc_has_expl_non_null_val, bool *is_row_changed);
 bool fill_record_n_invoke_before_triggers(THD *thd, Field **field,
                                           const mem_root_deque<Item *> &values,
                                           TABLE *table,
@@ -230,8 +235,7 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
 bool fill_record(THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
                  const mem_root_deque<Item *> &values, MY_BITMAP *bitmap,
                  MY_BITMAP *insert_into_fields_bitmap,
-                 bool raise_autoinc_has_expl_non_null_val,
-                 bool is_ora_update_set = false);
+                 bool raise_autoinc_has_expl_non_null_val);
 bool fill_record(THD *thd, TABLE *table, Field **field,
                  const mem_root_deque<Item *> &values, MY_BITMAP *bitmap,
                  MY_BITMAP *insert_into_fields_bitmap,
@@ -309,7 +313,7 @@ bool lock_dictionary_tables(THD *thd, Table_ref *tables, uint count,
 void free_io_cache(TABLE *entry);
 void intern_close_table(TABLE *entry);
 void close_thread_table(THD *thd, TABLE **table_ptr);
-bool close_temporary_tables(THD *thd);
+bool close_temporary_tables(THD *thd, int mode = 0);
 Table_ref *unique_table(const Table_ref *table, Table_ref *table_list,
                         bool check_alias);
 void drop_temporary_table(THD *thd, Table_ref *table_list);

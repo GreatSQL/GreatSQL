@@ -71,6 +71,7 @@ struct RelationalExpression;
 struct TABLE;
 struct TABLE_REF;
 struct Select_limit_counters;
+class Connect_by_param;
 
 /**
   A specification that two specific relational expressions
@@ -263,9 +264,10 @@ struct AccessPath {
     // Access paths that modify tables.
     DELETE_ROWS,
     UPDATE_ROWS,
+    ROWNUM_FILTER,
+    CONNECT_BY_SCAN,
     PARALLEL_SCAN,
-    PQBLOCK_SCAN,
-    ROWNUM_FILTER
+    PQBLOCK_SCAN
   } type;
 
   /// A general enum to describe the safety of a given operation.
@@ -855,6 +857,14 @@ struct AccessPath {
     assert(type == ROWNUM_FILTER);
     return u.rownum_filter;
   }
+  auto &connect_by_scan() {
+    assert(type == CONNECT_BY_SCAN);
+    return u.connect_by_scan;
+  }
+  const auto &connect_by_scan() const {
+    assert(type == CONNECT_BY_SCAN);
+    return u.connect_by_scan;
+  }
 
   auto &parallel_scan() {
     assert(type == PARALLEL_SCAN);
@@ -1102,6 +1112,7 @@ struct AccessPath {
       AccessPath *outer, *inner;
       const JoinPredicate *join_predicate;
       bool allow_spill_to_disk;
+      bool is_foj;
       bool store_rowids;  // Whether we are below a weedout or not.
       bool rewrite_semi_to_inner;
       table_map tables_to_get_rowid_for;
@@ -1271,6 +1282,14 @@ struct AccessPath {
       Item *condition;
     } rownum_filter;
     struct {
+      AccessPath *src_path;
+      Temp_table_param *temp_table_param;
+      TABLE *table;
+      AccessPath *table_path;
+      Connect_by_param *connect_by_param;
+      int ref_slice;
+    } connect_by_scan;
+    struct {
       QEP_TAB *tab;
       TABLE *table;
       Gather_operator *gather;
@@ -1288,6 +1307,8 @@ static_assert(std::is_trivially_destructible<AccessPath>::value,
               "AccessPath must be trivially destructible, as it is allocated "
               "on the MEM_ROOT and not wrapped in unique_ptr_destroy_only"
               "(because multiple candidates during planning could point to "
+              "the same access paths, and refcounting would be expensive)");
+static_assert(sizeof(AccessPath) <= 300,
               "We are creating a lot of access paths in the join "
               "optimizer, so be sure not to bloat it without noticing. "
               "(96 bytes for the base, 48 bytes for the variant.)");
@@ -1646,6 +1667,22 @@ inline AccessPath *NewRownumFilterAccessPath(THD *thd, AccessPath *child,
   path->type = AccessPath::ROWNUM_FILTER;
   path->rownum_filter().child = child;
   path->rownum_filter().condition = condition;
+  return path;
+}
+
+inline AccessPath *NewConnectByAccessPath(THD *thd, AccessPath *src_path,
+                                          Temp_table_param *temp_table_param,
+                                          TABLE *table, AccessPath *table_path,
+                                          Connect_by_param *connect_by_param,
+                                          int ref_slice) {
+  AccessPath *path = new (thd->mem_root) AccessPath;
+  path->type = AccessPath::CONNECT_BY_SCAN;
+  path->connect_by_scan().src_path = src_path;
+  path->connect_by_scan().table_path = table_path;
+  path->connect_by_scan().table = table;
+  path->connect_by_scan().temp_table_param = temp_table_param;
+  path->connect_by_scan().connect_by_param = connect_by_param;
+  path->connect_by_scan().ref_slice = ref_slice;
   return path;
 }
 

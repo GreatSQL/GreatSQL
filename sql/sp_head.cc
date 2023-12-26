@@ -72,6 +72,7 @@
 #include "sql/mdl.h"
 #include "sql/mysqld.h"     // atomic_global_query_id
 #include "sql/opt_trace.h"  // opt_trace_disable_etc
+#include "sql/parse_tree_helpers.h"
 #include "sql/protocol.h"
 #include "sql/protocol_classic.h"
 #include "sql/psi_memory_key.h"
@@ -91,6 +92,7 @@
 #include "sql/sql_parse.h"  // cleanup_items
 #include "sql/sql_profile.h"
 #include "sql/sql_show.h"  // append_identifier
+#include "sql/table_function.h"
 #include "sql/thd_raii.h"
 #include "sql/thr_malloc.h"
 #include "sql/transaction.h"  // trans_commit_stmt
@@ -1568,7 +1570,11 @@ void init_sp_psi_keys() {
                            1);
   mysql_statement_register(category,
                            &sp_instr_set_row_field_table_by_name::psi_info, 1);
+  mysql_statement_register(category,
+                           &sp_instr_set_row_field_table_by_index::psi_info, 1);
   mysql_statement_register(category, &sp_instr_cfetch_bulk::psi_info, 1);
+  mysql_statement_register(category, &sp_instr_copen_for::psi_info, 1);
+  mysql_statement_register(category, &sp_instr_goto::psi_info, 1);
 }
 #endif
 
@@ -1775,6 +1781,7 @@ sp_head::sp_head(MEM_ROOT &&mem_root, enum_sp_type type)
 
   m_trg_chistics.ordering_clause = TRG_ORDER_NONE;
   m_trg_chistics.anchor_trigger_name = NULL_CSTR;
+  m_sig.m_mem_root = &main_mem_root;
 }
 
 void sp_head::init_sp_name(THD *thd, sp_name *spname) {
@@ -2000,6 +2007,11 @@ Field *sp_head::create_result_field(THD *thd, size_t field_max_length,
 
   assert(field->pack_length() == m_return_field_def.pack_length());
 
+  Field_udt_type *field_udt_type = dynamic_cast<Field_udt_type *>(field);
+  if (field_udt_type) {
+    field_udt_type->create_udt_table_from_routine(thd);
+  }
+
   return field;
 }
 
@@ -2030,6 +2042,49 @@ void sp_head::returns_type(THD *thd, String *result) const {
   ::destroy(field);
 }
 
+std::string sp_head::get_unit_type(sp_head *sp) {
+  if (sp == nullptr) return "";
+  if (sp->m_name.length == 0) return "anonymous block";
+
+  std::string s;
+  switch (sp->m_type) {
+    case enum_sp_type::FUNCTION:
+      s = sp->m_parent ? "package body" : "function";
+      break;
+    case enum_sp_type::PROCEDURE:
+      s = sp->m_parent ? "package body" : "procedure";
+      break;
+    case enum_sp_type::TRIGGER:
+      s = "trigger";
+      break;
+    default:
+      break;
+  }
+
+  return s;
+}
+
+void sp_head::get_unit_name(sp_head *sp, std::string *pkname,
+                            std::string *unit_name) {
+  if (sp == nullptr) return;
+  if (pkname == nullptr || unit_name == nullptr) return;
+  if (sp->m_name.length == 0) {
+    *unit_name = std::string("<anonymous>");
+  } else {
+    uint pos = 0;
+    for (; pos < sp->m_name.length; pos++) {
+      if (sp->m_name.str[pos] == '.') break;
+    }
+
+    if (pos >= sp->m_name.length) {
+      *unit_name = std::string(sp->m_name.str, sp->m_name.length);
+    } else {
+      *pkname = std::string(sp->m_name.str, pos);
+      *unit_name = *pkname;
+    }
+  }
+}
+
 bool sp_head::execute(THD *thd, bool merge_da_on_success) {
   char saved_cur_db_name_buf[NAME_LEN + 1];
   LEX_STRING saved_cur_db_name = {saved_cur_db_name_buf,
@@ -2053,6 +2108,11 @@ bool sp_head::execute(THD *thd, bool merge_da_on_success) {
   Object_creation_ctx *saved_creation_ctx = nullptr;
   Diagnostics_area *caller_da = thd->get_stmt_da();
   Diagnostics_area sp_da(false);
+  thd->set_ora_implicit_cursor_attr_rowcount(-1);
+  int64 version = 0;
+  if (m_name.length == 0) {
+    version = Sp_version_changed::get_instance()->sp_anonymous_version();
+  }
 
   /*
     Just reporting a stack overrun error
@@ -2271,12 +2331,62 @@ bool sp_head::execute(THD *thd, bool merge_da_on_success) {
     */
     if (thd->rewritten_query().length()) thd->reset_rewritten_query();
 
+    cur_line = i->yylineno;
+    // dbms_profiler
+    std::shared_ptr<Dbms_profiler_data> dbms_profiler_data;
+    auto &dbms_profiler_info = current_thd->dbms_profiler_info;
+    if (dbms_profiler_info.status() == DBMS_PROFILER_STATUS_RUNING) {
+      std::string package_name;
+      std::string unit_name;
+      sp_head::get_unit_name(this, &package_name, &unit_name);
+
+      sp_package *sp_pk = dynamic_cast<sp_package *>(this);
+      // sp_pk != nullptr show this call from package instantiate
+      if (sp_pk == nullptr && package_name.compare("DBMS_PROFILER") != 0) {
+        int sp_type = m_parent ? (int)enum_sp_type::PACKAGE_BODY : (int)m_type;
+        std::string unit_db(m_db.str, m_db.length);
+        if (m_name.length != 0) {
+          version = Sp_version_changed::get_instance()->sp_version_lookup(
+              unit_db, sp_type, unit_name);
+        }
+        Dbms_profiler_units *dbms_profiler_uint =
+            dbms_profiler_info.find_uint(unit_db, sp_type, unit_name, version);
+        if (dbms_profiler_uint == nullptr) {
+          std::string unit_type = sp_head::get_unit_type(this);
+          std::string unit_owner("<anonymous>");
+          if (m_name.length != 0) {
+            unit_owner = std::string(m_definer_user.str, m_definer_user.length);
+          }
+          dbms_profiler_uint = dbms_profiler_info.create_uint(
+              std::move(unit_type), std::move(unit_owner), std::move(unit_name),
+              unit_db, sp_type, version);
+        }
+
+        if (dbms_profiler_uint != nullptr) {
+          dbms_profiler_data = dbms_profiler_uint->find_data(cur_line);
+          if (!dbms_profiler_data) {
+            dbms_profiler_data = dbms_profiler_uint->create_data(cur_line);
+          }
+        }
+
+        if (dbms_profiler_data) {
+          dbms_profiler_data->before_exec();
+        } else {
+          dbms_profiler_info.stop();
+        }
+      }
+    }
     err_status = i->execute(thd, &ip);
 
 #ifdef HAVE_PSI_STATEMENT_INTERFACE
     MYSQL_END_STATEMENT(thd->m_statement_psi, thd->get_stmt_da());
     thd->m_statement_psi = parent_locker;
 #endif
+
+    if (dbms_profiler_data) {
+      dbms_profiler_data->after_exec();
+      dbms_profiler_data->need_flush = true;
+    }
 
     thd->m_digest = parent_digest;
 
@@ -2534,6 +2644,7 @@ bool sp_head::execute_trigger(THD *thd, const LEX_CSTRING &db_name,
 
   trigger_runtime_ctx->sp = this;
   thd->sp_runtime_ctx = trigger_runtime_ctx;
+  trigger_runtime_ctx->parent_ctx = parent_sp_runtime_ctx;
 
 #ifdef HAVE_PSI_SP_INTERFACE
   PSI_sp_locker_state psi_state;
@@ -2602,7 +2713,6 @@ bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
 
   sp_rcontext *func_runtime_ctx =
       sp_rcontext::create(thd, m_root_parsing_ctx, return_value_fld);
-  Field_row *field_row = dynamic_cast<Field_row *>(return_value_fld);
   if (!func_runtime_ctx) {
     thd->swap_query_arena(backup_arena, &call_arena);
     err_status = true;
@@ -2626,19 +2736,17 @@ bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
     passed. Values are taken from the caller's runtime context and set to the
     runtime context of this function.
   */
-  if (!field_row) {
-    for (arg_no = 0; arg_no < argcount; arg_no++) {
-      /* Arguments must be fixed in Item_func_sp::fix_fields */
-      assert(argp[arg_no]->fixed);
+  for (arg_no = 0; arg_no < argcount; arg_no++) {
+    /* Arguments must be fixed in Item_func_sp::fix_fields */
+    assert(argp[arg_no]->fixed);
 
-      err_status = func_runtime_ctx->set_variable(thd, arg_no, &(argp[arg_no]));
+    err_status = func_runtime_ctx->set_variable(thd, arg_no, &(argp[arg_no]));
 
-      if (err_status) goto err_with_cleanup;
+    if (err_status) goto err_with_cleanup;
 
-      sp_variable *spvar = m_root_parsing_ctx->find_variable(arg_no);
-      if (!spvar) continue;
-      spvar->ref_actual_parameter = argp[arg_no];
-    }
+    sp_variable *spvar = m_root_parsing_ctx->find_variable(arg_no);
+    if (!spvar) continue;
+    spvar->ref_actual_parameter = argp[arg_no];
   }
   /*
     If row-based binlogging, we don't need to binlog the function's call, let
@@ -2680,6 +2788,7 @@ bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
   }
 
   thd->sp_runtime_ctx = func_runtime_ctx;
+  func_runtime_ctx->parent_ctx = parent_sp_runtime_ctx;
   thd->sp_rcontext_layers.push_back(Sp_rcontext_layer(
       func_runtime_ctx, Sp_rcontext_layer::FUNCTION_RUNTIME_CTX));
 
@@ -2904,6 +3013,13 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
           break;
         }
       } else {
+        /*for p1(var in out/in sys_refcursor),it must identify the var.*/
+        Item_field_refcursor *item_row =
+            dynamic_cast<Item_field_refcursor *>(proc_runtime_ctx->get_item(i));
+        Field_refcursor *field_cursor =
+            item_row ? item_row->get_refcursor_field() : nullptr;
+        if (field_cursor && spvar->mode == sp_variable::MODE_IN)
+          field_cursor->m_is_in_mode = true;
         if (proc_runtime_ctx->set_variable(thd, i, &*it_args)) {
           err_status = true;
           break;
@@ -2962,6 +3078,7 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
     thd->variables.option_bits |= OPTION_LOG_OFF;
   }
   thd->sp_runtime_ctx = proc_runtime_ctx;
+  proc_runtime_ctx->parent_ctx = parent_sp_runtime_ctx;
   thd->sp_rcontext_layers.push_back(
       Sp_rcontext_layer(proc_runtime_ctx, Sp_rcontext_layer::SP_RUNTIME_CTX));
 
@@ -3064,6 +3181,24 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
     thd->issue_unsafe_warnings();
 
   return err_status;
+}
+
+bool sp_head::setup_sp_assignment_lex(THD *thd, LEX *assign_lex) {
+  LEX *oldlex = thd->lex;
+
+  LEX *sublex = assign_lex;
+
+  if (!sublex) return true;
+
+  thd->lex = sublex;
+  m_parser_data.push_lex(oldlex);
+  thd->lex->thd = thd;
+
+  sublex->sphead = oldlex->sphead;
+  sublex->set_sp_current_parsing_ctx(oldlex->get_sp_current_parsing_ctx());
+  sublex->sp_lex_in_use = true;
+
+  return false;
 }
 
 bool sp_head::reset_lex(THD *thd) {
@@ -3205,6 +3340,7 @@ bool sp_head::add_instr(THD *thd, sp_instr *instr) {
     entire stored procedure, as their life span is equal.
   */
   instr->m_arena.mem_root = get_persistent_mem_root();
+  instr->yylineno = thd->m_parser_state->m_lip.yylineno;
 
   return m_instructions.push_back(instr);
 }
@@ -3288,7 +3424,7 @@ void sp_head::opt_mark() {
 }
 
 #ifndef NDEBUG
-bool sp_head::show_routine_code(THD *thd) {
+bool sp_head::show_routine_code(THD *thd, bool show_header, bool show_eof) {
   Protocol *protocol = thd->get_protocol();
   char buff[2048];
   String buffer(buff, sizeof(buff), system_charset_info);
@@ -3299,14 +3435,25 @@ bool sp_head::show_routine_code(THD *thd) {
 
   if (check_show_access(thd, &full_access) || !full_access) return true;
 
-  mem_root_deque<Item *> field_list(thd->mem_root);
-  field_list.push_back(new Item_uint(NAME_STRING("Pos"), 0, 9));
-  // 1024 is for not to confuse old clients
-  field_list.push_back(new Item_empty_string(
-      "Instruction", std::max<size_t>(buffer.length(), 1024U)));
-  if (thd->send_result_metadata(field_list,
-                                Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
-    return true;
+  if (show_header) {
+    mem_root_deque<Item *> field_list(thd->mem_root);
+    field_list.push_back(new Item_uint(NAME_STRING("Pos"), 0, 9));
+    // 1024 is for not to confuse old clients
+    field_list.push_back(new Item_empty_string(
+        "Instruction", std::max<size_t>(buffer.length(), 1024U)));
+    if (thd->send_result_metadata(field_list,
+                                  Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
+      return true;
+  } else {
+    // put a separator so that developer can distinguish the different routine.
+    protocol->start_row();
+    protocol->store((longlong)-1);
+    buffer.set("", 0, system_charset_info);
+    protocol->store_string(buffer.ptr(), buffer.length(), system_charset_info);
+    res = protocol->end_row();
+    if (!res && show_eof) my_eof(thd);
+    if (res) return true;
+  }
 
   for (ip = 0; (i = get_instr(ip)); ip++) {
     /*
@@ -3332,7 +3479,7 @@ bool sp_head::show_routine_code(THD *thd) {
     if ((res = protocol->end_row())) break;
   }
 
-  if (!res) my_eof(thd);
+  if (!res && show_eof) my_eof(thd);
 
   return res;
 }
@@ -3546,28 +3693,41 @@ bool sp_head::set_security_ctx(THD *thd, Security_context **save_ctx) {
 /*
   Test if two routine have equal specification
 */
-bool sp_head::eq_routine_spec(const sp_head *sp) const {
+bool sp_head::eq_routine_spec(sp_head *sp) {
   // TODO: Add tests for equal return data types (in case of FUNCTION)
   // TODO: Add tests for equal argument data types
+
+  // it is possible implmentation is overloaded, but declaration is not.
+  if (this->m_sig.is_inited() || sp->m_sig.is_inited()) {
+    this->m_sig.init_by(this);
+    sp->m_sig.init_by(sp);
+    return this->m_sig.compare(
+               &sp->m_sig,
+               sp_signature::enum_check_type::SP_CHECK_FIELD_TYPE) ==
+           sp_signature::SP_ARG_MATCH;
+  }
   return m_type == sp->m_type &&
          m_root_parsing_ctx->context_var_count() ==
              sp->m_root_parsing_ctx->context_var_count();
 }
 
-bool sp_head::check_package_routine_end_name(const LEX_STRING &end_name) const {
+bool sp_head::check_routine_end_name(const LEX_STRING &end_name) const {
   LEX_STRING nqname = m_name;
-  const char *errpos;
+  const char *errpos = m_name.str;
   size_t ofs;
 
   if (!end_name.length) return false;  // no end name
-  if (!(errpos = strrchr(m_name.str, '.'))) {
-    errpos = m_name.str;
-    goto err;
+  if (m_parent) {
+    if (!(errpos = strrchr(m_name.str, '.'))) {
+      errpos = m_name.str;
+      goto err;
+    }
+    errpos++;
+
+    ofs = errpos - m_name.str;
+    nqname.str += ofs;
+    nqname.length -= ofs;
   }
-  errpos++;
-  ofs = errpos - m_name.str;
-  nqname.str += ofs;
-  nqname.length -= ofs;
   if (my_strnncoll(system_charset_info, (const uchar *)end_name.str,
                    end_name.length, (const uchar *)nqname.str,
                    nqname.length) == 0)
@@ -3584,7 +3744,13 @@ bool sp_head::check_for_type_table() {
              udt_table_db.str, nested_table_udt.str);
     return true;
   }
-
+  if (type == enum_udt_table_of_type::TYPE_VARRAY) {
+    if (size_limit > tf_udt_table_max_rows) {
+      my_error(ER_UDT_TABLE_SIZE_LIMIT, MYF(0),
+               tf_sequence_table_max_upper_bound, size_limit);
+      return true;
+    }
+  }
   if (!nested_table_udt.str) return false;
   List<Create_field> *field_def_list = nullptr;
   ulong reclength = 0;
@@ -3610,42 +3776,498 @@ bool sp_head::check_for_type_table() {
 ///////////////////////////////////////////////////////////////////////////
 // sp_package implementation.
 ///////////////////////////////////////////////////////////////////////////
-LEX *sp_package::LexList::find(const LEX_STRING &name, enum_sp_type type) {
+LEX *sp_package::LexList::find_common(const LEX_STRING &name,
+                                      enum_sp_type sp_type, sp_signature *sig,
+                                      bool qualified) {
   List_iterator<LEX> it(*this);
+  LEX *found_lex = nullptr;
+  int found_distance = 0;
+  int found_count = 0;
+  sp_signature::enum_check_type chk =
+      (sig && sig->m_define)
+          ? sp_signature::enum_check_type::SP_CHECK_FIELD_TYPE
+          : sp_signature::enum_check_type::SP_CHECK_DISTANCE;
   for (LEX *lex; (lex = it++);) {
     assert(lex->sphead);
     const char *dot;
-    if (lex->sphead->m_type == type &&
-        (dot = strrchr(lex->sphead->m_name.str, '.'))) {
+    if (lex->sphead->m_type != sp_type) continue;
+    if (qualified) {
+      if (!sp_eq_routine_name(lex->sphead->m_name, name)) continue;
+    } else {
+      if (!(dot = strrchr(lex->sphead->m_name.str, '.'))) continue;
       size_t ofs = dot + 1 - lex->sphead->m_name.str;
       LEX_STRING non_qualified_sphead_name = lex->sphead->m_name;
       non_qualified_sphead_name.str += ofs;
       non_qualified_sphead_name.length -= ofs;
-      if (sp_eq_routine_name(non_qualified_sphead_name, name)) return lex;
+      if (!sp_eq_routine_name(non_qualified_sphead_name, name)) continue;
+    }
+    /*
+       if no overload function search (!sig) or there is no overload
+       function is defined (! m_sig.is_inited()), return the lex
+       immediately.
+    */
+    if (!sig) return lex;
+    if (!lex->sphead->m_sig.is_inited()) {
+      if (sig->m_lookup_public && !lex->sphead->m_parent->m_sig_resolved) {
+        // resolved in spec, and impl. is not parsed yet
+        sig->copy_params(lex->sphead);
+      }
+      return lex;
+    }
+
+    /* an overloaded function is found */
+    int distance = 0;
+    auto rc = sig->compare(&lex->sphead->m_sig, chk, &distance);
+    if (rc != sp_signature::SP_ARG_MATCH) continue;
+    /*
+       At least, the number of argument is matched.
+       However, overloaded routine is not allowed for prepared statement.
+     */
+    if (sig->m_has_parameter) {
+      my_error(ER_PARAMETER_IN_OVERLOAD_ROUTINES_NOT_ALLOWED, MYF(0), name.str);
+      return NULL;
+    }
+    found_count++;
+
+    if (found_lex == nullptr) {
+      found_lex = lex;
+      found_distance = distance;
+
+      /*
+        if not all arguments are fixed, the routine should be resolved
+        again after all arguments are fixed.
+      */
+      if (sig->m_not_all_fixed) break;
+    } else {
+      if (distance == found_distance) {
+        // throw error
+        my_error(ER_TOO_MANY_SP_DECLARATIONS_MATCH, MYF(0), name.str);
+        return NULL;
+      } else if (distance < found_distance) {
+        found_lex = lex;
+        found_distance = distance;
+      }
     }
   }
+
+  // it is possible to throw not-found if distance is too far.
+  if (found_count > 0) {
+    // overloaded routine && for public routine && all parameters are fixed
+    if (!found_lex->sphead->m_sig.m_overload_index || !sig->m_lookup_public ||
+        sig->m_not_all_fixed)
+      sig->m_overload_index = found_lex->sphead->m_sig.m_overload_index;
+    else {
+      auto f = sig->m_lookup_public;
+      found_lex->sphead->m_sig.copy_to(sig);
+      sig->m_lookup_public = f;
+    }
+    return found_lex;
+  }
   return NULL;
+}
+
+LEX *sp_package::LexList::find(const LEX_STRING &name, enum_sp_type sp_type,
+                               sp_signature *sig) {
+  return find_common(name, sp_type, sig, false);
 }
 
 LEX *sp_package::LexList::find_qualified(const LEX_STRING &name,
-                                         enum_sp_type sp_type) {
-  List_iterator<LEX> it(*this);
-  for (LEX *lex; (lex = it++);) {
-    assert(lex->sphead);
-    if (lex->sphead->m_type == sp_type &&
-        sp_eq_routine_name(lex->sphead->m_name, name))
-      return lex;
-  }
-  return NULL;
+                                         enum_sp_type sp_type,
+                                         sp_signature *sig) {
+  return find_common(name, sp_type, sig, true);
 }
 
-// Check if a routine with the given qualified name already exists
-bool sp_package::LexList::check_dup_qualified(const LEX_STRING &name,
-                                              enum_sp_type sp_type) {
-  if (!find_qualified(name, sp_type)) return false;
+sp_argument::sp_argument(enum enum_field_types fld_type) {
+  m_fld_type = fld_type;
+  m_osp_type = Field::osp_base_type(fld_type);
+}
 
-  my_error(ER_SP_ALREADY_EXISTS, MYF(0), sp_type_str(sp_type), name.str);
-  return true;
+sp_signature *sp_signature::clone(MEM_ROOT *mem_root) {
+  assert(mem_root);
+  sp_signature *sig = new (mem_root) sp_signature(mem_root);
+
+  sig->m_inited = m_inited;
+  sig->m_define = m_define;
+  sig->m_lookup = m_lookup;
+  sig->m_lookup_public = m_lookup_public;
+  sig->m_count = m_count;
+  sig->m_overload_index = m_overload_index;
+  sig->m_not_all_fixed = m_not_all_fixed;
+  sig->m_has_parameter = m_has_parameter;
+
+  for (uint i = 0; i < m_count; i++) {
+    sp_argument *sp_arg = new (mem_root) sp_argument(m_arg_list[i]);
+    sig->m_arg_list.push_back(sp_arg, mem_root);
+  }
+  return sig;
+}
+
+sp_signature *sp_signature::copy_to(sp_signature *sig) {
+  assert(m_mem_root);
+  sig->m_inited = m_inited;
+  sig->m_define = m_define;
+  sig->m_lookup = m_lookup;
+  sig->m_lookup_public = m_lookup_public;
+  sig->m_count = m_count;
+  sig->m_overload_index = m_overload_index;
+  sig->m_not_all_fixed = m_not_all_fixed;
+  sig->m_has_parameter = m_has_parameter;
+
+  sig->m_arg_list.clear();
+  for (uint i = 0; i < m_count; i++) {
+    sp_argument *sp_arg = new (sig->m_mem_root) sp_argument(m_arg_list[i]);
+    sig->m_arg_list.push_back(sp_arg, sig->m_mem_root);
+  }
+  return sig;
+}
+
+void sp_signature::init_by(const sp_head *sp) {
+  assert(m_mem_root);
+  if (m_inited) return;
+  sp_pcontext *pctx = sp->get_root_parsing_context();
+  m_count = pctx->context_var_count();
+  m_not_all_fixed = false;
+  m_has_parameter = false;
+  for (uint i = 0; i < m_count; i++) {
+    sp_variable *sp_var = pctx->find_variable(i);
+    sp_argument *sp_arg = new (m_mem_root) sp_argument(sp_var->type);
+    m_arg_list.push_back(sp_arg, m_mem_root);
+  }
+
+  m_overload_index = 1;
+
+  m_define = true;
+  m_inited = true;
+}
+
+void sp_signature::init_by(const mem_root_deque<Item *> *proc_args) {
+  assert(m_mem_root);
+  if (m_inited) return;
+  m_count = (proc_args == nullptr) ? 0 : proc_args->size();
+  m_not_all_fixed = false;
+  m_has_parameter = false;
+  for (uint i = 0; i < m_count; i++) {
+    if (!(*proc_args)[i]->fixed) m_not_all_fixed = true;
+    if (dynamic_cast<Item_param *>((*proc_args)[i]) != nullptr)
+      m_has_parameter = true;
+    enum enum_field_types fld_type;
+    fld_type = (*proc_args)[i]->fixed ? (*proc_args)[i]->data_type()
+                                      : MYSQL_TYPE_INVALID;
+    sp_argument *sp_arg = new (m_mem_root) sp_argument(fld_type);
+
+    m_arg_list.push_back(sp_arg, m_mem_root);
+  }
+
+  m_lookup = true;
+  m_inited = true;
+}
+
+void sp_signature::init_by(const uint arg_count, Item **args) {
+  assert(m_mem_root);
+  if (m_inited) return;
+  m_count = arg_count;
+  m_not_all_fixed = false;
+  m_has_parameter = false;
+  m_define = false;
+  for (uint i = 0; i < m_count; i++) {
+    if (!args[i]->fixed) m_not_all_fixed = true;
+    if (dynamic_cast<Item_param *>(args[i]) != nullptr) m_has_parameter = true;
+    enum enum_field_types fld_type;
+    fld_type = args[i]->fixed ? args[i]->data_type() : MYSQL_TYPE_INVALID;
+    sp_argument *sp_arg = new (m_mem_root) sp_argument(fld_type);
+    m_arg_list.push_back(sp_arg, m_mem_root);
+  }
+
+  m_lookup = true;
+  m_inited = true;
+}
+
+void sp_signature::copy_params(sp_head *sp) {
+  assert(m_mem_root);
+  /*
+    This function is used when a package spec is loaded but its implementation
+    is not.
+  */
+  if (!m_lookup_public || !sp->m_parent || sp->m_parent->m_sig_resolved) return;
+
+  sp_pcontext *pctx = sp->get_root_parsing_context();
+  if (m_count != pctx->context_var_count()) return;
+  m_arg_list.clear();
+  for (uint i = 0; i < m_count; i++) {
+    sp_variable *sp_var = pctx->find_variable(i);
+    sp_argument *sp_arg = new (m_mem_root) sp_argument(sp_var->type);
+    m_arg_list.push_back(sp_arg, m_mem_root);
+  }
+
+  // always search the subprogram as sp_head describes.
+  m_overload_index = 1;
+}
+
+sp_signature::enum_arg sp_signature::compare(const sp_signature *sps,
+                                             sp_signature::enum_check_type chk,
+                                             int *distance) const {
+  if (m_count != sps->m_count) return sp_signature::SP_ARG_NOMATCH;
+
+  for (uint i = 0; i < m_count; i++) {
+    if (chk == sp_signature::enum_check_type::SP_CHECK_BASE_TYPE) {
+      if (m_arg_list[i]->m_osp_type != sps->m_arg_list[i]->m_osp_type)
+        return sp_signature::SP_ARG_NOMATCH;
+    } else if (chk == sp_signature::enum_check_type::SP_CHECK_FIELD_TYPE) {
+      if (m_arg_list[i]->m_fld_type != sps->m_arg_list[i]->m_fld_type)
+        return sp_signature::SP_ARG_NOMATCH;
+    } else {
+      int d = 0;
+      switch (m_arg_list[i]->m_osp_type) {
+        case OSP_INVALID:
+          d = 100;
+          break;
+        case OSP_NUMBER:
+          switch (sps->m_arg_list[i]->m_osp_type) {
+            case OSP_NUMBER:
+              d = 0;
+              break;
+            case OSP_FLOAT:
+              d = 1;
+              break;
+            case OSP_DOUBLE:
+              d = 2;
+              break;
+            case OSP_STRING:
+              d = 1;
+              break;
+            case OSP_TIMESTAMP:
+            case OSP_DATE:
+            case OSP_TIME:
+            case OSP_DATETIME:
+            case OSP_YEAR:
+            case OSP_INVALID:
+              d = 100;
+              break;
+          }
+          break;
+        case OSP_FLOAT:
+          switch (sps->m_arg_list[i]->m_osp_type) {
+            case OSP_NUMBER:
+              d = 1;
+              break;
+            case OSP_FLOAT:
+              d = 0;
+              break;
+            case OSP_DOUBLE:
+              d = 1;
+              break;
+            case OSP_STRING:
+              d = 1;
+              break;
+            case OSP_TIMESTAMP:
+            case OSP_DATE:
+            case OSP_TIME:
+            case OSP_DATETIME:
+            case OSP_YEAR:
+            case OSP_INVALID:
+              d = 100;
+              break;
+          }
+          break;
+        case OSP_DOUBLE:
+          switch (sps->m_arg_list[i]->m_osp_type) {
+            case OSP_NUMBER:
+              d = 2;
+              break;
+            case OSP_FLOAT:
+              d = 1;
+              break;
+            case OSP_DOUBLE:
+              d = 0;
+              break;
+            case OSP_STRING:
+              d = 1;
+              break;
+            case OSP_TIMESTAMP:
+            case OSP_DATE:
+            case OSP_TIME:
+            case OSP_DATETIME:
+            case OSP_YEAR:
+            case OSP_INVALID:
+              d = 100;
+              break;
+          }
+          break;
+        case OSP_STRING:
+          switch (sps->m_arg_list[i]->m_osp_type) {
+            case OSP_NUMBER:
+            case OSP_FLOAT:
+            case OSP_DOUBLE:
+              d = 1;
+              break;
+            case OSP_STRING:
+              d = 0;
+              break;
+            case OSP_TIMESTAMP:
+            case OSP_DATE:
+            case OSP_TIME:
+            case OSP_DATETIME:
+            case OSP_YEAR:
+              d = 1;
+              break;
+            case OSP_INVALID:
+              d = 100;
+              break;
+          }
+          break;
+        case OSP_TIMESTAMP:
+          switch (sps->m_arg_list[i]->m_osp_type) {
+            case OSP_STRING:
+              d = 1;
+              break;
+            case OSP_TIMESTAMP:
+              d = 0;
+              break;
+            case OSP_NUMBER:
+            case OSP_FLOAT:
+            case OSP_DOUBLE:
+            case OSP_DATE:
+            case OSP_TIME:
+            case OSP_DATETIME:
+            case OSP_YEAR:
+            case OSP_INVALID:
+              d = 100;
+              break;
+          }
+          break;
+        case OSP_DATE:
+          switch (sps->m_arg_list[i]->m_osp_type) {
+            case OSP_STRING:
+              d = 1;
+              break;
+            case OSP_DATE:
+              d = 0;
+              break;
+            case OSP_NUMBER:
+            case OSP_FLOAT:
+            case OSP_DOUBLE:
+            case OSP_TIMESTAMP:
+            case OSP_TIME:
+            case OSP_DATETIME:
+            case OSP_YEAR:
+            case OSP_INVALID:
+              d = 100;
+              break;
+          }
+          break;
+        case OSP_TIME:
+          switch (sps->m_arg_list[i]->m_osp_type) {
+            case OSP_STRING:
+              d = 1;
+              break;
+            case OSP_TIME:
+              d = 0;
+              break;
+            case OSP_NUMBER:
+            case OSP_FLOAT:
+            case OSP_DOUBLE:
+            case OSP_TIMESTAMP:
+            case OSP_DATE:
+            case OSP_DATETIME:
+            case OSP_YEAR:
+            case OSP_INVALID:
+              d = 100;
+              break;
+          }
+          break;
+        case OSP_DATETIME:
+          switch (sps->m_arg_list[i]->m_osp_type) {
+            case OSP_STRING:
+              d = 1;
+              break;
+            case OSP_DATETIME:
+              d = 0;
+              break;
+            case OSP_NUMBER:
+            case OSP_FLOAT:
+            case OSP_DOUBLE:
+            case OSP_TIMESTAMP:
+            case OSP_DATE:
+            case OSP_TIME:
+            case OSP_YEAR:
+            case OSP_INVALID:
+              d = 100;
+              break;
+          }
+          break;
+        case OSP_YEAR:
+          switch (sps->m_arg_list[i]->m_osp_type) {
+            case OSP_STRING:
+              d = 1;
+              break;
+            case OSP_YEAR:
+              d = 0;
+              break;
+            case OSP_NUMBER:
+            case OSP_FLOAT:
+            case OSP_DOUBLE:
+            case OSP_TIMESTAMP:
+            case OSP_DATE:
+            case OSP_TIME:
+            case OSP_DATETIME:
+            case OSP_INVALID:
+              d = 100;
+              break;
+          }
+          break;
+      }
+      if (distance && *distance < d) *distance = d;
+    }
+  }
+  return sp_signature::SP_ARG_MATCH;
+}
+
+bool sp_package::add_routine(LexList *routines, LEX *lex_arg, bool base_check) {
+  sp_head *sp = lex_arg->sphead;
+  assert(sp);
+  enum_sp_type sp_type = (enum_sp_type)sp->m_type;
+  const LEX_STRING name = sp->m_name;
+  sp_signature *sig = &sp->m_sig;
+  uint index = 1;
+  sp_signature::enum_check_type chk;
+
+  chk = base_check ? sp_signature::enum_check_type::SP_CHECK_BASE_TYPE
+                   : sp_signature::enum_check_type::SP_CHECK_FIELD_TYPE;
+
+  // iterator for all sphead
+  List_iterator<LEX> it(*routines);
+  for (LEX *lex; (lex = it++);) {
+    assert(lex->sphead);
+    if (lex->sphead->m_type != sp_type ||
+        !sp_eq_routine_name(lex->sphead->m_name, name))
+      continue;
+
+    // duplicated name is found
+    // signature should be inited.
+    // if lex_arg->sphead is the first overloading, set index.
+    lex->sphead->m_sig.init_by(lex->sphead);
+    index++;
+    // sig->init_by() will check sig->m_inited
+    sig->init_by(sp);
+
+    if (sig->compare(&lex->sphead->m_sig, chk, nullptr) ==
+        sp_signature::SP_ARG_MATCH) {
+      my_error(ER_SP_ALREADY_EXISTS, MYF(0), sp_type_str(sp_type), name.str);
+      return true;
+    }
+
+    // not match.
+    sig->m_overload_index = index;
+  }
+  return routines->push_back(lex_arg, &main_mem_root);
+}
+
+bool sp_package::add_routine_declaration(LEX *lex) {
+  return add_routine(&m_routine_declarations, lex, false);
+}
+
+bool sp_package::add_routine_implementation(LEX *lex) {
+  return add_routine(&m_routine_implementations, lex, true);
 }
 
 void sp_package::LexList::cleanup() {
@@ -3681,6 +4303,15 @@ bool sp_package::validate_public_routines(THD *thd, sp_package *spec) {
       if (sp_eq_routine_name(lex2->sphead->m_name, lex->sphead->m_name) &&
           lex2->sphead->eq_routine_spec(lex->sphead)) {
         found = true;
+        /*
+          For overloaded routine, it is necessary to use new rule to search
+          the public routine. Mark such routine here.
+        */
+        if (lex2->sphead->m_sig.is_inited()) {
+          lex->sphead->m_sig.init_by(lex->sphead);
+          lex->sphead->m_sig.m_overload_index =
+              lex2->sphead->m_sig.m_overload_index;
+        }
         break;
       }
     }
@@ -3690,6 +4321,7 @@ bool sp_package::validate_public_routines(THD *thd, sp_package *spec) {
       return true;
     }
   }
+  spec->m_sig_resolved = true;
   return false;
 }
 
@@ -3718,6 +4350,7 @@ bool sp_package::validate_private_routines(THD *thd) {
       return true;
     }
   }
+  m_sig_resolved = true;
   return false;
 }
 
@@ -3869,7 +4502,8 @@ void sp_parser_data::finish_parsing_sp_body(THD *thd) {
   m_saved_item_list = nullptr;
 }
 
-bool sp_parser_data::add_backpatch_entry(sp_branch_instr *i, sp_label *label) {
+bool sp_parser_data::add_backpatch_entry(sp_branch_instr *i, sp_label *label,
+                                         bool is_goto) {
   Backpatch_info *bp =
       (Backpatch_info *)(*THR_MALLOC)->Alloc(sizeof(Backpatch_info));
 
@@ -3877,7 +4511,27 @@ bool sp_parser_data::add_backpatch_entry(sp_branch_instr *i, sp_label *label) {
 
   bp->label = label;
   bp->instr = i;
-  return m_backpatch.push_front(bp);
+  return is_goto ? m_backpatch_goto.push_front(bp) : m_backpatch.push_front(bp);
+}
+
+bool sp_parser_data::add_backpatch_goto(THD *thd, sp_pcontext *ctx,
+                                        sp_label *label) {
+  sp_head *sp = thd->lex->sphead;
+  uint ip = sp->instructions();
+
+  /*
+    Add sp_instr_goto : m_cursor_count and m_handler_count will be updated later
+    if target is in the same block or not
+  */
+  sp_instr_goto *goto_instr = new (thd->mem_root) sp_instr_goto(ip++, ctx);
+  if (goto_instr == NULL || sp->add_instr(thd, goto_instr)) return true;
+
+  // Add jump with ip=0. IP will be updated when label is found.
+  sp_instr_jump *i = new (thd->mem_root) sp_instr_jump(ip, ctx);
+  if (i == NULL || sp->add_instr(thd, i)) return true;
+  if (add_backpatch_entry(i, label, true)) return true;
+
+  return false;
 }
 
 void sp_parser_data::do_backpatch(sp_label *label, uint dest) {
@@ -3887,6 +4541,69 @@ void sp_parser_data::do_backpatch(sp_label *label, uint dest) {
   while ((bp = li++)) {
     if (bp->label == label) bp->instr->backpatch(dest);
   }
+}
+
+void sp_parser_data::do_backpatch_goto(THD *thd, sp_label *lab,
+                                       sp_label *lab_begin_block, uint dest) {
+  sp_head *sp = thd->lex->sphead;
+  Backpatch_info *bp;
+  List_iterator<Backpatch_info> li(m_backpatch_goto);
+
+  while ((bp = li++)) {
+    sp_instr_jump *instr_jump = dynamic_cast<sp_instr_jump *>(bp->instr);
+    if (lab_begin_block && (instr_jump->get_ip() < lab_begin_block->ip ||
+                            instr_jump->get_ip() > lab->ip)) {
+      /*
+        Update only jump target from the beginning of the block where the
+        label is defined.
+      */
+      continue;
+    }
+    if (my_strcasecmp(system_charset_info, bp->label->name.str,
+                      lab->name.str) == 0) {
+      DBUG_PRINT("info",
+                 ("do_backpatch_goto: (m_ip %d, label %p <%s>) to dest %d",
+                  instr_jump->get_ip(), lab, lab->name.str, dest));
+      instr_jump->backpatch(dest);
+
+      if (lab_begin_block) {
+        uint n = instr_jump->get_parsing_ctx()->diff_cursors(
+            lab_begin_block->ctx, true);
+        sp_instr *instr = sp->get_instr(instr_jump->get_ip() - 1);
+        sp_instr_goto *goto_instr = dynamic_cast<sp_instr_goto *>(instr);
+        if (n == 0) {
+          goto_instr->update_ignore_cursor_execute(true);
+        } else {
+          // update count of cpop
+          goto_instr->update_cursor_count(n);
+        }
+
+        uint m = instr_jump->get_parsing_ctx()->diff_handlers(
+            lab_begin_block->ctx, true);
+        if (m == 0) {
+          goto_instr->update_ignore_handler_execute(true);
+        } else {
+          // update count of cpop
+          goto_instr->update_handler_count(m);
+        }
+      }
+      // Jump resolved, remove from the list
+      li.remove();
+    }
+  }
+}
+
+bool sp_parser_data::check_unresolved_goto() {
+  bool has_unresolved_label = false;
+  if (m_backpatch_goto.size() > 0) {
+    List_iterator_fast<Backpatch_info> li(m_backpatch_goto);
+    while (Backpatch_info *bp = li++) {
+      my_error(ER_SP_LILABEL_MISMATCH, MYF(0), "GOTO", bp->label->name.str);
+      has_unresolved_label = true;
+      return has_unresolved_label;
+    }
+  }
+  return has_unresolved_label;
 }
 
 bool sp_parser_data::add_cont_backpatch_entry(sp_lex_branch_instr *i) {

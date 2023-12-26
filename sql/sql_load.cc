@@ -116,7 +116,7 @@ XML_TAG::XML_TAG(int l, String f, String v) {
   value.append(v);
 }
 
-#define GET (stack_pos != stack ? *--stack_pos : my_b_get(&cache))
+#define GET (stack_pos != stack ? *--stack_pos : read_and_copy_bypass(&cache))
 #define PUSH(A) *(stack_pos++) = (A)
 #define SUB_LOAD_SESSION_LOCK_TIME_OUT 60
 
@@ -134,6 +134,12 @@ class READ_INFO {
   bool need_end_io_cache;
   IO_CACHE cache;
   int level; /* for load xml */
+
+  /* copy data for parallel load */
+  bool copy_bypass = false;
+  int copy_bypass_err = 0;
+  int read_cols_num = -1;
+  std::shared_ptr<IO_CACHE> bypass_cache;
 
   size_t max_size() { return std::numeric_limits<size_t>::max() - 1; }
 
@@ -173,7 +179,22 @@ class READ_INFO {
 
   /* parallel load data */
   bool never_end_io_cache{false};  // set to true if is load worker
-  int read_line(IO_CACHE *dst_cache, size_t &lines, size_t &totoal_read_len);
+  int read_line(IO_CACHE *dst_cache, size_t &lines);
+  void set_copy_bypass(bool val) { copy_bypass = val; }
+  void set_read_cols_num(int num) { read_cols_num = num; }
+  std::shared_ptr<IO_CACHE> get_bypass_cache() { return bypass_cache; }
+  void set_bypass_cache(std::shared_ptr<IO_CACHE> cache) {
+    bypass_cache = cache;
+  }
+  inline int read_and_copy_bypass(IO_CACHE *cache) {
+    int ret = my_b_get(cache);
+    if (ret != my_b_EOF && copy_bypass && !copy_bypass_err) {
+      assert(bypass_cache != nullptr);
+      uchar one_byte = ret;
+      copy_bypass_err = my_b_write(bypass_cache.get(), &one_byte, 1);
+    }
+    return ret;
+  }
 
   /*
     We need to force cache close before destructor is invoked to log
@@ -823,11 +844,16 @@ bool Sql_cmd_load_table::execute_inner(THD *thd,
             "unsupport handle duplicates replace, use normal load data");
         m_parallel_load = false;  // forbid parallel for DUP_REPLACE
       }
-      /* NOTE: if use parallel load, just load first row for test */
-      error = read_sep_field(thd, info, insert_table_ref, read_info, *enclosed,
-                             skip_lines);
-      if (!error && m_parallel_load) /* parallel load, using sub sessions */
-        error = read_sep_line(thd, info, read_info);
+
+      if (m_parallel_load) error = prepare_parallel_load(thd, read_info);
+      /* NOTE: if use parallel load, just load first row for checking */
+      if (!error)
+        error = read_sep_field(thd, info, insert_table_ref, read_info,
+                               *enclosed, skip_lines);
+      /* parallel load, using sub sessions */
+      if (!error && m_parallel_load)
+        error = do_parallel_load(thd, info, read_info);
+      if (m_parallel_load) cleanup_parallel_load(thd, read_info);
     }
     if (thd->locked_tables_mode <= LTM_LOCK_TABLES &&
         table->file->ha_end_bulk_insert() && !error) {
@@ -1195,6 +1221,18 @@ bool Sql_cmd_load_table::read_sep_field(THD *thd, COPY_INFO &info,
 
   enclosed_length = enclosed.length();
 
+  /* set number of required fields in datafile */
+  if (m_parallel_load) {
+    int read_cols_num = 0;
+    auto it = m_opt_fields_or_vars.begin();
+    for (; it != m_opt_fields_or_vars.end(); ++it) {
+      Item *item = *it;
+      if (is_hidden_generated_column(table, item)) continue;
+      read_cols_num++;
+    }
+    read_info.set_read_cols_num(read_cols_num);
+  }
+
   for (;;) {
     if (thd->killed) {
       thd->send_kill_message();
@@ -1212,6 +1250,11 @@ bool Sql_cmd_load_table::read_sep_field(THD *thd, COPY_INFO &info,
     }
 
     Autoinc_field_has_explicit_non_null_value_reset_guard after_each_row(table);
+
+    /* start copy by pass after skip_lines */
+    if (unlikely(m_parallel_load && !skip_lines)) {
+      read_info.set_copy_bypass(true);
+    }
 
     auto it = m_opt_fields_or_vars.begin();
     for (; it != m_opt_fields_or_vars.end(); ++it) {
@@ -1366,6 +1409,12 @@ bool Sql_cmd_load_table::read_sep_field(THD *thd, COPY_INFO &info,
       goto continue_loop;
     }
 
+    /* parallel load: exit after check the first row */
+    if (m_parallel_load) {
+      read_info.next_line();
+      break;
+    }
+
     err = write_record(thd, table, &info, nullptr);
     if (err) return true;
     /*
@@ -1383,8 +1432,6 @@ bool Sql_cmd_load_table::read_sep_field(THD *thd, COPY_INFO &info,
       if (thd->killed) return true;
     }
     thd->get_stmt_da()->inc_current_row_for_condition();
-
-    if (m_parallel_load) break;  // exit after insert the first row
   continue_loop:;
   }
   return read_info.error;
@@ -1393,31 +1440,30 @@ bool Sql_cmd_load_table::read_sep_field(THD *thd, COPY_INFO &info,
 /* extra length used for avoid flush disk when wirte last record to cache */
 #define FILE_CHUNK_CACHE_EXTRA_BUFFER (256 * 1024)
 
-/* read lines in delimiter-separated formats.
-     @returns true if error*/
-bool Sql_cmd_load_table::read_sep_line(THD *thd, COPY_INFO &info,
-                                       READ_INFO &read_info) {
+static std::shared_ptr<IO_CACHE> create_chunk_cache(THD *thd) {
+  size_t chunk_size = thd->variables.gdb_parallel_load_chunk_size;
+  size_t buffer_size = chunk_size + FILE_CHUNK_CACHE_EXTRA_BUFFER;
+  auto chunk_cache = std::make_shared<IO_CACHE>();
+  if (chunk_cache == nullptr ||
+      init_io_cache(chunk_cache.get(), -1, buffer_size, WRITE_CACHE, 0L, true,
+                    MYF(MY_WME))) {
+    my_error(ER_GDB_PARALLEL_LOAD, MYF(0), "init chunk_cache failed");
+    return nullptr;
+  }
+  return chunk_cache;
+}
+
+bool Sql_cmd_load_table::prepare_parallel_load(THD *thd, READ_INFO &read_info) {
   DBUG_TRACE;
 
-  auto &jobs_mgr = Gdb_load_jobs_mgr::instance();
-  auto load_job = std::make_shared<Gdb_load_job>(thd, thd->thread_id());
-  /* unregister job by caller */
-  if (load_job == nullptr || jobs_mgr.register_load_job(load_job)) return true;
-
   // build worker load statment part and set
-  String load_str;
+  load_str.length(0);
   load_str.set_charset(default_charset_info);
   load_str.reserve(1024);
   if (build_worker_sql_stmt(thd, load_str)) {
     my_error(ER_GDB_PARALLEL_LOAD, MYF(0), "build worker load statmemt failed");
     return true;
   }
-  load_job->set_cmd_sql(&load_str);
-
-  // get current db and set
-  auto &cur_db = thd->db();
-  load_job->set_current_db(&cur_db);
-
   // get master session sql_mode and set
   auto sql_mode_lex = std::make_shared<LEX_STRING>();
   if (sql_mode_string_representation(thd, thd->variables.sql_mode,
@@ -1425,6 +1471,35 @@ bool Sql_cmd_load_table::read_sep_line(THD *thd, COPY_INFO &info,
     my_error(ER_GDB_PARALLEL_LOAD, MYF(0), "build sql_mode string failed");
     return true;
   }
+  // collect used user vars and sys vars from session
+  Item_func::Collect_session_vars session_vars;
+  if (collect_used_session_vars(session_vars)) {
+    my_error(ER_GDB_PARALLEL_LOAD, MYF(0),
+             "collect used user/sys vars failed ");
+    return true;
+  }
+  // create first chunk cache
+  auto chunk_cache = create_chunk_cache(thd);
+  if (chunk_cache == nullptr) return true;
+
+  auto &jobs_mgr = Gdb_load_jobs_mgr::instance();
+  auto load_job = std::make_shared<Gdb_load_job>(thd, thd->thread_id());
+  if (load_job == nullptr) {
+    my_error(ER_GDB_PARALLEL_LOAD, MYF(0), "create load_job failed");
+    return true;
+  }
+  if (jobs_mgr.register_load_job(load_job)) {  // unregister by caller
+    my_error(ER_GDB_PARALLEL_LOAD, MYF(0), "regist load_job failed");
+    return true;
+  }
+
+  /* NOTE: must succeed after here */
+  load_job->set_cmd_sql(&load_str);
+
+  // get set current db
+  auto &cur_db = thd->db();
+  load_job->set_current_db(&cur_db);
+
   load_job->add_session_var("@@sql_mode", sql_mode_lex->str, true);
 
   // get master session time_zone and set
@@ -1445,49 +1520,66 @@ bool Sql_cmd_load_table::read_sep_line(THD *thd, COPY_INFO &info,
   // SET SESSION lock_wait_timeout = SUB_LOAD_SESSION_LOCK_TIME_OUT;
   load_job->add_session_var("@@lock_wait_timeout",
                             std::to_string(SUB_LOAD_SESSION_LOCK_TIME_OUT));
-  // collect used user vars and sys vars from session
-  Item_func::Collect_session_vars session_vars;
-  if (collect_used_session_vars(session_vars)) {
-    my_error(ER_GDB_PARALLEL_LOAD, MYF(0),
-             "collect used user/sys vars failed ");
-    return true;
-  }
+
   load_job->add_collected_vars(thd, session_vars);
 
-  size_t chunk_size = thd->variables.gdb_parallel_load_chunk_size;
-  size_t buffer_size = chunk_size + FILE_CHUNK_CACHE_EXTRA_BUFFER;
+  /* set parallel copy by pass cache, start copy after skip_lines */
+  read_info.set_bypass_cache(chunk_cache);
 
+  return false;
+}
+
+/* read lines in delimiter-separated formats.
+     @returns true if error*/
+bool Sql_cmd_load_table::do_parallel_load(THD *thd, COPY_INFO &info,
+                                          READ_INFO &read_info) {
+  DBUG_TRACE;
   DEBUG_SYNC(thd, "gdb_parallel_load_start");
+  size_t chunk_size = thd->variables.gdb_parallel_load_chunk_size;
+  auto &jobs_mgr = Gdb_load_jobs_mgr::instance();
+  auto load_job = jobs_mgr.get_load_job(thd->thread_id());
+  assert(load_job != nullptr);
+  bool first_chunk = true;
 
   int ret = 0;
   while (!ret) {
-    auto chunk_cache = std::make_shared<IO_CACHE>();
-    if (chunk_cache == nullptr ||
-        init_io_cache(chunk_cache.get(), -1, buffer_size, WRITE_CACHE, 0L, true,
-                      MYF(MY_WME))) {
-      ret = -2;  // init io_cache fail
-      my_error(ER_GDB_PARALLEL_LOAD, MYF(0), "init io_cache buffer failed");
-      break;
+    auto chunk_cache = read_info.get_bypass_cache();
+    if (unlikely(chunk_cache == nullptr)) {
+      chunk_cache = create_chunk_cache(thd);
+      if (chunk_cache == nullptr) return -1;
+      read_info.set_bypass_cache(chunk_cache);
     }
+    IO_CACHE *chunk_cache_ptr = chunk_cache.get();
 
     /* continuously read line until read end of file or */
     size_t lines = 0;
     size_t total_read_len = 0;
-    while (!(
-        ret = read_info.read_line(chunk_cache.get(), lines, total_read_len))) {
-      if (total_read_len >= chunk_size) break;
+    if (unlikely(first_chunk)) {
+      lines++;  // the first line read in read_sep_field()
+      first_chunk = false;
+    }
+    while ((ret = read_info.read_line(chunk_cache_ptr, lines)) >= 0) {
+      total_read_len = my_b_tell(chunk_cache_ptr);
+      if (ret > 0 /*EOF*/ || total_read_len >= chunk_size) break;
     }
 
     /* add a subtask to job */
-    if (total_read_len > 0) {
+    if (ret >= 0 && total_read_len > 0) {
+      /* no lines but contains data, clear cache, and skip add to subtask */
+      if (lines == 0) {
+        my_b_seek(chunk_cache_ptr, 0);
+        if (ret > 0)
+          break;
+        else
+          continue;  // if not EOF, continue read
+      }
+
       Gdb_load_worker_result prev_result;
       if (!load_job->can_add_subtask()) {
-        /* subtask will close it's io_cache in worker thread */
         load_job->wait_finished_subtask(prev_result);
 
         if (prev_result.m_errno) {
-          /* exit if other worker error, close current io_cache */
-          close_cached_file(chunk_cache.get());
+          /* exit if other worker error */
           ret = -3;
           std::string exec_err_msg = "worker execute error[";
           exec_err_msg += prev_result.m_errmsg;
@@ -1500,22 +1592,18 @@ bool Sql_cmd_load_table::read_sep_line(THD *thd, COPY_INFO &info,
         info.stats.copied += prev_result.m_inserted_rows;
       }
 
-      /* check thd killed, need wait other worker finished */
       if (thd->killed) {
-        close_cached_file(chunk_cache.get());
         thd->send_kill_message();
-        ret = -4;
+        ret = -4;  // if killed, need wait other workers
         break;
       }
-
       if (load_job->add_subtask_to_worker(chunk_cache, lines)) {
-        close_cached_file(chunk_cache.get());
         ret = -5;  // add subtask fail, already called my_error()
         break;
       }
-    } else {
-      // error or read end of file
-      close_cached_file(chunk_cache.get());
+
+      /* Add subtask PK, chunk_cache will closed in subtask */
+      read_info.set_bypass_cache(nullptr);
     }
   }
 
@@ -1534,12 +1622,30 @@ bool Sql_cmd_load_table::read_sep_line(THD *thd, COPY_INFO &info,
     info.stats.copied += prev_result.m_inserted_rows;
   }
 
-  load_job->join_workers();
-
-  // TODO: collect warning messagess
-  jobs_mgr.unregister_load_job(load_job);
   if (ret < 0) return ret;
   return false;
+}
+
+void Sql_cmd_load_table::cleanup_parallel_load(THD *thd, READ_INFO &read_info) {
+  DBUG_TRACE;
+  auto chunk_cache = read_info.get_bypass_cache();
+  if (chunk_cache) {
+    close_cached_file(chunk_cache.get());
+    read_info.set_bypass_cache(nullptr);
+  }
+
+  auto &jobs_mgr = Gdb_load_jobs_mgr::instance();
+  auto load_job = jobs_mgr.get_load_job(thd->thread_id());
+  if (load_job) {
+    load_job->join_workers();
+    // TODO: collect warning messagess
+    jobs_mgr.unregister_load_job(load_job);
+  }
+  load_str.mem_free();
+
+  // reset copy_bypass flag for m_is_local_file==true
+  assert(read_info.get_bypass_cache() == nullptr);
+  read_info.set_copy_bypass(false);
 }
 
 /*
@@ -2307,58 +2413,40 @@ found_eof:
 }
 
 /**
-   Read a line including start and terminators, and write_into dst_cache.
-   @returns -1 if error
+   Read a line using read_field().
+   @returns <0 if error
              0 read a line
              1 read end of file
 */
-int READ_INFO::read_line(IO_CACHE *dst_cache, size_t &lines,
-                         size_t &total_read_len) {
+int READ_INFO::read_line(IO_CACHE *dst_cache, size_t &lines) {
   assert(dst_cache != nullptr);
-  int chr;
-  uchar *to;
-  to = buffer;
+  assert(read_cols_num >= 0);
+
   int ret = 0;
-
-  for (;;) {
-    if ((chr = GET) == my_b_EOF) {
-      found_end_of_line = eof = true;
-      ret = 1;
-      break;
-    }
-
-    if (chr == line_term_char) {
-      if (terminator(line_term_ptr, line_term_length)) {
-        found_end_of_line = true;
-        memcpy(to, line_term_ptr, line_term_length);
-        to += line_term_length;
-        /* write line terminator(also contain line data) */
-        if (to > buffer && my_b_write(dst_cache, buffer, to - buffer)) {
-          my_error(ER_GDB_PARALLEL_LOAD, MYF(0),
-                   "write io_cache buffer failed");
-          return -1;
-        }
-        lines++;  // got a line
-        total_read_len += to - buffer;
-        break;
-      }
-    }
-
-    *to++ = (uchar)chr;
-    assert(to <= end_of_buff - line_term_length);
-    /* write to io_cache if buffer nearly full, no need extend buffer. Need
-       reserve spaces for line terminator */
-    if (to == end_of_buff - line_term_length) {
-      if (my_b_write(dst_cache, buffer, to - buffer)) {
-        my_error(ER_GDB_PARALLEL_LOAD, MYF(0), "write io_cache buffer failed");
-        return -1;
-      }
-      total_read_len += to - buffer;
-      to = buffer;
-    }
+  int i = 0;
+  for (; i < read_cols_num; i++) {
+    ret = read_field();
+    if (ret) break;
   }
 
-  return ret;
+  if (unlikely(copy_bypass_err)) return -1;  // copy bypass err
+  if (unlikely(ret && error)) return -2;     // read err
+
+  if (i > 0) lines++;
+
+  /* keep reading to end_of_line */
+  if (likely(!ret || !eof)) {
+    ret = next_line();
+    if (unlikely(copy_bypass_err)) return -3;  // copy bypass err
+    if (unlikely(ret)) {
+      if (eof) return 1;  // EOF
+      assert(0);
+    }
+  } else {
+    if (eof) return 1;  // EOF
+  }
+
+  return 0;
 }
 
 /**
@@ -3003,13 +3091,13 @@ int Gdb_load_worker::add_subtask(std::shared_ptr<IO_CACHE> chunk_cache,
   DBUG_TRACE;
   mysql_mutex_lock(&m_worker_mutex);
   assert(m_inited);
-  assert(!m_exit);
   assert(m_cur_stop);
   if (!m_inited || m_exit || !m_cur_stop) {
     m_master_job->m_list_mutex.lock();
     m_master_job->m_idle_workers.push_back(this);  // add to idle list if failed
     m_master_job->m_list_mutex.unlock();
     my_error(ER_GDB_PARALLEL_LOAD, MYF(0), "[add subtask] worker status error");
+    mysql_mutex_unlock(&m_worker_mutex);
     return -1;
   }
 

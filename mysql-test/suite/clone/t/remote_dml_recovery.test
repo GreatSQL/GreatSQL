@@ -16,6 +16,7 @@
 --disable_query_log
 call mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* Clone removing all user data for provisioning: .*");
 call mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.*clone_check_recovery_crashpoint.*");
+call mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* Can't open and lock privilege tables: .*");
 --enable_query_log
 
 --source ../include/clone_connection_begin.inc

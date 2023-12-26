@@ -1,0 +1,773 @@
+set sql_mode=oracle;
+CREATE TABLE test_cursor_rowcount(id int, salary int);
+CREATE TABLE test_cursor_rowcount2(id int, salary int);
+CREATE TABLE test_cursor_rowcount3(id int, salary int);
+CREATE TABLE test_cursor_rowcount4(id int, salary int);
+INSERT INTO test_cursor_rowcount VALUES (1, 10000);
+INSERT INTO test_cursor_rowcount VALUES (2, 20000);
+INSERT INTO test_cursor_rowcount3 VALUES (1, 10000);
+INSERT INTO test_cursor_rowcount3 VALUES (2, 20000);
+INSERT INTO test_cursor_rowcount4 VALUES (1, 10000);
+INSERT INTO test_cursor_rowcount4 VALUES (2, 20000);
+CREATE VIEW test_cursor_rowcount_view AS SELECT * FROM test_cursor_rowcount;
+
+--echo #
+--echo # IMPLICIT CURSOR
+--echo #
+# UPDATE
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    UPDATE test_cursor_rowcount SET salary = salary + 1000;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# INSERT
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    INSERT INTO test_cursor_rowcount VALUES(3, 30000),(3, 30000);
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# DELETE
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    DELETE FROM test_cursor_rowcount WHERE ID = 3;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# SELECT
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    SELECT * FROM test_cursor_rowcount;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# SELECT INTO
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    SELECT salary INTO sal FROM test_cursor_rowcount WHERE ID = 1;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# SELECT FROM DERIVED
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    SELECT salary INTO sal FROM (SELECT * FROM test_cursor_rowcount) t WHERE ID = 1;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# SET VAR AFTER SELECT
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    SELECT salary INTO sal FROM test_cursor_rowcount WHERE ID = 1;
+    nRawCnt := 0;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# SET VAR AFTER UPDATE 
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    UPDATE test_cursor_rowcount SET salary = salary + 1000;
+    nRawCnt := 0;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+#　JOIN
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    SELECT t1.salary INTO sal FROM test_cursor_rowcount t1 JOIN test_cursor_rowcount t2 ON t1.id=t2.id WHERE t1.id = 1;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+
+# UNION JOIN INSERT
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    INSERT INTO test_cursor_rowcount2 (id, salary) SELECT t1.id,t4.salary FROM (SELECT id FROM test_cursor_rowcount) t1 LEFT JOIN (SELECT t2.id,t2.salary FROM test_cursor_rowcount t2 UNION ALL SELECT t3.id, t3.salary FROM test_cursor_rowcount t3) t4 ON t1.id = t4.id;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# UPDATE WITH SELECT
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    UPDATE test_cursor_rowcount2 t2 SET salary = (SELECT 0 FROM test_cursor_rowcount t1 WHERE t1.id = t2.id) WHERE t2.id = 1;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# VIEW UPDATE
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    UPDATE test_cursor_rowcount_view SET salary = salary + 1000;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;  
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+
+# VIEW INSERT
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    INSERT INTO test_cursor_rowcount_view VALUES(3, 30000);
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;  
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# VIEW DELETE
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+  nRawCnt        NUMBER;
+BEGIN
+    DELETE FROM test_cursor_rowcount_view WHERE ID = 3;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;  
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# VIEW SELECT INTO
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+	nRawCnt        NUMBER;
+BEGIN
+   SELECT salary INTO sal FROM test_cursor_rowcount_view t WHERE ID = 1;
+   nRawCnt := SQL%ROWCOUNT;
+   SELECT nRawCnt;  
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# EXECUTE IMMEDIATE
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+   szSql          VARCHAR2(2000);
+	nRawCnt        NUMBER;
+BEGIN
+	szSql := 'UPDATE test_cursor_rowcount SET salary = salary + 1000';
+   set   @v_SQL = szSql;
+   EXECUTE IMMEDIATE @v_SQL;
+   nRawCnt := SQL%ROWCOUNT;
+   SELECT nRawCnt;  
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# EXECUTE IMMEDIATE SELECT AFTER UPDATE
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	sal int;
+   szSql          VARCHAR2(2000);
+	nRawCnt        NUMBER;
+BEGIN
+	UPDATE test_cursor_rowcount SET salary = salary + 1000;
+  szSql := 'SELECT * FROM test_cursor_rowcount';
+   set   @v_SQL = szSql;
+   EXECUTE IMMEDIATE @v_SQL;
+   nRawCnt := SQL%ROWCOUNT;
+   SELECT nRawCnt;  
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+
+# NESTED INVOCATION PROCEDURE
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE sp_test_cursor_rowcount_inner AS
+BEGIN
+   UPDATE test_cursor_rowcount SET salary = salary + 1000;
+   UPDATE test_cursor_rowcount SET salary = salary + 1000;
+END;
+$$
+
+CREATE OR REPLACE PROCEDURE sp_test_cursor_rowcount AS
+  nRawCnt        NUMBER;
+BEGIN
+	 call sp_test_cursor_rowcount_inner();
+   nRawCnt := SQL%ROWCOUNT;
+   SELECT nRawCnt; 
+END;
+$$
+DELIMITER ;$$
+CALL sp_test_cursor_rowcount();
+CALL sp_test_cursor_rowcount();
+DROP PROCEDURE sp_test_cursor_rowcount_inner;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# UPDATE WITHOUT DATA MODIFY 
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE sp_test_cursor_rowcount AS
+  nRawCnt        NUMBER;
+BEGIN
+	UPDATE test_cursor_rowcount SET salary = salary;
+   nRawCnt := SQL%ROWCOUNT;
+   SELECT nRawCnt;  
+END;
+$$
+DELIMITER ;$$
+CALL sp_test_cursor_rowcount();
+CALL sp_test_cursor_rowcount();
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# DELETE WITHOUT DATA MODIFY 
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE sp_test_cursor_rowcount AS
+  nRawCnt        NUMBER;
+BEGIN
+	DELETE FROM test_cursor_rowcount WHERE ID = -1;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;  
+END;
+$$
+DELIMITER ;$$
+CALL sp_test_cursor_rowcount();
+CALL sp_test_cursor_rowcount();
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# MULTI-TABLE UPDATE
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE sp_test_cursor_rowcount AS
+  nRawCnt        NUMBER;
+BEGIN
+	UPDATE test_cursor_rowcount SET  salary = salary + 1000 WHERE id IN (SELECT id FROM test_cursor_rowcount2);
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;  
+END;
+$$
+DELIMITER ;$$
+CALL sp_test_cursor_rowcount();
+CALL sp_test_cursor_rowcount();
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# MULTI-TABLE DELETE
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE sp_test_cursor_rowcount AS
+  nRawCnt        NUMBER;
+BEGIN
+	DELETE t1,t2 FROM test_cursor_rowcount3 t1 LEFT JOIN test_cursor_rowcount4 t2 ON t1.id=t2.id;
+    nRawCnt := SQL%ROWCOUNT;
+    SELECT nRawCnt;  
+END;
+$$
+DELIMITER ;$$
+CALL sp_test_cursor_rowcount();
+CALL sp_test_cursor_rowcount();
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# BULK COLLECT INTO
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE sp_test_cursor_rowcount AS
+  CURSOR cselect IS SELECT * FROM test_cursor_rowcount;
+  TYPE tklist IS TABLE OF test_cursor_rowcount%ROWTYPE INDEX BY BINARY_INTEGER;
+  record_val tklist;
+BEGIN
+	OPEN cselect;
+  LOOP
+    FETCH cselect BULK COLLECT INTO record_val LIMIT 3;
+    SELECT SQL%ROWCOUNT;
+    EXIT WHEN cselect%notfound;
+  END LOOP;
+  CLOSE cselect;
+END;
+$$
+DELIMITER ;$$
+CALL sp_test_cursor_rowcount();
+CALL sp_test_cursor_rowcount();
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# COMMIT
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE sp_test_cursor_rowcount AS
+BEGIN
+	UPDATE test_cursor_rowcount SET salary = salary + 1000 where id = 2;
+  SELECT SQL%ROWCOUNT;
+  COMMIT;
+  SELECT SQL%ROWCOUNT;
+END;
+$$
+DELIMITER ;$$
+CALL sp_test_cursor_rowcount();
+CALL sp_test_cursor_rowcount();
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# TRUNCATE
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE sp_test_cursor_rowcount AS
+BEGIN
+  TRUNCATE TABLE test_cursor_rowcount2;
+  SELECT SQL%ROWCOUNT;
+END;
+$$
+DELIMITER ;$$
+CALL sp_test_cursor_rowcount();
+CALL sp_test_cursor_rowcount();
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# MATCH n, UPDATE m, m < n
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE sp_test_cursor_rowcount AS
+  sal         INT;
+BEGIN
+	SELECT salary INTO sal FROM test_cursor_rowcount WHERE ID = 2;
+  UPDATE test_cursor_rowcount SET salary = sal;
+  SELECT SQL%ROWCOUNT;
+END;
+$$
+DELIMITER ;$$
+CALL sp_test_cursor_rowcount();
+CALL sp_test_cursor_rowcount();
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+
+--echo #
+--echo # EXPLICIT CURSOR
+--echo #
+# CURSOR%ROWCOUNT BEFORE OPEN
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	salary INT;
+	CURSOR cselect IS SELECT salary FROM test_cursor_rowcount;
+BEGIN
+   SELECT cselect%ROWCOUNT;
+	OPEN cselect;
+	LOOP
+		FETCH cselect INTO salary;
+		EXIT WHEN cselect%notfound;
+	END LOOP;
+  CLOSE cselect;
+END;
+$$
+DELIMITER ;$$
+--error 1326
+call sp_test_cursor_rowcount;
+--error 1326
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# CURSOR%ROWCOUNT AFTER OPEN
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	salary INT;
+	CURSOR cselect IS SELECT salary FROM test_cursor_rowcount;
+BEGIN
+	OPEN cselect;
+   SELECT cselect%ROWCOUNT;
+	LOOP
+		FETCH cselect INTO salary;
+		EXIT WHEN cselect%notfound;
+	END LOOP;
+  CLOSE cselect;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# CURSOR%ROWCOUNT IN LOOP
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	salary INT;
+	CURSOR cselect IS SELECT salary FROM test_cursor_rowcount;
+BEGIN
+	OPEN cselect;
+	LOOP
+      SELECT cselect%ROWCOUNT;
+		FETCH cselect INTO salary;
+		EXIT WHEN cselect%notfound;
+	END LOOP;
+  CLOSE cselect;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# CURSOR%ROWCOUNT AFTER FETCH
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	salary INT;
+	CURSOR cselect IS SELECT salary FROM test_cursor_rowcount;
+BEGIN
+	OPEN cselect;
+	LOOP
+		FETCH cselect INTO salary;
+      SELECT cselect%ROWCOUNT;
+		EXIT WHEN cselect%notfound;
+	END LOOP;
+  CLOSE cselect;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# CURSOR%ROWCOUNT AFTER FETCH
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	salary INT;
+	CURSOR cselect IS SELECT salary FROM test_cursor_rowcount;
+BEGIN
+	OPEN cselect;
+	LOOP
+		FETCH cselect INTO salary;
+		EXIT WHEN cselect%notfound;
+      SELECT cselect%ROWCOUNT;
+	END LOOP;
+  CLOSE cselect;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# CURSOR%ROWCOUNT BEFORE CLOSE
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	salary INT;
+	CURSOR cselect IS SELECT salary FROM test_cursor_rowcount;
+BEGIN
+	OPEN cselect;
+	LOOP
+		FETCH cselect INTO salary;
+		EXIT WHEN cselect%notfound;
+	END LOOP;
+   SELECT cselect%ROWCOUNT;
+  CLOSE cselect;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# CURSOR%ROWCOUNT AFTER CLOSE
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	salary INT;
+	CURSOR cselect IS SELECT salary FROM test_cursor_rowcount;
+BEGIN
+	OPEN cselect;
+	LOOP
+		FETCH cselect INTO salary;
+		EXIT WHEN cselect%notfound;
+	END LOOP;
+  CLOSE cselect;
+  SELECT cselect%ROWCOUNT;
+END;
+$$
+DELIMITER ;$$
+--error 1326
+call sp_test_cursor_rowcount;
+--error 1326
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+--echo #
+--echo # FOR CURSOR
+--echo #
+# CURSOR%ROWCOUNT BEFORE FOR
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	salary INT;
+	CURSOR cselect IS SELECT * FROM test_cursor_rowcount;
+BEGIN
+    SELECT cselect%ROWCOUNT;
+    FOR rec in cselect() LOOP
+      SELECT rec.salary INTO salary;
+    END LOOP;
+END;
+$$
+DELIMITER ;$$
+--error 1326
+call sp_test_cursor_rowcount;
+--error 1326
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# SQL%ROWCOUNT BEFORE FOR
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	salary INT;
+	CURSOR cselect IS SELECT * FROM test_cursor_rowcount;
+BEGIN
+    SELECT SQL%ROWCOUNT;
+    FOR rec in cselect() LOOP
+      SELECT rec.salary INTO salary;
+    END LOOP;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# CURSOR%ROWCOUNT IN FOR BEFORE STATEMENT
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	salary INT;
+	CURSOR cselect IS SELECT * FROM test_cursor_rowcount;
+BEGIN
+    FOR rec in cselect() LOOP
+      SELECT cselect%ROWCOUNT;
+      SELECT rec.salary INTO salary;
+    END LOOP;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# CURSOR%ROWCOUNT IN FOR AFTER STATEMENT
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	salary INT;
+	CURSOR cselect IS SELECT * FROM test_cursor_rowcount;
+BEGIN
+    FOR rec in cselect() LOOP
+      SELECT rec.salary INTO salary;
+      SELECT cselect%ROWCOUNT;
+    END LOOP;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# CURSOR%ROWCOUNT AFTER FOR
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+	salary INT;
+	CURSOR cselect IS SELECT * FROM test_cursor_rowcount;
+BEGIN
+    FOR rec in cselect() LOOP
+      SELECT rec.salary INTO salary;
+    END LOOP;
+    SELECT cselect%ROWCOUNT;
+END;
+$$
+DELIMITER ;$$
+--error 1326
+call sp_test_cursor_rowcount;
+--error 1326
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+# BULK COLLECT INTO
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+  CURSOR cselect IS SELECT * FROM test_cursor_rowcount where ID = -1;
+  TYPE tklist IS TABLE OF test_cursor_rowcount%ROWTYPE INDEX BY BINARY_INTEGER;
+  record_val tklist;
+BEGIN
+	OPEN cselect;
+  LOOP
+    FETCH cselect BULK COLLECT INTO record_val LIMIT 3;
+    SELECT cselect%ROWCOUNT;
+    EXIT WHEN cselect%notfound;
+  END LOOP;
+  CLOSE cselect;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+  CURSOR cselect IS SELECT * FROM test_cursor_rowcount;
+  TYPE tklist IS TABLE OF test_cursor_rowcount%ROWTYPE INDEX BY BINARY_INTEGER;
+  record_val tklist;
+BEGIN
+	OPEN cselect;
+  LOOP
+    FETCH cselect BULK COLLECT INTO record_val LIMIT 1;
+    SELECT cselect%ROWCOUNT;
+    EXIT WHEN cselect%notfound;
+  END LOOP;
+  CLOSE cselect;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+  CURSOR cselect IS SELECT * FROM test_cursor_rowcount;
+  TYPE tklist IS TABLE OF test_cursor_rowcount%ROWTYPE INDEX BY BINARY_INTEGER;
+  record_val tklist;
+BEGIN
+	OPEN cselect;
+  LOOP
+    FETCH cselect BULK COLLECT INTO record_val LIMIT 2;
+    SELECT cselect%ROWCOUNT;
+    EXIT WHEN cselect%notfound;
+  END LOOP;
+  CLOSE cselect;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+DELIMITER $$;
+CREATE PROCEDURE sp_test_cursor_rowcount AS
+  CURSOR cselect IS SELECT * FROM test_cursor_rowcount;
+  TYPE tklist IS TABLE OF test_cursor_rowcount%ROWTYPE INDEX BY BINARY_INTEGER;
+  record_val tklist;
+BEGIN
+	OPEN cselect;
+  LOOP
+    FETCH cselect BULK COLLECT INTO record_val LIMIT 3;
+    SELECT cselect%ROWCOUNT;
+    EXIT WHEN cselect%notfound;
+  END LOOP;
+  CLOSE cselect;
+END;
+$$
+DELIMITER ;$$
+call sp_test_cursor_rowcount;
+call sp_test_cursor_rowcount;
+DROP PROCEDURE sp_test_cursor_rowcount;
+
+
+DROP TABLE test_cursor_rowcount;
+DROP TABLE test_cursor_rowcount2;
+DROP TABLE test_cursor_rowcount3;
+DROP TABLE test_cursor_rowcount4;
+DROP VIEW test_cursor_rowcount_view;

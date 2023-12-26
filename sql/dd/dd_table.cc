@@ -478,6 +478,12 @@ bool get_field_datetime_precision(const Create_field *field,
               ? (field->max_display_width_in_codepoints() - 1 - MAX_TIME_WIDTH)
               : 0;
       return false;
+    case MYSQL_TYPE_VARCHAR:
+      if (field->auto_flags & Field::DEFAULT_NOW) {
+        *datetime_precision = field->decimals;
+        return false;
+      }
+      return true;
     default:
       return true;
   }
@@ -485,12 +491,16 @@ bool get_field_datetime_precision(const Create_field *field,
   return true;
 }
 
-static dd::String_type now_with_opt_decimals(uint decimals) {
+static dd::String_type now_with_opt_decimals(uint decimals,
+                                             bool dec_appoint = false) {
   char buff[17 + 1 + 1 + 1 + 1];
   String val(buff, sizeof(buff), &my_charset_bin);
   val.length(0);
   val.append("CURRENT_TIMESTAMP");
   if (decimals > 0) val.append_parenthesized(decimals);
+  if (decimals == 0 && dec_appoint) {
+    val.append_parenthesized(decimals);
+  }
   return dd::String_type(val.ptr(), val.length());
 }
 
@@ -598,7 +608,9 @@ bool fill_dd_columns_from_create_fields(THD *thd, dd::Abstract_table *tab_obj,
       stored in Create_field::auto_flags.
     */
     if (field.auto_flags & Field::DEFAULT_NOW)
-      col_obj->set_default_option(now_with_opt_decimals(field.decimals));
+      col_obj->set_default_option(now_with_opt_decimals(
+          field.decimals,
+          field.auto_flags & Field::CURRENT_TIMESTAMP_DEC_APPOINT));
 
     if (field.auto_flags & Field::ON_UPDATE_NOW)
       col_obj->set_update_option(now_with_opt_decimals(field.decimals));
@@ -735,11 +747,17 @@ bool fill_dd_columns_from_create_fields(THD *thd, dd::Abstract_table *tab_obj,
                    "udt column in temporary table");
           return true;
         }
-        if (alter_type_ref_count(thd, field.udt_db_name, field.udt_name.str,
+        if (alter_type_ref_count(thd, field.udt_db_name.str, field.udt_name.str,
                                  true))
           return true;
       }
       col_options->set("udt_name", (char const *)field.udt_name.str);
+    }
+    // sys_refcursor column,e.g:select returnacursor()
+    if (field.field && dynamic_cast<Field_refcursor *>(field.field)) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "ref cursor column in temporary table");
+      return true;
     }
 
     //
@@ -778,6 +796,11 @@ bool fill_dd_columns_from_create_fields(THD *thd, dd::Abstract_table *tab_obj,
     // Store geometry sub type
     if (field.sql_type == MYSQL_TYPE_GEOMETRY) {
       col_options->set("geom_type", field.geom_type);
+    }
+
+    if (field.sql_type == MYSQL_TYPE_VARCHAR &&
+        field.auto_flags & Field::VARCHAR_DEFAULT_CURRENT_TIMESTAP) {
+      col_options->set("varchar_default_ct", 1);
     }
 
     // Reset the buffer and assign the column's default value.
@@ -2034,6 +2057,22 @@ static bool fill_dd_table_from_create_info(
     tab_obj->set_comment(
         dd::String_type(create_info->comment.str, create_info->comment.length));
 
+  // View definition.
+  if (create_info->is_materialized_view) {
+    tab_obj->set_is_materialized_view(create_info->is_materialized_view);
+    if (create_info->create_view_query_block.str &&
+        create_info->create_view_query_block.length)
+      tab_obj->set_definition(
+          dd::String_type(create_info->create_view_query_block.str,
+                          create_info->create_view_query_block.length));
+
+    if (create_info->create_view_query_block_utf8.str &&
+        create_info->create_view_query_block_utf8.length)
+      tab_obj->set_definition_utf8(
+          dd::String_type(create_info->create_view_query_block_utf8.str,
+                          create_info->create_view_query_block_utf8.length));
+  }
+
   //
   // Set options
   //
@@ -2050,6 +2089,15 @@ static bool fill_dd_table_from_create_info(
     if (dd::alter_type_columns_ref_count(thd, create_info->udt_db_name.str,
                                          tab_obj, true))
       return true;
+  }
+
+  /*
+    HA_ORA_TMP_TABLE should be used so that both global/private table will set
+    the ora_temp option of dd::Table which may be used to create TABLE_SHARE.
+  */
+  if (create_info->ora_tmp_table_options & HA_ORA_TMP_TABLE) {
+    /* in fill_share_from_dd(), uint is used to fetch this value */
+    table_options->set("ora_temp", create_info->ora_tmp_table_options);
   }
   //
   // Options encoded in HA_CREATE_INFO::table_options.
@@ -2184,6 +2232,15 @@ static bool fill_dd_table_from_create_info(
     }
   } else {
     table_options->set("explicit_encryption", false);
+  }
+
+  if ((create_info->used_fields & HA_CREATE_USED_EXTERNAL_TABLE)) {
+    table_options->set("external_file_name", create_info->external_file_name);
+
+    if ((create_info->used_fields & HA_CREATE_USED_EXTERNAL_DATADIR) ||
+        (create_info->used_fields & HA_CREATE_USED_DATADIR)) {
+      table_options->set("external_data_dir", true);
+    }
   }
 
   // Storage media

@@ -63,16 +63,17 @@
   @param[out]    event_already_exists  When method is completed successfully
                                        set to true if event already exists else
                                        set to false
+  @param[in]     event_body            use define sp m_body if nullptr
+
   @retval false  Success
   @retval true   Error
 */
 
 bool Event_db_repository::create_event(THD *thd, Event_parse_data *parse_data,
                                        bool create_if_not,
-                                       bool *event_already_exists) {
+                                       bool *event_already_exists,
+                                       String *job) {
   DBUG_TRACE;
-  sp_head *sp = thd->lex->sphead;
-  assert(sp);
 
   const dd::Schema *schema = nullptr;
   const dd::Event *event = nullptr;
@@ -99,8 +100,25 @@ bool Event_db_repository::create_event(THD *thd, Event_parse_data *parse_data,
     return true;
   }
 
-  return dd::create_event(thd, *schema, parse_data->name.str, sp->m_body.str,
-                          sp->m_body_utf8.str, thd->lex->definer, parse_data);
+  if (!job) {
+    sp_head *sp = thd->lex->sphead;
+    assert(sp);
+    // in oracle_mode xxx => begin xxx; end;
+    dd::String_type event_body(sp->m_body.str, sp->m_body.length);
+    dd::String_type event_body_utf8(sp->m_body_utf8.str,
+                                    sp->m_body_utf8.length);
+    if (thd->variables.sql_mode & MODE_ORACLE) {
+      event_body.append(";");
+      event_body_utf8.append(";");
+    }
+    return dd::create_event(thd, *schema, parse_data->name.str, event_body,
+                            event_body_utf8, thd->lex->definer, parse_data);
+  } else {
+    dd::String_type event_body(job->ptr(), job->length());
+    dd::String_type event_body_utf8(job->ptr(), job->length());
+    return dd::create_event(thd, *schema, parse_data->name.str, event_body,
+                            event_body_utf8, thd->lex->definer, parse_data);
+  }
 }
 
 /**
@@ -121,9 +139,9 @@ bool Event_db_repository::create_event(THD *thd, Event_parse_data *parse_data,
 
 bool Event_db_repository::update_event(THD *thd, Event_parse_data *parse_data,
                                        const LEX_CSTRING *new_dbname,
-                                       const LEX_CSTRING *new_name) {
+                                       const LEX_CSTRING *new_name,
+                                       String *job) {
   DBUG_TRACE;
-  sp_head *sp = thd->lex->sphead;
 
   /* None or both must be set */
   assert((new_dbname && new_name) || new_dbname == new_name);
@@ -177,14 +195,38 @@ bool Event_db_repository::update_event(THD *thd, Event_parse_data *parse_data,
   Auth_id definer(event->definer_user().c_str(), event->definer_host().c_str());
   if (sctx->can_operate_with(definer, consts::system_user, true)) return true;
 
-  // Update Event in the data dictionary with altered event object attributes.
-  bool ret = dd::update_event(
-      thd, event, *schema, new_schema, new_name != nullptr ? new_name->str : "",
-      (parse_data->body_changed) ? sp->m_body.str : event->definition(),
-      (parse_data->body_changed) ? sp->m_body_utf8.str
-                                 : event->definition_utf8(),
-      thd->lex->definer, parse_data);
-  return ret;
+  if (!job) {
+    sp_head *sp = thd->lex->sphead;
+    dd::String_type event_body;
+    dd::String_type event_body_utf8;
+
+    if (parse_data->body_changed) {
+      event_body.append(sp->m_body.str);
+      event_body_utf8.append(sp->m_body_utf8.str);
+
+      if (thd->variables.sql_mode & MODE_ORACLE) {
+        event_body.append(";");
+        event_body_utf8.append(";");
+      }
+    }
+
+    // Update Event in the data dictionary with altered event object attributes.
+    return dd::update_event(
+        thd, event, *schema, new_schema,
+        new_name != nullptr ? new_name->str : "",
+        (parse_data->body_changed) ? event_body : event->definition(),
+        (parse_data->body_changed) ? event_body_utf8 : event->definition_utf8(),
+        thd->lex->definer, parse_data);
+  } else {
+    return dd::update_event(
+        thd, event, *schema, new_schema,
+        new_name != nullptr ? new_name->str : "",
+        (parse_data->body_changed) ? dd::String_type(job->ptr(), job->length())
+                                   : event->definition(),
+        (parse_data->body_changed) ? dd::String_type(job->ptr(), job->length())
+                                   : event->definition_utf8(),
+        thd->lex->definer, parse_data);
+  }
 }
 
 /**
@@ -294,24 +336,29 @@ bool Event_db_repository::drop_schema_events(THD *thd,
 
 bool Event_db_repository::load_named_event(THD *thd, LEX_CSTRING dbname,
                                            LEX_CSTRING name, Event_basic *etn) {
+  return Event_db_repository::load_named_event(thd, dbname.str, name.str, etn);
+}
+
+bool Event_db_repository::load_named_event(THD *thd, const char *dbname,
+                                           const char *name, Event_basic *etn) {
   const dd::Event *event_obj = nullptr;
 
   DBUG_TRACE;
-  DBUG_PRINT("enter", ("thd: %p  name: %*s", thd, (int)name.length, name.str));
+  DBUG_PRINT("enter", ("thd: %p  name: %s", thd, name));
 
   dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
 
-  if (thd->dd_client()->acquire(dbname.str, name.str, &event_obj)) {
+  if (thd->dd_client()->acquire(dbname, name, &event_obj)) {
     // Error is reported by the dictionary subsystem.
     return true;
   }
 
   if (event_obj == nullptr) {
-    my_error(ER_EVENT_DOES_NOT_EXIST, MYF(0), name.str);
+    my_error(ER_EVENT_DOES_NOT_EXIST, MYF(0), name);
     return true;
   }
 
-  if (etn->fill_event_info(thd, *event_obj, dbname.str)) {
+  if (etn->fill_event_info(thd, *event_obj, dbname)) {
     my_error(ER_CANNOT_LOAD_FROM_TABLE_V2, MYF(0), "mysql", "events");
     return true;
   }

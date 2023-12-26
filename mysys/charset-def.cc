@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -267,8 +268,14 @@ extern CHARSET_INFO my_charset_utf8mb4_0900_bin;
 
 extern CHARSET_INFO my_charset_gb18030_unicode_520_ci;
 
+extern CHARSET_INFO my_charset_gb18030_2022_chinese_ci;
+extern CHARSET_INFO my_charset_gb18030_2022_bin;
+extern int init_gb18030_2022();
+
 bool init_compiled_charsets(myf flags [[maybe_unused]]) {
   CHARSET_INFO *cs;
+
+  init_gb18030_2022();
 
   add_compiled_collation(&my_charset_bin);
 
@@ -529,6 +536,9 @@ bool init_compiled_charsets(myf flags [[maybe_unused]]) {
   /* Copy compiled charsets */
   for (cs = compiled_charsets; cs->m_coll_name; cs++)
     add_compiled_collation(cs);
+
+  add_compiled_collation(&my_charset_gb18030_2022_chinese_ci);
+  add_compiled_collation(&my_charset_gb18030_2022_bin);
 
   return false;
 }

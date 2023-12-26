@@ -106,6 +106,12 @@ fix_flush_caches() {
     fi
 }
 
+fix_system_path() {
+  if [ ! -d "/var/lib/mysql-files" ]; then
+    mkdir -p /var/lib/mysql-files
+  fi
+}
+
 fix_thp_setting() {
     [ -e /etc/sysconfig/mysql ] && . /etc/sysconfig/mysql
     # If no THP_SETTING variable specified in /etc/sysconfig/mysql don't do anything
@@ -180,6 +186,7 @@ install_db () {
     exit 0
 }
 
+fix_system_path
 fix_thp_setting
 fix_flush_caches $1
 install_db $1

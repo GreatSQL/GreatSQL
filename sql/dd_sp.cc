@@ -94,7 +94,10 @@ void prepare_sp_chistics_from_dd_routine(const dd::Routine *routine,
 }
 
 static Field *make_field(const dd::Parameter &param, TABLE_SHARE *share,
-                         Field::geometry_type geom_type, TYPELIB *interval) {
+                         Field::geometry_type geom_type, TYPELIB *interval,
+                         bool is_refcursor, bool is_rowtype_ref,
+                         bool is_row_table, LEX_CSTRING *udt_name,
+                         LEX_STRING udt_db_name) {
   // Decimals
   uint numeric_scale = 0;
   if (param.data_type() == dd::enum_column_types::DECIMAL ||
@@ -109,7 +112,9 @@ static Field *make_field(const dd::Parameter &param, TABLE_SHARE *share,
                     0, dd_get_old_field_type(param.data_type()),
                     dd_get_mysql_charset(param.collation_id()), geom_type,
                     Field::NONE, interval, "", false, param.is_zerofill(),
-                    param.is_unsigned(), numeric_scale, false, 0, {}, false);
+                    param.is_unsigned(), numeric_scale, false, 0, {}, false,
+                    is_rowtype_ref, is_row_table, udt_name, udt_db_name, 0,
+                    dd::Column::enum_hidden_type::HT_VISIBLE, is_refcursor);
 }
 
 /**
@@ -124,7 +129,7 @@ static Field *make_field(const dd::Parameter &param, TABLE_SHARE *share,
                          object.
 */
 
-static void prepare_type_string_from_dd_param(THD *thd,
+static bool prepare_type_string_from_dd_param(THD *thd,
                                               const dd::Parameter *param,
                                               String *type_str) {
   DBUG_TRACE;
@@ -171,8 +176,51 @@ static void prepare_type_string_from_dd_param(THD *thd,
   table.in_use = thd;
   table.s = &share;
 
+  bool is_rowtype_ref = false;
+  bool is_row_table = false;
+  LEX_CSTRING udt_name = NULL_CSTR;
+  LEX_STRING udt_db_name = NULL_STR;
+  const dd::Properties &param_options = param->options();
+  if (param_options.exists("udt_name")) {
+    dd::String_type tmp;
+    param_options.get("udt_name", &tmp);
+    udt_name = thd->strmake(to_lex_cstring(tmp.c_str()));
+    tmp.clear();
+    param_options.get("udt_db_name", &tmp);
+    udt_db_name =
+        to_lex_string(thd->strmake(LEX_CSTRING{tmp.c_str(), tmp.length()}));
+
+    List<Create_field> *field_def_list = nullptr;
+    ulong reclength = 0;
+    sql_mode_t sql_mode;
+    LEX_CSTRING nested_table_udt = NULL_CSTR;
+    uint table_type = 255;
+    ulonglong varray_limit = 0;
+    if (sp_find_ora_type_create_fields(
+            thd, udt_db_name, to_lex_string(udt_name), false, &field_def_list,
+            &reclength, &sql_mode, &nested_table_udt, &table_type,
+            &varray_limit)) {
+      return true;
+    }
+
+    if (table_type == (uint)enum_udt_table_of_type::TYPE_VARRAY ||
+        table_type == (uint)enum_udt_table_of_type::TYPE_TABLE) {
+      is_row_table = true;
+    } else {
+      is_rowtype_ref = true;
+    }
+  }
+
   unique_ptr_destroy_only<Field> field(
-      make_field(*param, table.s, geom_type, interval));
+      make_field(*param, table.s, geom_type, interval,
+                 param->options().exists("sys_refcursor"), is_rowtype_ref,
+                 is_row_table, &udt_name, udt_db_name));
+
+  if (dynamic_cast<Field_row *>(field.get()) &&
+      !dynamic_cast<Field_refcursor *>(field.get())) {
+    field->set_udt_name(udt_name);
+    field->set_udt_db_name(udt_db_name.str);
+  }
 
   field->init(&table);
   field->sql_type(*type_str);
@@ -185,9 +233,11 @@ static void prepare_type_string_from_dd_param(THD *thd,
       type_str->append(field->charset()->m_coll_name);
     }
   }
+
+  return false;
 }
 
-void prepare_return_type_string_from_dd_routine(
+bool prepare_return_type_string_from_dd_routine(
     THD *thd, const dd::Routine *routine, dd::String_type *return_type_str) {
   DBUG_TRACE;
 
@@ -209,10 +259,12 @@ void prepare_return_type_string_from_dd_routine(
       String type_str(64);
       type_str.set_charset(system_charset_info);
 
-      prepare_type_string_from_dd_param(thd, param, &type_str);
+      if (prepare_type_string_from_dd_param(thd, param, &type_str)) return true;
       *return_type_str = type_str.ptr();
     }
   }
+
+  return false;
 }
 
 inline void append_param_mode(dd::Stringstream_type *s,
@@ -263,13 +315,17 @@ void prepare_params_string_from_dd_routine(THD *thd, const dd::Routine *routine,
       PARAMETER NAME
       Convert and quote the parameter name if needed.
     */
-    String param_str(NAME_LEN + 1);
-    sql_mode_t sql_mode = thd->variables.sql_mode;
-    thd->variables.sql_mode = routine->sql_mode();
-    append_identifier(thd, &param_str, param->name().c_str(),
-                      param->name().length());
-    thd->variables.sql_mode = sql_mode;
-    params_ss << param_str.ptr() << " ";
+    // It's not create type as table/varray of type/udt.
+    if (!(routine->type() == dd::Routine::RT_TYPE &&
+          routine->options().exists("table_type"))) {
+      String param_str(NAME_LEN + 1);
+      sql_mode_t sql_mode = thd->variables.sql_mode;
+      thd->variables.sql_mode = routine->sql_mode();
+      append_identifier(thd, &param_str, param->name().c_str(),
+                        param->name().length());
+      thd->variables.sql_mode = sql_mode;
+      params_ss << param_str.ptr() << " ";
+    }
 
     // PARAMETER MODE while in Oracle mode
     if (routine->type() == dd::Routine::RT_PROCEDURE &&
@@ -278,10 +334,14 @@ void prepare_params_string_from_dd_routine(THD *thd, const dd::Routine *routine,
     }
 
     // PARAMETER TYPE
-    String type_str(64);
-    type_str.set_charset(system_charset_info);
-    prepare_type_string_from_dd_param(thd, param, &type_str);
-    params_ss << type_str.ptr();
+    // It's not create type as table/varray of udt.
+    if (!(routine->type() == dd::Routine::RT_TYPE &&
+          routine->options().exists("nested_table_udt"))) {
+      String type_str(64);
+      type_str.set_charset(system_charset_info);
+      prepare_type_string_from_dd_param(thd, param, &type_str);
+      params_ss << type_str.ptr();
+    }
 
     // PARAMETER DEFAULT VALUE
     if ((routine->sql_mode() & MODE_ORACLE) &&

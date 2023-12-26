@@ -1,0 +1,99 @@
+--echo [### test common failure]
+create sequence seq1;
+create sequence seq2 start with 2000 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+create sequence seq3 maxvalue 2000000 start with 1000000 increment by -1 nominvalue  nocycle nocache noorder;
+--error ER_GDB_CREATE_SEQUENCE
+create sequence seq3;
+select * from mysql.greatdb_sequences order by db,name;
+select * from mysql.greatdb_sequences_persist order by db,name;
+--error ER_GDB_DROP_SEQUENCE
+drop sequence seq_error;
+update mysql.greatdb_sequences set name='seq11' where name='seq1';
+--error ER_KEY_NOT_FOUND
+drop sequence seq1;
+update mysql.greatdb_sequences set name='seq1' where name='seq11';
+drop sequence seq1;
+drop sequence seq2;
+drop sequence seq3;
+select * from mysql.greatdb_sequences order by db,name;
+select * from mysql.greatdb_sequences_persist order by db,name;
+
+--echo
+--echo [### test duplicate options]
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err start with 1 start with 2;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err increment by 1 increment by 2;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err minvalue 10000 minvalue 20000;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err minvalue 10000 nominvalue;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err nominvalue nominvalue;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err maxvalue 10000 maxvalue 20000;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err maxvalue 10000 nomaxvalue;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err nomaxvalue nomaxvalue;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err cycle cycle;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err cycle nocycle;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err nocycle nocycle;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err cache 10 cache 100;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err cache 10 nocache;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err nocache nocache;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err order order;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err order noorder;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+create sequence seq_err noorder noorder;
+
+--echo
+--echo [### check parse keyword]
+create table t1 (c1 int primary key) engine = innodb;
+alter table t1 add column sequence int;
+alter table t1 add column increment int;
+alter table t1 add column minvalue int;
+alter table t1 add column nocache int;
+alter table t1 add column nocycle int;
+alter table t1 add column nomaxvalue int;
+alter table t1 add column nominvalue int;
+alter table t1 add column noorder int;
+show create table t1;
+drop table t1;
+
+--echo
+--echo [### create sequence if not exists seq_name and drop sequence if exists seq_name]
+--error ER_GDB_DROP_SEQUENCE
+drop sequence seq;
+drop sequence if exists seq;
+create sequence if not exists seq start with 1 increment by 4 minvalue 1 maxvalue 10 cache 3 order;
+--error ER_GDB_CREATE_SEQUENCE
+create sequence seq start with 1000 increment by 1 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+drop sequence if exists seq;
+
+drop sequence if exists seq_test;
+create sequence seq_test start with 50 increment by 1 minvalue 10 maxvalue 1000000 cycle cache 10 order;
+create sequence if not exists seq_test start with 1 increment by 4 minvalue 1 maxvalue 10 cache 3 order;
+--error ER_GDB_CREATE_SEQUENCE
+create sequence seq_test start with 10 increment by 12 minvalue 10 maxvalue 1000000 cycle cache 10 order;
+drop sequence if exists seq_test;
+--error ER_GDB_DROP_SEQUENCE
+drop sequence seq_test;
+
+--echo
+--echo [test zentao bug 5136: alter table rename to an existing sequence]
+## Ref: http://zbox.greatdb.com/zentao/bug-view-5136.html
+create table t1 (c1 int)engine=innodb;
+create sequence seq1 start with 1 increment by 1;
+--error ER_GDB_DUPLICATE_SEQ_NAME
+alter table t1 rename to seq1;
+drop table t1;
+drop sequence seq1;

@@ -43,6 +43,7 @@
 class String;
 class THD;
 class Time_zone;
+class Item;
 
 typedef ulonglong sql_mode_t;
 namespace dd {
@@ -108,6 +109,9 @@ class Event_queue_element : public Event_basic {
 
   longlong m_expression;
   interval_type m_interval;
+  LEX_CSTRING m_interval_expr_str;
+
+  sql_mode_t m_sql_mode;
 
   bool m_dropped;
 
@@ -134,8 +138,6 @@ class Event_timed : public Event_queue_element {
 
   ulonglong m_created;
   ulonglong m_modified;
-
-  sql_mode_t m_sql_mode;
 
   class Stored_program_creation_ctx *m_creation_ctx;
   LEX_STRING m_definition_utf8;
@@ -165,7 +167,7 @@ class Event_job_data : public Event_basic {
 
   Event_job_data();
 
-  bool execute(THD *thd, bool drop);
+  bool execute(THD *thd, bool drop, bool reset = true);
 
   Event_job_data(const Event_job_data &) = delete;
   void operator=(Event_job_data &) = delete;
@@ -201,5 +203,14 @@ bool event_basic_identifier_equal(LEX_CSTRING db, LEX_CSTRING name,
 /**
   @} (End of group Event_Scheduler)
 */
+constexpr auto oracle_style_len = sizeof("AS BEGIN  END");
+
+bool create_new_event_job(THD *thd, String *job_name, String *job_what,
+                          Item *next_date, String *interval_str, bool broken);
+bool update_event_job_status(THD *thd, String *job_name, bool run, bool status);
+
+bool change_event_job(THD *thd, String *job_name, String *job_what,
+                      Item *next_date, String *interval_str);
+bool drop_event_job(THD *thd, String *job_name);
 
 #endif /* _EVENT_DATA_OBJECTS_H_ */

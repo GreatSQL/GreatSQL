@@ -1,0 +1,48 @@
+--write_file $MYSQLTEST_VARDIR/tmp/exec.sql
+
+DROP PROCEDURE IF EXISTS pro;
+DELIMITER $$
+CREATE PROCEDURE pro()
+BEGIN
+	SELECT 1;
+END$$
+DELIMITER ;
+
+DROP PROCEDURE IF EXISTS `@pro`;
+DELIMITER $$
+CREATE PROCEDURE `@pro`(in p1 int, in p2 int)
+BEGIN
+	SELECT p1+p2;
+END$$
+DELIMITER ;
+
+set sql_mode=oracle;
+
+exec;
+exec call pro;
+exec call pro
+;
+exec call pro; call `@pro`(1,2);
+DELIMITER //
+exec call pro//
+exec call pro;//
+exec call pro;
+call `@pro`(1,2);//
+DELIMITER ;
+
+prepare stmt1 from 'select 200';
+execute stmt1;
+
+DROP PROCEDURE pro;
+DROP PROCEDURE `@pro`;
+EOF
+
+--exec $MYSQL test --force < $MYSQLTEST_VARDIR/tmp/exec.sql 2>&1
+remove_file $MYSQLTEST_VARDIR/tmp/exec.sql;
+
+--exec $MYSQL test --verbose -e "set sql_mode=oracle;exec select 20;"
+--exec $MYSQL test --verbose -e "set sql_mode=oracle;exec select 22"
+--exec $MYSQL test --verbose -e "set sql_mode=oracle;exec select 24; select 26"
+
+--error 1
+--exec $MYSQL test -e "set sql_mode=oracle;exec;" 

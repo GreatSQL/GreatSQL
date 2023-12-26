@@ -41,9 +41,8 @@ CHANGE REPLICATION SOURCE TO SOURCE_USER='root', SOURCE_PASSWORD='' FOR CHANNEL 
 --source include/assert.inc
 
 # check that no inactive worker has applying transactions
---let $assert_text= There can be no applying transactions when the service state is off
---let $assert_cond= [SELECT COUNT(*) AS count FROM performance_schema.replication_applier_status_by_worker WHERE SERVICE_STATE = "OFF" AND APPLYING_TRANSACTION != "", count, 1] = "0"
---source include/assert.inc
+--let $wait_condition=SELECT COUNT(*)=0 AS count FROM performance_schema.replication_applier_status_by_worker WHERE SERVICE_STATE = "OFF" AND APPLYING_TRANSACTION != ""
+--source include/wait_condition.inc
 
 # Restore defaults
 SET @@GLOBAL.REPLICA_PARALLEL_TYPE= @replica_parallel_type_saved;

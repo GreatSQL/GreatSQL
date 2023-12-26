@@ -41,6 +41,7 @@
 #include "mysql/psi/mysql_sp.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
+#include "scope_guard.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_routine_access, check_table_access
 #include "sql/item.h"              // class Item
@@ -60,6 +61,9 @@ using std::max;
 bool do_execute_sp(THD *thd, sp_head *sp, mem_root_deque<Item *> *args) {
   /* bits that should be cleared in thd->server_status */
   uint bits_to_be_cleared = 0;
+  auto dbmsotpt_guard =
+      create_scope_guard([thd] { thd->show_dbms_output(true); });
+
   if (sp->m_flags & sp_head::MULTI_RESULTS) {
     if (!thd->get_protocol()->has_client_capability(CLIENT_MULTI_RESULTS)) {
       // Client does not support multiple result sets
@@ -134,7 +138,7 @@ bool Sql_cmd_call::check_privileges(THD *thd) {
   }
 
   sp_head *sp = sp_find_routine(thd, enum_sp_type::PROCEDURE, proc_name,
-                                &thd->sp_proc_cache, true, m_pkg_name);
+                                &thd->sp_proc_cache, true, m_pkg_name, m_sig);
   if (sp == nullptr) {
     my_error(ER_SP_DOES_NOT_EXIST, MYF(0), "PROCEDURE", proc_name->m_qname.str);
     return true;
@@ -174,7 +178,7 @@ bool Sql_cmd_call::prepare_inner(THD *thd) {
   Query_block *const select = lex->query_block;
 
   sp_head *sp = sp_find_routine(thd, enum_sp_type::PROCEDURE, proc_name,
-                                &thd->sp_proc_cache, true, m_pkg_name);
+                                &thd->sp_proc_cache, true, m_pkg_name, m_sig);
   if (sp == nullptr) {
     my_error(ER_SP_DOES_NOT_EXIST, MYF(0), "PROCEDURE", proc_name->m_qname.str);
     return true;
@@ -259,23 +263,40 @@ bool Sql_cmd_call::prepare_inner(THD *thd) {
     }
     if ((!arg->fixed && arg->fix_fields(thd, &arg)) || arg->check_cols(1))
       return true; /* purecov: inspected */
-    if (arg->data_type() == MYSQL_TYPE_INVALID) {
-      switch (Item::type_to_result(spvar->type)) {
-        case INT_RESULT:
-        case REAL_RESULT:
-        case DECIMAL_RESULT:
-          if (arg->propagate_type(
-                  thd,
-                  Type_properties(spvar->type, spvar->field_def.is_unsigned)))
-            return true;
-          break;
-        case STRING_RESULT:
-          if (arg->propagate_type(
-                  thd, Type_properties(spvar->type, spvar->field_def.charset)))
-            return true;
-          break;
-        default:
-          assert(false);
+    // for call p1(out sys_refcursor)
+    if (spvar->field_def.ora_record.is_ref_cursor) {
+      if (!arg->is_splocal() && arg->type() != Item::PARAM_ITEM &&
+          arg->type() != Item::FUNC_ITEM) {
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                 "the global variable used as sys_refcursor parameter");
+        return true;
+      }
+    } else {
+      if (arg->data_type() == MYSQL_TYPE_INVALID) {
+        if (spvar->field_def.ora_record.is_row() ||
+            spvar->field_def.ora_record.is_row_table()) {
+          my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                   "user variable as procedure parameter");
+          return true;
+        }
+        switch (Item::type_to_result(spvar->type)) {
+          case INT_RESULT:
+          case REAL_RESULT:
+          case DECIMAL_RESULT:
+            if (arg->propagate_type(
+                    thd,
+                    Type_properties(spvar->type, spvar->field_def.is_unsigned)))
+              return true;
+            break;
+          case STRING_RESULT:
+            if (arg->propagate_type(
+                    thd,
+                    Type_properties(spvar->type, spvar->field_def.charset)))
+              return true;
+            break;
+          default:
+            assert(false);
+        }
       }
     }
     arg_no++;
@@ -291,8 +312,31 @@ bool Sql_cmd_call::prepare_inner(THD *thd) {
 bool Sql_cmd_call::execute_inner(THD *thd) {
   // All required SPs should be in cache so no need to look into DB.
 
+  /*
+    If proc is called from an SP, the overload subprogram may not be resolved
+    properly. Anyway, the package body is already in cache. What we need to do
+    is resolving it again.
+  */
+  if (m_sig->m_overload_index != 0 && m_sig->m_not_all_fixed) {
+    MEM_ROOT *saved_mem_root = thd->mem_root;
+    if (thd->lex->sphead)
+      thd->mem_root = thd->lex->sphead->get_persistent_mem_root();
+    m_sig->clear();
+    m_sig->init_by(proc_args);
+    proc_name->m_db = m_save_db;
+    proc_name->m_name = m_save_fn_name;
+    proc_name->m_explicit_name = m_save_explicit_name;
+    if (sp_resolve_package_routine(thd, enum_sp_type::PROCEDURE,
+                                   thd->lex->sphead, proc_name, m_pkg_name,
+                                   m_sig)) {
+      thd->mem_root = saved_mem_root;
+      return true;
+    }
+    thd->mem_root = saved_mem_root;
+  }
+
   sp_head *sp = sp_setup_routine(thd, enum_sp_type::PROCEDURE, proc_name,
-                                 &thd->sp_proc_cache, m_pkg_name);
+                                 &thd->sp_proc_cache, m_pkg_name, m_sig);
   if (sp == nullptr) {
     my_error(ER_SP_DOES_NOT_EXIST, MYF(0), "PROCEDURE", proc_name->m_qname.str);
     return true;

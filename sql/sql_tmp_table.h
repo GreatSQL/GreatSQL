@@ -64,6 +64,9 @@ TABLE *create_tmp_table_from_fields(THD *thd, List<Create_field> &field_list,
                                     bool is_virtual = true,
                                     ulonglong select_options = 0,
                                     const char *alias = nullptr);
+bool create_tmp_table_unique_index_info(THD *thd, TABLE *table,
+                                        const char *table_alias,
+                                        List<Create_field> *field_list);
 bool create_ondisk_from_heap(THD *thd, TABLE *table, int error,
                              bool insert_last_record, bool ignore_last_dup,
                              bool *is_duplicate);

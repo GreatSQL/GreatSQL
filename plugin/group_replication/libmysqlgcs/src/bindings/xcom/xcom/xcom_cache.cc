@@ -266,6 +266,7 @@ static void expand_lru();
   leaks in tests.
 */
 void init_cache() {
+  G_DEBUG("Do init_cache");
   reset_cache();
   /* Init LRU */
   expand_lru();
@@ -430,7 +431,6 @@ pax_machine *init_pax_machine(pax_machine *p, lru_machine *lru,
   p->synode = synode;
   p->last_modified = 0.0;
   link_init(&p->rv, TYPE_HASH("task_env"));
-  link_init(&p->watchdog, TYPE_HASH("time_queue"));
   init_ballot(&p->proposer.bal, -1, 0);
   init_ballot(&p->proposer.sent_prop, 0, 0);
   init_ballot(&p->proposer.sent_learn, -1, 0);
@@ -590,6 +590,7 @@ static void expand_lru() {
     link_init(&l->lru_link, TYPE_HASH("lru_machine"));
     link_into(&l->lru_link, &probation_lru);
     init_pax_machine(&l->pax, l, null_synode);
+    link_init(&l->pax.watchdog, TYPE_HASH("time_queue"));
     cache_length++;
   }
 }

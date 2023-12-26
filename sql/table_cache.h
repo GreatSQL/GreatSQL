@@ -673,4 +673,52 @@ void Table_cache_iterator::rewind() {
   move_to_next_table();
 }
 
+class Global_temp_table_cache {
+ private:
+  bool inited{false};
+  /**
+    The global temp table cache lock protects the following data:
+
+    1) m_cache hash.
+  */
+  mysql_mutex_t m_lock;
+
+  /**
+    The hash of global temp table key, each key has a reference count.
+    If the reference count is 0, the key is removed from the hash.
+  */
+  std::unordered_map<std::string, int> m_cache;
+
+#ifdef HAVE_PSI_INTERFACE
+  static PSI_mutex_key m_lock_key;
+  static PSI_mutex_info m_mutex_keys[];
+#endif
+
+ private:
+  void add_used_table(std::string *key_str);
+  bool in_use(std::string *key_str);
+
+ public:
+  bool init();
+  void destroy();
+  static void init_psi_keys();
+
+  /** Acquire lock on table cache instance. */
+  void lock() { mysql_mutex_lock(&m_lock); }
+  /** Release lock on table cache instance. */
+  void unlock() { mysql_mutex_unlock(&m_lock); }
+
+  void release_table(TABLE *table);
+
+  void add_used_table(const char *db, const char *table_name);
+
+  bool in_use(TABLE *table);
+
+  bool in_use(const char *db, const char *table_name);
+};
+
+extern Global_temp_table_cache global_temp_table_cache;
+extern bool is_in_global_temp_table_cache(THD *thd, const char *db,
+                                          const char *table_name);
+
 #endif /* TABLE_CACHE_INCLUDED */

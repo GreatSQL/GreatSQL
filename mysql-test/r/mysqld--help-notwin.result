@@ -313,6 +313,13 @@ The following options may be given as the first argument:
  than this number of iterations.
  -D, --daemonize     Run mysqld as sysv daemon
  -h, --datadir=name  Path to the database root directory
+ --dbms-profiler-max-data-size[=#] 
+ The maximum number of lines can be profiled in a
+ function,trigger,procedure
+ --dbms-profiler-max-units-size[=#] 
+ The maximum number of different
+ functions,trigger,procedure can be executed in one
+ dbms_profiler profiled
  --default-authentication-plugin=name 
  The default authentication plugin used by the server to
  hash the password.
@@ -424,8 +431,6 @@ The following options may be given as the first argument:
  With this option enabled you can run myisamchk to test
  (not repair) tables while the MySQL server is running.
  Disable with --skip-external-locking.
- --fake-serv-vers-num=name 
- user defined version to display.
  --flush             Flush MyISAM tables to disk between SQL commands
  --flush-time=#      A dedicated thread is created to flush all tables at the
  given interval
@@ -582,6 +587,11 @@ The following options may be given as the first argument:
  Set the language used for the month names and the days of
  the week.
  --local-infile      Enable LOAD DATA LOCAL INFILE
+ --lock-ddl-polling-mode 
+ lock ddl polling mode in session
+ --lock-ddl-polling-runtime=# 
+ Timeout in millisecond to wait for a lock before
+ returning an error.
  --lock-wait-timeout=# 
  Timeout in seconds to wait for a lock before returning an
  error.
@@ -757,6 +767,8 @@ The following options may be given as the first argument:
  connections from a host this host will be blocked from
  further connections
  --max-connections=# The number of simultaneous clients allowed
+ --max-dbmsotpt-count[=#] 
+ Max number of dbmsoutput buffer  to store for a session
  --max-delayed-threads=# 
  Don't start more than this number of threads to handle
  INSERT DELAYED statements. If set to zero INSERT DELAYED
@@ -909,7 +921,8 @@ The following options may be given as the first argument:
  use_index_extensions, condition_fanout_filter,
  derived_merge, hash_join, subquery_to_derived,
  prefer_ordering_index, derived_condition_pushdown,
- favor_range_scan} and val is one of {on, off, default}
+ favor_range_scan, remove_useless_outerjoin} and val is
+ one of {on, off, default}
  --optimizer-trace=name 
  Controls tracing of the Optimizer:
  optimizer_trace=option=val[,option=val...], where option
@@ -1173,6 +1186,10 @@ The following options may be given as the first argument:
  --print-identified-with-as-hex 
  SHOW CREATE USER will print the AS clause as HEX if it
  contains non-prinable characters
+ --private-temp-table-prefix=name 
+ The name of private temporary tables must always be
+ prefixed with whatever is defined with the parameter
+ private_temp_table_prefix. The default is ORA$PTT_
  --profiling-history-size=# 
  Limit of query profiling memory
  --protocol-compression-algorithms=name 
@@ -1376,6 +1393,11 @@ The following options may be given as the first argument:
  our server id. Default value is 0 (to break infinite
  loops in circular replication). Can't be set to 1 if
  --log-replica-updates is used.
+ --replicate-server-mode 
+ In replication, if set to 1, do only replicate events
+ having the server id of master,skip the events which has
+ the different server id from master Default value is 0
+ (to replicate all the events from master).
  --replicate-wild-do-table=name 
  Make replication applier threads apply changes only in
  tables that match the specified wildcard pattern. To
@@ -1457,6 +1479,8 @@ The following options may be given as the first argument:
  --secure-log-path=name 
  Limit location of general log, slow log and buffered
  error logwithin specified directory
+ --select-bulk-into-batch[=#] 
+ Batch size for SELECT BULK COLLECT INTO VAR.
  --select-into-buffer-size[=#] 
  Buffer size for SELECT INTO OUTFILE/DUMPFILE.
  --select-into-disk-sync 
@@ -1469,6 +1493,7 @@ The following options may be given as the first argument:
  --server-id=#       Uniquely identifies the server instance in the community
  of replication partners
  --server-id-bits=#  Set number of significant bits in server-id
+ --serveroutput      dbms_output serveroutput switch
  --session-track-gtids=name 
  Controls the amount of global transaction ids to be
  included in the response packet sent by the
@@ -1712,6 +1737,9 @@ The following options may be given as the first argument:
  --tf-sequence-table-max-upper-bound=# 
  Maximum number of records SEQUENCE_TABLE() table function
  is allowed to generate.
+ --tf-udt-table-max-rows=# 
+ Maximum number of records UDT_TABLE() table function is
+ allowed to generate.
  --thread-cache-size=# 
  How many threads we should keep in a cache for reuse
  --thread-handling=name 
@@ -1876,6 +1904,8 @@ coredumper (No default value)
 create-admin-listener-thread FALSE
 cte-max-recursion-depth 1000
 daemonize FALSE
+dbms-profiler-max-data-size 1000
+dbms-profiler-max-units-size 100
 default-authentication-plugin caching_sha2_password
 default-password-lifetime 0
 default-storage-engine InnoDB
@@ -1903,7 +1933,6 @@ expire-logs-days 0
 explain-format TRADITIONAL
 explicit-defaults-for-timestamp TRUE
 external-locking FALSE
-fake-serv-vers-num 8.0.32-24
 flush FALSE
 flush-time 0
 force-parallel-execute FALSE
@@ -1952,6 +1981,8 @@ large-pages FALSE
 lc-messages en_US
 lc-time-names en_US
 local-infile FALSE
+lock-ddl-polling-mode FALSE
+lock-ddl-polling-runtime 1000
 lock-wait-timeout 31536000
 log-bin (No default value)
 log-bin-index (No default value)
@@ -1998,6 +2029,7 @@ max-binlog-size 1073741824
 max-binlog-stmt-cache-size 18446744073709547520
 max-connect-errors 100
 max-connections 151
+max-dbmsotpt-count 2048
 max-delayed-threads 20
 max-digest-length 1024
 max-error-count 1024
@@ -2106,7 +2138,7 @@ performance-schema-max-socket-classes 10
 performance-schema-max-socket-instances -1
 performance-schema-max-sql-text-length 1024
 performance-schema-max-stage-classes 175
-performance-schema-max-statement-classes 243
+performance-schema-max-statement-classes 258
 performance-schema-max-statement-stack 10
 performance-schema-max-table-handles -1
 performance-schema-max-table-instances -1
@@ -2125,6 +2157,7 @@ port ####
 port-open-timeout 0
 preload-buffer-size 32768
 print-identified-with-as-hex FALSE
+private-temp-table-prefix ORA$PTT_
 profiling-history-size 15
 protocol-compression-algorithms zlib,zstd,uncompressed
 proxy-protocol-networks 
@@ -2160,6 +2193,7 @@ replica-sql-verify-checksum TRUE
 replica-transaction-retries 10
 replica-type-conversions 
 replicate-same-server-id FALSE
+replicate-server-mode FALSE
 replication-optimize-for-static-plugin-config FALSE
 replication-sender-observe-commit-only FALSE
 report-host (No default value)
@@ -2174,11 +2208,13 @@ safe-user-create FALSE
 schema-definition-cache 256
 secondary-engine-cost-threshold 100000
 secure-log-path 
+select-bulk-into-batch 10000
 select-into-buffer-size 131072
 select-into-disk-sync FALSE
 select-into-disk-sync-delay 0
 server-id 1
 server-id-bits 32
+serveroutput FALSE
 session-track-gtids OFF
 session-track-schema TRUE
 session-track-state-change FALSE
@@ -2243,6 +2279,7 @@ temptable-max-ram 1073741824
 temptable-use-mmap TRUE
 terminology-use-previous NONE
 tf-sequence-table-max-upper-bound 1048576
+tf-udt-table-max-rows 1048576
 thread-cache-size 9
 thread-handling one-thread-per-connection
 thread-stack 1048576

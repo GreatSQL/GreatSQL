@@ -610,6 +610,12 @@ static inline void trx_sys_mutex_enter() { mutex_enter(&trx_sys->mutex); }
 /** Release the trx_sys->mutex. */
 static inline void trx_sys_mutex_exit() { trx_sys->mutex.exit(); }
 
+class trx_sys_mutex_guard_t {
+ public:
+  trx_sys_mutex_guard_t() { trx_sys_mutex_enter(); }
+  ~trx_sys_mutex_guard_t() { trx_sys_mutex_exit(); }
+};
+
 #ifdef UNIV_DEBUG
 
 /** Test if trx_sys->mutex is owned. */

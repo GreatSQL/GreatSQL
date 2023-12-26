@@ -30,6 +30,7 @@
 struct MEM_ROOT;
 class THD;
 class Trigger;
+class Event_parse_data;
 
 template <class T>
 class List;
@@ -78,6 +79,20 @@ bool load_triggers(THD *thd, MEM_ROOT *mem_root, const char *schema_name,
                    List<::Trigger> *triggers);
 
 /**
+  Clone trigger from the data dictionary.
+
+  @param [in]  mem_root           MEM_ROOT for memory allocation
+  @param [in]  src_trigger        src trigger
+  @param [in]  schema_name        name of schema
+  @param [in]  table_name         subject table name
+
+  @return Operation status
+    @retval ::Trigger
+*/
+::Trigger *clone_trigger(MEM_ROOT *mem_root, ::Trigger *src_trigger,
+                         const char *schema_name, const char *table_name);
+
+/**
   Check in the data dictionary if there is any trigger associated with a table.
 
   @param [in]  thd                thread handle
@@ -94,6 +109,25 @@ bool load_triggers(THD *thd, MEM_ROOT *mem_root, const char *schema_name,
 
 bool table_has_triggers(THD *thd, const char *schema_name,
                         const char *table_name, bool *table_has_trigger);
+
+/**
+  clone_trigger_and_set_status trigger from the data dictionary.
+
+  @param [in]  mem_root           MEM_ROOT for memory allocation
+  @param [in]  src_trigger        src trigger
+  @param [in]  schema_name        name of schema
+  @param [in]  table_name         subject table name
+  @param [in]  parse_data         Event information obtained from parser.
+  @param [in]  dd_table           dd::Table
+
+  @return Operation status
+    @retval ::Trigger
+*/
+bool clone_trigger_and_set_status(MEM_ROOT *mem_root, ::Trigger *src_trigger,
+                                  const char *schema_name,
+                                  const char *table_name,
+                                  Event_parse_data *parse_data,
+                                  Table *dd_table);
 
 }  // namespace dd
 

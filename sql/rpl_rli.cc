@@ -1,4 +1,5 @@
 /* Copyright (c) 2006, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -126,6 +127,7 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
 #endif
                param_id, param_channel),
       replicate_same_server_id(::replicate_same_server_id),
+      replicate_server_id_mode(::replicate_server_id_mode),
       relay_log(&sync_relaylog_period, true),
       is_relay_log_recovery(is_slave_recovery),
       save_temporary_tables(nullptr),
@@ -204,9 +206,8 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
       PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED, key_RELAYLOG_LOCK_log,
       key_RELAYLOG_LOCK_log_end_pos, key_RELAYLOG_LOCK_sync,
       PSI_NOT_INSTRUMENTED, key_RELAYLOG_LOCK_xids, PSI_NOT_INSTRUMENTED,
-      PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED, key_RELAYLOG_update_cond,
-      PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED, key_file_relaylog,
-      key_file_relaylog_index, key_file_relaylog_cache,
+      PSI_NOT_INSTRUMENTED, key_RELAYLOG_update_cond, PSI_NOT_INSTRUMENTED,
+      key_file_relaylog, key_file_relaylog_index, key_file_relaylog_cache,
       key_file_relaylog_index_cache);
 #endif
 

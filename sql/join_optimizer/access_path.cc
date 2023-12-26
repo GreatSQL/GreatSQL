@@ -727,12 +727,25 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
       }
       case AccessPath::HASH_JOIN: {
         const auto &param = path->hash_join();
+        unique_ptr_destroy_only<RowIterator> foj_attach_it;
         if (job.children.is_null()) {
-          SetupJobsForChildren(mem_root, param.outer, param.inner, join,
-                               /*inner_eligible_for_batch_mode=*/true, &job,
-                               &todo);
+          if (!param.is_foj) {
+            SetupJobsForChildren(mem_root, param.outer, param.inner, join,
+                                 /*inner_eligible_for_batch_mode=*/true, &job,
+                                 &todo);
+          } else {
+            // Create two more children iterators for foj_attach_it
+            job.AllocChildren(mem_root, 4);
+            job.children.size();
+            todo.push_back(job);
+            todo.push_back({param.outer, join, true, &job.children[3], {}});
+            todo.push_back({param.inner, join, false, &job.children[2], {}});
+            todo.push_back({param.inner, join, true, &job.children[1], {}});
+            todo.push_back({param.outer, join, false, &job.children[0], {}});
+          }
           continue;
         }
+
         const JoinPredicate *join_predicate = param.join_predicate;
         vector<HashJoinCondition> conditions;
         for (Item_eq_base *cond : join_predicate->expr->equijoin_conditions) {
@@ -755,6 +768,10 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
             break;
           case RelationalExpression::LEFT_JOIN:
             join_type = JoinType::OUTER;
+            break;
+          case RelationalExpression::FULL_OUTER_JOIN:
+            join_type = JoinType::OUTER;  // STILL OUTER, WE've set is_foj for
+                                          // the iterator
             break;
           case RelationalExpression::ANTIJOIN:
             join_type = JoinType::ANTI;
@@ -804,6 +821,21 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
             param.allow_spill_to_disk, join_type,
             join_predicate->expr->join_conditions, probe_input_batch_mode,
             hash_table_generation);
+
+        if (param.is_foj) {
+          foj_attach_it = NewIterator<HashJoinIterator>(
+              thd, mem_root, move(job.children[3]),
+              GetUsedTables(param.outer, /*include_pruned_tables=*/true),
+              estimated_build_rows, move(job.children[2]),
+              GetUsedTables(param.inner, /*include_pruned_tables=*/true),
+              param.store_rowids, param.tables_to_get_rowid_for,
+              thd->variables.join_buff_size, move(conditions),
+              param.allow_spill_to_disk, join_type,
+              join_predicate->expr->join_conditions, probe_input_batch_mode,
+              hash_table_generation, /* m_foj_attach */ true);
+          HashJoinIterator *it = down_cast<HashJoinIterator *>(iterator.get());
+          it->foj_attach_it = move(foj_attach_it);
+        }
         break;
       }
       case AccessPath::FILTER: {
@@ -882,6 +914,33 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
                 thd, std::move(job.children[0]), param.temp_table_param,
                 param.table, std::move(job.children[1]), join,
                 param.ref_slice));
+
+        break;
+      }
+      case AccessPath::CONNECT_BY_SCAN: {
+        const auto &param = path->connect_by_scan();
+        if (job.children.is_null()) {
+          job.AllocChildren(mem_root, 2);
+          todo.push_back(job);
+          todo.push_back({param.src_path,
+                          join,
+                          /*eligible_for_batch_mode=*/true,
+                          &job.children[0],
+                          {}});
+
+          todo.push_back({param.table_path,
+                          join,
+                          eligible_for_batch_mode,
+                          &job.children[1],
+                          {}});
+          continue;
+        }
+
+        iterator = unique_ptr_destroy_only<RowIterator>(
+            connect_by_iterator::CreateIterator(
+                thd, join, param.table, param.temp_table_param,
+                move(job.children[0]), move(job.children[1]),
+                param.connect_by_param, param.ref_slice));
 
         break;
       }

@@ -1,0 +1,367 @@
+--source include/have_debug.inc
+
+--echo [****************abnormal test: purge file rename ibd failed, delete ibd file directly]
+create table t1(c1 int primary key, c2 varchar(40), c3 varchar(40));
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 10) {
+    --eval insert into t1 values($row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890')
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=ON;
+set global debug='+d,innodb_do_not_purge_file';
+set global debug='+d,innodb_file_purge_rename_fail_1';
+set global debug='+d,innodb_file_purge_rename_fail_2';
+drop table t1;
+--let $data_dir=`select @@datadir`
+--let $db_name = test
+--let $old_ibd_path = $data_dir$db_name/t1.ibd
+--error 1
+--file_exists $old_ibd_path
+
+--let tmp_file_dir=$data_dir#file_purge
+perl;
+use strict;
+my $dirname = $ENV{'tmp_file_dir'};
+my @dir_files = <$dirname/*>;
+if ( @dir_files ) {   
+    print "$dirname has file:\n";
+    foreach my $file (@dir_files) {
+        print "$file\n";
+    }
+    die("error, purge file dir is not empty.\n");
+}
+EOF
+
+select * from information_schema.innodb_async_purge_files;
+show tables;
+set global debug='-d,innodb_do_not_purge_file';
+set global debug='-d,innodb_file_purge_rename_fail_1';
+set global debug='-d,innodb_file_purge_rename_fail_2';
+
+--echo [****************abnormal test: crash before write file purge log]
+create table t1(c1 int primary key, c2 varchar(40), c3 varchar(40));
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 10) {
+    --eval insert into t1 values($row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890')
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=ON;
+set session debug='+d,ddl_log_crash_before_write_file_purge_log';
+
+--source include/expect_crash.inc
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+drop table t1;
+--file_exists $old_ibd_path
+
+--let $restart_parameters= restart
+--let $do_not_echo_parameters=1
+--source include/start_mysqld.inc
+
+show tables like 't1';
+--error 1
+--file_exists $old_ibd_path
+--let wait_condition=select count(*) = 0 from information_schema.innodb_async_purge_files
+--source include/wait_condition.inc
+perl;
+use strict;
+my $dirname = $ENV{'tmp_file_dir'};
+my @dir_files = <$dirname/*>;
+if ( @dir_files ) {   
+    print "$dirname has file:\n";
+    foreach my $file (@dir_files) {
+        print "$file\n";
+    }
+    die("error, purge file dir is not empty.\n");
+}
+EOF
+
+--echo [****************abnormal test: crash after write file purge log]
+create table t1(c1 int primary key, c2 varchar(40), c3 varchar(40));
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 10) {
+    --eval insert into t1 values($row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890')
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=ON;
+set session debug='+d,ddl_log_crash_after_write_file_purge_log';
+
+--source include/expect_crash.inc
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+drop table t1;
+--file_exists $old_ibd_path
+
+--let $restart_parameters= restart
+--let $do_not_echo_parameters=1
+--source include/start_mysqld.inc
+
+show tables like 't1';
+--error 1
+--file_exists $old_ibd_path
+--let wait_condition=select count(*) = 0 from information_schema.innodb_async_purge_files
+--source include/wait_condition.inc
+perl;
+use strict;
+my $dirname = $ENV{'tmp_file_dir'};
+my @dir_files = <$dirname/*>;
+if ( @dir_files ) {   
+    print "$dirname has file:\n";
+    foreach my $file (@dir_files) {
+        print "$file\n";
+    }
+    die("error, purge file dir is not empty.\n");
+}
+EOF
+
+create table t1(c1 int primary key, c2 varchar(40), c3 varchar(40));
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 10) {
+    --eval insert into t1 values($row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890')
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=ON;
+set session debug='+d,ddl_log_crash_after_rename_file';
+--source include/expect_crash.inc
+--error CR_SERVER_LOST,ER_INTERNAL_ERROR
+drop table t1;
+
+--error 1
+--file_exists $old_ibd_path
+
+perl;
+use strict;
+my $dirname = $ENV{'tmp_file_dir'};
+my @dir_files = <$dirname/*>;
+if ( @dir_files ) {
+    print "crash before purge temp data file, there is temp file in purge dir.\n"; 
+} else {
+    die("error, purge file dir is empty.\n");  
+}
+EOF
+
+--let $restart_parameters= restart
+--let $do_not_echo_parameters=1
+--source include/start_mysqld.inc
+
+--let wait_condition=select count(*) = 0 from information_schema.innodb_async_purge_files
+--source include/wait_condition.inc
+perl;
+use strict;
+my $dirname = $ENV{'tmp_file_dir'};
+my @dir_files = <$dirname/*>;
+if ( @dir_files ) {   
+    print "$dirname has file:\n";
+    foreach my $file (@dir_files) {
+        print "$file\n";
+    }
+    die("error, purge file dir is not empty.\n");
+}
+EOF
+
+--echo [****************abnormal test: crash after replay file purge log]
+call mtr.add_suppression("temp data file not exist");
+create table t1(c1 int primary key, c2 varchar(40), c3 varchar(40));
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 10) {
+    --eval insert into t1 values($row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890')
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=ON;
+set session debug='+d,ddl_log_crash_after_replay_file_purge_log';
+--source include/expect_crash.inc
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+drop table t1;
+
+--echo ## wait pid_file deleted
+perl;
+my $pid_file = $ENV{'mysqld_pid_file'};
+my $retry_times = 120;
+while ($retry_times > 0) {
+    if (-e $pid_file) {
+        sleep(1);
+        $retry_times--;
+    } else {
+        $retry_times = 0;
+    }
+}
+EOF
+
+--let $restart_parameters= restart
+--let $do_not_echo_parameters=1
+--source include/start_mysqld.inc
+
+show tables like 't1';
+--error 1
+--file_exists $old_ibd_path
+--let wait_condition=select count(*) = 0 from information_schema.innodb_async_purge_files
+--source include/wait_condition.inc
+perl;
+use strict;
+my $dirname = $ENV{'tmp_file_dir'};
+my @dir_files = <$dirname/*>;
+if ( @dir_files ) {   
+    print "$dirname has file:\n";
+    foreach my $file (@dir_files) {
+        print "$file\n";
+    }
+    die("error, purge file dir is not empty.\n");
+}
+EOF
+
+let $log_error_= `SELECT @@GLOBAL.log_error`;
+if($log_error_ == "stderr")
+{
+    --let $_server_id= `SELECT @@server_id`
+    let $log_error_ = $MYSQLTEST_VARDIR/log/mysqld.$_server_id.err;
+}
+--let LOG_ERROR=$log_error_
+perl;
+   use strict;
+   use File::stat;
+   my $file= $ENV{'LOG_ERROR'} or die("grep file not set");
+   my $pattern="temp data file not exist";
+   my $cnt = 0;
+
+   open(FILE, "$file") or die("Unable to open $file: $!");
+   while (<FILE>) {
+     my $line = $_;
+     if ($line =~ /$pattern/) {
+       $cnt++;
+     }
+   }
+   if ($cnt <= 0) {
+    die("error, crash after replay file purge log");
+   }
+   close(FILE);
+EOF
+
+--echo [************** abnormal test: test file operation exception, then purge success]
+call mtr.add_suppression("create file handle failed");
+call mtr.add_suppression("get file size failed");
+call mtr.add_suppression("truncate file failed");
+
+--echo ## generate table t1 which data file size is 9M
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 100) {
+    --eval insert into t1 values($row_cnt, $row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890', '1qaz2wsx3edc4rfv5tgb')
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=ON;
+set global innodb_data_file_async_purge_max_size=51200;
+set global innodb_data_file_async_purge_error_retry_count=2000;
+set global innodb_data_file_async_purge_interval=1000;
+set global debug='+d,fp_create_file_handle_fail';
+set @pre_message = '';
+drop table t1;
+--let wait_condition=select count(*) != 0 from information_schema.innodb_async_purge_files where message is not null and message != @pre_message
+--source include/wait_condition.inc
+set global debug='-d,fp_create_file_handle_fail';
+
+set global debug='+d,fp_get_file_size_fail';
+--let $pre_msg=`select message from information_schema.innodb_async_purge_files`
+--disable_query_log
+eval set @pre_message = '$pre_msg';
+--enable_query_log
+--let wait_condition=select count(*) != 0 from information_schema.innodb_async_purge_files where message is not null and message != @pre_message
+--source include/wait_condition.inc
+set global debug='-d,fp_get_file_size_fail';
+
+set global debug='+d,fp_truncate_file_fail';
+--let $pre_msg=`select message from information_schema.innodb_async_purge_files`
+--disable_query_log
+eval set @pre_message = '$pre_msg';
+--enable_query_log
+--let wait_condition=select count(*) != 0 from information_schema.innodb_async_purge_files where message is not null and message != @pre_message
+--source include/wait_condition.inc
+--let $tmp_file_path=`select temporary_path from information_schema.innodb_async_purge_files`
+set global debug='-d,fp_truncate_file_fail';
+
+set global innodb_data_file_async_purge_interval=100;
+--let wait_condition=select count(*) = 0 from information_schema.innodb_async_purge_files
+--source include/wait_condition.inc
+--error 1
+--file_exists $tmp_file_path
+perl;
+   use strict;
+   use File::stat;
+   my $file= $ENV{'LOG_ERROR'} or die("grep file not set");
+   my $pattern="file must be manually deleted";
+   my $cnt = 0;
+
+   open(FILE, "$file") or die("Unable to open $file: $!");
+   while (<FILE>) {
+     my $line = $_;
+     if ($line =~ /$pattern/) {
+       $cnt++;
+     }
+   }
+   if ($cnt > 0) {
+    die("error, purge temp file failed.");
+   }
+   close(FILE);
+EOF
+
+--echo [************** abnormal test: test file operation exception, retry count reachs innodb_data_file_async_purge_interval, delete file manually]
+call mtr.add_suppression("file must be manually deleted");
+
+--echo ## generate table t1 which data file size is 9M
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+--let $row_cnt = 1
+--disable_query_log
+while ($row_cnt <= 100) {
+    --eval insert into t1 values($row_cnt, $row_cnt, 'qazwsxedcrfvtgbyhnuj', '12345678901234567890', '1qaz2wsx3edc4rfv5tgb')
+    --inc $row_cnt
+}
+--enable_query_log
+set innodb_data_file_async_purge=ON;
+set global innodb_data_file_async_purge_max_size=51200;
+set global innodb_data_file_async_purge_error_retry_count=2000;
+set global innodb_data_file_async_purge_interval=1000;
+set global debug='+d,fp_create_file_handle_fail';
+set @pre_message = '';
+drop table t1;
+--let wait_condition=select count(*) != 0 from information_schema.innodb_async_purge_files where message is not null and message != @pre_message
+--source include/wait_condition.inc
+set global debug='-d,fp_create_file_handle_fail';
+
+set global debug='+d,fp_get_file_size_fail';
+--let $pre_msg=`select message from information_schema.innodb_async_purge_files`
+--disable_query_log
+eval set @pre_message = '$pre_msg';
+--enable_query_log
+--let wait_condition=select count(*) != 0 from information_schema.innodb_async_purge_files where message is not null and message != @pre_message
+--source include/wait_condition.inc
+set global debug='-d,fp_get_file_size_fail';
+
+set global debug='+d,fp_truncate_file_fail';
+--let $pre_msg=`select message from information_schema.innodb_async_purge_files`
+--disable_query_log
+eval set @pre_message = '$pre_msg';
+--enable_query_log
+--let wait_condition=select count(*) != 0 from information_schema.innodb_async_purge_files where message is not null and message != @pre_message
+--source include/wait_condition.inc
+--let $tmp_file_path=`select temporary_path from information_schema.innodb_async_purge_files`
+
+set global innodb_data_file_async_purge_interval=100;
+set global innodb_data_file_async_purge_error_retry_count=5;
+--let wait_condition=select count(*) = 0 from information_schema.innodb_async_purge_files
+--source include/wait_condition.inc
+set global debug='-d,fp_truncate_file_fail';
+--file_exists $tmp_file_path
+--exec rm -f $tmp_file_path
+
+set innodb_data_file_async_purge=OFF;
+set global innodb_data_file_async_purge_error_retry_count=10;
+set global innodb_data_file_async_purge_max_size=268435456;

@@ -376,6 +376,9 @@ static int sweeper_task(task_arg arg);
 extern int alive_task(task_arg arg);
 extern int cache_manager_task(task_arg arg);
 extern int detector_task(task_arg arg);
+extern void notify_detector_when_removed();
+extern void notify_detector_when_actually_removed();
+extern int ask_for_detector_if_added_ok();
 
 static int finished(pax_machine *p);
 static int accepted(pax_machine *p);
@@ -938,6 +941,7 @@ static synode_no last_delivered_msg = NULL_SYNODE;
 synode_no get_last_delivered_msg() { return last_delivered_msg; }
 
 void init_xcom_base() {
+  G_DEBUG("Do init_xcom_base");
   IFDBG(D_NONE, FN);
   xcom_shutdown = 0;
   current_message = null_synode;
@@ -967,6 +971,7 @@ void init_xcom_base() {
 
 static void init_tasks() {
   IFDBG(D_NONE, FN);
+  G_DEBUG("Do init_tasks");
   set_task(&boot, nullptr);
   set_task(&net_boot, nullptr);
   set_task(&net_recover, nullptr);
@@ -986,6 +991,8 @@ void xcom_thread_init() {
 #ifndef NO_SIGPIPE
   signal(SIGPIPE, SIG_IGN);
 #endif
+  G_INFO("Do xcom_thread_init");
+
   init_base_vars();
   init_site_vars();
   init_crc32c();
@@ -1000,6 +1007,7 @@ void xcom_thread_init() {
   task_sys_init();
 
   init_cache();
+  G_INFO("Finish xcom_thread_init");
 }
 
 /* Empty the proposer input queue */
@@ -1504,8 +1512,10 @@ static void init_time_queue();
 static int paxos_timer_task(task_arg arg [[maybe_unused]]);
 
 int xcom_taskmain2(xcom_port listen_port) {
+  G_INFO("Do start xcom_taskmain2");
   init_xcom_transport(listen_port);
 
+  G_INFO("enter taskmain");
   IFDBG(D_BUG, FN; STRLIT("enter taskmain"));
   ignoresig(SIGPIPE);
 
@@ -1578,6 +1588,7 @@ int xcom_taskmain2(xcom_port listen_port) {
 
     IFDBG(D_NONE, FN; STRLIT("Creating tasks"));
 
+    G_INFO("Creating tcp_server task");
     task_new(incoming_connection_task, int_arg(tcp_fd.val), "tcp_server",
              XCOM_THREAD_DEBUG);
     task_new(tcp_reaper_task, null_arg, "tcp_reaper_task", XCOM_THREAD_DEBUG);
@@ -1597,6 +1608,7 @@ int xcom_taskmain2(xcom_port listen_port) {
   if (recovery_begin_cb) recovery_begin_cb();
 #endif
 
+  G_INFO("enter task loop");
   task_loop();
 cleanup:
 
@@ -2820,7 +2832,10 @@ void execute_msg(site_def *site, pax_machine *pma, pax_msg *p) {
             if (site->max_active_leaders == active_leaders_all) {
               copy_node_set(&a->body.app_u_u.present, &site->global_node_set);
             }
+            G_INFO("before deliver_global_view_msg is called");
             deliver_global_view_msg(site, a->body.app_u_u.present, p->synode);
+            notify_detector_when_actually_removed();
+            G_INFO("after deliver_global_view_msg is called");
             ADD_DBG(D_BASE,
                     add_event(EVENT_DUMP_PAD,
                               string_arg("deliver_global_view_msg p->synode"));
@@ -3936,6 +3951,7 @@ site_def *handle_remove_node(app_data_ptr a) {
   }
   G_INFO("handle_remove_node calls site_install_action");
   site_install_action(site, a->body.c_t);
+  notify_detector_when_removed();
   return site;
 }
 
@@ -5808,6 +5824,13 @@ static u_int allow_add_node(app_data_ptr a) {
     }
   }
 
+  G_INFO("allow_add_node check ask_for_detector_if_added_ok");
+  if (!ask_for_detector_if_added_ok()) {
+    G_WARNING(
+        "Old incarnation has not been removed while trying to add a new node");
+    return 0;
+  }
+
   return 1;
 }
 
@@ -6825,8 +6848,9 @@ again:
             add_event(EVENT_DUMP_PAD, string_arg(pax_op_to_str(ep->p->op))););
 
     if (ep->srv && !ep->srv->invalid && ((int)ep->p->op != (int)client_msg) &&
-        is_connected(ep->srv->con))
+        is_connected(ep->srv->con)) {
       server_detected(ep->srv);
+    }
 
     if (((int)ep->p->op < (int)client_msg || ep->p->op > LAST_OP)) {
       /* invalid operation, ignore message */
@@ -7097,7 +7121,8 @@ int reply_handler_task(task_arg arg) {
         shutdown_connection(ep->s->con);
         ep->s->unreachable = DIRECT_ABORT_CONN;
         ep->s->fast_skip_allowed_for_kill = 1;
-        G_INFO("fast_skip_allowed_for_kill is set here");
+        G_INFO("fast_skip_allowed_for_kill is set here for server:%s,port:%d",
+               ep->s->srv, ep->s->port);
         continue;
       }
       receive_bytes[ep->reply->op] += (uint64_t)n + MSG_HDR_SIZE;
@@ -7128,7 +7153,7 @@ int reply_handler_task(task_arg arg) {
         wakeup_sender();
       } else {
         G_INFO("we should not process the incoming need_boot_op message");
-        ep->s->invalid = 1;
+        // ep->s->invalid = 1;
       }
     } else {
       /* We only handle messages from this connection if the server is valid.
@@ -8028,7 +8053,10 @@ xcom_fsm_state *xcom_fsm_impl(xcom_actions action, task_arg fsmargs) {
   while (ctxt.state_fp(action, fsmargs, &ctxt)) {
     IFDBG(D_BUG, FN; STREXP(ctxt.state_name);
           STREXP(xcom_actions_name[action]));
+    G_DEBUG("start %f pid %d xcom_id %x state %s action %s", seconds(), xpid(),
+            get_my_xcom_id(), ctxt.state_name, xcom_actions_name[action]);
   }
+  G_DEBUG("Finish do xcom_fsm_impl");
   return &ctxt;
 }
 
@@ -8597,23 +8625,12 @@ static xcom_send_app_wait_result xcom_send_app_wait_and_get(
   pax_msg *rp = nullptr;
 
   do {
-    std::packaged_task<void()> send_client_app_data_task([&]() {
-      retval = (int)xcom_send_client_app_data(fd, a, force);
-      if (retval >= 0) rp = socket_read_msg(fd, p);
-    });
-
-    auto send_client_app_data_result = send_client_app_data_task.get_future();
-    std::thread(std::move(send_client_app_data_task)).detach();
-
-    std::future_status request_status = send_client_app_data_result.wait_for(
-        std::chrono::seconds(XCOM_SEND_APP_WAIT_TIMEOUT));
-    if ((retval < 0) || request_status == std::future_status::timeout) {
-      memset(p, 0, sizeof(*p)); /* before return so caller can free p */
-      G_INFO(
-          "Client sent negotiation request for protocol failed. Please check "
-          "the remote node log for more details.")
+    retval = (int)xcom_send_client_app_data(fd, a, force);
+    memset(p, 0, sizeof(*p)); /* before return so caller can free p */
+    if (retval < 0) {
       return SEND_REQUEST_FAILED;
     }
+    rp = socket_read_msg(fd, p);
 
     if (rp) {
       client_reply_code cli_err = rp->cli_err;

@@ -207,6 +207,7 @@ enum options_client {
   OPT_CLONE_DECRYPT_FILE,
   OPT_CLONE_DECRYPT_DIR,
   OPT_REMOVE_ORIGINAL,
+  OPT_SEQUENCES,
   /* Add new option above this */
   OPT_MAX_CLIENT_OPTION
 };

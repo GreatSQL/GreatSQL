@@ -761,7 +761,9 @@ bool invalid_routine(THD *thd, const dd::Schema &schema,
   prepare_sp_chistics_from_dd_routine(&routine, &chistics);
 
   dd::String_type return_type_str;
-  prepare_return_type_string_from_dd_routine(thd, &routine, &return_type_str);
+  if (prepare_return_type_string_from_dd_routine(thd, &routine,
+                                                 &return_type_str))
+    return true;
 
   // Create SP creation context to be used in db_load_routine()
   Stored_program_creation_ctx *creation_ctx =
@@ -784,13 +786,23 @@ bool invalid_routine(THD *thd, const dd::Schema &schema,
     type = enum_sp_type::TYPE;
   else
     return true;
+
+  /* Get options about udt object.*/
+  LEX_CSTRING nested_table_udt = NULL_CSTR;
+  ulonglong varray_limit = 0;
+  enum_udt_table_of_type enum_table_type = enum_udt_table_of_type::TYPE_INVALID;
+  if (type == enum_sp_type::TYPE) {
+    get_udt_info_from_dd_routine(thd, &routine, &nested_table_udt,
+                                 &enum_table_type, &varray_limit);
+  }
   enum_sp_return_code error = db_load_routine(
       thd, type, schema.name().c_str(), schema.name().size(),
       routine.name().c_str(), routine.name().size(), &sp, routine.sql_mode(),
       routine.parameter_str().c_str(), return_type_str.c_str(),
       routine.definition().c_str(), &chistics, routine.definer_user().c_str(),
       routine.definer_host().c_str(), routine.created(true),
-      routine.last_altered(true), creation_ctx, false);
+      routine.last_altered(true), creation_ctx, false, nested_table_udt,
+      enum_table_type, varray_limit);
 
   if (sp != nullptr)  // To be safe
     sp_head::destroy(sp);
@@ -920,7 +932,9 @@ bool upgrade_system_schemas(THD *thd) {
                : check.check_system_schemas(thd)) ||
           check.repair_tables(thd) ||
           dd::tables::DD_properties::instance().set(
-              thd, "MYSQLD_VERSION_UPGRADED", MYSQL_VERSION_ID);
+              thd, "MYSQLD_VERSION_UPGRADED", MYSQL_VERSION_ID) ||
+          dd::tables::DD_properties::instance().set(
+              thd, "GREATDB_DD_VERSION_UPGRADED", GREATDB_DD_VERSION_ID);
   }
   create_upgrade_file();
   bootstrap_error_handler.set_log_error(true);

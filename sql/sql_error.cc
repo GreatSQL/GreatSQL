@@ -611,8 +611,12 @@ Sql_condition *Diagnostics_area::push_warning(
     sp_condition_value *user_defined) {
   Sql_condition *cond = nullptr;
 
+  ulong da_max_count = (mysql_errno == ER_ORA_DBMS_OUTPUT)
+                           ? thd->variables.max_dbmsotpt_count
+                           : thd->variables.max_error_count;
+
   if (m_allow_unlimited_conditions ||
-      m_conditions_list.elements() < thd->variables.max_error_count) {
+      m_conditions_list.elements() < da_max_count) {
     cond = new (&m_condition_root)
         Sql_condition(&m_condition_root, mysql_errno, returned_sqlstate,
                       severity, message_text);
@@ -751,6 +755,8 @@ const LEX_CSTRING warning_level_names[] = {{STRING_WITH_LEN("Note")},
 bool mysqld_show_warnings(THD *thd, ulong levels_to_show) {
   Diagnostics_area new_stmt_da(false);
   Diagnostics_area *first_da = thd->get_stmt_da();
+  Diagnostics_area *dbms_da = thd->get_dbmsotpt()->get_dbms_da();
+  bool dbmsotpt_serveroutput = thd->get_dbmsotpt()->get_serveroutput();
   bool rc = false;
   DBUG_TRACE;
 
@@ -799,6 +805,27 @@ bool mysqld_show_warnings(THD *thd, ulong levels_to_show) {
     if (protocol->end_row()) rc = true;
   }
   thd->pop_diagnostics_area();
+
+  if (dbmsotpt_serveroutput) {
+    // show dbms_output buffer contents
+    it = dbms_da->sql_conditions();
+    rc = false;
+
+    while (!rc && (err = it++)) {
+      assert(err->mysql_errno() == (uint32)ER_ORA_DBMS_OUTPUT);
+      if (++idx <= unit->offset_limit_cnt) continue;
+      if (idx > unit->select_limit_cnt) break;
+      protocol->start_row();
+      protocol->store_string(warning_level_names[err->severity()].str,
+                             warning_level_names[err->severity()].length,
+                             system_charset_info);
+      protocol->store((uint32)err->mysql_errno());
+      protocol->store_string(err->message_text(), err->message_octet_length(),
+                             system_charset_info);
+      if (protocol->end_row()) rc = true;
+    }
+    thd->get_dbmsotpt()->reset_dbms_output_package(thd);
+  }
 
   if (!rc) {
     my_eof(thd);

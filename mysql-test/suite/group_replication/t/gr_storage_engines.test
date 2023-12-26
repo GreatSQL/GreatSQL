@@ -87,8 +87,7 @@ while ($tables_count)
   --dec $tables_count
 }
 
---echo Check that INSERT...SELECT statement on InnoDB table(tn) from a non-transactional table(Eg:MyISAM t2) fails
---error ER_BEFORE_DML_VALIDATION_ERROR
+--echo Check that INSERT...SELECT statement on InnoDB table(tn) from a non-transactional table(Eg:MyISAM t2) succeeds
 INSERT INTO tn (c1) SELECT (t2.c1) FROM t2;
 
 --echo change storage engine to "InnoDB" on t2 and check INSERT...SELECT on tn succeeds

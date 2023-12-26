@@ -130,6 +130,52 @@ class IteratorProfilerImpl final : public IteratorProfiler {
 };
 
 /**
+   This is a no-op class with a public interface identical to that of the
+   IteratorProfilerImpl class. This allows iterators with internal time
+   keeping (such as MaterializeIterator) to use the same code whether
+   time keeping is enabled or not. And all the mutators are inlinable no-ops,
+   so that there should be no runtime overhead.
+*/
+class DummyIteratorProfiler final : public IteratorProfiler {
+ public:
+  struct TimeStamp {};
+
+  static TimeStamp Now() { return TimeStamp(); }
+
+  double GetFirstRowMs() const override {
+    assert(false);
+    return 0.0;
+  }
+
+  double GetLastRowMs() const override {
+    assert(false);
+    return 0.0;
+  }
+
+  uint64_t GetNumInitCalls() const override {
+    assert(false);
+    return 0;
+  }
+
+  uint64_t GetNumRows() const override {
+    assert(false);
+    return 0;
+  }
+
+  /*
+     The methods below are non-virtual with the same name and signature as
+     in IteratorProfilerImpl. The compiler should thus be able to suppress
+     calls to these for iterators without profiling.
+  */
+  void StopInit([[maybe_unused]] TimeStamp start_time) {}
+
+  void IncrementNumRows([[maybe_unused]] uint64_t materialized_rows) {}
+
+  void StopRead([[maybe_unused]] TimeStamp start_time,
+                [[maybe_unused]] bool read_ok) {}
+};
+
+/**
   An iterator template that wraps a RowIterator, such that all calls to Init()
   and Read() are timed (all others are passed through unchanged, and possibly
   even inlined, since all RowIterator implementations are final). This is used

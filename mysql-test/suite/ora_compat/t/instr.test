@@ -500,3 +500,64 @@ select instr('helloworld','l',2,2) from dual;
 
 DROP TABLE t1;
 
+#
+# fix bug: Decimal to integer without rounding
+#
+set sql_mode='oracle';
+select instr('thisisatestsentence','t',1,2.1) from dual;
+select instr('thisisatestsentence','t',1,2.2) from dual;
+select instr('thisisatestsentence','t',1,2.3) from dual;
+select instr('thisisatestsentence','t',1,2.5) from dual;
+select instr('thisisatestsentence','t',1,2.6) from dual;
+select instr('thisisatestsentence','t',1,2.7) from dual;
+
+select instr('thisisatestsentence','t',1,3) from dual;
+
+select instr('thisisatestsentence','t',1.1,3) from dual;
+select instr('thisisatestsentence','t',1.2,3) from dual;
+select instr('thisisatestsentence','t',1.3,3) from dual;
+select instr('thisisatestsentence','t',1.5,3) from dual;
+select instr('thisisatestsentence','t',1.6,3) from dual;
+select instr('thisisatestsentence','t',1.7,3) from dual;
+
+select instr('thisisatestsentence','t',1.1,2.1) from dual;
+select instr('thisisatestsentence','t',1.7,2.7) from dual;
+select instr('thisisatestsentence','t',1,2)  from dual;
+select instr('thisisatestsentence','t',2,3)  from dual;
+
+#
+# fix : native function without rounding,udt function is rounding
+#
+delimiter |;
+create or replace function f1() return double as begin return 0.6; end;|
+delimiter ;|
+select f1(),instr('thisisatestsentence','t', 1, f1()) from dual;
+select f1(),instr('thisisatestsentence','t', f1(), f1()) from dual;
+--error ER_INVALID_PARAMETER_USE
+select  log(10,4),instr('thisisatestsentence','t',1,log(10, 4)) from dual;
+--error ER_INVALID_PARAMETER_USE
+select  log(10,4),instr('thisisatestsentence','t',log(10, 4),log(10, 4)) from dual;
+select f1(),instr('thisisatestsentence','t',f1()) from dual;
+select log(10,4),instr('thisisatestsentence','t',log(10,4)) from dual;
+select instr('thisisatestsentence','t',0.6) from dual;
+select f1(),instr('thisisatestsentence','t',1,f1()) from dual;
+
+#
+# fix : String are converted to decimals, and exceptions are reported with errors
+#
+--error ER_INVALID_PARAMETER_USE
+select instr('thisisatestsentence','t', '1.6abc') from dual;
+select instr('thisisatestsentence','t', '1.5') from dual;
+--error ER_INVALID_PARAMETER_USE
+select instr('thisisatestsentence','t', '1','1.6abc') from dual;
+select  instr('thisisatestsentence','t',log(10, 4)) from dual;
+--error ER_INVALID_PARAMETER_USE
+select  instr('thisisatestsentence','t', 1,log(10, 4)) from dual;
+select  instr('thisisatestsentence','t', 1,1.999999999999999) from dual;
+select  instr('thisisatestsentence','t', 1.999999999999999,1) from dual;
+select  instr('thisisatestsentence','t', 1.999999999999999,1.999999999999999) from dual;
+select  instr('thisisatestsentence','t', 1.999999999999999,2) from dual;
+select  instr('thisisatestsentence','t', 1,2) from dual;
+
+drop function f1;
+

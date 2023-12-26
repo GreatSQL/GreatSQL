@@ -80,7 +80,12 @@ static bool ParseRegexpOptions(const std::string &options_string,
         result |= UREGEX_DOTALL;
         break;
       case 'u':
+        if (current_thd->variables.sql_mode & MODE_ORACLE) return true;
         result |= UREGEX_UNIX_LINES;
+        break;
+      case 'x':
+        if (!(current_thd->variables.sql_mode & MODE_ORACLE)) return true;
+        result |= (UREGEX_ERROR_ON_UNKNOWN_ESCAPES << 1);
         break;
       default:
         return true;
@@ -154,6 +159,97 @@ bool Item_func_regexp::set_pattern() {
   }
 
   return m_facade->SetPattern(pattern(), icu_flags);
+}
+
+bool item_func_regexp_count::fix_fields(THD *thd, Item **arguments) {
+  if (Item_func_regexp::fix_fields(thd, arguments)) return true;
+
+  if (return_option().has_value() && return_option() != 0 &&
+      return_option() != 1) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0),
+             "regexp_count: return_option must be 1 or 0.");
+    return true;
+  }
+
+  return false;
+}
+
+bool item_func_regexp_count::resolve_type(THD *thd) {
+  if (Item_func_regexp::resolve_type(thd)) return true;
+  if (param_type_is_default(thd, 0, 2)) return true;
+  if (param_type_is_default(thd, 2, 3, MYSQL_TYPE_LONGLONG)) return true;
+  if (param_type_is_default(thd, 3, 3)) return true;
+  if (param_type_is_rejected(4, 4))  // as we evaluate it in fix_fields
+    return true;
+  return false;
+}
+
+longlong item_func_regexp_count::val_int() {
+  DBUG_TRACE;
+  assert(fixed);
+  int32 resultcount = 0;
+  String *tempstr = nullptr;
+
+  std::optional<int> pos = position();
+  std::optional<int> occ = occurrence();
+  std::optional<int> retopt = return_option();
+  null_value = false;
+
+  if (args[0]->null_value || args[0]->is_null() ||
+      (((tempstr = (args[0]->val_str(&value))) == nullptr) ||
+       (tempstr->is_empty())) ||
+      args[1]->null_value || args[1]->is_null() ||
+      (((tempstr = (args[1]->val_str(&value))) == nullptr) ||
+       (tempstr->is_empty())) ||
+      set_pattern() || !pos.has_value() || !occ.has_value() ||
+      !retopt.has_value()) {
+    null_value = true;
+    return 0;
+  }
+
+  longlong begin = pos.value();
+  String *res = args[0]->val_str(&value);
+  String *posres = args[1]->val_str(&tmp_value1);
+
+  if (begin > static_cast<uint32>(res->numchars())) return 0;
+  std::optional<int32_t> result;
+  result = m_facade->Find(subject(), begin, occ.value(), retopt.value());
+
+  while (result.has_value() && result.value()) {
+    resultcount++;
+
+    /* Processing '^' or '$' beginning  expression, for example: ^abcd.. */
+    /* Processing expression length is 3，'^' beginning '*' ending expression,
+     * for example: ^a*  */
+    if ((posres->ptr()[0] == '^') || (posres->ptr()[0] == '$') ||
+        ((posres->numchars() == 3) && (posres->ptr()[0] == '^') &&
+         (posres->ptr()[posres->length() - 1] == '*'))) {
+      if (begin > 1) resultcount--;
+      break;
+    }
+
+    if ((static_cast<uint32>(result.value()) >
+         static_cast<uint32>(res->numchars())))
+      break;
+
+    /* Processing expression example: a*,b?  m_facade->Find returns the index
+     * position equal to begin
+     */
+    if (begin == static_cast<uint32>(result.value())) {
+      begin++;
+
+      if (begin > static_cast<uint32>(res->numchars())) {
+        resultcount++;
+        break;
+      }
+    } else
+      begin = min(static_cast<uint32>(result.value()),
+                  static_cast<uint32>(res->numchars()));
+
+    result = m_facade->Find(subject(), begin, occ.value(), retopt.value());
+  }
+
+  return resultcount;
 }
 
 bool Item_func_regexp_instr::fix_fields(THD *thd, Item **arguments) {
@@ -233,6 +329,32 @@ bool Item_func_regexp_like::resolve_type(THD *thd) {
 }
 
 bool Item_func_regexp_replace::resolve_type(THD *thd) {
+  /**
+    In Oracle mode, the third parameter 'replace_string' can not be passed
+    explicitly, the default value is `NULL`
+  */
+  if (2 == arg_count) {
+    if (current_thd->variables.sql_mode & MODE_ORACLE) {
+      arg_count += 1;
+      Item **old_args = args;
+      args = thd->mem_root->ArrayAlloc<Item *>(arg_count);
+      if (args == nullptr) {
+        my_error(ER_DA_OOM, MYF(0));
+        return true;
+      }
+      args[0] = old_args[0];
+      args[1] = old_args[1];
+      args[2] = new (thd->mem_root) Item_null();
+      if (args[2] == nullptr) {
+        my_error(ER_DA_OOM, MYF(0));
+        return true;
+      }
+    } else {
+      my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), func_name());
+      return true;
+    }
+  }
+
   if (Item_func_regexp::resolve_type(thd)) return true;
   if (param_type_is_default(thd, 2, 3)) return true;
   if (param_type_is_default(thd, 3, 5, MYSQL_TYPE_LONGLONG)) return true;
@@ -279,8 +401,26 @@ String *Item_func_regexp_replace::val_str(String *buf) {
                                      occ.value(), buf);
   if (current_thd->is_error()) return error_str();
 
-  null_value = (result == nullptr);
-  return result;
+  if (result == nullptr && current_thd->variables.sql_mode & MODE_ORACLE) {
+    /**
+      In Oracle mode, if the second parameter 'pattern' is 'NULL', 'source_char'
+      does not perform any substitutions
+    */
+    if (pattern()->is_null()) {
+      result = subject()->val_str(buf);
+    }
+  }
+
+  /**
+    In Oracle mode, all results that return an empty string are replaced with
+    'NULL'
+  */
+  null_value =
+      (result == nullptr) ||
+      ((current_thd->variables.sql_mode & MODE_ORACLE) &&
+       (current_thd->variables.sql_mode & MODE_EMPTYSTRING_EQUAL_NULL) &&
+       (0 == result->length()));
+  return null_value ? nullptr : result;
 }
 
 bool Item_func_regexp_substr::resolve_type(THD *thd) {

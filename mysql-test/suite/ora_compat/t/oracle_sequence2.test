@@ -1,0 +1,249 @@
+create sequence seq1;
+create sequence seq2;
+create table t1(ida int, age int);
+select seq1.nextval, seq1.currval from dual;
+insert into t1 values(1, 2), (2, 3);
+select seq1.nextval from t1;
+select seq1.currval, t1.ida from t1 where t1.ida in (select age from t1);
+select seq1.nextval+1 from t1;
+select seq1.nextval+1, seq1.nextval "a", concat(seq1.nextval+age, 3), ida from t1;
+select seq1.currval from t1;
+select seq1.currval, floor(seq1.nextval) from t1;
+
+insert into t1 select seq1.nextval, seq1.currval from t1;
+select * from t1;
+insert into t1 values(seq1.nextval, 11);
+insert into t1 values(seq1.nextval, seq1.currval);
+--error ER_GDB_SEQUENCE_POSITION
+insert into t1 values(seq1.currval,seq1.currval),(seq1.currval,seq1.currval);
+insert into t1 values(seq1.currval, 110);
+select * from t1;
+update t1 set ida = seq1.nextval, age = seq1.currval where ida = 1;
+update t1 set ida = seq1.nextval, age = seq1.nextval+2 where ida is not null;
+select * from t1;
+create table t2(ida int, age int);
+insert into t2 values(1, 4), (2, 5);
+insert into t2 select seq1.nextval, floor(seq2.nextval) from t1;
+select * from t2;
+select seq1.currval, seq2.nextval, seq1.nextval from t1 where t1.ida in (select age from t1);
+
+select * from t1;
+select case when seq1.currval = 14 then 14 else seq1.nextval end from t1;
+select case when seq1.nextval is null then true else false end from t1;
+
+--error ER_GDB_SEQUENCE_POSITION
+select * from t1 where seq1.nextval > 5;
+--error ER_GDB_SEQUENCE_POSITION
+select count(*) from t1 group by seq1.nextval, ida;
+--error ER_GDB_SEQUENCE_POSITION
+select distinct ida, seq1.currval from t1;
+--error ER_GDB_SEQUENCE_POSITION
+select * from t1 where t1.ida in (select seq1.nextval from t1);
+--error ER_GDB_SEQUENCE_POSITION
+select * from t1 join t1 t2 on t1.ida = seq1.nextval;
+--error ER_GDB_SEQUENCE_POSITION
+select seq1.nextval, ida from t1 union select ida, age from t1; 
+--error ER_GDB_SEQUENCE_POSITION
+select 1, ida from t1 union select ida, seq1.currval from t1;
+--error ER_GDB_SEQUENCE_POSITION
+select seq1.currval from t1 order by ida;
+--error ER_GDB_SEQUENCE_POSITION
+update t1 join t2 on t1.ida > t2.ida set t1.ida = seq1.nextval, t2.ida = seq2.nextval;
+--error ER_GDB_SEQUENCE_POSITION
+update t1, t2 set t1.ida = seq1.nextval, t2.ida = seq1.nextval where t1.ida < 5;
+--error ER_GDB_SEQUENCE_POSITION
+update t1 set ida = seq1.nextval, age = (select seq2.nextval from dual) where ida = 15;
+
+drop table t1, t2;
+drop sequence seq1;
+drop sequence seq2;
+
+--echo [#### test bug8528 start ####]
+create table t1(c1 varchar(20), c2 varchar(20));
+insert into t1 values('11', 'aa'),('22', 'bb');
+create sequence seq2 start with 2 increment by 2 minvalue 1 maxvalue 1000000 cycle cache 10 order;
+--error ER_GDB_SEQUENCE_POSITION
+select c1, row_number() over (partition by seq2.nextval order by t1.c2) from t1;
+--error ER_GDB_SEQUENCE_POSITION
+select c1, row_number() over (order by seq2.nextval) from t1;
+--error ER_GDB_SEQUENCE_POSITION
+select * from t1 order by seq2.nextval;
+--error ER_GDB_SEQUENCE_POSITION
+select sum(seq2.nextval) from t1;
+--error ER_GDB_SEQUENCE_POSITION
+select max(seq2.nextval) from t1;
+--error ER_GDB_SEQUENCE_POSITION
+select FIRST_VALUE(seq2.nextval) OVER (order by t1.c2) from t1;
+--error ER_GDB_SEQUENCE_POSITION
+select FIRST_VALUE(max(seq2.nextval)) OVER (order by t1.c2) from t1;
+select c1, seq2.nextval, row_number() over (order by t1.c2) from t1;
+
+drop table t1;
+drop sequence seq2;
+--echo [#### test bug8528 end ####]
+
+--echo [#### test bug8742 start ####]
+create table t1(c1 varchar(20), c2 varchar(20));
+insert into t1 values('11', 'aa'),('22', 'bb'), ('33', 'aa'), ('44', 'bb');
+create table t2(c1 varchar(20), c2 varchar(20));
+insert into t2 select * from t1;
+create sequence seq2 start with 2 increment by 2 minvalue 1 maxvalue 1000000 cycle cache 10 order;
+
+select t1.c1, t2.c2, seq2.nextval, row_number() over (partition by t1.c1 order by t1.c2) from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2;
+select t1.c1, t2.c2, seq2.nextval, row_number() over (partition by t1.c2 order by t1.c1) from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2;
+select t1.c1, t2.c2, seq2.nextval, row_number() over (order by t1.c1) from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2;
+select t1.c1, t2.c2, seq2.nextval, row_number() over (partition by t1.c2) from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2;
+select seq2.nextval, FIRST_VALUE(t1.c1) OVER (partition by t1.c1 order by t1.c2) from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2;
+select seq2.nextval, FIRST_VALUE(t1.c1) OVER (partition by t1.c2 order by t1.c1) from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2;
+
+drop table t1;
+drop table t2;
+drop sequence seq2;
+--echo [#### test bug8742 end ####]
+
+--echo
+--echo [######### test dml in sp #########]
+create table t1(c1 int primary key, c2 int);
+create sequence seq;
+--echo
+--echo [# test prepared statement(similar in sp)]
+prepare sql1 from 'insert into t1 values (seq.nextval,seq.currval)';
+execute sql1;
+execute sql1;
+execute sql1;
+select * from t1;
+prepare sql2 from 'update t1 set c1=seq.currval, c2 = seq.nextval';
+execute sql2;
+select * from t1;
+execute sql2;
+select * from t1;
+execute sql2;
+select * from t1;
+truncate table t1;
+deallocate prepare sql1;
+deallocate prepare sql2;
+
+--echo
+--echo [# test in sp(procedure,function,trigger)]
+delimiter $$;
+create procedure sp1()
+begin
+insert into t1 values(seq.nextval, seq.currval);
+end;$$
+create procedure sp2()
+begin
+update t1 set c1=seq.currval, c2=seq.nextval;
+end;$$
+delimiter ;$$
+call sp1();
+call sp1();
+call sp1();
+select * from t1;
+call sp2();
+select * from t1;
+call sp2();
+select * from t1;
+call sp2();
+select * from t1;
+drop procedure sp1;
+drop procedure sp2;
+
+--echo
+--echo [# bugfix 6679: http://zbox.greatdb.com/zentao/bug-view-6679.html]
+select lpad(seq.nextval, 18, 0);
+
+drop table t1;
+drop sequence seq;
+
+--echo
+--echo [# bugfix 7472:http://zbox.greatdb.com/zentao/bug-view-7472.html]
+drop procedure if exists p1;
+drop table if exists t1;
+create table t1(i int);
+delimiter $$;
+create procedure p1()
+begin
+declare max int;
+drop sequence if exists myseq;
+create sequence myseq start with 1 increment by 1;
+set @max=(select myseq.nextval from dual);
+end$$
+delimiter ;$$
+--error ER_GDB_SEQUENCE_POSITION
+call p1();
+drop sequence myseq;
+drop procedure p1;
+drop table t1;
+
+--echo
+--echo [# bugfix 7453: http://zbox.greatdb.com/zentao/bug-view-7453.html]
+delete from mysql.greatdb_sequences_persist;
+drop sequence if exists myseq;
+create sequence myseq minvalue 1000 start with 1000 maxvalue 10000 increment by 1000;
+select myseq.nextval from dual;
+select myseq.currval from dual;
+--error ER_GDB_ALTER_SEQUENCE
+alter sequence myseq maxvalue 6000;
+drop sequence if exists myseq;
+create sequence myseq minvalue 1000 start with 1000 maxvalue 10000 increment by 1000;
+drop sequence myseq;
+
+--echo
+--echo [# bugfix 7617:http://zbox.greatdb.com/zentao/bug-view-7617.html]
+drop sequence if exists myseq;
+create sequence myseq start with 1;
+drop view if exists v1;
+--error ER_VIEW_SELECT_SEQUENCE
+create view v1 as select myseq.nextval from dual;
+drop sequence myseq;
+
+--echo
+--echo [# bugfix 8144:http://zbox.greatdb.com/zentao/bug-view-8144.html]
+--echo [sequence in cursor]
+create table t1(id int);
+insert into t1 values (1);
+create sequence myseq;
+select @@sql_mode into @sql_mode_saved;
+set sql_mode=oracle; 
+delimiter $$;
+CREATE or replace PROCEDURE p1() as
+a int;
+cursor c2 is select myseq.nextval from t1;
+begin 
+open c2;
+loop
+fetch c2 into a; 
+exit when c2%notfound; 
+select a; 
+end loop;
+end;$$
+delimiter ;$$
+call p1();
+call p1();
+drop sequence myseq;
+drop procedure p1;
+drop table t1;
+set @@sql_mode = @sql_mode_saved;
+
+--echo
+--echo [# bugfix 7455:http://zbox.greatdb.com/zentao/bug-view-7455.html]
+drop sequence if exists seq_cycle;
+--error ER_GDB_CREATE_SEQUENCE
+create sequence seq_cycle increment by 1 start with 10 minvalue 5 cycle;
+
+--echo
+--echo [# bugfix 7448:http://zbox.greatdb.com/zentao/bug-view-7448.html]
+CREATE SEQUENCE MYSEQ MINVALUE 1 START WITH 10000 MAXVALUE 15000 INCREMENT BY 6000 CYCLE CACHE 2;
+drop sequence MYSEQ;
+--error ER_GDB_CREATE_SEQUENCE
+CREATE SEQUENCE MYSEQ MINVALUE 1 START WITH 10000 MAXVALUE 15000 INCREMENT BY 6000 CYCLE CACHE 10;
+
+
+create sequence xx;
+
+select xx.nextval;
+
+--error ER_GDB_ALTER_SEQUENCE
+alter sequence xx  Minvalue 15;
+
+drop sequence xx;

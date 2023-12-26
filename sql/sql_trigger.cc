@@ -47,6 +47,7 @@
 #include "sql/binlog.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/dd/dd_schema.h"
+#include "sql/dd/dd_trigger.h"  // dd::create_new_trigger
 #include "sql/dd/string_type.h"
 #include "sql/dd/types/abstract_table.h"  // dd::enum_table_type
 #include "sql/dd/types/table.h"
@@ -63,11 +64,14 @@
 #include "sql/sql_error.h"
 #include "sql/sql_handler.h"  // mysql_ha_rm_tables()
 #include "sql/sql_lex.h"
+#include "sql/sql_show.h"  // find_trigger_in_share
 #include "sql/sql_table.h"  // build_table_filename()
 #include "sql/system_variables.h"
 #include "sql/table.h"
+#include "sql/table_cache.h"
 #include "sql/table_trigger_dispatcher.h"  // Table_trigger_dispatcher
 #include "sql/transaction.h"               // trans_commit_stmt, trans_commit
+#include "sql/trigger.h"                   // Trigger
 #include "sql_string.h"
 #include "thr_lock.h"
 
@@ -371,6 +375,27 @@ bool Sql_cmd_create_trigger::execute(THD *thd) {
     return true;
   }
 
+  TABLE *tbl = find_temporary_table(thd, m_trigger_table);
+  if (tbl && tbl->m_is_ora_tmp) {
+    // check for global temp table is delayed until table is opened.
+    if (!tbl->m_global_tmp) {
+      my_error(ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE, MYF(0));
+      return true;
+    }
+  }
+  /*
+    MySQL tmp table is checked later, skip global temp table cache check
+    for MySQL tmp table here.
+  */
+  if (!(tbl && !tbl->m_is_ora_tmp) &&
+      is_in_global_temp_table_cache(thd, m_trigger_table->db,
+                                    m_trigger_table->table_name)) {
+    /* NOTE: oracle support this when no instance is created. */
+    /* but current implementation, this is not supported */
+    my_error(ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE, MYF(0));
+    return true;
+  }
+
   // Normally, the schema is locked in open_and_lock...() below,
   // but not when in LOCK TABLE mode.
   dd::Schema_MDL_locker schema_mdl_locker(thd);
@@ -420,6 +445,10 @@ bool Sql_cmd_create_trigger::execute(THD *thd) {
   MDL_ticket *mdl_ticket = nullptr;
   TABLE *table = open_and_lock_subj_table(thd, m_trigger_table, &mdl_ticket);
   if (table == nullptr) return true;
+  if (table->s->ora_tmp_table_options) {
+    my_error(ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE, MYF(0));
+    return true;
+  }
 
   if (acquire_exclusive_mdl_for_trigger(thd, thd->lex->spname->m_db.str,
                                         thd->lex->spname->m_name.str)) {
@@ -464,6 +493,14 @@ bool Sql_cmd_create_trigger::execute(THD *thd) {
   }
 
   restore_original_mdl_state(thd, mdl_ticket);
+  if (!result) {
+    std::string unit_db(thd->lex->spname->m_db.str,
+                        thd->lex->spname->m_db.length);
+    std::string unit_name(thd->lex->spname->m_name.str,
+                          thd->lex->spname->m_name.length);
+    Sp_version_changed::get_instance()->sp_version_changed(
+        unit_db, (int)enum_sp_type::TRIGGER, unit_name);
+  }
 
   return result;
 }
@@ -572,6 +609,135 @@ bool Sql_cmd_drop_trigger::execute(THD *thd) {
                                  !result);
 
   DBUG_EXECUTE_IF("simulate_drop_trigger_failure", {
+    result = true;
+    my_error(ER_UNKNOWN_ERROR, MYF(0));
+  });
+
+  if (result) {
+    trans_rollback_stmt(thd);
+    trans_rollback(thd);
+  } else {
+    if (!(result = trans_commit_stmt(thd)) && !(result = trans_commit(thd))) {
+#ifdef HAVE_PSI_SP_INTERFACE
+      /* Drop statistics for this stored program from performance schema. */
+      MYSQL_DROP_SP(to_uint(enum_sp_type::TRIGGER), thd->lex->spname->m_db.str,
+                    thd->lex->spname->m_db.length, thd->lex->spname->m_name.str,
+                    thd->lex->spname->m_name.length);
+#endif
+      my_ok(thd);
+    }
+  }
+
+  restore_original_mdl_state(thd, mdl_ticket);
+  if (!result) {
+    std::string unit_db(thd->lex->spname->m_db.str,
+                        thd->lex->spname->m_db.length);
+    std::string unit_name(thd->lex->spname->m_name.str,
+                          thd->lex->spname->m_name.length);
+    Sp_version_changed::get_instance()->sp_version_clear(
+        unit_db, (int)enum_sp_type::TRIGGER, unit_name);
+  }
+
+  return result;
+}
+
+/**
+  Execute ALTER TRIGGER statement.
+
+  @param thd     current thread context
+
+  @todo
+    TODO: We should check if user has TRIGGER privilege for table here.
+    Now we just require SUPER privilege for creating/dropping because
+    we don't have proper privilege checking for triggers in place yet.
+
+  @retval
+    false Success
+  @retval
+    true  error
+*/
+bool Sql_cmd_alter_trigger::execute(THD *thd) {
+  DBUG_TRACE;
+
+  if (!thd->lex->spname->m_db.length) {
+    my_error(ER_NO_DB_ERROR, MYF(0));
+    return true;
+  }
+
+  if (check_readonly(thd, true)) return true;
+
+  // This auto releaser will own the DD objects that we commit
+  // at the bottom of this function.
+  dd::Schema_MDL_locker schema_mdl_locker(thd);
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+
+  if (schema_mdl_locker.ensure_locked(thd->lex->spname->m_db.str)) return true;
+
+  if (check_schema_readonly(thd, thd->lex->spname->m_db.str)) return true;
+
+  if (acquire_exclusive_mdl_for_trigger(thd, thd->lex->spname->m_db.str,
+                                        thd->lex->spname->m_name.str))
+    return true;
+
+  /* Charset of the buffer for statement must be system one. */
+  String stmt_query;
+  stmt_query.set_charset(system_charset_info);
+
+  Table_ref *tables = nullptr;
+  if (get_table_for_trigger(thd, thd->lex->spname->m_db,
+                            thd->lex->spname->m_name, false, &tables))
+    return true;
+
+  if (check_trg_priv_on_subj_table(thd, tables)) return true;
+
+  MDL_ticket *mdl_ticket = nullptr;
+  TABLE *table = open_and_lock_subj_table(thd, tables, &mdl_ticket);
+  if (table == nullptr) return true;
+
+  DEBUG_SYNC(thd, "alter_trigger_has_acquired_mdl");
+
+  dd::Table *dd_table = nullptr;
+  if (thd->dd_client()->acquire_for_modification(tables->db, tables->table_name,
+                                                 &dd_table)) {
+    // Error is reported by the dictionary subsystem.
+    restore_original_mdl_state(thd, mdl_ticket);
+    return true;
+  }
+  assert(dd_table != nullptr);
+
+  const dd::Trigger *dd_trig_obj =
+      dd_table->get_trigger(thd->lex->spname->m_name.str);
+  if (dd_trig_obj == nullptr) {
+    my_error(ER_TRG_DOES_NOT_EXIST, MYF(0));
+    restore_original_mdl_state(thd, mdl_ticket);
+    return true;
+  }
+
+  dd_table->drop_trigger(dd_trig_obj);
+  bool result = thd->dd_client()->update(dd_table);
+
+  /* Drop the old trigger and create a new trigger */
+  if (!result) {
+    Trigger *trigger =
+        find_trigger_in_share(table->s, thd->lex->spname->m_name);
+    if (!trigger || dd::clone_trigger_and_set_status(
+                        thd->mem_root, trigger, thd->lex->spname->m_db.str,
+                        thd->lex->spname->m_name.str,
+                        thd->lex->event_parse_data, dd_table)) {
+      result = true;
+      my_error(ER_TRG_CORRUPTED_FILE, MYF(0), thd->lex->spname->m_db.str,
+               thd->lex->spname->m_name.str);
+    } else
+      result = thd->dd_client()->update(dd_table);
+  }
+
+  if (!result)
+    result = stmt_query.append(thd->query().str, thd->query().length);
+
+  result |= finalize_trigger_ddl(thd, tables->db, table, stmt_query, !result,
+                                 !result);
+
+  DBUG_EXECUTE_IF("simulate_alter_trigger_failure", {
     result = true;
     my_error(ER_UNKNOWN_ERROR, MYF(0));
   });

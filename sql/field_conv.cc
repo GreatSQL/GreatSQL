@@ -160,15 +160,18 @@ type_conversion_status set_field_to_null_with_conversions(Field *field,
 
   Field_row_table *field_table = dynamic_cast<Field_row_table *>(field);
   /*
-    stu_record_val tklist;stu_record_val := null is not allowed.
-    stu_record_val udt_table; stu_record_val := null is allowed.
+    only collecton type combine index by cant be assign to null.
+    type inttab is table of int index by binary_integer;
+    val inttab;
+    val := null;  error;
+
+    type inttab is table of int;
+    val inttab;
+    val := null;  ok;
   */
-  if (field_table) {
-    if (!thd->sp_runtime_ctx->search_udt_variable(
-            field_table->udt_name().str, field_table->udt_name().length)) {
-      my_error(ER_BAD_NULL_ERROR, MYF(0), field->field_name);
-      return TYPE_ERR_NULL_CONSTRAINT_VIOLATION;
-    }
+  if (field_table && field_table->m_is_index_by) {
+    my_error(ER_BAD_NULL_ERROR, MYF(0), field->field_name);
+    return TYPE_ERR_NULL_CONSTRAINT_VIOLATION;
   }
 
   if (field->is_nullable()) {
@@ -806,35 +809,6 @@ type_conversion_status field_conv_slow(Field *to, const Field *from) {
   const enum_field_types from_real_type = from->real_type();
   const enum_field_types to_real_type = to->real_type();
 
-  // select name into rec1 from tt_air
-  Field *from_field = const_cast<Field *>(from);
-  Field_udt_type *udt = dynamic_cast<Field_udt_type *>(from_field);
-  Field_row *row = dynamic_cast<Field_row *>(to);
-  Field_row_table *row_table = dynamic_cast<Field_row_table *>(to);
-  if (row_table || (from_field->udt_name().str && !to->udt_name().str) ||
-      (!from_field->udt_name().str && to->udt_name().str)) {
-    my_error(ER_UDT_INCONS_DATATYPES, myf(0));
-    return TYPE_ERR_BAD_VALUE;
-  }
-  if (udt) {
-    if (row) {
-      if (my_strcasecmp(system_charset_info, to->get_udt_db_name(),
-                        udt->get_udt_db_name()) ||
-          my_strcasecmp(system_charset_info, to->udt_name().str,
-                        udt->udt_name().str)) {
-        my_error(ER_WRONG_UDT_DATA_TYPE, MYF(0), to->get_udt_db_name(),
-                 to->udt_name().str, udt->get_udt_db_name(),
-                 udt->udt_name().str);
-        return TYPE_ERR_BAD_VALUE;
-      }
-      if (udt->field_udt_table_store_to_table(to->virtual_tmp_table_addr()[0]))
-        return TYPE_ERR_BAD_VALUE;
-      to->set_udt_value_initialized();
-      return TYPE_OK;
-    }
-    to->set_udt_value_initialized();
-  }
-
   if ((to_type == MYSQL_TYPE_JSON) && (from_type == MYSQL_TYPE_JSON)) {
     Field_json *to_json = down_cast<Field_json *>(to);
     const Field_json *from_json = down_cast<const Field_json *>(from);
@@ -859,8 +833,41 @@ type_conversion_status field_conv_slow(Field *to, const Field *from) {
   }
   if (to_type == MYSQL_TYPE_BLOB) {  // Be sure the value is stored
     Field_blob *blob = (Field_blob *)to;
+    to->dbms_lob_temporary = from->dbms_lob_temporary;
     return blob->store(from);
   }
+  // select name into rec1 from tt_air
+  if (from->result_type() == ROW_RESULT || to->result_type() == ROW_RESULT) {
+    Field *from_field = const_cast<Field *>(from);
+    Field_udt_type *udt = dynamic_cast<Field_udt_type *>(from_field);
+    Field_row *row = dynamic_cast<Field_row *>(to);
+    Field_row_table *row_table = dynamic_cast<Field_row_table *>(to);
+    if (row_table || (from_field->udt_name().str && !to->udt_name().str) ||
+        (!from_field->udt_name().str && to->udt_name().str)) {
+      my_error(ER_UDT_INCONS_DATATYPES, myf(0));
+      return TYPE_ERR_BAD_VALUE;
+    }
+    if (udt) {
+      if (row) {
+        if (my_strcasecmp(system_charset_info, to->get_udt_db_name(),
+                          udt->get_udt_db_name()) ||
+            my_strcasecmp(system_charset_info, to->udt_name().str,
+                          udt->udt_name().str)) {
+          my_error(ER_WRONG_UDT_DATA_TYPE, MYF(0), to->get_udt_db_name(),
+                   to->udt_name().str, udt->get_udt_db_name(),
+                   udt->udt_name().str);
+          return TYPE_ERR_BAD_VALUE;
+        }
+        if (udt->field_udt_table_store_to_table(
+                to->virtual_tmp_table_addr()[0]))
+          return TYPE_ERR_BAD_VALUE;
+        to->set_udt_value_initialized(true);
+        return TYPE_OK;
+      }
+      to->set_udt_value_initialized(true);
+    }
+  }
+
   if (from_real_type == MYSQL_TYPE_ENUM && to_real_type == MYSQL_TYPE_ENUM &&
       from->val_int() == 0) {
     ((Field_enum *)(to))->store_type(0);

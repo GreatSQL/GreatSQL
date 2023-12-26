@@ -964,7 +964,8 @@ Query_block *pq_dup_select(THD *thd, Query_block *orig) {
           !strncmp(table_name, tl->table_name, strlen(table_name)) &&
           strlen(tl->table_name) == strlen(table_name) &&
           !strncmp(alias, tl->alias, strlen(alias)) &&
-          strlen(tl->alias) == strlen(alias)) {
+          strlen(tl->alias) == strlen(alias) &&
+          tl->m_tableno == tbl_list->m_tableno) {
         if (tl->table != nullptr && tl->table->is_nullable()) {
           tbl_list->table->set_nullable();
         }
@@ -1095,7 +1096,7 @@ static bool pq_select_prepare(THD *thd, Query_block *select,
   thd->mark_used_columns = MARK_COLUMNS_READ;
   ulong want_privilege = 0;
   if (setup_fields(thd, want_privilege, true, true, false, nullptr,
-                   &select->fields, select->base_ref_items, false, true)) {
+                   &select->fields, select->base_ref_items, true)) {
     return true;
   }
 

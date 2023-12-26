@@ -1336,7 +1336,8 @@ dberr_t Parallel_reader::dispatch_ctx(row_prebuilt_t *prebuilt) {
   dberr_t err{DB_SUCCESS};
 
   for (;;) {
-    int64_t sig_count = os_event_reset(m_event);
+    // int64_t sig_count = os_event_reset(m_event);
+    os_event_reset(m_event);
 
     auto ctx = dequeue();
     bool done = work_done.load(std::memory_order_relaxed);
@@ -1350,8 +1351,10 @@ dberr_t Parallel_reader::dispatch_ctx(row_prebuilt_t *prebuilt) {
         return DB_END_OF_INDEX;
       } else {
         /* wait for other worker */
-        constexpr auto FOREVER = std::chrono::microseconds::max();
-        os_event_wait_time_low(m_event, FOREVER, sig_count);
+        // constexpr auto FOREVER = std::chrono::microseconds::max();
+        // os_event_wait_time_low(m_event, FOREVER, sig_count);
+        os_event_set(m_event);
+        return DB_END_OF_INDEX;
       }
     } else {
       if (ctx->m_split) {

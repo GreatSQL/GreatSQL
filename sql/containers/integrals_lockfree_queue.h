@@ -1,4 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -231,14 +232,6 @@ class Integrals_lockfree_queue {
     // FORWARD ITERATOR METHODS //
     // Enable support for both input and output iterator <- already enabled
     // END / FORWARD ITERATOR METHODS //
-
-    /**
-      Sets the value of the element the iterator is pointing to the given
-      parameter.
-
-      @param new_value The new value to set the element to.
-     */
-    void set(value_type new_value);
 
    private:
     /** The position of the element this iterator is pointing to. */
@@ -550,7 +543,7 @@ class Integrals_lockfree_queue {
   friend std::ostream &operator<<(
       std::ostream &out,
       Integrals_lockfree_queue<T, Null, Erased, I, A> const &in) {
-    out << in.to_string() << std::flush;
+    out << in.to_string(true) << std::flush;
     return out;
   }
 
@@ -660,13 +653,6 @@ template <typename T, T Null, T Erased, typename I, typename A>
 bool container::Integrals_lockfree_queue<
     T, Null, Erased, I, A>::Iterator::operator!=(Iterator const &rhs) const {
   return !((*this) == rhs);
-}
-
-template <typename T, T Null, T Erased, typename I, typename A>
-void container::Integrals_lockfree_queue<T, Null, Erased, I, A>::Iterator::set(
-    value_type new_value) {
-  this->m_parent->m_array[this->m_parent->translate(this->m_current)].store(
-      new_value);
 }
 
 template <typename T, T Null, T Erased, typename I, typename A>

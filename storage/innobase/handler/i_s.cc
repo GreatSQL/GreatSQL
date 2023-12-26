@@ -32,6 +32,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "storage/innobase/handler/i_s.h"
+#include "i_s_file_purge.h"
 
 #include <field.h>
 #include <sql_acl.h>
@@ -112,8 +113,9 @@ constexpr auto I_S_PAGE_TYPE_LAST = I_S_PAGE_TYPE_SDI;
 constexpr auto I_S_PAGE_TYPE_BITS = 6;
 
 /** I_S.innodb_* views version postfix. Every time the define of any InnoDB I_S
-table is changed, this value has to be increased accordingly */
-constexpr uint8_t i_s_innodb_plugin_version_postfix = 2;
+table is changed, this value has to be increased accordingly. Move the
+definition of i_s_innodb_plugin_version_postfix to i_s_file_purge.h */
+// constexpr uint8_t i_s_innodb_plugin_version_postfix = 2;
 
 /** I_S.innodb_* views version. It would be X.Y and X should be the server major
 version while Y is the InnoDB I_S views version, starting from 1 */
@@ -282,9 +284,8 @@ static int i_s_common_deinit(void *p); /*!< in/out: table schema object */
 /** Auxiliary function to store time_t value in MYSQL_TYPE_DATETIME
  field.
  @return 0 on success */
-static int field_store_time_t(
-    Field *field, /*!< in/out: target field for storage */
-    time_t time)  /*!< in: value to store */
+int field_store_time_t(Field *field, /*!< in/out: target field for storage */
+                       time_t time)  /*!< in: value to store */
 {
   MYSQL_TIME my_time;
   struct tm tm_time;
@@ -309,10 +310,9 @@ static int field_store_time_t(
 
 /** Auxiliary function to store char* value in MYSQL_TYPE_STRING field.
  @return 0 on success */
-static int field_store_string(
-    Field *field,    /*!< in/out: target field for storage */
-    const char *str) /*!< in: NUL-terminated utf-8 string,
-                     or NULL */
+int field_store_string(Field *field,    /*!< in/out: target field for storage */
+                       const char *str) /*!< in: NUL-terminated utf-8 string,
+                                        or NULL */
 {
   int ret;
 

@@ -77,6 +77,7 @@
 #include "mysql/plugin_audit.h"
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_mutex.h"
+#include "mysql/psi/mysql_ps.h"  // MYSQL_EXECUTE_PS
 #include "mysql/service_mysql_password_policy.h"
 #include "mysql/service_thd_wait.h"
 #include "mysql/status_var.h"
@@ -101,6 +102,8 @@
 #include "sql/debug_sync.h"      // DEBUG_SYNC
 #include "sql/derror.h"          // ER_THD
 #include "sql/error_handler.h"   // Internal_error_handler
+#include "sql/event_data_objects.h"
+#include "sql/gdb_sequence.h"
 #include "sql/item.h"            // Item_json
 #include "sql/item_cmpfunc.h"    // get_datetime_value
 #include "sql/item_json_func.h"  // get_json_wrapper
@@ -109,7 +112,8 @@
 #include "sql/key.h"
 #include "sql/log_event.h"  // server_version
 #include "sql/mdl.h"
-#include "sql/mysqld.h"                // log_10 stage_user_sleep
+#include "sql/mysqld.h"  // log_10 stage_user_sleep
+#include "sql/mysqld_dbms_pipe_manager.h"
 #include "sql/parse_tree_helpers.h"    // PT_item_list
 #include "sql/parse_tree_items.h"      // PTI_user_variable
 #include "sql/parse_tree_node_base.h"  // Parse_context
@@ -132,6 +136,7 @@
 #include "sql/sql_bitmap.h"
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_cmd.h"
+#include "sql/sql_cursor.h"
 #include "sql/sql_derived.h"  // Condition_pushdown
 #include "sql/sql_error.h"
 #include "sql/sql_exchange.h"  // sql_exchange
@@ -148,10 +153,12 @@
 #include "sql/strfunc.h"  // find_type
 #include "sql/system_variables.h"
 #include "sql/thd_raii.h"
+#include "sql/transaction.h"
 #include "sql/val_int_compare.h"  // Integer_value
 #include "sql_string.h"
 #include "template_utils.h"  // pointer_cast
 #include "thr_mutex.h"
+#include "unhex.h"
 
 using std::max;
 using std::min;
@@ -360,7 +367,7 @@ bool Item_func::itemize(Parse_context *pc, Item **res) {
   if (Item_result_field::itemize(pc, res)) return true;
   const bool no_named_params = !may_have_named_parameters();
   for (size_t i = 0; i < arg_count; i++) {
-    add_accum_properties(args[i]);
+    add_accum_properties(args[i]->this_item());
     if (args[i]->itemize(pc, &args[i])) return true;
 
     if ((pc->thd->variables.sql_mode & MODE_ORACLE) && functype() == FUNC_SP) {
@@ -436,14 +443,18 @@ bool Item_func::fix_fields(THD *thd, Item **) {
 }
 
 bool Item_func::fix_func_arg(THD *thd, Item **arg) {
-  if ((!(*arg)->fixed && (*arg)->fix_fields(thd, arg)))
+  if ((!(*arg)->fixed && (*arg)->fix_fields(thd, arg))) {
+    (*arg)->fixed = false;
     return true; /* purecov: inspected */
+  }
   Item *item = *arg;
   // e.g: select (select * from t1)+1
-  if ((item->element_index(0)->is_ora_type() ||
-       item->element_index(0)->is_ora_table()) &&
-      functype() != UDT_FUNC && functype() != UDT_TABLE_FUNC &&
-      !is_bool_func() && !is_ora_table()) {
+  if (((item->element_index(0)->is_ora_udt_type() ||
+        item->this_item()->is_ora_udt_type()) &&
+       functype() != UDT_FUNC && functype() != UDT_TABLE_FUNC &&
+       !is_bool_func() && !is_ora_table() && functype() != FUNC_SP) ||
+      // e.g: select * from t1 where returnacursor() is null;
+      item->this_item()->is_ora_refcursor()) {
     my_error(ER_NOT_SUPPORTED_YET, MYF(0), "udt columns used in function");
     return true;
   }
@@ -459,7 +470,11 @@ bool Item_func::fix_func_arg(THD *thd, Item **arg) {
   set_nullable(is_nullable() || item->is_nullable());
   used_tables_cache |= item->used_tables();
   if (null_on_null) not_null_tables_cache |= item->not_null_tables();
-  add_accum_properties(item);
+  bool is_table = is_ora_table();
+  bool is_type = is_ora_type();
+  add_accum_properties(item->this_item());
+  if (is_table) reset_ora_type();
+  if (is_type) reset_ora_table();
 
   return false;
 }
@@ -1624,8 +1639,11 @@ bool reject_geometry_args(uint arg_count, Item **args, Item_result_field *me) {
     isn't a field.
   */
   for (uint i = 0; i < arg_count; i++) {
-    if (args[i]->result_type() != ROW_RESULT &&
-        args[i]->data_type() == MYSQL_TYPE_GEOMETRY) {
+    if (((args[i]->result_type() != ROW_RESULT &&
+          args[i]->data_type() == MYSQL_TYPE_GEOMETRY) ||
+         (args[i]->result_type() == ROW_RESULT &&
+          args[i]->is_ora_refcursor())) ||
+        (args[i]->is_ora_udt_type())) {
       my_error(ER_WRONG_ARGUMENTS, MYF(0), me->func_name());
       return true;
     }
@@ -1661,6 +1679,10 @@ void unsupported_json_comparison(size_t arg_count, Item **args,
 
 bool Item_func_numhybrid::resolve_type(THD *thd) {
   assert(arg_count == 1 || arg_count == 2);
+  if (is_ora_udt_type()) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "udt value in hybrid_type function");
+    return true;
+  }
   /*
     If no arguments have type information, return and trust
     propagate_type() to assign data types later.
@@ -3454,7 +3476,7 @@ my_decimal *Item_typeto_number::val_decimal(my_decimal *dec) {
   */
   if (!from_str && args[0]->result_type() == STRING_RESULT) {
     String *res = args[0]->val_str(&tmp_value);
-    if (!res->length()) {
+    if (!res || !res->length()) {
       null_value = true;
       return nullptr;
     }
@@ -5893,6 +5915,166 @@ void Item_func_locate::print(const THD *thd, String *str,
   }
   str->append(')');
 }
+bool Item_func_instrb::resolve_type(THD *thd) {
+  if (param_type_is_default(thd, 0, 2)) return true;
+  if (param_type_is_default(thd, 2, 4, MYSQL_TYPE_LONGLONG)) return true;
+  set_nullable(true);
+  max_length = MY_INT32_NUM_DECIMAL_DIGITS;
+  return false;
+}
+
+longlong Item_func_instrb::val_int() {
+  assert(fixed == 1);
+  String *a = args[0]->val_str(&value1);
+  String *b = args[1]->val_str(&value2);
+  if (!a || !b || (a->length() <= 0) || (b->length() <= 0)) {
+    null_value = true;
+    return 0; /* purecov: inspected */
+  }
+  null_value = false;
+  int offset = 0;
+
+  if (arg_count == 4) {
+    longlong start, count;
+    my_decimal decimal_value, tmp_args2, tmp_args3, truncated, *val_args2,
+        *val_args3;
+    String value_tmp;
+    String *res = args[3]->val_str(&value_tmp);
+    if (!res || (0 == res->length())) {
+      null_value = true;
+      return 0; /* when nth_appearance is '',return null */
+    }
+    String value;
+    String *res2 = args[2]->val_str(&value);
+    if (!res2 || (0 == res2->length())) {
+      null_value = true;
+      return 0; /* when start_position is '',return null */
+    }
+    if ((args[3]->null_value) || (args[2]->null_value)) {
+      null_value = true;
+      return 0; /* purecov: inspected */
+    }
+    /*Decimal to integer,removing rounding; udt function is rounding */
+    if ((args[2]->result_type() == DECIMAL_RESULT ||
+         args[2]->result_type() == REAL_RESULT ||
+         args[2]->result_type() == STRING_RESULT) &&
+        (!args[2]->has_stored_program())) {
+      if (args[2]->result_type() == STRING_RESULT) {
+        if (str2my_decimal(E_DEC_FATAL_ERROR & ~E_DEC_BAD_NUM, res2->ptr(),
+                           res2->length(), res2->charset(), &tmp_args2)) {
+          /*
+            The EC_BAD_NUM message is awkward that's why we didn't let
+            str2my_decimal() send it above. exceptions are reported with errors
+          */
+          my_error(ER_INVALID_PARAMETER_USE, MYF(0), "start position");
+          null_value = true;
+          return 0; /* purecov: inspected */
+        }
+        val_args2 = &tmp_args2;
+      } else {
+        val_args2 = args[2]->val_decimal(&decimal_value);
+      }
+      decimal_round(val_args2, &truncated, 0, TRUNCATE);
+      val_args2->check_result(E_DEC_FATAL_ERROR,
+                              decimal2longlong(&truncated, &start));
+    } else {
+      start = args[2]->val_int();
+    }
+    /*Decimal to integer,removing rounding;udt function is rounding */
+    if ((args[3]->result_type() == DECIMAL_RESULT ||
+         args[3]->result_type() == REAL_RESULT ||
+         args[3]->result_type() == STRING_RESULT) &&
+        (!args[3]->has_stored_program())) {
+      if (args[3]->result_type() == STRING_RESULT) {
+        if (str2my_decimal(E_DEC_FATAL_ERROR & ~E_DEC_BAD_NUM, res->ptr(),
+                           res->length(), res->charset(), &tmp_args3)) {
+          /*
+            The EC_BAD_NUM message is awkward that's why we didn't let
+            str2my_decimal() send it above. exceptions are reported with errors
+          */
+          my_error(ER_INVALID_PARAMETER_USE, MYF(0), "nth_appearance");
+          null_value = true;
+          return 0; /* purecov: inspected */
+        }
+        val_args3 = &tmp_args3;
+      } else {
+        val_args3 = args[3]->val_decimal(&decimal_value);
+      }
+      decimal_round(val_args3, &truncated, 0, TRUNCATE);
+      val_args3->check_result(E_DEC_FATAL_ERROR,
+                              decimal2longlong(&truncated, &count));
+    } else {
+      count = args[3]->val_int();
+    }
+    if (count <= 0) {
+      my_error(ER_INVALID_PARAMETER_USE, MYF(0), "nth_appearance");
+      return 0; /* purecov: inspected */
+    }
+
+    size_t substring_length = b->length();
+    if (start == 0) return 0;
+    Integer_value start_val(start, args[2]->unsigned_flag);
+    if (start_val.is_negative()) {
+      longlong tmp_offset = 0;
+      longlong src_length = a->length();
+      if (use_mb(a->charset())) {
+        tmp_offset = src_length + start + substring_length;
+        if (tmp_offset > src_length) {
+          tmp_offset = src_length;
+        }
+      } else {
+        tmp_offset = a->length() + start + 1;
+      }
+      /*
+        Negative index, start counting at the end
+      */
+      for (offset = tmp_offset; offset;) {
+        /*
+          this call will result in finding the position pointing to one
+          address space less than where the found substring is located
+          in res
+        */
+        if ((offset = a->strrstr(*b, offset)) < 0)
+          return 0;  // Didn't find, return org string
+        /*
+          At this point, we've searched for the substring
+          the number of times as supplied by the index value
+        */
+        if (--count == 0) {
+          break;
+        }
+        offset = offset + substring_length - 1;
+      }
+      if (count != 0) return 0;  // Didn't find
+    } else {                     // start counting from the beginning
+      for (offset = start - 1;; offset += 1) {
+        if ((offset = a->strstr(*b, offset)) < 0)
+          return 0;  // Didn't find, return org string
+        if (--count == 0) {
+          break;
+        }
+      }
+    }
+  } else {
+    if ((offset = a->strstr(*b, offset)) < 0) return 0;
+  }
+  return (offset + 1);
+}
+
+void Item_func_instrb::print(const THD *thd, String *str,
+                             enum_query_type query_type) const {
+  str->append(STRING_WITH_LEN("instrb("));
+  args[0]->print(thd, str, query_type);
+  str->append(',');
+  args[1]->print(thd, str, query_type);
+  if (arg_count == 4) {
+    str->append(',');
+    args[2]->print(thd, str, query_type);
+    str->append(',');
+    args[3]->print(thd, str, query_type);
+  }
+  str->append(')');
+}
 
 bool Item_func_ora_instr::resolve_type(THD *thd) {
   if (param_type_is_default(thd, 0, 2)) return true;
@@ -5953,7 +6135,41 @@ longlong Item_func_ora_instr::val_int() {
   if (num != index_map.size()) return default_pos;
 
   if (arg_count == 4) {
-    const longlong tmp = args[2]->val_int();
+    longlong tmp;
+    my_decimal decimal_value, tmp_args2, tmp_args3, truncated, *val_args2,
+        *val_args3;
+    String value_tmp;
+    String *res2 = args[2]->val_str(&value_tmp);
+    if (!res2 || (0 == res2->length())) {
+      null_value = true;
+      return default_pos; /* when start_position is '',return null */
+    }
+    /*Decimal to integer,removing rounding;udt function is rounding */
+    if ((args[2]->result_type() == DECIMAL_RESULT ||
+         args[2]->result_type() == REAL_RESULT ||
+         args[2]->result_type() == STRING_RESULT) &&
+        (!args[2]->has_stored_program())) {
+      if (args[2]->result_type() == STRING_RESULT) {
+        if (str2my_decimal(E_DEC_FATAL_ERROR & ~E_DEC_BAD_NUM, res2->ptr(),
+                           res2->length(), res2->charset(), &tmp_args2)) {
+          /*
+            The EC_BAD_NUM message is awkward that's why we didn't let
+            str2my_decimal() send it above. exceptions are reported with errors
+          */
+          my_error(ER_INVALID_PARAMETER_USE, MYF(0), "start position");
+          null_value = true;
+          return 0; /* purecov: inspected */
+        }
+        val_args2 = &tmp_args2;
+      } else {
+        val_args2 = args[2]->val_decimal(&decimal_value);
+      }
+      decimal_round(val_args2, &truncated, 0, TRUNCATE);
+      val_args2->check_result(E_DEC_FATAL_ERROR,
+                              decimal2longlong(&truncated, &tmp));
+    } else {
+      tmp = args[2]->val_int();
+    }
     String value_tmp2;
     String *res = args[3]->val_str(&value_tmp2);
     if (!res || (0 == res->length())) {
@@ -5964,16 +6180,36 @@ longlong Item_func_ora_instr::val_int() {
       null_value = true;
       return default_pos; /* purecov: inspected */
     }
-    occurrence = args[3]->val_int();
+    /*Decimal to integer,removing rounding; udt function is rounding*/
+    if ((args[3]->result_type() == DECIMAL_RESULT ||
+         args[3]->result_type() == REAL_RESULT ||
+         args[3]->result_type() == STRING_RESULT) &&
+        (!args[3]->has_stored_program())) {
+      if (args[3]->result_type() == STRING_RESULT) {
+        if (str2my_decimal(E_DEC_FATAL_ERROR & ~E_DEC_BAD_NUM, res->ptr(),
+                           res->length(), res->charset(), &tmp_args3)) {
+          /*
+            The EC_BAD_NUM message is awkward that's why we didn't let
+            str2my_decimal() send it above. exceptions are reported with
+            errors
+          */
+          my_error(ER_INVALID_PARAMETER_USE, MYF(0), "nth_appearance");
+          null_value = true;
+          return default_pos; /* purecov: inspected */
+        }
+        val_args3 = &tmp_args3;
+      } else {
+        val_args3 = args[3]->val_decimal(&decimal_value);
+      }
+      decimal_round(val_args3, &truncated, 0, TRUNCATE);
+      val_args3->check_result(E_DEC_FATAL_ERROR,
+                              decimal2longlong(&truncated, &occurrence));
+    } else {
+      occurrence = args[3]->val_int();
+    }
     if (occurrence <= 0) {
       my_error(ER_INVALID_PARAMETER_USE, MYF(0), "nth_appearance");
       return default_pos; /* purecov: inspected */
-    }
-    String value_tmp;
-    String *res2 = args[2]->val_str(&value_tmp);
-    if (!res2 || (0 == res2->length())) {
-      null_value = true;
-      return default_pos; /* when start_position is '',return null */
     }
     if (tmp == 0) return 0; /* when start_position is 0,return 0 */
     null_value = false;
@@ -7190,7 +7426,6 @@ static bool check_and_convert_ull_name(char *buff, const String *org_name) {
 bool Item_func_get_lock::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
   if (super::itemize(pc, res)) return true;
-  pc->thd->lex->has_notsupported_func = true;
   pc->thd->lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_SYSTEM_FUNCTION);
   pc->thd->lex->set_uncacheable(pc->select, UNCACHEABLE_SIDEEFFECT);
   return false;
@@ -7296,7 +7531,6 @@ longlong Item_func_get_lock::val_int() {
 bool Item_func_release_lock::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
   if (super::itemize(pc, res)) return true;
-  pc->thd->lex->has_notsupported_func = true;
   pc->thd->lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_SYSTEM_FUNCTION);
   pc->thd->lex->set_uncacheable(pc->select, UNCACHEABLE_SIDEEFFECT);
   return false;
@@ -7396,7 +7630,6 @@ longlong Item_func_release_all_locks::val_int() {
 bool Item_func_is_free_lock::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
   if (super::itemize(pc, res)) return true;
-  pc->thd->lex->has_notsupported_func = true;
   pc->thd->lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_SYSTEM_FUNCTION);
   pc->thd->lex->set_uncacheable(pc->select, UNCACHEABLE_SIDEEFFECT);
   return false;
@@ -7443,7 +7676,6 @@ longlong Item_func_is_free_lock::val_int() {
 bool Item_func_is_used_lock::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
   if (super::itemize(pc, res)) return true;
-  pc->thd->lex->has_notsupported_func = true;
   pc->thd->lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_SYSTEM_FUNCTION);
   pc->thd->lex->set_uncacheable(pc->select, UNCACHEABLE_SIDEEFFECT);
   return false;
@@ -7626,7 +7858,6 @@ void item_func_sleep_free() {
 bool Item_func_sleep::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
   if (super::itemize(pc, res)) return true;
-  pc->thd->lex->has_notsupported_func = true;
   pc->thd->lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_SYSTEM_FUNCTION);
   pc->thd->lex->set_uncacheable(pc->select, UNCACHEABLE_SIDEEFFECT);
   return false;
@@ -7783,6 +8014,10 @@ bool Item_func_set_user_var::fix_fields(THD *thd, Item **ref) {
 
 bool Item_func_set_user_var::resolve_type(THD *thd) {
   if (Item_var_func::resolve_type(thd)) return true;
+  if (args[0]->this_item()->is_ora_udt_type()) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "assign udt to user variable");
+    return true;
+  }
   set_nullable(args[0]->is_nullable());
   collation.set(DERIVATION_IMPLICIT);
   /*
@@ -9747,6 +9982,7 @@ bool NonAggregatedFullTextSearchVisitor::operator()(Item *item) {
         case Item_ref::REF:
         case Item_ref::OUTER_REF:
         case Item_ref::AGGREGATE_REF:
+        case Item_ref::CONNECT_BY_REF:
           // Skip all these. REF means the expression is already handled
           // elsewhere in the SELECT list. OUTER_REF is already handled in an
           // outer query block. AGGREGATE_REF means it's aggregated, and we're
@@ -9856,6 +10092,27 @@ longlong Item_func_row_count::val_int() {
   return thd->get_row_count_func();
 }
 
+bool Item_func_table_count::resolve_type(THD *thd) {
+  if (!thd->sp_runtime_ctx) {
+    return true;
+  }
+  set_nullable(false);
+  return false;
+}
+
+longlong Item_func_table_count::val_int() {
+  assert(fixed == 1 && current_thd->sp_runtime_ctx);
+
+  Item_field_row_table *row_table_item = dynamic_cast<Item_field_row_table *>(
+      current_thd->sp_runtime_ctx->get_item(m_spv_idx));
+  if (!row_table_item) {
+    my_error(ER_SP_UNDECLARED_VAR, MYF(0), "count");
+    return 0;
+  }
+
+  return row_table_item->get_row_table_field()->get_row_count();
+}
+
 Item_func_udt_constructor::Item_func_udt_constructor(
     const POS &pos, const LEX_STRING &db_name, const LEX_STRING &udt_name,
     bool use_explicit_name, PT_item_list *item_list,
@@ -9867,6 +10124,8 @@ Item_func_udt_constructor::Item_func_udt_constructor(
   m_field_def_list = field_def;
   m_reclength = reclength == 0 ? MAX_FIELD_WIDTH : reclength;
   m_sql_mode = sql_mode;
+  set_ora_type();
+  reset_ora_table();
 
   if (m_db_name.length == 0) {
     current_thd->lex->copy_db_to(&m_db_name.str, &m_db_name.length);
@@ -9935,15 +10194,6 @@ bool Item_func_udt_constructor::fix_fields(THD *thd, Item **ref) {
 
     if (res) return res;
   }
-  // Item_func_sp->context will be changed,so unsupport.
-  for (uint i = 0; i < arg_count; i++) {
-    Item_func_sp *func = dynamic_cast<Item_func_sp *>(args[i]);
-    if (func) {
-      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
-               "udt object with function object parameter");
-      return true;
-    }
-  }
 
   if (super::fix_fields(thd, ref)) return true;
 
@@ -9965,13 +10215,6 @@ bool Item_func_udt_constructor::refix_fields() {
     }
   }
   return false;
-}
-
-double Item_func_udt_constructor::val_real() {
-  String *res = val_str(&str_value);
-  if (res == nullptr) return 0.0;
-  return double_from_string_with_check(collation.collation, res->ptr(),
-                                       res->ptr() + res->length());
 }
 
 bool Item_func_udt_constructor::fill_udt() {
@@ -10024,7 +10267,7 @@ String *Item_func_udt_constructor::val_str(String *str) {
     str->set(pointer_cast<const char *>(m_table->record[0]),
              m_table->s->reclength, &my_charset_bin);
   } else {
-    show_udt_values(m_table, str);
+    return show_udt_values(m_table, str);
   }
   return str;
 }
@@ -10037,7 +10280,6 @@ bool Item_func_udt_constructor::resolve_type(THD *thd) {
   max_length = m_reclength;
   collation.set(charset_for_protocol());
   set_nullable(true);
-  // for prepare which uses Item_func::param_type_uses_non_param.
   return Item_func::resolve_type(thd);
 }
 
@@ -10079,8 +10321,7 @@ bool Item_func_udt_constructor::udt_table_store_to_table(TABLE *table_to) {
 }
 
 type_conversion_status Item_func_udt_constructor::udt_table_store_to_field(
-    Field *to, bool no_conversions) {
-  type_conversion_status ret;
+    Field *to, bool no_conversions [[maybe_unused]]) {
   Field_row_table *field_table = dynamic_cast<Field_row_table *>(to);
   if (field_table) {
     my_error(ER_NOT_SUPPORTED_YET, MYF(0), "udt value stores to record table");
@@ -10091,17 +10332,27 @@ type_conversion_status Item_func_udt_constructor::udt_table_store_to_field(
     return TYPE_ERR_BAD_VALUE;
   }
   for (uint i = 0; i < arg_count; i++) {
-    ret = args[i]->save_in_field(to->virtual_tmp_table_addr()[0]->field[i],
-                                 no_conversions);
-    if (ret != TYPE_OK) return ret;
+    if (sp_eval_expr(current_thd, to->virtual_tmp_table_addr()[0]->field[i],
+                     &args[i])) {
+      return TYPE_ERR_BAD_VALUE;
+    }
   }
-  to->set_udt_value_initialized();
+  to->set_udt_value_initialized(true);
   return TYPE_OK;
 }
 
 type_conversion_status Item_func_udt_constructor::save_in_field_inner(
     Field *field, bool no_conversions) {
-  assert(field->get_udt_db_name() && field->udt_name().str);
+  Field_row *field_row = dynamic_cast<Field_row *>(field);
+  Field_row_table *field_table = dynamic_cast<Field_row_table *>(field);
+  if (field_table) {
+    my_error(ER_UDT_INCONS_DATATYPES, myf(0));
+    return TYPE_ERR_BAD_VALUE;
+  }
+  if (!field->get_udt_db_name() || !field->udt_name().str) {
+    my_error(ER_UDT_INCONS_DATATYPES, myf(0));
+    return TYPE_ERR_BAD_VALUE;
+  }
   if (my_strcasecmp(system_charset_info, get_udt_db_name().str,
                     field->get_udt_db_name()) != 0 ||
       my_strcasecmp(system_charset_info, get_udt_name().str,
@@ -10110,23 +10361,29 @@ type_conversion_status Item_func_udt_constructor::save_in_field_inner(
              field->udt_name().str, get_udt_db_name().str, get_udt_name().str);
     return TYPE_ERR_BAD_VALUE;
   }
-  Field_row *field_row = dynamic_cast<Field_row *>(field);
 
   if (null_value) {
     type_conversion_status ret =
         set_field_to_null_with_conversions(field, no_conversions);
-    if (field_row && ret == TYPE_OK) field_row->set_udt_value_initialized();
+    if (field_row && ret == TYPE_OK) field_row->set_udt_value_initialized(true);
     return ret;
   }
   field->set_notnull();
   if (!field_row) {
     fill_udt();
-    field->set_udt_value_initialized();
     return field->store((const char *)m_table->record[0], m_table->s->reclength,
                         &my_charset_bin);
   } else {
     return udt_table_store_to_field(field, no_conversions);
   }
+}
+
+Field *Item_func_udt_constructor::tmp_table_field(TABLE *table) {
+  Field *field = new (*THR_MALLOC) Field_udt_type(
+      max_length, is_nullable(), item_name.ptr(), table->s, &my_charset_bin,
+      to_lex_cstring(m_udt_name), *THR_MALLOC, m_db_name);
+  if (field) field->init(table);
+  return field;
 }
 /****************************************************************************
   Item_func_udt_table
@@ -10136,18 +10393,17 @@ Item_func_udt_table::Item_func_udt_table(
     const POS &pos, const LEX_STRING &db_name, const LEX_STRING &udt_name,
     LEX_CSTRING nested_table_udt, ulong reclength,
     enum_udt_table_of_type table_type, ulonglong varray_limit,
-    PT_item_list *item_list, List<Create_field> *field_def)
-    : Item_func(pos, item_list) {
-  m_db_name = db_name;
-  m_udt_name = udt_name;
+    PT_item_list *item_list, List<Create_field> *field_def, int index_length)
+    : Item_func_udt_constructor(pos, db_name, udt_name, true, item_list,
+                                field_def, reclength,
+                                current_thd->variables.sql_mode) {
   m_nested_table_udt = nested_table_udt;
-  m_reclength = reclength == 0 ? MAX_FIELD_WIDTH : reclength;
   m_table_type = table_type;
   m_varray_size_limit = varray_limit;
-  m_field_def_list = field_def;
-  if (m_db_name.length == 0) {
-    current_thd->lex->copy_db_to(&m_db_name.str, &m_db_name.length);
-  }
+  m_has_assignment_list = item_list ? item_list->m_has_assignment_list : false;
+  m_index_length = index_length;
+  set_ora_table();
+  reset_ora_type();
 }
 
 bool Item_func_udt_table::itemize(Parse_context *pc, Item **res) {
@@ -10160,7 +10416,8 @@ bool Item_func_udt_table::itemize(Parse_context *pc, Item **res) {
   context = lex->current_context();
 
   if (m_table_type == enum_udt_table_of_type::TYPE_VARRAY &&
-      arg_count > m_varray_size_limit) {
+      ((!m_has_assignment_list && arg_count > m_varray_size_limit) ||
+       (m_has_assignment_list && arg_count / 2 > m_varray_size_limit))) {
     my_error(ER_DA_OOM, myf(0));
     return true;
   }
@@ -10197,6 +10454,10 @@ bool Item_func_udt_table::fix_fields(THD *thd, Item **ref) {
     if (res) return res;
   }
 
+  if (thd->lex->query_block && thd->lex->query_block->has_connect_by) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "connect by used with udt table");
+    return true;
+  }
   if (super::fix_fields(thd, ref)) return true;
 
   /* args are initialized in super::itemize() */
@@ -10211,34 +10472,30 @@ bool Item_func_udt_table::fix_fields(THD *thd, Item **ref) {
 
 // used for sp.cc : sp_prepare_func_item
 bool Item_func_udt_table::refix_fields() {
-  for (uint i = 0; i < arg_count; i++) {
-    if (!args[i]->is_ora_type()) {
+  for (uint i = m_has_assignment_list; i < arg_count;
+       i = i + m_has_assignment_list + 1) {
+    if (!args[i]->this_item()->is_ora_type()) {
+      if (args[i]->this_item()->type() == Item::NULL_ITEM) continue;
       my_error(ER_UDT_INCONS_DATATYPES, myf(0));
       return true;
     } else {
       if (my_strcasecmp(system_charset_info, get_udt_db_name().str,
-                        args[i]->get_udt_db_name().str) != 0 ||
+                        args[i]->this_item()->get_udt_db_name().str) != 0 ||
           my_strcasecmp(system_charset_info, m_nested_table_udt.str,
-                        args[i]->get_udt_name().str) != 0) {
+                        args[i]->this_item()->get_udt_name().str) != 0) {
         my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), get_udt_db_name().str,
-                 m_nested_table_udt.str, args[i]->get_udt_db_name().str,
-                 args[i]->get_udt_name().str);
+                 m_nested_table_udt.str,
+                 args[i]->this_item()->get_udt_db_name().str,
+                 args[i]->this_item()->get_udt_name().str);
         return true;
       }
     }
   }
+  // check the index's value.
+  if (m_has_assignment_list) {
+    if (check_record_table_index(m_index_length)) return true;
+  }
   return false;
-}
-
-bool Item_func_udt_table::resolve_type(THD *thd) {
-  DBUG_TRACE;
-
-  set_data_type(MYSQL_TYPE_VARCHAR);
-  decimals = 0;
-  max_length = m_reclength;
-  collation.set(charset_for_protocol());
-  set_nullable(true);
-  return Item_func::resolve_type(thd);
 }
 
 void Item_func_udt_table::make_field(Send_field *tmp_field) {
@@ -10261,7 +10518,9 @@ String *Item_func_udt_table::val_str(String *str) {
   str->append(m_udt_name.str);
   str->append('(');
   String tmp;
-  for (uint i = 0; i < arg_count; i++) {
+  for (uint i = m_has_assignment_list; i < arg_count;
+       i = i + m_has_assignment_list + 1) {
+    Field *fld = nullptr;
     Item_func_udt_constructor *udt =
         dynamic_cast<Item_func_udt_constructor *>(args[i]);
     if (udt) {
@@ -10271,11 +10530,11 @@ String *Item_func_udt_table::val_str(String *str) {
       }
       str->append(m_nested_table_udt.str);
       str->append('(');
-      for (uint j = 0; j < udt->arg_count; j++) {
-        if (udt->arguments()[j]->val_str(&tmp))
-          str->append(udt->arguments()[j]->val_str(&tmp)->ptr(),
-                      udt->arguments()[j]->val_str(&tmp)->length());
-        else
+      for (uint j = 0; j < udt->m_table->visible_field_count(); j++) {
+        fld = udt->m_table->field[j];
+        if (!fld->is_null()) {
+          append_field_to_string(fld, str);
+        } else
           str->append(STRING_WITH_LEN("NULL"));
         if (j < udt->arg_count - 1)
           str->append(',');
@@ -10298,16 +10557,62 @@ String *Item_func_udt_table::val_str(String *str) {
         return nullptr;
       }
       for (uint j = 0; j < table->s->fields; j++) {
-        if (table->field[j]->val_str(&tmp))
-          str->append(table->field[j]->val_str(&tmp)->ptr(),
-                      table->field[j]->val_str(&tmp)->length());
-        else
+        fld = table->field[j];
+        if (!fld->is_null()) {
+          append_field_to_string(fld, str);
+        } else
           str->append(STRING_WITH_LEN("NULL"));
         if (j < table->s->fields - 1)
           str->append(',');
         else
           str->append(')');
       }
+    }
+    if (args[i]->this_item()->type() == Item::NULL_ITEM)
+      str->append(STRING_WITH_LEN("NULL"));
+    Item_func_sp *item_func_sp = dynamic_cast<Item_func_sp *>(args[i]);
+    if (item_func_sp) {
+      item_func_sp->val_str(&tmp);
+      TABLE *table =
+          item_func_sp->get_sp_result_field()->virtual_tmp_table_addr()[0];
+      str->append(m_nested_table_udt.str);
+      str->append('(');
+      for (uint j = 0; j < table->s->fields; j++) {
+        fld = table->field[j];
+        if (fld->is_null()) {
+          str->append(STRING_WITH_LEN("NULL"));
+        } else {
+          append_field_to_string(fld, str);
+        }
+        str->append(',');
+      }
+      (*str)[str->length() - 1] = ')';
+    }
+    Item_splocal *item_splocal = dynamic_cast<Item_splocal *>(args[i]);
+    if (item_splocal != nullptr) {
+      item_field = dynamic_cast<Item_field *>(item_splocal->this_item());
+      Field_row *field = dynamic_cast<Field_row *>(item_field->field);
+      if (!field) {
+        null_value = true;
+        return nullptr;
+      }
+      TABLE *table = field->virtual_tmp_table_addr()[0];
+      str->append(m_nested_table_udt.str);
+      str->append('(');
+      int b = 0;
+      if (dynamic_cast<Item_splocal_row_field_table_by_index *>(item_splocal)) {
+        b = 1;
+      }
+      for (uint j = b; j < table->s->fields; j++) {
+        fld = table->field[j];
+        if (fld->is_null()) {
+          str->append(STRING_WITH_LEN("NULL"));
+        } else {
+          append_field_to_string(fld, str);
+        }
+        str->append(',');
+      }
+      (*str)[str->length() - 1] = ')';
     }
     if (i < arg_count - 1) str->append(',');
   }
@@ -10322,18 +10627,15 @@ Item_func_udt_single_type_table::Item_func_udt_single_type_table(
     const POS &pos, const LEX_STRING &db_name, const LEX_STRING &udt_name,
     enum_udt_table_of_type table_type, ulonglong varray_limit,
     PT_item_list *item_list, List<Create_field> *field_def, ulong reclength,
-    sql_mode_t sql_mode)
-    : Item_func(pos, item_list) {
-  m_db_name = db_name;
-  m_udt_name = udt_name;
+    sql_mode_t sql_mode, int index_length)
+    : Item_func_udt_constructor(pos, db_name, udt_name, true, item_list,
+                                field_def, reclength, sql_mode) {
   m_table_type = table_type;
   m_varray_size_limit = varray_limit;
-  m_field_def_list = field_def;
-  m_reclength = reclength == 0 ? MAX_FIELD_WIDTH : reclength;
-  m_sql_mode = sql_mode;
-  if (m_db_name.length == 0) {
-    current_thd->lex->copy_db_to(&m_db_name.str, &m_db_name.length);
-  }
+  m_has_assignment_list = item_list ? item_list->m_has_assignment_list : false;
+  m_index_length = index_length;
+  set_ora_table();
+  reset_ora_type();
 }
 
 bool Item_func_udt_single_type_table::itemize(Parse_context *pc, Item **res) {
@@ -10346,7 +10648,8 @@ bool Item_func_udt_single_type_table::itemize(Parse_context *pc, Item **res) {
   context = lex->current_context();
 
   if (m_table_type == enum_udt_table_of_type::TYPE_VARRAY &&
-      arg_count > m_varray_size_limit) {
+      ((!m_has_assignment_list && arg_count > m_varray_size_limit) ||
+       (m_has_assignment_list && arg_count / 2 > m_varray_size_limit))) {
     my_error(ER_DA_OOM, myf(0));
     return true;
   }
@@ -10383,7 +10686,16 @@ bool Item_func_udt_single_type_table::fix_fields(THD *thd, Item **ref) {
     if (res) return res;
   }
 
+  if (thd->lex->query_block && thd->lex->query_block->has_connect_by) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "connect by used with udt table");
+    return true;
+  }
   if (super::fix_fields(thd, ref)) return true;
+
+  // check the index's value.
+  if (m_has_assignment_list) {
+    if (check_record_table_index(m_index_length)) return true;
+  }
 
   set_nullable(true);
 
@@ -10396,17 +10708,6 @@ bool Item_func_udt_single_type_table::fix_fields(THD *thd, Item **ref) {
   fixed = true;
 
   return false;
-}
-
-bool Item_func_udt_single_type_table::resolve_type(THD *thd) {
-  DBUG_TRACE;
-
-  set_data_type(MYSQL_TYPE_VARCHAR);
-  decimals = 0;
-  max_length = m_reclength;
-  collation.set(charset_for_protocol());
-  set_nullable(true);
-  return Item_func::resolve_type(thd);
 }
 
 void Item_func_udt_single_type_table::make_field(Send_field *tmp_field) {
@@ -10424,7 +10725,7 @@ void Item_func_udt_single_type_table::make_field(Send_field *tmp_field) {
   tmp_field->decimals = 0;
 }
 
-bool Item_func_udt_single_type_table::fill_udt(int number) {
+bool Item_func_udt_single_type_table::fill_udt_single_type(int number) {
   sql_mode_t old_sql_mode = current_thd->variables.sql_mode;
   current_thd->variables.sql_mode = m_sql_mode;
   enum_check_fields save_check_for_truncated_fields =
@@ -10449,7 +10750,8 @@ bool Item_func_udt_single_type_table::fill_udt(int number) {
   }
   Field **flds = m_table->visible_field_ptr();
   if (number == -1) {
-    for (uint i = 0; i < arg_count; i++) {
+    for (uint i = m_has_assignment_list; i < arg_count;
+         i = i + m_has_assignment_list + 1) {
       args[i]->save_in_field(flds[0], false);
       if (current_thd->is_error()) {
         null_value = true;
@@ -10476,8 +10778,9 @@ String *Item_func_udt_single_type_table::val_str(String *str) {
   str->append('(');
   String tmp;
   null_value = false;
-  for (uint i = 0; i < arg_count; i++) {
-    if (fill_udt()) {
+  for (uint i = m_has_assignment_list; i < arg_count;
+       i = i + m_has_assignment_list + 1) {
+    if (fill_udt_single_type()) {
       null_value = true;
       return nullptr;
     }
@@ -10513,7 +10816,12 @@ Item_func_sp::Item_func_sp(const POS &pos, const LEX_STRING &db_name,
   THD *thd = current_thd;
   m_name = new (thd->mem_root)
       sp_name(to_lex_cstring(db_name), fn_name, use_explicit_name);
+  m_save_db = m_name->m_db;
+  m_save_fn_name = m_name->m_name;
+  m_save_explicit_name = m_name->m_explicit_name;
 }
+
+Item_func_sp::~Item_func_sp() { cleanup_udt(); }
 
 bool Item_func_sp::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
@@ -10551,8 +10859,18 @@ bool Item_func_sp::itemize(Parse_context *pc, Item **res) {
 
   m_pkg_name = new (thd->mem_root) sp_name(NULL_CSTR, NULL_STR, false);
 
+  /*
+  The type of function arguments may not be known here.
+  If type of any argument is not known, the m_sp should be resolved again.
+
+  NOTE: if m_sp is resolved again, the prelocking list may be changed.
+  It is not sure whether prelocking list is changed will create issue or not.
+  */
+  m_sig = new (thd->mem_root) sp_signature(thd->mem_root);
+  m_sig->init_by(arg_count, args);
+
   if (sp_resolve_package_routine(thd, enum_sp_type::FUNCTION, thd->lex->sphead,
-                                 m_name, m_pkg_name))
+                                 m_name, m_pkg_name, m_sig))
     return true;
 
   // mark this package to be loaded in open_tables_for_query()
@@ -10560,7 +10878,8 @@ bool Item_func_sp::itemize(Parse_context *pc, Item **res) {
     sp_add_own_used_routine(lex, thd, Sroutine_hash_entry::FUNCTION, m_name);
   } else {
     sp_add_own_used_routine(lex, thd, Sroutine_hash_entry::FUNCTION, m_name,
-                            m_pkg_name->m_name.str, m_pkg_name->m_name.length);
+                            m_pkg_name->m_name.str, m_pkg_name->m_name.length,
+                            m_sig);
     // to acquire MDL for this package
     sp_add_own_used_routine(lex, thd, Sroutine_hash_entry::PACKAGE_BODY,
                             m_pkg_name);
@@ -10648,7 +10967,7 @@ bool Item_func_sp::init_result_field(THD *thd) {
       thd, context->view_error_handler, context->view_error_handler_arg);
 
   m_sp = sp_find_routine(thd, enum_sp_type::FUNCTION, m_name,
-                         &thd->sp_func_cache, true, m_pkg_name);
+                         &thd->sp_func_cache, true, m_pkg_name, m_sig);
   if (m_sp == nullptr) {
     my_missing_function_error(m_name->m_name, m_name->m_qname.str, "FUNCTION");
     return true;
@@ -10677,7 +10996,165 @@ bool Item_func_sp::init_result_field(THD *thd) {
 
   sp_result_field =
       m_sp->create_result_field(thd, max_length, item_name.ptr(), dummy_table);
+  if (dynamic_cast<Field_refcursor *>(sp_result_field))
+    m_is_refcursor = true;
+  else if (dynamic_cast<Field_udt_type *>(sp_result_field))
+    set_ora_type();
+
   return sp_result_field == nullptr;
+}
+
+/**
+  This table is used to configure which functions in the UTL_RAW package should
+  be processed with the is_raw_params_invalid() function before execution Key -
+  The name of the function in the packge Value - The position of the RAW type
+  parameter in the function parameter list
+*/
+using RAW_PARAM_POS_TYPE = std::unordered_map<std::string, std::set<uint32>>;
+static const RAW_PARAM_POS_TYPE raw_param_pos_hash = {
+    {"UTL_RAW.BIT_AND", {0, 1}},
+    {"UTL_RAW.BIT_COMPLEMENT", {0}},
+    {"UTL_RAW.BIT_OR", {0, 1}},
+    {"UTL_RAW.BIT_XOR", {0, 1}},
+    {"UTL_RAW.CAST_TO_BINARY_DOUBLE", {0}},
+    {"UTL_RAW.CAST_TO_BINARY_FLOAT", {0}},
+    {"UTL_RAW.CAST_TO_BINARY_INTEGER", {0}},
+    {"UTL_RAW.CAST_TO_NUMBER", {0}},
+    {"UTL_RAW.CAST_TO_NVARCHAR2", {0}},
+    {"UTL_RAW.CAST_TO_VARCHAR2", {0}},
+    {"UTL_RAW.COMPARE", {0, 1, 2}},
+    {"UTL_RAW.CONCAT", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}},
+    {"UTL_RAW.CONVERT", {0}},
+    {"UTL_RAW.COPIES", {0}},
+    {"UTL_RAW.LENGTH", {0}},
+    {"UTL_RAW.OVERLAY", {0, 1, 4}},
+    {"UTL_RAW.REVERSE", {0}},
+    {"UTL_RAW.SUBSTR", {0}},
+    {"UTL_RAW.TRANSLATE", {0, 1, 2}},
+    {"UTL_RAW.TRANSLITERATE", {0, 1, 2, 3}},
+    {"UTL_RAW.XRANGE", {0, 1}}};
+
+static const RAW_PARAM_POS_TYPE utl_encode_param_pos_hash = {
+    {"UTL_ENCODE.BASE64_DECODE", {0}},
+    {"UTL_ENCODE.BASE64_ENCODE", {0}},
+    {"UTL_ENCODE.QUOTED_PRINTABLE_DECODE", {0}},
+    {"UTL_ENCODE.QUOTED_PRINTABLE_ENCODE", {0}},
+    {"UTL_ENCODE.UUDECODE", {0}},
+    {"UTL_ENCODE.UUENCODE", {0}}};
+/**
+  This table is used to configure which functions in the UTL_RAW package should
+  be processed with the is_raw_params_invalid() function before execution Key -
+  Name of the packge Value - Function list
+*/
+static const std::unordered_map<std::string, RAW_PARAM_POS_TYPE>
+    pkg_func_with_raw_param = {{"UTL_RAW", raw_param_pos_hash},
+                               {"UTL_ENCODE", utl_encode_param_pos_hash}};
+
+Item_func_sp::Backup_args_defer::Backup_args_defer(Item_func_sp *item)
+    : outer(item) {
+  if (outer->m_pkg_name && outer->m_pkg_name->m_name.str &&
+      (0 == my_strcasecmp(system_charset_info, outer->m_pkg_name->m_name.str,
+                          "UTL_RAW") ||
+       0 == my_strcasecmp(system_charset_info, outer->m_pkg_name->m_name.str,
+                          "UTL_ENCODE"))) {
+    std::string pkg_ident = to_string(outer->m_pkg_name->m_name);
+    for (auto &it : pkg_ident) it = std::toupper(it);
+    auto pkg_entry = pkg_func_with_raw_param.find(pkg_ident);
+    if (pkg_entry != pkg_func_with_raw_param.end() && outer->arg_count > 0) {
+      backup_args = current_thd->mem_root->ArrayAlloc<Item *>(outer->arg_count);
+      std::copy_n(outer->args, outer->arg_count, backup_args);
+    }
+  }
+}
+
+Item_func_sp::Backup_args_defer::~Backup_args_defer() {
+  if (backup_args) {
+    std::copy_n(backup_args, outer->arg_count, outer->args);
+  }
+}
+
+bool Item_func_sp::is_raw_params_invalid() {
+  if (m_pkg_name && m_pkg_name->m_name.str &&
+      (0 == my_strcasecmp(system_charset_info, m_pkg_name->m_name.str,
+                          "UTL_RAW") ||
+       0 == my_strcasecmp(system_charset_info, m_pkg_name->m_name.str,
+                          "UTL_ENCODE"))) {
+    std::string pkg_ident = to_string(m_pkg_name->m_name);
+    for (auto &it : pkg_ident) it = std::toupper(it);
+    auto pkg_entry = pkg_func_with_raw_param.find(pkg_ident);
+    if (pkg_entry != pkg_func_with_raw_param.end()) {
+      std::string fn_ident = to_string(m_name->m_name);
+      for (auto &it : fn_ident) it = std::toupper(it);
+      auto fn_entry = pkg_entry->second.find(fn_ident);
+      if (fn_entry != pkg_entry->second.end()) {
+        /**
+          Handle each raw type parameter in the function
+        */
+        for (auto it : fn_entry->second) {
+          uint32 pos = it;
+          if (pos >= arg_count || args[pos]->result_type() != STRING_RESULT) {
+            my_error(ER_WRONG_PARAMETERS_TO_STORED_FCT, MYF(0),
+                     m_name->m_name.str);
+            null_value = true;
+            return true;
+          }
+
+          /**
+            Binary strings don't need to be processed as it is no longer a
+            string but a binary value
+          */
+          if (&my_charset_bin != args[pos]->collation.collation) {
+            String tmp_value, *res = nullptr;
+            res = args[pos]->val_str(&tmp_value);
+            if (args[pos]->is_null()) continue;
+            if (!res) {
+              my_error(ER_WRONG_PARAMETERS_TO_STORED_FCT, MYF(0),
+                       m_name->m_name.str);
+              null_value = true;
+              return true;
+            }
+
+            size_t length = (1 + res->length()) / 2;
+            char *buffer = new (current_thd->mem_root) char[length + 1];
+            if (!buffer) {
+              null_value = true;
+              return true;
+            }
+
+            /**
+              When Oracle implicitly converts character data to RAW,
+              it interprets each consecutive input character as a hexadecimal
+              representation of four consecutive bits of binary data and builds
+              the resulting RAW or LONG RAW value by concatenating those bits.
+              If any of the input characters is not a hexadecimal digit (0-9,
+              A-F, a-f), then an error is reported.
+            */
+            if (unhex(res->ptr(), res->ptr() + res->length(), buffer)) {
+              null_value = true;
+              my_error(ER_ILLEGAL_VALUE_FOR_TYPE, MYF(0), "string",
+                       res->c_ptr_safe());
+              return true;
+            }
+            /**
+              Because mysql implicitly converts character data to RAW, it is
+              directly converted to ASCII corresponding to the character, so it
+              is necessary to replace the original data with the data converted
+              by oracle rules
+            */
+            Item_string *item = new (current_thd->mem_root)
+                Item_string(buffer, length, &my_charset_bin);
+            if (!item) {
+              null_value = true;
+              return true;
+            }
+            item->quick_fix_field();
+            args[pos] = item;
+          }
+        }
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -10693,6 +11170,9 @@ bool Item_func_sp::resolve_type(THD *) {
   set_data_type(sp_result_field->type());
   decimals = sp_result_field->decimals();
   max_length = sp_result_field->field_length;
+  if (is_ora_type()) {
+    max_length = sp_result_field->pack_length();
+  }
   collation.set(sp_result_field->charset());
   set_nullable(true);
   unsigned_flag = sp_result_field->is_flag_set(UNSIGNED_FLAG);
@@ -10700,37 +11180,111 @@ bool Item_func_sp::resolve_type(THD *) {
   return false;
 }
 
+bool Item_func_sp::udt_table_store_to_table(TABLE *table_to) {
+  if (sp_result_field == nullptr) return true;
+  Query_arena backup_arena;
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> tmp;
+  current_thd->swap_query_arena(*current_thd->stmt_arena, &backup_arena);
+  val_str(&tmp);
+  current_thd->swap_query_arena(backup_arena, current_thd->stmt_arena);
+  return sp_result_field->field_udt_table_store_to_table(table_to);
+}
+
+type_conversion_status Item_func_sp::save_in_field_inner(Field *field,
+                                                         bool no_conversions) {
+  if (is_ora_type()) {
+    if (!field->get_udt_db_name() || !field->udt_name().str) {
+      my_error(ER_UDT_INCONS_DATATYPES, myf(0));
+      return TYPE_ERR_BAD_VALUE;
+    }
+
+    if (my_strcasecmp(system_charset_info, get_udt_db_name().str,
+                      field->get_udt_db_name()) != 0 ||
+        my_strcasecmp(system_charset_info, get_udt_name().str,
+                      field->udt_name().str) != 0) {
+      my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), field->get_udt_db_name(),
+               field->udt_name().str, get_udt_db_name().str,
+               get_udt_name().str);
+      return TYPE_ERR_BAD_VALUE;
+    }
+
+    Query_arena backup_arena;
+    StringBuffer<STRING_BUFFER_USUAL_SIZE> tmp;
+    current_thd->swap_query_arena(*current_thd->stmt_arena, &backup_arena);
+    val_str(&tmp);
+    current_thd->swap_query_arena(backup_arena, current_thd->stmt_arena);
+
+    if (null_value) {
+      type_conversion_status ret =
+          set_field_to_null_with_conversions(field, no_conversions);
+      if (ret == TYPE_OK) field->set_udt_value_initialized(true);
+      return ret;
+    }
+
+    field->set_notnull();
+    Field_udt_type *field_udt_type = dynamic_cast<Field_udt_type *>(field);
+    if (field_udt_type) {
+      type_conversion_status ret =
+          field->store(pointer_cast<const char *>(sp_result_field->data_ptr()),
+                       sp_result_field->data_length(), &my_charset_bin);
+      if (ret != TYPE_OK) return ret;
+    } else {  // Field_row
+      dynamic_cast<Field_udt_type *>(sp_result_field)->copy_data_to_table();
+      TABLE *table = sp_result_field->virtual_tmp_table_addr()[0];
+      for (uint i = 0; i < table->s->fields; i++) {
+        Item *item_filed =
+            new (current_thd->mem_root) Item_field(table->field[i]);
+        if (sp_eval_expr(current_thd,
+                         field->virtual_tmp_table_addr()[0]->field[i],
+                         &item_filed))
+          return TYPE_ERR_BAD_VALUE;
+      }
+    }
+
+    field->set_udt_value_initialized(true);
+    return TYPE_OK;
+  }
+
+  return Item::save_in_field_inner(field, no_conversions);
+}
+
 longlong Item_func_sp::val_int() {
-  if (execute()) return error_int();
+  Backup_args_defer backupArgsDefer(this);
+  if (is_raw_params_invalid() || execute()) return error_int();
   if (null_value) return 0;
   return sp_result_field->val_int();
 }
 
 double Item_func_sp::val_real() {
-  if (execute()) return error_real();
+  Backup_args_defer backupArgsDefer(this);
+  if (is_raw_params_invalid() || execute()) return error_real();
   if (null_value) return 0.0;
   return sp_result_field->val_real();
 }
 
 bool Item_func_sp::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
-  if (execute() || null_value) return true;
+  Backup_args_defer backupArgsDefer(this);
+  if (is_raw_params_invalid() || execute() || null_value) return true;
   return sp_result_field->get_date(ltime, fuzzydate);
 }
 
 bool Item_func_sp::get_time(MYSQL_TIME *ltime) {
-  if (execute() || null_value) return true;
+  Backup_args_defer backupArgsDefer(this);
+  if (is_raw_params_invalid() || execute() || null_value) return true;
   return sp_result_field->get_time(ltime);
 }
 
 my_decimal *Item_func_sp::val_decimal(my_decimal *dec_buf) {
-  if (execute()) return error_decimal(dec_buf);
+  Backup_args_defer backupArgsDefer(this);
+  if (is_raw_params_invalid() || execute()) return error_decimal(dec_buf);
   if (null_value) return nullptr;
   return sp_result_field->val_decimal(dec_buf);
 }
 
 String *Item_func_sp::val_str(String *str) {
   StringBuffer<STRING_BUFFER_USUAL_SIZE> buf(str->charset());
-  if (execute()) return error_str();
+  Backup_args_defer backupArgsDefer(this);
+  if (is_raw_params_invalid() || execute()) return error_str();
   if (null_value) return nullptr;
   /*
     result_field will set buf pointing to internal buffer
@@ -10777,7 +11331,7 @@ bool Item_func_sp::execute() {
   // Bind to an instance of the stored function:
   if (m_sp == nullptr) {
     m_sp = sp_setup_routine(thd, enum_sp_type::FUNCTION, m_name,
-                            &thd->sp_func_cache, m_pkg_name);
+                            &thd->sp_func_cache, m_pkg_name, m_sig);
     if (m_sp == nullptr) {
       null_value = true;
       return true;
@@ -10962,6 +11516,46 @@ bool Item_func_sp::fix_fields(THD *thd, Item **ref) {
   }
 
   /*
+    If this subprogram is overloaded, resolve this function again
+    The prelocking list of the previous routine may be not useful.
+  */
+  if (m_sig->m_overload_index != 0 && m_sig->m_not_all_fixed) {
+    bool resolve_again = false;
+    Item **arg, **arg_end;
+    uchar buff[STACK_BUFF_ALLOC];  // Max argument in function
+    if (check_stack_overrun(thd, STACK_MIN_SIZE * 2, buff))
+      return true;    // Fatal error if flag is set!
+    if (arg_count) {  // Print purify happy
+      for (arg = args, arg_end = args + arg_count; arg != arg_end; arg++) {
+        if (!(*arg)->fixed) resolve_again = true;
+        if (fix_func_arg(thd, arg)) return true;
+      }
+    }
+    if (resolve_again) {
+      MEM_ROOT *saved_mem_root = thd->mem_root;
+      if (thd->lex->sphead)
+        thd->mem_root = thd->lex->sphead->get_persistent_mem_root();
+      m_sig->clear();
+      m_sig->init_by(arg_count, args);
+      /*
+        NOTE: if public routine is resolved, m_sig should be update changed
+        in sp_resolve_package_routine_explicit() should mark m_sig is looking
+        for public routine or not
+      */
+      m_name->m_db = m_save_db;
+      m_name->m_name = m_save_fn_name;
+      m_name->m_explicit_name = m_save_explicit_name;
+      if (sp_resolve_package_routine(thd, enum_sp_type::FUNCTION,
+                                     thd->lex->sphead, m_name, m_pkg_name,
+                                     m_sig)) {
+        thd->mem_root = saved_mem_root;
+        return true;
+      }
+      thd->mem_root = saved_mem_root;
+    }
+  }
+
+  /*
     We must call init_result_field before Item_func::fix_fields()
     to make m_sp and result_field members available to resolve_type(),
     which is called from Item_func::fix_fields().
@@ -11013,6 +11607,10 @@ bool Item_func_sp::fix_fields(THD *thd, Item **ref) {
   }
 
   if (Item_func::fix_fields(thd, ref)) return true;
+  if (is_ora_udt_type() && get_udt_name().length == 0) {
+    reset_ora_type();
+    reset_ora_table();
+  }
 
   for (uint i = 0; i < arg_count; i++) {
     if (args[i]->data_type() == MYSQL_TYPE_INVALID) {
@@ -11056,6 +11654,10 @@ bool Item_func_sp::fix_fields(THD *thd, Item **ref) {
 
 void Item_func_sp::update_used_tables() {
   Item_func::update_used_tables();
+  if (is_ora_udt_type() && get_udt_name().length == 0) {
+    reset_ora_type();
+    reset_ora_table();
+  }
 
   /* This is reset by Item_func::update_used_tables(). */
   set_stored_program();
@@ -11118,6 +11720,142 @@ bool Item_func_version::itemize(Parse_context *pc, Item **res) {
   if (super::itemize(pc, res)) return true;
   pc->thd->lex->set_stmt_unsafe(LEX::BINLOG_STMT_UNSAFE_SYSTEM_FUNCTION);
   return false;
+}
+
+longlong Item_func_vsize::val_int() {
+  longlong storelen;
+  String *res;
+
+  assert(fixed == 1);
+
+  // user variable '@user_var' is not supported now.
+  if (PTI_user_variable *puv = dynamic_cast<PTI_user_variable *>(args[0])) {
+    (void)puv;
+    goto err;
+  }
+
+  res = args[0]->val_str(&value);
+  if (args[0]->null_value || args[0]->is_null() || res->is_empty() ||
+      args[0]->data_type() == MYSQL_TYPE_NULL) {
+    null_value = true;
+    return 0;
+  }
+
+  if (Item_field *item_field = dynamic_cast<Item_field *>(args[0])) {
+    // for char/varchar/nvarchar, is it necessary to handle differently.
+    // otherwise, the pack_length() for these data types is the declaration size
+    // * cs->cbmaxlen. length code is stored with data.
+    uchar *field_ptr = item_field->field->field_ptr();
+
+    if (Field_varstring *varstr =
+            dynamic_cast<Field_varstring *>(item_field->field)) {
+      uint32 length_bytes = varstr->get_length_bytes();
+      uint content_length;
+
+      if (length_bytes == 1)
+        content_length = (uint)*field_ptr;
+      else
+        content_length = uint2korr(field_ptr);
+
+      return content_length + length_bytes;
+    } else if (Field_blob *blob =
+                   dynamic_cast<Field_blob *>(item_field->field)) {
+      // these type cannot be dump properly.
+      // packlength is used to store the length which can be access
+      // by Field_blob::pack_length_no_ptr().
+      // but that member is protected, cannot be accessed publicly.
+      (void)blob;
+      goto err;
+    }
+    return item_field->field->pack_length();
+  }
+
+  storelen = calc_key_length(args[0]->data_type(), res->length(),
+                             args[0]->decimals, args[0]->unsigned_flag, 0);
+  switch (args[0]->data_type()) {
+    case MYSQL_TYPE_BIT:
+      storelen = res->length();
+      break;
+
+    case MYSQL_TYPE_STRING:  // char
+      break;
+
+    case MYSQL_TYPE_VAR_STRING:
+    case MYSQL_TYPE_VARCHAR:
+      storelen += 2;
+      break;
+
+    case MYSQL_TYPE_BOOL:
+    case MYSQL_TYPE_TINY:
+      return storelen;
+
+    case MYSQL_TYPE_YEAR:
+      storelen += 3;
+      break;
+
+    case MYSQL_TYPE_SHORT:
+    case MYSQL_TYPE_INT24:
+    case MYSQL_TYPE_LONG:
+      break;
+
+    case MYSQL_TYPE_LONGLONG:
+      if (dynamic_cast<Item_func_false *>(args[0]) ||
+          dynamic_cast<Item_func_true *>(args[0])) {
+        // SELECT VSIZE(false), VSIZE(true);
+        storelen = 1;
+      }
+      break;
+
+    case MYSQL_TYPE_FLOAT:
+    case MYSQL_TYPE_DOUBLE:
+      break;
+
+    case MYSQL_TYPE_DECIMAL:
+    case MYSQL_TYPE_NEWDECIMAL:
+      storelen += 1;  // unsigned_flag =[1].
+      break;
+
+    case MYSQL_TYPE_NEWDATE:
+    case MYSQL_TYPE_DATE:
+      storelen -= 1;  // 3
+      break;
+
+    case MYSQL_TYPE_TIMESTAMP:
+    case MYSQL_TYPE_TIMESTAMP2:
+      break;
+
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_DATETIME2:
+      break;
+
+    case MYSQL_TYPE_TIME:
+    case MYSQL_TYPE_TIME2:
+      break;
+
+    default:
+    case MYSQL_TYPE_TINY_BLOB:
+    case MYSQL_TYPE_MEDIUM_BLOB:
+    case MYSQL_TYPE_LONG_BLOB:
+    case MYSQL_TYPE_BLOB:
+    case MYSQL_TYPE_ENUM:
+    case MYSQL_TYPE_SET:
+    case MYSQL_TYPE_JSON:
+    case MYSQL_TYPE_GEOMETRY:
+    case MYSQL_TYPE_TYPED_ARRAY:
+    case MYSQL_TYPE_INVALID:
+      goto err;
+  }
+  return storelen;
+
+err:
+  my_error(ER_DATA_OUT_OF_RANGE, MYF(0),
+           args[0]->item_name.is_set() ? args[0]->item_name.ptr() : "",
+           func_name());
+  push_warning_printf(
+      current_thd, Sql_condition::SL_WARNING, ER_WARN_DATA_OUT_OF_RANGE,
+      ER_THD(current_thd, ER_WARN_DATA_OUT_OF_RANGE), item_name.ptr(), 1L);
+  null_value = true;
+  return 0;
 }
 
 /**
@@ -12372,8 +13110,8 @@ longlong Item_func_internal_tablespace_data_free::val_int() {
 }
 
 Item_func_version::Item_func_version(const POS &pos)
-    : Item_static_string_func(pos, NAME_STRING("version()"), fake_serv_vers,
-                              strlen(fake_serv_vers), system_charset_info,
+    : Item_static_string_func(pos, NAME_STRING("version()"), server_version,
+                              strlen(server_version), system_charset_info,
                               DERIVATION_SYSCONST) {}
 
 /*
@@ -12673,14 +13411,13 @@ longlong Item_func_rownum::val_int() {
 bool Item_func_rownum::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
   if (super::itemize(pc, res)) return true;
-  pc->thd->lex->has_notsupported_func = true;
   pc->select->has_rownum = true;
   enum_parsing_context parse_place = pc->select->parsing_place;
   if (parse_place == CTX_SELECT_LIST) {
     pc->select->has_rownum_in_select = true;
   }
   if (parse_place == CTX_WHERE || parse_place == CTX_HAVING ||
-      parse_place == CTX_ON) {
+      parse_place == CTX_ON || parse_place == CTX_CONNECT_BY) {
     pc->select->has_rownum_in_cond = true;
   }
 
@@ -12690,13 +13427,20 @@ bool Item_func_rownum::itemize(Parse_context *pc, Item **res) {
   return false;
 }
 
+/**
+ * @brief replace to base rownum func
+ *
+ * @param arg
+ * @return Item*
+ */
 Item *Item_func_rownum::replace_rownum_func(uchar *arg) {
-  auto *info = pointer_cast<Item::Item_rownum_func_replacement *>(arg);
-  Item_func_rownum *base = info->m_curr_block->rownum_func;
-  if (base) {
-    return base;
+  auto base_item = pointer_cast<Item_func_rownum **>(arg);
+  if (*base_item) {
+    return *base_item;
+  } else {
+    *base_item = this;
   }
-  return nullptr;
+  return this;
 }
 
 Item *Item_func_rownum::replace_rownum_use_tmp_field(uchar *) {
@@ -12706,4 +13450,266 @@ Item *Item_func_rownum::replace_rownum_use_tmp_field(uchar *) {
   } else {
     return this;
   }
+}
+
+bool Item_func_lnnvl_advisor::is_valid_expr(Item *expr) {
+  if (!expr) return true;
+
+  // The lnnvl function condition can evaluate any scalar values but cannot be a
+  // compound condition containing AND, OR, or BETWEEN.
+  bool not_allow_expr = false;
+
+  WalkItem(expr, enum_walk::POSTFIX, [&](Item *item) -> bool {
+    if (!not_allow_expr && (item->type() == Item::COND_ITEM ||
+                            is_function_of_type(item, Item_func::BETWEEN))) {
+      not_allow_expr = true;
+      return true;
+    }
+    return false;
+  });
+
+  return !not_allow_expr;
+}
+
+bool Item_func_lnnvl_advisor::is_lnnvl_expr(Item *expr) {
+  return (expr && is_function_of_type(expr, Item_func::LNNVL_FUNC));
+}
+
+bool Item_func_lnnvl::itemize(Parse_context *pc, Item **res) {
+  if (!pc->select->has_lnnvl_func) pc->select->has_lnnvl_func = true;
+  return Item_int_func::itemize(pc, res);
+}
+
+longlong Item_func_lnnvl::val_int() {
+  Item *cond = args[0];
+  null_value = true;
+
+  bool is_lnnvl_func = Item_func_lnnvl_advisor::is_lnnvl_expr(cond);
+
+  auto res = !(cond->val_int());
+  if (is_lnnvl_func) return res;
+  return ((cond->null_value)) ? 1 : res;
+}
+
+bool Item_func_lnnvl::fix_fields(THD *thd, Item **ref) {
+  if (validate_cond(thd)) {
+    fixed = false;
+    return true;
+  }
+  return Item_int_func::fix_fields(thd, ref);
+}
+
+bool Item_func_lnnvl::resolve_type(THD *thd) {
+  bool error = Item_int_func::resolve_type(thd);
+  // The lnnvl function must be set to nullable to true, to prevent the nullable
+  // variable in Item_int_func::resolve_type has been modified.
+  set_nullable(true);
+  return error;
+}
+
+bool Item_func_lnnvl::validate_cond(THD *thd) {
+  assert(thd);
+  Item *expr = args[0];
+
+  if (Item_func_lnnvl_advisor::is_lnnvl_expr(expr)) {
+    return false;
+  }
+
+  if (!Item_func_lnnvl_advisor::is_valid_expr(expr)) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0),
+             "invalid parameter in LNNVL function.");
+    return true;
+  }
+
+  return false;
+}
+
+String *Item_func_sequence::val_str(String *str) {
+  DBUG_TRACE;
+  if (ref_seq_func) {
+    return ref_seq_func->val_str(str);
+  } else {
+    if (first_read) {
+      THD *session = thd_get_current_thd();
+      if (read_next) {
+        if (!m_seq_def->read_val(read_next, curval)) {
+          session->update_seq_cache_entity(db_name, table_name,
+                                           m_seq_def->volatile_id(), curval);
+        }
+      } else {
+        set_val_with_cached_currval();
+      }
+      first_read = false;
+    }
+    my_decimal2string(E_DEC_FATAL_ERROR, &curval, str);
+    return str;
+  }
+}
+
+double Item_func_sequence::val_real() {
+  DBUG_TRACE;
+  if (ref_seq_func) {
+    return ref_seq_func->val_real();
+  } else {
+    if (first_read) {
+      THD *session = thd_get_current_thd();
+      if (read_next) {
+        if (!m_seq_def->read_val(read_next, curval)) {
+          session->update_seq_cache_entity(db_name, table_name,
+                                           m_seq_def->volatile_id(), curval);
+        }
+      } else {
+        set_val_with_cached_currval();
+      }
+      first_read = false;
+    }
+    double res;
+    my_decimal2double(E_DEC_FATAL_ERROR, &curval, &res);
+    return res;
+  }
+}
+
+longlong Item_func_sequence::val_int() {
+  DBUG_TRACE;
+  if (ref_seq_func) {
+    return ref_seq_func->val_int();
+  } else {
+    if (first_read) {
+      THD *session = thd_get_current_thd();
+      if (read_next) {
+        if (!m_seq_def->read_val(read_next, curval)) {
+          session->update_seq_cache_entity(db_name, table_name,
+                                           m_seq_def->volatile_id(), curval);
+        }
+      } else {
+        set_val_with_cached_currval();
+      }
+      first_read = false;
+    }
+    longlong res;
+    my_decimal2int(E_DEC_FATAL_ERROR, &curval, false, &res);
+    return res;
+  }
+}
+
+my_decimal *Item_func_sequence::val_decimal(my_decimal *) {
+  DBUG_TRACE;
+  if (ref_seq_func) {
+    return ref_seq_func->val_decimal(nullptr);
+  } else {
+    if (first_read) {
+      THD *session = thd_get_current_thd();
+      if (read_next) {
+        if (!m_seq_def->read_val(read_next, curval)) {
+          session->update_seq_cache_entity(db_name, table_name,
+                                           m_seq_def->volatile_id(), curval);
+        }
+      } else {
+        set_val_with_cached_currval();
+      }
+      first_read = false;
+    }
+    return &curval;
+  }
+}
+
+void Item_func_sequence::reset_read_flag() {
+  assert(!ref_seq_func);
+  first_read = true;
+}
+
+/* recheck metadata version of sequence
+   @return:
+      false  check pass
+      true   version changed or sequence no longer exist */
+bool Item_func_sequence::recheck_sequence_version(THD *thd) {
+  assert(!ref_seq_func);  // not for ref seq func item
+
+  if (sequences_metadata_version == 0) return true;
+  auto new_version = has_sequence_def(thd, db_name, table_name);
+  if (new_version != sequences_metadata_version) return true;
+  return false;
+}
+
+void Item_func_sequence::set_val_with_cached_currval() {
+  THD *session = thd_get_current_thd();
+  const my_decimal *cached_val =
+      session->get_cached_seq_currval(db_name, table_name, m_seq_def);
+  if (cached_val) {
+    this->curval = *cached_val;
+  } else {
+    my_error(ER_UNKNOWN_TABLE, MYF(0),
+             "CURRVAL of sequence is not yet defined in this session");
+  }
+}
+
+bool Item_func::check_record_table_index(int index_length) {
+  for (uint i = 0; i < arg_count; i = i + 2) {
+    String tmp;
+    Item *item_index = args[i]->this_item();
+    String *index = item_index->val_str(&tmp);
+    if (!index) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "NULL to be the record table's index");
+      return true;
+    }
+    // varchar type.
+    if (index_length > 0) {
+      if ((int)index->length() > index_length) {
+        my_error(ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE, MYF(0), index->ptr());
+        return true;
+      }
+    } else {  // int type.
+      if (item_index->result_type() != INT_RESULT) {
+        char *row_str = index->ptr();
+        char *str = row_str;
+        char *end = row_str + index->length();
+        while (str != end) {
+          if (*str == '-') str++;
+          if (!my_isdigit(&my_charset_bin, *str++)) {
+            my_error(ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE, MYF(0), index->ptr());
+            return true;
+          }
+        }
+      }
+    }
+    // check the index is not same with previous index.
+    for (uint m = 0; m < i; m = m + 2) {
+      String tmp_m;
+      Item *item_index_m = args[m]->this_item();
+      String *index_m = item_index_m->val_str(&tmp_m);
+      if (index_m && !my_strcasecmp(&my_charset_bin, index_m->c_ptr_quick(),
+                                    index->c_ptr_quick())) {
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                 "the record table's index is same with previous index");
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+longlong Item_func_cursor_rowcount::val_int() {
+  assert(fixed == 1);
+  null_value = true;
+
+  sp_cursor *c = get_open_cursor_or_error();
+  if (!c || !c->is_open()) {
+    my_error(ER_SP_CURSOR_NOT_OPEN, MYF(0));
+    return 0;
+  }
+  null_value = false;
+  return c->fetch_count();
+}
+
+longlong Item_func_implicit_cursor_rowcount::val_int() {
+  assert(fixed == 1);
+  null_value = true;
+
+  long long ret = current_thd->get_ora_implicit_cursor_attr_rowcount();
+  if (-1 == ret) {
+    return 0;
+  }
+  null_value = false;
+  return ret;
 }

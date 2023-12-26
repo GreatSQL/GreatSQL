@@ -31,6 +31,7 @@
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_time.h"  // interval_type
+#include "sql_string.h"
 
 class Item;
 class THD;
@@ -40,7 +41,7 @@ class sp_name;
 #define EVEX_BAD_PARAMS -5
 #define EVEX_MICROSECOND_UNSUP -6
 #define EVEX_MAX_INTERVAL_VALUE 1000000000L
-
+extern const char *interval_item_expr_define;
 class Event_parse_data {
  public:
   /*
@@ -90,6 +91,8 @@ class Event_parse_data {
 
   sp_name *identifier;
   Item *item_expression;
+  bool is_dbms_job;
+
   longlong expression;
   interval_type interval;
 
@@ -110,6 +113,7 @@ class Event_parse_data {
         ends_null(true),
         execute_at_null(true),
         item_expression(nullptr),
+        is_dbms_job(false),
         expression(0) {
     DBUG_TRACE;
 
@@ -124,6 +128,8 @@ class Event_parse_data {
 
   ~Event_parse_data() = default;
 
+  bool get_create_event_str(THD *thd, bool create, String *buf);
+
  private:
   void init_definer(THD *thd);
 
@@ -132,6 +138,8 @@ class Event_parse_data {
   int init_execute_at(THD *thd);
 
   int init_interval(THD *thd);
+
+  int init_comment_expr_interval();
 
   int init_starts(THD *thd);
 
@@ -145,4 +153,5 @@ class Event_parse_data {
   void check_originator_id(THD *thd);
   void operator=(Event_parse_data &);
 };
+
 #endif

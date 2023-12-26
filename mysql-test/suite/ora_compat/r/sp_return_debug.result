@@ -1,0 +1,14 @@
+set sql_mode='oracle';
+CREATE procedure p1 ()
+as
+BEGIN
+select 'hello world';
+RETURN;
+select 'php is the best';
+END;
+/
+SHOW PROCEDURE CODE p1;
+Pos	Instruction
+0	stmt "select 'hello world'"
+1	preturn
+drop procedure p1;

@@ -86,6 +86,8 @@ enum enum_parsing_context {
   CTX_OPTIMIZED_AWAY_SUBQUERY,  ///< Subquery executed once during optimization
   CTX_UNION,
   CTX_UNION_RESULT,  ///< Pseudo-table context for UNION result
+  CTX_START_WITH,
+  CTX_CONNECT_BY,  /// Pseudo-table prior is in conect by or other
   CTX_INTERSECT,
   CTX_INTERSECT_RESULT,  ///< Pseudo-table context
   CTX_EXCEPT,

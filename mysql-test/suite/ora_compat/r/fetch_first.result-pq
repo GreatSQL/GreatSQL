@@ -16,11 +16,10 @@ a
 select * from t1
 offset null rows;
 a
-1
-1
-2
-3
-2
+select * from t1
+offset null rows
+fetch first 50 PERCENT rows only;
+a
 #
 # OFFSET offset { ROW | ROWS }
 # [FETCH { FIRST | NEXT } [ count|percent PERCENT]  { ROW | ROWS } { ONLY | WITH TIES }]
@@ -1188,12 +1187,8 @@ a
 foo
 select a from t offset '' rows ;
 a
-foo
-bar
 select a from t offset null rows ;
 a
-foo
-bar
 select a from t offset 1.5 rows ;
 a
 bar
@@ -1284,4 +1279,8 @@ EXPLAIN
 -> Offset 1 rows Fetch next 1.2345 percent row(s) only  (cost=0.45 rows=1)
     -> Table scan on t  (cost=0.45 rows=2)
 
+select * from t ORDER BY a  offset (select 2) rows;
+a
+select * from t ORDER BY a  offset 2 rows fetch first (select 3) row only;
+a
 DROP TABLE t;

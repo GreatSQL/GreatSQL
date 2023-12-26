@@ -1,0 +1,44 @@
+set sql_mode="oracle";
+
+--echo #
+--echo # type column
+--echo #
+
+CREATE TABLE t1(id int  not null auto_increment primary key,col1 number,col2 VARCHAR(100),col3 pls_integer)  partition by hash(id) partitions 3;
+
+--echo #
+--echo # type sp
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as 
+ TYPE t_rec1 IS TABLE OF t1%ROWTYPE index by binary_integer; 
+ v_t_rec1 t_rec1;
+BEGIN
+  select id,col1,col2,col3 BULK COLLECT into v_t_rec1 from t1 WHERE ROWNUM <= 5;
+  for i IN v_t_rec1.first .. v_t_rec1.last loop
+   select v_t_rec1(i).id,v_t_rec1(i).col1, v_t_rec1(i).col2, v_t_rec1(i).col3 where v_t_rec1(i).col3 =13 ;
+  end loop;
+END;
+$$
+DELIMITER ;$$
+CALL p1();
+INSERT INTO t1(col1,col2,col3) values(1,'col1',11),(2,'col2',12),(3,'col3',13),(4,'col4',14),(5,'col5',15);
+CALL p1();
+DROP PROCEDURE p1;
+
+--echo #
+--echo # type sp
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as 
+ v_t_rec1 t1.col1%type;
+BEGIN
+  v_t_rec1 := 12;
+ select v_t_rec1;
+END;
+$$
+DELIMITER ;$$
+CALL p1();
+DROP PROCEDURE p1;
+
+drop table t1;

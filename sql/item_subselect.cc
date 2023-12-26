@@ -250,6 +250,14 @@ void Item_subselect::accumulate_properties(Query_block *select) {
                      return false;
                    });
 
+  if (select->connect_by_cond()) {
+    accumulate_condition(select->connect_by_cond());
+
+    if (select->start_with_cond()) {
+      accumulate_condition(select->connect_by_cond());
+    }
+  }
+
   for (ORDER *group = select->group_list.first; group; group = group->next)
     accumulate_condition(*group->item);
 
@@ -581,6 +589,10 @@ bool Item_subselect::fix_fields(THD *thd, Item **ref) {
     */
     if (substitution) {
       int ret = 0;
+      if (!ref) {
+        assert(0);
+        return true;
+      }
       (*ref) = substitution;
       substitution->item_name = item_name;
       if (have_to_be_excluded) {
@@ -1141,7 +1153,7 @@ Item_subselect::trans_res Item_singlerow_subselect::select_transformer(
   if (!unit->is_set_operation() && !select->m_table_list.elements &&
       single_field != nullptr && !single_field->has_aggregation() &&
       !single_field->has_wf() && !select->where_cond() &&
-      !select->having_cond()) {
+      !select->having_cond() && !select->connect_by_cond()) {
     have_to_be_excluded = true;
     if (thd->lex->is_explain()) {
       char warn_buff[MYSQL_ERRMSG_SIZE];
@@ -1175,6 +1187,10 @@ enum Item_result Item_singlerow_subselect::result_type() const {
 bool Item_singlerow_subselect::resolve_type(THD *thd) {
   if ((max_columns = unit_cols()) == 1) {
     subquery->fix_length_and_dec(row = &value);
+    if (value->is_ora_type())
+      set_ora_type();
+    else if (value->is_ora_table())
+      set_ora_table();
   } else {
     row = thd->mem_root->ArrayAlloc<Item_cache *>(max_columns);
     if (row == nullptr) {
@@ -1567,9 +1583,6 @@ bool Item_exists_subselect::choose_semijoin_or_antijoin() {
     }
   }
   can_do_aj = might_do_aj;
-  if (can_do_aj) {
-    current_thd->lex->has_notsupported_func = true;
-  }
 
   return true;
 }
@@ -2789,6 +2802,43 @@ bool Item_singlerow_subselect::collect_scalar_subqueries(uchar *arg) {
   return false;
 }
 
+LEX_STRING Item_singlerow_subselect::get_udt_name() const {
+  if (value == nullptr) return NULL_STR;
+  return value->get_udt_name();
+}
+LEX_STRING Item_singlerow_subselect::get_udt_db_name() const {
+  if (value == nullptr) return NULL_STR;
+  return value->get_udt_db_name();
+}
+
+type_conversion_status Item_singlerow_subselect::save_in_field_inner(
+    Field *field, bool no_conversions) {
+  if (is_ora_type() || is_ora_table()) {
+    assert(unit_cols() == 1);
+    if (!field->get_udt_db_name() || !field->udt_name().str) {
+      my_error(ER_UDT_INCONS_DATATYPES, myf(0));
+      return TYPE_ERR_BAD_VALUE;
+    }
+
+    if (my_strcasecmp(system_charset_info, get_udt_db_name().str,
+                      field->get_udt_db_name()) != 0 ||
+        my_strcasecmp(system_charset_info, get_udt_name().str,
+                      field->udt_name().str) != 0) {
+      my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), field->get_udt_db_name(),
+               field->udt_name().str, get_udt_db_name().str,
+               get_udt_name().str);
+      return TYPE_ERR_BAD_VALUE;
+    }
+
+    String tmp;
+    val_str(&tmp);
+
+    return value->save_in_field(field, no_conversions);
+  }
+
+  return Item::save_in_field_inner(field, no_conversions);
+}
+
 /**
   Find the scalar subquery in Query_block::fields if directly present,
   i.e., not inside an expression.
@@ -2900,6 +2950,11 @@ Item *Item_subselect::replace_item(Item_transformer t, uchar *arg) {
     }
     if (slave->where_cond() != nullptr &&
         replace_and_update(slave->where_cond(), slave->where_cond_ref()))
+      return nullptr;
+
+    if (slave->connect_by_cond() != nullptr &&
+        replace_and_update(slave->connect_by_cond(),
+                           slave->connect_by_cond_ref()))
       return nullptr;
 
     for (ORDER *ord = slave->group_list.first; ord != nullptr;

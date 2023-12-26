@@ -1,0 +1,22 @@
+
+select chr(90);
+
+select chr(90 using utf8);
+
+select chr(90 using utf8mb4);
+
+
+create table test1 (id int ,cc char(10));
+
+insert into test1 values (90 , 'Z' ), (91, 'Z');
+
+select  strcmp(chr(id),cc)  from test1;
+
+drop table test1;
+
+
+--error ER_PARSE_ERROR
+create  table  chr( id int);
+
+create table test2( chr int, cc char(10) );
+drop table test2;

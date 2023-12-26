@@ -14,6 +14,8 @@ mysql.func                                         OK
 mysql.general_log
 note     : The storage engine for the table doesn't support analyze
 mysql.global_grants                                OK
+mysql.greatdb_sequences                            OK
+mysql.greatdb_sequences_persist                    OK
 mysql.gtid_executed                                OK
 mysql.help_category                                OK
 mysql.help_keyword                                 OK
@@ -79,6 +81,12 @@ status   : OK
 mysql.general_log
 note     : The storage engine for the table doesn't support optimize
 mysql.global_grants
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.greatdb_sequences
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.greatdb_sequences_persist
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.gtid_executed
@@ -187,6 +195,8 @@ mysql.func                                         OK
 mysql.general_log
 note     : The storage engine for the table doesn't support analyze
 mysql.global_grants                                OK
+mysql.greatdb_sequences                            OK
+mysql.greatdb_sequences_persist                    OK
 mysql.gtid_executed                                OK
 mysql.help_category                                OK
 mysql.help_keyword                                 OK
@@ -238,6 +248,12 @@ status   : OK
 mysql.general_log
 note     : The storage engine for the table doesn't support optimize
 mysql.global_grants
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.greatdb_sequences
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.greatdb_sequences_persist
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.gtid_executed

@@ -1,0 +1,190 @@
+
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+
+--echo #
+--echo # test of create type
+--echo #
+create or replace type t_air as object(id int,type varchar(20));
+
+--echo #
+--echo # test of show create type
+--echo #
+show create type t_air;
+
+--echo #
+--echo # test of select type
+--echo #
+create or replace type t_air as object(id int,type varchar(20));
+SELECT t_air(1+1,'aa') FROM dual;
+
+--echo #
+--echo # test of select type
+--echo #
+SELECT t_air(1+1,null) FROM dual;
+
+--echo #
+--echo # test of error ER_SP_INVALID_DEFAULT_PARAM
+--echo #
+--error ER_SP_INVALID_DEFAULT_PARAM
+SELECT t_air(1+1) FROM dual;
+
+--echo #
+--echo # test of error ER_SP_WRONG_NO_OF_ARGS
+--echo #
+--error ER_SP_WRONG_NO_OF_ARGS
+SELECT t_air(1+1,1,1) FROM dual;
+
+--echo #
+--echo # test of sp
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+ rec int;
+BEGIN
+  SELECT t_air(1,1) FROM dual;
+end
+$$
+DELIMITER ;$$
+call p1;
+drop procedure p1;
+
+--echo #
+--echo # test of create type in sp
+--echo #
+DELIMITER $$;
+--error ER_SP_NO_RECURSIVE_CREATE
+create or replace procedure p1 as
+ rec int;
+BEGIN
+  create or replace type t_air as object(id int,type varchar(20));
+  SELECT t_air(1,1) FROM dual;
+end
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of drop type
+--echo #
+drop type t_air;
+
+--echo #
+--echo # test of object as ident
+--echo #
+SET SQL_MODE=default;
+create table object(id int,object blob);
+drop table object;
+
+SET SQL_MODE=ORACLE;
+create table object(id int,object blob);
+drop table object;
+
+--echo #
+--echo # test of duplicate of function name
+--echo #
+create or replace type t_air as object(id int, name varchar(20));
+DELIMITER $$;
+--error ER_SP_ALREADY_EXISTS
+create or replace function t_air (v int) return int deterministic as begin return 1; end;$$
+DELIMITER ;$$
+
+
+--echo #
+--echo # test of udt type union non udt type
+--echo #
+--error ER_NOT_SUPPORTED_YET
+SELECT t_air(1,'aa') a FROM dual union select 1;
+
+--echo #
+--echo # test of duplicate name
+--echo #
+drop type t_air;
+DELIMITER $$;
+create or replace function t_air (v int) return int deterministic as begin return 1; end;$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of duplicate name
+--echo #
+--error ER_SP_ALREADY_EXISTS
+create or replace type t_air as object(id int, name varchar(20));
+
+--echo #
+--echo # test of bug7354
+--echo #
+drop function t_air;
+
+create or replace type t_air as object(id int, name varchar(20));
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+--error ER_NOT_SUPPORTED_YET
+create view zgh1 as SELECT t_air_table(t_air(1,'aa'),t_air(2,'bb')) from dual;
+create view zgh1 as SELECT t_air(1,'aa') FROM dual;
+select * from zgh1;
+
+--echo #
+--echo # test of bug8849
+--echo #
+--error ER_NOT_SUPPORTED_YET
+select t_air_table(name1) from zgh1 connect by level<2;
+
+CREATE OR REPLACE TYPE int_table AS table OF int;
+--error ER_NOT_SUPPORTED_YET
+select int_table(1,2) from zgh1 connect by level<2;
+drop type t_air_table;
+drop type int_table;
+
+--echo #
+--echo # test of bug8861
+--echo #
+--error ER_UDT_INCONS_DATATYPES
+SELECT t_air(1,2) aa from (select t_air(1,2) aa ) where aa=aa=aa; 
+--error ER_UDT_INCONS_DATATYPES
+SELECT t_air(1,2) aa from (select t_air(1,2) aa ) where 1=aa;
+--error ER_UDT_INCONS_DATATYPES
+select aa=aa=aa from (select t_air(1,2) aa );
+--error ER_UDT_INCONS_DATATYPES
+select * from ( select t_air(1,3) a,t_air(2,1) b, 1 c from (select t_air(3,1))) where a in( b, c);
+select * from ( select t_air(1,3) a,t_air(2,1) b, t_air(1,3) c from (select t_air(3,1))) where a in( b, c);
+
+--echo #
+--echo # test of information_schema.tables_using_type
+--echo #
+create or replace type test_type as object(id int,type varchar(20));
+create or replace type t_type as object(id int,type varchar(20));
+create table tt_air(id int,name1 t_air,name2 t_air);
+create table tt_air1(id int,name1 t_air,name2 t_type);
+create table t_of of test_type;
+create database db1;
+use db1;
+create or replace type t_air as object(id int,type varchar(20));
+create or replace type test_type as object(id int,type varchar(20));
+create or replace type t_type as object(id int,type varchar(20));
+create table tt_air(id int,name1 t_air,name2 t_air);
+create table tt_air1(id int,name1 t_air,name2 t_type);
+create table t_of of test_type;
+create view zgh1 as SELECT * FROM tt_air1;
+
+select distinct tbl.table_schema,tbl.table_name,tbl.create_options from information_schema.tables tbl where (create_options like '%udt_name=%') union
+select distinct col.table_schema,col.table_name,extra from information_schema.columns col where extra like '%udt_name=%' order by TABLE_SCHEMA,TABLE_NAME,CREATE_OPTIONS;
+drop table tt_air;
+drop table tt_air1;
+drop table t_of;
+drop type test_type;
+drop type t_type;
+drop type t_air;
+drop view zgh1;
+
+use test;
+drop database db1;
+drop table tt_air;
+drop table tt_air1;
+drop table t_of;
+drop type test_type;
+drop type t_type;
+drop type t_air;
+drop view zgh1;
+
+
+
+
+

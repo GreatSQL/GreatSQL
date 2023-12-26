@@ -174,6 +174,63 @@ FilterCost EstimateFilterCost(THD *thd, double num_rows, Item *condition,
   return cost;
 }
 
+void EstimateConnectByCost(THD *thd, AccessPath *path) {
+  auto param = &path->connect_by_scan();
+  AccessPath *table_path = param->table_path;
+
+  path->set_num_output_rows(param->src_path->num_output_rows());
+
+  // Try to get usable estimates. Ignored by InnoDB, but used by
+  // TempTable.
+  if (table_path->type == AccessPath::TABLE_SCAN) {
+    path->cost = 0.0;
+    path->init_cost = 0.0;
+    path->init_once_cost = 0.0;
+    table_path->set_num_output_rows(path->num_output_rows());
+    table_path->init_cost = param->src_path->init_cost;
+    table_path->init_once_cost = param->src_path->cost;
+
+    if (Overlaps(test_flags, TEST_NO_TEMP_TABLES)) {
+      // Unit tests don't load any temporary table engines,
+      // so just make up a number.
+      table_path->cost = param->src_path->cost + path->num_output_rows() * 0.1;
+    } else {
+      TABLE dummy_table;
+      TABLE *temp_table = table_path->table_scan().table;
+      if (temp_table == nullptr) {
+        // We need a dummy TABLE object to get estimates.
+        handlerton *handlerton = ha_default_temp_handlerton(thd);
+        dummy_table.file =
+            handlerton->create(handlerton, /*share=*/nullptr,
+                               /*partitioned=*/false, thd->mem_root);
+        dummy_table.file->set_ha_table(&dummy_table);
+        dummy_table.init_cost_model(thd->cost_model());
+        temp_table = &dummy_table;
+      }
+
+      // Try to get usable estimates. Ignored by InnoDB, but used by
+      // TempTable.
+      temp_table->file->stats.records =
+          min(path->num_output_rows(), LLONG_MAX_DOUBLE);
+      table_path->cost = param->src_path->cost +
+                         temp_table->file->table_scan_cost().total_cost();
+    }
+  } else {
+    // Use the costs of the subquery.
+    path->init_cost = param->src_path->init_cost;
+    path->init_once_cost = param->src_path->init_cost;
+    path->cost = param->src_path->cost;
+  }
+
+  path->init_cost += std::max(table_path->init_cost, 0.0) +
+                     kMaterializeOneRowCost * path->num_output_rows();
+
+  path->init_once_cost += std::max(table_path->init_once_cost, 0.0);
+
+  path->cost += std::max(table_path->cost, 0.0) +
+                kMaterializeOneRowCost * path->num_output_rows();
+}
+
 // Very rudimentary (assuming no deduplication; it's better to overestimate
 // than to understimate), so that we get something that isn't “unknown”.
 void EstimateMaterializeCost(THD *thd, AccessPath *path) {

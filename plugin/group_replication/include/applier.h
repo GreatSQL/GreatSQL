@@ -52,6 +52,7 @@
 #define TRANSACTION_PREPARED_PACKET_TYPE 6
 #define LEAVING_MEMBERS_PACKET_TYPE 7
 #define CERTIFICATION_PACKET_TYPE 8
+#define SYNC_PREPARED_COMPLETE_TYPE 101
 
 // Define the applier return error codes
 #define APPLIER_GTID_CHECK_TIMEOUT_ERROR -1
@@ -136,6 +137,17 @@ class View_change_packet : public Packet {
 
   std::string view_id;
   std::vector<std::string> group_executed_set;
+};
+
+/**
+ @class Prepared_finished_packet
+  A packet to send a finished processing flag related info to the prepared
+  packets
+*/
+class Prepared_finished_packet : public Packet {
+ public:
+  Prepared_finished_packet() : Packet(SYNC_PREPARED_COMPLETE_TYPE) {}
+  ~Prepared_finished_packet() override {}
 };
 
 /**
@@ -293,6 +305,7 @@ class Applier_module_interface {
   virtual Member_applier_state get_applier_status() = 0;
   virtual void add_suspension_packet() = 0;
   virtual void add_view_change_packet(View_change_packet *packet) = 0;
+  virtual void add_prepared_finished_packet() = 0;
   virtual void add_certification_change_packet(
       Certification_packet *packet) = 0;
   virtual void add_single_primary_action_packet(
@@ -549,6 +562,10 @@ class Applier_module : public Applier_module_interface {
 
   void add_certification_change_packet(Certification_packet *packet) override {
     incoming->push(packet);
+  }
+
+  void add_prepared_finished_packet() override {
+    incoming->push(new Prepared_finished_packet());
   }
 
   /**
@@ -855,6 +872,13 @@ class Applier_module : public Applier_module_interface {
   int apply_transaction_prepared_action_packet(
       Transaction_prepared_action_packet *packet, int *delayed);
 
+  /* Check if remote prepare packets should be delayed */
+  bool check_remote_prepare_before_view_change(
+      Transaction_prepared_action_packet *packet);
+
+  /* Check if it needs to delay a packet after delayed_view_change */
+  bool check_and_delay_packet_after_delayed_view_change(Packet *packet);
+
   /**
     Apply a synchronization before execution action packet received
     by the applier.
@@ -974,6 +998,9 @@ class Applier_module : public Applier_module_interface {
   /* The incoming event queue */
   Synchronized_queue<Packet *> *incoming;
 
+  /* Delayed packets */
+  std::deque<Packet *> *delayed_packets_queue;
+
   /* The applier pipeline for event execution */
   Event_handler *pipeline;
 
@@ -986,8 +1013,10 @@ class Applier_module : public Applier_module_interface {
   Pipeline_stats_member_collector pipeline_stats_member_collector;
   Flow_control_module flow_control_module;
   Plugin_stage_monitor_handler stage_handler;
+  bool has_delayed_view_change_event;
 #ifndef NDEBUG
   bool wait_online;
+  int conditional_trap;
 #endif
 };
 

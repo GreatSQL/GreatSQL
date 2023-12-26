@@ -2832,7 +2832,7 @@ tables=
       elem25=def=tablespace_id BIGINT UNSIGNED
             lbl=FIELD_TABLESPACE_ID
             pos=13
-      elem26=def=type ENUM('BASE TABLE', 'VIEW', 'SYSTEM VIEW')NOT NULL
+      elem26=def=type ENUM('BASE TABLE', 'VIEW', 'SYSTEM VIEW', 'MATERIALIZED VIEW')NOT NULL
             lbl=FIELD_TYPE
             pos=3
       elem27=def=view_algorithm ENUM('UNDEFINED', 'TEMPTABLE', 'MERGE')
@@ -3214,7 +3214,7 @@ triggers=
       elem7=def=definer VARCHAR(288) NOT NULL
             lbl=FIELD_DEFINER
             pos=12
-      elem8=def=event_type ENUM('INSERT', 'UPDATE', 'DELETE') NOT NULL
+      elem8=def=event_type ENUM('INSERT', 'UPDATE', 'DELETE', 'INSERT OR UPDATE', 'INSERT OR DELETE', 'UPDATE OR DELETE', 'INSERT OR UPDATE OR DELETE') NOT NULL
             lbl=FIELD_EVENT_TYPE
             pos=3
       elem9=def=id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT

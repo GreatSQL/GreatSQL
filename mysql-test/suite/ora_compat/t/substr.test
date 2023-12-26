@@ -1,0 +1,385 @@
+--disable_warnings
+#----------------------------------MySQL Mode----------------------------------
+SELECT SUBSTR('abc',2,1),SUBSTR('abc',1,1), SUBSTR('abc',0,1) FROM dual;
+SELECT SUBSTR('abc',2),SUBSTR('abc',1), SUBSTR('abc',0) FROM dual;
+SELECT SUBSTR(null,2,1),SUBSTR(null,1), SUBSTR(null,0) FROM dual;
+SELECT SUBSTR('abc',-2),SUBSTR('abc',-1), SUBSTR('abc',-0) FROM dual;
+SELECT SUBSTR('abc',-2,1),SUBSTR('abc',-1,1), SUBSTR('abc',-0,1) FROM dual;
+SELECT SUBSTR('abc',null) FROM dual;
+SELECT SUBSTR('abc',2,null),SUBSTR('abc',1,null), SUBSTR('abc',0,null) FROM dual;
+SELECT SUBSTR('abc',2,0),SUBSTR('abc',1,0), SUBSTR('abc',0,0) FROM dual;
+SELECT SUBSTR('abc',2,-1),SUBSTR('abc',1,-1), SUBSTR('abc',0,-1) FROM dual;
+
+select SUBSTR('\0ABC', 3, 2),SUBSTR('\'ABC', 3, 2),SUBSTR('\"ABC', 3, 2),SUBSTR('\\ABC', 3, 2) from dual;
+select SUBSTR('\bABC', 3, 2),SUBSTR('\BABC', 3, 2) from dual;
+select SUBSTR('\nABC', 3, 2),SUBSTR('\NABC', 3, 2) from dual;
+select SUBSTR('\rABC', 3, 2),SUBSTR('\RABC', 3, 2) from dual;
+select SUBSTR('\tABC', 3, 2),SUBSTR('\TABC', 3, 2) from dual;
+select SUBSTR('\zABC', 3, 2),SUBSTR('\ZABC', 3, 2) from dual;
+
+SELECT SUBSTR('中国人',2,1),SUBSTR('中国人',1,1), SUBSTR('中国人',0,1) FROM dual;
+SELECT SUBSTR('中国人',2),SUBSTR('中国人',1), SUBSTR('中国人',0) FROM dual;
+SELECT SUBSTR('中国人',-2),SUBSTR('中国人',-1), SUBSTR('中国人',-0) FROM dual;
+SELECT SUBSTR('中国人',-2,1),SUBSTR('中国人',-1,1), SUBSTR('中国人',-0,1) FROM dual;
+SELECT SUBSTR('中国人',null) FROM dual;
+SELECT SUBSTR('中国人',2,null),SUBSTR('中国人',1,null), SUBSTR('中国人',0,null) FROM dual;
+SELECT SUBSTR('中国人',2,0),SUBSTR('中国人',1,0), SUBSTR('中国人',0,0) FROM dual;
+SELECT SUBSTR('中国人',2,-1),SUBSTR('中国人',1,-1), SUBSTR('中国人',0,-1) FROM dual;
+
+SELECT SUBSTR('中A国B人C',2,1),SUBSTR('中A国B人C',1,1), SUBSTR('中A国B人C',0,1) FROM dual;
+SELECT SUBSTR('中A国B人C',2),SUBSTR('中A国B人C',1), SUBSTR('中A国B人C',0) FROM dual;
+SELECT SUBSTR('中A国B人C',-2),SUBSTR('中A国B人C',-1), SUBSTR('中A国B人C',-0) FROM dual;
+SELECT SUBSTR('中A国B人C',-2,1),SUBSTR('中A国B人C',-1,1), SUBSTR('中A国B人C',-0,1) FROM dual;
+SELECT SUBSTR('中A国B人C',null) FROM dual;
+SELECT SUBSTR('中A国B人C',2,null),SUBSTR('中A国B人C',1,null), SUBSTR('中A国B人C',0,null) FROM dual;
+SELECT SUBSTR('中A国B人C',2,0),SUBSTR('中A国B人C',1,0), SUBSTR('中A国B人C',0,0) FROM dual;
+SELECT SUBSTR('中A国B人C',2,-1),SUBSTR('中A国B人C',1,-1), SUBSTR('中A国B人C',0,-1) FROM dual;
+
+SELECT SUBSTR('A中B国C人',2,1),SUBSTR('A中B国C人',1,1), SUBSTR('A中B国C人',0,1) FROM dual;
+SELECT SUBSTR('A中B国C人',2),SUBSTR('A中B国C人',1), SUBSTR('A中B国C人',0) FROM dual;
+SELECT SUBSTR('A中B国C人',-2),SUBSTR('A中B国C人',-1), SUBSTR('A中B国C人',-0) FROM dual;
+SELECT SUBSTR('A中B国C人',-2,1),SUBSTR('A中B国C人',-1,1), SUBSTR('A中B国C人',-0,1) FROM dual;
+SELECT SUBSTR('A中B国C人',null) FROM dual;
+SELECT SUBSTR('A中B国C人',2,null),SUBSTR('A中B国C人',1,null), SUBSTR('A中B国C人',0,null) FROM dual;
+SELECT SUBSTR('A中B国C人',2,0),SUBSTR('A中B国C人',1,0), SUBSTR('A中B国C人',0,0) FROM dual;
+SELECT SUBSTR('A中B国C人',2,-1),SUBSTR('A中B国C人',1,-1), SUBSTR('A中B国C人',0,-1) FROM dual;
+
+SELECT SUBSTR('A中B国C人',1000,-1),SUBSTR('A中B国C人',-100,10000) FROM dual;
+
+DROP TABLE IF EXISTS `test_substr`;
+
+CREATE TABLE `test_substr` (`c1` VARCHAR(10), `start_pos` INTEGER, `str_length` INTEGER);
+INSERT INTO test_substr VALUES ('abc', 1, 1);
+INSERT INTO test_substr VALUES ('abc', 0, 1);
+INSERT INTO test_substr VALUES (null, 1, 1);
+INSERT INTO test_substr VALUES (null, 0, 1);
+INSERT INTO test_substr VALUES ('abc', 1, 0);
+INSERT INTO test_substr VALUES ('abc', 0, 0);
+INSERT INTO test_substr VALUES (null, 1, 0);
+INSERT INTO test_substr VALUES (null, 0, 0);
+INSERT INTO test_substr VALUES ('abc', 1, -1);
+INSERT INTO test_substr VALUES ('abc', 0, -1);
+INSERT INTO test_substr VALUES (null, 1, -1);
+INSERT INTO test_substr VALUES (null, 0, -1);
+
+INSERT INTO test_substr VALUES ('中国人', 1, 1);
+INSERT INTO test_substr VALUES ('中国人', 0, 1);
+INSERT INTO test_substr VALUES ('中国人', 1, 0);
+INSERT INTO test_substr VALUES ('中国人', 0, 0);
+INSERT INTO test_substr VALUES ('中国人', 1, -1);
+INSERT INTO test_substr VALUES ('中国人', 0, -1);
+
+INSERT INTO test_substr VALUES ('中A国B人C', 1, 1);
+INSERT INTO test_substr VALUES ('中A国B人C', 0, 1);
+INSERT INTO test_substr VALUES ('中A国B人C', 1, 0);
+INSERT INTO test_substr VALUES ('中A国B人C', 0, 0);
+INSERT INTO test_substr VALUES ('中A国B人C', 1, -1);
+INSERT INTO test_substr VALUES ('中A国B人C', 0, -1);
+
+INSERT INTO test_substr VALUES ('A中B国C人', 1, 1);
+INSERT INTO test_substr VALUES ('A中B国C人', 0, 1);
+INSERT INTO test_substr VALUES ('A中B国C人', 1, 0);
+INSERT INTO test_substr VALUES ('A中B国C人', 0, 0);
+INSERT INTO test_substr VALUES ('A中B国C人', 1, -1);
+INSERT INTO test_substr VALUES ('A中B国C人', 0, -1);
+
+
+SELECT SUBSTR(c1,start_pos,str_length) FROM test_substr;
+
+drop table if exists test_substr;
+
+select substr(to_char('GreatDB数据库'), 2, 2) from dual;
+select substr(to_char('GreatDB数据库'), 2, 2.5) from dual;
+select substr(to_char('GreatDB数据库'), 2, 3) from dual;
+select substr(to_char('GreatDB数据库'), 2, 6) from dual;
+select substr(to_char('GreatDB数据库'), 2.1, 6) from dual;
+select substr(to_char('GreatDB数据库'), 2.5, 6) from dual;
+
+set @a = substr(to_char('GreatSQL Database'), 2, 5);
+select substr(to_char('GreatSQL Database'), 2, 5) from dual;
+select substr(to_char('GreatSQL Database'), 2, 5)=@a from dual;
+select substr(to_char('GreatSQL Database'), 2.1, 5)=@a from dual;
+select substr(to_char('GreatSQL Database'), 2.5, 5)=@a from dual;
+select substr(to_char('GreatSQL Database'), 2.1, 5.1)=@a from dual;
+select substr(to_char('GreatSQL Database'), 2.1, 5.5)=@a from dual;
+select substr(to_char('GreatSQL Database'), 2.5, 5.1)=@a from dual;
+select substr(to_char('GreatSQL Database'), 2.5, 5.5)=@a from dual;
+
+create table t1 (i int, n number(10,5), d binary_double);
+insert into t1 values (2.4, 2.4, 3.4);
+insert into t1 values (-2.4, -2.4, -3.4);
+insert into t1 values (4.5, 4.5, 6.5);
+insert into t1 values (-4.5, -4.5, -6.5);
+select i,n,d,
+	substr('GreatSQL Database', i, 5),
+	substr('GreatSQL Database', n, 5),
+	substr('GreatSQL Database', d, 5) from t1;
+drop table t1;
+
+select substr('GreatSQL Database', 1.999999999999999,5) from dual;
+
+select 
+substr(to_char('GreatDB数据库'), '2', '2') a,
+substr(to_char('GreatDB数据库'), '2', '2.5') b,
+substr(to_char('GreatDB数据库'), '2', '3') c,
+substr(to_char('GreatDB数据库'), '2', '6') d,
+substr(to_char('GreatDB数据库'), '2.1', '6') e,
+substr(to_char('GreatDB数据库'), '2.5', '6') f
+from dual;
+
+--disable_warnings
+select
+substr(to_char('GreatDBABC'), 'a', '2') a,
+substr(to_char('GreatDBABC'), '2', 'a') b,
+substr(to_char('GreatDBABC'), '2a', '2') c,
+substr(to_char('GreatDBABC'), '2', '2a') d,
+substr(to_char('GreatDBABC'), '2.1a', '2') e,
+substr(to_char('GreatDBABC'), '2', '2.1a') f,
+substr(to_char('GreatDBABC'), 'a2.1', '2') g,
+substr(to_char('GreatDBABC'), '2', 'a2.1') h
+from dual;
+
+#----------------------------------Oracle Mode----------------------------------
+set sql_mode='oracle';
+
+SELECT SUBSTR('abc',2,1),SUBSTR('abc',1,1), SUBSTR('abc',0,1) FROM dual;
+SELECT SUBSTR('abc',2),SUBSTR('abc',1), SUBSTR('abc',0) FROM dual;
+SELECT SUBSTR(null,2,1),SUBSTR(null,1), SUBSTR(null,0) FROM dual;
+SELECT SUBSTR('abc',-2),SUBSTR('abc',-1), SUBSTR('abc',-0) FROM dual;
+SELECT SUBSTR('abc',-2,1),SUBSTR('abc',-1,1), SUBSTR('abc',-0,1) FROM dual;
+SELECT SUBSTR('abc',null) FROM dual;
+SELECT SUBSTR('abc',2,null),SUBSTR('abc',1,null), SUBSTR('abc',0,null) FROM dual;
+SELECT SUBSTR('abc',2,0),SUBSTR('abc',1,0), SUBSTR('abc',0,0) FROM dual;
+SELECT SUBSTR('abc',2,-1),SUBSTR('abc',1,-1), SUBSTR('abc',0,-1) FROM dual;
+
+select SUBSTR('\0ABC', 3, 2),SUBSTR('\'ABC', 3, 2),SUBSTR('\"ABC', 3, 2),SUBSTR('\\ABC', 3, 2) from dual;
+select SUBSTR('\bABC', 3, 2),SUBSTR('\BABC', 3, 2) from dual;
+select SUBSTR('\nABC', 3, 2),SUBSTR('\NABC', 3, 2) from dual;
+select SUBSTR('\rABC', 3, 2),SUBSTR('\RABC', 3, 2) from dual;
+select SUBSTR('\tABC', 3, 2),SUBSTR('\TABC', 3, 2) from dual;
+select SUBSTR('\zABC', 3, 2),SUBSTR('\ZABC', 3, 2) from dual;
+
+SELECT SUBSTR('中国人',2,1),SUBSTR('中国人',1,1), SUBSTR('中国人',0,1) FROM dual;
+SELECT SUBSTR('中国人',2),SUBSTR('中国人',1), SUBSTR('中国人',0) FROM dual;
+SELECT SUBSTR('中国人',-2),SUBSTR('中国人',-1), SUBSTR('中国人',-0) FROM dual;
+SELECT SUBSTR('中国人',-2,1),SUBSTR('中国人',-1,1), SUBSTR('中国人',-0,1) FROM dual;
+SELECT SUBSTR('中国人',null) FROM dual;
+SELECT SUBSTR('中国人',2,null),SUBSTR('中国人',1,null), SUBSTR('中国人',0,null) FROM dual;
+SELECT SUBSTR('中国人',2,0),SUBSTR('中国人',1,0), SUBSTR('中国人',0,0) FROM dual;
+SELECT SUBSTR('中国人',2,-1),SUBSTR('中国人',1,-1), SUBSTR('中国人',0,-1) FROM dual;
+
+SELECT SUBSTR('中A国B人C',2,1),SUBSTR('中A国B人C',1,1), SUBSTR('中A国B人C',0,1) FROM dual;
+SELECT SUBSTR('中A国B人C',2),SUBSTR('中A国B人C',1), SUBSTR('中A国B人C',0) FROM dual;
+SELECT SUBSTR('中A国B人C',-2),SUBSTR('中A国B人C',-1), SUBSTR('中A国B人C',-0) FROM dual;
+SELECT SUBSTR('中A国B人C',-2,1),SUBSTR('中A国B人C',-1,1), SUBSTR('中A国B人C',-0,1) FROM dual;
+SELECT SUBSTR('中A国B人C',null) FROM dual;
+SELECT SUBSTR('中A国B人C',2,null),SUBSTR('中A国B人C',1,null), SUBSTR('中A国B人C',0,null) FROM dual;
+SELECT SUBSTR('中A国B人C',2,0),SUBSTR('中A国B人C',1,0), SUBSTR('中A国B人C',0,0) FROM dual;
+SELECT SUBSTR('中A国B人C',2,-1),SUBSTR('中A国B人C',1,-1), SUBSTR('中A国B人C',0,-1) FROM dual;
+
+SELECT SUBSTR('A中B国C人',2,1),SUBSTR('A中B国C人',1,1), SUBSTR('A中B国C人',0,1) FROM dual;
+SELECT SUBSTR('A中B国C人',2),SUBSTR('A中B国C人',1), SUBSTR('A中B国C人',0) FROM dual;
+SELECT SUBSTR('A中B国C人',-2),SUBSTR('A中B国C人',-1), SUBSTR('A中B国C人',-0) FROM dual;
+SELECT SUBSTR('A中B国C人',-2,1),SUBSTR('A中B国C人',-1,1), SUBSTR('A中B国C人',-0,1) FROM dual;
+SELECT SUBSTR('A中B国C人',null) FROM dual;
+SELECT SUBSTR('A中B国C人',2,null),SUBSTR('A中B国C人',1,null), SUBSTR('A中B国C人',0,null) FROM dual;
+SELECT SUBSTR('A中B国C人',2,0),SUBSTR('A中B国C人',1,0), SUBSTR('A中B国C人',0,0) FROM dual;
+SELECT SUBSTR('A中B国C人',2,-1),SUBSTR('A中B国C人',1,-1), SUBSTR('A中B国C人',0,-1) FROM dual;
+
+SELECT SUBSTR('A中B国C人',1000,-1),SUBSTR('A中B国C人',-100,10000) FROM dual;
+
+
+DROP TABLE IF EXISTS `test_substr`;
+
+CREATE TABLE `test_substr` (`c1` VARCHAR(10), `start_pos` INTEGER, `str_length` INTEGER);
+INSERT INTO test_substr VALUES ('abc', 1, 1);
+INSERT INTO test_substr VALUES ('abc', 0, 1);
+INSERT INTO test_substr VALUES (null, 1, 1);
+INSERT INTO test_substr VALUES (null, 0, 1);
+INSERT INTO test_substr VALUES ('abc', 1, 0);
+INSERT INTO test_substr VALUES ('abc', 0, 0);
+INSERT INTO test_substr VALUES (null, 1, 0);
+INSERT INTO test_substr VALUES (null, 0, 0);
+INSERT INTO test_substr VALUES ('abc', 1, -1);
+INSERT INTO test_substr VALUES ('abc', 0, -1);
+INSERT INTO test_substr VALUES (null, 1, -1);
+INSERT INTO test_substr VALUES (null, 0, -1);
+
+INSERT INTO test_substr VALUES ('中国人', 1, 1);
+INSERT INTO test_substr VALUES ('中国人', 0, 1);
+INSERT INTO test_substr VALUES ('中国人', 1, 0);
+INSERT INTO test_substr VALUES ('中国人', 0, 0);
+INSERT INTO test_substr VALUES ('中国人', 1, -1);
+INSERT INTO test_substr VALUES ('中国人', 0, -1);
+
+INSERT INTO test_substr VALUES ('中A国B人C', 1, 1);
+INSERT INTO test_substr VALUES ('中A国B人C', 0, 1);
+INSERT INTO test_substr VALUES ('中A国B人C', 1, 0);
+INSERT INTO test_substr VALUES ('中A国B人C', 0, 0);
+INSERT INTO test_substr VALUES ('中A国B人C', 1, -1);
+INSERT INTO test_substr VALUES ('中A国B人C', 0, -1);
+
+INSERT INTO test_substr VALUES ('A中B国C人', 1, 1);
+INSERT INTO test_substr VALUES ('A中B国C人', 0, 1);
+INSERT INTO test_substr VALUES ('A中B国C人', 1, 0);
+INSERT INTO test_substr VALUES ('A中B国C人', 0, 0);
+INSERT INTO test_substr VALUES ('A中B国C人', 1, -1);
+INSERT INTO test_substr VALUES ('A中B国C人', 0, -1);
+
+
+SELECT SUBSTR(c1,start_pos,str_length) FROM test_substr;
+
+drop table if exists test_substr;
+
+#substr test subquery
+create table tab001(id number,name varchar(20));
+insert into tab001 values(1234567,'1234567890');
+set sql_mode=oracle;
+
+#1234567
+select substr(name,0,7) from tab001;
+#1234567
+select * from (select substr(name, 0, 7) from tab001);
+#1234567
+select * from (select substr(name, 0, 7) from tab001 limit 1);
+#1234567
+select * from (select substr(name, 0, 7) from tab001 limit 2);
+
+#1234567
+select substr('1234567890', 0, 7);
+#1234567
+select substr('1234567890', 0, 7) from dual;
+#1234567
+select * from (select substr('1234567890', 0, 7));
+#1234567
+select * from (select substr('1234567890', 0, 7) from dual);
+#1234567
+select * from (select substr('1234567890', 0, 7) limit 1);
+#1234567
+select * from (select substr('1234567890', 0, 7) from dual limit 1);
+#1234567
+select * from (select substr('1234567890', 0, 7) limit 2);
+#1234567
+select * from (select substr('1234567890', 0, 7) from dual limit 2);
+
+#1234567890
+select substr(name,0) from tab001;
+#1234567890
+select * from (select substr(name, 0) from tab001);
+#1234567890
+select * from (select substr(name, 0) from tab001 limit 1);
+#1234567890
+select * from (select substr(name, 0) from tab001 limit 2);
+
+#1234567890
+select substr('1234567890', 0);
+#1234567890
+select substr('1234567890', 0) from dual;
+#1234567890
+select * from (select substr('1234567890', 0));
+#1234567890
+select * from (select substr('1234567890', 0) from dual);
+#1234567890
+select * from (select substr('1234567890', 0) limit 1);
+#1234567890
+select * from (select substr('1234567890', 0) from dual limit 1);
+#1234567890
+select * from (select substr('1234567890', 0) limit 2);
+#1234567890
+select * from (select substr('1234567890', 0) from dual limit 2);
+
+select substr('1234567890', 1, 0);
+select * from (select substr('1234567890', 1, 0));
+
+select substr(to_char('GreatDB数据库'), 2, 2) from dual;
+select substr(to_char('GreatDB数据库'), 2, 2.5) from dual;
+select substr(to_char('GreatDB数据库'), 2, 3) from dual;
+select substr(to_char('GreatDB数据库'), 2, 6) from dual;
+select substr(to_char('GreatDB数据库'), 2.1, 6) from dual;
+select substr(to_char('GreatDB数据库'), 2.5, 6) from dual;
+
+set @a = substr(to_char('GreatSQL Database'), 2, 5);
+select substr(to_char('GreatSQL Database'), 2, 5) from dual;
+select substr(to_char('GreatSQL Database'), 2, 5)=@a from dual;
+select substr(to_char('GreatSQL Database'), 2.1, 5)=@a from dual;
+select substr(to_char('GreatSQL Database'), 2.5, 5)=@a from dual;
+select substr(to_char('GreatSQL Database'), 2.1, 5.1)=@a from dual;
+select substr(to_char('GreatSQL Database'), 2.1, 5.5)=@a from dual;
+select substr(to_char('GreatSQL Database'), 2.5, 5.1)=@a from dual;
+select substr(to_char('GreatSQL Database'), 2.5, 5.5)=@a from dual;
+
+create table t1 (i int, n number(10,5), d binary_double);
+insert into t1 values (2.4, 2.4, 3.4);
+insert into t1 values (-2.4, -2.4, -3.4);
+insert into t1 values (4.5, 4.5, 6.5);
+insert into t1 values (-4.5, -4.5, -6.5);
+select i,n,d,
+	substr('GreatSQL Database', i, 5),
+	substr('GreatSQL Database', n, 5),
+	substr('GreatSQL Database', d, 5) from t1;
+drop table t1;
+
+select substr('GreatSQL Database', 1.999999999999999,5) from dual;
+
+select 
+substr(to_char('GreatDB数据库'), '2', '2') a,
+substr(to_char('GreatDB数据库'), '2', '2.5') b,
+substr(to_char('GreatDB数据库'), '2', '3') c,
+substr(to_char('GreatDB数据库'), '2', '6') d,
+substr(to_char('GreatDB数据库'), '2.1', '6') e,
+substr(to_char('GreatDB数据库'), '2.5', '6') f
+from dual;
+
+--disable_warnings
+select
+substr(to_char('GreatDBABC'), 'a', '2') a,
+substr(to_char('GreatDBABC'), '2', 'a') b,
+substr(to_char('GreatDBABC'), '2a', '2') c,
+substr(to_char('GreatDBABC'), '2', '2a') d,
+substr(to_char('GreatDBABC'), '2.1a', '2') e,
+substr(to_char('GreatDBABC'), '2', '2.1a') f,
+substr(to_char('GreatDBABC'), 'a2.1', '2') g,
+substr(to_char('GreatDBABC'), '2', 'a2.1') h
+from dual;
+
+
+delimiter //;
+
+create or replace function f1() return double as begin return 2.4; end;//
+select f1(), substr('abcd', f1(), 2) from dual;//
+
+create or replace function f1() return double as begin return 2.5; end;//
+select f1(), substr('abcd', f1(), 2) from dual;//
+
+create or replace function f1() return double as begin return 2.51; end;//
+select f1(), substr('abcd', f1(), 2) from dual;//
+
+create or replace function f1() return double as begin return 2.6; end;//
+select f1(), substr('abcd', f1(), 2) from dual;//
+
+create or replace function f1() return double as begin return 2.50001; end;//
+select f1(), substr('abcd', f1(), 2) from dual;//
+
+create or replace function f1() return double as begin return 2.4; end;//
+select f1(), substr('abcd', 2, f1()) from dual;//
+
+create or replace function f1() return double as begin return 2.5; end;//
+select f1(), substr('abcd', 2, f1()) from dual;//
+
+create or replace function f1() return double as begin return 2.51; end;//
+select f1(), substr('abcd', 2, f1()) from dual;//
+
+create or replace function f1() return double as begin return 2.6; end;//
+select f1(), substr('abcd', 2, f1()) from dual;//
+
+create or replace function f1() return double as begin return 2.50001; end;//
+select f1(), substr('abcd', 2, f1()) from dual;//
+
+drop function f1;//
+
+delimiter ;//
+
+--enable_warnings
+
+drop table tab001;
+

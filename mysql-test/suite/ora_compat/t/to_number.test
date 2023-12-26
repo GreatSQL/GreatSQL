@@ -728,3 +728,81 @@ SELECT to_number(substr(t1.c1, 1, 2)),t1.c1 from t1;
 SELECT C1 from t1;
 
 DROP TABLE IF EXISTS t1;
+
+
+#  bugfix 
+# After executing the to_number function, the variables in the stored procedure will be modified
+
+set sql_mode=oracle;
+
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE TEST_BUG_01() AS
+szBeginDay varchar2(8);
+BEGIN
+szBeginDay := '20220901';
+SELECT 'szBeginDay=' || szBeginDay;
+SELECT 'to_number(substr(szBeginDay, 1, 6))=' || to_number(substr(szBeginDay, 1, 6));
+SELECT 'szBeginDay=' || szBeginDay;
+END;
+$$
+DELIMITER ;$$
+
+CALL TEST_BUG_01();
+DROP PROCEDURE IF EXISTS TEST_BUG_01;
+
+#bugfix:16781
+delimiter //;
+
+set sql_mode=default;
+create or replace function my_getage(birthst varchar(10)) returns integer
+begin
+declare
+  fromyear integer;
+  set fromyear = to_number(substr(birthst,2,4));
+  return(fromyear);
+end;
+//
+--error 1366
+select my_getage('abc');//
+select my_getage('1234567');//
+--error 1366
+select my_getage('');//
+--error 1690
+select my_getage('123abc');//
+select my_getage(NULL);//
+
+--error 1690
+select to_number(substr('abc',2,4));//
+select to_number(substr('1234567',2,4));//
+select to_number(substr('',2,4));//
+--error 1690
+select to_number(substr('123abc',2,4));//
+select to_number(substr(NULL,2,4));//
+
+set sql_mode=oracle;
+create or replace function my_getage(birthst varchar(10)) return integer is
+  fromyear integer;
+begin
+  fromyear := to_number(substr(birthst,2,4));
+  return(fromyear);
+end my_getage;
+//
+--error 1366
+select my_getage('abc');//
+select my_getage('1234567');//
+select my_getage('');//
+--error 1690
+select my_getage('123abc');//
+select my_getage(NULL);//
+
+--error 1690
+select to_number(substr('abc',2,4));//
+select to_number(substr('1234567',2,4));//
+select to_number(substr('',2,4));//
+--error 1690
+select to_number(substr('123abc',2,4));//
+select to_number(substr(NULL,2,4));//
+
+drop function my_getage;//
+delimiter ;//
+

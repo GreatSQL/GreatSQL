@@ -1,0 +1,31 @@
+connect (conn1_without_db,127.0.0.1,root,,*NO-ONE*,$SERVER_MYPORT_1,);
+connect (conn1_with_db,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+
+--echo [### Create sequence without database]
+--connection conn1_without_db
+--error ER_NO_DB_ERROR
+create sequence seq_without_db;
+
+
+--echo [### Use sequqnce without database]
+--connection conn1_without_db
+--error ER_NO_DB_ERROR
+select seq.nextval;
+
+--echo [### Create sequence with database]
+--connection conn1_with_db
+create sequence seq;
+
+--echo [### Use sequence with database]
+--connection conn1_with_db
+select seq.nextval;
+select seq.currval;
+
+--echo [### Cleanup]
+--connection conn1_with_db
+drop sequence seq;
+
+--echo [### Finalize]
+--disconnect conn1_without_db
+--disconnect conn1_with_db

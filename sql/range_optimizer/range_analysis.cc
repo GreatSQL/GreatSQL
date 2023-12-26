@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -173,7 +174,8 @@ static SEL_TREE *get_func_mm_tree_from_in_predicate(
   if (param->has_errors()) return nullptr;
 
   // Populate array as we need to examine its values here
-  if (op->m_const_array != nullptr && !op->m_populated) {
+  if (op->m_const_array != nullptr && !op->m_populated &&
+      !op->m_need_populate) {
     op->populate_bisection(thd);
   }
   if (is_negated) {

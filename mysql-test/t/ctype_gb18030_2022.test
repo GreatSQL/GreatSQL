@@ -1,0 +1,191 @@
+--disable_warnings
+CREATE TABLE t1(C VARCHAR(100) CHARACTER SET gb18030_2022, KEY(c(20)));
+--enable_warnings
+
+INSERT INTO t1 VALUES(0xC4EEC5ABBDBFA1A4B3E0B1DABBB3B9C520A1A4CBD5B6ABC6C2);
+INSERT INTO t1 VALUES(0xB4F3BDADB6ABC8A5A3ACC0CBCCD4BEA1A1A2C7A7B9C5B7E7C1F7C8CBCEEFA1A3);
+INSERT INTO t1 VALUES(0xB9CAC0DDCEF7B1DFA3ACC8CBB5C0CAC7A1A2C8FDB9FAD6DCC0C9B3E0B1DAA1A3);
+INSERT INTO t1 VALUES(0xC2D2CAAFB1C0D4C6A3ACBEAACCCEC1D1B0B6A3ACBEEDC6F0C7A7B6D1D1A9A1A3);
+INSERT INTO t1 VALUES(0xBDADC9BDC8E7BBADA3ACD2BBCAB1B6E0C9D9BAC0BDDCA3A1);
+INSERT INTO t1 VALUES(0xD2A3CFEBB9ABE8AAB5B1C4EAA3ACD0A1C7C7B3F5BCDEC1CBA3ACD0DBD7CBD3A2B7A2A1A3);
+INSERT INTO t1 VALUES(0xD3F0C9C8C2DABDEDA3ACCCB8D0A6BCE4A1A2E9C9E9D6BBD2B7C9D1CCC3F0A1A3);
+INSERT INTO t1 VALUES(0xB9CAB9FAC9F1D3CEA3ACB6E0C7E9D3A6D0A6CED2A1A2D4E7C9FABBAAB7A2A1A3);
+INSERT INTO t1 VALUES(0xC8CBBCE4C8E7C3CEA3ACD2BBE9D7BBB9F5AABDADD4C2A1A3);
+select * from t1;
+drop table t1;
+
+# find . -type f|xargs -n 1 basename |sed 's/\.txt$//'
+#  find . -type f|xargs -n 1 basename |sed 's/\.txt$//'| awk '{printf  "create table `%s` (val text);\n",$1}'
+create table `GFZB-196` (val text);
+create table `double1` (val text);
+create table `user2` (val text);
+create table `double3` (val text);
+create table `user3` (val text);
+create table `double5` (val text);
+create table `double2` (val text);
+create table `four` (val text);
+create table `Single` (val text);
+create table `user1` (val text);
+create table `double4` (val text);
+create table `CJK-4` (val text);
+create table `D.3` (val text);
+create table `D.2` (val text);
+create table `D.1` (val text);
+create table `CJK-B-4` (val text);
+create table `CJK-B-3` (val text);
+create table `KXBS` (val text);
+create table `CJK-B-1` (val text);
+create table `CJK-B-2` (val text);
+create table `CJK-D` (val text);
+create table `CJK-C` (val text);
+create table `CJK-F` (val text);
+create table `CJK-E` (val text);
+
+
+let GBDATA=$MYSQLTEST_VARDIR/std_data/18030
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level2/GFZB-196.txt' 
+into table `GFZB-196` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/2005part/double1.txt' 
+into table `double1` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);  
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/2005part/user2.txt' 
+into table `user2` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/2005part/double3.txt' 
+into table `double3` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/2005part/user3.txt' 
+into table `user3` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/2005part/double5.txt' 
+into table `double5` character set gb18030_2022 LINES TERMINATED BY '\r\n'(val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/2005part/double2.txt' 
+into table `double2` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/2005part/four.txt' 
+into table `four` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/2005part/Single.txt' 
+into table `Single` character set gb18030_2022 LINES TERMINATED BY '\r\n'  (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/2005part/user1.txt' 
+into table `user1` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/2005part/double4.txt' 
+into table `double4` character set gb18030_2022 LINES TERMINATED BY '\r\n'(val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/CJK-4.txt' 
+into table `CJK-4` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/D.3.txt' 
+into table `D.3` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/D.2.txt' 
+into table `D.2` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level1/D.1.txt' 
+into table `D.1` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level3/CJK-B-4.txt' 
+into table `CJK-B-4` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level3/CJK-B-3.txt' 
+into table `CJK-B-3` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level3/KXBS.txt'
+ into table `KXBS` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level3/CJK-B-1.txt'
+into table `CJK-B-1` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level3/CJK-B-2.txt'
+into table `CJK-B-2` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>  
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level3/CJK-D.txt'
+ into table `CJK-D` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level3/CJK-C.txt'
+into table `CJK-C` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level3/CJK-F.txt'
+ into table `CJK-F` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);  
+
+--replace_result $MYSQLTEST_VARDIR <MYSQLTEST_VARDIR>
+eval load data infile '$MYSQLTEST_VARDIR/std_data/18030/level3/CJK-E.txt' 
+into table `CJK-E` character set gb18030_2022 LINES TERMINATED BY '\r\n' (val);
+
+select val from `GFZB-196`;
+select val from `double1`;
+select val from `user2`;
+select val from `double3`;
+select val from `user3`;
+select val from `double5`;
+select val from `double2`;
+select val from `four`;
+select val from `Single`;
+select val from `user1`;
+select val from `double4`;
+select val from `CJK-4`;
+select val from `D.3`;
+select val from `D.2`;
+select val from `D.1`;
+select val from `CJK-B-4`;
+select val from `CJK-B-3`;
+select val from `KXBS`;
+select val from `CJK-B-1`;
+select val from `CJK-B-2`;
+select val from `CJK-D`;
+select val from `CJK-C`;
+select val from `CJK-F`;
+select val from `CJK-E`;
+
+drop table `GFZB-196` ;
+drop table `double1` ;
+drop table `user2` ;
+drop table `double3` ;
+drop table `user3` ;
+drop table `double5` ;
+drop table `double2` ;
+drop table `four` ;
+drop table `Single` ;
+drop table `user1` ;
+drop table `double4` ;
+drop table `CJK-4` ;
+drop table `D.3` ;
+drop table `D.2` ;
+drop table `D.1` ;
+drop table `CJK-B-4` ;
+drop table `CJK-B-3` ;
+drop table `KXBS` ;
+drop table `CJK-B-1` ;
+drop table `CJK-B-2` ;
+drop table `CJK-D` ;
+drop table `CJK-C` ;
+drop table `CJK-F` ;
+drop table `CJK-E` ;

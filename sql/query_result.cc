@@ -949,10 +949,11 @@ bool Query_dumpvar::prepare(THD *thd, const mem_root_deque<Item *> &list,
       }
       // SELECT INTO row_type_sp_variable
       if (thd->sp_runtime_ctx->get_item(var_list.head()->get_offset())
-              ->cols() != list.size()) {
+              ->cols() != CountVisibleFields(list)) {
         if (thd->sp_runtime_ctx->get_item(var_list.head()->get_offset())
                 ->is_ora_type() &&
-            list.size() == 1 && list.at(0)->this_item()->is_ora_type())
+            CountVisibleFields(list) == 1 &&
+            list.at(0)->this_item()->is_ora_type())
           return false;
         my_error(ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT, MYF(0));
         return true;
@@ -965,8 +966,10 @@ bool Query_dumpvar::prepare(THD *thd, const mem_root_deque<Item *> &list,
         return true;
       }
       // SELECT bulk collect INTO record_table_type_sp_variable
-      if (thd->sp_runtime_ctx->get_item(var_list.head()->get_offset())
-              ->cols() != list.size()) {
+      if (thd->sp_runtime_ctx->get_item(var_list.head()->get_offset())->cols() -
+                  1 !=
+              CountVisibleFields(list) &&
+          CountVisibleFields(list) != 1) {
         my_error(ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT, MYF(0));
         return true;
       }
@@ -1054,8 +1057,8 @@ void Query_dumpvar::push_param_rela(enum_dumpvar_type var_type, THD *thd,
       // SELECT tab.a INTO tmp_clob_a FROM test_lob as tab limit 1;
       // SELECT tab.a INTO tmp_clob_a FROM test_lob as tab where rownum<=1;
       // because unable to locate the record, so not allowed.
-      param.is_rownum_or_limit =
-          (block->has_rownum_in_cond || block->has_limit());
+      param.is_rownum_or_limit = (block->has_rownum_in_cond ||
+                                  block->has_limit() || block->has_connect_by);
       if (!param.is_rownum_or_limit) {
         param.query_expr_cond.assign(Sp_rcontext_layer::locate_rec(
             thd, lex->query_tables, current_where, &param));
@@ -1115,7 +1118,9 @@ bool Query_dumpvar::send_data(THD *thd, const mem_root_deque<Item *> &items) {
   DBUG_TRACE;
 
   if (!(thd->variables.sql_mode & MODE_ORACLE) || var_list.size() > 1 ||
-      (var_list.size() == 1 && !var_list.head()->var_is_record_table_type())) {
+      (var_list.size() == 1 && (!var_list.head()->var_is_record_table_type() ||
+                                (var_list.head()->var_is_record_table_type() &&
+                                 !var_list.head()->var_is_bulk_collect())))) {
     if (row_count++) {
       my_error(ER_TOO_MANY_ROWS, MYF(0));
       return true;
@@ -1142,13 +1147,16 @@ bool Query_dumpvar::send_data(THD *thd, const mem_root_deque<Item *> &items) {
           my_error(ER_SP_MISMATCH_USE_OF_RECORD_VAR, MYF(0), mv->name.str);
           return true;
         }
-        if (item->this_item()->is_ora_type()) {
+
+        if (mv->var_is_bulk_collect()) {
+          if (thd->sp_runtime_ctx->set_variable_row_table(
+                  thd, mv->get_offset(), items, row_count + 1, true))
+            return true;
+          row_count++;
+        } else {
           if (thd->sp_runtime_ctx->set_variable(thd, mv->get_offset(), &item))
             return true;
-        } else if (thd->sp_runtime_ctx->set_variable_row_table(
-                       thd, mv->get_offset(), items, row_count + 1))
-          return true;
-        row_count++;
+        }
       } else {
         if (thd->sp_runtime_ctx->set_variable(thd, mv->get_offset(), &item))
           return true;

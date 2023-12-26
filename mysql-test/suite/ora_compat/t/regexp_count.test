@@ -1,0 +1,98 @@
+#1.table create
+
+DROP TABLE IF EXISTS `test_regexp_count`;
+CREATE TABLE `test_regexp_count` (
+  `c0` int NOT NULL AUTO_INCREMENT,
+  `c1` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `c2` varchar(255) CHARACTER SET gbk COLLATE gbk_chinese_ci DEFAULT NULL,
+  `c3` decimal(10,5) DEFAULT NULL,
+  PRIMARY KEY (`c0`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+#2.insert data
+INSERT INTO test_regexp_count (`c0`, `c1`, `c2`, `c3`) VALUES (6, 'c means Case insensitive matching', 'c2', 3.00000);
+
+#2.test cast
+
+SELECT REGEXP_COUNT('aadfMich你safaaaaaaa你aaewtqgafgt你aaaaaaa aael', '^a*',1) from dual;
+
+SELECT REGEXP_COUNT('aadfMich你safaaaaaaa你aaewtqgafgt你aaaaaaa aael', 'a*',1) from dual;
+
+SELECT REGEXP_COUNT('aadfMich你safaaaaaaa你aaewtqgafgt你aaaaaaa aael', 'aa*',1) from dual;
+
+SELECT REGEXP_COUNT('fo\r\n\n\n\n\fo\n\n\n\n', '$',1,'u') from dual;
+
+SELECT REGEXP_COUNT('Michael', 'a?',1) from dual ;
+
+SELECT REGEXP_COUNT('Michael', '^*') from dual;
+
+SELECT REGEXP_COUNT('Michael', '^a*') from dual;
+
+SELECT REGEXP_COUNT('Michael', '^a*',5) from dual;
+
+SELECT REGEXP_COUNT('Michael', '^^a*') from dual;
+
+SELECT REGEXP_COUNT('Michael', '^^a*',2) from dual;
+
+SELECT REGEXP_COUNT('Michael', '^^a*',4) from dual;
+
+SELECT REGEXP_COUNT('Michael', '^^a*',8) from dual;
+
+SELECT REGEXP_COUNT('Michael', '^aa*',5) from dual;
+
+SELECT REGEXP_COUNT('Michael', 'a*') from dual;
+
+SELECT REGEXP_COUNT('Michael', 'a*',5) from dual;
+
+SELECT REGEXP_COUNT('Michael', 'a*',5) from dual;
+
+SELECT REGEXP_COUNT('Michael', 'a*',6) from dual;
+
+SELECT REGEXP_COUNT('Michael', 'a*',7) from dual;
+
+SELECT REGEXP_COUNT('Michael', 'a*',8) from dual;
+
+SELECT REGEXP_COUNT('Michael', '你*') from dual;
+
+SELECT REGEXP_COUNT('Michael', '你*',1) from dual;
+
+SELECT REGEXP_COUNT('Michael', '你*',5) from dual;
+
+SELECT REGEXP_COUNT('Michael', '你*',5) from dual;
+
+SELECT REGEXP_COUNT('Michael', '你*',6) from dual;
+
+SELECT REGEXP_COUNT('Michael', '你*',7) from dual;
+
+SELECT REGEXP_COUNT('Michael', '你*',8) from dual;
+
+select REGEXP_COUNT ('c means Case insensitive matching','A','1','c')  "count(A)" from dual;
+
+select REGEXP_COUNT ('c means Case insensitive matching','A','1','i')  "count(A)" from dual;
+
+select REGEXP_COUNT (c1,'A','1','c')  "count(A)" from test_regexp_count;
+
+select REGEXP_COUNT (c1,'A','1','i')  "count(A)" from test_regexp_count;
+
+select REGEXP_COUNT('2454sdg','.{2}','1') FROM dual;
+
+select REGEXP_COUNT('24','^\d{2}$',1) FROM dual;
+
+select REGEXP_COUNT('24','^\\d{2}$',1) FROM dual;
+
+
+SELECT REGEXP_COUNT('fo
+fa
+^
+$
+
+^', '.',1,'mn') AS REGEXP_COUNT from dual;
+
+SELECT REGEXP_COUNT('fo
+fa
+^
+$
+
+^\n\r', '.',1,'mnu') AS REGEXP_COUNT from dual;
+
+drop table if exists test_regexp_count;

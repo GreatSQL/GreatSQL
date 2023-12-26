@@ -73,10 +73,16 @@ static const char *initialization_data[] = {
     "'FIREWALL_EXEMPT', 'Y')",
     nullptr};
 
-static const char **cmds[] = {initialization_cmds, mysql_system_tables,
-                              initialization_data, mysql_system_data,
-                              fill_help_tables,    mysql_system_users,
-                              mysql_sys_schema,    nullptr};
+#include "scripts/sql_commands_greatdb_tables.h"
+static const char **cmds[] = {initialization_cmds,
+                              mysql_system_tables,
+                              initialization_data,
+                              mysql_system_data,
+                              fill_help_tables,
+                              mysql_system_users,
+                              mysql_sys_schema,
+                              mysql_greatdb_tables,
+                              nullptr};
 
 /** keep in sync with the above array */
 static const char *cmd_descs[] = {

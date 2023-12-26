@@ -26,8 +26,10 @@
 #include "sql/derror.h"
 #include "sql/field.h"
 #include "sql/item.h"
+#include "sql/item_timefunc.h"
 #include "sql/my_decimal.h"
 #include "sql/sql_class.h"
+#include "sql/sql_table.h"
 #include "sql_string.h"
 #include "template_utils.h"
 
@@ -84,21 +86,12 @@ Create_field::Create_field(Field *old_field, Field *orig_field)
       m_engine_attribute(old_field->m_engine_attribute),
       m_secondary_engine_attribute(old_field->m_secondary_engine_attribute),
       udt_name(old_field->udt_name()),
+      udt_db_name(NULL_STR),
       m_max_display_width_in_codepoints(old_field->char_length()),
-      m_cursor_rowtype_ref(false),
-      m_column_type_ref(nullptr),
-      m_column_type(false),
-      m_table_rowtype_ref(nullptr),
-      m_table_rowtype(false),
-      m_row_field_definitions(nullptr),
-      m_row_field_table_definitions(nullptr),
-      is_record_define(false),
-      is_record_table_define(false),
-      is_for_loop_var(false),
-      is_record_table_ref(false),
-      is_forall_loop_var(false),
-      record_default_value(nullptr),
-      udt_db_name(old_field->get_udt_db_name()) {
+      ora_record() {
+  if (old_field->get_udt_db_name())
+    udt_db_name = LEX_STRING{old_field->get_udt_db_name(),
+                             strlen(old_field->get_udt_db_name())};
   switch (sql_type) {
     case MYSQL_TYPE_TINY_BLOB:
     case MYSQL_TYPE_MEDIUM_BLOB:
@@ -156,6 +149,12 @@ Create_field::Create_field(Field *old_field, Field *orig_field)
         auto_flags |= Field::ON_UPDATE_NOW;
       if (orig_field->has_insert_default_general_value_expression())
         auto_flags |= Field::GENERATED_FROM_EXPRESSION;
+      if (orig_field->auto_flags & Field::VARCHAR_DEFAULT_CURRENT_TIMESTAP) {
+        auto_flags |= Field::VARCHAR_DEFAULT_CURRENT_TIMESTAP;
+      }
+      if (orig_field->auto_flags & Field::CURRENT_TIMESTAMP_DEC_APPOINT) {
+        auto_flags |= Field::CURRENT_TIMESTAMP_DEC_APPOINT;
+      }
     }
 
     if (orig_field->has_insert_default_constant_expression()) {
@@ -242,7 +241,7 @@ bool Create_field::init(
   is_array = is_array_arg;
   if (udt_ident) {
     udt_name = to_lex_string(udt_ident->m_column);
-    udt_db_name = udt_ident->table.str;
+    udt_db_name = to_lex_string(udt_ident->table);
   }
 
   if (fld_default_value != nullptr &&
@@ -264,6 +263,21 @@ bool Create_field::init(
   if (fld_type_modifier & AUTO_INCREMENT_FLAG) auto_flags |= Field::NEXT_NUMBER;
 
   decimals = fld_decimals ? (uint)atoi(fld_decimals) : 0;
+  if ((auto_flags & Field::DEFAULT_NOW) && fld_type == MYSQL_TYPE_VARCHAR) {
+    Item_func_now *func_now = down_cast<Item_func_now *>(fld_default_value);
+    if (func_now && func_now->is_current_timestmap) {
+      auto_flags |= Field::VARCHAR_DEFAULT_CURRENT_TIMESTAP;
+      if (func_now->is_dec_appoint) {
+        auto_flags |= Field::CURRENT_TIMESTAMP_DEC_APPOINT;
+      }
+    }
+    decimals = fld_default_value->decimals;
+    if (decimals > DATETIME_MAX_DECIMALS) {
+      my_error(ER_TOO_BIG_PRECISION, MYF(0), decimals, fld_name,
+               DATETIME_MAX_DECIMALS);
+      return true;
+    }
+  }
   if (is_temporal_real_type(fld_type)) {
     flags |= BINARY_FLAG;
     charset = &my_charset_numeric;
@@ -381,6 +395,8 @@ bool Create_field::init(
       allowed_type_modifier = AUTO_INCREMENT_FLAG;
       break;
     case MYSQL_TYPE_NULL:
+      if (udt_name.length != 0) max_field_charlength = MAX_FIELD_VARCHARLENGTH;
+      break;
     case MYSQL_TYPE_INVALID:
     case MYSQL_TYPE_BOOL:
       break;
@@ -835,7 +851,7 @@ Row_definition_list *Row_definition_table_list::find_row_fields_by_offset(
 }
 
 Create_field *Row_definition_table_list::find_row_field_by_name(
-    LEX_CSTRING name, uint *offset) const {
+    LEX_STRING name, uint *offset) const {
   // Cast-off the "const" qualifier
   const Row_definition_table_list *rr = this;
   Row_definition_table_list *rdl = const_cast<Row_definition_table_list *>(rr);
@@ -852,12 +868,11 @@ Create_field *Row_definition_table_list::find_row_field_by_name(
 }
 
 inline bool Row_definition_list::eq_name(const Create_field *def,
-                                         LEX_CSTRING name) const {
-  return to_lex_cstring(def->field_name).length == name.length &&
-         my_strcasecmp(system_charset_info, def->field_name, name.str) == 0;
+                                         LEX_STRING name) const {
+  return my_strcasecmp(system_charset_info, def->field_name, name.str) == 0;
 }
 
-Create_field *Row_definition_list::find_row_field_by_name(LEX_CSTRING name,
+Create_field *Row_definition_list::find_row_field_by_name(LEX_STRING name,
                                                           uint *offset) const {
   // Cast-off the "const" qualifier
   const Row_definition_list *rr = this;
@@ -866,7 +881,7 @@ Create_field *Row_definition_list::find_row_field_by_name(LEX_CSTRING name,
   List_iterator<Create_field> it(*sd);
   Create_field *def;
   for (*offset = 0; (def = it++); (*offset)++) {
-    if (eq_name(def, name)) return def;
+    if (name.str && eq_name(def, name)) return def;
   }
   return nullptr;
 }
@@ -885,10 +900,10 @@ Create_field *Row_definition_list::find_row_field_by_offset(uint offset) const {
 }
 
 bool Row_definition_list::append_uniq(MEM_ROOT *mem_root, Create_field *var) {
-  assert(elements);
   uint unused;
-  if (unlikely(
-          find_row_field_by_name(to_lex_cstring(var->field_name), &unused))) {
+  if (!is_empty() &&
+      unlikely(find_row_field_by_name(
+          to_lex_string(to_lex_cstring(var->field_name)), &unused))) {
     my_error(ER_DUP_FIELDNAME, MYF(0), var->field_name);
     return true;
   }
@@ -897,6 +912,37 @@ bool Row_definition_list::append_uniq(MEM_ROOT *mem_root, Create_field *var) {
 
 bool Row_definition_table_list::append_uniq(MEM_ROOT *mem_root,
                                             Row_definition_list *var) {
-  assert(elements);
   return push_back(var, mem_root);
+}
+
+bool Row_definition_list::make_new_create_field_to_store_index(
+    THD *thd, const char *str_length, bool is_index_by,
+    Row_definition_list **list_new) const {
+  const Row_definition_list *rr = this;
+  Row_definition_list *list = const_cast<Row_definition_list *>(rr);
+  Item *dflt_value_item = new (thd->mem_root) Item_null();
+  Create_field *cdf = new (thd->mem_root) Create_field();
+  const char *field_name = ORA_TYPE_RECORD_INDEX_COLUMN_NAME;
+  enum_field_types type = str_length ? MYSQL_TYPE_VARCHAR : MYSQL_TYPE_LONG;
+
+  if (cdf->init(thd, field_name, type, str_length, nullptr,
+                is_index_by ? 0 : UNSIGNED_FLAG, NULL, NULL, &NULL_CSTR, 0,
+                nullptr, thd->variables.collation_database, false, 0, nullptr,
+                nullptr, nullptr, {},
+                dd::Column::enum_hidden_type::HT_HIDDEN_USER)) {
+    return true;
+  }
+  cdf->ora_record.record_default_value = dflt_value_item;
+  if (prepare_sp_create_field(thd, cdf)) {
+    return true;
+  }
+  cdf->offset = 0;
+  List_iterator_fast<Create_field> it(*list);
+  Create_field *def;
+  *list_new = Row_definition_list::make(thd->mem_root, cdf);
+  for (uint i = 1; (def = it++); i++) {
+    def->offset = i;
+    if ((*list_new)->append_uniq(thd->mem_root, def)) return true;
+  }
+  return false;
 }

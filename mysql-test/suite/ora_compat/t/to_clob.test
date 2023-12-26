@@ -1,0 +1,620 @@
+--disable_warnings
+create table t1(a int, b clob, primary key(a));
+set group_concat_max_len = 10000000;
+set timestamp=1;
+
+create table my_data(id number(4),a clob);
+
+CREATE TABLE my_misc_data (id int,
+f01 BIGINT,
+f02 BLOB,
+f03 DATE,
+f04 DATETIME,
+f05 FLOAT,
+f06 INT,
+f07 LONGBLOB,
+f08 LONGTEXT,
+f09 MEDIUMBLOB,
+f10 MEDIUMINT,
+f11 MEDIUMTEXT,
+f12 REAL,
+f13 SMALLINT,
+f14 TEXT,
+f15 TIME,
+f16 TIMESTAMP,
+f17 TINYBLOB,
+f18 TINYINT,
+f19 TINYTEXT,
+f20 YEAR,
+f21 BINARY(255),
+f22 BIT(64),
+f23 CHAR(255),
+f24 DECIMAL(30,7),
+f25 DOUBLE,
+f26 ENUM ('a','b', 'c') default 'a',
+f27 FLOAT,
+f28 NUMERIC(17,9),
+f29 SET ('a', 'b', 'c') default 'b',
+f30 VARBINARY(1025),
+f31 VARCHAR(257));
+
+#----------------------------------MySQL Mode----------------------------------
+select to_clob(''),to_clob(null) from dual;
+select to_clob('') is null,to_clob(null) is null from dual;
+select * from (select to_clob('\\\\\\'));
+explain select to_clob('\\\\\\');
+show warnings;
+
+#test large lob
+delete from t1;
+insert into t1 values (1, repeat(concat('A', cast(char(0) as binary), 'B'), 40000));
+select to_clob(b) from t1 where a=1;
+insert into t1 select 2,to_clob(b) from t1 where a=1;
+select to_clob(b) from t1 where a=2;
+select length(to_clob(b)),length(b) from t1 where a in(1,2);
+
+#test lob column
+select to_clob('');
+select to_clob(NULL);
+select to_clob(123);
+select to_clob(0x65);
+select to_clob(1.1E10);
+select to_clob(123.456);
+select to_clob(1+1);
+select to_clob(1+1.23);
+select to_clob('\\\ABC DEF中国人');
+select to_clob(concat('\\\ABC DEF中国人','XYZ'));
+select to_clob(now());
+select to_clob(now()+1);
+select to_clob(substr('ABCDE',1,2));
+set @my_clob1='12ABC';select to_clob(@my_clob1);
+set @my_clob2='';select to_clob(@my_clob2);
+
+delete from my_data;
+insert into my_data(id,a) select  1,'';
+insert into my_data(id,a) select  2,NULL;
+insert into my_data(id,a) select  3,123;
+insert into my_data(id,a) select  4,0x65;
+insert into my_data(id,a) select  5,1.1E10;
+insert into my_data(id,a) select  6,123.456;
+insert into my_data(id,a) select  7,1+1;
+insert into my_data(id,a) select  8,1+1.23;
+insert into my_data(id,a) select  9,'\\\ABC DEF中国人';
+insert into my_data(id,a) select 10,concat('\\\ABC DEF中国人','XYZ');
+insert into my_data(id,a) select 11,now();
+insert into my_data(id,a) select 12,now()+1;
+insert into my_data(id,a) select 13,substr('ABCDE',1,2);
+insert into my_data(id,a) select 14,@my_clob1;
+insert into my_data(id,a) select 15,@my_clob2;
+insert into my_data(id,a) select 16,to_clob('');
+insert into my_data(id,a) select 17,to_clob(NULL);
+insert into my_data(id,a) select 18,to_clob(123);
+insert into my_data(id,a) select 19,to_clob(0x65);
+insert into my_data(id,a) select 20,to_clob(1.1E10);
+insert into my_data(id,a) select 21,to_clob(123.456);
+insert into my_data(id,a) select 22,to_clob(1+1);
+insert into my_data(id,a) select 23,to_clob(1+1.23);
+insert into my_data(id,a) select 24,to_clob('\\\ABC DEF中国人');
+insert into my_data(id,a) select 25,to_clob(concat('\\\ABC DEF中国人','XYZ'));
+insert into my_data(id,a) select 26,to_clob(now());
+insert into my_data(id,a) select 27,to_clob(now()+1);
+insert into my_data(id,a) select 28,to_clob(substr('ABCDE',1,2));
+insert into my_data(id,a) select 29,to_clob(@my_clob1);
+insert into my_data(id,a) select 30,to_clob(@my_clob2);
+
+select * from my_data;
+select count(*) from (select distinct a from my_data where ((id between 2 and 14) or (id between 17 and 29)));
+
+delete from my_data;
+delete from my_misc_data;
+
+INSERT into my_misc_data(id,f01,f02,f03,f04,f05,f06,f07,f08,f09,f10,f11,f12,f13,f14,f15,f16,f17,f18,f19,f20,f21,f22,f23,f24,f25,f26,f27,f28,f29,f30,f31) values(1,
+/* f01 BIGINT,  */            1333333333333,
+/* f02 BLOB,  */              '2333333333333',
+/* f03 DATE,  */              '2007-07-18',
+/* f04 DATETIME,  */          '2007-08-18',
+/* f05 FLOAT,  */             3.33333333,
+/* f06 INT,  */               333333333,
+/* f07 LONGBLOB,  */          '3333333333333333333',
+/* f08 LONGTEXT,  */          '4333333333333333333',
+/* f09 MEDIUMBLOB,  */        '5333333333333333333',
+/* f10 MEDIUMINT,  */         333,
+/* f11 MEDIUMTEXT,  */        3.13,
+/* f12 REAL,  */              3.23,
+/* f13 SMALLINT,  */          4,
+/* f14 TEXT,  */              '33',
+/* f15 TIME,  */              '2:59:58.999',
+/* f16 TIMESTAMP,  */         20000303000000,
+/* f17 TINYBLOB,  */          '3333',
+/* f18 TINYINT,  */           5,
+/* f19 TINYTEXT,  */          '6',
+/* f20 YEAR,  */              2023,
+/* f21 BINARY(255),  */       'three_33333',
+/* f22 BIT(64),  */           b'011', 
+/* f23 CHAR(255),  */         'three',
+/* f24 DECIMAL(30,7),  */     3.333,
+/* f25 DOUBLE,  */            3.333333333333333333333333333,
+/* f26 ENUM ('a','b','c')*/   'b',
+/* f27 FLOAT,  */             7.0,
+/* f28 NUMERIC(17,9),  */     3.3333,
+/* f29 SET ('a','b','c'),*/   'c',
+/* f30 VARBINARY(1025),*/      '3333 minus 3',
+/* f31 VARCHAR(257),*/         'three times three'
+);
+
+select id,
+to_clob(f01),
+to_clob(f02),
+to_clob(f03),
+to_clob(f04),
+to_clob(f05),
+to_clob(f06),
+to_clob(f07),
+to_clob(f08),
+to_clob(f09),
+to_clob(f10),
+to_clob(f11),
+to_clob(f12),
+to_clob(f13),
+to_clob(f14),
+to_clob(f15),
+to_clob(f16),
+to_clob(f17),
+to_clob(f18),
+to_clob(f19),
+to_clob(f20),
+to_clob(f21),
+to_clob(f22),
+to_clob(f23),
+to_clob(f24),
+to_clob(f25),
+to_clob(f26),
+to_clob(f27),
+to_clob(f28),
+to_clob(f29),
+to_clob(f30),
+to_clob(f31)
+from my_misc_data;
+
+insert into my_data(id,a) select  1,f01 from my_misc_data where id=1;
+insert into my_data(id,a) select  2,f02 from my_misc_data where id=1;
+insert into my_data(id,a) select  3,f03 from my_misc_data where id=1;
+insert into my_data(id,a) select  4,f04 from my_misc_data where id=1;
+insert into my_data(id,a) select  5,f05 from my_misc_data where id=1;
+insert into my_data(id,a) select  6,f06 from my_misc_data where id=1;
+insert into my_data(id,a) select  7,f07 from my_misc_data where id=1;
+insert into my_data(id,a) select  8,f08 from my_misc_data where id=1;
+insert into my_data(id,a) select  9,f09 from my_misc_data where id=1;
+insert into my_data(id,a) select 10,f10 from my_misc_data where id=1;
+insert into my_data(id,a) select 11,f11 from my_misc_data where id=1;
+insert into my_data(id,a) select 12,f12 from my_misc_data where id=1;
+insert into my_data(id,a) select 13,f13 from my_misc_data where id=1;
+insert into my_data(id,a) select 14,f14 from my_misc_data where id=1;
+insert into my_data(id,a) select 15,f15 from my_misc_data where id=1;
+insert into my_data(id,a) select 16,f16 from my_misc_data where id=1;
+insert into my_data(id,a) select 17,f17 from my_misc_data where id=1;
+insert into my_data(id,a) select 18,f18 from my_misc_data where id=1;
+insert into my_data(id,a) select 19,f19 from my_misc_data where id=1;
+insert into my_data(id,a) select 20,f20 from my_misc_data where id=1;
+insert into my_data(id,a) select 21,f21 from my_misc_data where id=1;
+insert into my_data(id,a) select 22,f22 from my_misc_data where id=1;
+insert into my_data(id,a) select 23,f23 from my_misc_data where id=1;
+insert into my_data(id,a) select 24,f24 from my_misc_data where id=1;
+insert into my_data(id,a) select 25,f25 from my_misc_data where id=1;
+insert into my_data(id,a) select 26,f26 from my_misc_data where id=1;
+insert into my_data(id,a) select 27,f27 from my_misc_data where id=1;
+insert into my_data(id,a) select 28,f28 from my_misc_data where id=1;
+insert into my_data(id,a) select 29,f29 from my_misc_data where id=1;
+insert into my_data(id,a) select 30,f30 from my_misc_data where id=1;
+insert into my_data(id,a) select 31,f31 from my_misc_data where id=1;
+
+insert into my_data(id,a) select 32,to_clob(f01) from my_misc_data where id=1;
+insert into my_data(id,a) select 33,to_clob(f02) from my_misc_data where id=1;
+insert into my_data(id,a) select 34,to_clob(f03) from my_misc_data where id=1;
+insert into my_data(id,a) select 35,to_clob(f04) from my_misc_data where id=1;
+insert into my_data(id,a) select 36,to_clob(f05) from my_misc_data where id=1;
+insert into my_data(id,a) select 37,to_clob(f06) from my_misc_data where id=1;
+insert into my_data(id,a) select 38,to_clob(f07) from my_misc_data where id=1;
+insert into my_data(id,a) select 39,to_clob(f08) from my_misc_data where id=1;
+insert into my_data(id,a) select 40,to_clob(f09) from my_misc_data where id=1;
+insert into my_data(id,a) select 41,to_clob(f10) from my_misc_data where id=1;
+insert into my_data(id,a) select 42,to_clob(f11) from my_misc_data where id=1;
+insert into my_data(id,a) select 43,to_clob(f12) from my_misc_data where id=1;
+insert into my_data(id,a) select 44,to_clob(f13) from my_misc_data where id=1;
+insert into my_data(id,a) select 45,to_clob(f14) from my_misc_data where id=1;
+insert into my_data(id,a) select 46,to_clob(f15) from my_misc_data where id=1;
+insert into my_data(id,a) select 47,to_clob(f16) from my_misc_data where id=1;
+insert into my_data(id,a) select 48,to_clob(f17) from my_misc_data where id=1;
+insert into my_data(id,a) select 49,to_clob(f18) from my_misc_data where id=1;
+insert into my_data(id,a) select 50,to_clob(f19) from my_misc_data where id=1;
+insert into my_data(id,a) select 51,to_clob(f20) from my_misc_data where id=1;
+insert into my_data(id,a) select 52,to_clob(f21) from my_misc_data where id=1;
+insert into my_data(id,a) select 53,to_clob(f22) from my_misc_data where id=1;
+insert into my_data(id,a) select 54,to_clob(f23) from my_misc_data where id=1;
+insert into my_data(id,a) select 55,to_clob(f24) from my_misc_data where id=1;
+insert into my_data(id,a) select 56,to_clob(f25) from my_misc_data where id=1;
+insert into my_data(id,a) select 57,to_clob(f26) from my_misc_data where id=1;
+insert into my_data(id,a) select 58,to_clob(f27) from my_misc_data where id=1;
+insert into my_data(id,a) select 59,to_clob(f28) from my_misc_data where id=1;
+insert into my_data(id,a) select 60,to_clob(f29) from my_misc_data where id=1;
+insert into my_data(id,a) select 61,to_clob(f30) from my_misc_data where id=1;
+insert into my_data(id,a) select 62,to_clob(f31) from my_misc_data where id=1;
+
+select count(*) from my_data;
+
+select count(*) from my_data where id= 1 and a=(select to_clob(f01) from my_misc_data where id=1);
+select count(*) from my_data where id= 2 and a=(select to_clob(f02) from my_misc_data where id=1);
+select count(*) from my_data where id= 3 and a=(select to_clob(f03) from my_misc_data where id=1);
+select count(*) from my_data where id= 4 and a=(select to_clob(f04) from my_misc_data where id=1);
+select count(*) from my_data where id= 5 and a=(select to_clob(f05) from my_misc_data where id=1);
+select count(*) from my_data where id= 6 and a=(select to_clob(f06) from my_misc_data where id=1);
+select count(*) from my_data where id= 7 and a=(select to_clob(f07) from my_misc_data where id=1);
+select count(*) from my_data where id= 8 and a=(select to_clob(f08) from my_misc_data where id=1);
+select count(*) from my_data where id= 9 and a=(select to_clob(f09) from my_misc_data where id=1);
+select count(*) from my_data where id=10 and a=(select to_clob(f10) from my_misc_data where id=1);
+select count(*) from my_data where id=11 and a=(select to_clob(f11) from my_misc_data where id=1);
+select count(*) from my_data where id=12 and a=(select to_clob(f12) from my_misc_data where id=1);
+select count(*) from my_data where id=13 and a=(select to_clob(f13) from my_misc_data where id=1);
+select count(*) from my_data where id=14 and a=(select to_clob(f14) from my_misc_data where id=1);
+select count(*) from my_data where id=15 and a=(select to_clob(f15) from my_misc_data where id=1);
+select count(*) from my_data where id=16 and a=(select to_clob(f16) from my_misc_data where id=1);
+select count(*) from my_data where id=17 and a=(select to_clob(f17) from my_misc_data where id=1);
+select count(*) from my_data where id=18 and a=(select to_clob(f18) from my_misc_data where id=1);
+select count(*) from my_data where id=19 and a=(select to_clob(f19) from my_misc_data where id=1);
+select count(*) from my_data where id=20 and a=(select to_clob(f20) from my_misc_data where id=1);
+select count(*) from my_data where id=21 and a=(select to_clob(f21) from my_misc_data where id=1);
+select count(*) from my_data where id=22 and a=(select to_clob(f22) from my_misc_data where id=1);
+select count(*) from my_data where id=23 and a=(select to_clob(f23) from my_misc_data where id=1);
+select count(*) from my_data where id=24 and a=(select to_clob(f24) from my_misc_data where id=1);
+select count(*) from my_data where id=25 and a=(select to_clob(f25) from my_misc_data where id=1);
+select count(*) from my_data where id=26 and a=(select to_clob(f26) from my_misc_data where id=1);
+select count(*) from my_data where id=27 and a=(select to_clob(f27) from my_misc_data where id=1);
+select count(*) from my_data where id=28 and a=(select to_clob(f28) from my_misc_data where id=1);
+select count(*) from my_data where id=29 and a=(select to_clob(f29) from my_misc_data where id=1);
+select count(*) from my_data where id=30 and a=(select to_clob(f30) from my_misc_data where id=1);
+select count(*) from my_data where id=31 and a=(select to_clob(f31) from my_misc_data where id=1);
+
+select count(*) from my_data where id=32 and a=(select to_clob(f01) from my_misc_data where id=1);
+select count(*) from my_data where id=33 and a=(select to_clob(f02) from my_misc_data where id=1);
+select count(*) from my_data where id=34 and a=(select to_clob(f03) from my_misc_data where id=1);
+select count(*) from my_data where id=35 and a=(select to_clob(f04) from my_misc_data where id=1);
+select count(*) from my_data where id=36 and a=(select to_clob(f05) from my_misc_data where id=1);
+select count(*) from my_data where id=37 and a=(select to_clob(f06) from my_misc_data where id=1);
+select count(*) from my_data where id=38 and a=(select to_clob(f07) from my_misc_data where id=1);
+select count(*) from my_data where id=39 and a=(select to_clob(f08) from my_misc_data where id=1);
+select count(*) from my_data where id=40 and a=(select to_clob(f09) from my_misc_data where id=1);
+select count(*) from my_data where id=41 and a=(select to_clob(f10) from my_misc_data where id=1);
+select count(*) from my_data where id=42 and a=(select to_clob(f11) from my_misc_data where id=1);
+select count(*) from my_data where id=43 and a=(select to_clob(f12) from my_misc_data where id=1);
+select count(*) from my_data where id=44 and a=(select to_clob(f13) from my_misc_data where id=1);
+select count(*) from my_data where id=45 and a=(select to_clob(f14) from my_misc_data where id=1);
+select count(*) from my_data where id=46 and a=(select to_clob(f15) from my_misc_data where id=1);
+select count(*) from my_data where id=47 and a=(select to_clob(f16) from my_misc_data where id=1);
+select count(*) from my_data where id=48 and a=(select to_clob(f17) from my_misc_data where id=1);
+select count(*) from my_data where id=49 and a=(select to_clob(f18) from my_misc_data where id=1);
+select count(*) from my_data where id=50 and a=(select to_clob(f19) from my_misc_data where id=1);
+select count(*) from my_data where id=51 and a=(select to_clob(f20) from my_misc_data where id=1);
+select count(*) from my_data where id=52 and a=(select to_clob(f21) from my_misc_data where id=1);
+select count(*) from my_data where id=53 and a=(select to_clob(f22) from my_misc_data where id=1);
+select count(*) from my_data where id=54 and a=(select to_clob(f23) from my_misc_data where id=1);
+select count(*) from my_data where id=55 and a=(select to_clob(f24) from my_misc_data where id=1);
+select count(*) from my_data where id=56 and a=(select to_clob(f25) from my_misc_data where id=1);
+select count(*) from my_data where id=57 and a=(select to_clob(f26) from my_misc_data where id=1);
+select count(*) from my_data where id=58 and a=(select to_clob(f27) from my_misc_data where id=1);
+select count(*) from my_data where id=59 and a=(select to_clob(f28) from my_misc_data where id=1);
+select count(*) from my_data where id=60 and a=(select to_clob(f29) from my_misc_data where id=1);
+select count(*) from my_data where id=61 and a=(select to_clob(f30) from my_misc_data where id=1);
+select count(*) from my_data where id=62 and a=(select to_clob(f31) from my_misc_data where id=1);
+
+select distinct a from my_data where id in(22,53);
+select count(*) from (select distinct a from my_data);
+
+
+#----------------------------------Oracle Mode----------------------------------
+set sql_mode=oracle;
+
+select to_clob(''),to_clob(null) from dual;
+select to_clob('') is null,to_clob(null) is null from dual;
+select * from (select to_clob('\\\\\\'));
+explain select to_clob('\\\\\\');
+show warnings;
+
+delimiter //;
+begin
+select to_clob('\\\\\\')||to_clob('\\\\\\XYZ') from dual;
+end;//
+delimiter ;//
+
+#test large lob
+delete from t1;
+insert into t1 values (1, repeat(concat('A', cast(char(0) as binary), 'B'), 40000));
+select to_clob(b) from t1 where a=1;
+insert into t1 select 2,to_clob(b) from t1 where a=1;
+select to_clob(b) from t1 where a=2;
+select length(to_clob(b)),length(b) from t1 where a in(1,2);
+
+#test raw
+create table my_test_data(id number(4),a clob,b blob);
+
+insert into my_test_data(id,a,b) values(1,'ABC123','ABC123');
+
+insert into my_test_data select  5,a,b from my_test_data where id=1;
+insert into my_test_data select  6,a,b from my_test_data where id=2;
+insert into my_test_data select  7,a,b from my_test_data where id=3;
+insert into my_test_data select  8,to_clob(a),to_clob(b) from my_test_data where id=1;
+insert into my_test_data select  9,to_clob(a),to_clob(b) from my_test_data where id=2;
+insert into my_test_data select 10,to_clob(a),to_clob(b) from my_test_data where id=3;
+insert into my_test_data select 11,b,a from my_test_data where id=1;
+insert into my_test_data select 12,b,a from my_test_data where id=2;
+insert into my_test_data select 13,b,a from my_test_data where id=3;
+insert into my_test_data select 14,to_clob(b),to_clob(a) from my_test_data where id=1;
+insert into my_test_data select 15,to_clob(b),to_clob(a) from my_test_data where id=2;
+insert into my_test_data select 16,to_clob(b),to_clob(a) from my_test_data where id=3;
+
+insert into my_test_data(id,a,b) select 17,null,cast(to_clob(b) as binary) from my_test_data where id=4;
+
+select * from my_test_data;
+select id,to_clob(a),to_clob(b) from my_test_data;
+
+#test lob column
+select to_clob('');
+select to_clob(NULL);
+select to_clob(123);
+select to_clob(0x65);
+select to_clob(1.1E10);
+select to_clob(123.456);
+select to_clob(1+1);
+select to_clob(1+1.23);
+select to_clob('\\\ABC DEF中国人');
+select to_clob('\\\ABC DEF中国人'||'XYZ');
+select to_clob(sysdate);
+select to_clob(sysdate+1);
+select to_clob(substr('ABCDE',1,2));
+set @my_clob1='12ABC';select to_clob(@my_clob1);
+set @my_clob2='';select to_clob(@my_clob2);
+
+delete from my_data;
+insert into my_data(id,a) select  1,'';
+insert into my_data(id,a) select  2,NULL;
+insert into my_data(id,a) select  3,123;
+insert into my_data(id,a) select  4,0x65;
+insert into my_data(id,a) select  5,1.1E10;
+insert into my_data(id,a) select  6,123.456;
+insert into my_data(id,a) select  7,1+1;
+insert into my_data(id,a) select  8,1+1.23;
+insert into my_data(id,a) select  9,'\\\ABC DEF中国人';
+insert into my_data(id,a) select 10,'\\\ABC DEF中国人'||'XYZ';
+insert into my_data(id,a) select 11,sysdate;
+insert into my_data(id,a) select 12,sysdate+1;
+insert into my_data(id,a) select 13,substr('ABCDE',1,2);
+insert into my_data(id,a) select 14,@my_clob1;
+insert into my_data(id,a) select 15,@my_clob2;
+insert into my_data(id,a) select 16,to_clob('');
+insert into my_data(id,a) select 17,to_clob(NULL);
+insert into my_data(id,a) select 18,to_clob(123);
+insert into my_data(id,a) select 19,to_clob(0x65);
+insert into my_data(id,a) select 20,to_clob(1.1E10);
+insert into my_data(id,a) select 21,to_clob(123.456);
+insert into my_data(id,a) select 22,to_clob(1+1);
+insert into my_data(id,a) select 23,to_clob(1+1.23);
+insert into my_data(id,a) select 24,to_clob('\\\ABC DEF中国人');
+insert into my_data(id,a) select 25,to_clob('\\\ABC DEF中国人'||'XYZ');
+insert into my_data(id,a) select 26,to_clob(sysdate);
+insert into my_data(id,a) select 27,to_clob(sysdate+1);
+insert into my_data(id,a) select 28,to_clob(substr('ABCDE',1,2));
+insert into my_data(id,a) select 29,to_clob(@my_clob1);
+insert into my_data(id,a) select 30,to_clob(@my_clob2);
+
+select * from my_data;
+select count(*) from (select distinct a from my_data where ((id between 2 and 14) or (id between 17 and 29)));
+
+delete from my_data;
+delete from my_misc_data;
+
+INSERT into my_misc_data(id,f01,f02,f03,f04,f05,f06,f07,f08,f09,f10,f11,f12,f13,f14,f15,f16,f17,f18,f19,f20,f21,f22,f23,f24,f25,f26,f27,f28,f29,f30,f31) values(1,
+/* f01 BIGINT,  */            1333333333333,
+/* f02 BLOB,  */              '2333333333333',
+/* f03 DATE,  */              '2007-07-18',
+/* f04 DATETIME,  */          '2007-08-18',
+/* f05 FLOAT,  */             3.33333333,
+/* f06 INT,  */               333333333,
+/* f07 LONGBLOB,  */          '3333333333333333333',
+/* f08 LONGTEXT,  */          '4333333333333333333',
+/* f09 MEDIUMBLOB,  */        '5333333333333333333',
+/* f10 MEDIUMINT,  */         333,
+/* f11 MEDIUMTEXT,  */        3.13,
+/* f12 REAL,  */              3.23,
+/* f13 SMALLINT,  */          4,
+/* f14 TEXT,  */              '33',
+/* f15 TIME,  */              '2:59:58.999',
+/* f16 TIMESTAMP,  */         20000303000000,
+/* f17 TINYBLOB,  */          '3333',
+/* f18 TINYINT,  */           5,
+/* f19 TINYTEXT,  */          '6',
+/* f20 YEAR,  */              2023,
+/* f21 BINARY(255),  */       'three_33333',
+/* f22 BIT(64),  */           b'011', 
+/* f23 CHAR(255),  */         'three',
+/* f24 DECIMAL(30,7),  */     3.333,
+/* f25 DOUBLE,  */            3.333333333333333333333333333,
+/* f26 ENUM ('a','b','c')*/   'b',
+/* f27 FLOAT,  */             7.0,
+/* f28 NUMERIC(17,9),  */     3.3333,
+/* f29 SET ('a','b','c'),*/   'c',
+/* f30 VARBINARY(1025),*/      '3333 minus 3',
+/* f31 VARCHAR(257),*/         'three times three'
+);
+
+select id,
+to_clob(f01),
+to_clob(f02),
+to_clob(f03),
+to_clob(f04),
+to_clob(f05),
+to_clob(f06),
+to_clob(f07),
+to_clob(f08),
+to_clob(f09),
+to_clob(f10),
+to_clob(f11),
+to_clob(f12),
+to_clob(f13),
+to_clob(f14),
+to_clob(f15),
+to_clob(f16),
+to_clob(f17),
+to_clob(f18),
+to_clob(f19),
+to_clob(f20),
+to_clob(f21),
+to_clob(f22),
+to_clob(f23),
+to_clob(f24),
+to_clob(f25),
+to_clob(f26),
+to_clob(f27),
+to_clob(f28),
+to_clob(f29),
+to_clob(f30),
+to_clob(f31)
+from my_misc_data;
+
+insert into my_data(id,a) select  1,f01 from my_misc_data where id=1;
+insert into my_data(id,a) select  2,f02 from my_misc_data where id=1;
+insert into my_data(id,a) select  3,f03 from my_misc_data where id=1;
+insert into my_data(id,a) select  4,f04 from my_misc_data where id=1;
+insert into my_data(id,a) select  5,f05 from my_misc_data where id=1;
+insert into my_data(id,a) select  6,f06 from my_misc_data where id=1;
+insert into my_data(id,a) select  7,f07 from my_misc_data where id=1;
+insert into my_data(id,a) select  8,f08 from my_misc_data where id=1;
+insert into my_data(id,a) select  9,f09 from my_misc_data where id=1;
+insert into my_data(id,a) select 10,f10 from my_misc_data where id=1;
+insert into my_data(id,a) select 11,f11 from my_misc_data where id=1;
+insert into my_data(id,a) select 12,f12 from my_misc_data where id=1;
+insert into my_data(id,a) select 13,f13 from my_misc_data where id=1;
+insert into my_data(id,a) select 14,f14 from my_misc_data where id=1;
+insert into my_data(id,a) select 15,f15 from my_misc_data where id=1;
+insert into my_data(id,a) select 16,f16 from my_misc_data where id=1;
+insert into my_data(id,a) select 17,f17 from my_misc_data where id=1;
+insert into my_data(id,a) select 18,f18 from my_misc_data where id=1;
+insert into my_data(id,a) select 19,f19 from my_misc_data where id=1;
+insert into my_data(id,a) select 20,f20 from my_misc_data where id=1;
+insert into my_data(id,a) select 21,f21 from my_misc_data where id=1;
+insert into my_data(id,a) select 22,f22 from my_misc_data where id=1;
+insert into my_data(id,a) select 23,f23 from my_misc_data where id=1;
+insert into my_data(id,a) select 24,f24 from my_misc_data where id=1;
+insert into my_data(id,a) select 25,f25 from my_misc_data where id=1;
+insert into my_data(id,a) select 26,f26 from my_misc_data where id=1;
+insert into my_data(id,a) select 27,f27 from my_misc_data where id=1;
+insert into my_data(id,a) select 28,f28 from my_misc_data where id=1;
+insert into my_data(id,a) select 29,f29 from my_misc_data where id=1;
+insert into my_data(id,a) select 30,f30 from my_misc_data where id=1;
+insert into my_data(id,a) select 31,f31 from my_misc_data where id=1;
+
+insert into my_data(id,a) select 32,to_clob(f01) from my_misc_data where id=1;
+insert into my_data(id,a) select 33,to_clob(f02) from my_misc_data where id=1;
+insert into my_data(id,a) select 34,to_clob(f03) from my_misc_data where id=1;
+insert into my_data(id,a) select 35,to_clob(f04) from my_misc_data where id=1;
+insert into my_data(id,a) select 36,to_clob(f05) from my_misc_data where id=1;
+insert into my_data(id,a) select 37,to_clob(f06) from my_misc_data where id=1;
+insert into my_data(id,a) select 38,to_clob(f07) from my_misc_data where id=1;
+insert into my_data(id,a) select 39,to_clob(f08) from my_misc_data where id=1;
+insert into my_data(id,a) select 40,to_clob(f09) from my_misc_data where id=1;
+insert into my_data(id,a) select 41,to_clob(f10) from my_misc_data where id=1;
+insert into my_data(id,a) select 42,to_clob(f11) from my_misc_data where id=1;
+insert into my_data(id,a) select 43,to_clob(f12) from my_misc_data where id=1;
+insert into my_data(id,a) select 44,to_clob(f13) from my_misc_data where id=1;
+insert into my_data(id,a) select 45,to_clob(f14) from my_misc_data where id=1;
+insert into my_data(id,a) select 46,to_clob(f15) from my_misc_data where id=1;
+insert into my_data(id,a) select 47,to_clob(f16) from my_misc_data where id=1;
+insert into my_data(id,a) select 48,to_clob(f17) from my_misc_data where id=1;
+insert into my_data(id,a) select 49,to_clob(f18) from my_misc_data where id=1;
+insert into my_data(id,a) select 50,to_clob(f19) from my_misc_data where id=1;
+insert into my_data(id,a) select 51,to_clob(f20) from my_misc_data where id=1;
+insert into my_data(id,a) select 52,to_clob(f21) from my_misc_data where id=1;
+insert into my_data(id,a) select 53,to_clob(f22) from my_misc_data where id=1;
+insert into my_data(id,a) select 54,to_clob(f23) from my_misc_data where id=1;
+insert into my_data(id,a) select 55,to_clob(f24) from my_misc_data where id=1;
+insert into my_data(id,a) select 56,to_clob(f25) from my_misc_data where id=1;
+insert into my_data(id,a) select 57,to_clob(f26) from my_misc_data where id=1;
+insert into my_data(id,a) select 58,to_clob(f27) from my_misc_data where id=1;
+insert into my_data(id,a) select 59,to_clob(f28) from my_misc_data where id=1;
+insert into my_data(id,a) select 60,to_clob(f29) from my_misc_data where id=1;
+insert into my_data(id,a) select 61,to_clob(f30) from my_misc_data where id=1;
+insert into my_data(id,a) select 62,to_clob(f31) from my_misc_data where id=1;
+
+select count(*) from my_data;
+
+select count(*) from my_data where id= 1 and a=(select to_clob(f01) from my_misc_data where id=1);
+select count(*) from my_data where id= 2 and a=(select to_clob(f02) from my_misc_data where id=1);
+select count(*) from my_data where id= 3 and a=(select to_clob(f03) from my_misc_data where id=1);
+select count(*) from my_data where id= 4 and a=(select to_clob(f04) from my_misc_data where id=1);
+select count(*) from my_data where id= 5 and a=(select to_clob(f05) from my_misc_data where id=1);
+select count(*) from my_data where id= 6 and a=(select to_clob(f06) from my_misc_data where id=1);
+select count(*) from my_data where id= 7 and a=(select to_clob(f07) from my_misc_data where id=1);
+select count(*) from my_data where id= 8 and a=(select to_clob(f08) from my_misc_data where id=1);
+select count(*) from my_data where id= 9 and a=(select to_clob(f09) from my_misc_data where id=1);
+select count(*) from my_data where id=10 and a=(select to_clob(f10) from my_misc_data where id=1);
+select count(*) from my_data where id=11 and a=(select to_clob(f11) from my_misc_data where id=1);
+select count(*) from my_data where id=12 and a=(select to_clob(f12) from my_misc_data where id=1);
+select count(*) from my_data where id=13 and a=(select to_clob(f13) from my_misc_data where id=1);
+select count(*) from my_data where id=14 and a=(select to_clob(f14) from my_misc_data where id=1);
+select count(*) from my_data where id=15 and a=(select to_clob(f15) from my_misc_data where id=1);
+select count(*) from my_data where id=16 and a=(select to_clob(f16) from my_misc_data where id=1);
+select count(*) from my_data where id=17 and a=(select to_clob(f17) from my_misc_data where id=1);
+select count(*) from my_data where id=18 and a=(select to_clob(f18) from my_misc_data where id=1);
+select count(*) from my_data where id=19 and a=(select to_clob(f19) from my_misc_data where id=1);
+select count(*) from my_data where id=20 and a=(select to_clob(f20) from my_misc_data where id=1);
+select count(*) from my_data where id=21 and a=(select to_clob(f21) from my_misc_data where id=1);
+select count(*) from my_data where id=22 and a=(select to_clob(f22) from my_misc_data where id=1);
+select count(*) from my_data where id=23 and a=(select to_clob(f23) from my_misc_data where id=1);
+select count(*) from my_data where id=24 and a=(select to_clob(f24) from my_misc_data where id=1);
+select count(*) from my_data where id=25 and a=(select to_clob(f25) from my_misc_data where id=1);
+select count(*) from my_data where id=26 and a=(select to_clob(f26) from my_misc_data where id=1);
+select count(*) from my_data where id=27 and a=(select to_clob(f27) from my_misc_data where id=1);
+select count(*) from my_data where id=28 and a=(select to_clob(f28) from my_misc_data where id=1);
+select count(*) from my_data where id=29 and a=(select to_clob(f29) from my_misc_data where id=1);
+select count(*) from my_data where id=30 and a=(select to_clob(f30) from my_misc_data where id=1);
+select count(*) from my_data where id=31 and a=(select to_clob(f31) from my_misc_data where id=1);
+
+select count(*) from my_data where id=32 and a=(select to_clob(f01) from my_misc_data where id=1);
+select count(*) from my_data where id=33 and a=(select to_clob(f02) from my_misc_data where id=1);
+select count(*) from my_data where id=34 and a=(select to_clob(f03) from my_misc_data where id=1);
+select count(*) from my_data where id=35 and a=(select to_clob(f04) from my_misc_data where id=1);
+select count(*) from my_data where id=36 and a=(select to_clob(f05) from my_misc_data where id=1);
+select count(*) from my_data where id=37 and a=(select to_clob(f06) from my_misc_data where id=1);
+select count(*) from my_data where id=38 and a=(select to_clob(f07) from my_misc_data where id=1);
+select count(*) from my_data where id=39 and a=(select to_clob(f08) from my_misc_data where id=1);
+select count(*) from my_data where id=40 and a=(select to_clob(f09) from my_misc_data where id=1);
+select count(*) from my_data where id=41 and a=(select to_clob(f10) from my_misc_data where id=1);
+select count(*) from my_data where id=42 and a=(select to_clob(f11) from my_misc_data where id=1);
+select count(*) from my_data where id=43 and a=(select to_clob(f12) from my_misc_data where id=1);
+select count(*) from my_data where id=44 and a=(select to_clob(f13) from my_misc_data where id=1);
+select count(*) from my_data where id=45 and a=(select to_clob(f14) from my_misc_data where id=1);
+select count(*) from my_data where id=46 and a=(select to_clob(f15) from my_misc_data where id=1);
+select count(*) from my_data where id=47 and a=(select to_clob(f16) from my_misc_data where id=1);
+select count(*) from my_data where id=48 and a=(select to_clob(f17) from my_misc_data where id=1);
+select count(*) from my_data where id=49 and a=(select to_clob(f18) from my_misc_data where id=1);
+select count(*) from my_data where id=50 and a=(select to_clob(f19) from my_misc_data where id=1);
+select count(*) from my_data where id=51 and a=(select to_clob(f20) from my_misc_data where id=1);
+select count(*) from my_data where id=52 and a=(select to_clob(f21) from my_misc_data where id=1);
+select count(*) from my_data where id=53 and a=(select to_clob(f22) from my_misc_data where id=1);
+select count(*) from my_data where id=54 and a=(select to_clob(f23) from my_misc_data where id=1);
+select count(*) from my_data where id=55 and a=(select to_clob(f24) from my_misc_data where id=1);
+select count(*) from my_data where id=56 and a=(select to_clob(f25) from my_misc_data where id=1);
+select count(*) from my_data where id=57 and a=(select to_clob(f26) from my_misc_data where id=1);
+select count(*) from my_data where id=58 and a=(select to_clob(f27) from my_misc_data where id=1);
+select count(*) from my_data where id=59 and a=(select to_clob(f28) from my_misc_data where id=1);
+select count(*) from my_data where id=60 and a=(select to_clob(f29) from my_misc_data where id=1);
+select count(*) from my_data where id=61 and a=(select to_clob(f30) from my_misc_data where id=1);
+select count(*) from my_data where id=62 and a=(select to_clob(f31) from my_misc_data where id=1);
+
+select distinct a from my_data where id in(22,53);
+select count(*) from (select distinct a from my_data);
+
+--enable_warnings
+drop table t1;
+drop table my_test_data;
+drop table my_misc_data;
+drop table my_data;
+

@@ -36,6 +36,7 @@
 #include "sql/dd/types/table.h"    // dd::Table
 #include "sql/dd/types/trigger.h"  // dd::Trigger
 #include "sql/dd_table_share.h"    // dd_get_mysql_charset
+#include "sql/event_parse_data.h"  // Event_parse_data
 #include "sql/item_create.h"
 #include "sql/key.h"
 #include "sql/sql_class.h"  // THD
@@ -65,6 +66,14 @@ static inline Trigger::enum_event_type get_dd_event_type(
       return Trigger::enum_event_type::ET_UPDATE;
     case TRG_EVENT_DELETE:
       return Trigger::enum_event_type::ET_DELETE;
+    case TRG_EVENT_INSERT_UPDATE:
+      return Trigger::enum_event_type::ET_INSERT_UPDATE;
+    case TRG_EVENT_INSERT_DELETE:
+      return Trigger::enum_event_type::ET_INSERT_DELETE;
+    case TRG_EVENT_UPDATE_DELETE:
+      return Trigger::enum_event_type::ET_UPDATE_DELETE;
+    case TRG_EVENT_INSERT_UPDATE_DELETE:
+      return Trigger::enum_event_type::ET_INSERT_UPDATE_DELETE;
     case TRG_EVENT_MAX:
       break;
   }
@@ -78,6 +87,30 @@ static inline Trigger::enum_event_type get_dd_event_type(
   assert(false);
 
   return Trigger::enum_event_type::ET_INSERT;
+}
+
+/**
+  Get DD API value of event status type for a trigger.
+
+  @param [in]  new_trigger       pointer to a Trigger object from sql-layer.
+
+  @return Value of enumeration dd::Trigger::enum_trigger_status
+*/
+
+static inline Trigger::enum_trigger_status get_dd_event_status(
+    const ::Trigger *new_trigger) {
+  switch (new_trigger->get_event_status()) {
+    case TRG_STATUS_ENABLED:
+      return Trigger::enum_trigger_status::ES_ENABLED;
+    case TRG_STATUS_DISABLED:
+      return Trigger::enum_trigger_status::ES_DISABLED;
+    case TRG_STATUS_MAX:
+      break;
+  }
+
+  assert(false);
+
+  return Trigger::enum_trigger_status::ES_ENABLED;
 }
 
 /**
@@ -172,6 +205,9 @@ static bool fill_in_dd_trigger_object(const ::Trigger *new_trigger,
   }
   dd_trig_obj->set_schema_collation_id(collation->number);
 
+  dd_trig_obj->options().set("status",
+                             (ulong)(get_dd_event_status(new_trigger)));
+
   return false;
 }
 
@@ -253,9 +289,36 @@ static enum_trigger_event_type convert_event_type_from_dd(
       return TRG_EVENT_UPDATE;
     case dd::Trigger::enum_event_type::ET_DELETE:
       return TRG_EVENT_DELETE;
+    case dd::Trigger::enum_event_type::ET_INSERT_UPDATE:
+      return TRG_EVENT_INSERT_UPDATE;
+    case dd::Trigger::enum_event_type::ET_INSERT_DELETE:
+      return TRG_EVENT_INSERT_DELETE;
+    case dd::Trigger::enum_event_type::ET_UPDATE_DELETE:
+      return TRG_EVENT_UPDATE_DELETE;
+    case dd::Trigger::enum_event_type::ET_INSERT_UPDATE_DELETE:
+      return TRG_EVENT_INSERT_UPDATE_DELETE;
   };
   assert(false);
   return TRG_EVENT_MAX;
+}
+
+/**
+  Convert event status value from DD presentation to generic SQL presentation.
+
+  @param [in] event_status  Event status value from the Data Dictionary
+
+  @return Event status value as it's presented in generic SQL-layer
+*/
+static enum_trigger_event_status convert_event_status_from_dd(
+    dd::Trigger::enum_trigger_status event_status) {
+  switch (event_status) {
+    case dd::Trigger::enum_trigger_status::ES_ENABLED:
+      return TRG_STATUS_ENABLED;
+    case dd::Trigger::enum_trigger_status::ES_DISABLED:
+      return TRG_STATUS_DISABLED;
+  };
+  assert(false);
+  return TRG_STATUS_MAX;
 }
 
 /**
@@ -341,7 +404,9 @@ bool load_triggers(THD *thd, MEM_ROOT *mem_root, const char *schema_name,
         client_cs_name, connection_cl_name, db_cl_name,
         convert_event_type_from_dd(trigger->event_type()),
         convert_action_time_from_dd(trigger->action_timing()),
-        trigger->action_order(), trigger->created());
+        trigger->action_order(), trigger->created(),
+        convert_event_status_from_dd(static_cast<Trigger::enum_trigger_status>(
+            trigger->event_status())));
 
     if (trigger_to_add == nullptr) return true;
 
@@ -352,6 +417,61 @@ bool load_triggers(THD *thd, MEM_ROOT *mem_root, const char *schema_name,
   }
 
   return false;
+}
+
+::Trigger *clone_trigger(MEM_ROOT *mem_root, ::Trigger *src_trigger,
+                         const char *schema_name, const char *table_name) {
+  DBUG_TRACE;
+
+  LEX_CSTRING db_name_str = {schema_name, strlen(schema_name)};
+  LEX_CSTRING subject_table_name = {table_name, strlen(table_name)};
+  LEX_CSTRING definition, definition_utf8;
+
+  if (lex_string_strmake(mem_root, &definition,
+                         src_trigger->get_definition().str,
+                         src_trigger->get_definition().length))
+    return nullptr;
+
+  if (lex_string_strmake(mem_root, &definition_utf8,
+                         src_trigger->get_definition_utf8().str,
+                         src_trigger->get_definition_utf8().length))
+    return nullptr;
+
+  LEX_CSTRING definer_user;
+  if (lex_string_strmake(mem_root, &definer_user,
+                         src_trigger->get_definer_user().str,
+                         src_trigger->get_definer_user().length))
+    return nullptr;
+
+  LEX_CSTRING definer_host;
+  if (lex_string_strmake(mem_root, &definer_host,
+                         src_trigger->get_definer_host().str,
+                         src_trigger->get_definer_host().length))
+    return nullptr;
+
+  LEX_CSTRING client_cs_name, connection_cl_name, db_cl_name, trigger_name;
+  if (lex_string_strmake(mem_root, &client_cs_name,
+                         src_trigger->get_client_cs_name().str,
+                         src_trigger->get_client_cs_name().length) ||
+      lex_string_strmake(mem_root, &connection_cl_name,
+                         src_trigger->get_connection_cl_name().str,
+                         src_trigger->get_connection_cl_name().length) ||
+      lex_string_strmake(mem_root, &db_cl_name,
+                         src_trigger->get_db_cl_name().str,
+                         src_trigger->get_db_cl_name().length) ||
+      lex_string_strmake(mem_root, &trigger_name,
+                         src_trigger->get_trigger_name().str,
+                         src_trigger->get_trigger_name().length))
+    return nullptr;
+
+  ::Trigger *trigger_to_add = ::Trigger::create_from_dd(
+      mem_root, trigger_name, db_name_str, subject_table_name, definition,
+      definition_utf8, src_trigger->get_sql_mode(), definer_user, definer_host,
+      client_cs_name, connection_cl_name, db_cl_name, src_trigger->get_event(),
+      src_trigger->get_action_time(), src_trigger->get_action_order(),
+      src_trigger->get_created_timestamp(), src_trigger->get_event_status());
+
+  return trigger_to_add;
 }
 
 // Only used by NDB
@@ -373,4 +493,21 @@ bool table_has_triggers(THD *thd, const char *schema_name,
   return false;
 }
 
+bool clone_trigger_and_set_status(MEM_ROOT *mem_root, ::Trigger *src_trigger,
+                                  const char *schema_name,
+                                  const char *table_name,
+                                  Event_parse_data *parse_data,
+                                  Table *dd_table) {
+  DBUG_TRACE;
+  src_trigger->set_event_status(
+      static_cast<enum_trigger_event_status>(parse_data->status));
+  ::Trigger *trigger_to_add =
+      clone_trigger(mem_root, src_trigger, schema_name, table_name);
+  if (trigger_to_add == nullptr) return true;
+  dd::Trigger *trig_obj;
+  trig_obj = dd_table->add_trigger(get_dd_action_timing(trigger_to_add),
+                                   get_dd_event_type(trigger_to_add));
+  if (fill_in_dd_trigger_object(trigger_to_add, trig_obj)) return true;
+  return false;
+}
 }  // namespace dd

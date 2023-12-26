@@ -1,0 +1,339 @@
+CREATE TABLE t1 (iv INT, cv VARCHAR(10), ncv VARCHAR(40) CHARACTER SET UTF8MB4);
+INSERT INTO t1 VALUES (1, 'a', 'b');
+INSERT INTO t1 VALUES (-1, NULL, NULL);
+INSERT INTO t1 VALUES (3, 'greatdb', _UTF8MB4 '万里开源');
+select instrb('日日花前长病酒','波',1,1) from dual;
+instrb('日日花前长病酒','波',1,1)
+0
+select instrb('日日花前长病酒','花前',1,1) from dual;
+instrb('日日花前长病酒','花前',1,1)
+7
+select instrb('日日花前长病酒','日',1,2) from dual;
+instrb('日日花前长病酒','日',1,2)
+4
+SELECT INSTRB('Geeksforgeeks', 'e') FROM dual;
+INSTRB('Geeksforgeeks', 'e')
+2
+SELECT INSTRB('Geeksforgeeks', 'e', 1, 1) FROM dual;
+INSTRB('Geeksforgeeks', 'e', 1, 1)
+2
+SELECT INSTRB('Geeksforgeeks', 'e', 1, 3) FROM dual;
+INSTRB('Geeksforgeeks', 'e', 1, 3)
+10
+SELECT INSTRB('Geeksforgeeks', 'for', 1, 1) FROM dual;
+INSTRB('Geeksforgeeks', 'for', 1, 1)
+6
+select instrb('万里开源万里开源','开源',1,2) from dual;
+instrb('万里开源万里开源','开源',1,2)
+19
+select instrb('万里开源万里开源','开源',1,1) from dual;
+instrb('万里开源万里开源','开源',1,1)
+7
+SELECT INSTRB('Geeksforgeeks', 'e', -2, 1) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -2, 1)
+11
+select instrb('万里开源12万里开源134万里开源12345','1',null,null) from dual;
+instrb('万里开源12万里开源134万里开源12345','1',null,null)
+NULL
+select instrb('万里开源12万里开源134万里开源12345','1',null,'a') from dual;
+instrb('万里开源12万里开源134万里开源12345','1',null,'a')
+NULL
+select instrb('万里开源12万里开源134万里开源12345','1',11111111,'a') from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+select instrb('万里开源12万里开源134万里开源12345','1',11111111,55555555) from dual;
+instrb('万里开源12万里开源134万里开源12345','1',11111111,55555555)
+0
+select instrb('中A国B人C','b',1,1) from dual;
+instrb('中A国B人C','b',1,1)
+0
+select instrb('中A国B人C','B',1,1) from dual;
+instrb('中A国B人C','B',1,1)
+8
+select instrb('万里开源12万里开源134万里开源12345','1',1) from dual;
+instrb('万里开源12万里开源134万里开源12345','1',1)
+13
+select instrb('万里开源12万里开源134万里开源12345','1',1,1) from dual;
+instrb('万里开源12万里开源134万里开源12345','1',1,1)
+13
+select lengthb('万里开源1') from dual;
+lengthb('万里开源1')
+13
+select instrb('万里开源12万里开源134万里开源12345','1',2) from dual;
+instrb('万里开源12万里开源134万里开源12345','1',2)
+13
+select instrb('万里开源12万里开源134万里开源12345','1',2,2) from dual;
+instrb('万里开源12万里开源134万里开源12345','1',2,2)
+27
+select lengthb('万里开源12万里开源1')from dual;
+lengthb('万里开源12万里开源1')
+27
+select instrb('万里开源12万里开源134万里开源12345','1',3) from dual;
+instrb('万里开源12万里开源134万里开源12345','1',3)
+13
+select instrb('万里开源12万里开源134万里开源12345','1',3,3) from dual;
+instrb('万里开源12万里开源134万里开源12345','1',3,3)
+42
+select lengthb('万里开源12万里开源134万里开源1') from dual;
+lengthb('万里开源12万里开源134万里开源1')
+42
+SELECT INSTRB('Geeksforgeeks', 'e', -1,1) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -1,1)
+11
+SELECT INSTRB('Geeksforgeeks', 'e', -2,1) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -2,1)
+11
+SELECT INSTRB('Geeksforgeeks', 'e', -3,1) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -3,1)
+11
+SELECT INSTRB('Geeksforgeeks', 'e', -4,1) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -4,1)
+10
+SELECT INSTRB('Geeksforgeeks', 'e', -1,2) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -1,2)
+10
+SELECT INSTRB('Geeksforgeeks', 'e', -1,3) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -1,3)
+3
+SELECT INSTRB('Geeksforgeeks', 'e', -1,4) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -1,4)
+2
+SELECT INSTRB('Geeksforgeeks', 'e', -1,5) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -1,5)
+0
+SELECT INSTRB('Geeksforgeeks', 'e', -4,2) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -4,2)
+3
+SELECT INSTRB('Geeksforgeeks', 'e', -5,2) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -5,2)
+2
+SELECT INSTRB('Geeksforgeeks', 'e', -4,3) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -4,3)
+2
+SELECT INSTRB('Geeksforgeeks', 'e', -5,3) FROM dual;
+INSTRB('Geeksforgeeks', 'e', -5,3)
+0
+SELECT INSTRB('aaaAAACCCC', 'c', -1,1) FROM dual;
+INSTRB('aaaAAACCCC', 'c', -1,1)
+0
+SELECT INSTRB('aaaAAACCCC', 'C', -1,1) FROM dual;
+INSTRB('aaaAAACCCC', 'C', -1,1)
+10
+select instrb('thisisatestsentence','t',1,0)  from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+select instrb('thisisatestsentence','t',1,'')  from dual;
+instrb('thisisatestsentence','t',1,'')
+NULL
+select instrb('thisisatestsentence','t','',1)  from dual;
+instrb('thisisatestsentence','t','',1)
+NULL
+select instrb('thisisatestsentence','t','','')  from dual;
+instrb('thisisatestsentence','t','','')
+NULL
+select instrb('thisisatestsentence','','1','1')  from dual;
+instrb('thisisatestsentence','','1','1')
+NULL
+select instrb('','bbobbb','1','1')  from dual;
+instrb('','bbobbb','1','1')
+NULL
+select instrb('bbb','','1','1')  from dual;
+instrb('bbb','','1','1')
+NULL
+select instrb('','')  from dual;
+instrb('','')
+NULL
+select instrb('','','')  from dual;
+instrb('','','')
+NULL
+select instrb('','','','')  from dual;
+instrb('','','','')
+NULL
+select instrb('万里开源12万里开源134万里开源12345','1',-1,2) from dual;
+instrb('万里开源12万里开源134万里开源12345','1',-1,2)
+27
+select instrb('万里开源12万里开源134万里开源12345','1',-6,2) from dual;
+instrb('万里开源12万里开源134万里开源12345','1',-6,2)
+13
+select instrb('万里开源12万里开源134万里开源12345','1',-6,5) from dual;
+instrb('万里开源12万里开源134万里开源12345','1',-6,5)
+0
+select instrb('万里开源a万里开源1A万里开源a12345','源a',-2,2) from dual;
+instrb('万里开源a万里开源1A万里开源a12345','源a',-2,2)
+10
+select instrb('万里开源a万里开源1A万里开源a12345','源A',-2,2) from dual;
+instrb('万里开源a万里开源1A万里开源a12345','源A',-2,2)
+0
+select instrb('万里开源a万里开源A万里开源a12345','源A',-2,1) from dual;
+instrb('万里开源a万里开源A万里开源a12345','源A',-2,1)
+23
+select instrb('万里开源12万里开源134万里开源12345','里开源',-1,2) from dual;
+instrb('万里开源12万里开源134万里开源12345','里开源',-1,2)
+18
+select instrb('万里开源12万里开源134万里开源12345','里开源',-7,2) from dual;
+instrb('万里开源12万里开源134万里开源12345','里开源',-7,2)
+18
+select instrb('万里开源12万里开源134万里开源12345','里开源',-9,1) from dual;
+instrb('万里开源12万里开源134万里开源12345','里开源',-9,1)
+33
+select instrb('万里开源12万里开源134万里开源12345','里开源',-13,1) from dual;
+instrb('万里开源12万里开源134万里开源12345','里开源',-13,1)
+33
+select instrb('万里开源12万里开源134万里开源12345','里开源',-9,3) from dual;
+instrb('万里开源12万里开源134万里开源12345','里开源',-9,3)
+4
+select instrb('万里开源12万里开源134万里开源12345','里开源',-9,4) from dual;
+instrb('万里开源12万里开源134万里开源12345','里开源',-9,4)
+0
+select instrb('万里开源12万里开源134万里开源12345','里开源',-9,2) from dual;
+instrb('万里开源12万里开源134万里开源12345','里开源',-9,2)
+18
+select instrb('万里开源12万里开源134万里开源12345','里开源',-11,2) from dual;
+instrb('万里开源12万里开源134万里开源12345','里开源',-11,2)
+18
+select instrb('万里开源12万里开源134万里开源12345','里开源',-15,2) from dual;
+instrb('万里开源12万里开源134万里开源12345','里开源',-15,2)
+4
+select instrb('万里开源12万里开源134万里开源12345','里开源',-14,2) from dual;
+instrb('万里开源12万里开源134万里开源12345','里开源',-14,2)
+18
+SELECT 	instrb('中国人国人', '国人',-4) FROM dual;
+instrb('中国人国人', '国人',-4)
+10
+SELECT 	instrb('中国人国人', '国人',-6) FROM dual;
+instrb('中国人国人', '国人',-6)
+10
+SELECT 	instrb('中国人国人', '国人',-5) FROM dual;
+instrb('中国人国人', '国人',-5)
+10
+SELECT 	instrb('中国人国人', '国人',-7) FROM dual;
+instrb('中国人国人', '国人',-7)
+4
+SELECT instrb('aaaaabbbBBB','BB',5,2) FROM DUAL;
+instrb('aaaaabbbBBB','BB',5,2)
+10
+SELECT instrb('aaaaabbbBBB','BB',5,1) FROM DUAL;
+instrb('aaaaabbbBBB','BB',5,1)
+9
+SELECT instrb('ABCDABCDABCD','A',1,2) FROM DUAL;
+instrb('ABCDABCDABCD','A',1,2)
+5
+SELECT instrb('ABCDABCDABCD','a',1,2) FROM DUAL;
+instrb('ABCDABCDABCD','a',1,2)
+0
+SELECT instrb('aaaaabbbBBB','BB',-1,2) FROM DUAL;
+instrb('aaaaabbbBBB','BB',-1,2)
+9
+SELECT instrb('aaaaabbbBBB','BB',-1,1) FROM DUAL;
+instrb('aaaaabbbBBB','BB',-1,1)
+10
+SELECT instrb('aaaaabbbBBB','BB',-1,3) FROM DUAL;
+instrb('aaaaabbbBBB','BB',-1,3)
+0
+select instrb('thisisatestsentence','t',0,1)  from dual;
+instrb('thisisatestsentence','t',0,1)
+0
+SELECT 	instrb('中国人国人', '国人',-100) FROM dual;
+instrb('中国人国人', '国人',-100)
+0
+select instrb('thisisatestsentence','c',0,0)  from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+select instrb('xx','') is null,instrb('xx','','') is null,instrb('xx','','','') is null from dual;
+instrb('xx','') is null	instrb('xx','','') is null	instrb('xx','','','') is null
+1	1	1
+set sql_mode='oracle';
+select instrb('thisisatestsentence','t',1,2.1) from dual;
+instrb('thisisatestsentence','t',1,2.1)
+8
+select instrb('thisisatestsentence','t',1,2.2) from dual;
+instrb('thisisatestsentence','t',1,2.2)
+8
+select instrb('thisisatestsentence','t',1,2.3) from dual;
+instrb('thisisatestsentence','t',1,2.3)
+8
+select instrb('thisisatestsentence','t',1,2.5) from dual;
+instrb('thisisatestsentence','t',1,2.5)
+8
+select instrb('thisisatestsentence','t',1,2.6) from dual;
+instrb('thisisatestsentence','t',1,2.6)
+8
+select instrb('thisisatestsentence','t',1,2.7) from dual;
+instrb('thisisatestsentence','t',1,2.7)
+8
+select instrb('thisisatestsentence','t',1,3) from dual;
+instrb('thisisatestsentence','t',1,3)
+11
+select instrb('thisisatestsentence','t',1.1,3) from dual;
+instrb('thisisatestsentence','t',1.1,3)
+11
+select instrb('thisisatestsentence','t',1.2,3) from dual;
+instrb('thisisatestsentence','t',1.2,3)
+11
+select instrb('thisisatestsentence','t',1.3,3) from dual;
+instrb('thisisatestsentence','t',1.3,3)
+11
+select instrb('thisisatestsentence','t',1.5,3) from dual;
+instrb('thisisatestsentence','t',1.5,3)
+11
+select instrb('thisisatestsentence','t',1.6,3) from dual;
+instrb('thisisatestsentence','t',1.6,3)
+11
+select instrb('thisisatestsentence','t',1.7,3) from dual;
+instrb('thisisatestsentence','t',1.7,3)
+11
+select instrb('thisisatestsentence','t',1.1,3.1) from dual;
+instrb('thisisatestsentence','t',1.1,3.1)
+11
+select instrb('thisisatestsentence','t',1.7,3.7) from dual;
+instrb('thisisatestsentence','t',1.7,3.7)
+11
+DROP TABLE t1;
+create or replace function f1() return double as begin return 0.6; end;|
+select f1(),instr('thisisatestsentence','t', 1, f1()) from dual;
+f1()	instr('thisisatestsentence','t', 1, f1())
+0.6	1
+select f1(),instr('thisisatestsentence','t', f1(), f1()) from dual;
+f1()	instr('thisisatestsentence','t', f1(), f1())
+0.6	1
+select  log(10,4),instr('thisisatestsentence','t',1,log(10, 4)) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+select  log(10,4),instr('thisisatestsentence','t',log(10, 4),log(10, 4)) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+select f1(),instr('thisisatestsentence','t',f1()) from dual;
+f1()	instr('thisisatestsentence','t',f1())
+0.6	1
+select log(10,4),instr('thisisatestsentence','t',log(10,4)) from dual;
+log(10,4)	instr('thisisatestsentence','t',log(10,4))
+0.6020599913279623	0
+select instr('thisisatestsentence','t',0.6) from dual;
+instr('thisisatestsentence','t',0.6)
+0
+select f1(),instr('thisisatestsentence','t',1,f1()) from dual;
+f1()	instr('thisisatestsentence','t',1,f1())
+0.6	1
+select instr('thisisatestsentence','t', '1.6abc') from dual;
+ERROR HY000: Invalid use of parameters in 'start position'
+select instr('thisisatestsentence','t', '1.5') from dual;
+instr('thisisatestsentence','t', '1.5')
+1
+select instr('thisisatestsentence','t', '1','1.6abc') from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+select  instr('thisisatestsentence','t',log(10, 4)) from dual;
+instr('thisisatestsentence','t',log(10, 4))
+0
+select  instr('thisisatestsentence','t', 1,log(10, 4)) from dual;
+ERROR HY000: Invalid use of parameters in 'nth_appearance'
+select  instr('thisisatestsentence','t', 1,1.999999999999999) from dual;
+instr('thisisatestsentence','t', 1,1.999999999999999)
+1
+select  instr('thisisatestsentence','t', 1.999999999999999,1) from dual;
+instr('thisisatestsentence','t', 1.999999999999999,1)
+1
+select  instr('thisisatestsentence','t', 1.999999999999999,1.999999999999999) from dual;
+instr('thisisatestsentence','t', 1.999999999999999,1.999999999999999)
+1
+select  instr('thisisatestsentence','t', 1.999999999999999,2) from dual;
+instr('thisisatestsentence','t', 1.999999999999999,2)
+8
+select  instr('thisisatestsentence','t', 1,2) from dual;
+instr('thisisatestsentence','t', 1,2)
+8
+drop function f1;

@@ -744,9 +744,34 @@ bool Sql_cmd_truncate_table::execute(THD *thd) {
   Table_ref *first_table = thd->lex->query_block->get_table_list();
   if (check_one_table_access(thd, DROP_ACL, first_table)) return true;
 
-  if (is_temporary_table(first_table))
-    truncate_temporary(thd, first_table);
-  else
+  if (is_temporary_table(first_table)) {
+    if (!first_table->table->m_is_ora_tmp)
+      truncate_temporary(thd, first_table);
+    else {
+      if (first_table->table->m_global_tmp) {
+        first_table->table->file->ha_reset();
+        close_temporary_table(thd, first_table->table, true, true);
+        first_table->table = nullptr;
+
+        /*
+          In MySQL, truncate statement will commit the current transaction.
+          This is its transaction behavior, not dedicated for temporary table.
+          if truncate_temporary() is called, end_transaction() will be invoked.
+          For global temporary table, it is simulated by following call.
+        */
+        close_temporary_tables_for_trans(thd);
+      } else {
+        /*
+          In MySQL, truncate statement will commit the current transaction.
+          So after truncate-statement, all transactional temporary table
+          will be terminated. (rows removed or definition dropped)
+        */
+        truncate_temporary(thd, first_table);
+      }
+      first_table->table = nullptr;
+      m_error = false;
+    }
+  } else
     truncate_base(thd, first_table);
 
   if (!m_error) my_ok(thd);

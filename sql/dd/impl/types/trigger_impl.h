@@ -35,6 +35,7 @@
 #include <sys/types.h>
 #include <new>
 
+#include "sql/dd/impl/properties_impl.h"  // Properties_impl
 #include "sql/dd/impl/raw/raw_record.h"
 #include "sql/dd/impl/types/entity_object_impl.h"  // dd::Entity_object_impl
 #include "sql/dd/impl/types/table_impl.h"          // dd::Table_impl
@@ -109,6 +110,20 @@ class Trigger_impl : virtual public Entity_object_impl, virtual public Trigger {
 
   void set_event_type(enum_event_type event_type) override {
     m_event_type = event_type;
+  }
+
+  /////////////////////////////////////////////////////////////////////////
+  // event_status
+  /////////////////////////////////////////////////////////////////////////
+  enum_trigger_status event_status() const override {
+    ulong status = (ulong)(enum_trigger_status::ES_ENABLED);
+    if (options().exists("status")) options().get("status", &status);
+    return static_cast<enum_trigger_status>(status);
+  }
+
+  void set_event_status(enum_trigger_status event_status) override {
+    m_event_status = (ulong)event_status;
+    options().set("status", m_event_status);
   }
 
   /////////////////////////////////////////////////////////////////////////
@@ -256,6 +271,14 @@ class Trigger_impl : virtual public Entity_object_impl, virtual public Trigger {
     return new (std::nothrow) Trigger_impl(other, table);
   }
 
+  const Properties &options() const override { return m_options; }
+
+  Properties &options() override { return m_options; }
+
+  bool set_options(const String_type &options_raw) override {
+    return m_options.insert_values(options_raw);
+  }
+
  private:
   enum_event_type m_event_type;
   enum_action_timing m_action_timing;
@@ -287,6 +310,9 @@ class Trigger_impl : virtual public Entity_object_impl, virtual public Trigger {
   Object_id m_client_collation_id;
   Object_id m_connection_collation_id;
   Object_id m_schema_collation_id;
+  // trigger status
+  ulong m_event_status = 0;
+  Properties_impl m_options;
 };
 
 ///////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,65 @@
+[### normal test : old failure1]
+create table test (c1 int primary key auto_increment, c2 varchar(50))engine = innodb;
+create table test_test (c1 int, c3 varchar(50))engine = innodb;
+create view test as select * from test_test;
+ERROR 42S01: Table 'test' already exists
+drop table test;
+drop table test_test;
+[### normal test : old failure2]
+create table test_test (c1 int, c3 varchar(50))engine = innodb;
+create view test as select * from test_test;
+create table test (c1 long primary key, c3 varchar(100))engine = innodb;
+ERROR 42S01: Table 'test' already exists
+drop table test_test;
+drop view test;
+[### rename duplicate test : normal old failure3]
+create table test1 (c3 int primary key auto_increment, c4 double)engine = innodb;
+create table test_test (c1 int, c3 varchar(50))engine = innodb;
+create view test as select * from test_test;
+rename table test1 to test;
+ERROR 42S01: Table 'test' already exists
+rename table test to test1;
+ERROR 42S01: Table 'test1' already exists
+drop table test1;
+drop table test_test;
+drop view test;
+[### create sequence test : common failure4]
+create table test2 (c1 int primary key) engine = innodb;
+create sequence test2 start with 2 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+ERROR HY000: create sequence failed, cause START WITH should between MINVALUE and MAXVALUE!
+drop table test2;
+[### create sequence test : common failure5]
+create table test_test (c1 int primary key, c2 varchar(50)) engine = innodb;
+create view test3 as select * from test_test;
+create sequence test3 start with 2000 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+ERROR HY000: create sequence failed, cause duplicated table/view name is already exists!
+drop table test_test;
+drop view test3;
+[### duplicate test common failure6]
+create sequence test4 start with 2000 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+create table test4 (c1 int primary key) engine = innodb;
+ERROR HY000: duplicated name with sequence: test4
+drop sequence test4;
+[### duplicate test common failure7]
+create sequence test5 start with 2000 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+create table test_test (c1 int, c2 varchar(50))engine = innodb;
+create view test5 as select * from test_test;
+ERROR HY000: duplicated name with sequence: test5
+drop sequence test5;
+drop table test_test;
+[### rename duplicate test common failure8]
+create sequence test6 start with 2000 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+create table test_test (c1 int, c2 varchar(50))engine = innodb;
+rename table test_test to test6;
+ERROR HY000: duplicated name with sequence: test6
+drop sequence test6;
+drop table test_test;
+[### rename duplicate test common failure9]
+create sequence test7 start with 2000 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+create table test_test (c1 int, c2 varchar(50))engine = innodb;
+create view view7 as select * from test_test;
+rename table view7 to test7;
+ERROR HY000: duplicated name with sequence: test7
+drop sequence test7;
+drop table test_test;
+drop view view7;

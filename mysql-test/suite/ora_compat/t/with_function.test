@@ -1,0 +1,405 @@
+#
+# Testing with function 
+# Note that all the cases in this section are copied from
+# oracmp_sp.test  after modifying the constructure to apply to
+# the syntax of with function 
+#
+
+-- echo # Tests for mysql default sql_mode
+
+SET SQL_MODE=default;
+DROP TABLE IF EXISTS t1;
+DROP function IF EXISTS f1;
+CREATE TABLE t1 (
+  int_field INTEGER UNSIGNED NOT NULL,
+  char_field CHAR(10),
+  INDEX(`int_field`)
+);
+insert into t1 values(1,'test1');
+insert into t1 values(2,'test2');
+insert into t1 values(3,'test3');
+
+DELIMITER /;
+
+WITH FUNCTION f1() RETURNS INT
+ RETURN (SELECT COUNT(*) FROM t1);
+ select f1() from dual /
+--error ER_SP_DOES_NOT_EXIST
+ select f1() from dual /
+
+with function f1() returns int
+  return (select * from (select 100) as r);
+select f1() from dual/
+--error ER_SP_DOES_NOT_EXIST
+select f1() from dual/
+
+with function f1() returns int
+begin
+  declare a, b int;
+  drop temporary table if exists t3;
+  create temporary table t3 (id int);
+  insert into t3 values (1), (2), (3);
+  set a:= (select count(*) from t3);
+  set b:= (select count(*) from t3 t3_alias);
+  return a + b;
+end;
+select f1() from dual/
+
+--error ER_SP_DOES_NOT_EXIST
+select f1() from dual/
+
+with function f1(C INT) RETURNS INT BEGIN RETURN C * 10; END;
+select f1(1) from dual/
+
+with function f1(C INT) RETURNS INT BEGIN RETURN C * 0; END;
+select f1(1) from dual/
+
+--error ER_SP_DOES_NOT_EXIST
+select f1(1) from dual/
+
+--error 1064
+with function f1(C INT) RETURNS INT BEGIN RETURN C * 10; END;
+insert into t1 values(10,'test10');/
+
+--error 1235
+with function f1(C INT) RETURNS INT BEGIN RETURN C * 10; END;
+update t1 set t1.char_field = 'testtest' where t1.int_field =1;/ 
+
+--error 1235
+with function f1(C INT) RETURNS INT BEGIN RETURN C * 10; END;
+delete from t1 where t1.int_field =1;/ 
+
+DELIMITER ;/
+DROP TABLE t1;
+
+-- echo
+-- echo # Tests for mysql sql_mode under oracle
+-- echo
+
+SET SQL_MODE=oracle;
+
+DROP function IF EXISTS f1;
+--error ER_SP_DOES_NOT_EXIST
+select f1() from dual;
+
+DELIMITER /;
+WITH FUNCTION f1() RETURN INT AS BEGIN RETURN 1; END;
+select f1() from dual/
+--error ER_SP_DOES_NOT_EXIST
+select f1() from dual/
+
+WITH FUNCTION f1() RETURN INT IS BEGIN RETURN 1; END;
+select f1() from dual/
+--error ER_SP_DOES_NOT_EXIST
+select f1() from dual/
+
+WITH FUNCTION f1 (p1 VARCHAR2(10)) RETURN VARCHAR(20)
+AS
+  p2 VARCHAR(10);
+BEGIN
+  SET p2:='new';
+  RETURN CONCAT(p1, p2);
+END;
+select f1('is test ') from dual/
+--error ER_SP_DOES_NOT_EXIST
+select f1('is test ') from dual/
+
+WITH FUNCTION f1 (p1 VARCHAR2(10)) RETURN VARCHAR(20)
+AS
+BEGIN
+  DECLARE
+    p2 VARCHAR(10);
+  BEGIN
+    SET p2:='new';
+    RETURN CONCAT(p1, p2);
+  END;
+  DECLARE
+    t1 VARCHAR(10);
+    t2 VARCHAR(10);
+  BEGIN
+  END;
+END;
+select f1('test is') from dual/
+--error ER_SP_DOES_NOT_EXIST
+select f1('test is') from dual/
+DELIMITER ;/
+
+--echo #
+--echo # Tests when udf function is exit, with function still excute and priority over udf function
+--echo #
+
+SET SQL_MODE=default;
+DROP function IF EXISTS f1;
+DELIMITER /;
+create function f1(C INT) RETURNS INT BEGIN RETURN C * 10; END/
+
+select f1(1) from dual/
+
+with function f1(C INT) RETURNS INT BEGIN RETURN C * 0; END;
+select f1(1) from dual/
+
+select f1(1) from dual/
+
+with function f1(C INT) RETURNS INT BEGIN RETURN C * 11; END;
+select f1(1) from dual/
+
+with function f1(C INT) RETURNS INT BEGIN RETURN C * 11; END;
+select f1(1),f1(2) from dual/
+
+select f1(1) from dual/
+
+with function f2(C INT) RETURNS INT BEGIN RETURN C * 11; END;
+select f2(1), f1(1) from dual/
+
+--error ER_SP_DOES_NOT_EXIST
+with function f2(C INT) RETURNS INT BEGIN RETURN C * 11; END;
+select f2(1), f(1) from dual/
+
+select f1(1) from dual/
+
+DELIMITER ;/
+DROP function IF EXISTS f1;
+
+--echo #
+--echo # Tests when function is exit, with function still excute and priority lower function
+--echo #
+SET SQL_MODE=oracle;
+SELECT LENGTH ('bbbb') FROM dual;
+
+DELIMITER /;
+WITH FUNCTION LENGTH(C varchar2(50)) RETURN INT AS BEGIN RETURN 6; END;
+SELECT LENGTH('bbbb') FROM DUAL/
+
+WITH FUNCTION LENGTH(C varchar2(50)) RETURN INT AS BEGIN RETURN 6; END;
+SELECT length('bbbb') FROM DUAL/
+  
+SELECT LENGTH('bbbb') FROM DUAL/
+
+WITH FUNCTION LENGTH(C varchar2(50)) RETURN INT AS BEGIN RETURN 6; END;
+SELECT LENGTH('bbbb'),INSTR('hello world', 'l') FROM DUAL/
+
+SELECT LENGTH('bbbb'),INSTR('hello world', 'l') FROM DUAL/
+ 
+WITH FUNCTION LENGTHTMP(C varchar2(50)) RETURN INT AS BEGIN RETURN 8; END;
+SELECT LENGTHTMP('bbbb') FROM DUAL/
+
+--error ER_SP_DOES_NOT_EXIST
+SELECT LENGTHTMP('bbbb') FROM DUAL/
+
+DELIMITER ;/
+
+--echo #
+--echo # Tests unsupport prepare Sql
+--echo #
+
+SET SQL_MODE=default;
+
+--error ER_UNSUPPORTED_PS
+prepare stmt from "with function f1(C INT) RETURNS INT BEGIN RETURN C * 10; END; select f1(1) from dual;";
+
+--error ER_UNSUPPORTED_PS
+prepare stmt from "with function f1(C INT) RETURNS INT BEGIN RETURN C * 10; END; select f1(1) from dual;";
+
+#after excute error , no crash
+prepare stmt from "select length('test') from dual";
+
+select length('test') from dual;
+
+--echo #
+--echo # Tests other Sql
+--echo #
+
+SET SQL_MODE=default;
+
+drop procedure if exists p1;
+drop table if exists t1;
+create table t1 (a integer);
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t1 values(3);
+DELIMITER /;
+with function f1(C INT) RETURNS INT BEGIN RETURN C * 10; END; select f1(10) from dual/
+with function f1(C INT) RETURNS INT BEGIN RETURN C * 10; END; select f1(t1.a) from t1/
+with function f1(C INT) RETURNS INT BEGIN RETURN C * 10; END; select f1(t1.a),f1(10) from t1/
+explain with function f1(C INT) RETURNS INT BEGIN RETURN C * 10; END; select f1(t1.a) from t1/
+explain with function f1(C INT) RETURNS INT BEGIN RETURN C * 10; END; select f1(t1.a),f1(10) from t1/
+
+
+DELIMITER ;/
+drop table t1;
+ 
+drop table if exists t2;
+drop function if exists f_agg;  
+create table t2(id int,name varchar(20));
+insert into t2 values(1,'test1');
+insert into t2 values(2,'test2');
+SET SQL_MODE=oracle;
+DELIMITER /;
+with function f_agg(i_id int,i_name varchar(20)) return varchar(20)
+is
+begin
+  insert into t2 values(i_id,i_name);
+   return i_name;
+   end;
+select f_agg(5,'test5') from dual/
+
+DELIMITER ;/
+insert into t2 values(3,'test3');
+insert into t2 values(4,'test4');
+DELIMITER /;
+with function f_delete(i_id integer,i_name varchar(10)) return varchar(10)
+is
+  begin 
+  delete from t2 where t2.id = i_id;
+    return i_name;
+  end;
+  select f_delete(1,'test1') from dual/
+  DELIMITER ;/
+drop table t2;
+
+DELIMITER /;
+
+WITH FUNCTION f1(C INT) RETURN INT AS BEGIN RETURN C * 10; END;
+SELECT F1(10) FROM DUAL/
+
+DELIMITER ;/
+
+--echo #
+--echo # Tests unsupport SQL
+--echo #
+
+SET SQL_MODE=oracle;
+
+DELIMITER /;
+
+WITH FUNCTION LENGTHTMP(C varchar2(50)) RETURN INT AS BEGIN RETURN 8; END;
+SELECT LENGTHTMP('bbbb') FROM DUAL/
+
+--error 1303
+WITH FUNCTION f21(C1 INT) RETURN INT AS BEGIN RETURN C1; END;
+  SELECT f21(1) FROM dual WHERE 100 IN
+   (
+  WITH FUNCTION f22(C1 INT) RETURN INT AS BEGIN RETURN C1 + 2; END;
+  FUNCTION f23(C1 INT) RETURN INT AS BEGIN RETURN C1 - 2; END;
+  v21(C) AS (SELECT 50 FROM dual)
+ SELECT f22(C) +f23(C) FROM v21
+  )
+  /
+
+  #after error , other function can still excute, do not crash
+select LENGTH('test') from dual/
+
+--error 1064
+with function f2(C INT) RETURNS INT BEGIN RETURN C * 10; END; select f2(10) from dual union with function f3(C INT) RETURNS INT BEGIN RETURN C * 20; END;select f3(10) from dual/
+
+#after error , other function can still excute, do not crash
+select LENGTH('test') from dual/
+
+--error 1064
+with FUNCTION f_del(p_id NUMBER) RETURN NUMBER deterministic IS
+BEGIN
+RETURN p_id+1;
+END; drop with function f_del;/
+
+--error 1064
+with FUNCTION f_del(p_id NUMBER) RETURN NUMBER deterministic IS
+BEGIN
+RETURN p_id+1;
+END; drop with function f_del;/
+
+#after error , other function can still excute, do not crash
+select LENGTH('test') from dual/
+
+#unsupport the <db>.function format 
+--error 1235
+WITH FUNCTION test.f_del(p_id NUMBER) RETURN NUMBER DETERMINISTIC IS BEGIN   RETURN p_id +1; END; SELECT id,test.f_del(p_id) FROM test1/
+
+#after error , other function can still excute, do not crash
+select LENGTH('test') from dual/
+
+DELIMITER ;/
+
+
+--echo #
+--echo # Tests the same function name in nested SQL
+--echo #
+
+SET SQL_MODE=oracle;
+
+drop function IF EXISTS f_del;
+drop function IF EXISTS f_del_out;
+
+DELIMITER /;
+
+create  FUNCTION f_del(p_id int) RETURN int deterministic is  BEGIN RETURN p_id+100; END/
+
+create  FUNCTION f_del_out(p_id int) RETURN int deterministic is
+  p_var int;
+  BEGIN
+  p_var :=f_del(p_id);
+  #p_var :=to_number(p_id);
+  set @p_del=p_var;
+  RETURN p_var;
+  END;/
+
+select f_del_out(300),@p_del;/
+
+with FUNCTION f_del(p_var int) RETURN int deterministic IS
+  name1 int;
+  BEGIN
+  select f_del_out(p_var) into name1 from dual;
+  RETURN name1 ;
+  END; select f_del(300),@p_del;/
+
+with FUNCTION f_del_alias(p_var int) RETURN int deterministic IS
+  name1 int;
+  BEGIN
+  select f_del_out(p_var) into name1 from dual;
+  RETURN name1 ;
+  END; select f_del_alias(300),@p_del;/
+
+DELIMITER ;/
+drop function IF EXISTS f_del;
+drop function IF EXISTS f_del_out;
+drop function IF EXISTS f_del1;
+drop function IF EXISTS f_del2;
+
+
+DELIMITER /;
+
+CREATE FUNCTION f_del(p_id int) RETURN INT DETERMINISTIC IS BEGIN RETURN p_id+100; END; /
+
+CREATE FUNCTION f_del1(p_id int) RETURN INT DETERMINISTIC IS
+p_var int;
+BEGIN
+  p_var := f_del(p_id);
+  RETURN p_var;
+END;
+/
+
+CREATE FUNCTION f_del2(p_var int) RETURN INT DETERMINISTIC IS
+name2 int;
+BEGIN
+  select f_del1(p_var) into name2 from dual;
+  RETURN name2 ;
+END;
+/
+
+#there are three sp_head::execution() calls
+SELECT f_del2(300) from dual;
+/
+
+#there are same calls with f_del2
+WITH FUNCTION f_del(p_var int) RETURN INT DETERMINISTIC IS
+name1 int;
+BEGIN
+select f_del1(p_var) into name1 from dual;
+RETURN name1 ;
+END; SELECT f_del(300) from dual;
+/
+
+DELIMITER ;/
+
+drop function IF EXISTS f_del;
+drop function IF EXISTS f_del1;
+drop function IF EXISTS f_del2;

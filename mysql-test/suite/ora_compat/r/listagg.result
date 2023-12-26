@@ -1,0 +1,535 @@
+create table plan1 (
+id int PRIMARY key,
+name varchar(255)
+);
+create table plandetail(
+id int PRIMARY key,
+name varchar(255),
+state int,
+planId int
+);
+insert into plan1 values(1,'计划一');
+insert into plan1 values(2,'计划二');
+insert into plan1 values(3,'计划三');
+insert into plandetail values(1,'明细一',0,1);
+insert into plandetail values(2,'明细2',1,1);
+insert into plandetail values(3,'明细3',1,1);
+insert into plandetail values(4,'明细一',0,2);
+insert into plandetail values(5,'明细2',0,2);
+insert into plandetail values(6,'明细3',1,2);
+insert into plandetail values(7,'明细一',1,3);
+insert into plandetail values(8,'明细2',1,3);
+insert into plandetail values(9,'明细3',1,3);
+select t1.name ,group_concat(t2.name order by PLANID asc separator ',') from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	group_concat(t2.name order by PLANID asc separator ',')
+计划一	明细一,明细2,明细3
+计划三	明细一,明细2,明细3
+计划二	明细一,明细2,明细3
+select t1.name ,LISTAGG(t2.name,'')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	LISTAGG(t2.name,'')  WITHIN GROUP (order by t2.planid asc)
+计划一	明细一明细2明细3
+计划三	明细一明细2明细3
+计划二	明细一明细2明细3
+select t1.name ,LISTAGG(t2.name,'aaaaaa')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	LISTAGG(t2.name,'aaaaaa')  WITHIN GROUP (order by t2.planid asc)
+计划一	明细一aaaaaa明细2aaaaaa明细3
+计划三	明细一aaaaaa明细2aaaaaa明细3
+计划二	明细一aaaaaa明细2aaaaaa明细3
+select t1.name ,LISTAGG(t2.name,',')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	LISTAGG(t2.name,',')  WITHIN GROUP (order by t2.planid asc)
+计划一	明细一,明细2,明细3
+计划三	明细一,明细2,明细3
+计划二	明细一,明细2,明细3
+select t1.name ,LISTAGG(t2.name,':')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	LISTAGG(t2.name,':')  WITHIN GROUP (order by t2.planid asc)
+计划一	明细一:明细2:明细3
+计划三	明细一:明细2:明细3
+计划二	明细一:明细2:明细3
+select t1.name ,LISTAGG(t2.name,';')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	LISTAGG(t2.name,';')  WITHIN GROUP (order by t2.planid asc)
+计划一	明细一;明细2;明细3
+计划三	明细一;明细2;明细3
+计划二	明细一;明细2;明细3
+select t1.name ,LISTAGG(t2.name,'\'')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	LISTAGG(t2.name,'\'')  WITHIN GROUP (order by t2.planid asc)
+计划一	明细一'明细2'明细3
+计划三	明细一'明细2'明细3
+计划二	明细一'明细2'明细3
+select t1.name ,LISTAGG(t2.name,1)  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	LISTAGG(t2.name,1)  WITHIN GROUP (order by t2.planid asc)
+计划一	明细一1明细21明细3
+计划三	明细一1明细21明细3
+计划二	明细一1明细21明细3
+select t1.name ,LISTAGG(t2.name,-1)  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	LISTAGG(t2.name,-1)  WITHIN GROUP (order by t2.planid asc)
+计划一	明细一-1明细2-1明细3
+计划三	明细一-1明细2-1明细3
+计划二	明细一-1明细2-1明细3
+select t1.name ,LISTAGG(t2.name,1.0000000001)  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	LISTAGG(t2.name,1.0000000001)  WITHIN GROUP (order by t2.planid asc)
+计划一	明细一1.0000000001明细21.0000000001明细3
+计划三	明细一1.0000000001明细21.0000000001明细3
+计划二	明细一1.0000000001明细21.0000000001明细3
+select t1.name ,LISTAGG(t2.name,-1.0000000001)  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	LISTAGG(t2.name,-1.0000000001)  WITHIN GROUP (order by t2.planid asc)
+计划一	明细一-1.0000000001明细2-1.0000000001明细3
+计划三	明细一-1.0000000001明细2-1.0000000001明细3
+计划二	明细一-1.0000000001明细2-1.0000000001明细3
+select t1.name ,LISTAGG(t2.name,-1.0000000001)  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	LISTAGG(t2.name,-1.0000000001)  WITHIN GROUP (order by t2.planid asc)
+计划一	明细一-1.0000000001明细2-1.0000000001明细3
+计划三	明细一-1.0000000001明细2-1.0000000001明细3
+计划二	明细一-1.0000000001明细2-1.0000000001明细3
+select t1.name ,LISTAGG(t2.name,'|分割|')  WITHIN GROUP (order by t2.planid asc) from plan1 t1 LEFT JOIN plandetail t2 on t1.id = t2.planid GROUP BY t1.name;
+name	LISTAGG(t2.name,'|分割|')  WITHIN GROUP (order by t2.planid asc)
+计划一	明细一|分割|明细2|分割|明细3
+计划三	明细一|分割|明细2|分割|明细3
+计划二	明细一|分割|明细2|分割|明细3
+drop table plan1;
+drop table plandetail;
+# test window function support
+CREATE TABLE p (population int, nation char (20), city char(20));
+INSERT INTO p VALUES (500, 'China','Guangzhou');
+INSERT INTO p VALUES (1500, 'China','Shanghai');
+INSERT INTO p VALUES (500, 'China','Beijing');
+INSERT INTO p VALUES (1000, 'USA','New York');
+INSERT INTO p VALUES (500, 'USA','Boston');
+INSERT INTO p VALUES (500, 'Japan','Tokyo');
+INSERT INTO p VALUES (1200, 'China','Shanghai');
+# data set in population table p.
+SELECT * FROM p;
+population	nation	city
+500	China	Guangzhou
+1500	China	Shanghai
+500	China	Beijing
+1000	USA	New York
+500	USA	Boston
+500	Japan	Tokyo
+1200	China	Shanghai
+# legacy behavior
+SELECT SUM(population),LISTAGG(p.city, ',') la_a_city,
+GROUP_CONCAT(p.city SEPARATOR ',') gc_a_city FROM p;
+SUM(population)	la_a_city	gc_a_city
+5700	Guangzhou,Shanghai,Beijing,New York,Boston,Tokyo,Shanghai	Guangzhou,Shanghai,Beijing,New York,Boston,Tokyo,Shanghai
+SELECT SUM(population),
+LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY p.city) la_a_city,
+GROUP_CONCAT(p.city ORDER BY p.city SEPARATOR ',') gc_a_city FROM p;
+SUM(population)	la_a_city	gc_a_city
+5700	Beijing,Boston,Guangzhou,New York,Shanghai,Shanghai,Tokyo	Beijing,Boston,Guangzhou,New York,Shanghai,Shanghai,Tokyo
+SELECT SUM(population),
+LISTAGG(DISTINCT city, ',') WITHIN GROUP (ORDER BY p.city) la_d_city,
+GROUP_CONCAT(DISTINCT city ORDER BY p.city SEPARATOR ',') gc_d_city FROM p;
+SUM(population)	la_d_city	gc_d_city
+5700	Beijing,Boston,Guangzhou,New York,Shanghai,Tokyo	Beijing,Boston,Guangzhou,New York,Shanghai,Tokyo
+SELECT SUM(population),
+LISTAGG(DISTINCT city, ',') WITHIN GROUP (ORDER BY p.city DESC) la_d_city,
+GROUP_CONCAT(DISTINCT city ORDER BY p.city DESC SEPARATOR ',') gc_d_city FROM p;
+SUM(population)	la_d_city	gc_d_city
+5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+# partition behavior for comparision.
+SET SQL_MODE=DEFAULT;
+SELECT LISTAGG(p.city, ',') OVER (PARTITION BY nation ORDER BY city) la_a_city FROM p;
+ERROR HY000: ORDER BY not allowed in window spec for 'listagg()'
+SELECT LISTAGG(p.city, ',') WITHIN GROUP () la_a_city FROM p;
+ERROR HY000: missing ORDER BY clause
+SET SQL_MODE=ORACLE;
+SELECT LISTAGG(p.city, ',') OVER (PARTITION BY nation ORDER BY city) la_a_city FROM p;
+ERROR HY000: ORDER BY not allowed in window spec for 'listagg()'
+SELECT LISTAGG(p.city, ',') WITHIN GROUP () la_a_city FROM p;
+ERROR HY000: missing ORDER BY clause
+SELECT SUM(population) OVER (PARTITION BY nation) sum,
+LISTAGG(p.city, ',') OVER (PARTITION BY nation) la_a_city FROM p;
+sum	la_a_city
+3700	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai
+500	Tokyo
+1500	New York,Boston
+1500	New York,Boston
+SELECT SUM(population) OVER (PARTITION BY nation) sum,
+LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY p.city) OVER (PARTITION BY nation) la_a_city FROM p;
+sum	la_a_city
+3700	Beijing,Guangzhou,Shanghai,Shanghai
+3700	Beijing,Guangzhou,Shanghai,Shanghai
+3700	Beijing,Guangzhou,Shanghai,Shanghai
+3700	Beijing,Guangzhou,Shanghai,Shanghai
+500	Tokyo
+1500	Boston,New York
+1500	Boston,New York
+SELECT SUM(population) OVER (PARTITION BY nation) sum,
+LISTAGG(DISTINCT city, ',') WITHIN GROUP (ORDER BY p.city) OVER (PARTITION BY nation) la_d_city FROM p;
+sum	la_d_city
+3700	Beijing,Guangzhou,Shanghai
+3700	Beijing,Guangzhou,Shanghai
+3700	Beijing,Guangzhou,Shanghai
+3700	Beijing,Guangzhou,Shanghai
+500	Tokyo
+1500	Boston,New York
+1500	Boston,New York
+SELECT NATION,CITY,POPULATION,SUM(population) OVER (PARTITION BY nation ORDER BY city) sum,
+LISTAGG(DISTINCT '<'||city||'>') WITHIN GROUP (ORDER BY p.city ASC) OVER (PARTITION BY nation) la_d_city FROM p;
+NATION	CITY	POPULATION	sum	la_d_city
+China	Beijing	500	500	<Beijing><Guangzhou><Shanghai>
+China	Guangzhou	500	1000	<Beijing><Guangzhou><Shanghai>
+China	Shanghai	1500	3700	<Beijing><Guangzhou><Shanghai>
+China	Shanghai	1200	3700	<Beijing><Guangzhou><Shanghai>
+Japan	Tokyo	500	500	<Tokyo>
+USA	Boston	500	500	<Boston><New York>
+USA	New York	1000	1500	<Boston><New York>
+# listagg/group_concat shares the same partition behavior
+SET SQL_MODE=ORACLE;
+SELECT SUM(population) OVER (PARTITION BY nation) sum,
+LISTAGG(p.city, ',') OVER (PARTITION BY nation) la_a_city,
+GROUP_CONCAT(p.city SEPARATOR ',') OVER (PARTITION BY nation) gc_a_city FROM p;
+sum	la_a_city	gc_a_city
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+500	Tokyo	Tokyo
+1500	New York,Boston	New York,Boston
+1500	New York,Boston	New York,Boston
+SELECT SUM(population) OVER (PARTITION BY nation) sum,
+LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY p.city) OVER (PARTITION BY nation) la_a_city,
+GROUP_CONCAT(p.city ORDER BY p.city SEPARATOR ',') OVER (PARTITION BY nation) gc_a_city FROM p;
+sum	la_a_city	gc_a_city
+3700	Beijing,Guangzhou,Shanghai,Shanghai	Beijing,Guangzhou,Shanghai,Shanghai
+3700	Beijing,Guangzhou,Shanghai,Shanghai	Beijing,Guangzhou,Shanghai,Shanghai
+3700	Beijing,Guangzhou,Shanghai,Shanghai	Beijing,Guangzhou,Shanghai,Shanghai
+3700	Beijing,Guangzhou,Shanghai,Shanghai	Beijing,Guangzhou,Shanghai,Shanghai
+500	Tokyo	Tokyo
+1500	Boston,New York	Boston,New York
+1500	Boston,New York	Boston,New York
+SELECT SUM(population) OVER (PARTITION BY nation) sum,
+LISTAGG(DISTINCT city, ',') WITHIN GROUP (ORDER BY p.city) OVER (PARTITION BY nation) la_d_city,
+GROUP_CONCAT(DISTINCT city ORDER BY p.city SEPARATOR ',') OVER (PARTITION BY nation) gc_d_city FROM p;
+sum	la_d_city	gc_d_city
+3700	Beijing,Guangzhou,Shanghai	Beijing,Guangzhou,Shanghai
+3700	Beijing,Guangzhou,Shanghai	Beijing,Guangzhou,Shanghai
+3700	Beijing,Guangzhou,Shanghai	Beijing,Guangzhou,Shanghai
+3700	Beijing,Guangzhou,Shanghai	Beijing,Guangzhou,Shanghai
+500	Tokyo	Tokyo
+1500	Boston,New York	Boston,New York
+1500	Boston,New York	Boston,New York
+SELECT NATION,CITY,POPULATION,SUM(population) OVER (PARTITION BY nation ORDER BY city) sum,
+LISTAGG(DISTINCT '<'||city||'>') WITHIN GROUP (ORDER BY p.city DESC) OVER (PARTITION BY nation) la_d_city,
+GROUP_CONCAT(DISTINCT '<'||city||'>' ORDER BY p.city DESC) OVER (PARTITION BY nation) gc_d_city FROM p;
+NATION	CITY	POPULATION	sum	la_d_city	gc_d_city
+China	Shanghai	1500	3700	<Shanghai><Guangzhou><Beijing>	<Shanghai>,<Guangzhou>,<Beijing>
+China	Shanghai	1200	3700	<Shanghai><Guangzhou><Beijing>	<Shanghai>,<Guangzhou>,<Beijing>
+China	Guangzhou	500	1000	<Shanghai><Guangzhou><Beijing>	<Shanghai>,<Guangzhou>,<Beijing>
+China	Beijing	500	500	<Shanghai><Guangzhou><Beijing>	<Shanghai>,<Guangzhou>,<Beijing>
+Japan	Tokyo	500	500	<Tokyo>	<Tokyo>
+USA	New York	1000	1500	<New York><Boston>	<New York>,<Boston>
+USA	Boston	500	500	<New York><Boston>	<New York>,<Boston>
+todo: wrong result due to ps-8.0.30's bug, which should be recorded again after bugfix
+EXPLAIN SELECT NATION,CITY,POPULATION,SUM(population) OVER (PARTITION BY nation ORDER BY city) sum,
+LISTAGG(DISTINCT '<'||city||'>') WITHIN GROUP (ORDER BY p.city DESC) OVER (PARTITION BY nation) la_d_city,
+GROUP_CONCAT(DISTINCT '<'||city||'>' ORDER BY p.city DESC) OVER (PARTITION BY nation) gc_d_city FROM p;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	ALL	NULL	NULL	NULL	NULL	7	100.00	Using filesort
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select "test"."p"."nation" AS "NATION","test"."p"."city" AS "CITY","test"."p"."population" AS "POPULATION",sum("test"."p"."population") OVER (PARTITION BY "test"."p"."nation" ORDER BY "test"."p"."city" )  AS "sum",listagg(distinct """concat(concat('<',p.city),'>')""" , '') within group (order by "test"."p"."city" desc) OVER (PARTITION BY "test"."p"."nation" )  AS "la_d_city",group_concat(distinct """concat(concat('<',p.city),'>')""" order by "test"."p"."city" desc separator ',') OVER (PARTITION BY "test"."p"."nation" )  AS "gc_d_city" from "test"."p"
+SHOW WARNINGS;
+Level	Code	Message
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select "test"."p"."nation" AS "NATION","test"."p"."city" AS "CITY","test"."p"."population" AS "POPULATION",sum("test"."p"."population") OVER (PARTITION BY "test"."p"."nation" ORDER BY "test"."p"."city" )  AS "sum",listagg(distinct """concat(concat('<',p.city),'>')""" , '') within group (order by "test"."p"."city" desc) OVER (PARTITION BY "test"."p"."nation" )  AS "la_d_city",group_concat(distinct """concat(concat('<',p.city),'>')""" order by "test"."p"."city" desc separator ',') OVER (PARTITION BY "test"."p"."nation" )  AS "gc_d_city" from "test"."p"
+SELECT NATION,CITY,POPULATION,SUM(population) OVER (PARTITION BY nation ORDER BY city) sum,
+LISTAGG(DISTINCT '<'||city||'>') OVER (PARTITION BY nation) la_d_city,
+GROUP_CONCAT(DISTINCT '<'||city||'>') OVER (PARTITION BY nation) gc_d_city FROM p;
+NATION	CITY	POPULATION	sum	la_d_city	gc_d_city
+China	Beijing	500	500	<Beijing><Guangzhou><Shanghai>	<Beijing>,<Guangzhou>,<Shanghai>
+China	Guangzhou	500	1000	<Beijing><Guangzhou><Shanghai>	<Beijing>,<Guangzhou>,<Shanghai>
+China	Shanghai	1500	3700	<Beijing><Guangzhou><Shanghai>	<Beijing>,<Guangzhou>,<Shanghai>
+China	Shanghai	1200	3700	<Beijing><Guangzhou><Shanghai>	<Beijing>,<Guangzhou>,<Shanghai>
+Japan	Tokyo	500	500	<Tokyo>	<Tokyo>
+USA	Boston	500	500	<Boston><New York>	<Boston>,<New York>
+USA	New York	1000	1500	<Boston><New York>	<Boston>,<New York>
+todo: wrong result due to ps-8.0.30's bug, which should be recorded again after bugfix
+EXPLAIN SELECT NATION,CITY,POPULATION,SUM(population) OVER (PARTITION BY nation ORDER BY city) sum,
+LISTAGG(DISTINCT '<'||city||'>') OVER (PARTITION BY nation) la_d_city,
+GROUP_CONCAT(DISTINCT '<'||city||'>') OVER (PARTITION BY nation) gc_d_city FROM p;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	ALL	NULL	NULL	NULL	NULL	7	100.00	Using filesort
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select "test"."p"."nation" AS "NATION","test"."p"."city" AS "CITY","test"."p"."population" AS "POPULATION",sum("test"."p"."population") OVER (PARTITION BY "test"."p"."nation" ORDER BY "test"."p"."city" )  AS "sum",listagg(distinct """concat(concat('<',p.city),'>')""" , '') OVER (PARTITION BY "test"."p"."nation" )  AS "la_d_city",group_concat(distinct """concat(concat('<',p.city),'>')""" separator ',') OVER (PARTITION BY "test"."p"."nation" )  AS "gc_d_city" from "test"."p"
+SHOW WARNINGS;
+Level	Code	Message
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select "test"."p"."nation" AS "NATION","test"."p"."city" AS "CITY","test"."p"."population" AS "POPULATION",sum("test"."p"."population") OVER (PARTITION BY "test"."p"."nation" ORDER BY "test"."p"."city" )  AS "sum",listagg(distinct """concat(concat('<',p.city),'>')""" , '') OVER (PARTITION BY "test"."p"."nation" )  AS "la_d_city",group_concat(distinct """concat(concat('<',p.city),'>')""" separator ',') OVER (PARTITION BY "test"."p"."nation" )  AS "gc_d_city" from "test"."p"
+# empty OVER () to analytic functions.
+SELECT NATION,CITY,POPULATION,SUM(population) OVER () sum,
+LISTAGG(DISTINCT city, ',') WITHIN GROUP (ORDER BY p.city DESC) OVER () la_d_city FROM p;
+NATION	CITY	POPULATION	sum	la_d_city
+Japan	Tokyo	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Shanghai	1500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Shanghai	1200	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+USA	New York	1000	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Guangzhou	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+USA	Boston	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Beijing	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+# reference window by name which is defined in query.
+SELECT nation,GROUP_CONCAT(p.city, ',') OVER w FROM p WINDOW w AS (ORDER BY nation);
+ERROR HY000: ORDER BY not allowed in window spec for 'group_concat()'
+SELECT nation,WM_CONCAT(p.city, ',') OVER w FROM p WINDOW w AS (ORDER BY nation);
+ERROR HY000: ORDER BY not allowed in window spec for 'wm_concat()'
+SELECT nation,LISTAGG(p.city, ',') OVER w FROM p WINDOW w AS (ORDER BY nation) ;
+ERROR HY000: ORDER BY not allowed in window spec for 'listagg()'
+SELECT nation,LISTAGG(p.city, ',') OVER w FROM p WINDOW w AS (PARTITION BY nation);
+nation	LISTAGG(p.city, ',') OVER w 
+China	Guangzhou,Shanghai,Beijing,Shanghai
+China	Guangzhou,Shanghai,Beijing,Shanghai
+China	Guangzhou,Shanghai,Beijing,Shanghai
+China	Guangzhou,Shanghai,Beijing,Shanghai
+Japan	Tokyo
+USA	New York,Boston
+USA	New York,Boston
+SELECT nation,LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER w FROM p WINDOW w AS (PARTITION BY nation);
+nation	LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER w 
+China	Beijing,Guangzhou,Shanghai,Shanghai
+China	Beijing,Guangzhou,Shanghai,Shanghai
+China	Beijing,Guangzhou,Shanghai,Shanghai
+China	Beijing,Guangzhou,Shanghai,Shanghai
+Japan	Tokyo
+USA	Boston,New York
+USA	Boston,New York
+EXPLAIN SELECT nation,LISTAGG(p.city, ',') OVER w FROM p WINDOW w AS (PARTITION BY nation);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	ALL	NULL	NULL	NULL	NULL	7	100.00	Using filesort
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select "test"."p"."nation" AS "nation",listagg("test"."p"."city" , ',') OVER "w" AS "LISTAGG(p.city, ',') OVER w " from "test"."p" window "w" AS (PARTITION BY "test"."p"."nation" ) 
+SHOW WARNINGS;
+Level	Code	Message
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select "test"."p"."nation" AS "nation",listagg("test"."p"."city" , ',') OVER "w" AS "LISTAGG(p.city, ',') OVER w " from "test"."p" window "w" AS (PARTITION BY "test"."p"."nation" ) 
+EXPLAIN SELECT nation,LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER w FROM p WINDOW w AS (PARTITION BY nation);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	ALL	NULL	NULL	NULL	NULL	7	100.00	Using filesort
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select "test"."p"."nation" AS "nation",listagg("test"."p"."city" , ',') within group (order by "test"."p"."city") OVER "w" AS "LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER w " from "test"."p" window "w" AS (PARTITION BY "test"."p"."nation" ) 
+SHOW WARNINGS;
+Level	Code	Message
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select "test"."p"."nation" AS "nation",listagg("test"."p"."city" , ',') within group (order by "test"."p"."city") OVER "w" AS "LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER w " from "test"."p" window "w" AS (PARTITION BY "test"."p"."nation" ) 
+# inherit window definition
+SELECT nation,LISTAGG(p.city, ',') OVER (w) FROM p WINDOW w AS (ORDER BY nation);
+ERROR HY000: ORDER BY not allowed in window spec for 'listagg()'
+SELECT nation,LISTAGG(p.city, ',') OVER (w) FROM p WINDOW w AS (PARTITION BY nation ORDER BY nation);
+ERROR HY000: ORDER BY not allowed in window spec for 'listagg()'
+SELECT nation,LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER (w) FROM p WINDOW w AS (PARTITION BY nation ORDER BY nation);
+ERROR HY000: Window '<unnamed window>' cannot inherit 'w' since both contain an ORDER BY clause.
+SELECT nation,LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER (w) FROM p WINDOW w AS (PARTITION BY nation);
+nation	LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER (w)
+China	Beijing,Guangzhou,Shanghai,Shanghai
+China	Beijing,Guangzhou,Shanghai,Shanghai
+China	Beijing,Guangzhou,Shanghai,Shanghai
+China	Beijing,Guangzhou,Shanghai,Shanghai
+Japan	Tokyo
+USA	Boston,New York
+USA	Boston,New York
+EXPLAIN SELECT nation,LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER (w) FROM p WINDOW w AS (PARTITION BY nation);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	ALL	NULL	NULL	NULL	NULL	7	100.00	Using filesort
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select "test"."p"."nation" AS "nation",listagg("test"."p"."city" , ',') within group (order by "test"."p"."city") OVER ("w" )  AS "LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER (w)" from "test"."p" window "w" AS (PARTITION BY "test"."p"."nation" ) 
+SHOW WARNINGS;
+Level	Code	Message
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select "test"."p"."nation" AS "nation",listagg("test"."p"."city" , ',') within group (order by "test"."p"."city") OVER ("w" )  AS "LISTAGG(p.city, ',') WITHIN GROUP (ORDER BY city) OVER (w)" from "test"."p" window "w" AS (PARTITION BY "test"."p"."nation" ) 
+SELECT nation,LISTAGG(p.city, ',') OVER (w) FROM p WINDOW w AS (PARTITION BY nation);
+nation	LISTAGG(p.city, ',') OVER (w)
+China	Guangzhou,Shanghai,Beijing,Shanghai
+China	Guangzhou,Shanghai,Beijing,Shanghai
+China	Guangzhou,Shanghai,Beijing,Shanghai
+China	Guangzhou,Shanghai,Beijing,Shanghai
+Japan	Tokyo
+USA	New York,Boston
+USA	New York,Boston
+EXPLAIN SELECT nation,LISTAGG(p.city, ',') OVER (w) FROM p WINDOW w AS (PARTITION BY nation);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	p	NULL	ALL	NULL	NULL	NULL	NULL	7	100.00	Using filesort
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select "test"."p"."nation" AS "nation",listagg("test"."p"."city" , ',') OVER ("w" )  AS "LISTAGG(p.city, ',') OVER (w)" from "test"."p" window "w" AS (PARTITION BY "test"."p"."nation" ) 
+# other window range clause should be disabled to follow oracle behavior
+SELECT nation,city,population,LISTAGG(p.city,',') WITHIN GROUP(ORDER BY nation) OVER (ROWS UNBOUNDED PRECEDING) FROM p;
+ERROR HY000: window frame not allowed in window spec for 'listagg()'
+SELECT nation, LISTAGG(p.city, ',') WITHIN GROUP(ORDER BY p.city)  over w from p window w AS (ORDER BY nation DESC) ;
+ERROR HY000: ORDER BY not allowed in window spec for 'listagg()'
+SELECT nation, LISTAGG(p.city, ',') WITHIN GROUP(ORDER BY p.city)  over w from p window w AS (RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) ;
+ERROR HY000: window frame not allowed in window spec for 'listagg()'
+SELECT nation, LISTAGG(p.city, ',') WITHIN GROUP(ORDER BY p.city)  over w from p window w AS (ORDER BY nation DESC RANGE BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) ;
+ERROR HY000: ORDER BY not allowed in window spec for 'listagg()'
+# prepare
+PREPARE stmt1 FROM 'SELECT SUM(population),LISTAGG(p.city, '','') la_a_city, GROUP_CONCAT(p.city SEPARATOR '','') gc_a_city FROM p';
+PREPARE stmt2 FROM 'SELECT NATION,CITY,POPULATION,SUM(population) OVER () sum, LISTAGG(DISTINCT city, '','') WITHIN GROUP (ORDER BY p.city DESC) OVER () la_d_city FROM p';
+PREPARE stmt3 FROM 'SELECT SUM(population) OVER (PARTITION BY nation) sum, LISTAGG(p.city, '','') OVER (PARTITION BY nation) la_a_city, GROUP_CONCAT(p.city SEPARATOR '','') OVER (PARTITION BY nation) gc_a_city FROM p';
+EXECUTE stmt1;
+SUM(population)	la_a_city	gc_a_city
+5700	Guangzhou,Shanghai,Beijing,New York,Boston,Tokyo,Shanghai	Guangzhou,Shanghai,Beijing,New York,Boston,Tokyo,Shanghai
+EXECUTE stmt2;
+NATION	CITY	POPULATION	sum	la_d_city
+Japan	Tokyo	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Shanghai	1500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Shanghai	1200	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+USA	New York	1000	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Guangzhou	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+USA	Boston	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Beijing	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+EXECUTE stmt3;
+sum	la_a_city	gc_a_city
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+500	Tokyo	Tokyo
+1500	New York,Boston	New York,Boston
+1500	New York,Boston	New York,Boston
+EXECUTE stmt1;
+SUM(population)	la_a_city	gc_a_city
+5700	Guangzhou,Shanghai,Beijing,New York,Boston,Tokyo,Shanghai	Guangzhou,Shanghai,Beijing,New York,Boston,Tokyo,Shanghai
+EXECUTE stmt2;
+NATION	CITY	POPULATION	sum	la_d_city
+Japan	Tokyo	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Shanghai	1500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Shanghai	1200	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+USA	New York	1000	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Guangzhou	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+USA	Boston	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Beijing	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+EXECUTE stmt3;
+sum	la_a_city	gc_a_city
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+500	Tokyo	Tokyo
+1500	New York,Boston	New York,Boston
+1500	New York,Boston	New York,Boston
+DEALLOCATE PREPARE stmt3;
+DEALLOCATE PREPARE stmt2;
+DEALLOCATE PREPARE stmt1;
+# execute immediate
+EXECUTE IMMEDIATE 'SELECT SUM(population),LISTAGG(p.city, '','') la_a_city, GROUP_CONCAT(p.city SEPARATOR '','') gc_a_city FROM p';
+SUM(population)	la_a_city	gc_a_city
+5700	Guangzhou,Shanghai,Beijing,New York,Boston,Tokyo,Shanghai	Guangzhou,Shanghai,Beijing,New York,Boston,Tokyo,Shanghai
+EXECUTE IMMEDIATE 'SELECT NATION,CITY,POPULATION,SUM(population) OVER () sum, LISTAGG(DISTINCT city, '','') WITHIN GROUP (ORDER BY p.city DESC) OVER () la_d_city FROM p';
+NATION	CITY	POPULATION	sum	la_d_city
+Japan	Tokyo	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Shanghai	1500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Shanghai	1200	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+USA	New York	1000	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Guangzhou	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+USA	Boston	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+China	Beijing	500	5700	Tokyo,Shanghai,New York,Guangzhou,Boston,Beijing
+EXECUTE IMMEDIATE 'SELECT SUM(population) OVER (PARTITION BY nation) sum, LISTAGG(p.city, '','') OVER (PARTITION BY nation) la_a_city, GROUP_CONCAT(p.city SEPARATOR '','') OVER (PARTITION BY nation) gc_a_city FROM p';
+sum	la_a_city	gc_a_city
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+3700	Guangzhou,Shanghai,Beijing,Shanghai	Guangzhou,Shanghai,Beijing,Shanghai
+500	Tokyo	Tokyo
+1500	New York,Boston	New York,Boston
+1500	New York,Boston	New York,Boston
+DROP TABLE p;
+# user variables
+create table t1(
+id int,
+col1 varchar(60),
+col2 varchar(60),
+col3 varchar(60)
+) partition by hash(id) partitions 15  ;
+insert into t1 values (1,'Anc','Bbc','Ccc');
+insert into t1 values (2,'An','Bbcc','Ccc');
+insert into t1 values (3,'Anc','Bbc','Ccc');
+insert into t1 values (4,'Ancc','Bbcc','Cccc');
+insert into t1 values (5,'Anccc','Bbc','Cccc');
+insert into t1 values (6,'Anccc','Bbcc','Cccc');
+insert into t1 values (7,'','1','');
+insert into t1 values (8,null,'2',null);
+set @a='test';
+select col1, group_concat(@a order by col3 asc separator '_') as TOTAL from t1 group by col1;
+col1	TOTAL
+NULL	test
+	test
+An	test
+Anc	test_test
+Ancc	test
+Anccc	test_test
+select col1, listagg(@a, '_') within group (order by col3 asc) as TOTAL from t1 group by col1;
+col1	TOTAL
+NULL	test
+	test
+An	test
+Anc	test_test
+Ancc	test
+Anccc	test_test
+select col1, wm_concat(@a order by col3 asc separator '_') as TOTAL from t1 group by col1;
+col1	TOTAL
+NULL	test
+	test
+An	test
+Anc	test_test
+Ancc	test
+Anccc	test_test
+set timestamp=1;
+select col1, group_concat(now(6) order by col3 asc separator '_') as TOTAL from t1 group by col1;
+col1	TOTAL
+NULL	1970-01-01 03:00:01.000000
+	1970-01-01 03:00:01.000000
+An	1970-01-01 03:00:01.000000
+Anc	1970-01-01 03:00:01.000000_1970-01-01 03:00:01.000000
+Ancc	1970-01-01 03:00:01.000000
+Anccc	1970-01-01 03:00:01.000000_1970-01-01 03:00:01.000000
+set timestamp=1;
+select col1, listagg(now(6), '_') within group (order by col3 asc) as TOTAL from t1 group by col1;
+col1	TOTAL
+NULL	1970-01-01 03:00:01.000000
+	1970-01-01 03:00:01.000000
+An	1970-01-01 03:00:01.000000
+Anc	1970-01-01 03:00:01.000000_1970-01-01 03:00:01.000000
+Ancc	1970-01-01 03:00:01.000000
+Anccc	1970-01-01 03:00:01.000000_1970-01-01 03:00:01.000000
+set timestamp=1;
+select col1, wm_concat(now(6) order by col3 asc separator '_') as TOTAL from t1 group by col1;
+col1	TOTAL
+NULL	1970-01-01 03:00:01.000000
+	1970-01-01 03:00:01.000000
+An	1970-01-01 03:00:01.000000
+Anc	1970-01-01 03:00:01.000000_1970-01-01 03:00:01.000000
+Ancc	1970-01-01 03:00:01.000000
+Anccc	1970-01-01 03:00:01.000000_1970-01-01 03:00:01.000000
+set timestamp=1;
+select col1, group_concat(sysdate(6) order by col3 asc separator '_') as TOTAL from t1 group by col1;
+col1	TOTAL
+NULL	1970-01-01 03:00:01.000000
+	1970-01-01 03:00:01.000000
+An	1970-01-01 03:00:01.000000
+Anc	1970-01-01 03:00:01.000000_1970-01-01 03:00:01.000000
+Ancc	1970-01-01 03:00:01.000000
+Anccc	1970-01-01 03:00:01.000000_1970-01-01 03:00:01.000000
+set timestamp=1;
+select col1, listagg(sysdate(6), '_') within group (order by col3 asc) as TOTAL from t1 group by col1;
+col1	TOTAL
+NULL	1970-01-01 03:00:01.000000
+	1970-01-01 03:00:01.000000
+An	1970-01-01 03:00:01.000000
+Anc	1970-01-01 03:00:01.000000_1970-01-01 03:00:01.000000
+Ancc	1970-01-01 03:00:01.000000
+Anccc	1970-01-01 03:00:01.000000_1970-01-01 03:00:01.000000
+set timestamp=1;
+select col1, wm_concat(sysdate(6) order by col3 asc separator '_') as TOTAL from t1 group by col1;
+col1	TOTAL
+NULL	1970-01-01 03:00:01.000000
+	1970-01-01 03:00:01.000000
+An	1970-01-01 03:00:01.000000
+Anc	1970-01-01 03:00:01.000000_1970-01-01 03:00:01.000000
+Ancc	1970-01-01 03:00:01.000000
+Anccc	1970-01-01 03:00:01.000000_1970-01-01 03:00:01.000000
+drop table t1;

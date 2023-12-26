@@ -1,0 +1,128 @@
+[connect conn1]
+create sequence seq cache 2;
+create table t1(c1 int primary key, c2 int);
+insert into t1 values (1,1);
+[# create sp and prepared statement]
+create procedure sp_seq1()
+begin
+select seq.nextval from t1;
+end$$
+create procedure sp_seq2()
+begin
+select seq.nextval;
+end$$
+prepare prep_seq1 from 'select seq.nextval from t1';
+prepare prep_seq2 from 'select seq.nextval';
+[# test sequence works well]
+call sp_seq1();
+nextval
+1
+call sp_seq1();
+nextval
+2
+call sp_seq1();
+nextval
+3
+call sp_seq2();
+nextval
+4
+call sp_seq2();
+nextval
+5
+call sp_seq2();
+nextval
+6
+execute prep_seq1;
+nextval
+7
+execute prep_seq1;
+nextval
+8
+execute prep_seq1;
+nextval
+9
+execute prep_seq2;
+nextval
+10
+execute prep_seq2;
+nextval
+11
+execute prep_seq2;
+nextval
+12
+[# test drop sequence in other session]
+[connect conn1_2]
+drop sequence seq;
+[connect conn1]
+call sp_seq1();
+ERROR 42S22: Unknown column 'seq.nextval' in 'field list'
+call sp_seq2();
+ERROR 42S02: Unknown table 'seq' in field list
+execute prep_seq1;
+ERROR 42S22: Unknown column 'seq.nextval' in 'field list'
+execute prep_seq2;
+ERROR 42S02: Unknown table 'seq' in field list
+[# test re-create sequence in other session]
+[connect conn1_2]
+create sequence seq cache 2 start with 1000 increment by 10;
+[connect conn1]
+call sp_seq1();
+nextval
+1000
+call sp_seq2();
+nextval
+1010
+execute prep_seq1;
+nextval
+1020
+execute prep_seq2;
+nextval
+1030
+[# test alter sequence in other session]
+[connect conn1_2]
+alter sequence seq increment by 100;
+[connect conn1]
+call sp_seq1();
+nextval
+1130
+call sp_seq1();
+nextval
+1230
+call sp_seq1();
+nextval
+1330
+call sp_seq2();
+nextval
+1430
+call sp_seq2();
+nextval
+1530
+call sp_seq2();
+nextval
+1630
+execute prep_seq1;
+nextval
+1730
+execute prep_seq1;
+nextval
+1830
+execute prep_seq1;
+nextval
+1930
+execute prep_seq2;
+nextval
+2030
+execute prep_seq2;
+nextval
+2130
+execute prep_seq2;
+nextval
+2230
+
+[# clean up]
+drop procedure sp_seq1;
+drop procedure sp_seq2;
+drop prepare prep_seq1;
+drop prepare prep_seq2;
+drop sequence seq;
+drop table t1;

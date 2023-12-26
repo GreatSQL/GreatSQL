@@ -47,13 +47,11 @@
 #include "sql/query_result.h"
 #include "sql/sql_cmd_dml.h"  // Sql_cmd_dml
 #include "sql/sql_digest_stream.h"
-#include "sql/sql_lex.h"
 #include "sql/sql_list.h"
 #include "sql/sql_parse.h"      // mysql_execute_command
 #include "sql/sql_tmp_table.h"  // tmp tables
 #include "sql/sql_union.h"      // Query_result_union
 #include "sql/system_variables.h"
-#include "sql/table.h"
 #include "sql/thd_raii.h"  // Prepared_stmt_arena_holder
 
 /****************************************************************************
@@ -86,11 +84,12 @@ class Materialized_cursor final : public Server_side_cursor {
   ulong fetch_limit{0};
   ulong fetch_count{0};
   bool is_rnd_inited{false};
+  bool m_is_fetched{false};
 
  public:
   Materialized_cursor(Query_result *result);
   void set_table(TABLE *table_arg);
-  void set_result(Query_result *result_arg) { m_result = result_arg; }
+  void set_result(Query_result *result_arg) override { m_result = result_arg; }
   int send_result_set_metadata(
       THD *thd, const mem_root_deque<Item *> &send_result_set_metadata);
   bool is_open() const override { return m_table->has_storage_handler(); }
@@ -101,6 +100,9 @@ class Materialized_cursor final : public Server_side_cursor {
     bool rc = m_table->export_structure(thd, defs);
     return rc;
   }
+  ulong get_fetch_count() override { return fetch_count; }
+  bool is_cursor_fetched() override { return m_is_fetched; }
+  uint get_field_count() override { return m_table->visible_field_count(); }
   ~Materialized_cursor() override;
 };
 
@@ -124,6 +126,7 @@ class Query_result_materialize final : public Query_result_union {
       m_cursor->set_result(result_arg);
     }
   }
+  Query_result *get_result() { return m_result; }
   bool check_supports_cursor() const override { return false; }
   bool prepare(THD *thd, const mem_root_deque<Item *> &list,
                Query_expression *u) override;
@@ -255,7 +258,8 @@ bool mysql_open_cursor(THD *thd, Query_result *result,
     */
     if (cursor != nullptr) {
       result_materialize->abort_result_set(thd);
-      cursor->close();
+      /*e.g: open ref_rs for select ref_rs from t1;*/
+      if (dynamic_cast<Materialized_cursor *>(cursor)) cursor->close();
     }
     return true;
   }
@@ -430,6 +434,7 @@ bool Materialized_cursor::fetch(ulong num_rows) {
       close();
       return true;
   }
+  m_is_fetched = true;
 
   return false;
 }
@@ -446,10 +451,11 @@ void Materialized_cursor::close() {
 }
 
 Materialized_cursor::~Materialized_cursor() {
+  /* e.g: select cursor from t1*/
+  if (!m_table) return;
   assert(!is_open());
   if (m_table != nullptr) free_tmp_table(m_table);
 }
-
 /***************************************************************************
  Query_result_materialize
 ****************************************************************************/
@@ -477,6 +483,7 @@ bool Query_result_materialize::prepare(THD *thd,
                           thd->variables.option_bits | TMP_TABLE_ALL_COLUMNS,
                           "", false, false)) {
     destroy(m_cursor);
+    m_cursor = nullptr;
     return true;
   }
   m_cursor->set_table(table);

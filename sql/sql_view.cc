@@ -61,6 +61,7 @@
 #include "sql/enum_query_type.h"
 #include "sql/error_handler.h"  // Internal_error_handler
 #include "sql/field.h"
+#include "sql/gdb_sequence.h"
 #include "sql/item.h"
 #include "sql/key.h"
 #include "sql/mdl.h"
@@ -160,6 +161,8 @@ static void make_unique_view_field_name(Item *target,
   @param column_names     User-provided list of column names, NULL if none
   @param item_list        SELECT list of underlying query expression
   @param gen_unique_view_name  See description.
+  @param is_force_view  default false, it is true: create force view check
+  duplicate_names.
 
   - If a list of column names has been provided: it is simply searched for
   duplicates (which cause an error).
@@ -175,11 +178,11 @@ static void make_unique_view_field_name(Item *target,
 
 bool check_duplicate_names(const Create_col_name_list *column_names,
                            const mem_root_deque<Item *> &item_list,
-                           bool gen_unique_view_name) {
+                           bool gen_unique_view_name, bool is_force_view) {
   DBUG_TRACE;
   if (column_names) {
     const uint count = column_names->size();
-    if (count != CountVisibleFields(item_list)) {
+    if (!is_force_view && count != CountVisibleFields(item_list)) {
       my_error(ER_VIEW_WRONG_LIST, MYF(0));
       return true;
     }
@@ -214,6 +217,27 @@ bool check_duplicate_names(const Create_col_name_list *column_names,
           return true;
         }
       }
+    }
+  }
+  return false;
+}
+
+/**
+  When creating force view , Check that view is not recursively
+
+  @param view_ref      view name
+  @param table_list    subquery, select list of table
+  */
+bool check_view_recursion(Table_ref *view_ref, Table_ref *table_list) {
+  for (Table_ref *precedent = table_list; precedent;
+       precedent = precedent->next_global) {
+    if (precedent->table_name_length == view_ref->table_name_length &&
+        precedent->db_length == view_ref->db_length &&
+        my_strcasecmp(system_charset_info, precedent->table_name,
+                      view_ref->table_name) == 0 &&
+        my_strcasecmp(system_charset_info, precedent->db, view_ref->db) == 0) {
+      my_error(ER_VIEW_RECURSIVE, MYF(0), view_ref->db, view_ref->table_name);
+      return true;
     }
   }
   return false;
@@ -585,7 +609,8 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
         is this table temporary and is not a derived table, a view, a recursive
         reference, a table function or a schema table?
       */
-      if (tbl->table->s->tmp_table != NO_TMP_TABLE && !tbl->is_placeholder()) {
+      if (!tbl->table->m_global_tmp &&
+          tbl->table->s->tmp_table != NO_TMP_TABLE && !tbl->is_placeholder()) {
         my_error(ER_VIEW_SELECT_TMPTABLE, MYF(0), tbl->alias);
         res = true;
         goto err;
@@ -593,13 +618,34 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
     }
   }
 
+  /*create force view ,check view constraints */
+  if (lex->create_force_view_table_not_found) {
+    /*check contains view recursion */
+    if (check_view_recursion(view, tables)) {
+      res = true;
+      goto err;
+    }
+
+    /*
+      check duplicate_names
+      Only column names of the first query block should be checked for
+      duplication; any further UNION-ed part isn't used for determining
+      names of the view's columns.
+    */
+    if (check_duplicate_names(view->derived_column_names(), query_block->fields,
+                              true, true)) {
+      res = true;
+      goto err;
+    }
+  }
   /* prepare select to resolve all fields */
   lex->context_analysis_only |= CONTEXT_ANALYSIS_ONLY_VIEW;
-  if (!unit->is_prepared()) {
+  if (!lex->create_force_view_table_not_found && !unit->is_prepared()) {
     Prepared_stmt_arena_holder ps_arena_holder(thd);
     /*
       @todo - the following code is duplicated in mysql_test_create_view.
-              ensure that we have a single preparation function for create view.
+              ensure that we have a single preparation function for create
+      view.
     */
     if (unit->prepare(thd, nullptr, nullptr, 0, 0)) {
       /*
@@ -618,7 +664,7 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
       names of the view's columns.
     */
     if (check_duplicate_names(view->derived_column_names(), query_block->fields,
-                              true)) {
+                              true, lex->create_force_view_mode)) {
       res = true;
       goto err;
     }
@@ -632,7 +678,7 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
       res = true;
       goto err;
     }
-  } else {
+  } else if (!lex->create_force_view_table_not_found) {
     lex->restore_cmd_properties();
     bind_fields(thd->stmt_arena->item_list());
   }
@@ -653,7 +699,7 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
     view column of he/she doesn't have it on the underlying table's
     corresponding column. In that case, return an error for CREATE VIEW.
    */
-  {
+  if (!lex->create_force_view_table_not_found) {
     Item *report_item = nullptr;
     /*
        This will hold the intersection of the privileges on all columns in the
@@ -661,9 +707,22 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
      */
     uint final_priv = VIEW_ANY_ACL;
 
+    bool is_seq_used_in_the_view = false;
+    const char *seq_name = nullptr;
+
     for (sl = query_block; sl; sl = sl->next_query_block()) {
       assert(view->db); /* Must be set in the parser */
       for (Item *item : sl->visible_fields()) {
+        if (item->type() == Item::Type::FUNC_ITEM &&
+            down_cast<Item_func *>(item)->functype() ==
+                Item_func::Functype::SEQUENCE_FUNC) {
+          Item_func_sequence const *item_seq =
+              down_cast<Item_func_sequence *>(item);
+          seq_name = item_seq->table_name;
+          is_seq_used_in_the_view = true;
+          break;
+        }
+
         Item_field *fld = item->field_for_view_update();
         uint priv = (get_column_grant(thd, &view->grant, view->db,
                                       view->table_name, item->item_name.ptr()) &
@@ -682,6 +741,12 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
                thd->security_context()->priv_user().str,
                thd->security_context()->priv_host().str,
                report_item->item_name.ptr(), view->table_name);
+      res = true;
+      goto err;
+    }
+
+    if (is_seq_used_in_the_view) {
+      my_error(ER_VIEW_SELECT_SEQUENCE, MYF(0), seq_name);
       res = true;
       goto err;
     }
@@ -715,6 +780,9 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
 
     buff.append(command[static_cast<int>(thd->lex->create_view_mode)].str,
                 command[static_cast<int>(thd->lex->create_view_mode)].length);
+    /* create force view */
+    if (thd->lex->create_force_view_mode)
+      buff.append(STRING_WITH_LEN("FORCE "));
     view_store_options(thd, views, &buff);
     buff.append(STRING_WITH_LEN("VIEW "));
     /* Test if user supplied a db (ie: we did not use thd->db) */
@@ -949,7 +1017,8 @@ bool mysql_register_view(THD *thd, Table_ref *view,
   view->view_suid = lex->create_view_suid;
   view->with_check = lex->create_view_check;
 
-  view->updatable_view = is_updatable_view(thd, view);
+  if (!lex->create_force_view_table_not_found)
+    view->updatable_view = is_updatable_view(thd, view);
 
   /* init timestamp */
   if (!view->timestamp.str) view->timestamp.str = view->timestamp_buffer;
@@ -980,6 +1049,13 @@ bool mysql_register_view(THD *thd, Table_ref *view,
   } else {
     if (mode == enum_view_create_mode::VIEW_ALTER) {
       my_error(ER_NO_SUCH_TABLE, MYF(0), view->db, view->alias);
+      return true;
+    }
+  }
+
+  if (mode == enum_view_create_mode::VIEW_CREATE_NEW) {
+    if (has_sequence_def(thd, view->db, view->table_name)) {
+      my_error(ER_GDB_DUPLICATE_SEQ_NAME, MYF(0), view->table_name);
       return true;
     }
   }

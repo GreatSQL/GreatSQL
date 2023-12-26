@@ -1,0 +1,100 @@
+SET sql_mode=ORACLE;
+CREATE TABLE t1(c1 int, c2 CHAR(10),PRIMARY KEY (c1));
+INSERT INTO t1 VALUES (10, 'aa'), (12, null), (15, 'ccc');
+CREATE TABLE t2 (c1 int, c2 CHAR(10),PRIMARY KEY (c1));
+INSERT INTO t2 VALUES (10, 't2'), (11, 'c 1'), (12, null), (16, 'null c1');
+#
+# test of table
+#
+start transaction;
+select * from t1 where c1=10 for update of t1.c;
+ERROR 42S22: Unknown column 'test.t1.c' in 'update of clause'
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a nowait;
+ERROR 23000: Column 'a' in field list is ambiguous
+select * from t1 where c1=10 for update of c1;
+c1	c2
+10	aa
+SET sql_mode=ORACLE;
+select * from t1 where c1=10 for update of c1 nowait;
+ERROR HY000: Statement aborted because lock(s) could not be acquired immediately and NOWAIT is set.
+select * from t1 where c1=12 for update of c1 nowait;
+c1	c2
+12	NULL
+commit;
+#
+# test of muiti table
+#
+start transaction;
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1 nowait;
+c1	c2	c1	c2
+12	NULL	12	NULL
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 >1 for update of a.c1,b.c1 skip locked;
+c1	c2	c1	c2
+10	aa	10	t2
+commit;
+#
+# test of tmp table
+#
+CREATE TEMPORARY TABLE tmp(c1 int, c2 CHAR(10),PRIMARY KEY (c1));
+INSERT INTO tmp VALUES (10, 'aa'), (12, null), (15, 'ccc');
+start transaction;
+select * from tmp a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1 nowait;
+c1	c2	c1	c2
+12	NULL	12	NULL
+select * from tmp a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1,a.c1 nowait;
+c1	c2	c1	c2
+12	NULL	12	NULL
+select * from tmp a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1,a.c1,a.c4 nowait;
+ERROR 42S22: Unknown column 'test.a.c4' in 'update of clause'
+commit;
+#
+# test of view
+#
+CREATE VIEW v_1 AS SELECT * FROM t1;
+start transaction;
+select * from v_1 where c1=10 for update of c10;
+ERROR 42S22: Unknown column 'test.v_1.c10' in 'update of clause'
+select * from v_1 a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1 nowait;
+c1	c2	c1	c2
+12	NULL	12	NULL
+select * from v_1 a join t2 b on a.c1=b.c1 where a.c1 >1 for update of a.c1,b.c1 skip locked;
+c1	c2	c1	c2
+10	aa	10	t2
+commit;
+#
+# test of sp
+#
+CREATE or replace PROCEDURE p1root() AS
+id int;
+BEGIN
+select c1 from t1 where c1=10 into id for update of t1.c1 nowait;
+select id;
+select c1 from t1 where c1=12 for update of t1.c1 nowait into id;
+select id;
+END;
+//
+Warnings:
+Warning	3962	The INTO clause is deprecated inside query blocks of query expressions and will be removed in a future release. Please move the INTO clause to the end of statement instead.
+call p1root();
+id
+10
+id
+12
+Warnings:
+Warning	3962	The INTO clause is deprecated inside query blocks of query expressions and will be removed in a future release. Please move the INTO clause to the end of statement instead.
+drop PROCEDURE p1root;
+#
+# test of view
+#
+alter table t1 add c3 int;
+start transaction;
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1 nowait;
+c1	c2	c3	c1	c2
+12	NULL	NULL	12	NULL
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 >1 for update of a.c1,b.c1 skip locked;
+c1	c2	c3	c1	c2
+10	aa	NULL	10	t2
+commit;
+drop table t1,t2,tmp;
+drop view v_1;
+# DONE

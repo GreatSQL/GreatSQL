@@ -19,6 +19,8 @@ mysql/default_roles	161
 mysql/engine_cost	161
 mysql/func	161
 mysql/global_grants	161
+mysql/greatdb_sequences	33
+mysql/greatdb_sequences_persist	33
 mysql/gtid_executed	161
 mysql/help_category	161
 mysql/help_keyword	161

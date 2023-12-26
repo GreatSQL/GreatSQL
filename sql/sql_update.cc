@@ -140,12 +140,14 @@ bool Sql_cmd_update::precheck(THD *thd) {
     */
     Table_ref *insert_table_list = nullptr;
     ulong merge_privilege = 0;
-    if (merge_into_stmt && merge_when_insert) {
+    if (merge_into_stmt) {
+      // for merge_into, insert/update table is the latest entry in table_list.
       for (insert_table_list = lex->query_block->get_table_list();
            insert_table_list->next_local;
            insert_table_list = insert_table_list->next_local)
         ;
-
+    }
+    if (merge_into_stmt && merge_when_insert) {
       // @@NOTE@@ no support of view/derived table of merge-into table.
       if (insert_table_list->is_view() || insert_table_list->is_derived())
         return true;
@@ -171,12 +173,15 @@ bool Sql_cmd_update::precheck(THD *thd) {
         tr->grant.privilege = SELECT_ACL;
       else {
         auto chk = [&](long want_access) {
-          const bool ignore_errors = ((want_access & UPDATE_ACL));
+          const bool ignore_errors =
+              (want_access & UPDATE_ACL) &&
+              (tr != insert_table_list || merge_privilege == 0);
           return check_access(thd, want_access, tr->db, &tr->grant.privilege,
                               &tr->grant.m_internal, false, ignore_errors) ||
                  check_grant(thd, want_access, tr, false, 1, ignore_errors);
         };
         if (chk(privilege)) {
+          if (tr == insert_table_list && merge_privilege) return true;
           // Verify that lock has not yet been acquired for request.
           assert(tr->mdl_request.ticket == nullptr);
           // If there is no UPDATE privilege on this table we want to avoid
@@ -378,13 +383,20 @@ bool Sql_cmd_update::make_base_table_fields(THD *thd,
       Make temporary copy of Item_field, to avoid influence of changing
       result_field on Item_ref which refer on this field
     */
-    Item_field *const base_table_field = item->field_for_view_update();
-    assert(base_table_field != nullptr);
+    Item_row *item_row = dynamic_cast<Item_row *>(item);
+    if (item_row) {
+      Item_row *const row_field = new Item_row(item_row);
+      if (row_field == nullptr) return true;
+      *it = row_field;
+    } else {
+      Item_field *const base_table_field = item->field_for_view_update();
+      assert(base_table_field != nullptr);
 
-    Item_field *const cloned_field = new Item_field(thd, base_table_field);
-    if (cloned_field == nullptr) return true; /* purecov: inspected */
+      Item_field *const cloned_field = new Item_field(thd, base_table_field);
+      if (cloned_field == nullptr) return true; /* purecov: inspected */
 
-    *it = cloned_field;
+      *it = cloned_field;
+    }
     // WL#6570 remove-after-qa
     assert(thd->stmt_arena->is_regular() || !thd->lex->is_exec_started());
   }
@@ -421,7 +433,7 @@ static bool check_constant_expressions(const mem_root_deque<Item *> &values) {
   @returns false if success, true if error
 */
 
-bool Sql_cmd_update::update_single_table(THD *thd, bool is_ora_update_set) {
+bool Sql_cmd_update::update_single_table(THD *thd) {
   DBUG_TRACE;
 
   myf error_flags = MYF(0); /**< Flag for fatal errors */
@@ -559,6 +571,7 @@ bool Sql_cmd_update::update_single_table(THD *thd, bool is_ora_update_set) {
   join_type type = JT_UNKNOWN;
 
   auto cleanup = create_scope_guard([&range_scan, table] {
+    current_thd->show_dbms_output(true);
     destroy(range_scan);
     table->set_keyread(false);
     table->file->ha_index_or_rnd_end();
@@ -977,11 +990,11 @@ bool Sql_cmd_update::update_single_table(THD *thd, bool is_ora_update_set) {
         bool is_row_changed = false;
         if (fill_record_n_invoke_before_triggers(
                 thd, &update, query_block->fields, *update_value_list, table,
-                TRG_EVENT_UPDATE, 0, false, &is_row_changed,
-                is_ora_update_set)) {
+                TRG_EVENT_UPDATE, 0, false, &is_row_changed)) {
           error = 1;
           break;
         }
+        lex->query_block->reset_sequence_read_flag();
         thd->lex->query_block->reset_rownum_read_flag();
         found_rows++;
 
@@ -1238,6 +1251,7 @@ bool Sql_cmd_update::update_single_table(THD *thd, bool is_ora_update_set) {
             ? found_rows
             : updated_rows;
     my_ok(thd, row_count, id, buff);
+    thd->set_ora_implicit_cursor_attr_rowcount(found_rows);
     thd->updated_row_count += row_count;
     DBUG_PRINT("info", ("%ld records updated", (long)updated_rows));
   }
@@ -1263,7 +1277,12 @@ static table_map get_table_map(const mem_root_deque<Item *> &items) {
   table_map map = 0;
 
   for (Item *item : items) {
-    map |= down_cast<Item_field *>(item)->used_tables();
+    Item_row *item_row = dynamic_cast<Item_row *>(item);
+    if (item_row) {
+      item_row->setup_used_tables();
+      map |= item_row->used_tables();
+    } else
+      map |= down_cast<Item_field *>(item)->used_tables();
   }
   DBUG_PRINT("info", ("table_map: 0x%08lx", (long)map));
   return map;
@@ -1551,8 +1570,7 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
   const bool is_single_table_syntax = !multitable;
 
   assert(select->fields.size() == select->num_visible_fields());
-  assert(is_ora_update_set ||
-         select->num_visible_fields() == update_value_list->size());
+  assert(select->num_visible_fields() == update_value_list->size());
 
   Table_ref *insert_table_list = nullptr;
   bool insert_into_view = false;
@@ -1797,11 +1815,41 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
     bitmap_copy(&merge_insert_bitmap, insert_table->write_set);
     bitmap_clear_all(insert_table->write_set);
   }
+  if (merge_into_stmt && opt_merge_update_delete) {
+    TABLE *const insert_table = insert_table_list->table;
+    // @@NOTE@@ if insert_table_list->is_view(), insert_table is nullptr.
+    if (insert_table == nullptr) {
+      my_error(ER_MERGE_TARGET_VIEW_DELETE_NOT_SUPPORT, MYF(0));
+      return true;
+    }
+    uint n_bits = insert_table->write_set->n_bits;
+    uint bitmap_size = bitmap_buffer_size(n_bits);
+    my_bitmap_map *bitmaps =
+        thd->mem_root->ArrayAlloc<my_bitmap_map>(bitmap_size);
+    bitmap_init(&merge_delete_write_set, bitmaps, n_bits);
+    bitmap_clear_all(&merge_delete_write_set);
+
+    bitmaps = thd->mem_root->ArrayAlloc<my_bitmap_map>(bitmap_size);
+    bitmap_init(&merge_delete_read_set, bitmaps, n_bits);
+    bitmap_clear_all(&merge_delete_read_set);
+
+    MY_BITMAP *save_read_set = insert_table->read_set;
+    MY_BITMAP *save_write_set = insert_table->write_set;
+
+    // for delete, columns for read depends on storage.
+    // in sql_delete.cc, TABLE::mark_columns_needed_for_delete() is used.
+    // in sql_insert.cc/write_record() which calls table->use_all_columns()
+    insert_table->column_bitmaps_set_no_signal(&merge_delete_read_set,
+                                               &merge_delete_write_set);
+    insert_table->mark_columns_needed_for_delete(thd);
+
+    insert_table->column_bitmaps_set_no_signal(save_read_set, save_write_set);
+  }
 
   if (setup_fields(thd, /*want_privilege=*/UPDATE_ACL,
                    /*allow_sum_func=*/false, /*split_sum_funcs=*/false,
                    /*column_update=*/true, /*typed_items=*/nullptr,
-                   &select->fields, Ref_item_array()))
+                   &select->fields, Ref_item_array(), true, false))
     return true;
 
   if (make_base_table_fields(thd, &select->fields))
@@ -1840,6 +1888,31 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
         }
       }
     }
+
+    if (opt_merge_update_where) {
+      if (opt_merge_update_where->fix_fields(thd, &opt_merge_update_where))
+        return true;
+    }
+
+    if (opt_merge_update_delete) {
+      if (opt_merge_update_delete->fix_fields(thd, &opt_merge_update_delete))
+        return true;
+    }
+
+    if (opt_merge_insert_where) {
+      if (opt_merge_insert_where->fix_fields(thd, &opt_merge_insert_where))
+        return true;
+      mem_root_deque<Item_field *> where_list(thd->mem_root);
+      opt_merge_insert_where->walk(&Item::collect_item_field_processor,
+                                   enum_walk::POSTFIX, (uchar *)&where_list);
+      for (Item_field *item : where_list) {
+        if (item->table_ref == insert_table_list) {
+          my_error(ER_INSERT_WHERE_REFER_TARGET_TABLE, MYF(0), item->table_name,
+                   item->field_name);
+          return true;
+        }
+      }
+    }
   }
 
   /*
@@ -1865,8 +1938,13 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
   if (setup_fields(thd, /*want_privilege=*/SELECT_ACL,
                    /*allow_sum_func=*/false, /*split_sum_funcs=*/false,
                    /*column_update=*/false, &select->fields, update_value_list,
-                   Ref_item_array(), is_ora_update_set))
+                   Ref_item_array(), true, false))
     return true; /* purecov: inspected */
+
+  if (select->setup_sequence_func(
+          thd, const_cast<mem_root_deque<Item *> *>(update_value_list))) {
+    return true;
+  }
 
   thd->mark_used_columns = mark_used_columns_saved;
 
@@ -2005,6 +2083,10 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
       return true;
     }
   }
+  if (multitable && select->has_sequence) {
+    my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), "");
+    return true;
+  }
   if (select->order_list.first) {
     mem_root_deque<Item *> fields(thd->mem_root);
     if (setup_order(thd, select->base_ref_items, table_list, &fields,
@@ -2028,10 +2110,10 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
       const_join_on_value = (join_on->val_int() != 0);
     }
     Query_result_update *qru = (Query_result_update *)result;
-    qru->set_merge_params(merge_when_insert, opt_merge_update_where,
-                          opt_merge_update_delete, opt_merge_insert_where,
-                          const_join_on, const_join_on_value,
-                          &merge_insert_bitmap);
+    qru->set_merge_params(
+        merge_when_insert, opt_merge_update_where, opt_merge_update_delete,
+        opt_merge_insert_where, const_join_on, const_join_on_value,
+        &merge_insert_bitmap, &merge_delete_read_set, &merge_delete_write_set);
   }
 
   if (select->query_result() &&
@@ -2074,7 +2156,7 @@ bool Sql_cmd_update::execute_inner(THD *thd) {
     return false;
   }
   return multitable ? Sql_cmd_dml::execute_inner(thd)
-                    : update_single_table(thd, is_ora_update_set);
+                    : update_single_table(thd);
 }
 
 /*
@@ -2087,6 +2169,13 @@ bool Query_result_update::prepare(THD *thd, const mem_root_deque<Item *> &,
   DBUG_TRACE;
 
   unit = u;
+
+  if (merge_into_stmt && merge_when_insert) {
+    insert_table = thd->lex->insert_table_leaf->table;
+    if (insert.add_function_default_columns(insert_table,
+                                            insert_table->write_set))
+      return true;
+  }
 
   Query_block *const select = unit->first_query_block();
   Table_ref *const leaves = select->leaf_tables;
@@ -2169,12 +2258,23 @@ bool Query_result_update::prepare(THD *thd, const mem_root_deque<Item *> &,
 
   auto field_it = fields->begin();
   auto value_it = values->begin();
+  size_t row_cols = 0;
   while (field_it != fields->end()) {
-    Item_field *const field = down_cast<Item_field *>(*field_it++);
+    Item *item_tmp = *field_it++;
+    Item_row *item_row = dynamic_cast<Item_row *>(item_tmp);
+    uint offset = 0;
+    if (item_row) {
+      fields_for_table[offset]->push_back(item_row);
+      row_cols = item_row->cols();
+      ora_update_set_row = true;
+    } else {
+      Item_field *const field = down_cast<Item_field *>(item_tmp);
+      offset = field->table_ref->shared;
+      assert(!field->hidden);
+      fields_for_table[offset]->push_back(field);
+    }
     Item *const value = *value_it++;
-    assert(!field->hidden && !value->hidden);
-    uint offset = field->table_ref->shared;
-    fields_for_table[offset]->push_back(field);
+    assert(!value->hidden);
     values_for_table[offset]->push_back(value);
   }
   if (thd->is_error()) return true;
@@ -2184,6 +2284,10 @@ bool Query_result_update::prepare(THD *thd, const mem_root_deque<Item *> &,
   for (uint i = 0; i < update_table_count; i++)
     max_fields = std::max(max_fields, size_t(fields_for_table[i]->size() +
                                              select->leaf_table_count));
+  if (ora_update_set_row)
+    max_fields =
+        std::max(max_fields, size_t(row_cols + select->leaf_table_count));
+
   copy_field = new (thd->mem_root) Copy_field[max_fields];
 
   for (Table_ref *ref = leaves; ref != nullptr; ref = ref->next_leaf) {
@@ -2215,6 +2319,14 @@ bool Query_result_update::prepare(THD *thd, const mem_root_deque<Item *> &,
       if (table->triggers && table->triggers->mark_fields(TRG_EVENT_UPDATE))
         return true;
     }
+  }
+
+  // default delete-mark field should be false
+  // it is necessary in fill_record() into temp table.
+  if (merge_when_update_delete) {
+    Item *value = new (thd->mem_root) Item_func_false();
+    int offset = insert_table_list->shared;
+    values_for_table[offset]->push_back(value);
   }
 
   assert(!thd->is_error());
@@ -2496,6 +2608,25 @@ bool Query_result_update::optimize() {
   if (prepare_partial_update(&thd->opt_trace, *fields, *values))
     return true; /* purecov: inspected */
 
+  if (merge_into_stmt) {
+    if (merge_when_insert) {
+      // create temp table here
+      // it is necessary, otherwise, the inserted row may be shown up
+      // on the join-scan.
+      tmp_insert_table_param = new (thd->mem_root) Temp_table_param();
+      tmp_insert_table_param->func_count = insert_field_list->size();
+      tmp_insert_table = create_tmp_table(
+          thd, tmp_insert_table_param, *insert_field_list, nullptr, false,
+          false, TMP_TABLE_ALL_COLUMNS, HA_POS_ERROR, "");
+      if (!tmp_insert_table) return true;
+
+      tmp_insert_table->triggers = insert_table->triggers;
+    }
+
+    // if merge-into without when-matched-clause
+    if (fields->empty()) return false;
+  }
+
   /* Any update has at least one pair (field, value) */
   assert(!fields->empty());
 
@@ -2509,8 +2640,14 @@ bool Query_result_update::optimize() {
    table.
    For a regular multi-update it refers to some updated table.
   */
+  Item_row *item_row =
+      dynamic_cast<Item_row *>(*VisibleFields(*fields).begin());
+  /*for update set (a,b)=(),a and b have same table_ref,so use item_row[0] is
+   * enough.*/
   Table_ref *first_table_for_update =
-      down_cast<Item_field *>(*VisibleFields(*fields).begin())->table_ref;
+      item_row
+          ? dynamic_cast<Item_field *>(item_row->element_index(0))->table_ref
+          : down_cast<Item_field *>(*VisibleFields(*fields).begin())->table_ref;
 
   /* Create a temporary table for keys to all tables, except main table */
   for (Table_ref *table_ref = update_tables; table_ref != nullptr;
@@ -2603,8 +2740,32 @@ bool Query_result_update::optimize() {
       if (AddRowIdAsTempTableField(thd, &tbl, &temp_fields)) return true;
     }
 
-    temp_fields.insert(temp_fields.end(), fields_for_table[cnt]->begin(),
-                       fields_for_table[cnt]->end());
+    // ora_update_set_row=true,it uses the item_row->row[] to create tmp table.
+    if (!item_row)
+      temp_fields.insert(temp_fields.end(), fields_for_table[cnt]->begin(),
+                         fields_for_table[cnt]->end());
+    else {
+      for (uint i = 0; i < item_row->cols(); i++) {
+        Item_field *ifield =
+            dynamic_cast<Item_field *>(item_row->element_index(i));
+        temp_fields.push_back(ifield);
+      }
+    }
+
+    // in merge-into-update-delete clause, and it is temp table for target
+    // table.
+    if (merge_when_update_delete && insert_table_list->shared == cnt) {
+      // add a boolean field for deletion condition here.
+      // so this field is not included in COPY_FIELD.
+      // btw, this is the latest field of the temp table.
+      // it is necessary to make sure evaluating opt_merge_update_delete after
+      // fill_records().
+      Field_tiny *field =
+          new (thd->mem_root) Field_tiny(1, false, table->alias, false);
+      field->init(table);
+      Item_field *ifield = new (thd->mem_root) Item_field(field);
+      temp_fields.push_back(ifield);
+    }
 
     group = new (thd->mem_root) ORDER;
     /* Make an unique key over the first field to avoid duplicated updates */
@@ -2636,6 +2797,52 @@ bool Query_result_update::optimize() {
 bool Query_result_update::start_execution(THD *thd) {
   thd->check_for_truncated_fields = CHECK_FIELD_WARN;
   thd->num_truncated_fields = 0L;
+
+  if (!merge_into_stmt) return false;
+
+  if (opt_merge_update_delete) {
+    // for merge-into, temp table is always created.
+    mem_root_deque<Item_field *> item_list(thd->mem_root);
+    opt_merge_update_delete->walk(&Item::collect_all_item_fields_processor,
+                                  enum_walk::POSTFIX, (uchar *)&item_list);
+
+    uint offset = insert_table_list->shared;
+    int tmp_field_ofs = 0;
+    for (Item *item : *fields_for_table[offset]) {
+      Item_field *field = (Item_field *)item;
+      assert(!field->hidden);
+
+      Field *modified_field =
+          tmp_tables[offset]
+              ->visible_field_ptr()[1 + unupdated_check_opt_tables.elements +
+                                    tmp_field_ofs];
+      for (Item_field *delete_field : item_list) {
+        if (delete_field->eq(field, true))
+          delete_field->reset_field(modified_field);
+      }
+      tmp_field_ofs++;
+    }
+  }
+
+  if (!merge_when_insert) return false;
+
+  // @@NOTE@@ insert_table->record[0] will be restored to default.
+  // but what happens after next iteration of update ?
+  restore_record(insert_table, s->default_values);
+  insert_table->next_number_field = insert_table->found_next_number_field;
+
+  if (insert.add_function_default_columns(insert_table,
+                                          insert_table->write_set))
+    return true;
+
+  insert_table->mark_columns_needed_for_insert(thd);
+
+  for (Field **next_field = insert_table->field; *next_field; ++next_field) {
+    (*next_field)->reset_warnings();
+    (*next_field)->reset_tmp_null();
+  }
+
+  insert.reset_counters();
   return false;
 }
 
@@ -2644,6 +2851,17 @@ void Query_result_update::cleanup() {
   for (Table_ref *tr = update_tables; tr != nullptr; tr = tr->next_local) {
     tr->table = nullptr;
   }
+  if (merge_into_stmt && merge_when_insert) {
+    if (tmp_insert_table) {
+      tmp_insert_table->file->ha_index_or_rnd_end();
+      close_tmp_table(tmp_insert_table);
+      free_tmp_table(tmp_insert_table);
+      tmp_insert_table = nullptr;
+      tmp_insert_table_param->cleanup();
+      tmp_insert_table_param = nullptr;
+    }
+  }
+
   if (tmp_tables) {
     for (uint cnt = 0; cnt < update_table_count; cnt++) {
       if (tmp_tables[cnt]) {
@@ -2745,6 +2963,25 @@ bool UpdateRowsIterator::DoImmediateUpdatesAndBufferRowIds(
     return false;
   }
 
+  // For insert_table_list is not nullptr,
+  // if when-matched-clause doesn't exists, check for insert operation.
+  // otherwise, update_tables->next_local should be nullptr.
+  if (merge_into_stmt && merge_when_insert) {
+    if ((!m_update_tables && !const_join_on) ||
+        (const_join_on && !const_join_on_value)) {
+      TABLE *table = insert_table_list->table;
+      if (table->has_null_row()) {
+        return merge_insert_into_tmp(thd());
+      }
+      return false;
+    }
+    // @@NOTE@@ it is not supported now.
+    if (!m_update_tables) return false;
+    if (m_update_tables->next_local) {
+      return true;
+    }
+  }
+
   for (Table_ref *cur_table = m_update_tables; cur_table != nullptr;
        cur_table = cur_table->next_local) {
     TABLE *table = cur_table->table;
@@ -2761,7 +2998,29 @@ bool UpdateRowsIterator::DoImmediateUpdatesAndBufferRowIds(
       The join algorithm guarantees that we will not find the a row in
       t1 several times.
     */
+    if ((merge_into_stmt && merge_when_insert) && table->has_null_row()) {
+      // has_null_row() may come from constant join-on false
+      // or empty source table.
+      if (const_join_on && const_join_on_value) return false;
+      return merge_insert_into_tmp(thd());
+    }
     if (table->has_null_row() || table->has_updated_row()) continue;
+
+    if (merge_into_stmt) {
+      if (opt_merge_update_where && !opt_merge_update_where->val_int())
+        return false;
+      /*
+        @@NOTE@@ for merge-into, all updated records are in the temp table.
+        now, it is possible to throw error if a record will be updated twice.
+        so it is not necessary to handle ON-predicate-constant-true issue
+        specially. ref. code around ER_MERGE_UPDATE_UNSTABLE_SET.
+      if (const_join_on && const_join_on_value) {
+        // if uncomment this block makes behavior inconsistent with MySQL
+        // update ... right join on ...
+        return false;
+      }
+      */
+    }
 
     if (table == m_immediate_table) {
       table->clear_partial_update_diffs();
@@ -2876,6 +3135,23 @@ bool UpdateRowsIterator::DoImmediateUpdatesAndBufferRowIds(
         return true;
       }
 
+      // evaluate opt_merge_update_delete after all necessary fields are
+      // filled into temp table.
+      if (merge_when_update_delete && offset == insert_table_list->shared) {
+        // delete-mark field are the latest field of this temp table.
+        Field *modified_fields =
+            tmp_table
+                ->visible_field_ptr()[tmp_table->visible_field_count() - 1];
+        // all the necessary fields are ready, and the UPDATED record are
+        // available after fill_record().
+        // evalute the DELETE clause and change delete-mark field.
+        longlong val = opt_merge_update_delete->val_int();
+        if (val) {
+          modified_fields->store(val);
+          m_deleted_found_rows++;
+        }
+      }
+
       // check if a record exists with the same hash value
       if (!check_unique_constraint(tmp_table))
         return false;  // skip adding duplicate record to the temp table
@@ -2890,6 +3166,9 @@ bool UpdateRowsIterator::DoImmediateUpdatesAndBufferRowIds(
           return true;  // Not a table_is_full error
         }
         ++m_found_rows;
+      } else if (merge_into_stmt) {
+        my_error(ER_MERGE_UPDATE_UNSTABLE_SET, MYF(0));
+        return true;
       }
     }
   }
@@ -2902,6 +3181,7 @@ bool UpdateRowsIterator::DoDelayedUpdates(bool *trans_safe,
   ha_rows org_updated;
   TABLE *table, *tmp_table;
   myf error_flags = MYF(0); /**< Flag for fatal errors */
+  MY_BITMAP *save_read_set, *save_write_set;
 
   DBUG_TRACE;
 
@@ -2926,6 +3206,11 @@ bool UpdateRowsIterator::DoDelayedUpdates(bool *trans_safe,
       }
     }
     return false;
+  }
+
+  if (merge_into_stmt && opt_merge_update_delete != nullptr) {
+    save_read_set = insert_table_list->table->read_set;
+    save_write_set = insert_table_list->table->write_set;
   }
 
   // All rows which we will now read must be updated and thus locked:
@@ -2981,9 +3266,19 @@ bool UpdateRowsIterator::DoDelayedUpdates(bool *trans_safe,
     Field **field = tmp_table->visible_field_ptr() + 1 +
                     m_unupdated_check_opt_tables.size();  // Skip row pointers
     Copy_field *copy_field_ptr = m_copy_fields, *copy_field_end;
+    uint count_field = 0;
+    Item *item_row =
+        ora_update_set_row ? m_fields_for_table[offset]->at(0) : nullptr;
     for (; *field; field++) {
-      Item_field *item = down_cast<Item_field *>(*field_it++);
+      // skip the delete mark field for this case.
+      if (merge_when_update_delete && insert_table_list->shared == offset &&
+          field[1] == nullptr)
+        break;
+      Item *item_tmp = ora_update_set_row ? item_row->element_index(count_field)
+                                          : *field_it++;
+      Item_field *item = down_cast<Item_field *>(item_tmp);
       (copy_field_ptr++)->set(item->field, *field);
+      count_field++;
     }
     copy_field_end = copy_field_ptr;
 
@@ -3119,6 +3414,37 @@ bool UpdateRowsIterator::DoDelayedUpdates(bool *trans_safe,
           table->triggers->process_triggers(thd(), TRG_EVENT_UPDATE,
                                             TRG_ACTION_AFTER, true))
         goto err;
+
+      if (merge_when_update_delete && insert_table_list->shared == offset) {
+        Field *delete_mark =
+            tmp_table
+                ->visible_field_ptr()[tmp_table->visible_field_count() - 1];
+        if (!delete_mark->val_int()) continue;
+
+        assert(insert_table_list->table == table);
+
+        table->column_bitmaps_set(merge_delete_read_set,
+                                  merge_delete_write_set);
+        auto rw_set_grd = create_scope_guard([&]() {
+          table->column_bitmaps_set(save_read_set, save_write_set);
+        });
+
+        table->file->position(table->record[0]);
+
+        // update trigger's NEW is the delete trigger's OLD.
+        // so, it is necessary to specify false in process_triggers().
+        if (table->triggers &&
+            table->triggers->process_triggers(thd(), TRG_EVENT_DELETE,
+                                              TRG_ACTION_BEFORE, false))
+          goto err;
+        if (table->file->ha_delete_row(table->record[0])) goto err;
+
+        if (table->triggers &&
+            table->triggers->process_triggers(thd(), TRG_EVENT_DELETE,
+                                              TRG_ACTION_AFTER, false))
+          goto err;
+        m_deleted_rows++;
+      }
     }
 
     if (m_updated_rows != org_updated ||
@@ -3192,6 +3518,8 @@ int UpdateRowsIterator::Read() {
     if (read_error > 0 || thd()->is_error()) {
       local_error = true;
     } else if (read_error < 0) {
+      if (merge_into_stmt && merge_when_insert)
+        insert_table->file->ha_release_auto_increment();
       break;  // EOF
     } else if (thd()->killed) {
       thd()->send_kill_message();
@@ -3247,6 +3575,14 @@ int UpdateRowsIterator::Read() {
   assert(
       trans_safe || m_updated_rows == 0 ||
       thd()->get_transaction()->cannot_safely_rollback(Transaction_ctx::STMT));
+
+  if (merge_into_stmt && merge_when_insert) {
+    insert_table->file->ha_release_auto_increment();
+
+    // let close_temporary_tables_for_eos() remove it.
+    if (local_error && insert_table->m_check_inserted_rows)
+      insert_table->m_delete_on_eos = true;
+  }
 
   // Safety: If we haven't got an error before (can happen in DoDelayedUpdates).
   if (local_error && !error_before_do_delayed_updates) {
@@ -3397,12 +3733,23 @@ bool Query_result_update::send_eof(THD *thd) {
     snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO), (long)found_rows,
              (long)updated_rows,
              (long)thd->get_stmt_da()->current_statement_cond_count());
+
   const ha_rows row_count =
       thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
           ? found_rows
           : updated_rows;
   ::my_ok(thd, row_count + inserted_row_count, id, buff);
   thd->updated_row_count += row_count;
+  if (merge_into_stmt && merge_when_insert) {
+    insert_table->file->ha_release_auto_increment();
+    if (insert_table->m_check_inserted_rows) {
+      // let close_temporary_tables_for_eos() remove it.
+      if (inserted_row_count == 0)
+        insert_table->m_delete_on_eos = true;
+      else
+        insert_table->m_check_inserted_rows = false;
+    }
+  }
   return false;
 }
 
@@ -3523,13 +3870,15 @@ unique_ptr_destroy_only<RowIterator> Query_result_update::create_iterator(
       thd->lex->using_hypergraph_optimizer
           ? GetHashJoinTables(unit->root_access_path())
           : 0);
-  if (!merge_into_stmt) return p;
+  if (!merge_into_stmt && !ora_update_set_row) return p;
   UpdateRowsIterator *iterator = dynamic_cast<UpdateRowsIterator *>(p.get());
+  // if thd->lex->is_explain_analyze is set, iterator will be nullptr.
+  if (!iterator) return p;
   iterator->set_merge_params(
       merge_when_insert, opt_merge_update_where, opt_merge_update_delete,
       opt_merge_insert_where, const_join_on, const_join_on_value,
       merge_insert_bitmap, merge_delete_read_set, merge_delete_write_set,
       &insert, insert_table_list, insert_field_list, insert_many_values,
-      insert_table, tmp_insert_table);
+      insert_table, tmp_insert_table, ora_update_set_row);
   return p;
 }

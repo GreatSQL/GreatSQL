@@ -39,6 +39,7 @@
 #include "my_alloc.h"
 #include "my_inttypes.h"
 #include "my_table_map.h"
+#include "sql/iterators/gdb_connect_by_iterator.h"
 #include "sql/iterators/row_iterator.h"
 #include "sql/query_result.h"
 #include "sql/sql_lex.h"
@@ -216,6 +217,13 @@ enum Copy_func_type : int {
     on those fields).
   */
   CFT_FIELDS,
+  /**
+    setup for Item_ratio_to_report_value:
+    CFT_WF_FRAMING:sum the data in partition to get sum result.
+    CFT_WF_ORA_ONLY_NEED_DO_SECOND_PHASE:do args[0]/sum to get the
+    ratio_to_report() result.
+  */
+  CFT_WF_ORA_ONLY_NEED_DO_SECOND_PHASE
 };
 
 bool copy_funcs(Temp_table_param *, const THD *thd,
@@ -241,6 +249,10 @@ int join_read_const_table(JOIN_TAB *tab, POSITION *pos);
 int do_sj_dups_weedout(THD *thd, SJ_TMP_TABLE *sjtbl);
 int update_item_cache_if_changed(List<Cached_item> &list);
 
+#define EXCEPT_RAND_FUNC (1ULL << 1)
+#define EXCEPT_CONNECT_BY_FUNC (1ULL << 2)
+#define EXCEPT_CONNECT_BY_VALUE (1ULL << 3)
+
 // Create list for using with temporary table
 bool change_to_use_tmp_fields(mem_root_deque<Item *> *fields, THD *thd,
                               Ref_item_array ref_item_array,
@@ -252,6 +264,10 @@ bool change_to_use_tmp_fields_except_sums(mem_root_deque<Item *> *fields,
                                           Ref_item_array ref_item_array,
                                           mem_root_deque<Item *> *res_fields,
                                           size_t added_non_hidden_fields);
+bool change_to_use_tmp_fields_except_sums_or_connect_by(
+    mem_root_deque<Item *> *fields, THD *thd, Query_block *select,
+    Ref_item_array ref_item_array, mem_root_deque<Item *> *res_fields,
+    size_t added_non_hidden_fields, longlong except_opt);
 bool prepare_sum_aggregators(Item_sum **func_ptr, bool need_distinct);
 bool setup_sum_funcs(THD *thd, Item_sum **func_ptr);
 bool make_group_fields(JOIN *main_join, JOIN *curr_join);
@@ -277,6 +293,7 @@ class QEP_TAB : public QEP_shared_owner {
         rematerialize(false),
         not_used_in_distinct(false),
         having(nullptr),
+        connect_by(nullptr),
         tmp_table_param(nullptr),
         filesort(nullptr),
         ref_item_slice(REF_SLICE_SAVED_BASE),
@@ -431,6 +448,8 @@ class QEP_TAB : public QEP_shared_owner {
   /** HAVING condition for checking prior saving a record into tmp table*/
   Item *having;
 
+  Connect_by_param *connect_by;
+
   // Operation between the previous QEP_TAB and this one.
   enum enum_op_type {
     // Regular nested loop.
@@ -444,6 +463,7 @@ class QEP_TAB : public QEP_shared_owner {
     OT_AGGREGATE_THEN_MATERIALIZE,
     OT_AGGREGATE_INTO_TMP_TABLE,
     OT_WINDOWING_FUNCTION,
+    OT_CONNECT_BY,
 
     // Block-nested loop (rewritten to hash join).
     OT_BNL,

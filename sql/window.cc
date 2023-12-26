@@ -153,6 +153,9 @@ bool Window::check_window_functions1(THD *thd, Query_block *select) {
       assert(!wf.framing());
       m_needs_partition_cardinality = true;
     }
+    if (wf.only_need_do_second_phase()) {
+      m_only_need_do_second_phase = true;
+    }
     m_opt_first_row |= reqs.opt_first_row;
     m_opt_last_row |= reqs.opt_last_row;
     m_row_optimizable &= reqs.row_optimizable;
@@ -1102,6 +1105,15 @@ bool Window::setup_windows1(THD *thd, Query_block *select,
 
   for (Window &w : *windows) {
     w.m_query_block = select;
+    if (w.m_partition_by == nullptr && w.get_keep_dir() != KEEP_DIR_NONE &&
+        select->group_list.size() > 0) {
+      w.m_partition_by = new (thd->mem_root) PT_order_list();
+      for (ORDER *o = select->group_list.first; o != nullptr; o = o->next) {
+        PT_order_expr *pt_order =
+            new (thd->mem_root) PT_order_expr(o->item_initial, o->direction);
+        w.m_partition_by->push_back(pt_order);
+      }
+    }
 
     if (w.m_partition_by != nullptr &&
         w.resolve_window_ordering(thd, ref_item_array, tables, fields,

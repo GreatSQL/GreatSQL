@@ -32,6 +32,7 @@
   Historically this file contained "Classes in mysql".
 */
 
+#include "gdb_sequence.h"
 #include "my_config.h"
 
 #include <limits.h>
@@ -87,6 +88,7 @@
 #include "mysqld_error.h"
 #include "pfs_thread_provider.h"
 #include "prealloced_array.h"
+#include "session_package_data.h"
 #include "sql/auth/sql_security_ctx.h"  // Security_context
 #include "sql/current_thd.h"
 #include "sql/dd/string_type.h"      // dd::string_type
@@ -112,6 +114,7 @@
 #include "sql/sys_vars_resource_mgr.h"  // Session_sysvar_resource_manager
 #include "sql/system_variables.h"       // system_variables
 #include "sql/transaction_info.h"       // Ha_trx_info
+#include "sql/trigger_def.h"            // enum_trigger_event_type
 #include "sql/xa.h"
 #include "sql_string.h"
 #include "template_utils.h"
@@ -723,6 +726,11 @@ class Open_tables_state {
     Flags with information about the open tables state.
   */
   uint state_flags;
+
+  /* if true , use in dbms_sql will change open tables for new lex and lock
+   * status */
+  bool use_in_dbms_sql;
+
   /**
      This constructor initializes Open_tables_state instance which can only
      be used as backup storage. To prepare Open_tables_state instance for
@@ -730,7 +738,9 @@ class Open_tables_state {
      call init_open_tables_state().
   */
   Open_tables_state()
-      : m_reprepare_observers(PSI_INSTRUMENT_ME), state_flags(0U) {}
+      : m_reprepare_observers(PSI_INSTRUMENT_ME),
+        state_flags(0U),
+        use_in_dbms_sql{false} {}
 
   void set_open_tables_state(Open_tables_state *state);
 
@@ -1283,6 +1293,7 @@ class THD : public MDL_context_owner,
 
  public:
   LEX *lex;                                        // parse tree descriptor
+
   dd::cache::Dictionary_client *dd_client() const  // Get the dictionary client.
   {
     return m_dd_client.get();
@@ -2773,11 +2784,46 @@ class THD : public MDL_context_owner,
 
   longlong m_row_count_func; /* For the ROW_COUNT() function */
 
+  /**
+    Stores the result of oracle implicit cursor attribute SQL%ROWCOUNT
+
+    SQL%ROWCOUNT has one of these values:
+      - If no SELECT or DML statement has run, NULL.
+      - If a SELECT or DML statement has run, the number of rows fetched so far.
+
+    SQL%ROWCOUNT is assigned according to the following rules:
+      - Dufalut value:
+        - The default value is -1, indicating that no SELECT or DML statement
+          has run in the store routine
+
+      - In sp_head::execute():
+        - reset the value to -1
+
+      - In my_ok():
+        - for DML statements: to the number of affected rows;
+        - for DDL statements: to 0.
+
+      - In my_eof(): to 0 to indicate that there was a result set.
+
+      - In Sql_cmd_update::update_single_table():
+        - Set the value to the number of rows matched instead of the number of
+          rows updated in the the UPDATE statement
+  */
+  longlong ora_implicit_cursor_attr_rowcount{-1};
+
  public:
   inline longlong get_row_count_func() const { return m_row_count_func; }
 
   inline void set_row_count_func(longlong row_count_func) {
     m_row_count_func = row_count_func;
+  }
+
+  inline longlong get_ora_implicit_cursor_attr_rowcount() const {
+    return ora_implicit_cursor_attr_rowcount;
+  }
+
+  inline void set_ora_implicit_cursor_attr_rowcount(longlong rowcount) {
+    ora_implicit_cursor_attr_rowcount = rowcount;
   }
 
   ha_rows num_truncated_fields;
@@ -3762,6 +3808,8 @@ class THD : public MDL_context_owner,
     return m_query_rewrite_plugin_da_ptr;
   }
 
+  Dbms_output_package *get_dbmsotpt() { return m_dbmsotpt_ptr; }
+  void show_dbms_output(bool is_my_ok_pattern);
   /**
     Push the given Diagnostics Area on top of the stack, making
     it the new first Diagnostics Area. Conditions in the new second
@@ -4432,6 +4480,16 @@ class THD : public MDL_context_owner,
     return copy_db_to(const_cast<char const **>(p_db), p_db_length);
   }
 
+  // Add for greatdb: used for fix sequence Item_field
+  bool copy_db_to_no_throw(char **p_db, size_t *p_db_length) const {
+    if (m_db.str == nullptr) {
+      return true;
+    }
+    *p_db = strmake(m_db.str, m_db.length);
+    *p_db_length = m_db.length;
+    return false;
+  }
+
   // add for greatdb: set/check is parallel load executor
   void set_parallel_load_executor() {
     variables.gdb_parallel_load_executor = true;
@@ -4837,6 +4895,10 @@ class THD : public MDL_context_owner,
   LEX_USER *get_gdb_current_user() const { return m_gdb_current_user; }
   void set_gdb_current_user(LEX_USER *user) { m_gdb_current_user = user; }
 
+  // dbms_alert_package
+  bool m_dbms_alert_cleanup{false};
+  std::string m_dbms_alert_sid;
+
  public:
   /** This memory root is used for Parallel Query */
   MEM_ROOT *pq_mem_root;
@@ -4861,6 +4923,9 @@ class THD : public MDL_context_owner,
 
   Diagnostics_area *m_parser_da;
   Diagnostics_area *m_stmt_da;
+
+  Dbms_output_package m_dbmsotpt; /* dbms output content*/
+  Dbms_output_package *m_dbmsotpt_ptr;
 
   /**
     It will be set TRUE if CURRENT_USER() is called in account management
@@ -5193,12 +5258,56 @@ class THD : public MDL_context_owner,
   /** the number of elements in parameters */
   unsigned long bind_parameter_values_count;
 
+  // dbms_pipe
+  /*local buffer for pack_message and send_message*/
+  std::string dbms_pipe_pack_message;
+  /*local buffer for unpack_message and receive_message*/
+  std::string dbms_pipe_receive_message;
+  // dbms_pipe_receive_message indicators, use for reset_buffer procedure
+  int dbms_pipe_receive_message_read_pos;
+
+  // dbms_profiler
+  Session_dbms_profiler_info dbms_profiler_info;
+
  private:
   bool is_rpl_stmt_event_format_used;
 
  public:
   void check_rpl_stmt_event_format_used();
   bool get_rpl_stmt_event_format_used() const;
+
+ public:
+  /**
+   * @name GreatDB Sequence cache (for compatibility with Oracle)
+   * @{ */
+ private:
+  struct seq_currval_cache_entity {
+    seq_currval_cache_entity(uint64_t id) : volatile_id(id), valid(false) {}
+
+    seq_currval_cache_entity(uint64_t id, my_decimal &cval)
+        : volatile_id(id), currval(cval), valid(false) {}
+
+    void update(uint64_t id, my_decimal &cval) {
+      this->volatile_id = id;
+      this->currval = cval;
+      this->valid = true;
+    }
+
+    uint64_t volatile_id{0};
+    my_decimal currval;
+    bool valid{false};
+  };
+  using thd_sequence_cache_t =
+      std::unordered_map<std::string,
+                         std::unique_ptr<seq_currval_cache_entity>>;
+  thd_sequence_cache_t sequence_cache;
+
+ public:
+  const my_decimal *get_cached_seq_currval(const char *db, const char *name,
+                                           const Gdb_sequence_entity *seq);
+  void update_seq_cache_entity(const char *db, const char *name, uint64_t id,
+                               my_decimal &cval);
+  /**  @} GreatDB Sequence cache (for compatibility with Oracle) */
 
  public:
   /**
@@ -5234,8 +5343,10 @@ class THD : public MDL_context_owner,
              get_stmt_da()->mysql_errno() == ER_DA_CONN_LIMIT));
   }
 #endif
-};
 
+  bool m_ora_create_global_temp_instance{false};
+
+};
 /**
    Return lock_tables_mode for secondary engine.
    @param cthd thread context

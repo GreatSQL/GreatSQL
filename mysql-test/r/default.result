@@ -245,3 +245,251 @@ CREATE TABLE t(t TIME DEFAULT TIME'01:02:03');
 ERROR 42000: Invalid default value for 't'
 CREATE TABLE d(d DATE DEFAULT DATE'2019-10-01');
 ERROR 42000: Invalid default value for 'd'
+set timestamp=1681438146;
+set sql_mode = oracle;
+select current_timestamp, current_timestamp(0), current_timestamp(5);
+current_timestamp	current_timestamp(0)	current_timestamp(5)
+14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06 AM +03:00	14-04-23 05:09:06.00000 AM +03:00
+create table t1 (
+id int,
+c1 varchar(64) default current_timestamp
+);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE "t1" (
+  "id" int DEFAULT NULL,
+  "c1" varchar(64) DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t1(id) values(1);
+select * from t1;
+id	c1
+1	14-04-23 05:09:06.000000 AM +03:00
+alter table t1 add column c2 varchar(64) default current_timestamp(1);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE "t1" (
+  "id" int DEFAULT NULL,
+  "c1" varchar(64) DEFAULT CURRENT_TIMESTAMP,
+  "c2" varchar(64) DEFAULT CURRENT_TIMESTAMP(1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t1;
+id	c1	c2
+1	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+insert into t1(id) values(2);
+insert into t1 values(3, current_timestamp(2), current_timestamp(4));
+insert into t1 values(4, current_timestamp, current_timestamp(1));
+select * from t1;
+id	c1	c2
+1	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+2	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+3	14-04-23 05:09:06.00 AM +03:00	14-04-23 05:09:06.0000 AM +03:00
+4	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+set sql_mode=default;
+select current_timestamp, current_timestamp(0), current_timestamp(5);
+current_timestamp	current_timestamp(0)	current_timestamp(5)
+2023-04-14 05:09:06	2023-04-14 05:09:06	2023-04-14 05:09:06.00000
+insert into t1(id) values(5);
+insert into t1 values(6, current_timestamp, current_timestamp(1));
+select * from t1;
+id	c1	c2
+1	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+2	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+3	14-04-23 05:09:06.00 AM +03:00	14-04-23 05:09:06.0000 AM +03:00
+4	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+5	2023-04-14 05:09:06	2023-04-14 05:09:06.0
+6	2023-04-14 05:09:06	2023-04-14 05:09:06.0
+create table t11(
+id int,
+c1 varchar(64) default current_timestamp
+);
+show create table t11;
+Table	Create Table
+t11	CREATE TABLE `t11` (
+  `id` int DEFAULT NULL,
+  `c1` varchar(64) DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t11(id) values(1);
+insert into t11 values(2, current_timestamp);
+set sql_mode=oracle;
+show create table t11;
+Table	Create Table
+t11	CREATE TABLE "t11" (
+  "id" int DEFAULT NULL,
+  "c1" varchar(64) DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t11(id) values(3);
+insert into t11 values(4, current_timestamp);
+select * from t11;
+id	c1
+1	2023-04-14 05:09:06
+2	2023-04-14 05:09:06
+3	14-04-23 05:09:06.000000 AM +03:00
+4	14-04-23 05:09:06.000000 AM +03:00
+create table t12(
+id int,
+c1 varchar(64) default current_timestamp(0)
+);
+show create table t12;
+Table	Create Table
+t12	CREATE TABLE "t12" (
+  "id" int DEFAULT NULL,
+  "c1" varchar(64) DEFAULT CURRENT_TIMESTAMP(0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t12(id) values(1);
+insert into t12 values(2, current_timestamp);
+insert into t12 values(4, current_timestamp(0));
+set sql_mode=default;
+show create table t12;
+Table	Create Table
+t12	CREATE TABLE `t12` (
+  `id` int DEFAULT NULL,
+  `c1` varchar(64) DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t12(id) values(4);
+insert into t12 values(5, current_timestamp);
+select * from t12;
+id	c1
+1	14-04-23 05:09:06 AM +03:00
+2	14-04-23 05:09:06.000000 AM +03:00
+4	14-04-23 05:09:06 AM +03:00
+4	2023-04-14 05:09:06
+5	2023-04-14 05:09:06
+create table t13(
+id int,
+c1 varchar(64) default now(0)
+);
+show create table t13;
+Table	Create Table
+t13	CREATE TABLE `t13` (
+  `id` int DEFAULT NULL,
+  `c1` varchar(64) DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t13(id) values(1);
+insert into t13 values(2, current_timestamp);
+set sql_mode=oracle;
+show create table t13;
+Table	Create Table
+t13	CREATE TABLE "t13" (
+  "id" int DEFAULT NULL,
+  "c1" varchar(64) DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t13(id) values(3);
+insert into t13 values(4, current_timestamp);
+select * from t13;
+id	c1
+1	2023-04-14 05:09:06
+2	2023-04-14 05:09:06
+3	2023-04-14 05:09:06
+4	14-04-23 05:09:06.000000 AM +03:00
+create table t2 (
+id int,
+c1 varchar(4) default current_timestamp
+);
+ERROR 42000: Invalid default value for 'c1'
+create table t2 (
+id int,
+c1 varchar(64) default current_timestamp(9)
+);
+ERROR 42000: Too-big precision 9 specified for 'c1'. Maximum is 6.
+create table t2 (
+id int,
+id2 int,
+c1 varchar(48) default current_timestamp(2)
+);
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE "t2" (
+  "id" int DEFAULT NULL,
+  "id2" int DEFAULT NULL,
+  "c1" varchar(48) DEFAULT CURRENT_TIMESTAMP(2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+alter table t2 add column c2 varchar(4) default current_timestamp(3);
+ERROR 42000: Invalid default value for 'c2'
+alter table t2 add column c2 varchar(64) default current_timestamp(8);
+ERROR 42000: Too-big precision 8 specified for 'c2'. Maximum is 6.
+alter table t2 modify column id2 varchar(4) default current_timestamp(3);
+ERROR 42000: Invalid default value for 'id2'
+alter table t2 change id2 col3 varchar(4) default current_timestamp(3);
+ERROR 42000: Invalid default value for 'col3'
+create table t3 (
+id int,
+c1 varchar(16)
+);
+insert into t3 values(1, 'hi1');
+insert into t3 values(2, 'hi2');
+insert into t3 values(3, now());
+ERROR 22001: Data too long for column 'c1' at row 1
+alter table t3 modify column c1 varchar(64) default current_timestamp(4);
+insert into t3(id) values(3);
+select * from t3;
+id	c1
+1	hi1
+2	hi2
+3	14-04-23 05:09:06.0000 AM +03:00
+create table t4 (
+id int,
+c1 int
+);
+insert into t4 values(1,1);
+insert into t4 values(1,2);
+select * from t4;
+id	c1
+1	1
+1	2
+alter table t4 change c1 col1 varchar(64) default current_timestamp(5);
+insert into t4(id) values(3);
+select * from t4;
+id	col1
+1	1
+1	2
+3	14-04-23 05:09:06.00000 AM +03:00
+create table t5 (
+id int,
+c0 varchar(64) default current_timestamp,
+c1 varchar(64) default current_timestamp(1),
+c2 varchar(64) default current_timestamp(2),
+c3 varchar(64) default current_timestamp(3),
+c4 varchar(64) default current_timestamp(4),
+c5 varchar(64) default current_timestamp(5),
+c6 varchar(64) default current_timestamp(6)
+);
+insert into t5(id) values(1);
+select * from t5;
+id	c0	c1	c2	c3	c4	c5	c6
+1	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00	14-04-23 05:09:06.00 AM +03:00	14-04-23 05:09:06.000 AM +03:00	14-04-23 05:09:06.0000 AM +03:00	14-04-23 05:09:06.00000 AM +03:00	14-04-23 05:09:06.000000 AM +03:00
+select @@time_zone into @tz;
+set time_zone='+08:00';
+insert into t5(id) values(2);
+select * from t5;
+id	c0	c1	c2	c3	c4	c5	c6
+1	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00	14-04-23 05:09:06.00 AM +03:00	14-04-23 05:09:06.000 AM +03:00	14-04-23 05:09:06.0000 AM +03:00	14-04-23 05:09:06.00000 AM +03:00	14-04-23 05:09:06.000000 AM +03:00
+2	14-04-23 10:09:06.000000 AM +08:00	14-04-23 10:09:06.0 AM +08:00	14-04-23 10:09:06.00 AM +08:00	14-04-23 10:09:06.000 AM +08:00	14-04-23 10:09:06.0000 AM +08:00	14-04-23 10:09:06.00000 AM +08:00	14-04-23 10:09:06.000000 AM +08:00
+set time_zone=@tz;
+set sql_mode=oracle;
+create table t6 as select * from t1;
+show create table t6;
+Table	Create Table
+t6	CREATE TABLE "t6" (
+  "id" int DEFAULT NULL,
+  "c1" varchar(64) DEFAULT CURRENT_TIMESTAMP,
+  "c2" varchar(64) DEFAULT CURRENT_TIMESTAMP(1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t6(id) values(9);
+select * from t6;
+id	c1	c2
+1	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+2	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+3	14-04-23 05:09:06.00 AM +03:00	14-04-23 05:09:06.0000 AM +03:00
+4	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+5	2023-04-14 05:09:06	2023-04-14 05:09:06.0
+6	2023-04-14 05:09:06	2023-04-14 05:09:06.0
+9	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+drop table t1;
+drop table t11;
+drop table t12;
+drop table t13;
+drop table t2;
+drop table t3;
+drop table t4;
+drop table t5;
+drop table t6;

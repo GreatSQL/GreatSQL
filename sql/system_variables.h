@@ -680,6 +680,17 @@ struct System_variables {
   uint select_into_disk_sync_delay;
 
   /**
+    use for select bulk collect into
+  */
+  uint select_bulk_into_batch;
+
+  /**
+    @sa Sys_serveroutput session level
+  */
+  bool serveroutput;
+  ulong max_dbmsotpt_count;
+
+  /**
     @sa Sys_terminology_use_previous
   */
   ulong terminology_use_previous;
@@ -736,6 +747,22 @@ struct System_variables {
   ulong parallel_queue_timeout;
 
   bool pq_copy_from(System_variables leader);
+
+  /**
+    @sa dbms_profiler
+  */
+  uint dbms_profiler_max_units_size;
+  uint dbms_profiler_max_data_size;
+
+  /**
+    lock ddl polling mode config
+   */
+  bool lock_ddl_polling_mode;
+
+  /**
+    Unit millisecond default 1000
+ */
+  ulong lock_ddl_polling_runtime;
 };
 
 /**
@@ -857,5 +884,9 @@ void add_diff_to_status(System_status_var *to_var, System_status_var *from_var,
 void add_to_status(System_status_var *to_var, System_status_var *from_var);
 
 void reset_system_status_vars(System_status_var *status_vars);
+
+/* For Oracle private temporary table, its name must always be prefixed with
+ * whatever is defined with this parameter. The default is ORA$PTT_. */
+extern char *ora_private_temp_table_prefix;
 
 #endif  // SYSTEM_VARIABLES_INCLUDED

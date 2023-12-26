@@ -53,19 +53,6 @@ typedef struct outer_join_info {
   // key is outer table, value is inner table;
   std::map<uint, std::set<uint>> outer_to_inner_map;
   List<Item> where_conds;
-
-  bool need_to_reset{false};
-
-  void reset() {
-    outer_joined_map.clear();
-    join_cond_map.clear();
-    table_no_map.clear();
-    inner_tables.clear();
-    outer_tables.clear();
-    inner_to_outer_map.clear();
-    outer_to_inner_map.clear();
-    where_conds.clear();
-  }
 } OUTER_INFO;
 
 class Outerjoin_transformer {

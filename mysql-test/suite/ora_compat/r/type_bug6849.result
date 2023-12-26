@@ -1,0 +1,115 @@
+SET sql_mode=ORACLE;
+show variables like '%udt_format_result%';
+Variable_name	Value
+udt_format_result	BINARY
+set @@udt_format_result='DBA';
+#
+# test of function in type is table of
+#
+CREATE or replace  FUNCTION f1 (a VARCHAR(32)) RETURN VARCHAR(32) no sql
+is result VARCHAR(32);
+BEGIN
+result := CONCAT(a,'y');
+RETURN(result);
+END;$$
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist := tklist(f1(1),f1(2),'cc');
+id1 int := 1;
+begin
+select stu_record_val(1),stu_record_val(2);
+stu_record_val(1) := 1;
+select stu_record_val(1);
+stu_record_val(3) := 1;
+select stu_record_val(1), stu_record_val(3);
+select stu_record_val.count;
+end;
+$$
+call p1;
+stu_record_val(1)	stu_record_val(2)
+1y	2y
+stu_record_val(1)
+1
+stu_record_val(1)	stu_record_val(3)
+1	1
+stu_record_val.count
+3
+drop PROCEDURE p1;
+#
+# test of function in type is record of
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := f1(1),
+score varchar(20) := f1(2)
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>stu_record(10,f1(10),f1(20)));
+BEGIN
+stu_record_val(2).id := 20;
+select stu_record_val(1),stu_record_val(2);
+END;
+$$
+call p1();
+stu_record_val(1)	stu_record_val(2)
+id:10 | name_d:10y | score:20y	id:20 | name_d:1y | score:2y
+drop PROCEDURE p1;
+#
+# test of for in inner layer of sp
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := f1(1),
+score varchar(20) := f1(2)
+);
+stu_record_val stu_record;
+BEGIN
+stu_record_val.id := 10;
+select stu_record_val;
+END;
+$$
+call p1();
+stu_record_val
+id:10 | name_d:1y | score:2y
+drop PROCEDURE p1;
+#
+# test of for in inner layer of sp
+#
+create database db1;
+use db1;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := test.f1(1),
+score varchar(20) := test.f1(2)
+);
+stu_record_val stu_record;
+BEGIN
+stu_record_val.id := 10;
+select stu_record_val;
+END;
+$$
+use test;
+CREATE or replace PROCEDURE p2() as
+type tklist1 is table of varchar(20);
+stu_record_val1 tklist1 := tklist1();
+begin
+show procedure code db1.p1;
+call db1.p1;
+end;
+$$
+call p2();
+Pos	Instruction
+0	set stu_record.id@0[0] 1
+1	set stu_record.name_d@0[1] "test"."f1"(1)
+2	set stu_record.score@0[2] "test"."f1"(2)
+3	set stu_record_val@1 stu_record@0
+4	set stu_record_val.id@1[id] 10
+5	stmt "select stu_record_val"
+stu_record_val
+id:10 | name_d:1y | score:2y
+drop PROCEDURE p2;
+drop database db1;
+drop function f1;

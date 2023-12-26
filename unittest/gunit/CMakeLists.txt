@@ -1,4 +1,5 @@
 # Copyright (c) 2010, 2022, Oracle and/or its affiliates.
+# Copyright (c) 2023, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -206,7 +207,6 @@ ENDIF()
 
 # Add tests (link them with gunit/gmock libraries and the server libraries)
 SET(SERVER_TESTS
-  bgc_ticket_manager
   character_set_deprecation
   compare_access_paths
   connect_joins
@@ -455,6 +455,44 @@ MYSQL_ADD_EXECUTABLE(rpl_event_ctx-t rpl_event_ctx-t.cc
   LINK_LIBRARIES rpl_event_ctx_lib gunit_small
 )
 
+ADD_CUSTOM_COMMAND(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GB18030_2022_MappingTableBMP.txt
+    COMMAND gzip -d ${CMAKE_SOURCE_DIR}/unittest/gunit/GB18030_2022_MappingTableBMP.txt.gz -c > ${CMAKE_CURRENT_BINARY_DIR}/GB18030_2022_MappingTableBMP.txt
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    DEPENDS ${CMAKE_SOURCE_DIR}/unittest/gunit/GB18030_2022_MappingTableBMP.txt.gz
+)
+
+ADD_CUSTOM_COMMAND(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GB18030_2022_MappingTableSMP.txt
+    COMMAND gzip -d ${CMAKE_SOURCE_DIR}/unittest/gunit/GB18030_2022_MappingTableSMP.txt.gz -c > ${CMAKE_CURRENT_BINARY_DIR}/GB18030_2022_MappingTableSMP.txt
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    DEPENDS ${CMAKE_SOURCE_DIR}/unittest/gunit/GB18030_2022_MappingTableSMP.txt.gz
+)
+
+ADD_CUSTOM_COMMAND(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GB18030_2022_MappingTableBMP.h
+  COMMAND xxd -i GB18030_2022_MappingTableBMP.txt ${CMAKE_CURRENT_BINARY_DIR}/GB18030_2022_MappingTableBMP.h
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/GB18030_2022_MappingTableBMP.txt
+)
+
+
+ADD_CUSTOM_COMMAND(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GB18030_2022_MappingTableSMP.h
+  COMMAND xxd  -i  GB18030_2022_MappingTableSMP.txt ${CMAKE_CURRENT_BINARY_DIR}/GB18030_2022_MappingTableSMP.h
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/GB18030_2022_MappingTableSMP.txt
+)
+
+MYSQL_ADD_EXECUTABLE(charset_gb18030_2022-t charset_gb18030_2022-t.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/GB18030_2022_MappingTableBMP.h
+  ${CMAKE_CURRENT_BINARY_DIR}/GB18030_2022_MappingTableSMP.h
+  ENABLE_EXPORTS
+  ADD_TEST merge_small_tests
+  LINK_LIBRARIES   gunit_small
+  SKIP_INSTALL
+)
+target_include_directories(charset_gb18030_2022-t PRIVATE  ${CMAKE_CURRENT_BINARY_DIR})
 ADD_SUBDIRECTORY(ddl_rewriter)
 ADD_SUBDIRECTORY(innodb)
 ADD_SUBDIRECTORY(keyring)

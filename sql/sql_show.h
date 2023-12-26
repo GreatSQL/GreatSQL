@@ -153,6 +153,17 @@ void show_sql_type(enum_field_types type, bool is_array, uint metadata,
 
 bool do_fill_information_schema_table(THD *thd, Table_ref *table_list,
                                       Item *condition);
+/**
+  Helper to lookup Trigger object by trigger name in a TABLE_SHARE.
+
+  @param share TABLE_SHARE in which list of Trigger object lookup to
+               be performed.
+  @param name  Name of trigger to find.
+
+  @return Pointer to Trigger object, or nullptr if no trigger with such
+          name was found.
+*/
+Trigger *find_trigger_in_share(TABLE_SHARE *share, const LEX_STRING &name);
 
 extern TYPELIB grant_types;
 
@@ -343,6 +354,18 @@ class Sql_cmd_show_create_type : public Sql_cmd_show_noplan {
   Sql_cmd_show_create_type() : Sql_cmd_show_noplan(SQLCOM_SHOW_CREATE_TYPE) {}
   bool check_privileges(THD *thd) override;
   bool execute_inner(THD *thd) override;
+};
+
+// add for GreatDB: show create sequence
+class Sql_cmd_show_create_sequence : public Sql_cmd_show_noplan {
+ public:
+  Sql_cmd_show_create_sequence(Table_ident *table_ident)
+      : Sql_cmd_show_noplan(SQLCOM_SHOW_CREATE), m_table_ident(table_ident) {}
+  bool check_privileges(THD *thd) override;
+  bool execute_inner(THD *thd) override;
+
+ private:
+  Table_ident *const m_table_ident;
 };
 
 /// Represents SHOW CREATE TABLE/VIEW statement.
@@ -660,6 +683,12 @@ class Sql_cmd_show_table_status : public Sql_cmd_show_schema_base {
  public:
   Sql_cmd_show_table_status()
       : Sql_cmd_show_schema_base(SQLCOM_SHOW_TABLE_STATUS) {}
+};
+
+// Add for GreatDB: show sequences
+class Sql_cmd_show_sequences : public Sql_cmd_show_schema_base {
+ public:
+  Sql_cmd_show_sequences() : Sql_cmd_show_schema_base(SQLCOM_SHOW_SEQUENCES) {}
 };
 
 /// Represents SHOW TABLES statement.

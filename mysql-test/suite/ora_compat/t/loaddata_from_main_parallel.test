@@ -17,32 +17,26 @@ select @@auto_increment_offset into @old_increment_offset;
 set @@auto_increment_increment=1;
 set @@auto_increment_offset=1;
 
-create table t1 (a date, b date, c date not null, d date) engine=InnoDB;
-load data infile '../../std_data/loaddata1.dat'
-ignore into table t1 fields terminated by ',';
-load data infile '../../std_data/loaddata1.dat'
-into table t1 fields terminated by ',' IGNORE 2 LINES;
+create table t1 (a date, b date, c date not null, d date);
+load data infile '../../std_data/loaddata1.dat' ignore into table t1 fields terminated by ',';
+load data infile '../../std_data/loaddata1.dat' into table t1 fields terminated by ',' IGNORE 2 LINES;
 SELECT * from t1;
 truncate table t1;
 
-load data infile '../../std_data/loaddata1.dat'
-ignore into table t1 fields terminated by ',' LINES STARTING BY ',' (b,c,d);
+load data infile '../../std_data/loaddata1.dat' ignore into table t1 fields terminated by ',' LINES STARTING BY ',' (b,c,d);
 SELECT * from t1;
 drop table t1;
 
-create table t1 (a text, b text) engine=InnoDB;
-load data infile '../../std_data/loaddata2.dat'
-ignore into table t1 fields terminated by ',' enclosed by '''';
+create table t1 (a text, b text);
+load data infile '../../std_data/loaddata2.dat' ignore into table t1 fields terminated by ',' enclosed by '''';
 select concat('|',a,'|'), concat('|',b,'|') from t1;
 drop table t1;
 
-create table t1 (a int, b char(10)) engine=InnoDB charset latin1;
-load data infile '../../std_data/loaddata3.dat'
-ignore into table t1 fields terminated by '' enclosed by '' ignore 1 lines;
+create table t1 (a int, b char(10)) charset latin1;
+load data infile '../../std_data/loaddata3.dat' ignore into table t1 fields terminated by '' enclosed by '' ignore 1 lines;
 select * from t1;
 truncate table t1;
-load data infile '../../std_data/loaddata4.dat'
-ignore into table t1 fields terminated by '' enclosed by '' lines terminated by '' ignore 1 lines;
+load data infile '../../std_data/loaddata4.dat' ignore into table t1 fields terminated by '' enclosed by '' lines terminated by '' ignore 1 lines;
 
 # The empty line last comes from the end line field in the file
 select * from t1;
@@ -52,7 +46,7 @@ drop table t1;
 # Bug #12053 LOAD DATA INFILE ignores NO_AUTO_VALUE_ON_ZERO setting
 #
 SET @OLD_SQL_MODE=@@SQL_MODE, @@SQL_MODE=NO_AUTO_VALUE_ON_ZERO;
-create table t1(id integer not null auto_increment primary key) engine=InnoDB;
+create table t1(id integer not null auto_increment primary key);
 insert into t1 values(0);
 disable_query_log;
 eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/tmp/t1' from t1;
@@ -79,7 +73,7 @@ drop table t1;
 # Bug #11203: LOAD DATA does not accept same characters for ESCAPED and
 # ENCLOSED
 #
-create table t1 (a varchar(20), b varchar(20)) engine=InnoDB;
+create table t1 (a varchar(20), b varchar(20));
 load data infile '../../std_data/loaddata_dq.dat' into table t1 fields terminated by ',' enclosed by '"' escaped by '"' (a,b);
 select * from t1;
 drop table t1;
@@ -92,12 +86,12 @@ drop table t1;
 CREATE TABLE t1 (
   id INT AUTO_INCREMENT PRIMARY KEY,
   c1 VARCHAR(255)
-) engine=InnoDB;
+);
 
 CREATE TABLE t2 (
   id INT,
   c2 VARCHAR(255)
-) engine=InnoDB;
+);
 
 INSERT INTO t1 (c1) VALUES
   ('r'),   ('rr'),   ('rrr'),   ('rrrr'),
@@ -123,7 +117,7 @@ DROP TABLE t1,t2;
 #
 # Let us test extended LOAD DATA features
 #
-create table t1 (a int default 100, b int, c varchar(60)) engine=InnoDB;
+create table t1 (a int default 100, b int, c varchar(60));
 # we can do something like this
 load data infile '../../std_data/rpl_loaddata.dat' into table t1 (a, @b) set b=@b+10, c=concat("b=",@b);
 select * from t1;
@@ -160,7 +154,7 @@ select * from t1;
 load data infile '../../std_data/loaddata5.dat' into table t1 fields terminated by '' enclosed by '' (a, @b);
 
 # Now let us test LOAD DATA with subselect
-create table t2 (num int primary key, str varchar(10)) engine=InnoDB;
+create table t2 (num int primary key, str varchar(10));
 insert into t2 values (10,'Ten'), (15,'Fifteen');
 truncate table t1;
 load data infile '../../std_data/rpl_loaddata.dat' into table t1 (@dummy,@n) set a= @n, c= (select str from t2 where num=@n);
@@ -193,9 +187,9 @@ drop table t1, t2;
 # Bug#27586: Wrong autoinc value assigned by LOAD DATA in the
 #            NO_AUTO_VALUE_ON_ZERO mode
 #
-create table t1(f1 int) engine=InnoDB;
+create table t1(f1 int);
 insert into t1 values(1),(null);
-create table t2(f2 int auto_increment primary key) engine=InnoDB;
+create table t2(f2 int auto_increment primary key);
 disable_query_log;
 eval select * into outfile '$MYSQLTEST_VARDIR/tmp/t1' from t1;
 SET @OLD_SQL_MODE=@@SQL_MODE, @@SQL_MODE=NO_AUTO_VALUE_ON_ZERO;
@@ -210,8 +204,8 @@ drop table t1,t2;
 # Bug#27670: LOAD DATA does not set CURRENT_TIMESTAMP default value for a
 #            TIMESTAMP field when no value has been provided.
 #
-create table t1(f1 int, f2 timestamp not null default current_timestamp) engine=InnoDB;
-create table t2(f1 int) engine=InnoDB;
+create table t1(f1 int, f2 timestamp not null default current_timestamp);
+create table t2(f1 int);
 insert into t2 values(1),(2);
 disable_query_log;
 eval select * into outfile '$MYSQLTEST_VARDIR/tmp/t2' from t2;
@@ -239,7 +233,7 @@ drop table t1,t2;
 #            corrupts non-string fields containing this character.
 #
 
-CREATE TABLE t1 (c1 INT, c2 TIMESTAMP, c3 REAL, c4 DOUBLE) engine=InnoDB;
+CREATE TABLE t1 (c1 INT, c2 TIMESTAMP, c3 REAL, c4 DOUBLE);
 
 INSERT INTO t1 (c1, c2, c3, c4) VALUES (10, '1970-02-01 01:02:03', 1.1E-100, 1.1E+100);
 SELECT * FROM t1;
@@ -274,7 +268,7 @@ DROP VIEW IF EXISTS v3;
 --enable_warnings
 
 --echo
-CREATE TABLE t1(c1 INT, c2 VARCHAR(255)) engine=InnoDB;
+CREATE TABLE t1(c1 INT, c2 VARCHAR(255));
 
 --echo
 CREATE VIEW v1 AS SELECT * FROM t1;
@@ -385,7 +379,7 @@ SET sql_mode = '';
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --eval SELECT '1 \\\\aa\n' INTO DUMPFILE '$file'
 
-CREATE TABLE t1 (id INT, val1 CHAR(3)) engine=InnoDB;
+CREATE TABLE t1 (id INT, val1 CHAR(3));
 
 SET sql_mode = 'NO_BACKSLASH_ESCAPES';
 
@@ -436,7 +430,7 @@ select load_file(0x0A9FB76C661B409C4BEC88098C5DD71B1072F9691F2E827D7EC8F092B2998
 # Bug#12448 LOAD DATA / SELECT INTO OUTFILE
 # doesn't work with multibyte path name
 #
-CREATE TABLE t1 (a int) engine=InnoDB;
+CREATE TABLE t1 (a int);
 INSERT INTO t1 VALUES (1);
 SET NAMES latin1;
 SET character_set_filesystem=binary;
@@ -462,7 +456,7 @@ select @@character_set_filesystem;
 --echo #  col equal to itself!
 --echo #
 
-CREATE TABLE t1(col0 LONGBLOB) engine=InnoDB;
+CREATE TABLE t1(col0 LONGBLOB);
 SELECT 'test' INTO OUTFILE 't1.txt';
 LOAD DATA INFILE 't1.txt' IGNORE INTO TABLE t1 SET col0=col0;
 SELECT * FROM t1;

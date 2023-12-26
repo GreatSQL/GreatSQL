@@ -27,6 +27,7 @@
 #include <assert.h>
 #include <set>
 
+#include "greatdb_version.h"              // GREATDB VERSION
 #include "my_inttypes.h"                  // uint
 #include "mysql_version.h"                // MYSQL_VERSION_ID
 #include "sql/dd/dd_version.h"            // DD_VERSION
@@ -97,6 +98,8 @@ class DD_bootstrap_ctx {
   uint m_did_dd_upgrade_from = 0;
   uint m_actual_dd_version = 0;
   uint m_upgraded_server_version = 0;
+  uint m_actual_greatdb_dd_version = 0;
+  uint m_upgraded_greatdb_dd_version = 0;
   Stage m_stage = Stage::NOT_STARTED;
   bool m_dd_encrypted = false;
 
@@ -164,7 +167,22 @@ class DD_bootstrap_ctx {
     m_upgraded_server_version = upgraded_server_version;
   }
 
+  void set_actual_greatdb_dd_version(uint actual_greatdb_dd_version) {
+    m_actual_greatdb_dd_version = actual_greatdb_dd_version;
+  }
+
+  uint get_actual_greatdb_dd_version() const {
+    return m_actual_greatdb_dd_version;
+  }
+
+  void set_upgraded_greatdb_dd_version(uint upgraded_greatdb_dd_version) {
+    m_upgraded_greatdb_dd_version = upgraded_greatdb_dd_version;
+  }
+
   uint get_upgraded_server_version() const { return m_upgraded_server_version; }
+  uint get_upgraded_greatdb_dd_version() const {
+    return m_upgraded_greatdb_dd_version;
+  }
 
   bool upgraded_server_version_is(uint compare_upgraded_server_version) const {
     return (m_upgraded_server_version == compare_upgraded_server_version);
@@ -172,19 +190,30 @@ class DD_bootstrap_ctx {
 
   bool is_restart() const {
     return !opt_initialize && (m_actual_dd_version == dd::DD_VERSION) &&
-           (m_upgraded_server_version == MYSQL_VERSION_ID);
+           (m_upgraded_server_version == MYSQL_VERSION_ID) &&
+           (m_actual_greatdb_dd_version == GREATDB_DD_VERSION_ID);
   }
 
   bool is_dd_upgrade() const {
-    return !opt_initialize && (m_actual_dd_version < dd::DD_VERSION);
+    return !opt_initialize &&
+           ((m_actual_dd_version < dd::DD_VERSION) ||
+            (m_actual_greatdb_dd_version < GREATDB_DD_VERSION_ID));
   }
 
   bool is_server_upgrade() const {
-    return !opt_initialize && (m_upgraded_server_version < MYSQL_VERSION_ID);
+    return !opt_initialize &&
+           (m_upgraded_server_version < MYSQL_VERSION_ID ||
+            m_upgraded_greatdb_dd_version < GREATDB_DD_VERSION_ID);
   }
 
   bool is_dd_upgrade_from_before(uint compare_actual_dd_version) const {
     return (is_dd_upgrade() && m_actual_dd_version < compare_actual_dd_version);
+  }
+
+  bool is_greatdb_dd_upgrade_from_before(
+      uint compare_actual_gdb_dd_version) const {
+    return (is_dd_upgrade() &&
+            m_actual_greatdb_dd_version < compare_actual_gdb_dd_version);
   }
 
   bool is_server_upgrade_from_before(
@@ -208,7 +237,8 @@ class DD_bootstrap_ctx {
   bool is_above_minor_downgrade_threshold(THD *thd) const;
 
   bool is_initialize() const {
-    return opt_initialize && (m_actual_dd_version == dd::DD_VERSION);
+    return opt_initialize && (m_actual_dd_version == dd::DD_VERSION) &&
+           (m_upgraded_greatdb_dd_version == GREATDB_DD_VERSION_ID);
   }
 
   bool is_dd_encrypted() const noexcept { return m_dd_encrypted; }

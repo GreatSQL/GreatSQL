@@ -97,6 +97,27 @@ class PTI_comp_op_all : public Parse_tree_item {
   bool itemize(Parse_context *pc, Item **res) override;
 };
 
+class PTI_comp_op_all_any : public Parse_tree_item {
+  typedef Parse_tree_item super;
+
+  Item *left;
+  chooser_compare_func_creator comp_op;
+  bool is_all;
+  PT_item_list *item_list;
+
+ public:
+  PTI_comp_op_all_any(const POS &pos, Item *left_arg,
+                      chooser_compare_func_creator comp_op_arg, bool is_all_arg,
+                      PT_item_list *list_arg)
+      : super(pos),
+        left(left_arg),
+        comp_op(comp_op_arg),
+        is_all(is_all_arg),
+        item_list(list_arg) {}
+
+  bool itemize(Parse_context *pc, Item **res) override;
+};
+
 class PTI_simple_ident_ident : public Parse_tree_item {
   typedef Parse_tree_item super;
 
@@ -208,6 +229,20 @@ class PTI_function_call_nonkeyword_sysdate : public Parse_tree_item {
   bool itemize(Parse_context *pc, Item **res) override;
 };
 
+class PTI_function_call_nonkeyword_trigger_event_is : public Parse_tree_item {
+  typedef Parse_tree_item super;
+  Item *m_event_type;
+  Item *m_column;
+
+ public:
+  explicit PTI_function_call_nonkeyword_trigger_event_is(const POS &pos,
+                                                         Item *event_type,
+                                                         Item *column)
+      : super(pos), m_event_type(event_type), m_column(column) {}
+
+  bool itemize(Parse_context *pc, Item **res) override;
+};
+
 class PTI_udf_expr : public Parse_tree_item {
   typedef Parse_tree_item super;
 
@@ -229,7 +264,6 @@ class PTI_udf_expr : public Parse_tree_item {
   }
 
   bool itemize(Parse_context *pc, Item **res) override;
-  Item *get_expr() { return expr; }
 };
 
 class PTI_function_call_generic_ident_sys : public Parse_tree_item {
@@ -249,6 +283,7 @@ class PTI_function_call_generic_ident_sys : public Parse_tree_item {
         opt_udf_expr_list(opt_udf_expr_list_arg) {}
 
   bool itemize(Parse_context *pc, Item **res) override;
+  LEX_STRING get_ident() { return ident; }
 };
 
 /**
@@ -511,6 +546,7 @@ class PTI_singlerow_subselect : public Parse_tree_item {
       : super(pos), subselect(subselect_arg) {}
 
   bool itemize(Parse_context *pc, Item **res) override;
+  PT_subquery *get_subselect() { return subselect; }
 };
 
 class PTI_exists_subselect : public Parse_tree_item {
@@ -635,6 +671,16 @@ class PTI_having final : public PTI_context {
  public:
   PTI_having(const POS &pos, Item *expr_arg)
       : PTI_context(pos, expr_arg, CTX_HAVING) {}
+};
+
+class PTI_start_with final : public Parse_tree_item {
+  typedef Parse_tree_item super;
+  Item *expr;
+
+ public:
+  PTI_start_with(const POS &pos, Item *expr_arg)
+      : Parse_tree_item(pos), expr(expr_arg) {}
+  bool itemize(Parse_context *pc, Item **res) override;
 };
 
 #endif /* PARSE_TREE_ITEMS_INCLUDED */

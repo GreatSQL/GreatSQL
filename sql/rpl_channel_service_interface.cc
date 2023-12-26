@@ -1247,6 +1247,65 @@ bool is_any_slave_channel_running(int thread_mask) {
   return false;
 }
 
+bool is_any_slave_channel_connecting_with_failover_enabled(int thread_mask) {
+  DBUG_TRACE;
+  Master_info *mi = nullptr;
+  uint is_running;
+  int retry_count = 0;
+  channel_map.rdlock();
+
+  for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
+       it++) {
+    mi = it->second;
+
+    if (mi && Master_info::is_configured(mi) &&
+        mi->is_source_connection_auto_failover()) {
+      if ((thread_mask & SLAVE_IO) != 0) {
+        mysql_mutex_lock(&mi->run_lock);
+        is_running = mi->slave_running;
+        mysql_mutex_unlock(&mi->run_lock);
+        while (is_running == MYSQL_SLAVE_RUN_NOT_CONNECT && retry_count < 10) {
+          channel_map.unlock();
+          sleep(1);
+          channel_map.rdlock();
+          if (!mi) break;
+          mysql_mutex_lock(&mi->run_lock);
+          is_running = mi->slave_running;
+          mysql_mutex_unlock(&mi->run_lock);
+          retry_count += 1;
+        }
+        if (is_running == MYSQL_SLAVE_RUN_CONNECT) {
+          channel_map.unlock();
+          return true;
+        }
+      }
+      retry_count = 0;
+      if ((thread_mask & SLAVE_SQL) != 0) {
+        mysql_mutex_lock(&mi->rli->run_lock);
+        is_running = mi->rli->slave_running;
+        mysql_mutex_unlock(&mi->rli->run_lock);
+        while (is_running == MYSQL_SLAVE_RUN_NOT_CONNECT && retry_count < 10) {
+          channel_map.unlock();
+          sleep(1);
+          channel_map.rdlock();
+          if (!mi) break;
+          mysql_mutex_lock(&mi->run_lock);
+          is_running = mi->slave_running;
+          mysql_mutex_unlock(&mi->run_lock);
+          retry_count += 1;
+        }
+        if (is_running == MYSQL_SLAVE_RUN_CONNECT) {
+          channel_map.unlock();
+          return true;
+        }
+      }
+    }
+  }
+
+  channel_map.unlock();
+  return false;
+}
+
 bool is_any_slave_channel_running_with_failover_enabled(int thread_mask) {
   DBUG_TRACE;
   Master_info *mi = nullptr;

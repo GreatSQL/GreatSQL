@@ -152,10 +152,12 @@ When one supplies long data for a placeholder:
 #include "sql/resourcegroups/resource_group_basic_types.h"
 #include "sql/resourcegroups/resource_group_mgr.h"
 #include "sql/session_tracker.h"
-#include "sql/set_var.h"    // set_var_base
-#include "sql/sp_cache.h"   // sp_cache_enforce_limit
-#include "sql/sql_audit.h"  // mysql_global_audit_mask
-#include "sql/sql_base.h"   // open_tables_for_query, open_temporary_table
+#include "sql/set_var.h"      // set_var_base
+#include "sql/sp_cache.h"     // sp_cache_enforce_limit
+#include "sql/sp_pcontext.h"  // sp_variable
+#include "sql/sql_audit.h"    // mysql_global_audit_mask
+#include "sql/sql_base.h"     // open_tables_for_query, open_temporary_table
+#include "sql/sql_call.h"     // call
 #include "sql/sql_class.h"
 #include "sql/sql_cmd.h"
 #include "sql/sql_cmd_ddl_table.h"
@@ -223,6 +225,34 @@ class Query_fetch_protocol_binary final : public Query_result_send {
 };
 
 }  // namespace
+
+class Query_result_dbms_sql : public Query_result_interceptor {
+  mem_root_unordered_map<longlong, Item_cache *> **m_cache_map;
+
+ public:
+  Query_result_dbms_sql(
+      mem_root_unordered_map<longlong, Item_cache *> **cache_map)
+      : Query_result_interceptor(), m_cache_map(cache_map) {}
+  bool send_data(THD *thd, const mem_root_deque<Item *> &items) override {
+    longlong i = 0;
+    auto column_map = *m_cache_map;
+    mem_root_unordered_map<longlong, Item_cache *>::iterator itr;
+    for (Item *it : VisibleFields(items)) {
+      i++;
+      if (column_map) {
+        itr = column_map->find(i);
+        if (itr != column_map->end()) {
+          // if false, store failed ,example is null
+          if (!itr->second->store_and_cache(it)) return true;
+          if (thd->is_error()) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool send_eof(THD *) override { return false; }
+};
 
 /**
   Protocol_local: a helper class to intercept the result
@@ -1006,6 +1036,65 @@ error:
   return true;
 }
 
+/**
+  Assign prepared statement parameters from user variables.
+  If with_log is set, also construct query string for binary log.
+
+  @param varnames  List of expr. Caller must ensure that number
+                   of expr in the list is equal to number of statement
+                   parameters
+  @param query     The query with parameter markers replaced with corresponding
+                   user variables that were used to execute the query.
+
+  @returns false if success, true if error
+*/
+
+bool Prepared_statement::insert_parameters_from_expr(
+    THD *thd, mem_root_deque<Item *> *parameters, String *query) {
+  Item_param **end = m_param_array + m_param_count;
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> buf;
+  size_t length = 0;
+  auto expr_iter = parameters->begin();
+  DBUG_TRACE;
+
+  // Reserve an extra space of 32 bytes for each placeholder parameter.
+  if (m_with_log) query->reserve(m_query_string.length + 32 * m_param_count);
+
+  for (Item_param **it = m_param_array; it < end; ++it, expr_iter++) {
+    Item_param *const param = *it;
+    Item *expr = *expr_iter;
+
+    set_parameter_type(param, expr->data_type(), expr->unsigned_flag,
+                       expr->collation.collation);
+    if (param->set_from_expr_item(thd, *expr_iter)) return true;
+
+    const String *val = param->query_val_str(thd, &buf);
+    if (val == nullptr) goto error;
+    if (param->convert_value()) goto error;
+    size_t num_bytes = param->pos_in_query - length;
+    if (query->length() + num_bytes + val->length() >
+        std::numeric_limits<uint32>::max())
+      goto error;
+
+    if (m_with_log) {
+      if (query->append(m_query_string.str + length, num_bytes) ||
+          query->append(*val))
+        goto error;
+    }
+    length = param->pos_in_query + 1;
+    param->sync_clones();
+  }
+
+  // Copy part of query string after last parameter marker
+  if (m_with_log && query->append(m_query_string.str + length,
+                                  m_query_string.length - length))
+    goto error;
+  return false;
+
+error:
+  return true;
+}
+
 static bool send_statement(THD *thd, const Prepared_statement *stmt,
                            uint no_columns, Query_result *result,
                            const mem_root_deque<Item *> *types) {
@@ -1306,6 +1395,13 @@ bool Prepared_statement::prepare_query(THD *thd) {
         my_error(ER_UNSUPPORTED_PS, MYF(0));
         return true;
       }
+      /*
+      create force view is not supported in the prepared statement protocol
+      */
+      if (m_lex->create_force_view_mode) {
+        my_error(ER_UNSUPPORTED_PS, MYF(0));
+        return true;
+      }
       res = mysql_test_create_view(thd, this);
       break;
 
@@ -1358,6 +1454,10 @@ bool Prepared_statement::prepare_query(THD *thd) {
     case SQLCOM_ALTER_INSTANCE:
     case SQLCOM_SET_ROLE:
     case SQLCOM_ALTER_USER_DEFAULT_ROLE:
+    case SQLCOM_CREATE_SEQUENCE:
+    case SQLCOM_DROP_SEQUENCE:
+    case SQLCOM_ALTER_SEQUENCE:
+    case SQLCOM_ALTER_TRIGGER:
       break;
 
     case SQLCOM_CREATE_TABLE:
@@ -1440,6 +1540,7 @@ bool Prepared_statement::prepare_query(THD *thd) {
     case SQLCOM_SHOW_STATUS_TYPE:
     case SQLCOM_SHOW_STORAGE_ENGINES:
     case SQLCOM_SHOW_TABLE_STATUS:
+    case SQLCOM_SHOW_SEQUENCES:
     case SQLCOM_SHOW_TABLES:
     case SQLCOM_SHOW_TRIGGERS:
     case SQLCOM_SHOW_VARIABLES:
@@ -1450,6 +1551,7 @@ bool Prepared_statement::prepare_query(THD *thd) {
 
     case SQLCOM_PREPARE:
     case SQLCOM_EXECUTE:
+    case SQLCOM_EXECUTE_IMMEDIATE:
     case SQLCOM_DEALLOCATE_PREPARE:
     default:
       /*
@@ -2011,51 +2113,181 @@ void mysql_sql_stmt_execute(THD *thd) {
   stmt->execute_loop(thd, &expanded_query, false);
 }
 
-/**
-  SQLCOM_EXECUTE IMMEDIATE.
+bool Sql_cmd_execute::precheck(THD *thd) {
+  // Check SELECT privileges for any subqueries
+  if (check_table_access(thd, SELECT_ACL, lex->query_tables, false, UINT_MAX,
+                         false))
+    return true;
 
-    Execute dynamic statement ，using bind argument
-    lex->prepared_stmt_params and send result to the client using
-    text protocol. This is called from mysql_execute_command and
-    therefore should behave like an ordinary query (e.g. not change
-    global THD data, such as warning count, server status, etc).
-    This function uses text protocol to send a possible result set.
+  return false;
+}
 
-    In case of success, OK (or result set) packet is sent to the
-    client, otherwise an error is set in THD.
-
-  @param thd                thread handle
-*/
-void mysql_sql_stmt_execute_immediate(THD *thd) {
-  LEX *lex = thd->lex;
-
-#ifndef NDEBUG
-  const LEX_CSTRING &name = lex->prepared_stmt_name;
-#endif
-
-  Prepared_statement *stmt;
-  const char *query;
-  size_t query_len = 0;
-
-  DBUG_TRACE;
-  DBUG_PRINT("info", ("EXECUTE IMMEDIATE: %.*s\n", (int)name.length, name.str));
-
-  if (!(query = get_dynamic_sql_string(lex, &query_len)) ||
-      !(stmt = new Prepared_statement(thd))) {
-    return; /* out of memory */
+bool Sql_cmd_execute::check_privileges(THD *thd) {
+  if (check_all_table_privileges(thd)) {
+    return true;
   }
-  thd->status_var.com_stmt_execute++;
 
-  /* Create PS table entry, set query text after rewrite. */
-  stmt->m_prepared_stmt =
-      MYSQL_CREATE_PS(stmt, stmt->id(), thd->m_statement_psi, stmt->name().str,
-                      stmt->name().length, nullptr, 0);
+  for (Item *it : m_param) {
+    if (it->walk(&Item::check_column_privileges, enum_walk::PREFIX,
+                 pointer_cast<uchar *>(thd)))
+      return true;
+  }
 
-  MYSQL_EXECUTE_PS(thd->m_statement_psi, stmt->m_prepared_stmt);
-  (void)stmt->execute_immediate(thd, query, (uint)query_len);
-  /* Delete this stmt stats from PS table. */
-  MYSQL_DESTROY_PS(stmt->m_prepared_stmt);
-  delete stmt;
+  thd->want_privilege = SELECT_ACL;
+  if (lex->query_block->check_privileges_for_subqueries(thd)) {
+    return true;
+  }
+  return false;
+}
+
+bool Sql_cmd_execute::prepare_inner(THD *thd) {
+  DBUG_TRACE;
+
+  if (!m_query->fixed && m_query->fix_fields(thd, &m_query)) {
+    return true;
+  }
+
+  for (Item *&it : m_param) {
+    if ((!it->fixed && it->fix_fields(thd, &it)) || it->check_cols(1))
+      return true;
+  }
+
+  if (lex->unit) lex->unit->set_prepared();
+
+  return false;
+}
+
+bool Sql_cmd_execute::execute_inner(THD *thd) {
+  DBUG_TRACE;
+
+  String tmp;
+  auto sql_str = m_query->val_str(&tmp);
+  DBUG_PRINT("info", ("prepare stmt %s", sql_str->c_ptr()));
+  if (m_query->null_value) {
+    my_error(ER_SYNTAX_ERROR, MYF(0));
+    return true;
+  }
+  auto into_result = thd->lex->result;
+
+  Open_tables_backup open_tables_state_backup;
+  Query_tables_list table_list_backup;
+  thd->reset_n_backup_open_tables_state(&open_tables_state_backup, 0);
+  thd->lex->reset_n_backup_query_tables_list(&table_list_backup);
+  thd->temporary_tables = open_tables_state_backup.temporary_tables;
+  Query_arena backup_arena;
+  thd->swap_query_arena(m_arena, &backup_arena);
+  auto backup_guard = create_scope_guard([this, thd, backup_arena]() {
+    thd->swap_query_arena(backup_arena, &m_arena);
+  });
+
+  auto stmt = std::make_unique<Prepared_statement>(thd);
+  stmt->set_sql_prepare();
+  stmt->set_state_for_prepare(thd);
+  stmt->set_query_result(into_result);
+  auto ret = stmt->prepare(thd, sql_str->ptr(), sql_str->length(), nullptr);
+
+  open_tables_state_backup.temporary_tables = thd->temporary_tables;
+  thd->temporary_tables = nullptr;
+  thd->lex->restore_backup_query_tables_list(&table_list_backup);
+  thd->restore_backup_open_tables_state(&open_tables_state_backup);
+
+  if (ret) return true;
+
+  // expanded_query.set_charset(default_charset_info);
+  if (stmt->m_param_count != m_param.size()) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), "using param size");
+    return true;
+  }
+  // check is in or out
+  if (mode == sp_variable::MODE_OUT &&
+      stmt->m_lex->sql_command != SQLCOM_CALL) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0),
+             "using OUT param var only use for call");
+    return true;
+  }
+
+  if (stmt->has_into_clause) {
+    my_error(ER_INNER_INTO, MYF(0));
+    return true;
+  }
+
+  backup_guard.rollback();
+
+  String expanded_query;
+  ret = stmt->set_parameters(thd, &expanded_query, &m_param);
+
+  lex->cleanup(true);
+
+  if (!thd->in_sub_stmt) {
+    thd->get_stmt_da()->set_overwrite_status(true);
+    thd->is_error() ? trans_rollback_stmt(thd) : trans_commit_stmt(thd);
+    thd->get_stmt_da()->set_overwrite_status(false);
+  }
+
+  close_thread_tables(thd);
+  thd->rollback_item_tree_changes();
+  if (ret) return true;
+
+  thd->swap_query_arena(m_arena, &backup_arena);
+  auto backup_guard2 = create_scope_guard([this, thd, backup_arena]() {
+    thd->swap_query_arena(backup_arena, &m_arena);
+  });
+
+  if (mode != sp_variable::MODE_IN) stmt->reset_param = false;
+  ret = stmt->execute_loop(thd, &expanded_query, false);
+
+  if (!ret && mode != sp_variable::MODE_IN &&
+      stmt->m_lex->sql_command == SQLCOM_CALL) {
+    List_iterator_fast<Item_param> item_param_it(stmt->m_lex->param_list);
+    Item_param *item_param_tmp = item_param_it++;
+    Item *var;
+    for (auto var_itr = m_param.begin();
+         var_itr != m_param.end() && (item_param_tmp);
+         item_param_tmp = item_param_it++, var_itr++) {
+      if (!item_param_tmp->get_out_param_info()) continue;
+      var = (*var_itr);
+
+      if (var->is_splocal()) {
+        Item_splocal *sp_var = dynamic_cast<Item_splocal *>(var);
+        if (sp_var) {
+          Item *val = reinterpret_cast<Item *>(item_param_tmp);
+          sp_var->set_value(thd, thd->sp_runtime_ctx, &val);
+        }
+      } else {
+        // using  out @var
+        if (var->type() == Item::FUNC_ITEM &&
+            (((Item_func *)var)->functype() == Item_func::GUSERVAR_FUNC)) {
+          auto uvar = dynamic_cast<Item_func_get_user_var *>(var);
+          if (uvar) {
+            /*
+            Delete call not needed, the object appends itself
+             to THDs free_list.
+            */
+            Item_func_set_user_var *suv =
+                new Item_func_set_user_var(uvar->name, item_param_tmp);
+            if (suv) {
+              /*
+                Item_func_set_user_var is not fixed after construction,
+                call fix_fields().
+              */
+              if (suv->fix_fields(thd, nullptr)) return true;
+
+              if (suv->check(false)) return true;
+
+              if (suv->update()) return true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // using out
+  if (!stmt->reset_param) {
+    reset_stmt_parameters(stmt.get());
+  }
+
+  return ret;
 }
 
 /**
@@ -2087,6 +2319,28 @@ void mysqld_stmt_fetch(THD *thd, Prepared_statement *stmt, ulong num_rows) {
 
   stmt_backup.restore_thd(thd, stmt);
   thd->stmt_arena = thd;
+}
+
+bool dbms_sql_stmt_fetch(THD *thd, Prepared_statement *stmt) {
+  DBUG_TRACE;
+  thd->status_var.com_stmt_fetch++;
+
+  Server_side_cursor *cursor = stmt->m_cursor;
+
+  thd->stmt_arena = &stmt->m_arena;
+  Statement_backup stmt_backup;
+
+  stmt_backup.set_thd_to_ps(thd, stmt);
+
+  auto ret = cursor->fetch(1);
+
+  if (!cursor->is_open()) {
+    reset_stmt_parameters(stmt);
+    ret = true;  // END
+  }
+  stmt_backup.restore_thd(thd, stmt);
+  thd->stmt_arena = thd;
+  return ret;
 }
 
 /**
@@ -2123,6 +2377,22 @@ void mysqld_stmt_reset(THD *thd, Prepared_statement *stmt) {
   query_logger.general_log_print(thd, thd->get_command(), NullS);
 
   my_ok(thd);
+}
+
+bool dbms_sql_stmt_reset(Prepared_statement *stmt) {
+  if (stmt) {
+    stmt->clear_column_cache();
+
+    stmt->close_cursor();
+    /*
+      Clear parameters from data which could be set by
+      mysqld_stmt_send_long_data() call.
+    */
+    reset_stmt_parameters(stmt);
+
+    stmt->m_arena.set_state(Query_arena::STMT_PREPARED);
+  }
+  return false;
 }
 
 /**
@@ -2461,6 +2731,13 @@ Prepared_statement::~Prepared_statement() {
   m_cursor_result = nullptr;
   m_regular_result = nullptr;
   m_aux_result = nullptr;
+
+  if (m_dbms_sql_define_column) {
+    m_dbms_sql_define_column->clear();
+    destroy(m_dbms_sql_define_column);
+    m_dbms_sql_define_column = nullptr;
+  }
+
   /*
     We have to call free on the items even if cleanup is called as some items,
     like Item_param, don't free everything until free_items()
@@ -2715,10 +2992,14 @@ bool Prepared_statement::prepare(THD *thd, const char *query_str,
     Once dynamic SQL is allowed as substatements the below if-statement
     has to be adjusted to not do rollback in substatement.
   */
-  assert(!thd->in_sub_stmt);
+  // dbms_sql allow dynamic SQL  but only allow dml in substatement
+  assert(!thd->in_sub_stmt || thd->use_in_dbms_sql);
   if (thd->transaction_rollback_request) {
     trans_rollback_implicit(thd);
     thd->mdl_context.release_transactional_locks();
+  }
+  if (m_lex->has_into_clause) {
+    has_into_clause = true;
   }
 
   lex_end(m_lex);
@@ -2838,6 +3119,26 @@ bool Prepared_statement::set_parameters(THD *thd, String *expanded_query,
 bool Prepared_statement::set_parameters(THD *thd, String *expanded_query) {
   if (insert_parameters_from_vars(thd, thd->lex->prepared_stmt_params,
                                   expanded_query)) {
+    reset_stmt_parameters(this);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Assign parameter values from expr item..
+ *
+ * @param expanded_query  a container with the original SQL statement.
+                         '?' placeholders will be replaced with
+                         their values in case of success.
+                         The result is used for logging and replication
+ * @param parameters
+ * @return true
+ * @return false
+ */
+bool Prepared_statement::set_parameters(THD *thd, String *expanded_query,
+                                        mem_root_deque<Item *> *parameters) {
+  if (insert_parameters_from_expr(thd, parameters, expanded_query)) {
     reset_stmt_parameters(this);
     return true;
   }
@@ -3220,8 +3521,10 @@ reexecute:
     if (!error) /* Success */
       goto reexecute;
   }
-  reset_stmt_parameters(this);
 
+  if (reset_param) {
+    reset_stmt_parameters(this);
+  }
   // Re-enable the general log if it was temporarily disabled while repreparing
   // and executing a statement for a secondary engine.
   if (general_log_temporarily_disabled)
@@ -3348,6 +3651,40 @@ bool Prepared_statement::reprepare(THD *thd) {
   assert(m_param_count == copy.m_param_count);
   swap_parameter_array(m_param_array, copy.m_param_array, m_param_count);
 
+  // swap define
+  if (m_dbms_sql_define_column) {
+    Query_arena arena_backup;
+    Query_arena *save_stmt_arena = thd->stmt_arena;
+    Statement_backup stmt_backup;
+    stmt_backup.set_thd_to_ps(thd, this);
+    stmt_backup.save_rlb(thd);
+
+    thd->swap_query_arena(m_arena, &arena_backup);
+    thd->stmt_arena = &m_arena;
+
+    auto define_prepare = create_scope_guard([&]() {
+      thd->swap_query_arena(arena_backup, &m_arena);
+      stmt_backup.restore_thd(thd, this);
+      stmt_backup.restore_rlb(thd);
+      thd->stmt_arena = save_stmt_arena;
+    });
+
+    auto m_dbms_sql_define_column = new (&m_mem_root)
+        mem_root_unordered_map<longlong, Item_cache *>(&m_mem_root);
+    if (!m_dbms_sql_define_column) {
+      return true;
+    }
+    // cache_item mem_root has swap item need to replace
+    for (auto &itr : *copy.m_dbms_sql_define_column) {
+      auto tmp_it = Item_cache::get_cache(itr.second);
+      if (!tmp_it) return true;
+      if (tmp_it->setup(itr.second)) return true;
+      tmp_it->store(nullptr);
+
+      m_dbms_sql_define_column->emplace(itr.first, tmp_it);
+    }
+  }
+
   /*
     Clear possible warnings during reprepare, it has to be completely
     transparent to the user. We use reset_condition_info() since
@@ -3445,6 +3782,74 @@ void Prepared_statement::swap_prepared_statement(Prepared_statement *copy) {
 
   // Need a new cursor, if requested
   std::swap(m_cursor, copy->m_cursor);
+
+  // memroot has swap force m_dbms_sql_define_column sawp
+  std::swap(m_dbms_sql_define_column, copy->m_dbms_sql_define_column);
+}
+
+bool Prepared_statement::define_column(longlong pos, Item *it) {
+  if (!m_dbms_sql_define_column) {
+    m_dbms_sql_define_column = new (&m_mem_root)
+        mem_root_unordered_map<longlong, Item_cache *>(&m_mem_root);
+    if (!m_dbms_sql_define_column) {
+      return true;
+    }
+  }
+  Query_arena arena_backup;
+  auto thd = current_thd;
+  Query_arena *save_stmt_arena = thd->stmt_arena;
+  Statement_backup stmt_backup;
+  stmt_backup.set_thd_to_ps(thd, this);
+  stmt_backup.save_rlb(thd);
+
+  thd->swap_query_arena(m_arena, &arena_backup);
+  thd->stmt_arena = &m_arena;
+
+  auto define_prepare = create_scope_guard([&]() {
+    thd->swap_query_arena(arena_backup, &m_arena);
+    stmt_backup.restore_thd(thd, this);
+    stmt_backup.restore_rlb(thd);
+    thd->stmt_arena = save_stmt_arena;
+  });
+
+  auto tmp_it = Item_cache::get_cache(it);
+  if (!tmp_it) return true;
+
+  if (tmp_it->setup(it)) return true;
+  // force null example
+  tmp_it->store(nullptr);
+
+  auto itr = m_dbms_sql_define_column->find(pos);
+  if (itr != m_dbms_sql_define_column->end()) {
+    m_dbms_sql_define_column->erase(itr);
+  }
+
+  m_dbms_sql_define_column->emplace(pos, tmp_it);
+
+  return false;
+}
+
+bool Prepared_statement::column_value(longlong pos, Item_cache **ref) {
+  if (!m_dbms_sql_define_column) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), "the position is not define column");
+    return true;
+  }
+  auto iter = m_dbms_sql_define_column->find(pos);
+  if (iter != m_dbms_sql_define_column->end()) {
+    *ref = iter->second;
+  } else {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), "the position is not in select list");
+    return true;
+  }
+  return false;
+}
+
+void Prepared_statement::clear_column_cache() {
+  if (m_dbms_sql_define_column) {
+    for (auto &itr : *m_dbms_sql_define_column) {
+      itr.second->store(nullptr);
+    }
+  }
 }
 
 /**
@@ -3517,6 +3922,14 @@ bool Prepared_statement::execute(THD *thd, String *expanded_query,
     temporal values.
   */
   thd->get_stmt_da()->reset_condition_info(thd);
+
+  /**
+   * @brief
+   * dbms_sql use fake cursor
+   */
+  if (dbms_fake_result && open_cursor && !sql_cmd) {
+    open_cursor = false;
+  }
 
   if (open_cursor) {
     // Only DML statements may have assigned a cursor.
@@ -3664,7 +4077,7 @@ bool Prepared_statement::execute(THD *thd, String *expanded_query,
   m_lex->clear_execution();
 
   if (open_cursor) {
-    Query_result_send *new_result = nullptr;
+    Query_result *new_result = nullptr;
     m_lex->safe_to_cache_query = false;
     /*
       Initialize a Query_result object before opening the cursor, unless
@@ -3677,12 +4090,21 @@ bool Prepared_statement::execute(THD *thd, String *expanded_query,
     if (m_cursor_result != nullptr) {
       m_active_protocol = thd->get_protocol();
     } else if (sql_cmd->may_use_cursor()) {
-      if (thd->is_classic_protocol())
-        new_result = new (m_arena.mem_root) Query_fetch_protocol_binary(thd);
-      else
-        new_result = new (m_arena.mem_root) Query_result_send();
-      if (new_result == nullptr) return true;  // OOM
-      m_cursor_result = new_cursor_result(m_arena.mem_root, new_result);
+      if (m_into_result) {
+        m_cursor_result = m_into_result;
+      } else {
+        if (dbms_fake_result) {
+          new_result = new (m_arena.mem_root)
+              Query_result_dbms_sql(&m_dbms_sql_define_column);
+        } else if (thd->is_classic_protocol())
+          new_result = new (m_arena.mem_root) Query_fetch_protocol_binary(thd);
+        else
+          new_result = new (m_arena.mem_root) Query_result_send();
+
+        if (new_result == nullptr) return true;  // OOM
+        m_cursor_result = new_cursor_result(m_arena.mem_root, new_result);
+      }
+
       if (m_cursor_result == nullptr) {
         destroy(new_result);
         return true;
@@ -3700,11 +4122,17 @@ bool Prepared_statement::execute(THD *thd, String *expanded_query,
     }
   } else {
     if (sql_cmd != nullptr) {
-      if (m_regular_result == nullptr)
-        m_regular_result = sql_cmd->query_result();
-      else
-        sql_cmd->set_query_result(m_regular_result);
-      m_lex->result = m_regular_result;
+      if (m_into_result != nullptr) {
+        sql_cmd->set_query_result(m_into_result);
+        sql_cmd->set_lazy_result();
+        m_lex->result = m_into_result;
+      } else {
+        if (m_regular_result == nullptr)
+          m_regular_result = sql_cmd->query_result();
+        else
+          sql_cmd->set_query_result(m_regular_result);
+        m_lex->result = m_regular_result;
+      }
     }
   }
   /*
@@ -3760,47 +4188,6 @@ bool Prepared_statement::execute(THD *thd, String *expanded_query,
     }
   }
   return false;
-}
-
-/**
-  Prepare, execute and clean-up a statement.
-  @param query  - query text
-  @param length - query text length
-  @retval true  - the query was not executed (parse error, wrong parameters)
-  @retval false - the query was prepared and executed
-
-  Note, if some error happened during execution, it still returns "false".
-*/
-bool Prepared_statement::execute_immediate(THD *thd, const char *query,
-                                           uint query_len) {
-  DBUG_ENTER("Prepared_statement::execute_immediate");
-  String expanded_query;
-  static LEX_CSTRING execute_immediate_stmt_name = {
-      STRING_WITH_LEN("(immediate)")};
-
-  set_sql_prepare();
-  set_name(execute_immediate_stmt_name);
-
-  if (unlikely(prepare(thd, query, query_len, nullptr))) DBUG_RETURN(true);
-  if (m_param_count != thd->lex->prepared_stmt_params.elements) {
-    my_error(ER_WRONG_ARGUMENTS, MYF(0), "EXECUTE IMMEDIATE");
-    deallocate_immediate(thd);
-    DBUG_RETURN(true);
-  }
-
-  // Query text for binary, general or slow log, if any of them is open
-  if (set_parameters(thd, &expanded_query)) DBUG_RETURN(true);
-  (void)execute_loop(thd, &expanded_query, false);
-  deallocate_immediate(thd);
-  DBUG_RETURN(false);
-}
-
-/**
-  Common part of DEALLOCATE PREPARE, EXECUTE IMMEDIATE, mysqld_stmt_close.
-*/
-void Prepared_statement::deallocate_immediate(THD *thd) {
-  /* We account deallocate in the same manner as mysqld_stmt_close */
-  thd->status_var.com_stmt_close++;
 }
 
 /** Common part of DEALLOCATE PREPARE and mysqld_stmt_close. */

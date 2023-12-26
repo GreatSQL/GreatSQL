@@ -215,6 +215,9 @@ bool Group_check::check_query(THD *thd) {
   {
     List_iterator<Window> li(select->m_windows);
     for (Window *w = li++; w != nullptr; w = li++) {
+      if (w->get_keep_dir() != KEEP_DIR_NONE) {
+        continue;
+      }
       for (auto it : {w->first_partition_by(), w->first_order_by()}) {
         if (it != nullptr) {
           number_in_list = 1;
@@ -676,7 +679,15 @@ void Group_check::add_to_source_of_mat_table(Item_field *item_field,
    @returns true if the expression is FD on the source.
  */
 bool Group_check::is_in_fd(Item *item) {
-  if ((item->type() == Item::SUM_FUNC_ITEM && !item->m_is_window_function) ||
+  bool window_func_valid = item->m_is_window_function;
+  if (item->m_is_window_function) {
+    Item_sum *item_sum = down_cast<Item_sum *>(item);
+    Window *w = const_cast<Window *>(item_sum->window());
+    if (w && w->get_keep_dir() != KEEP_DIR_NONE) {
+      window_func_valid = false;
+    }
+  }
+  if ((item->type() == Item::SUM_FUNC_ITEM && !window_func_valid) ||
       (item->type() == Item_func::FUNC_ITEM &&
        (((Item_func *)item)->functype() == Item_func::GROUPING_FUNC))) {
     /*

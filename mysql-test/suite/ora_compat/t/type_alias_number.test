@@ -1,0 +1,841 @@
+#1.create test table and insert data 
+
+DROP TABLE IF EXISTS `test1`;
+CREATE TABLE `test1` (
+  `c0` int DEFAULT NULL,
+  `c1` number DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+show create table test1;
+INSERT INTO `test1` VALUES ('1', '2');
+INSERT INTO `test1` VALUES ('2', '3');
+INSERT INTO `test1` VALUES ('3', '1');
+
+DROP TABLE IF EXISTS `test3`;
+CREATE TABLE `test3` (
+  `c0` int DEFAULT NULL,
+  `c1` number  ,
+  `c2` number   
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+show create table test3;
+
+DROP TABLE IF EXISTS `test2`;
+CREATE TABLE `test2` (`c0`  number NULL DEFAULT NULL ,`c1`  number(4) NULL DEFAULT NULL ,  `c2`  number(4,2) NULL DEFAULT NULL ,`c3` decimal(4,2) NULL DEFAULT NULL , `c4` number(*,3) NULL DEFAULT NULL , `c5` number(*) NULL DEFAULT NULL) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC;
+show create table test2;
+
+DROP TABLE IF EXISTS `test_number`;
+CREATE TABLE `test_number` (`c0`  number DEFAULT NULL ,`c1`  number(4) NULL DEFAULT NULL ,  `c2`  number(4,2) NULL DEFAULT NULL ,`c3` decimal(4,2) NULL DEFAULT NULL , `c4` number(*,3) NULL DEFAULT NULL , `c5` number(*) NULL DEFAULT NULL) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC;
+insert into test_number (c0,c1,c2,c3,c4,c5) values (1234567890,1234,12.666,12.666,12.666,1234567890);
+show create table test_number;
+
+#2 test select number type + -* / ,update 
+
+select c0, c0+1.1 ,c1,c1+1.1,c2,c2+1.1,c3,c3+1.1,c4,c4+1.1,c5,c5+1.1 from test_number;
+select c0+1,c0-1,c0*2,c0/2,2/2 from test_number;
+update test_number set c0=123456 ,c1=12.567 ,c2=12.567,c3=12.567,c4=12.567,c5=123456;
+select * from test_number;
+--error 1264
+update test_number set c0=300000000000000000000000000000000000;
+update test_number set c0=30000000000000000000000000000000000;
+select c0 from test_number;
+update test_number set c0=123456 ,c1=12.567 ,c2=12.567,c3=12.567,c4=12.567,c5=123456;
+select * from test_number;
+
+#group by + order by 
+select c2,count(*) from test_number group by c2 order by c2;
+
+#modify field type
+ALTER TABLE `test_number` ADD COLUMN `test_cl` number NOT NULL DEFAULT 123456 COMMENT 'remark';
+ALTER TABLE `test_number` DROP COLUMN `test_cl`;
+ALTER TABLE `test_number` ADD COLUMN `test_cl` number(5,3) NOT NULL DEFAULT 12.666 COMMENT 'remark';
+ALTER TABLE `test_number` DROP COLUMN `test_cl`;
+ALTER TABLE `test_number` ADD COLUMN `test_cl` number(5,3) NOT NULL DEFAULT 12.666 COMMENT 'remark';
+ALTER TABLE `test_number` MODIFY COLUMN `test_cl` number(4,2) NOT NULL DEFAULT 12.66 COMMENT 'remark';
+ALTER TABLE `test_number` MODIFY COLUMN `test_cl` varchar(255) NOT NULL DEFAULT 'varchar_test' COMMENT 'remark' ;
+ALTER TABLE `test_number` DROP COLUMN `test_cl`;
+
+# add PRIMARY KEY
+ALTER TABLE `test_number`
+MODIFY COLUMN `c0`  number NOT NULL FIRST ,
+ADD PRIMARY KEY (`c0`);
+
+# drop PRIMARY KEY
+ALTER TABLE `test_number`
+DROP PRIMARY KEY;
+
+# add PRIMARY KEY
+ALTER TABLE `test_number`
+ADD PRIMARY KEY (`c0`, `c1`);
+
+
+ALTER TABLE `test_number`
+DROP PRIMARY KEY;
+
+
+# add index
+ALTER TABLE `test_number`
+ADD INDEX `test_index` (`c0`) ;
+ALTER TABLE `test_number`
+ADD INDEX `c1_2` (`c1`) ;
+
+# drop index
+DROP INDEX test_index ON test_number;
+
+# add FOREIGNkey
+delete  from test_number;
+ALTER TABLE `test1` ADD INDEX (`c1`);
+ALTER TABLE `test_number` ADD INDEX `test_for` (`c0`) ;
+ALTER TABLE `test_number` ADD CONSTRAINT `test_for` FOREIGN KEY (`c0`) REFERENCES `test1` (`c1`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+insert into test_number (c0,c1,c2,c3,c4,c5) values (2,1234,12.666,12.666,12.666,2);
+insert into test_number (c0,c1,c2,c3,c4,c5) values (1,1234,12.666,12.666,12.666,1);
+
+# drop FOREIGNkey
+ALTER TABLE `test_number` DROP FOREIGN KEY `test_for`;
+
+# temp table
+CREATE TEMPORARY TABLE temp_test (`c0`  number NULL DEFAULT NULL ,`c1`  number(4) NULL DEFAULT NULL ,  `c2`  number(4,2) NULL DEFAULT NULL ,`c3` decimal(4,2) NULL DEFAULT NULL, `c4` number(*,3) NULL DEFAULT NULL, `c5` number(*) NULL DEFAULT NULL );
+insert into temp_test (c0,c1,c2,c3,c4,c5) values (123456,1234,12.666,12.666,12.666,123456);
+select * from temp_test;
+drop table temp_test;
+
+
+# test Numerical function
+select c1,abs(c1),abs(c2) from test_number;
+select c1,SQRT(c1),SQRT(c2) from test_number;
+select c1,MOD(c1,1.5),MOD(c2,1.5) from test_number;
+select c1,CEIL(c1),CEIL(c2) from test_number;
+select c1,CEILING(c1),CEILING(c2)  from test_number;
+select c1,FLOOR(c1),FLOOR(c2) from test_number;
+select c1,RAND(c1),RAND(c2) from test_number;
+select c1,ROUND(c1),ROUND(c2) from test_number;
+select c1,SIGN(c1),SIGN(c2) from test_number;
+select c1,POW(c1,2),POW(c2,2) from test_number;
+select c1,POWER(c1,2),POWER(c2,2) from test_number;
+select c1,SIN(c1),SIN(c2) from test_number;
+select c1,ASIN(c1),ASIN(c2) from test_number;
+select c1,COS(c1),COS(c2) from test_number;
+select c1,ACOS(c1),ACOS(c2) from test_number;
+select c1,TAN(c1),TAN(c2) from test_number;
+select c1,ATAN(c1),ATAN(c2) from test_number;
+select c1,COT(c1),COT(c2) from test_number;
+
+# test string function
+select c1,length(c1) ,length(c2) from test_number;
+select c1,CONCAT(c1) ,CONCAT(c2) from test_number;
+select c1,CONCAT(c1,'2') ,CONCAT(c2,'2') from test_number;
+select c1,INSERT(c1,1,1,'+') ,INSERT(c2,1,1,'+')  from test_number;
+select c1,LOWER(c1) ,LOWER(c2) from test_number;
+select c1,UPPER(c1) ,UPPER(c2) from test_number;
+select c1,LEFT(c1,1) ,LEFT(c2,1) from test_number;
+select c1,RIGHT(c1,1) ,RIGHT(c2,1) from test_number;
+select c1,TRIM(c1) ,TRIM(c2) from test_number;
+select c1,REPLACE(c1,'-','+') ,REPLACE(c2,'-','+') from test_number;
+select c1,SUBSTRING(c1,2) ,SUBSTRING(c2,2) from test_number;
+select c1,REVERSE(c1) ,REVERSE(c2) from test_number;
+
+# test statistical function
+select MAX(c1) from test_number;
+select MIN(c1) from test_number;
+select COUNT(c1) from test_number;
+select sum(c1),sum(c2) from test_number;
+select AVG(c1),AVG(c2) from test_number;
+select least(c0,c1) from test_number ; 
+
+# test CAST
+SELECT CAST(c3 AS number(4,2)) - 2.0 from test_number where c0 <= 2;
+SELECT CAST(c2 AS decimal(4,2)) - 2.0 from test_number where c0 <= 2;
+SELECT CAST(c2 AS decimal) - 2.0 from test_number where c0 <= 2;
+SELECT CAST(c3 AS number) - 2.0 from test_number where c0 <= 2;
+
+# test CONVERT
+SELECT CONVERT(c2 , decimal) - 2.0 from test_number where c0 <= 2;
+SELECT CONVERT(c2 , number(4,2)) - 2.0 from test_number where c0 <= 2;
+SELECT CONVERT(c2 , number) - 2.0 from test_number where c0 <= 2;
+
+# test IF ,IFNULL ,CASE WHEN
+select c1,c2 ,IF(c1>0,'Y','N'),IF(c2>0,'Y','N') from test_number;
+select c1,c2 ,IFNULL(c1,'Y'),IFNULL(c2,'Y') from test_number;
+SELECT CASE c1 WHEN -2 THEN 'c1<0' WHEN 2 THEN 'c1>0' ELSE 'other' END AS C1,CASE c2 WHEN -2 THEN 'c2<0' WHEN 2 THEN 'c2>0' ELSE 'other' END AS C2 from test_number;
+
+#test UNION
+select c2 from test_number union select c1 from test1;
+
+#test DISTINCT
+select distinct c3 ,c0 from test_number;
+
+# test JOIN
+select * from test_number t  join test1 t1  on t.c0 = t1.c0;
+select * from test_number t  inner join test1 t1  on t.c0 = t1.c0;
+select * from test_number t  cross join test1 t1  on t.c0 = t1.c0;
+select * from test_number t  straight_join test1 t1  on t.c0 = t1.c0;
+select * from test_number t left join  test1 t1  on t.c0 = t1.c0;
+select * from test_number t right join  test1 t1  on t.c0 = t1.c0;
+
+
+# test INSERT INTO
+insert into test2 select * from test_number;
+DROP TABLE IF EXISTS `test2`;
+
+# test IN
+select c1 from test_number where c1 not in (1,2,3);
+select c1 from test_number where c1  in (1,2,3);
+
+
+# test DESCRIBE
+DESCRIBE test_number;
+
+
+# test HANDLER
+handler test_number open;
+handler test_number read first; 
+handler test_number read c1_2 first;  
+handler test_number  close;
+DROP INDEX c1_2 ON test_number;
+
+# test replace
+replace into test_number(c0,c1,c2) values(4,5,2);
+
+# test use INDEX
+ALTER TABLE `test_number`
+ADD INDEX `test_index` (`c0`) ;
+explain  select * from test_number force index(test_index) where c0 >0;
+
+
+# test SUBQUERY
+SELECT * FROM test_number WHERE c0 = (SELECT c0 FROM test1 where c0=1);
+
+
+# test TRANSACTION
+START TRANSACTION;
+delete from test_number;
+select * from test_number;
+ROLLBACK;
+COMMIT;
+
+# test VIEW
+create view  test_number1  as  select * from test_number;
+select * from  test_number1;
+drop view test_number1;
+
+
+# test CREATE FUNCTION
+DELIMITER //;
+CREATE FUNCTION f1(a int, b number(5), c number(5,4) ,d number) RETURNS number(6,3) BEGIN RETURN a * b + c +d;
+END//
+DELIMITER ;//
+
+DELIMITER //;
+CREATE FUNCTION f2(a int, b decimal(5), c decimal(5,4) ,d decimal) RETURNS decimal(6,3) BEGIN RETURN a * b + c +d;
+END//
+DELIMITER ;//
+
+DELIMITER //;
+CREATE FUNCTION f3(a int, b number(5), c number(5,4) ,d number, e number(*,3)) RETURNS number(*,3) BEGIN RETURN a * b + c +d + e;
+END//
+DELIMITER ;//
+
+DELIMITER //;
+CREATE FUNCTION f4(a int, b number(5), c number(5,4) ,d number(*)) RETURNS number(6,3) BEGIN RETURN a * b + c +d;
+END//
+DELIMITER ;//
+
+select f1(1.01,2.512,3.513,4.231);
+select f2(1.01,2.512,3.513,4.231);
+select f3(1.01,2.512,3.513,4.231,5.515);
+select f4(1.01,2.512,3.513,4.231);
+
+# test CREATE PROCEDURE
+DELIMITER //;
+CREATE PROCEDURE p1 (a int, b number(5), c number(5,4) ,d number)
+BEGIN
+  SELECT a * b + c +d;
+  SELECT f1(a,b,c,d);
+END//
+DELIMITER ;//
+
+DELIMITER //;
+CREATE PROCEDURE p2 (a int, b decimal(5), c decimal(5,4) ,d decimal)
+BEGIN
+  SELECT a * b + c +d;
+  SELECT f2(a,b,c,d);
+END//
+DELIMITER ;//
+
+DELIMITER //;
+CREATE PROCEDURE p3 (a int, b decimal(5), c decimal(5,4) ,d decimal, e number(*,3))
+BEGIN
+  SELECT a * b + c +d+e;
+  SELECT f3(a,b,c,d,e);
+END//
+DELIMITER ;//
+
+DELIMITER //;
+CREATE PROCEDURE p4 (a int, b number(5), c number(5,4) ,d number(*))
+BEGIN
+  SELECT a * b + c +d;
+  SELECT f1(a,b,c,d);
+END//
+DELIMITER ;//
+
+call p1(1.01,2.512,3.513,4.231);
+call p2(1.01,2.512,3.513,4.231);
+call p3(1.01,2.512,3.513,4.231,5.515);
+call p4(1.01,2.512,3.513,4.231);
+drop function f1;
+drop function f2;
+drop function f3;
+drop function f4;
+drop PROCEDURE p1;
+drop PROCEDURE p2;
+drop PROCEDURE p3;
+drop PROCEDURE p4;
+
+
+# test PROCEDURE use number
+DELIMITER //;
+CREATE PROCEDURE p1 (x number)
+  BEGIN
+    DECLARE xname VARCHAR(5) DEFAULT 'bob';
+    DECLARE pc0 number;
+    DECLARE pc1 number(5);
+    DECLARE pc2 number(4,2);
+    DECLARE pc3 decimal(4,2);
+    
+    SELECT c0,c1,c2,c3 INTO pc0,pc1,pc2,pc3 
+      FROM test_number WHERE c0 = x;
+    SELECT pc0,pc1,pc2,pc3 ;
+  END//
+DELIMITER ;//
+call p1(2);
+drop PROCEDURE p1;
+
+DELIMITER //;
+CREATE PROCEDURE p1 (x number(*,3))
+  BEGIN
+    DECLARE xname VARCHAR(5) DEFAULT 'bob';
+    DECLARE pc4 number(*,3);
+    
+    SELECT c4 INTO pc4
+      FROM test_number WHERE c0 = x;
+    SELECT pc4 ;
+  END//
+DELIMITER ;//
+call p1(2);
+call p1(2);
+drop PROCEDURE p1;
+
+DELIMITER //;
+CREATE PROCEDURE p1 (x number(*))
+  BEGIN
+    DECLARE xname VARCHAR(5) DEFAULT 'bob';
+    DECLARE pc5 number(*);
+    
+    SELECT c5 INTO pc5
+      FROM test_number WHERE c0 = x;
+    SELECT pc5 ;
+  END//
+DELIMITER ;//
+call p1(2);
+call p1(2);
+drop PROCEDURE p1;
+
+# test PROCEDURE  CURSOR use number 
+DELIMITER //;
+CREATE PROCEDURE p2(x number)
+BEGIN
+  DECLARE done INT DEFAULT 0;
+    DECLARE pc0 number;
+    DECLARE pc1 number(5);
+    DECLARE pc2 number(4,2);
+    DECLARE pc3 decimal(4,2);
+    
+  DECLARE cur1 CURSOR FOR SELECT c0,c1,c2,c3 FROM test_number where c0=x;
+  DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET done = 1;
+ 
+  OPEN cur1;
+ 
+  REPEAT
+    FETCH cur1 INTO pc0, pc1,pc2,pc3;
+    IF NOT done THEN
+     INSERT INTO test1 VALUES (pc0,pc1);
+     INSERT INTO test1 VALUES (pc0,pc3);
+     select * from test1;
+    END IF;
+  UNTIL done END REPEAT;
+  CLOSE cur1;
+END//
+DELIMITER ;//
+call p2(2);
+drop PROCEDURE p2;
+
+DELIMITER //;
+CREATE PROCEDURE p2(x number(*,3))
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  DECLARE pc0 number;
+  DECLARE pc4 number(*,3);
+    
+  DECLARE cur1 CURSOR FOR SELECT c0,c4 FROM test_number where c0=x;
+  DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET done = 1;
+ 
+  OPEN cur1;
+ 
+  REPEAT
+    FETCH cur1 INTO pc0, pc4;
+    IF NOT done THEN
+     INSERT INTO test1 VALUES (pc0, pc4);
+     select * from test1;
+    END IF;
+  UNTIL done END REPEAT;
+  CLOSE cur1;
+END//
+DELIMITER ;//
+call p2(2);
+call p2(2);
+drop PROCEDURE p2;
+
+DELIMITER //;
+CREATE PROCEDURE p2(x number(*))
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  DECLARE pc0 number;
+  DECLARE pc5 number(*);
+    
+  DECLARE cur1 CURSOR FOR SELECT c0, c5 FROM test_number where c0=x;
+  DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET done = 1;
+ 
+  OPEN cur1;
+ 
+  REPEAT
+    FETCH cur1 INTO pc0, pc5;
+    IF NOT done THEN
+     INSERT INTO test1 VALUES (pc0, pc5);
+     select * from test1;
+    END IF;
+  UNTIL done END REPEAT;
+  CLOSE cur1;
+END//
+DELIMITER ;//
+call p2(2);
+call p2(2);
+drop PROCEDURE p2;
+
+# test PARTITION TABLE
+CREATE TABLE `test_number1` (
+`c0`  number NOT NULL, 
+`c1`  number(4) NULL DEFAULT NULL ,  
+`c2`  number(4,2) NULL DEFAULT NULL ,
+`c3` decimal(4,2) NULL DEFAULT NULL
+ ) ENGINE=InnoDB 
+
+PARTITION BY LINEAR KEY(c0) PARTITIONS 3;
+INSERT INTO test_number1 (c0,c1,c2,c3) WITH RECURSIVE digits(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM digits WHERE i<1000) SELECT FLOOR(RAND()*1000000),FLOOR(RAND()*100),FLOOR(RAND()*100),FLOOR(RAND()*100) FROM digits;
+drop table test_number1;
+
+
+# test TRIGGER
+drop TRIGGER IF EXISTS test_tri;
+CREATE TABLE test_count (acct_num INT, amount number);
+SET @sum=0;
+CREATE TRIGGER test_tri BEFORE INSERT ON test_count FOR EACH ROW SET @sum = @sum + NEW.amount;
+insert into test_count(acct_num,amount) values(1,2);
+SELECT @sum;
+drop TRIGGER IF EXISTS test_tri;
+
+# test WITH
+SELECT c0,c1 FROM test1;
+SELECT c2,c3 FROM test_number;
+WITH
+  cte1 AS (SELECT c0,c1 FROM test1),
+  cte2 AS (SELECT c2,c3 FROM test_number)
+SELECT c1,c2 FROM cte1 JOIN cte2 
+WHERE cte1.c1 = cte2.c2;
+
+
+DROP TABLE IF EXISTS `test1`;
+DROP TABLE IF EXISTS `test2`;
+DROP TABLE IF EXISTS `test3`;
+DROP TABLE IF EXISTS `test_number`;
+DROP TABLE IF EXISTS `test_count`;
+
+set sql_mode = oracle;
+#1.create test table and insert data 
+
+DROP TABLE IF EXISTS `test1`;
+CREATE TABLE `test1` (
+  `c0` int DEFAULT NULL,
+  `c1` number DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+show create table test1;
+INSERT INTO `test1` VALUES ('1', '2');
+INSERT INTO `test1` VALUES ('2', '3');
+INSERT INTO `test1` VALUES ('3', '1');
+
+DROP TABLE IF EXISTS `test3`;
+CREATE TABLE `test3` (
+  `c0` int DEFAULT NULL,
+  `c1` number  ,
+  `c2` number   
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+show create table test3;
+
+DROP TABLE IF EXISTS `test2`;
+CREATE TABLE `test2` (`c0`  number NULL DEFAULT NULL ,`c1`  number(4) NULL DEFAULT NULL ,  `c2`  number(4,2) NULL DEFAULT NULL ,`c3` decimal(4,2) NULL DEFAULT NULL , `c4` number(*,3) NULL DEFAULT NULL , `c5` number(*) NULL DEFAULT NULL) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC;
+show create table test2;
+
+DROP TABLE IF EXISTS `test_number`;
+CREATE TABLE `test_number` (`c0`  number DEFAULT NULL ,`c1`  number(4) NULL DEFAULT NULL ,  `c2`  number(4,2) NULL DEFAULT NULL ,`c3` decimal(4,2) NULL DEFAULT NULL , `c4` number(*,3) NULL DEFAULT NULL , `c5` number(*) NULL DEFAULT NULL) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC;
+insert into test_number (c0,c1,c2,c3,c4,c5) values (1234567890,1234,12.666,12.666,12.666,1234567890);
+show create table test_number;
+
+#2 test select number type + -* / ,update 
+
+select c0, c0+1.1 ,c1,c1+1.1,c2,c2+1.1,c3,c3+1.1,c4,c4+1.1,c5,c5+1.1 from test_number;
+select c0+1,c0-1,c0*2,c0/2,2/2 from test_number;
+update test_number set c0=123456 ,c1=12.567 ,c2=12.567,c3=12.567,c4=12.567,c5=123456;
+select * from test_number;
+--error 1264
+update test_number set c0=300000000000000000000000000000000000;
+update test_number set c0=30000000000000000000000000000000000;
+select c0 from test_number;
+update test_number set c0=123456 ,c1=12.567 ,c2=12.567,c3=12.567,c4=12.567,c5=123456;
+select * from test_number;
+
+#group by + order by 
+select c2,count(*) from test_number group by c2 order by c2;
+
+#modify field type
+ALTER TABLE `test_number` ADD COLUMN `test_cl` number NOT NULL DEFAULT 123456 COMMENT 'remark';
+ALTER TABLE `test_number` DROP COLUMN `test_cl`;
+ALTER TABLE `test_number` ADD COLUMN `test_cl` number(5,3) NOT NULL DEFAULT 12.666 COMMENT 'remark';
+ALTER TABLE `test_number` DROP COLUMN `test_cl`;
+ALTER TABLE `test_number` ADD COLUMN `test_cl` number(5,3) NOT NULL DEFAULT 12.666 COMMENT 'remark';
+ALTER TABLE `test_number` MODIFY COLUMN `test_cl` number(4,2) NOT NULL DEFAULT 12.66 COMMENT 'remark';
+ALTER TABLE `test_number` MODIFY COLUMN `test_cl` varchar(255) NOT NULL DEFAULT 'varchar_test' COMMENT 'remark' ;
+ALTER TABLE `test_number` DROP COLUMN `test_cl`;
+
+# add PRIMARY KEY
+ALTER TABLE `test_number`
+MODIFY COLUMN `c0`  number NOT NULL FIRST ,
+ADD PRIMARY KEY (`c0`);
+
+# drop PRIMARY KEY
+ALTER TABLE `test_number`
+DROP PRIMARY KEY;
+
+# add PRIMARY KEY
+ALTER TABLE `test_number`
+ADD PRIMARY KEY (`c0`, `c1`);
+
+
+ALTER TABLE `test_number`
+DROP PRIMARY KEY;
+
+
+# add index
+ALTER TABLE `test_number`
+ADD INDEX `test_index` (`c0`) ;
+ALTER TABLE `test_number`
+ADD INDEX `c1_2` (`c1`) ;
+
+# drop index
+DROP INDEX test_index ON test_number;
+
+# add FOREIGNkey
+delete  from test_number;
+ALTER TABLE `test1` ADD INDEX (`c1`);
+ALTER TABLE `test_number` ADD INDEX `test_for` (`c0`) ;
+ALTER TABLE `test_number` ADD CONSTRAINT `test_for` FOREIGN KEY (`c0`) REFERENCES `test1` (`c1`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+insert into test_number (c0,c1,c2,c3,c4,c5) values (2,1234,12.666,12.666,12.666,2);
+insert into test_number (c0,c1,c2,c3,c4,c5) values (1,1234,12.666,12.666,12.666,1);
+
+# drop FOREIGNkey
+ALTER TABLE `test_number` DROP FOREIGN KEY `test_for`;
+
+# temp table
+CREATE TEMPORARY TABLE temp_test (`c0`  number NULL DEFAULT NULL ,`c1`  number(4) NULL DEFAULT NULL ,  `c2`  number(4,2) NULL DEFAULT NULL ,`c3` decimal(4,2) NULL DEFAULT NULL, `c4` number(*,3) NULL DEFAULT NULL, `c5` number(*) NULL DEFAULT NULL );
+insert into temp_test (c0,c1,c2,c3,c4,c5) values (123456,1234,12.666,12.666,12.666,123456);
+select * from temp_test;
+drop table temp_test;
+
+
+# test Numerical function
+select c1,abs(c1),abs(c2) from test_number;
+select c1,SQRT(c1),SQRT(c2) from test_number;
+select c1,MOD(c1,1.5),MOD(c2,1.5) from test_number;
+select c1,CEIL(c1),CEIL(c2) from test_number;
+select c1,CEILING(c1),CEILING(c2)  from test_number;
+select c1,FLOOR(c1),FLOOR(c2) from test_number;
+select c1,RAND(c1),RAND(c2) from test_number;
+select c1,ROUND(c1),ROUND(c2) from test_number;
+select c1,SIGN(c1),SIGN(c2) from test_number;
+select c1,POW(c1,2),POW(c2,2) from test_number;
+select c1,POWER(c1,2),POWER(c2,2) from test_number;
+select c1,SIN(c1),SIN(c2) from test_number;
+select c1,ASIN(c1),ASIN(c2) from test_number;
+select c1,COS(c1),COS(c2) from test_number;
+select c1,ACOS(c1),ACOS(c2) from test_number;
+select c1,TAN(c1),TAN(c2) from test_number;
+select c1,ATAN(c1),ATAN(c2) from test_number;
+select c1,COT(c1),COT(c2) from test_number;
+
+# test string function
+select c1,length(c1) ,length(c2) from test_number;
+select c1,CONCAT(c1) ,CONCAT(c2) from test_number;
+select c1,CONCAT(c1,'2') ,CONCAT(c2,'2') from test_number;
+select c1,INSERT(c1,1,1,'+') ,INSERT(c2,1,1,'+')  from test_number;
+select c1,LOWER(c1) ,LOWER(c2) from test_number;
+select c1,UPPER(c1) ,UPPER(c2) from test_number;
+select c1,LEFT(c1,1) ,LEFT(c2,1) from test_number;
+select c1,RIGHT(c1,1) ,RIGHT(c2,1) from test_number;
+select c1,TRIM(c1) ,TRIM(c2) from test_number;
+select c1,REPLACE(c1,'-','+') ,REPLACE(c2,'-','+') from test_number;
+select c1,SUBSTRING(c1,2) ,SUBSTRING(c2,2) from test_number;
+select c1,REVERSE(c1) ,REVERSE(c2) from test_number;
+
+# test statistical function
+select MAX(c1) from test_number;
+select MIN(c1) from test_number;
+select COUNT(c1) from test_number;
+select sum(c1),sum(c2) from test_number;
+select AVG(c1),AVG(c2) from test_number;
+select least(c0,c1) from test_number ; 
+
+# test CAST
+SELECT CAST(c3 AS number(4,2)) - 2.0 from test_number where c0 <= 2;
+SELECT CAST(c2 AS decimal(4,2)) - 2.0 from test_number where c0 <= 2;
+SELECT CAST(c2 AS decimal) - 2.0 from test_number where c0 <= 2;
+SELECT CAST(c3 AS number) - 2.0 from test_number where c0 <= 2;
+
+# test CONVERT
+SELECT CONVERT(c2 , decimal) - 2.0 from test_number where c0 <= 2;
+SELECT CONVERT(c2 , number(4,2)) - 2.0 from test_number where c0 <= 2;
+SELECT CONVERT(c2 , number) - 2.0 from test_number where c0 <= 2;
+
+# test IF ,IFNULL ,CASE WHEN
+select c1,c2 ,IF(c1>0,'Y','N'),IF(c2>0,'Y','N') from test_number;
+select c1,c2 ,IFNULL(c1,'Y'),IFNULL(c2,'Y') from test_number;
+SELECT CASE c1 WHEN -2 THEN 'c1<0' WHEN 2 THEN 'c1>0' ELSE 'other' END AS C1,CASE c2 WHEN -2 THEN 'c2<0' WHEN 2 THEN 'c2>0' ELSE 'other' END AS C2 from test_number;
+
+#test UNION
+select c2 from test_number union select c1 from test1;
+
+#test DISTINCT
+select distinct c3 ,c0 from test_number;
+
+# test JOIN
+select * from test_number t  join test1 t1  on t.c0 = t1.c0;
+select * from test_number t  inner join test1 t1  on t.c0 = t1.c0;
+select * from test_number t  cross join test1 t1  on t.c0 = t1.c0;
+select * from test_number t  straight_join test1 t1  on t.c0 = t1.c0;
+select * from test_number t left join  test1 t1  on t.c0 = t1.c0;
+select * from test_number t right join  test1 t1  on t.c0 = t1.c0;
+
+
+# test INSERT INTO
+insert into test2 select * from test_number;
+DROP TABLE IF EXISTS `test2`;
+
+# test IN
+select c1 from test_number where c1 not in (1,2,3);
+select c1 from test_number where c1  in (1,2,3);
+
+
+# test DESCRIBE
+DESCRIBE test_number;
+
+
+# test HANDLER
+handler test_number open;
+handler test_number read first; 
+handler test_number read c1_2 first;  
+handler test_number  close;
+DROP INDEX c1_2 ON test_number;
+
+# test replace
+replace into test_number(c0,c1,c2) values(4,5,2);
+
+# test use INDEX
+ALTER TABLE `test_number`
+ADD INDEX `test_index` (`c0`) ;
+explain  select * from test_number force index(test_index) where c0 >0;
+
+
+# test SUBQUERY
+SELECT * FROM test_number WHERE c0 = (SELECT c0 FROM test1 where c0=1);
+
+
+# test TRANSACTION
+START TRANSACTION;
+delete from test_number;
+select * from test_number;
+ROLLBACK;
+COMMIT;
+
+# test VIEW
+create view  test_number1  as  select * from test_number;
+select * from  test_number1;
+drop view test_number1;
+
+
+# test CREATE FUNCTION
+DELIMITER //;
+CREATE FUNCTION f1(a int, b number(5), c number(5,4) ,d number) RETURN number(6,3) DETERMINISTIC AS BEGIN RETURN a * b + c +d;
+END//
+DELIMITER ;//
+
+DELIMITER //;
+CREATE FUNCTION f2(a int, b decimal(5), c decimal(5,4) ,d decimal) RETURN decimal(6,3) DETERMINISTIC AS BEGIN RETURN a * b + c +d;
+END//
+DELIMITER ;//
+
+DELIMITER //;
+CREATE FUNCTION f3(a int, b number(5), c number(5,4) ,d number, e number(*,3)) RETURN number(*,3) DETERMINISTIC AS BEGIN RETURN a * b + c +d + e;
+END//
+DELIMITER ;//
+
+DELIMITER //;
+CREATE FUNCTION f4(a int, b number(5), c number(5,4) ,d number(*)) RETURN number(6,3) DETERMINISTIC AS BEGIN RETURN a * b + c +d;
+END//
+DELIMITER ;//
+
+select f1(1.01,2.512,3.513,4.231);
+select f2(1.01,2.512,3.513,4.231);
+select f3(1.01,2.512,3.513,4.231,5.515);
+select f4(1.01,2.512,3.513,4.231);
+
+# test CREATE PROCEDURE
+DELIMITER //;
+CREATE PROCEDURE p1 (a int, b number(5), c number(5,4) ,d number)
+AS
+BEGIN
+  SELECT a * b + c +d;
+  SELECT f1(a,b,c,d);
+END//
+DELIMITER ;//
+
+DELIMITER //;
+CREATE PROCEDURE p2 (a int, b decimal(5), c decimal(5,4) ,d decimal)
+AS
+BEGIN
+  SELECT a * b + c +d;
+  SELECT f2(a,b,c,d);
+END//
+DELIMITER ;//
+
+DELIMITER //;
+CREATE PROCEDURE p3 (a int, b decimal(5), c decimal(5,4) ,d decimal, e number(*,3))
+AS
+BEGIN
+  SELECT a * b + c +d+e;
+  SELECT f3(a,b,c,d,e);
+END//
+DELIMITER ;//
+
+DELIMITER //;
+CREATE PROCEDURE p4 (a int, b number(5), c number(5,4) ,d number(*))
+AS
+BEGIN
+  SELECT a * b + c +d;
+  SELECT f1(a,b,c,d);
+END//
+DELIMITER ;//
+
+call p1(1.01,2.512,3.513,4.231);
+call p2(1.01,2.512,3.513,4.231);
+call p3(1.01,2.512,3.513,4.231,5.515);
+call p4(1.01,2.512,3.513,4.231);
+drop function f1;
+drop function f2;
+drop function f3;
+drop function f4;
+drop PROCEDURE p1;
+drop PROCEDURE p2;
+drop PROCEDURE p3;
+drop PROCEDURE p4;
+
+
+# test PROCEDURE use number
+DELIMITER //;
+CREATE PROCEDURE p1 (x number)
+AS
+  xname VARCHAR(5) DEFAULT 'bob';
+  pc0 number;
+  pc1 number(5);
+  pc2 number(4,2);
+  pc3 decimal(4,2);
+BEGIN  
+  SELECT c0,c1,c2,c3 INTO pc0,pc1,pc2,pc3 
+    FROM test_number WHERE c0 = x;
+  SELECT pc0,pc1,pc2,pc3 ;
+END//
+DELIMITER ;//
+call p1(2);
+drop PROCEDURE p1;
+
+DELIMITER //;
+CREATE PROCEDURE p1 (x number(*,3))
+AS
+  xname VARCHAR(5) DEFAULT 'bob';
+  pc4 number(*,3);
+BEGIN
+  SELECT c4 INTO pc4
+    FROM test_number WHERE c0 = x;
+  SELECT pc4 ;
+END//
+DELIMITER ;//
+call p1(2);
+call p1(2);
+drop PROCEDURE p1;
+
+DELIMITER //;
+CREATE PROCEDURE p1 (x number(*))
+AS
+  xname VARCHAR(5) DEFAULT 'bob';
+  pc5 number(*);
+BEGIN  
+  SELECT c5 INTO pc5
+    FROM test_number WHERE c0 = x;
+  SELECT pc5 ;
+END//
+DELIMITER ;//
+call p1(2);
+call p1(2);
+drop PROCEDURE p1;
+
+# test PARTITION TABLE
+CREATE TABLE `test_number1` (
+`c0`  number NOT NULL, 
+`c1`  number(4) NULL DEFAULT NULL ,  
+`c2`  number(4,2) NULL DEFAULT NULL ,
+`c3` decimal(4,2) NULL DEFAULT NULL
+ ) ENGINE=InnoDB 
+
+PARTITION BY LINEAR KEY(c0) PARTITIONS 3;
+INSERT INTO test_number1 (c0,c1,c2,c3) WITH RECURSIVE digits(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM digits WHERE i<1000) SELECT FLOOR(RAND()*1000000),FLOOR(RAND()*100),FLOOR(RAND()*100),FLOOR(RAND()*100) FROM digits;
+drop table test_number1;
+
+
+# test TRIGGER
+drop TRIGGER IF EXISTS test_tri;
+CREATE TABLE test_count (acct_num INT, amount number);
+SET @sum=0;
+CREATE TRIGGER test_tri BEFORE INSERT ON test_count FOR EACH ROW SET @sum = @sum + :NEW.amount;
+insert into test_count(acct_num,amount) values(1,2);
+SELECT @sum;
+drop TRIGGER IF EXISTS test_tri;
+
+# test WITH
+SELECT c0,c1 FROM test1;
+SELECT c2,c3 FROM test_number;
+WITH
+  cte1 AS (SELECT c0,c1 FROM test1),
+  cte2 AS (SELECT c2,c3 FROM test_number)
+SELECT c1,c2 FROM cte1 JOIN cte2 
+WHERE cte1.c1 = cte2.c2;
+
+
+DROP TABLE IF EXISTS `test1`;
+DROP TABLE IF EXISTS `test2`;
+DROP TABLE IF EXISTS `test3`;
+DROP TABLE IF EXISTS `test_number`;
+DROP TABLE IF EXISTS `test_count`;

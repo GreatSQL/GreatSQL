@@ -145,7 +145,7 @@ struct gen_lex_token_string {
   - mode named tokens from bison (sql_yacc.yy).
   See also YYMAXUTOK.
 */
-const int MY_MAX_TOKEN = 1500;
+const int MY_MAX_TOKEN = 1600;
 
 gen_lex_token_string compiled_token_array[MY_MAX_TOKEN];
 
@@ -294,6 +294,18 @@ static void compute_tokens() {
   range_for_sql_yacc1.set_token(JSON_SEPARATOR_SYM, "->", __LINE__);
   range_for_sql_yacc1.set_token(JSON_UNQUOTED_SEPARATOR_SYM, "->>", __LINE__);
 
+  range_for_sql_yacc2.set_token(MERGE_INTO_SYM, "MERGE INTO", __LINE__);
+  range_for_sql_yacc2.set_token(BEGIN_WORK_SYM, "BEGIN WORK", __LINE__);
+  range_for_sql_yacc2.set_token(START_WITH_SYM, "START WITH", __LINE__);
+  range_for_sql_yacc2.set_token(DOT_DOT_SYM, "..", __LINE__);
+  range_for_sql_yacc2.set_token(BULK_COLLECT_SYM, "BULK COLLECT", __LINE__);
+  range_for_sql_yacc2.set_token(PERCENT_ORACLE_SYM, "%", __LINE__);
+  range_for_sql_yacc2.set_token(IN_REVERSE_SYM, "in reverse", __LINE__);
+  range_for_sql_yacc2.set_token(BUILD_IMMEDIATE_SYM, "BUILD IMMEDIATE",
+                                __LINE__);
+  range_for_sql_yacc2.set_token(BUILD_DEFERRED_SYM, "BUILD DEFERRED", __LINE__);
+  range_for_sql_yacc2.set_token(REFRESH_COMPLETE_SYM, "REFRESH COMPLETE",
+                                __LINE__);
   /*
     Values.
     These tokens are all normalized later,

@@ -1,4 +1,5 @@
 /* Copyright (c) 2014, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -142,6 +143,10 @@ class Recovery_module {
   void set_recovery_donor_reconnect_interval(ulong reconnect_interval) {
     recovery_state_transfer.set_recovery_donor_reconnect_interval(
         reconnect_interval);
+  }
+
+  void set_donor_threshold(ulonglong donor_threshold_value) {
+    recovery_state_transfer.set_donor_threshold(donor_threshold_value);
   }
 
   /**

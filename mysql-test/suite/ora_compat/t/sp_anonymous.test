@@ -1,0 +1,190 @@
+# anonymous_block
+set sql_mode='oracle';
+
+DELIMITER //;
+
+BEGIN
+   select 'hello world';
+END//
+
+DECLARE
+  value1 VARCHAR2(250);
+BEGIN
+  value1:='world';
+  select 'hello '||value1;
+END//
+
+BEGIN
+  select 'hello world' as val;
+  BEGIN
+    select 'php is the best language in the world' as val;
+  END;
+END//
+
+DECLARE
+  value1 VARCHAR2(250);
+BEGIN
+  value1:='world';
+  select 'hello '||value1 as val;
+  DECLARE
+    value1 VARCHAR2(250);
+  BEGIN
+    value1:='in the world';
+    select 'php is the best '||value1 as val;
+  END;
+
+END//
+
+<<test1>>
+BEGIN
+  select 'hello label' as val;
+  LEAVE test1;
+  select 'hello label2' as val;
+END test1//
+
+<<test2>>
+DECLARE
+  value1 VARCHAR2(250);
+BEGIN
+  value1:='hello world';
+  select value1;
+  LEAVE test2;
+  set value1='php is the best language in the world';
+  select value1;
+END test2//
+
+--error ER_SP_LABEL_MISMATCH
+<<test2>>
+BEGIN
+  select 'hello world';
+END test3//
+
+
+begin
+  select * from t1;
+exception
+  when others then
+    select 'get exception others' as res;
+end
+//
+
+DECLARE
+  value1 VARCHAR2(250);
+begin
+  set  value1='hello world';
+  select * from t1;
+exception
+  when others then
+    select 'get exception others' as res;
+end
+//
+
+
+DELIMITER ;//
+
+connect (con1, localhost, root,,*NO-ONE*);
+connection con1;
+set sql_mode=oracle;
+DELIMITER //;
+--error ER_NO_DB_ERROR
+begin
+ call p1;
+end //
+DELIMITER ;//
+disconnect con1;
+connection default;
+
+
+DELIMITER //;
+begin
+  select * from t1;
+exception
+  when others then
+    select 'errcode:' || sqlcode ||' msg:' || sqlerrm as res;
+end;
+//
+
+begin
+  select * from t1;
+exception
+  when others then
+    select ' msg:' || sqlerrm(sqlcode) as res;
+end;
+//
+
+begin
+  select vv  from t2;
+exception
+  when others then
+    select 'errcode:' || sqlcode ||' msg:' || sqlerrm(1054) as res;
+end;
+//
+
+begin
+  select sqlcode,sqlerrm ;
+  select * from t1;
+exception
+  when others then
+    select 'errcode:' || sqlcode ||' msg:' || SQLERRM as res;
+end;
+//
+
+
+begin
+  select sqlerrm(1054) ;
+  select * from t1;
+exception
+  when others then
+    select 'errcode:' || sqlcode ||' msg:' || SQLERRM as res;
+end;
+//
+DELIMITER ;//
+
+create table t1 (c1 date, c2 date, c3 int, ida int, age int, name varchar(10));
+insert into t1 values ('2023-08-17', '2023-08-17', 1, 1, 10, 'a');
+DELIMITER //;
+declare
+a date;
+begin
+explain format=tree select last_day(c1) into a from t1;
+end//
+DELIMITER ;//
+select @@sql_mode;
+select @@sql_mode;
+
+
+DELIMITER //;
+declare
+a date;
+begin
+explain format=tree select last_day(c1) into @a from t1;
+end//
+DELIMITER ;//
+select @@sql_mode;
+select @@sql_mode;
+
+
+DELIMITER //;
+declare
+a date;
+begin
+explain select last_day(c1) into a from t1;
+end//
+DELIMITER ;//
+select @@sql_mode;
+select @@sql_mode;
+
+
+DELIMITER //;
+declare
+a date;
+begin
+explain format=tree select last_day(c1) into a from t1;
+explain format=tree select last_day(c1) into @a from t1;
+explain select last_day(c1) into a from t1;
+end//
+DELIMITER ;//
+select @@sql_mode;
+select @@sql_mode;
+
+drop table t1;

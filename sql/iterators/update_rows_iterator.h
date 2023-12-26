@@ -151,6 +151,7 @@ class UpdateRowsIterator final : public RowIterator {
   bool merge_into_stmt{false};
   bool merge_when_insert{false};
   bool merge_when_update_delete{false};
+  bool ora_update_set_row{false};
   /// The table used for insertion of rows
   Table_ref *insert_table_list{nullptr};
   TABLE *insert_table{nullptr};
@@ -178,7 +179,8 @@ class UpdateRowsIterator final : public RowIterator {
                         Table_ref *insert_table_list_arg,
                         mem_root_deque<Item *> *insert_field_list_arg,
                         mem_root_deque<List_item *> *insert_many_values_arg,
-                        TABLE *insert_table_arg, TABLE *tmp_insert_table_arg) {
+                        TABLE *insert_table_arg, TABLE *tmp_insert_table_arg,
+                        bool ora_update_set_row_arg) {
     merge_into_stmt = true;
     merge_when_insert = merge_when_insert_arg;
     opt_merge_update_where = opt_merge_update_where_arg;
@@ -196,6 +198,7 @@ class UpdateRowsIterator final : public RowIterator {
     insert_many_values = insert_many_values_arg;
     insert_table = insert_table_arg;
     tmp_insert_table = tmp_insert_table_arg;
+    ora_update_set_row = ora_update_set_row_arg;
   }
 };
 

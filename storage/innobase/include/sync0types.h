@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2022, Oracle and/or its affiliates.
+Copyright (c) 2023, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -462,6 +463,7 @@ enum latch_id_t {
   LATCH_ID_DBLR,
   LATCH_ID_REDO_LOG_ARCHIVE_ADMIN_MUTEX,
   LATCH_ID_REDO_LOG_ARCHIVE_QUEUE_MUTEX,
+  LATCH_ID_FILE_ASYNC_PURGE_LIST,
   LATCH_ID_TEST_MUTEX,
   LATCH_ID_MAX = LATCH_ID_TEST_MUTEX
 };

@@ -126,6 +126,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ha_innopart.h"
 #include "ha_prototypes.h"
 #include "i_s.h"
+#include "i_s_file_purge.h"
 #include "ibuf0ibuf.h"
 #include "lex_string.h"
 #include "lob0lob.h"
@@ -165,6 +166,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0sel.h"
 #include "row0upd.h"
 #include "sql/plugin_table.h"
+#include "srv0file_purge.h"
 #include "srv0mon.h"
 #include "srv0srv.h"
 #include "srv0start.h"
@@ -339,9 +341,7 @@ static bool innobase_create_status_file = false;
 bool innobase_stats_on_metadata = true;
 static bool innodb_optimize_fulltext_only = false;
 
-[[maybe_unused]] static char *innodb_version_str = (char *)INNODB_VERSION_STR;
-
-extern char *opt_fake_serv_vers_num;  // add for greatdb
+static char *innodb_version_str = (char *)INNODB_VERSION_STR;
 
 static Innodb_data_lock_inspector innodb_data_lock_inspector;
 
@@ -811,7 +811,9 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(sync_array_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(row_drop_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(ahi_enabled_mutex, 0, 0,
-                  "Mutex used for AHI disabling and enabling.")};
+                  "Mutex used for AHI disabling and enabling."),
+    PSI_MUTEX_KEY(file_async_purge_list_mutex, 0, 0,
+                  "Mutex used for data file async purge list")};
 #endif /* UNIV_PFS_MUTEX */
 
 #ifdef UNIV_PFS_RWLOCK
@@ -912,6 +914,8 @@ static PSI_thread_info all_innodb_threads[] = {
     PSI_THREAD_KEY(parallel_rseg_init_thread, "ib_par_rseg", 0, 0,
                    PSI_DOCUMENT_ME),
     PSI_THREAD_KEY(meb::redo_log_archive_consumer_thread, "ib_meb_rl",
+                   PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME),
+    PSI_THREAD_KEY(srv_file_async_purge_thread, "ib_file_purge",
                    PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME)};
 #endif /* UNIV_PFS_THREAD */
 
@@ -23941,12 +23945,10 @@ static MYSQL_SYSVAR_LONG(
     AUTOINC_OLD_STYLE_LOCKING,            /* Minimum value */
     AUTOINC_NO_LOCKING, 0);               /* Maximum value */
 
-/*mod from for greatdb*/
-static MYSQL_SYSVAR_STR(version, opt_fake_serv_vers_num /*innodb_version_str*/,
+static MYSQL_SYSVAR_STR(version, innodb_version_str,
                         PLUGIN_VAR_NOCMDOPT | PLUGIN_VAR_READONLY |
                             PLUGIN_VAR_NOPERSIST,
-                        "InnoDB version", nullptr, nullptr,
-                        opt_fake_serv_vers_num /*INNODB_VERSION_STR*/);
+                        "InnoDB version", nullptr, nullptr, INNODB_VERSION_STR);
 
 static MYSQL_SYSVAR_BOOL(use_native_aio, srv_use_native_aio,
                          PLUGIN_VAR_NOCMDARG | PLUGIN_VAR_READONLY,
@@ -24288,6 +24290,46 @@ static MYSQL_SYSVAR_BOOL(encrypt_online_alter_logs,
                          PLUGIN_VAR_NOCMDARG | PLUGIN_VAR_READONLY,
                          "Encrypt online alter logs.", nullptr, nullptr, false);
 
+static MYSQL_THDVAR_BOOL(data_file_async_purge, PLUGIN_VAR_OPCMDARG,
+                         "Data file purge little by little (off by default)",
+                         /* check_func */ nullptr, /* update_func */ nullptr,
+                         /* default */ false);
+
+static MYSQL_SYSVAR_BOOL(data_file_async_purge_all_at_shutdown,
+                         srv_data_file_async_purge_all_at_shutdown,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Whether to purge all tmp file when shutdown.",
+                         nullptr, nullptr, false);
+
+static MYSQL_SYSVAR_ULONG(
+    data_file_async_purge_interval, srv_data_file_async_purge_interval,
+    PLUGIN_VAR_OPCMDARG,
+    "Time interval each of data file purge operation (milliseconds)", NULL,
+    NULL, 100, 0, 10000, 0);
+
+static MYSQL_SYSVAR_ULONGLONG(
+    data_file_async_purge_max_size, srv_data_file_async_purge_max_size,
+    PLUGIN_VAR_OPCMDARG, "Max size each of data file purge operation (Byte)",
+    NULL, NULL, 256ULL << 20 /* 256MB */, 1, ~0ULL, 0);
+
+static MYSQL_SYSVAR_UINT(data_file_async_purge_error_retry_count,
+                         srv_data_file_async_purge_error_retry_count,
+                         PLUGIN_VAR_RQCMDARG,
+                         "Retry count when purging file with errors", NULL,
+                         NULL, 10, 0, ~0U, 0);
+
+static MYSQL_SYSVAR_ULONGLONG(
+    data_force_async_purge_file_size, srv_data_force_async_purge_file_size,
+    PLUGIN_VAR_OPCMDARG,
+    "File which size(Byte) greater than this will be purge little by little",
+    NULL, NULL, 10ULL << 30 /* 10GB */, 1, ~0ULL, 0);
+
+static MYSQL_SYSVAR_BOOL(print_data_file_async_purge_process,
+                         srv_print_data_file_async_purge_process,
+                         PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_INVISIBLE,
+                         "Print all data file purge process to MySQL error log",
+                         NULL, NULL, true);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -24532,6 +24574,13 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(encrypt_online_alter_logs),
     MYSQL_SYSVAR(records_in_range),
     MYSQL_SYSVAR(force_index_records_in_range),
+    MYSQL_SYSVAR(data_file_async_purge),
+    MYSQL_SYSVAR(data_file_async_purge_all_at_shutdown),
+    MYSQL_SYSVAR(data_file_async_purge_error_retry_count),
+    MYSQL_SYSVAR(data_file_async_purge_interval),
+    MYSQL_SYSVAR(data_force_async_purge_file_size),
+    MYSQL_SYSVAR(data_file_async_purge_max_size),
+    MYSQL_SYSVAR(print_data_file_async_purge_process),
     nullptr};
 
 mysql_declare_plugin(innobase){
@@ -24561,7 +24610,8 @@ mysql_declare_plugin(innobase){
     i_s_innodb_ft_index_cache, i_s_innodb_ft_index_table, i_s_innodb_tables,
     i_s_innodb_tablestats, i_s_innodb_indexes, i_s_innodb_tablespaces,
     i_s_innodb_columns, i_s_innodb_virtual, i_s_innodb_cached_indexes,
-    i_s_innodb_session_temp_tablespaces
+    i_s_innodb_session_temp_tablespaces,
+    i_s_innodb_data_file_async_purge
 
     mysql_declare_plugin_end;
 
@@ -25372,3 +25422,7 @@ static bool innobase_check_reserved_file_name(handlerton *, const char *name) {
   return (true);
 }
 #endif /* !UNIV_HOTBACKUP */
+
+bool thd_data_file_async_purge(THD *thd) {
+  return THDVAR(thd, data_file_async_purge);
+}

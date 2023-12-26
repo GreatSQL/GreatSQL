@@ -1,0 +1,68 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+use test;
+set sql_mode=oracle;
+set @@udt_format_result='DBA';
+create or replace type t_air as object(id int,type varchar(20));
+"on master"
+SELECT t_air(1+1,'aa') FROM dual;
+t_air(1+1,'aa')
+id:2 | type:aa
+show create type t_air;
+Type	sql_mode	Create Type	character_set_client	collation_connection	Database Collation
+t_air	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="root"@"localhost" TYPE "t_air" AS OBJECT(id int,type varchar(20))	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+"on slave"
+set sql_mode=oracle;
+set @@udt_format_result='DBA';
+SELECT t_air(1+1,'aa') FROM dual;
+t_air(1+1,'aa')
+id:2 | type:aa
+create or replace type t_air as object(id int,type varchar(20),name1 int);
+SELECT t_air(1+1,'aa',2) FROM dual;
+t_air(1+1,'aa',2)
+id:2 | type:aa | name1:2
+"on slave"
+SELECT t_air(1+1+1,'aa1',20) FROM dual;
+t_air(1+1+1,'aa1',20)
+id:3 | type:aa1 | name1:20
+"on master"
+create or replace type t_air as object(id int,type varchar(20));
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+"on slave"
+SELECT t_air_table(t_air(1,'aa'),t_air(2,'bb')) from dual;
+t_air_table(t_air(1,'aa'),t_air(2,'bb'))
+t_air_table(t_air(1,aa),t_air(2,bb))
+"on master"
+create table t1 of t_air;
+insert into t1 values(1,'aa');
+select * from t1;
+id	type
+1	aa
+"on slave"
+select * from t1;
+id	type
+1	aa
+"on master"
+CREATE USER 'user_job'@'%' IDENTIFIED BY '123';
+GRANT ALL ON *.* TO 'user_job'@'%';
+
+---> connection: mysqltest_2_con
+set sql_mode=oracle;
+set @@udt_format_result='DBA';
+create or replace type t_air1 as object(id int,type varchar(20));
+SELECT t_air1(1+1,'aa') FROM dual;
+t_air1(1+1,'aa')
+id:2 | type:aa
+"on slave"
+SELECT t_air1(1+1,'aa') FROM dual;
+t_air1(1+1,'aa')
+id:2 | type:aa
+drop table t1;
+drop type t_air_table;
+drop type t_air;
+drop type t_air1;
+drop user user_job;
+include/rpl_end.inc

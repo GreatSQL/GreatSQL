@@ -78,6 +78,7 @@
 
 class Item;
 class Item_field;
+class Item_func;
 class Item_singlerow_subselect;
 class Item_sum;
 class Json_wrapper;
@@ -2082,6 +2083,8 @@ class Item : public Parse_tree_node {
   */
   bool get_time_from_non_temporal(MYSQL_TIME *ltime);
 
+  virtual bool is_sequence_field() { return false; }
+
  protected:
   /* Helper functions, see item_sum.cc */
   String *val_string_from_real(String *str);
@@ -2423,6 +2426,7 @@ class Item : public Parse_tree_node {
   void split_sum_func2(THD *thd, Ref_item_array ref_item_array,
                        mem_root_deque<Item *> *fields, Item **ref,
                        bool skip_registered);
+
   virtual bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) = 0;
   virtual bool get_time(MYSQL_TIME *ltime) = 0;
   /**
@@ -2506,6 +2510,13 @@ class Item : public Parse_tree_node {
     data types return "binary" charset in client-side metadata.
   */
   virtual const CHARSET_INFO *charset_for_protocol() {
+    if (is_ora_type()) {
+      if (current_thd->variables.udt_format_result == UDT_FORMAT_RESULT_BINARY)
+        return &my_charset_bin;
+      else
+        return system_charset_info;
+    }
+    if (is_ora_table()) return system_charset_info;
     return result_type() == STRING_RESULT ? collation.collation
                                           : &my_charset_bin;
   }
@@ -2646,6 +2657,11 @@ class Item : public Parse_tree_node {
   virtual bool collect_item_field_or_ref_processor(uchar *) { return false; }
   virtual bool collect_item_func_processor(uchar *) { return false; }
 
+  // collect prior or connect_by_root in connect by cond
+  virtual bool collect_connect_by_item_processor(uchar *) { return false; }
+  virtual bool collect_connect_by_leaf_cycle_or_ref_processor(uchar *) {
+    return false;
+  }
   class Collect_item_fields_or_refs : public Item_tree_walker {
    public:
     List<Item> *m_items;
@@ -3069,14 +3085,19 @@ class Item : public Parse_tree_node {
   virtual Item *element_index(uint) { return this; }
   virtual Item **addr(uint) { return nullptr; }
   virtual uint get_arg_count() { return 0; }
+  /*
+    For ROW_RESULT items,it creates tmp table and makes elements for
+    element_index to read.
+  */
+  virtual bool row_create_items(THD *, List<Create_field> *) { return false; }
   // row table
-  virtual Item *element_row_index(uint, uint) { return this; }
   virtual LEX_STRING get_udt_db_name() const { return NULL_STR; }
   virtual LEX_STRING get_udt_name() const { return NULL_STR; }
-  virtual LEX_CSTRING get_nested_table_udt() const { return NULL_CSTR; }
   virtual bool udt_table_store_to_table(TABLE *) { return false; }
   virtual longlong get_varray_size_limit() { return -1; }
   virtual List<Create_field> *get_field_create_field_list() { return nullptr; }
+  virtual bool has_assignment_list() { return false; }
+  virtual TABLE *get_udt_table() { return nullptr; }
 
   virtual bool check_cols(uint c);
   // It is not row => null inside is impossible
@@ -3122,11 +3143,11 @@ class Item : public Parse_tree_node {
     Item_view_ref_replacement(Item *target, Field *field, Query_block *select)
         : Item_replacement(select, select), m_target(target), m_field(field) {}
   };
-  class Item_func_rownum;
-  struct Item_rownum_func_replacement : Item_replacement {
-    Item_func_rownum *m_base;
-    Item_rownum_func_replacement(Query_block *select)
-        : Item_replacement(select, select), m_base(nullptr) {}
+
+  struct Item_sequence_field_replacement {
+    List<Item_func> *m_sequences;
+    Item_sequence_field_replacement(List<Item_func> *funcs)
+        : m_sequences(funcs) {}
   };
 
   struct Aggregate_replacement {
@@ -3154,6 +3175,7 @@ class Item : public Parse_tree_node {
   virtual Item *replace_item_view_ref(uchar *) { return this; }
   virtual Item *replace_aggregate(uchar *) { return this; }
   virtual Item *replace_outer_ref(uchar *) { return this; }
+  virtual Item *replace_sequence_field(uchar *) { return this; }
   virtual Item *replace_rownum_func(uchar *) { return this; }
   virtual Item *replace_rownum_use_tmp_field(uchar *) { return this; }
 
@@ -3325,6 +3347,12 @@ class Item : public Parse_tree_node {
   /// Set the "has stored program" property
   void set_stored_program() { m_accum_properties |= PROP_STORED_PROGRAM; }
 
+  /// Set the "has ora type" property
+  void set_ora_type() { m_accum_properties |= PROP_ORA_TYPE; }
+
+  /// Set the "has ora table" property
+  void set_ora_table() { m_accum_properties |= PROP_ORA_TABLE; }
+
  public:
   /// @return true if this item or any of its descendants contains a subquery.
   bool has_subquery() const { return m_accum_properties & PROP_SUBQUERY; }
@@ -3333,6 +3361,28 @@ class Item : public Parse_tree_node {
   bool has_stored_program() const {
     return m_accum_properties & PROP_STORED_PROGRAM;
   }
+
+  /// @return true if this item or any of its descendants refers a oracle udt
+  /// type.
+  bool is_ora_type() const { return m_accum_properties & PROP_ORA_TYPE; }
+
+  /// @return true if this item or any of its descendants refers a oracle udt
+  /// table.
+  bool is_ora_table() const { return m_accum_properties & PROP_ORA_TABLE; }
+
+  /// @return true if this item or any of its descendants refers a oracle
+  /// refcursor
+  virtual bool is_ora_refcursor() const {
+    // return m_accum_properties & PROP_ORA_REFCURSOR;
+    return false;
+  }
+
+  /// Reset the "has_ora_type" property,used by Item_func_udt_table.
+  void reset_ora_type() { m_accum_properties &= ~PROP_ORA_TYPE; }
+
+  /// Reset the "has_ora_table" property,used by
+  /// Item_field_row::row_create_items_for_tmp_field.
+  void reset_ora_table() { m_accum_properties &= ~PROP_ORA_TABLE; }
 
   /// @return true if this item or any of its descendants is an aggregated func.
   bool has_aggregation() const { return m_accum_properties & PROP_AGGREGATION; }
@@ -3371,6 +3421,37 @@ class Item : public Parse_tree_node {
 
   /// Set the property: this item is a call to GROUPING
   void set_grouping_func() { m_accum_properties |= PROP_GROUPING_FUNC; }
+
+  void set_connect_by_func() { m_accum_properties |= PROP_CONNECT_BY_FUNC; }
+
+  bool has_connect_by_func() const {
+    return m_accum_properties & PROP_CONNECT_BY_FUNC;
+  }
+
+  void set_connect_by_value() { m_accum_properties |= PROP_CONNECT_BY_VALUE; }
+
+  bool has_connect_by_value() const {
+    return m_accum_properties & PROP_CONNECT_BY_VALUE;
+  }
+
+  /**
+    @return true if this item is a PIVOT function
+   */
+  bool is_pivot_ref() const { return m_is_pivot_ref; }
+
+  /**
+    Item::walk function. Set m_is_pivot_ref.
+  */
+  bool add_pivot_ref_flag(uchar *) {
+    DBUG_TRACE;
+    DBUG_PRINT("info", ("%s", item_name.is_set() ? item_name.ptr() : "noname"));
+    m_is_pivot_ref = true;
+    return false;
+  }
+
+  bool is_ora_udt_type() {
+    return is_ora_type() || is_ora_table() || is_ora_refcursor();
+  }
 
   /// Whether this Item was created by the IN->EXISTS subquery transformation
   virtual bool created_by_in2exists() const { return false; }
@@ -3562,6 +3643,7 @@ class Item : public Parse_tree_node {
   bool null_value;  ///< True if item is null
   bool unsigned_flag;
   bool m_is_window_function;  ///< True if item represents window func
+  bool m_is_pivot_ref{false};  ///< True if item represents pivot func
   /**
     If the item is in a SELECT list (Query_block::fields) and hidden is true,
     the item wasn't actually in the list as given by the user (it was added
@@ -3591,24 +3673,47 @@ class Item : public Parse_tree_node {
     current item tree, except they are not accumulated across subqueries and
     functions.
   */
-  static constexpr uint8 PROP_SUBQUERY = 0x01;
-  static constexpr uint8 PROP_STORED_PROGRAM = 0x02;
-  static constexpr uint8 PROP_AGGREGATION = 0x04;
-  static constexpr uint8 PROP_WINDOW_FUNCTION = 0x08;
+  static constexpr uint32 PROP_SUBQUERY = 0x0001;
+  static constexpr uint32 PROP_STORED_PROGRAM = 0x0002;
+  static constexpr uint32 PROP_AGGREGATION = 0x0004;
+  static constexpr uint32 PROP_WINDOW_FUNCTION = 0x0008;
   /**
     Set if the item or one or more of the underlying items contains a
     ROLLUP expression. The rolled up expression itself is not so marked.
   */
-  static constexpr uint8 PROP_ROLLUP_EXPR = 0x10;
+  static constexpr uint32 PROP_ROLLUP_EXPR = 0x0010;
   /**
     Set if the item or one or more of the underlying items is a GROUPING
     function.
   */
-  static constexpr uint8 PROP_GROUPING_FUNC = 0x20;
+  static constexpr uint32 PROP_GROUPING_FUNC = 0x0020;
 
-  static constexpr uint8 PROP_ROWNUM_FUNC = 0x40;
+  static constexpr uint32 PROP_ROWNUM_FUNC = 0x0040;
 
-  uint8 m_accum_properties;
+  /*
+    Set if the item or one or more of the underlying items is a connect by
+    function.
+  */
+  static constexpr uint8 PROP_CONNECT_BY_FUNC = 0x0080;
+
+  /**
+    Set if the item or one or more of the underlying items is oracle
+    udt type.
+  */
+  static constexpr uint32 PROP_ORA_TYPE = 0x0100;
+  /**
+    Set if the item or one or more of the underlying items is oracle
+    udt table.
+  */
+  static constexpr uint32 PROP_ORA_TABLE = 0x0200;
+
+  /**
+    Set if the item or one or more of the underlying items is a connect by
+    function. syc_connect_by_path,isleaf,iscycle
+  */
+  static constexpr uint32 PROP_CONNECT_BY_VALUE = 0x0400;
+
+  uint32 m_accum_properties;
 
  public:
   /**
@@ -3636,9 +3741,6 @@ class Item : public Parse_tree_node {
    A helper function to ensure proper usage of CAST(.. AS .. ARRAY)
   */
   virtual void allow_array_cast() {}
-
-  virtual bool is_ora_type() { return false; }
-  virtual bool is_ora_table() { return false; }
 };
 
 /**
@@ -3858,17 +3960,14 @@ class Item_splocal : public Item_sp_variable,
   inline enum Type type() const override { return m_type; }
   inline Item_result result_type() const override { return m_result_type; }
   bool val_json(Json_wrapper *result) override;
-
- private:
   bool set_value(THD *thd, sp_rcontext *ctx, Item **it) override;
-
- public:
   Settable_routine_parameter *get_settable_routine_parameter() override {
     return this;
   }
   const CHARSET_INFO *charset_for_protocol() override {
     return this_item()->charset_for_protocol();
   }
+  void set_result_type(Item_result result) { m_result_type = result; }
 };
 
 /**
@@ -3940,6 +4039,7 @@ class Item_splocal_row_field_table_by_name
         m_arg_list(arg_list),
         m_number(number),
         m_pctx(pctx) {}
+  bool pre_fix_fields(THD *thd, Item **result);
   bool fix_fields(THD *thd, Item **) override;
   Item *this_item() override;
   const Item *this_item() const override { return nullptr; }
@@ -3971,9 +4071,40 @@ class Item_splocal_row_field_table_by_ident
                                        len_in_q),
         m_number_idx(number_idx),
         m_pctx(pctx) {}
+  bool pre_fix_fields(THD *thd, Item **result);
   bool fix_fields(THD *thd, Item **) override;
   Item *this_item() override;
   const Item *this_item() const override { return nullptr; }
+  void print(const THD *, String *str,
+             enum_query_type query_type) const override;
+  inline enum Type type() const override {
+    return Item::ORACLE_ROWTYPE_TABLE_ITEM;
+  }
+};
+
+/**
+  SP variables that are fields of a table.
+  DELCARE type tklist is table of varchar(20) INDEX BY pls_integer;
+  select stu_record_val('1') -- This is handled by
+  Item_splocal_row_field_table_by_index
+*/
+class Item_splocal_row_field_table_by_index : public Item_splocal {
+ private:
+  Item *m_index;
+
+ public:
+  Item_splocal_row_field_table_by_index(const Sp_rcontext_handler *rh,
+                                        const Name_string sp_var_name,
+                                        uint sp_var_idx, Item *index,
+                                        enum_field_types sp_var_type,
+                                        uint pos_in_q = 0, uint len_in_q = 0)
+      : Item_splocal(rh, sp_var_name, sp_var_idx, sp_var_type, pos_in_q,
+                     len_in_q),
+        m_index(index) {}
+  bool itemize(Parse_context *pc, Item **res) override;
+  bool fix_fields(THD *thd, Item **) override;
+  Item *this_item() override;
+  const Item *this_item() const override;
   void print(const THD *, String *str,
              enum_query_type query_type) const override;
   inline enum Type type() const override {
@@ -4384,6 +4515,9 @@ class Item_ident_for_show final : public Item {
 
 class COND_EQUAL;
 class Item_equal;
+class Gdb_sequence_entity;
+
+#define ORA_SEQUENCE_MAX_DIGITS 28
 
 class Item_field : public Item_ident {
   typedef Item_ident super;
@@ -4393,6 +4527,8 @@ class Item_field : public Item_ident {
   void fix_after_pullout(Query_block *parent_query_block,
                          Query_block *removed_query_block) override {
     super::fix_after_pullout(parent_query_block, removed_query_block);
+
+    if (is_sequence) return;  // skip set nullable for sequence
 
     // Update nullability information, as the table may have taken over
     // null_row status from the derived table it was part of.
@@ -4418,6 +4554,11 @@ class Item_field : public Item_ident {
   const char *ref_col_name{nullptr};
   bool ref{false};
 
+  // add for greatdb, support sequence
+  bool is_sequence{false};
+  uint64_t sequences_metadata_version{0};
+  bool seq_need_get_next{false};  // seq.nextval or seq.currval
+  enum_parsing_context parsing_place{CTX_NONE};
   /// Result field
   Field *result_field{nullptr};
 
@@ -4495,9 +4636,6 @@ class Item_field : public Item_ident {
   */
   bool can_use_prefix_key{false};
 
-  /// use for create type
-  bool m_is_ora_type{false};
-
   Item_field(Name_resolution_context *context_arg, const char *db_arg,
              const char *table_name_arg, const char *field_name_arg);
   Item_field(const POS &pos, const char *db_arg, const char *table_name_arg,
@@ -4529,12 +4667,23 @@ class Item_field : public Item_ident {
   void make_field(Send_field *tmp_field) override;
   void save_org_in_field(Field *field) override;
   table_map used_tables() const override;
-  Item_result result_type() const override { return field->result_type(); }
+  Item_result result_type() const override {
+    if (is_sequence) {
+      return DECIMAL_RESULT;
+    }
+    return field->result_type();
+  }
   Item_result numeric_context_result_type() const override {
+    if (is_sequence) {
+      return DECIMAL_RESULT;
+    }
     return field->numeric_context_result_type();
   }
   TYPELIB *get_typelib() const override;
   Item_result cast_to_int_type() const override {
+    if (is_sequence) {
+      return DECIMAL_RESULT;
+    }
     return field->cast_to_int_type();
   }
   enum_monotonicity_info get_monotonicity_info() const override {
@@ -4555,6 +4704,9 @@ class Item_field : public Item_ident {
   bool get_time(MYSQL_TIME *ltime) override;
   bool get_timeval(my_timeval *tm, int *warnings) override;
   bool is_null() override {
+    if (is_sequence) {
+      return false;
+    }
     // NOTE: May return true even if maybe_null is not set!
     // This can happen if the underlying TABLE did not have a NULL row
     // at set_field() time (ie., table->is_null_row() was false),
@@ -4563,7 +4715,6 @@ class Item_field : public Item_ident {
   }
   Item *get_tmp_table_item(THD *thd) override;
   bool collect_all_item_fields_processor(uchar *arg) override;
-
   bool collect_item_field_processor(uchar *arg) override;
   bool collect_item_field_or_ref_processor(uchar *arg) override;
   bool collect_item_field_or_view_ref_processor(uchar *arg) override;
@@ -4597,12 +4748,16 @@ class Item_field : public Item_ident {
   bool subst_argument_checker(uchar **arg) override;
   Item *equal_fields_propagator(uchar *arg) override;
   Item *replace_item_field(uchar *) override;
+  Item *replace_sequence_field(uchar *) override;
   bool disable_constant_propagation(uchar *) override {
     no_constant_propagation = true;
     return false;
   }
   Item *replace_equal_field(uchar *) override;
-  inline uint32 max_disp_length() { return field->max_display_length(); }
+  inline uint32 max_disp_length() {
+    if (is_sequence) return ORA_SEQUENCE_MAX_DIGITS;
+    return field->max_display_length();
+  }
   Item_field *field_for_view_update() override { return this; }
   Item *safe_charset_converter(THD *thd, const CHARSET_INFO *tocs) override;
   int fix_outer_field(THD *thd, Field **field, Item **reference);
@@ -4618,6 +4773,9 @@ class Item_field : public Item_ident {
     return field->get_geometry_type();
   }
   const CHARSET_INFO *charset_for_protocol(void) override {
+    if (is_sequence) {
+      return &my_charset_numeric;
+    }
     return field->charset_for_protocol();
   }
 
@@ -4698,30 +4856,90 @@ class Item_field : public Item_ident {
              select list item.
   */
   virtual bool is_asterisk() const { return false; }
+
   // forall insert table have no context,so it can't do check_privileges.
   bool is_record_table_field;
-  bool is_ora_type() override { return m_is_ora_type; }
   LEX_STRING get_udt_db_name() const override {
     return to_lex_string(to_lex_cstring(db_name));
   }
   LEX_STRING get_udt_name() const override { return field->udt_name(); }
   bool udt_table_store_to_table(TABLE *table_to) override;
+
+  bool is_sequence_field() override { return is_sequence; }
+
   Item *element_index(uint i) override;
+
+  TABLE *get_udt_table() override { return field->virtual_tmp_table_addr()[0]; }
+
+ private:
+  bool try_fix_sequence_field(THD *thd);
+};
+
+class Item_field_refcursor : public Item_field {
+  typedef Item_field super;
+
+ public:
+  Item_field_refcursor(Field *field_refcursor) : Item_field(field_refcursor) {}
+  ~Item_field_refcursor() override { destroy(field); }
+  enum Type type() const override { return ORACLE_ROWTYPE_ITEM; }
+  Item_result result_type() const override { return ROW_RESULT; }
+  bool row_create_items(THD *thd, List<Create_field> *list) override;
+  type_conversion_status save_in_field_inner(Field *to,
+                                             bool no_conversions) override;
+  Field_refcursor *get_refcursor_field() {
+    return dynamic_cast<Field_refcursor *>(field);
+  }
+  bool is_ora_refcursor() const override { return true; }
+  bool set_cursor_rowtype_table(THD *thd, Item *item_to, bool has_return_type,
+                                uint spv_offset);
+  double val_real() override {
+    assert(0);
+    return 0;
+  }
+  longlong val_int() override {
+    assert(0);
+    return 0;
+  }
+  String *val_str(String *) override {
+    assert(0);
+    return nullptr;
+  }
+  my_decimal *val_decimal(my_decimal *) override {
+    assert(0);
+    return nullptr;
+  }
+  bool get_date(MYSQL_TIME *, my_time_flags_t) override {
+    assert(0);
+    return true;
+  }
+  bool get_time(MYSQL_TIME *) override {
+    assert(0);
+    return true;
+  }
 };
 
 /**
   Item_field for the ROW data type
 */
 class Item_field_row : public Item_field {
+  typedef Item_field super;
+  // don't do destroy(field)
+  bool m_is_refer_from_field_table;
+
  public:
   Item_field_row(Field *field_row)
       : Item_field(field_row),
-        row(0),
+        m_is_refer_from_field_table(false),
+        row(nullptr),
         col(0),
         arg_count(0),
         m_udt_name(field_row->udt_name()),
         m_udt_db_name(
             to_lex_string(to_lex_cstring(field_row->get_udt_db_name()))) {}
+  ~Item_field_row() override {
+    if (row) row->mem_free();
+    if (!m_is_refer_from_field_table) destroy(field);
+  }
   Item_result result_type() const override { return ROW_RESULT; }
   inline Item **arguments() const { return args; }
   uint cols() const override { return arg_count; }
@@ -4734,13 +4952,13 @@ class Item_field_row : public Item_field {
     }
     return false;
   }
-  bool row_create_items(THD *thd, List<Create_field> *list);
+  bool row_create_items(THD *thd, List<Create_field> *list) override;
   bool alloc_arguments(THD *thd, uint count);
   uint get_arg_count() override { return arg_count; }
-  enum Type type() const override { return ROW_ITEM; }
+  enum Type type() const override { return ORACLE_ROWTYPE_ITEM; }
   void cleanup() override;
   // used for Field_row::m_row_table_list to identify the position of table.
-  uint row;
+  String *row;
   uint col;
   LEX_STRING get_udt_db_name() const override { return m_udt_db_name; }
   LEX_STRING get_udt_name() const override { return m_udt_name; }
@@ -4750,6 +4968,18 @@ class Item_field_row : public Item_field {
 
     return system_charset_info;
   }
+  bool udt_table_store_to_table(TABLE *table_to) override;
+  bool row_create_items_from_cdf_list(THD *thd, List<Create_field> *list,
+                                      TABLE *table, uint *arg_count_out,
+                                      char *row_table_name);
+  bool row_create_items_for_tmp_field(THD *thd, uint args_count_in,
+                                      Item **args_in,
+                                      LEX_CSTRING nested_table_udt,
+                                      TABLE *table);
+  bool index_item_save_in_field_no_index(Field *to);
+  Field_refcursor *get_refcursor_field() {
+    return dynamic_cast<Field_refcursor *>(field);
+  }
 
  protected:
   Item **args, *tmp_arg[2];
@@ -4758,6 +4988,8 @@ class Item_field_row : public Item_field {
   LEX_STRING m_udt_db_name;
   type_conversion_status save_in_field_inner(Field *to,
                                              bool no_conversions) override;
+  bool find_duplicate_def_name(uint arg_count, Create_field *def,
+                               List<Create_field> *list);
 };
 
 /**
@@ -4774,25 +5006,34 @@ class Item_field_row_table : public Item_field_row {
         row_table_name(nullptr),
         m_nested_table_udt(field_row->get_nested_table_udt()),
         m_varray_size_limit(field_row->get_varray_size_limit()) {}
-  Item *element_row_index(uint row_count, uint i) override;
+  Item *element_row_index(Item *item_index, uint i);
+  Item *element_table_index(Item *item_index);
   bool result_type_table() const override { return true; }
-  bool row_create_items(THD *thd, Row_definition_table_list *list);
+  bool row_table_create_items(THD *thd, Row_definition_table_list *list);
   void clear_args_table() override;
 
   void set_item_table_name(const char *name) {
     row_table_name = const_cast<char *>(name);
   }
-  bool insert_into_table_default_value(THD *thd);
+  bool insert_into_table_default_value(THD *thd, Item *index_item);
   bool insert_into_table_all_value(THD *thd,
-                                   const mem_root_deque<Item *> &items);
-  bool update_table_value(THD *thd, Item **value, uint field_idx, int offset,
-                          Field *field_udt = nullptr);
-  LEX_CSTRING get_nested_table_udt() const override {
-    return m_nested_table_udt;
-  }
+                                   const mem_root_deque<Item *> &items,
+                                   Item *item_index);
+  bool update_table_value(THD *thd, Item **value, int field_idx,
+                          Item *item_index, Field *field_udt = nullptr);
   longlong get_varray_size_limit() override { return m_varray_size_limit; }
   bool create_item_for_store_default_value_and_insert_into_table(
-      THD *thd, sp_rcontext *rtx);
+      THD *thd, sp_rcontext *rtx, Item *index_item);
+  enum Type type() const override { return ORACLE_ROWTYPE_TABLE_ITEM; }
+
+  Field_row_table *get_row_table_field() {
+    return dynamic_cast<Field_row_table *>(field);
+  }
+  List<Create_field> *get_field_create_field_list() override {
+    Field_row_table *f = get_row_table_field();
+    if (f == nullptr) return nullptr;
+    return f->get_field_create_field_list();
+  }
 
  protected:
   type_conversion_status save_in_field_inner(Field *to,
@@ -4902,6 +5143,8 @@ class Item_null : public Item_basic_constant {
              enum_query_type query_type) const override {
     str->append(query_type == QT_NORMALIZED_FORMAT ? "?" : "NULL");
   }
+
+  bool udt_table_store_to_table(TABLE *table_to) override;
 
   Item *safe_charset_converter(THD *thd, const CHARSET_INFO *tocs) override;
   bool check_partition_func_processor(uchar *) override { return false; }
@@ -5157,6 +5400,7 @@ class Item_param final : public Item, private Settable_routine_parameter {
   bool set_str(const char *str, size_t length);
   bool set_longdata(const char *str, ulong length);
   void set_time(MYSQL_TIME *tm, enum_mysql_timestamp_type type);
+  bool set_from_expr_item(THD *thd, Item *expr);
   bool set_from_user_var(THD *thd, const user_var_entry *entry);
   void copy_param_actual_type(Item_param *from);
   void reset();
@@ -6060,7 +6304,7 @@ class Item_ref : public Item_ident {
                                              bool no_conversions) override;
 
  public:
-  enum Ref_Type { REF, VIEW_REF, OUTER_REF, AGGREGATE_REF };
+  enum Ref_Type { REF, VIEW_REF, OUTER_REF, AGGREGATE_REF, CONNECT_BY_REF };
   // If true, depended_from information of this ref was pushed down to
   // underlying field.
   bool pusheddown_depended_from{false};
@@ -6082,19 +6326,16 @@ class Item_ref : public Item_ident {
     WITH_REF_ONLY
   };
 
-  bool m_is_ora_type;
   PQ_copy_type copy_type;
 
  public:
   Item_ref(Name_resolution_context *context_arg, const char *db_name_arg,
            const char *table_name_arg, const char *field_name_arg)
       : Item_ident(context_arg, db_name_arg, table_name_arg, field_name_arg),
-        m_is_ora_type(false),
         copy_type(WITH_CONTEXT) {}
   Item_ref(const POS &pos, const char *db_name_arg, const char *table_name_arg,
            const char *field_name_arg)
       : Item_ident(pos, db_name_arg, table_name_arg, field_name_arg),
-        m_is_ora_type(false),
         copy_type(WITHOUT_CONTEXT) {}
 
   /*
@@ -6122,7 +6363,6 @@ class Item_ref : public Item_ident {
       : Item_ident(thd, item),
         result_field(item->result_field),
         m_ref_item(item->m_ref_item),
-        m_is_ora_type(item->is_ora_type()),
         copy_type(WITH_REF_ONLY) {}
 
   /// @returns the item referenced by this object
@@ -6306,11 +6546,12 @@ class Item_ref : public Item_ident {
     return ref_item()->check_column_in_group_by(arg);
   }
   bool collect_item_field_or_ref_processor(uchar *arg) override;
+
+  bool collect_connect_by_leaf_cycle_or_ref_processor(uchar *arg) override;
+
   bool strip_db_table_name_processor(uchar *) override;
 
   Item *pq_clone(THD *thd, Query_block *select) override;
-
-  bool is_ora_type() override { return m_is_ora_type; }
 };
 
 /**
@@ -7028,9 +7269,6 @@ class Item_trigger_field final : public Item_field,
 };
 
 class Item_cache : public Item_basic_constant {
- public:
-  bool m_is_ora_type{false};
-
  protected:
   Item *example{nullptr};
 
@@ -7164,10 +7402,8 @@ class Item_cache : public Item_basic_constant {
     if (!example) return INT_RESULT;
     return Field::result_merge_type(example->data_type());
   }
-  bool is_ora_type() override { return m_is_ora_type; }
   Item *get_example() const { return example; }
   Item **get_example_ptr() { return &example; }
-
   Item *get_example() { return example; }
   bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
 };
@@ -7287,9 +7523,11 @@ class Item_cache_str final : public Item_cache {
         is_varbinary(item->type() == FIELD_ITEM &&
                      data_type() == MYSQL_TYPE_VARCHAR &&
                      !((const Item_field *)item)->field->has_charset()),
-        m_db_name(item->get_udt_db_name()),
-        m_udt_name(item->get_udt_name()) {
+        m_db_name(item->this_item()->get_udt_db_name()),
+        m_udt_name(item->this_item()->get_udt_name()) {
     collation.set(item->collation);
+    if (item->this_item()->is_ora_table()) set_ora_table();
+    if (item->this_item()->is_ora_type()) set_ora_type();
   }
   double val_real() override;
   longlong val_int() override;

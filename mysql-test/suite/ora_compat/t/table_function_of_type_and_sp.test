@@ -1,0 +1,1317 @@
+--source include/have_debug.inc
+SET sql_mode=ORACLE;
+SET SESSION debug='+d,skip_dd_table_access_check';
+set @@udt_format_result='DBA';
+
+--echo #
+--echo # test of create type as table
+--echo #
+create or replace type t_air as object(id int,type varchar(10));
+create or replace type my_integer is varray(100) of integer;
+SELECT name,type,options FROM mysql.routines where name='my_integer';
+
+create or replace type my_varchar is table of varchar2(8000);
+SELECT name,type,options FROM mysql.routines where name='my_varchar';
+
+--error ER_NOT_SUPPORTED_YET
+CREATE OR REPLACE TYPE t_air_table AS table OF my_integer;
+show create type my_integer;
+show create type my_varchar;
+
+--echo #
+--echo # test of select type_table
+--echo #
+select my_integer(1,2,null);
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+select my_integer(1,2,'a');
+--error ER_UDT_INCONS_DATATYPES
+select my_integer(t_air(1,'aa'));
+
+--echo #
+--echo # test of table function
+--echo #
+select * from table(my_integer(1,2,null));
+select * from table(my_varchar(1,'dd',null)) a;
+select * from table(my_varchar(1,'dd',null)) a union select * from table(my_integer(1,2,null)) a;
+select * from table(my_varchar(1,'dd',null)) union
+  select * from table(my_integer(1,2,null));
+select * from table(my_varchar(1,'dd',null)) a,table(my_integer(1,2,null)) b;
+select * from table(my_varchar(1,'dd',null)),table(my_integer(1,2,null));
+--error ER_NONUNIQ_TABLE
+select * from table(my_varchar(1,'dd',null)) a,table(my_integer(1,2,null)) a;
+select * from table(my_integer(1,2,null))  where column_value>1;
+select * from table(my_varchar(1,'dd',null)) where column_value is not null;
+
+--echo #
+--echo # test of create table as select table function
+--echo #
+create table ss_table as select * from table(my_integer(1,2,null));
+select * from ss_table;
+insert into ss_table select * from table(my_integer(10,20,null));
+select * from ss_table;
+select my_integer(column_value) from ss_table;
+--error ER_UDT_INCONS_DATATYPES
+insert into ss_table values(my_integer(10,20,null));
+--error ER_NOT_SUPPORTED_YET
+select * from ss_table where column_value=my_integer(10,20,null);
+--error ER_NOT_SUPPORTED_YET
+select my_integer(10,20,null)+1 from dual;
+drop table ss_table;
+
+--echo #
+--echo # test of create type as VARRAY
+--echo #
+create or replace type my_integer is varray(1) of integer;
+show variables like 'tf_udt_table_max_rows';
+set GLOBAL tf_udt_table_max_rows=10485;
+show variables like 'tf_udt_table_max_rows';
+--error ER_UDT_TABLE_SIZE_LIMIT
+create or replace type my_integer is varray(10486) of integer;
+set GLOBAL tf_udt_table_max_rows=1048576;
+
+--echo #
+--echo # test of select type_array
+--echo #
+select my_integer(1);
+--error ER_DA_OOM
+select my_integer(1,2);
+
+--echo #
+--echo # test of prepare stmt
+--echo #
+prepare ps2 from 'select my_integer(?)';
+set @a=1;
+execute ps2 using @a;
+set @a=10;
+execute ps2 using @a;
+DEALLOCATE PREPARE ps2;
+
+--echo #
+--echo # test of error with udt table
+--echo #
+--error ER_NOT_SUPPORTED_YET
+create table tt_of of my_integer;
+--error ER_NOT_SUPPORTED_YET
+create table tabl1 (id int, u1 my_integer);
+--error ER_NOT_SUPPORTED_YET
+CREATE OR REPLACE TYPE my_integer1 AS VARRAY(10) OF my_integer;
+
+--echo #
+--echo # test of conditions of with udt table
+--echo #
+create or replace type my_integer is varray(10) of integer;
+select * from table(my_integer(10,20,null)) where my_integer(10,20,null)=my_integer(10,20,null);
+--error ER_WRONG_UDT_DATA_TYPE
+select * from table(my_integer(10,20,null)) where my_integer(10,20,null)=my_varchar(10,20,null);
+
+--echo #
+--echo # test of different db of udt table
+--echo #
+create database db2;
+use db2;
+create or replace type my_integer is varray(100) of integer;
+use test;
+select * from table(db2.my_integer(10,20,null));
+use db2;
+drop type my_integer;
+use test;
+drop database db2;
+
+--echo #
+--echo # test of table(a.udt_col)
+--echo #
+create table tt_air(id int,name t_air);
+insert into tt_air values(10,t_air(10,'aabb10'));
+insert into tt_air values(11,t_air(11,'aabb11'));
+select * from tt_air;
+select * from tt_air b,table(my_integer(b.id)) a;
+select my_integer(a.id) from tt_air a;
+--error ER_TYPE_IN_ORDER_BY
+select * from tt_air a order by my_integer(a.id);
+--error ER_NOT_SUPPORTED_YET
+select name || my_integer(id) from tt_air;
+--error ER_NOT_SUPPORTED_YET
+select my_integer(id)-1 from tt_air;
+
+--echo #
+--echo # test of udt type in sp with uninitialized composite
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  rec1 t_air;
+BEGIN
+  select rec1,rec1.id;
+  rec1.id := 1;
+  select rec1.id;
+END;
+$$
+DELIMITER ;$$
+--error ER_UDT_REF_UNINIT_COMPOSITE
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type in sp
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  rec1 t_air;
+  to_id int;
+BEGIN
+  rec1 := t_air(1,'aa');
+  select rec1,rec1.id;
+  rec1.id := 10;
+  select rec1.id;
+  select * from tt_air;
+  insert into tt_air values(21,rec1);
+  select * from tt_air;
+  select name into rec1 from tt_air where id=10;
+  select rec1;
+  select id,name into to_id,rec1 from tt_air where id=11;
+  select to_id,rec1;
+END;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type in sp with null value
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  rec1 t_air := null;
+BEGIN
+  select * from tt_air;
+  insert into tt_air values(22,rec1);
+  select * from tt_air;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of record type in sp with default value
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE name_rec IS RECORD (
+    first_name  int := 1,
+    last_name   varchar(30) := 'qwe'
+  );
+  rec name_rec := name_rec(10,'bb');
+  rec1 name_rec;
+  rec2 name_rec := null;
+BEGIN
+  select rec,rec.first_name,rec.last_name;
+  select rec1,rec1.first_name,rec1.last_name;
+  select rec2,rec2.first_name,rec2.last_name;
+end;
+$$
+DELIMITER ;$$
+call p1();
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of record name is same with udt type in sp
+--echo #
+
+DELIMITER $$;
+--error ER_SP_WRONG_NO_OF_ARGS
+CREATE or replace PROCEDURE p1() as
+  TYPE t_air IS RECORD (
+    first_name  int,
+    last_name   varchar(30),
+    i int
+  );
+  rec t_air := t_air(10,'bb',1);
+BEGIN
+  select rec,rec.first_name,rec.last_name;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of record name is same with udt type in sp
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type t_air is record(
+  id int := 1,
+  name_d  t_air,
+  score float := 0
+);
+  rec1 t_air := t_air(10,null);
+BEGIN
+  select rec1.score;
+end;
+$$
+DELIMITER ;$$
+--error ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of record with udt type in sp
+--echo #
+
+DELIMITER $$;
+--error ER_WRONG_UDT_DATA_TYPE
+CREATE or replace PROCEDURE p1() as
+  TYPE t_air1 IS RECORD (
+    first_name  int,
+    last_name   varchar(30),
+    i int
+  );
+  rec t_air1 := t_air(10,'bb');
+BEGIN
+  select rec,rec.first_name,rec.last_name;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of udt table type in sp
+--echo #
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+CREATE OR REPLACE TYPE t_air_varray AS VARRAY(10) OF t_air;
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  rec1 t_air_table := null;
+BEGIN
+  select rec1;
+  rec1 := t_air_table(t_air(1,'aa'),t_air(2,'bb'));
+  for i in rec1.first .. rec1.last loop
+    select rec1(i).id,rec1(i).type;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt table type in sp
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  rec1 t_air_table := t_air_table(t_air(1,'aa'),t_air(2,'bb'));
+BEGIN
+  rec1(1).id := 10;
+  rec1(1).type := 'aa10';
+  for i in rec1.first .. rec1.last loop
+    select rec1(i).id,rec1(i).type;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt table type in sp
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  rec1 my_integer := null;
+BEGIN
+  select rec1;
+  rec1 := my_integer(1,2,3);
+  for i in rec1.first .. rec1.last loop
+    select rec1(i).column_value;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt table type in sp
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  rec1 t_air_table := null;
+  to_id int;
+BEGIN
+  select rec1;
+  select id,name into to_id,rec1 from tt_air where id=11;
+  select rec1;
+end;
+$$
+DELIMITER ;$$
+--error ER_UDT_INCONS_DATATYPES
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type in sp with default value
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) ,
+  score float := 0
+);
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 stu_record := stu_record(10,'aa',3.3)
+);
+stu_record_val stu_record1;
+begin
+  select stu_record_val.stu_record_val1.id,stu_record_val.stu_record_val1.name_d,stu_record_val.stu_record_val1.score;
+end;
+$$
+DELIMITER ;$$
+call p1();
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type in sp with default value
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu is record(
+  id int := 1,
+  name_d  varchar(20) ,
+  score float := 0
+);
+type stu_record is record(
+  id int := 1,
+  name_d  stu,
+  score float := 0
+);
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 stu_record := stu_record(10,stu(1,'bb',11),1.1)
+);
+stu_record_val stu_record1;
+begin
+  select stu_record_val.stu_record_val1.id,stu_record_val.stu_record_val1.name_d,stu_record_val.stu_record_val1.score;
+  select stu_record_val.stu_record_val1.name_d.id,stu_record_val.stu_record_val1.name_d.name_d,stu_record_val.stu_record_val1.name_d.score;
+end;
+$$
+DELIMITER ;$$
+call p1();
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type in sp with default value
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu is record(
+  id int := 1,
+  name_d  varchar(20) ,
+  score float := 0
+);
+type stu_record is record(
+  id int := 1,
+  name_d  stu,
+  score float := 0
+);
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 stu_record := stu_record(10,stu_record(1,'bb',11),1.1)
+);
+stu_record_val stu_record1;
+begin
+  select stu_record_val.stu_record_val1.id,stu_record_val.stu_record_val1.name_d,stu_record_val.stu_record_val1.score;
+  select stu_record_val.stu_record_val1.name_d.id,stu_record_val.stu_record_val1.name_d.name_d,stu_record_val.stu_record_val1.name_d.score;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_UDT_DATA_TYPE
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of record table type in sp with default value
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu is record(
+  id int := 1,
+  name_d  varchar(20) ,
+  score float := 0
+);
+type tklist1 is table of stu index by binary_integer;
+type stu_record is record(
+  id int := 1,
+  name_d  tklist1,
+  score float := 0
+);
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 stu_record := stu_record(10,tklist1(1=>stu(1,'bb',1)),1.1)
+);
+stu_record_val stu_record1;
+begin
+ select stu_record_val.stu_record_val1.name_d(1).name_d;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of error ER_SP_NOT_EXIST_OF_RECORD_TABLE with udt table
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  t_air_table,
+  score float := 0
+);
+stu_record_val stu_record;
+begin
+  select stu_record_val.id;
+  select stu_record_val.name_d(0).id;
+end;
+$$
+DELIMITER ;$$
+--error ER_SP_NOT_EXIST_OF_RECORD_TABLE
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of inited with udt table
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  t_air_table,
+  score float := 0
+);
+stu_record_val stu_record := stu_record(10,t_air_table(t_air(3,'cc'),t_air(4,'dd')),1.1);
+begin
+  select stu_record_val.id;
+  select stu_record_val.name_d(1).id,stu_record_val.name_d(1).type,stu_record_val.name_d(2).id,stu_record_val.name_d(2).type;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of record table type in sp with default value
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu is record(
+  id int := 1,
+  name_d  varchar(20) ,
+  score float := 0
+);
+type tklist1 is table of stu index by binary_integer;
+type stu_record is record(
+  id int := 1,
+  name_d  tklist1,
+  score float := 0
+);
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 stu_record
+);
+stu_record_val stu_record1 := stu_record1(10,stu_record(1,tklist1(),9));
+begin
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt table type in sp with default value
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  t_air_table,
+  score float := 0
+);
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 stu_record:= stu_record(10,t_air_table(t_air(3,'cc')),1.1)
+);
+stu_record_val stu_record1;
+begin
+  select stu_record_val.stu_record_val1.name_d(1).id,stu_record_val.stu_record_val1.name_d(1).type;
+  stu_record_val.stu_record_val1.name_d(2).type := 'ddd';
+end;
+$$
+DELIMITER ;$$
+--error ER_RECORD_TABLE_OUTSIZE_LIMIT
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt array type in sp with default value
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  t_air_varray,
+  score float := 0
+);
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 stu_record:= stu_record(10,t_air_varray(t_air(3,'cc')),1.1)
+);
+stu_record_val stu_record1;
+begin
+  select stu_record_val.stu_record_val1.name_d(1).id,stu_record_val.stu_record_val1.name_d(1).type;
+  stu_record_val.stu_record_val1:= stu_record(10,t_air_varray(t_air(30,'cc30'),t_air(40,'dd40')),1.1);
+  select stu_record_val.stu_record_val1.name_d(1).id,stu_record_val.stu_record_val1.name_d(1).type;
+  select stu_record_val.stu_record_val1.name_d(2).id,stu_record_val.stu_record_val1.name_d(2).type;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test for %type
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  rec tt_air.name%type;
+BEGIN
+  rec := t_air(1,'sd');
+  select rec,rec.id,rec.type;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test for %type and select into
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  rec tt_air.name%type;
+  rec1 t_air;
+BEGIN
+  select name into rec from tt_air where id=10;
+  select rec.id,rec.type;
+  select name into rec1 from tt_air where id=11;
+  select rec1.id,rec1.type;
+  select rec into rec1;
+  select rec1.id,rec1.type;
+end;
+$$
+DELIMITER ;$$
+call p1();
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of cursor for udt column
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p2() as
+  CURSOR c_country (ii int) IS SELECT * FROM tt_air WHERE id =ii;
+  rec1 tt_air.name%type;
+BEGIN
+  FOR rec IN c_country(10)
+  loop
+    select rec.name into rec1;
+    select rec1.id,rec1.type;
+  END loop;
+  insert into tt_air values(12,rec);
+END;
+$$
+DELIMITER ;$$
+--error ER_BAD_FIELD_ERROR
+call p2;
+drop PROCEDURE p2;
+
+--echo #
+--echo # test of cursor for udt column
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p2() as
+  CURSOR c_country (ii int) IS SELECT * FROM tt_air WHERE id =ii;
+  rec1 tt_air.name%type;
+BEGIN
+  FOR rec IN c_country(10)
+  loop
+    select rec,rec.id,rec.name;
+    select rec.name into rec1;
+    select rec1.id,rec1.type;
+  END loop;
+  select * from tt_air;
+END;
+$$
+DELIMITER ;$$
+call p2;
+drop PROCEDURE p2;
+
+--echo #
+--echo # test for set record to null 
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+stu_record_val stu_record;
+begin
+ stu_record_val := NULL;
+ stu_record_val.id :=10;
+ select stu_record_val.id,stu_record_val.name_d,stu_record_val.score;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test for set record table to null
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+ stu_record_val := NULL;
+end;
+$$
+DELIMITER ;$$
+--error ER_BAD_NULL_ERROR
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test for set udt table to null 
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+stu_record_val t_air_table;
+begin
+ stu_record_val := NULL;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test for replace type
+--echo #
+create or replace type t_air1 as object(id int,type varchar(10),i int);
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+stu_record_val t_air1 := t_air1(1,'aa',2);
+begin
+ select stu_record_val.id,stu_record_val.type,stu_record_val.i;
+end;
+$$
+DELIMITER ;$$
+call p1();
+create or replace type t_air1 as object(id int,type varchar(10));
+--error ER_SP_LOAD_FAILED
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test for replace type
+--echo #
+create or replace type t_air1 as object(id int,type varchar(10),i int);
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+stu_record_val t_air_table := t_air_table(t_air(1,'aa'));
+begin
+ select stu_record_val(1).id,stu_record_val(1).type;
+end;
+$$
+DELIMITER ;$$
+call p1();
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air1;
+--error ER_WRONG_UDT_DATA_TYPE
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test for replace type AS table
+--echo #
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+create or replace type t_air1 as object(id int,type varchar(10),i int);
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+stu_record_val t_air1 := t_air1(1,'aa',2);
+begin
+ select stu_record_val.id,stu_record_val.type;
+end;
+$$
+DELIMITER ;$$
+call p1();
+create or replace type t_air1 as object(id int,type varchar(10));
+--error ER_SP_LOAD_FAILED
+call p1();
+create or replace type t_air1 as object(id int,type int,i int);
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+call p1();
+create or replace type t_air1 as object(id1 int,type1 varchar(10),i1 int);
+--error ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test for replace type AS VARRAY
+--echo #
+create or replace type t_air1 as object(id int,type varchar(10),i int);
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+stu_record_val t_air_varray := t_air_varray(t_air(1,'aa'),t_air(2,'bb'));
+begin
+ select stu_record_val(1).id,stu_record_val(1).type;
+end;
+$$
+DELIMITER ;$$
+call p1();
+CREATE OR REPLACE TYPE t_air_varray AS VARRAY(1) OF t_air;
+--error ER_SP_LOAD_FAILED
+call p1();
+CREATE OR REPLACE TYPE t_air_varray AS VARRAY(10) OF t_air1;
+--error ER_WRONG_UDT_DATA_TYPE
+call p1();
+CREATE OR REPLACE TYPE t_air_varray AS VARRAY(10) OF t_air;
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test for replace type AS table
+--echo #
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+create or replace type t_air1 as object(id int,type varchar(10),i int);
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  t_air_table,
+  score float := 0
+);
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 stu_record:= stu_record(10,t_air_table(t_air(3,'cc')),1.1)
+);
+stu_record_val stu_record1;
+begin
+  select stu_record_val.stu_record_val1.name_d(1).id,stu_record_val.stu_record_val1.name_d(1).type;
+  stu_record_val.stu_record_val1.name_d(1).type := 'ddd';
+  select stu_record_val.stu_record_val1.name_d(1).type;
+end;
+$$
+DELIMITER ;$$
+call p1();
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air1;
+--error ER_WRONG_UDT_DATA_TYPE
+call p1();
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test for replace type AS table
+--echo #
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+create or replace type t_air1 as object(id int,type varchar(10),i int);
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  t_air_table,
+  score float := 0
+);
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 stu_record:= stu_record(10,t_air_table(t_air(3,'cc')),1.1)
+);
+stu_record_val stu_record1;
+begin
+  select stu_record_val.stu_record_val1.name_d(1).id,stu_record_val.stu_record_val1.name_d(1).type;
+  stu_record_val.stu_record_val1.name_d(2).type := 'ddd';
+  select stu_record_val.stu_record_val1.name_d(2).type;
+end;
+$$
+DELIMITER ;$$
+--error ER_RECORD_TABLE_OUTSIZE_LIMIT
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type in sp and insert into table
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  t_air,
+  score float := 0
+);
+  rec1 stu_record;
+BEGIN
+  rec1.name_d := t_air(2,'ee');
+  select * from tt_air;
+  insert into tt_air values(30,rec1.name_d);
+  select * from tt_air;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type in sp and BULK COLLECT into
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  select * BULK COLLECT into dr_table from tt_air;
+  for i IN dr_table.first .. dr_table.last loop
+    select dr_table(i).id,dr_table(i).name,dr_table(i).name.id,dr_table(i).name.type;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type in sp and FORALL
+--echo #
+create table tt_air1(id int,name t_air);
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  dr_table(100).id := 100;
+  dr_table(100).name := t_air(2,'eert');
+  select dr_table(100).id,dr_table(100).name,dr_table(100).name.id,dr_table(100).name.type;
+  FORALL i IN dr_table.first .. dr_table.last
+    insert into tt_air1 values dr_table (i);
+  select * from tt_air1;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+drop table tt_air1;
+
+--echo #
+--echo # test of sp variable used as record table's row number
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  idx int := 100;
+begin
+  dr_table(100).id := 100;
+  dr_table(100).name := t_air(2,'eert');
+  select dr_table(idx).id,dr_table(idx).name,dr_table(idx).name.id,dr_table(idx).name.type;
+  dr_table(100).name.id := 10;
+  select dr_table(100).name.id,dr_table(100).name.type;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of sp variable used as variable with `
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  idx int := 100;
+begin
+  dr_table(100).id := 100;
+  dr_table(100).name := t_air(2,'eert');
+  select dr_table(`idx`).id,dr_table(`idx`).name,dr_table(`idx`).name.id,dr_table(`idx`).name.type;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of sp variable used as variable with `
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  idx int := 100;
+begin
+  dr_table(100).id := 100;
+  dr_table(100).name := t_air(2,'eert');
+  select dr_table(`1`).id;
+end;
+$$
+DELIMITER ;$$
+--error ER_BAD_FIELD_ERROR
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of sp variable used as variable with null
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  idx int := 100;
+begin
+  dr_table(100).id := 100;
+  dr_table(100).name := t_air(2,'eert');
+  select dr_table(null).id;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of sp variable used as variable with row_result item
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  idx int := 100;
+begin
+  dr_table(100).id := 100;
+  dr_table(100).name := t_air(2,'eert');
+  select dr_table(dr_table).id;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of sp variable used as record table's row number
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  dr_table(100).name.id := 100;
+end;
+$$
+DELIMITER ;$$
+--error ER_UDT_REF_UNINIT_COMPOSITE
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of sp variable used as record table's row number
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  idx int := 99;
+begin
+  dr_table(100).id := 100;
+  dr_table(100).name := t_air(2,'eert');
+  select dr_table(idx+1).id;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of sp variable used as record table's row number
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  idx int := 99;
+begin
+  dr_table(100).id := 100;
+  dr_table(100).name := t_air(2,'eert');
+  select dr_table(`idx+1`).id;
+end;
+$$
+DELIMITER ;$$
+--error ER_BAD_FIELD_ERROR
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # set to record table with different row
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+stu_record_val1 tklist;
+begin
+ stu_record_val(0).id := 2;
+ stu_record_val(0).score := 1;
+ stu_record_val1(10).id := 20;
+ stu_record_val1 := stu_record_val;
+ select stu_record_val(0).id,stu_record_val(0).name_d,stu_record_val(0).score;
+ select stu_record_val1(0).id,stu_record_val1(0).name_d,stu_record_val1(0).score;
+end;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of table().table()
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE rec1 IS RECORD (
+    col1  t_air,
+    col2   varchar(30) := 'col2',
+    col3   varchar(30) := 'col3'
+  ); 
+  TYPE t_rec1 IS TABLE OF rec1 index by binary_integer;
+  TYPE rec2 IS RECORD (
+    v_t_rec1  t_rec1,  
+    col4 varchar(30) := 'col4'
+  );
+  TYPE t_rec2 IS TABLE OF rec2 index by binary_integer; 
+
+  TYPE rec3 IS RECORD (
+    v_t_rec2  t_rec2,  
+    col5 varchar(30) := 'col5'
+  );
+  TYPE t_rec3 IS TABLE OF rec3 index by binary_integer; 
+     
+  v_t_rec3 rec3;
+  
+BEGIN
+  v_t_rec3.col5 := 'abc';
+  v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1.type :='abc';
+END;
+$$
+DELIMITER ;$$
+--error ER_UDT_REF_UNINIT_COMPOSITE
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of table().table()
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE rec1 IS RECORD (
+    col1  t_air := t_air(1,'col1'),
+    col2   varchar(30) := 'col2',
+    col3   varchar(30) := 'col3'
+  ); 
+  TYPE t_rec1 IS TABLE OF rec1 index by binary_integer;
+  TYPE rec2 IS RECORD (
+    v_t_rec1  t_rec1,  
+    col4 varchar(30) := 'col4'
+  );
+  TYPE t_rec2 IS TABLE OF rec2 index by binary_integer; 
+
+  TYPE rec3 IS RECORD (
+    v_t_rec2  t_rec2,  
+    col5 varchar(30) := 'col5'
+  );
+  TYPE t_rec3 IS TABLE OF rec3 index by binary_integer; 
+     
+  v_t_rec3 rec3;
+  
+BEGIN
+  v_t_rec3.col5 := 'abc';
+  v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1.type :='type';
+  select v_t_rec3.v_t_rec2(0).col4,v_t_rec3.col5;
+  v_t_rec3.v_t_rec2(0).v_t_rec1(1).col2 :='123qwe';
+  v_t_rec3.v_t_rec2(1).v_t_rec1(0).col2 :='qqqq';
+  select v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1, v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1.id,v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1.type,v_t_rec3.v_t_rec2(0).v_t_rec1(0).col2,
+  v_t_rec3.v_t_rec2(0).v_t_rec1(0).col3 ;
+  select v_t_rec3.v_t_rec2(1).v_t_rec1(0).col1, v_t_rec3.v_t_rec2(1).v_t_rec1(0).col1.id,v_t_rec3.v_t_rec2(1).v_t_rec1(0).col1.type,v_t_rec3.v_t_rec2(1).v_t_rec1(0).col2,
+  v_t_rec3.v_t_rec2(1).v_t_rec1(0).col3 ;
+  select v_t_rec3.v_t_rec2(0).v_t_rec1(1).col1, v_t_rec3.v_t_rec2(0).v_t_rec1(1).col1.id,v_t_rec3.v_t_rec2(0).v_t_rec1(1).col1.type,v_t_rec3.v_t_rec2(0).v_t_rec1(1).col2,
+  v_t_rec3.v_t_rec2(0).v_t_rec1(1).col3 ;
+END;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of table().table()
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE t_rec1 IS TABLE OF tt_air%ROWTYPE index by binary_integer; 
+  
+  TYPE rec2 IS RECORD (
+    v_t_rec1  t_rec1,  
+    col4 varchar(30) := 'col4'
+  );
+  TYPE t_rec2 IS TABLE OF rec2 index by binary_integer; 
+
+  TYPE rec3 IS RECORD (
+    v_t_rec2  t_rec2,  
+    col5 varchar(30) := 'col5'
+  );
+  TYPE t_rec3 IS TABLE OF rec3 index by binary_integer; 
+     
+  v_t_rec3 rec3;
+  
+BEGIN
+  v_t_rec3.col5 := 'abc';
+  v_t_rec3.v_t_rec2(0).v_t_rec1(0).name.type :='abc';
+END;
+$$
+DELIMITER ;$$
+--error ER_UDT_REF_UNINIT_COMPOSITE
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of table().table()
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE t_rec1 IS TABLE OF tt_air%ROWTYPE index by binary_integer; 
+  TYPE rec2 IS RECORD (
+    v_t_rec1  t_rec1,  
+    col4 varchar(30) := 'col4'
+  );
+  TYPE t_rec2 IS TABLE OF rec2 index by binary_integer; 
+
+  TYPE rec3 IS RECORD (
+    v_t_rec2  t_rec2,  
+    col5 varchar(30) := 'col5'
+  );
+  TYPE t_rec3 IS TABLE OF rec3 index by binary_integer; 
+     
+  v_t_rec3 rec3;
+  
+BEGIN
+  v_t_rec3.col5 := 'abc';
+  v_t_rec3.v_t_rec2(0).v_t_rec1(0).name :=t_air(0,'type');
+  select v_t_rec3.v_t_rec2(0).v_t_rec1(0).name,v_t_rec3.v_t_rec2(0).v_t_rec1(0).name.id,v_t_rec3.v_t_rec2(0).v_t_rec1(0).name.type;
+END;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of table().udt_table()
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE rec2 IS RECORD (
+    v_t_rec1  t_air_table,  
+    col4 varchar(30) := 'col4'
+  );
+  TYPE t_rec2 IS TABLE OF rec2 index by binary_integer; 
+
+  TYPE rec3 IS RECORD (
+    v_t_rec2  t_rec2,  
+    col5 varchar(30) := 'col5'
+  );
+  TYPE t_rec3 IS TABLE OF rec3 index by binary_integer; 
+     
+  v_t_rec3 rec3;
+  
+BEGIN
+  v_t_rec3.col5 := 'abc';
+  v_t_rec3.v_t_rec2(0).v_t_rec1 := t_air_table(t_air(1,'col1'));
+  select v_t_rec3.v_t_rec2(0).v_t_rec1(1).id,v_t_rec3.v_t_rec2(0).v_t_rec1(1).type;
+  select v_t_rec3.v_t_rec2(0).col4;
+END;
+$$
+DELIMITER ;$$
+call p1;
+create or replace type t_air1 as object(id int,type varchar(10),i int);
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air1;
+--error ER_WRONG_UDT_DATA_TYPE
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of var as type
+--echo #
+
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE or replace PROCEDURE p1() as
+  TYPE rec2 IS RECORD (
+    v_t_rec1  t_air_table,  
+    col4 varchar(30) := 'col4'
+  );
+  TYPE t_rec2 IS TABLE OF rec2 index by binary_integer; 
+  t_rec t_rec2;
+  TYPE rec3 IS RECORD (
+    v_t_rec2  t_rec2 := t_rec(),  
+    col5 varchar(30) := 'col5'
+  );
+  v_t_rec3 rec3;
+BEGIN
+END;
+$$
+DELIMITER ;$$
+
+
+drop table tt_air;
+drop type t_air_table;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+drop type t_air_varray;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+drop type t_air;
+drop type t_air1;
+drop type my_integer;
+drop type my_varchar;
+
+
+
+

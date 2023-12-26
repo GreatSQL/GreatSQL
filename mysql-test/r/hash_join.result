@@ -2455,7 +2455,7 @@ SET optimizer_switch="materialization=off";
 EXPLAIN FORMAT=tree SELECT COUNT(*) FROM probe WHERE col1 IN (SELECT col1 FROM build);
 EXPLAIN
 -> Aggregate: count(0)  (cost=21635.36 rows=1)
-    -> Hash semijoin (build.col1 = probe.col1)  (cost=19669.28 rows=19661)
+    -> Hash semijoin (`build`.col1 = probe.col1)  (cost=19669.28 rows=19661)
         -> Table scan on probe  (cost=25.85 rows=256)
         -> Hash
             -> Table scan on build  (cost=3.73 rows=768)
@@ -2488,7 +2488,7 @@ SET optimizer_switch = "materialization=off";
 SET join_buffer_size = 1024;
 EXPLAIN FORMAT=tree SELECT * FROM probe WHERE col1 IN (SELECT * FROM build);
 EXPLAIN
--> Hash semijoin (build.col1 = probe.col1)  (cost=13109.20 rows=13107)
+-> Hash semijoin (`build`.col1 = probe.col1)  (cost=13109.20 rows=13107)
     -> Table scan on probe  (cost=25.85 rows=256)
     -> Hash
         -> Table scan on build  (cost=1.19 rows=512)
@@ -3204,7 +3204,7 @@ SET join_buffer_size = 128;
 SET optimizer_switch="materialization=off";
 EXPLAIN FORMAT=tree SELECT * FROM probe WHERE col1 NOT IN (SELECT col1 FROM build);
 EXPLAIN
--> Hash antijoin (build.col1 = probe.col1)  (cost=*** rows=196096)
+-> Hash antijoin (`build`.col1 = probe.col1)  (cost=*** rows=196096)
     -> Table scan on probe  (cost=*** rows=256)
     -> Hash
         -> Table scan on build  (cost=*** rows=766)

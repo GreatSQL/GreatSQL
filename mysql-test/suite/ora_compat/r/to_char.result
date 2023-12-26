@@ -1456,6 +1456,24 @@ to_char(sysdate,'yyyy-mon-dd-DAY')
 select to_char(sysdate,'yyyy-mon-dd') from dual;
 to_char(sysdate,'yyyy-mon-dd')
 1970-jan-01
+select dump(to_char(null, '999')) from dual;
+dump(to_char(null, '999'))
+NULL
+select dump(to_char(null, '999.99')) from dual;
+dump(to_char(null, '999.99'))
+NULL
+select dump(to_char(null, null)) from dual;
+dump(to_char(null, null))
+NULL
+select dump(to_char(null, '')) from dual;
+dump(to_char(null, ''))
+NULL
+select dump(to_char('', '')) from dual;
+dump(to_char('', ''))
+NULL
+select dump(to_char('', null)) from dual;
+dump(to_char('', null))
+NULL
 select to_char(12345,'9.9') FROM dual;
 to_char(12345,'9.9')
 ####
@@ -1595,6 +1613,24 @@ to_char(sysdate,'yyyy-mon-dd-DAY')
 select to_char(sysdate,'yyyy-mon-dd') from dual;
 to_char(sysdate,'yyyy-mon-dd')
 1970-jan-01
+select dump(to_char(null, '999')) from dual;
+dump(to_char(null, '999'))
+NULL
+select dump(to_char(null, '999.99')) from dual;
+dump(to_char(null, '999.99'))
+NULL
+select dump(to_char(null, null)) from dual;
+dump(to_char(null, null))
+NULL
+select dump(to_char(null, '')) from dual;
+dump(to_char(null, ''))
+NULL
+select dump(to_char('', '')) from dual;
+dump(to_char('', ''))
+NULL
+select dump(to_char('', null)) from dual;
+dump(to_char('', null))
+NULL
 CREATE TABLE format_data(id serial,  n double,c varchar(255) ,  unique(n,c) ) ;
 insert into format_data(n,c)values( 1234,'9999.99');
 insert into format_data(n,c)values( 1234,'99,99.99');
@@ -1886,6 +1922,15 @@ insert  into format_date (n,c)values ( '2021-01-12' , '9');
 SELECT id, to_char(n),c,to_char(n, c),LENGTH (to_char(n, c)) FROM format_date ORDER BY id;
 ERROR HY000: Invalid argument error: 9 in function to_char.
 DROP TABLE format_date;
+set sql_mode=oracle;
+DECLARE
+value1 datetime;
+BEGIN
+value1:=null;
+select to_char(value1, 'YYDDMM');
+END//
+to_char(value1, 'YYDDMM')
+NULL
 SELECT to_char(to_date('2022-03-06','yyyy-mm-dd'),'D') FROM dual;
 to_char(to_date('2022-03-06','yyyy-mm-dd'),'D')
 1

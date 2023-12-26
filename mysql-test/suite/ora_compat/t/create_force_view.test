@@ -1,0 +1,440 @@
+##################################
+#test case create/create or replace force view
+##################################
+
+#
+# simple create force view
+#
+
+drop table if exists t1,t2,t3;
+drop view if exists t1_view,t2_view,t3_view;
+
+create force view t1_view (c,d) as select a,b from t1;
+show create view t1_view;
+-- error ER_VIEW_INVALID
+describe t1_view;
+-- error ER_VIEW_INVALID
+desc t1_view;
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from t1;
+select * from t1_view;
+describe t1_view;
+desc t1_view;
+show create view t1_view;
+drop table t1;
+drop view t1_view;
+
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+create force view t1_view (c,d) as select a,b from t1;
+show create view t1_view;
+describe t1_view;
+desc t1_view;
+select * from t1;
+select * from t1_view;
+describe t1_view;
+describe t1_view;
+desc t1_view;
+drop table t1;
+drop view t1_view;
+
+create or replace force view t1_view (c,d) as select a,b from t1;
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from t1;
+select * from t1_view;
+describe t1_view;
+drop table t1;
+drop view t1_view;
+
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+create or replace force view t1_view (c,d) as select a,b from t1;
+select * from t1;
+select * from t1_view;
+describe t1_view;
+drop table t1;
+drop view t1_view;
+
+#
+# subselect includ '*'
+#
+create or replace force view t2_view (c,d) as select * from t2;
+show create view t2_view;
+-- error ER_VIEW_INVALID
+describe t2_view;
+-- error ER_VIEW_INVALID
+desc t2_view;
+create table t2 (a int, b int);
+insert into t2 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from t2;
+select * from t2_view;
+describe t2_view;
+desc t2_view;
+drop table t2;
+drop view t2_view;
+
+create or replace force view t3_view as select * from t3;
+show create view t3_view;
+-- error ER_VIEW_INVALID
+describe t3_view;
+-- error ER_VIEW_INVALID
+desc t3_view;
+create table t3 (a int, b int);
+insert into t3 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from t3;
+select * from t3_view;
+describe t3_view;
+desc t3_view;
+drop table t3;
+drop view t3_view;
+
+#
+# expand the * 
+#
+drop table if exists tt1;
+drop view if exists vtt1;
+
+create force view vtt1 as select * from tt1;
+-- error ER_VIEW_INVALID
+select * from vtt1;
+create table tt1 (id1 int, id2 int);
+insert into tt1 values (1,2);
+insert into tt1 values (10,20);
+select * from vtt1;
+
+drop table tt1;
+-- error ER_VIEW_INVALID
+select * from vtt1;
+
+create table tt1 (id2 int);
+
+-- error ER_VIEW_INVALID
+select * from vtt1;
+
+drop table tt1;
+create table tt1 (id2 int, id1 int);
+insert into tt1 values (1,2);
+insert into tt1 values (10,20);
+#only id1, id2
+select * from vtt1;
+
+drop table tt1;
+create table tt1 (id3 int, id2 int, id1 int);
+insert into tt1 values (1,2,300);
+insert into tt1 values (10,20,300);
+
+#only id1, id2
+select * from vtt1;
+
+drop table if exists tt1;
+drop view if exists vtt1;
+
+#
+# expand the * in sp
+#
+
+DELIMITER //;
+CREATE PROCEDURE force_view()
+BEGIN
+create force view vtt1 as select * from tt1;
+END//
+
+DELIMITER ;//
+call force_view();
+create table tt1 (id2 int, id1 int);
+select * from vtt1;
+
+DROP PROCEDURE force_view;
+drop table if exists tt1;
+drop view if exists vtt1;
+
+DELIMITER //;
+CREATE PROCEDURE force_view()
+BEGIN
+create force view vtt1 as select * from tt1;
+create table tt1 (id2 int, id1 int);
+insert into tt1 values (1,2);
+insert into tt1 values (10,20);
+select * from vtt1;
+END//
+
+DELIMITER ;//
+call force_view();
+
+DROP PROCEDURE force_view;
+drop table if exists tt1;
+drop view if exists vtt1;
+
+#
+# test prepare， EXECUTE IMMEDIATE stmt is unsupported
+#
+-- error ER_UNSUPPORTED_PS
+prepare stmt FROM 'create or replace force view t1_view as select * from t1 union select * from t2';
+-- error ER_UNSUPPORTED_PS
+prepare stmt FROM 'create or replace force view t1_view as select * from t1';
+-- error ER_UNSUPPORTED_PS
+EXECUTE IMMEDIATE 'create or replace force view t1_view as select * from t1 union select * from t2';
+-- error ER_UNSUPPORTED_PS
+EXECUTE IMMEDIATE 'create or replace force view t1_view as select * from t1';
+
+#
+# test includ union
+#
+drop table if exists t1;
+drop view if exists v1_view;
+drop view if exists v2_view;
+create view v1_view as select 'a',1;
+create force view v2_view as select * from t1 union all select * from v1_view;
+-- error ER_VIEW_INVALID
+select * from v2_view;
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from v2_view;
+drop table if exists t1;
+drop view if exists v1_view;
+drop view if exists v2_view;
+
+#
+# check after alter, create or replace view, show create view
+#
+create force view v1_view as select * from t1;
+-- error ER_VIEW_INVALID
+select * from v1_view;
+show create view v1_view;
+create table t1 (a int);
+insert into t1 values (1), (2), (3), (4), (5);
+select * from v1_view;
+create table t2 (b int);
+insert into t1 values (11), (12), (13), (14), (15);
+create or replace view v1_view as select * from t2;
+select * from v1_view;
+show create view v1_view;
+drop view v1_view;
+drop table t1;
+drop table t2;
+
+create force view v1_view as select * from t1;
+-- error ER_VIEW_INVALID
+select * from v1_view;
+show create view v1_view;
+create table t1 (a int);
+insert into t1 values (1), (2), (3), (4), (5);
+select * from v1_view;
+create table t2 (b int);
+insert into t2 values (11), (12), (13), (14), (15);
+alter view v1_view as select * from t2;
+select * from v1_view;
+show create view v1_view;
+drop view v1_view;
+drop table t1;
+drop table t2;
+
+#
+# fix:  when exist view ,create force view crash
+#
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+create view t1_view as select * from t1;
+select * from t1_view;
+-- error ER_TABLE_EXISTS_ERROR
+create force view t1_view as select * from t1;
+-- error ER_TABLE_EXISTS_ERROR
+create force view t1_view as select * from t2;
+-- error ER_NO_SUCH_TABLE
+create force view t1_view as select * from t1_view;
+show create view t1_view;
+drop table t1;
+drop view t1_view;
+
+#
+# fix:  when drop view ,create force view crash
+#
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+create view t1_view as select * from t1;
+drop view t1_view;
+-- error ER_VIEW_RECURSIVE
+create force view t1_view as select * from t1_view;
+create or replace force view t1_view as select * from t2;
+create or replace force view t1_view as select * from t1;
+describe t1_view;
+desc t1_view;
+select * from t1;
+select * from t1_view;
+show create view t1_view;
+drop table t1;
+drop view t1_view;
+
+#
+# fix: when create or replace view/force view ,'is_force_view' is not set up correctly
+# fix: show create force view , no include ALGORITHM KEY
+#
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+create or replace force view t1_view as select a,b from t1;
+show create view t1_view;
+create or replace view t1_view as select a,b from t1;
+show create view t1_view;
+create or replace force view t1_view as select a,b from t1;
+show create view t1_view;
+drop table t1;
+drop view t1_view;
+
+#when create table t1, auto update view, 'is_force_view' not change
+create or replace force view t1_view as select a,b from t1;
+show create view t1_view;
+create table t1 (a int, b int);
+show create view t1_view;
+drop table t1;
+show create view t1_view;
+drop view t1_view;
+
+#
+# test view ,select includ as alias
+#
+create or replace force view t1_view as select d.a,e.b,e.avge,ifnull(e.b,0) as used from t1 as d inner join (select a b ,avg(a) as avge from t1 group by a) as e on d.a=e.b;
+show create view t1_view;
+create table t1 (a int, b int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from t1_view;
+drop table t1;
+drop view t1_view;
+
+drop table if exists t2;
+drop view if exists t2_view;
+create or replace force view t1_view as select * from t1,t2 where t2.c1=1;
+show create view t1_view;
+-- error ER_VIEW_INVALID
+select * from t1_view;
+create table t1 (a int, b int);
+create table t2 (c1 int);
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+insert into t2 values (1),(2),(3),(4);
+create or replace view t2_view as select * from t1,t2 where t2.c1=1;
+select * from t1_view;
+select * from t2_view;
+drop table if exists t1,t2;
+drop view if exists t1_view,t2_view;
+
+create or replace force view t1_view as WITH  cte1 AS (SELECT b FROM t1), cte2 AS (SELECT a FROM t2) SELECT a,b FROM cte1 JOIN cte2 WHERE cte1.b = cte2.a;
+show create view t1_view;
+create table t2 (aa int, bb int);
+insert into t2 values (1,2), (1,3), (2,4), (2,5), (3,10);
+create table t1 (a int, b int);
+insert into t1(a,b) values (11,null), (22,4), (4,5), (5,11);
+-- error ER_VIEW_INVALID
+select * from t1_view;
+create or replace force view t1_view as select * from t1;
+show create view t1_view;
+select * from t1_view;
+-- error ER_BAD_FIELD_ERROR
+create or replace view t2_view as WITH  cte1 AS (SELECT b FROM t1), cte2 AS (SELECT a FROM t2) SELECT a,b FROM cte1 JOIN cte2 WHERE cte1.b = cte2.a;
+drop table if exists t1,t2;
+drop view if exists t1_view,t2_view;
+
+create or replace force view t1_view as SELECT a FROM t1 where a=1 GROUP BY a HAVING IFNULL((SELECT b FROM t2 WHERE b > 2),
+(SELECT c FROM t2 WHERE c=a AND b > 2 ORDER BY b)) > 3;
+CREATE TABLE t1 (a int);
+INSERT INTO t1 VALUES (2), (4), (1), (3);
+-- error ER_VIEW_INVALID
+select * from t1_view;
+CREATE TABLE t2 (b int, c int);
+INSERT INTO t2 VALUES (2,1), (1,3), (2,1), (4,4), (2,2), (1,4);
+select * from t1_view;
+drop table if exists t1,t2;
+drop view if exists t1_view;
+
+#
+# test view ,some special select join, Unlike Oralce behavior
+#
+drop table if exists t1;
+drop view if exists t1_view;
+create or replace force view t1_view as select * from t1 a join t1 b;
+--replace_regex /[0-9]/X/
+-- error ER_VIEW_INVALID
+create table t1 (a int, b int);
+--replace_regex /[0-9]/X/
+show warnings;
+drop view t1_view;
+create table t1 (a int, b int);
+drop table t1;
+
+create or replace force view t1_view as select a,b from t1 a join t1 b;
+create table t1 (a int, b int);
+show warnings;
+insert into t1 values (1,2), (1,3), (2,4), (2,5), (3,10);
+select * from t1;
+-- error ER_NON_UNIQ_ERROR
+select * from t1_view;
+drop table t1;
+drop view t1_view;
+
+#
+# test global TEMPORARY support
+#
+#
+set sql_mode = oracle;
+drop table if exists gt_t_t1;
+drop view if exists t1_view;
+CREATE GLOBAL TEMPORARY TABLE gt_t_t1 (a int, b int) on commit preserve rows;
+insert into gt_t_t1 values (111,2), (111,3), (222,4), (222,5), (333,10);
+create or replace force view t1_view as select * from gt_t_t1;
+select * from t1_view;
+show create view t1_view;
+drop table gt_t_t1;
+drop view t1_view;
+
+#
+# Test create force view constraints
+#
+#
+-- error ER_VIEW_RECURSIVE
+create force view t1_view as select a,b from t1_view;
+-- error ER_VIEW_RECURSIVE
+create force view t1_view as select * from t1_view;
+-- error ER_DUP_FIELDNAME
+create force view t1_view as select co1,co1 from t1;
+-- error ER_DUP_FIELDNAME
+create force view t1_view(co1,co1) as select * from t1;
+-- error ER_DUP_FIELDNAME
+create or replace force view t1_view as select a.a,b.a from t1 a join t1 b;
+drop table if exists t1;
+drop view if exists t1_view;
+
+create or replace force view t1_view as select (select c1 from t1),(select c1 from t1) from t1 ;
+CREATE TABLE t1 (
+  id int NOT NULL,
+  c1 varchar(200) DEFAULT NULL,
+  c2 varchar(200) DEFAULT NULL,
+  PRIMARY KEY (id)
+);
+insert into t1 values(1,1,1);
+select * from t1_view;
+
+drop table if exists t1;
+drop view if exists t1_view;
+
+-- error ER_DUP_FIELDNAME
+CREATE OR REPLACE FORCE VIEW t1_view (col0,col0) AS select col0,col0 from t1;
+-- error ER_DUP_FIELDNAME
+CREATE OR REPLACE FORCE VIEW t1_view (col0,col0) AS select col0,col1 from t1;
+CREATE OR REPLACE FORCE VIEW t1_view (col0,col1) AS select col0,col0 from t1;
+drop view if exists t1_view;
+
+# fix clash
+create or replace force view t1_view(c1,c2) as select 2*8,2*8,2*8 from t1;
+create table t1 (a int);
+drop table if exists t1;
+drop view if exists t1_view;
+
+create or replace force view t1_view(c1,c2) as select a1,a1,a1 from t1;
+create table t1 (a int);
+drop table if exists t1;
+drop view if exists t1_view;
+
+create table t1 (a int);
+create or replace force view t1_view(c1,c2) as select 2*8,2*8,2*8 from t1;
+drop table if exists t1;
+drop view if exists t1_view;

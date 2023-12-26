@@ -1,0 +1,100 @@
+
+SET sql_mode=ORACLE;
+
+CREATE TABLE t1(c1 int, c2 CHAR(10),PRIMARY KEY (c1));
+INSERT INTO t1 VALUES (10, 'aa'), (12, null), (15, 'ccc');
+CREATE TABLE t2 (c1 int, c2 CHAR(10),PRIMARY KEY (c1));
+INSERT INTO t2 VALUES (10, 't2'), (11, 'c 1'), (12, null), (16, 'null c1');
+
+--echo #
+--echo # test of table
+--echo #
+start transaction;
+--error ER_BAD_FIELD_ERROR
+select * from t1 where c1=10 for update of t1.c;
+--error ER_NON_UNIQ_ERROR
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a nowait;
+
+select * from t1 where c1=10 for update of c1;
+
+connect (conn1,localhost,root,,test);
+connection conn1;
+SET sql_mode=ORACLE;
+--error ER_LOCK_NOWAIT
+select * from t1 where c1=10 for update of c1 nowait;
+select * from t1 where c1=12 for update of c1 nowait;
+
+connection default;
+commit;
+
+--echo #
+--echo # test of muiti table
+--echo #
+start transaction;
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1 nowait;
+connection conn1;
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 >1 for update of a.c1,b.c1 skip locked;
+
+connection default;
+commit;
+
+--echo #
+--echo # test of tmp table
+--echo #
+CREATE TEMPORARY TABLE tmp(c1 int, c2 CHAR(10),PRIMARY KEY (c1));
+INSERT INTO tmp VALUES (10, 'aa'), (12, null), (15, 'ccc');
+start transaction;
+select * from tmp a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1 nowait;
+select * from tmp a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1,a.c1 nowait;
+--error ER_BAD_FIELD_ERROR
+select * from tmp a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1,a.c1,a.c4 nowait;
+
+connection default;
+commit;
+
+--echo #
+--echo # test of view
+--echo #
+CREATE VIEW v_1 AS SELECT * FROM t1;
+start transaction;
+--error ER_BAD_FIELD_ERROR
+select * from v_1 where c1=10 for update of c10;
+select * from v_1 a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1 nowait;
+connection conn1;
+select * from v_1 a join t2 b on a.c1=b.c1 where a.c1 >1 for update of a.c1,b.c1 skip locked;
+
+connection default;
+commit;
+
+--echo #
+--echo # test of sp
+--echo #
+DELIMITER //;
+CREATE or replace PROCEDURE p1root() AS
+  id int;
+BEGIN
+  select c1 from t1 where c1=10 into id for update of t1.c1 nowait;
+  select id;
+  select c1 from t1 where c1=12 for update of t1.c1 nowait into id;
+  select id;
+END;
+//
+DELIMITER ;//
+call p1root();
+drop PROCEDURE p1root;
+
+--echo #
+--echo # test of view
+--echo #
+alter table t1 add c3 int;
+start transaction;
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1 nowait;
+connection conn1;
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 >1 for update of a.c1,b.c1 skip locked;
+
+connection default;
+commit;
+
+drop table t1,t2,tmp;
+drop view v_1;
+--echo # DONE

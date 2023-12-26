@@ -1,0 +1,39 @@
+#
+# Test mysql dump support sequence objects
+#
+create database test1;
+use test1;
+
+create table t1 (c1 int);
+insert into t1 values (1);
+create sequence seq;
+select seq.nextval;
+
+--echo
+--echo [# start dump to file and test]
+--exec $MYSQL_DUMP --skip-comments --databases test1 --sequences > $MYSQLTEST_VARDIR/tmp/sequence_dump.sql
+
+--echo
+--echo [############### dump output start ###############]
+--cat_file $MYSQLTEST_VARDIR/tmp/sequence_dump.sql
+--echo [###############  dump output end  ######## ######]
+
+--echo
+--echo [# test import dumped objects]
+use test;
+drop database test1;
+--exec $MYSQL test < $MYSQLTEST_VARDIR/tmp/sequence_dump.sql
+show databases;
+use test1;
+show tables;
+select * from t1;
+show sequences;
+show create sequence seq;
+select seq.nextval;
+
+--echo [# sequence will not cascade dropped by drop database]
+drop sequence seq;
+use test;
+drop database test1;
+
+--remove_file $MYSQLTEST_VARDIR/tmp/sequence_dump.sql

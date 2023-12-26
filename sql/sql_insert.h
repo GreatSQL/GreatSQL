@@ -62,6 +62,13 @@ bool check_valid_table_refs(const Table_ref *view,
 bool validate_default_values_of_unset_fields(THD *thd, TABLE *table);
 bool fix_join_cond_for_insert(THD *thd, Table_ref *tr);
 
+enum insert_into_clause_type {
+  INSERT_INTO_NOT_SET = -1,
+  INSERT_INTO_UNCONDITION,
+  INSERT_INTO_WHEN,
+  INSERT_INTO_ELSE
+};
+
 class Query_result_insert : public Query_result_interceptor {
  public:
   /// The table used for insertion of rows
@@ -353,12 +360,17 @@ class Query_result_insert_all : public Query_result_interceptor {
  public:
   Query_result_insert_all(uint insert_table_count_arg,
                           List_item **fields_for_table_arg,
-                          Table_ref *select_tables_args)
+                          Table_ref *select_tables_args, Item **opt_when_arg,
+                          int *clause_type_arg, bool break_arg, bool uncond_arg)
       : Query_result_interceptor(),
         insert_table_count(insert_table_count_arg),
         insert_tables(nullptr),
         select_tables(select_tables_args),
         fields_for_table(fields_for_table_arg),
+        opt_when(opt_when_arg),
+        clause_type(clause_type_arg),
+        break_after_match(break_arg),
+        unconditional(uncond_arg),
         insert_operations(nullptr),
         bulk_insert_start(nullptr),
         autoinc_value_of_last_inserted_row(0) {}
@@ -383,6 +395,10 @@ class Query_result_insert_all : public Query_result_interceptor {
 
   /// The fields list decomposed into separate lists per table
   List_item **fields_for_table;
+  Item **opt_when;
+  int *clause_type;
+  bool break_after_match;
+  bool unconditional;
 
   COPY_INFO **insert_operations;
 
@@ -420,9 +436,15 @@ class Sql_cmd_insert_all : public Sql_cmd_dml {
   uint into_table_count;
 
   explicit Sql_cmd_insert_all(uint into_table_count_arg,
-                              List_item **fields_for_table_arg)
+                              List_item **fields_for_table_arg,
+                              Item **opt_when_arg, int *clause_type_arg,
+                              bool break_arg, bool uncond_arg)
       : into_table_count(into_table_count_arg),
         fields_for_table(fields_for_table_arg),
+        opt_when(opt_when_arg),
+        clause_type(clause_type_arg),
+        break_after_match(break_arg),
+        unconditional(uncond_arg),
         insert_field_list(*THR_MALLOC) {}
 
   enum_sql_command sql_command_code() const override {
@@ -435,6 +457,10 @@ class Sql_cmd_insert_all : public Sql_cmd_dml {
   // print_insert_all need public
 
   List_item **fields_for_table;
+  Item **opt_when;
+  int *clause_type;
+  bool break_after_match;
+  bool unconditional;
 
  private:
   // Table_ref *insert_tables;

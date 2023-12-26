@@ -1,0 +1,286 @@
+#----------------------------------MySQL Mode----------------------------------
+--disable_warnings
+select replace('abc', 'a', null) from dual;
+select replace('aaabbaacc','aa',''),replace('aaabbaacc','aa',null),replace('aaabbaacc','aa','中国'),replace('aa','aaTTT','中国') from dual;
+select replace('aa','aaTTT',''),replace('aa','aaTTT',null) from dual;
+select replace('aabbaacc','aa','中国'),replace('aab中国人ba中国人ac中国人c','中国人','ABC') from dual;
+select replace('aabbaacc','a1a','中国'),replace('aab中国人ba中国人ac中国人c','中1国人','ABC') from dual;
+select replace('\0ABC\\\\中国人','\\','数据库'),replace('\0ABC''''中国人','''','数据库') from dual;
+select replace(112233112244,22,'中国'),replace(112233112244,22,888) from dual;
+select replace(3.456456,45,888) from dual;
+select replace('aab中国人ba中国人ac中国人c','中国人','') from dual;
+select replace('aaabbaacc','aaabbaacc',''),replace('aaabbaacc','aaabbaacc',null),replace('aaabbaacc','aaabbaacc','我们'),replace('aaabbaacc','aaabbaacc','aaabbaacc中国人') from dual;
+select nvl(replace('aaabbaacc','aaabbaacc',''),'空'),nvl(replace('aaabbaacc','aaabbaacc',null),'空'),nvl(replace('aaabbaacc','aaabbaacc','我们'),'空') from dual;
+select replace(sysdate,sysdate,'xxx'),nvl(replace(sysdate,sysdate,'xxx'),'空') from dual;
+
+select replace('abcabc', 'a', null),replace('abcabc', 'a', '') from dual;
+select replace('abc', 'a', null) from dual;
+select replace('a中bca中JJ', 'a中', null) from dual;
+
+select replace('abc', null, '我们'),replace('abc', '', '我们') from dual;
+
+select replace('', 'a', '我们'),replace(null, 'a', '我们') from dual;
+select nvl(replace('', 'a', '我们'),'空'),nvl(replace(null, 'a', '我们'),'空') from dual;
+
+select replace('', '', ''),replace('', '', null),replace('', null, ''),replace('', null, null),replace(null, '', ''),replace(null, '', null),replace(null, null, ''),replace(null, null, null) from dual;
+select nvl(replace('', '', ''),'空'),nvl(replace('', '', null),'空'),nvl(replace('', null, ''),'空'),nvl(replace('', null, null),'空'),nvl(replace(null, '', ''),'空'),nvl(replace(null, '', null),'空'),nvl(replace(null, null, ''),'空'),nvl(replace(null, null, null),'空') from dual;
+
+select replace('a中bca中JJ', 'a中', '测试'),replace('a中bca中JJ', '中a', '测试') from dual;
+select replace('a中b\\\0ca\0中JJ', '\0', '测试') from dual;
+select replace('a中b测试\\\0ca\0中测试JJ', '测试', '''') from dual;
+
+select * from (select replace('a中bca中JJ', 'a中', '测试') from dual);
+select * from (select replace('', '', '') from dual);
+select nvl((select replace('', '', '') from dual),'空') from dual;
+
+select replace(null, 'a中', '测试') is null,nvl(replace(null, 'a中', '测试'),'空') from dual;
+select 1 from dual where replace(null, 'a中', '测试') is null;
+
+select
+replace('', '', '') is null,
+replace('', '', null) is null,
+replace('', null, '') is null,
+replace('', null, null) is null,
+replace(null, '', '') is null,
+replace(null, '', null) is null,
+replace(null, null, '') is null,
+replace(null, null, null) is null
+from dual;
+
+select replace('', '', '') is null,replace('', '', '') from dual;
+select 1 from dual where replace('', '', '') is null;
+select replace('', '', null) is null,replace('', '', null) from dual;
+select 1 from dual where replace('', '', null) is null;
+select replace('', null, '') is null,replace('', null, '') from dual;
+select 1 from dual where replace('', null, '') is null;
+select replace('', null, null) is null,replace('', null, null) from dual;
+select 1 from dual where replace('', null, null) is null;
+select replace(null, '', '') is null,replace(null, '', '') from dual;
+select 1 from dual where replace(null, '', '') is null;
+select replace(null, '', null) is null,replace(null, '', null) from dual;
+select 1 from dual where replace(null, '', null) is null;
+select replace(null, null, '') is null,replace(null, null, '') from dual;
+select 1 from dual where replace(null, null, '') is null;
+select replace(null, null, null) is null,replace(null, null, null) from dual;
+select 1 from dual where replace(null, null, null) is null;
+
+select replace('中国人abc中国人中国人abc中国人','中国人abc中国人中国人abc中国人',''),replace('中国人abc中国人中国人abc中国人','中国人abc中国人中国人abc中国人',null) from dual;
+select
+nvl(replace('中国人abc中国人中国人abc中国人','中国人abc中国人中国人abc中国人',''),'空'),
+nvl(replace('中国人abc中国人中国人abc中国人','中国人abc中国人中国人abc中国人',null),'空')
+from dual;
+
+select replace('中国人abc中国人中国人abc中国人','中国人abc中国人',''),replace('中国人abc中国人中国人abc中国人','中国人abc中国人',null) from dual;
+select
+nvl(replace('中国人abc中国人中国人abc中国人','中国人abc中国人',''),'空'),
+nvl(replace('中国人abc中国人中国人abc中国人','中国人abc中国人',null),'空')
+from dual;
+
+DROP TABLE IF EXISTS test_replace1;
+
+CREATE TABLE test_replace1 (id int, c1 VARCHAR2(32), c2 VARCHAR2(32), c3 VARCHAR2(32));
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (1,'abc中国人abc中国人', 'abc中国人abc中国人', null);
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (2,'abc中国人abc中国人', 'abc中国人abc中国人', '');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (3,'abc中国人abc中国人', 'abc中国人abc中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (4,'abc中国人abc中国人', 'abc中国人', null);
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (5,'abc中国人abc中国人', 'abc中国人', '');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (6,'abc中国人abc中国人', 'abc中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (7,'abc中国人abc中国人', 'abcA中国人', null);
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (8,'abc中国人abc中国人', 'abcA中国人', '');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (9,'abc中国人abc中国人', 'abcA中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (10,'abc中国人abc中国人', '中国人', null);
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (11,'abc中国人abc中国人', '中国人', '');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (12,'abc中国人abc中国人', '中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (13,'abc中\\\\国人a\0''\0''bc中国人', '\0''', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (14,'abc中\\\\国人a\0''\0''bc中国人', '\\''', '\'\'');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (15,'abc中国', '中国人人abc中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (16,'', '中国人人abc中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (17,'', '中国人人abc中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (18,'abc中国', '', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (19,'abc中国', '中国人人abc中国人', '');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (20,null, '中国人人abc中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (21,'abc中国', null, 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (22,'abc中国', '中国人人abc中国人', null);
+
+select id,replace(c1,c2,c3),nvl(replace(c1,c2,c3),'空') from test_replace1 order by id;
+
+DROP TABLE IF EXISTS test_replace2;
+CREATE TABLE test_replace2(c1 varchar2(128) DEFAULT (replace('abcab','ab','AB')));
+
+--enable_warnings
+drop table test_replace1;
+drop table test_replace2;
+
+#----------------------------------Oracle Mode----------------------------------
+set sql_mode=oracle;
+--disable_warnings
+select replace('abc', 'a', null) from dual;
+select replace('aaabbaacc','aa'),replace('aaabbaacc','aa',''),replace('aaabbaacc','aa',null),replace('aaabbaacc','aa','中国'),replace('aa','aaTTT','中国') from dual;
+select replace('aa','aaTTT',''),replace('aa','aaTTT',null) from dual;
+select replace('aabbaacc','aa','中国'),replace('aab中国人ba中国人ac中国人c','中国人','ABC') from dual;
+select replace('aabbaacc','a1a','中国'),replace('aab中国人ba中国人ac中国人c','中1国人','ABC') from dual;
+select replace('\0ABC\\\\中国人','\\'),replace('\0ABC\\\\中国人','\\','数据库'),replace('\0ABC''''中国人','''','数据库') from dual;
+select replace(112233112244,22,'中国'),replace(112233112244,22),replace(112233112244,22,888) from dual;
+select replace(3.456456,45,'中国'),replace(3.456456,45),replace(3.456456,45,888) from dual;
+select replace('aab中国人ba中国人ac中国人c','中国人',''),replace('aab中国人ba中国人ac中国人c','中国人') from dual;
+select replace('aaabbaacc','aaabbaacc'),replace('aaabbaacc','aaabbaacc',''),replace('aaabbaacc','aaabbaacc',null),replace('aaabbaacc','aaabbaacc','我们'),replace('aaabbaacc','aaabbaacc','aaabbaacc中国人') from dual;
+select nvl(replace('aaabbaacc','aaabbaacc'),'空'),nvl(replace('aaabbaacc','aaabbaacc',''),'空'),nvl(replace('aaabbaacc','aaabbaacc',null),'空'),nvl(replace('aaabbaacc','aaabbaacc','我们'),'空') from dual;
+
+select replace(to_date('20220518123456','yyyymmddhh24miss'),to_date('20220518123456','yyyymmddhh24miss'),to_date('20220518123456','yyyymmddhh24miss')) from dual;
+select replace(sysdate,sysdate),nvl(replace(sysdate,sysdate),'空'),replace(sysdate,sysdate,'xxx'),nvl(replace(sysdate,sysdate,'xxx'),'空') from dual;
+
+
+select replace('abcabc', 'a', null),replace('abcabc', 'a', ''),replace('abcabc', 'a') from dual;
+select replace('abc', 'a', null) from dual;
+select replace('a中bca中JJ', 'a中', null) from dual;
+
+select replace('abc', null, '我们'),replace('abc', '', '我们') from dual;
+
+select replace('', 'a', '我们'),replace(null, 'a', '我们') from dual;
+select nvl(replace('', 'a', '我们'),'空'),nvl(replace(null, 'a', '我们'),'空') from dual;
+
+select replace('', '', ''),replace('', '', null),replace('', null, ''),replace('', null, null),replace(null, '', ''),replace(null, '', null),replace(null, null, ''),replace(null, null, null) from dual;
+select nvl(replace('', '', ''),'空'),nvl(replace('', '', null),'空'),nvl(replace('', null, ''),'空'),nvl(replace('', null, null),'空'),nvl(replace(null, '', ''),'空'),nvl(replace(null, '', null),'空'),nvl(replace(null, null, ''),'空'),nvl(replace(null, null, null),'空') from dual;
+select nvl(replace('', ''),'空'),nvl(replace('', null),'空'),nvl(replace(null, null),'空'),nvl(replace(null, ''),'空') from dual;
+
+select replace('a中bca中JJ', 'a中', '测试'),replace('a中bca中JJ', '中a', '测试') from dual;
+select replace('a中b\\\0ca\0中JJ', '\0', '测试') from dual;
+select replace('a中b测试\\\0ca\0中测试JJ', '测试', '''') from dual;
+
+select * from (select replace('a中bca中JJ', 'a中', '测试') from dual);
+select * from (select replace('', '', '') from dual);
+select nvl((select replace('', '', '') from dual),'空') from dual;
+
+select REPLACE('123123tech','123'),REPLACE('123tech123', '123'),REPLACE('222tech', '2', '3'),REPLACE('000012003', '0'),REPLACE('0000123', '0', ' ') from dual;
+select replace(null, 'a中', '测试') is null,nvl(replace(null, 'a中', '测试'),'空') from dual;
+select 1 from dual where replace(null, 'a中', '测试') is null;
+
+select
+replace('', '', '') is null,
+replace('', '', null) is null,
+replace('', null, '') is null,
+replace('', null, null) is null,
+replace(null, '', '') is null,
+replace(null, '', null) is null,
+replace(null, null, '') is null,
+replace(null, null, null) is null
+from dual;
+
+select
+replace('', '') is null,
+replace('', null) is null,
+replace(null, '') is null,
+replace(null, null) is null;
+
+
+select replace('', '', '') is null,replace('', '', '') from dual;
+select 1 from dual where replace('', '', '') is null;
+select replace('', '', null) is null,replace('', '', null) from dual;
+select 1 from dual where replace('', '', null) is null;
+select replace('', null, '') is null,replace('', null, '') from dual;
+select 1 from dual where replace('', null, '') is null;
+select replace('', null, null) is null,replace('', null, null) from dual;
+select 1 from dual where replace('', null, null) is null;
+select replace(null, '', '') is null,replace(null, '', '') from dual;
+select 1 from dual where replace(null, '', '') is null;
+select replace(null, '', null) is null,replace(null, '', null) from dual;
+select 1 from dual where replace(null, '', null) is null;
+select replace(null, null, '') is null,replace(null, null, '') from dual;
+select 1 from dual where replace(null, null, '') is null;
+select replace(null, null, null) is null,replace(null, null, null) from dual;
+select 1 from dual where replace(null, null, null) is null;
+
+select replace('中国人abc中国人中国人abc中国人','中国人abc中国人中国人abc中国人'),replace('中国人abc中国人中国人abc中国人','中国人abc中国人中国人abc中国人',''),replace('中国人abc中国人中国人abc中国人','中国人abc中国人中国人abc中国人',null) from dual;
+select nvl(replace('中国人abc中国人中国人abc中国人','中国人abc中国人中国人abc中国人'),'空'),
+nvl(replace('中国人abc中国人中国人abc中国人','中国人abc中国人中国人abc中国人',''),'空'),
+nvl(replace('中国人abc中国人中国人abc中国人','中国人abc中国人中国人abc中国人',null),'空')
+from dual;
+
+select replace('中国人abc中国人中国人abc中国人','中国人abc中国人'),replace('中国人abc中国人中国人abc中国人','中国人abc中国人',''),replace('中国人abc中国人中国人abc中国人','中国人abc中国人',null) from dual;
+select nvl(replace('中国人abc中国人中国人abc中国人','中国人abc中国人'),'空'),
+nvl(replace('中国人abc中国人中国人abc中国人','中国人abc中国人',''),'空'),
+nvl(replace('中国人abc中国人中国人abc中国人','中国人abc中国人',null),'空')
+from dual;
+
+#test all
+select REPLACE('','',''),nvl(REPLACE('','',''),'空') from dual;
+select REPLACE('','','TEST'),nvl(REPLACE('','','TEST'),'空') from dual;
+select REPLACE('','',null),nvl(REPLACE('','',null),'空') from dual;
+select REPLACE('','TEST',''),nvl(REPLACE('','TEST',''),'空') from dual;
+select REPLACE('','TEST','TEST'),nvl(REPLACE('','TEST','TEST'),'空') from dual;
+select REPLACE('','TEST',null),nvl(REPLACE('','TEST',null),'空') from dual;
+select REPLACE('',null,''),nvl(REPLACE('',null,''),'空') from dual;
+select REPLACE('',null,'TEST'),nvl(REPLACE('',null,'TEST'),'空') from dual;
+select REPLACE('',null,null),nvl(REPLACE('',null,null),'空') from dual;
+select REPLACE('TEST','',''),nvl(REPLACE('TEST','',''),'空') from dual;
+select REPLACE('TEST','','TEST'),nvl(REPLACE('TEST','','TEST'),'空') from dual;
+select REPLACE('TEST','',null),nvl(REPLACE('TEST','',null),'空') from dual;
+select REPLACE('TEST','TEST',''),nvl(REPLACE('TEST','TEST',''),'空') from dual;
+select REPLACE('TEST','TEST','TEST'),nvl(REPLACE('TEST','TEST','TEST'),'空') from dual;
+select REPLACE('TEST','TEST',null),nvl(REPLACE('TEST','TEST',null),'空') from dual;
+select REPLACE('TEST',null,''),nvl(REPLACE('TEST',null,''),'空') from dual;
+select REPLACE('TEST',null,'TEST'),nvl(REPLACE('TEST',null,'TEST'),'空') from dual;
+select REPLACE('TEST',null,null),nvl(REPLACE('TEST',null,null),'空') from dual;
+select REPLACE(null,'',''),nvl(REPLACE(null,'',''),'空') from dual;
+select REPLACE(null,'','TEST'),nvl(REPLACE(null,'','TEST'),'空') from dual;
+select REPLACE(null,'',null),nvl(REPLACE(null,'',null),'空') from dual;
+select REPLACE(null,'TEST',''),nvl(REPLACE(null,'TEST',''),'空') from dual;
+select REPLACE(null,'TEST','TEST'),nvl(REPLACE(null,'TEST','TEST'),'空') from dual;
+select REPLACE(null,'TEST',null),nvl(REPLACE(null,'TEST',null),'空') from dual;
+select REPLACE(null,null,''),nvl(REPLACE(null,null,''),'空') from dual;
+select REPLACE(null,null,'TEST'),nvl(REPLACE(null,null,'TEST'),'空') from dual;
+select REPLACE(null,null,null),nvl(REPLACE(null,null,null),'空') from dual;
+
+select REPLACE(null,null,'BL')||REPLACE('','','BL')||REPLACE(null,'','BL')||REPLACE('',null,'BL') from dual;
+select nvl(REPLACE(null,null,'BL')||REPLACE('','','BL')||REPLACE(null,'','BL')||REPLACE('',null,'BL'),'空') from dual;
+
+
+delimiter //;
+begin
+select replace('aaabbaacc','aa','中国'),replace('aa','aaTTT','中国') from dual;
+end;//
+delimiter ;//
+
+
+DROP TABLE IF EXISTS test_replace1;
+
+CREATE TABLE test_replace1 (id int, c1 VARCHAR2(32), c2 VARCHAR2(32), c3 VARCHAR2(32));
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (1,'abc中国人abc中国人', 'abc中国人abc中国人', null);
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (2,'abc中国人abc中国人', 'abc中国人abc中国人', '');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (3,'abc中国人abc中国人', 'abc中国人abc中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (4,'abc中国人abc中国人', 'abc中国人', null);
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (5,'abc中国人abc中国人', 'abc中国人', '');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (6,'abc中国人abc中国人', 'abc中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (7,'abc中国人abc中国人', 'abcA中国人', null);
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (8,'abc中国人abc中国人', 'abcA中国人', '');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (9,'abc中国人abc中国人', 'abcA中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (10,'abc中国人abc中国人', '中国人', null);
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (11,'abc中国人abc中国人', '中国人', '');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (12,'abc中国人abc中国人', '中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (13,'abc中\\\\国人a\0''\0''bc中国人', '\0''', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (14,'abc中\\\\国人a\0''\0''bc中国人', '\\''', '\'\'');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (15,'abc中国', '中国人人abc中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (16,'', '中国人人abc中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (17,'', '中国人人abc中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (18,'abc中国', '', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (19,'abc中国', '中国人人abc中国人', '');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (20,null, '中国人人abc中国人', 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (21,'abc中国', null, 'XXX我们');
+INSERT INTO test_replace1(id,c1,c2,c3) VALUES (22,'abc中国', '中国人人abc中国人', null);
+
+select id,replace(c1,c2),nvl(replace(c1,c2),'空'),replace(c1,c2,c3),nvl(replace(c1,c2,c3),'空') from test_replace1 order by id;
+
+select replace(c1,c2) from test_replace1 order by replace(c1,c2);
+select replace(c1,c2),count(*) from test_replace1 group by replace(c1,c2) order by replace(c1,c2);
+
+DROP TABLE IF EXISTS test_replace2;
+CREATE TABLE test_replace2(c1 varchar2(128) DEFAULT (replace('abcab','ab')));
+
+DROP TABLE IF EXISTS test_replace2;
+CREATE TABLE test_replace2(c1 varchar2(128) DEFAULT (replace('abcab','a1b')));
+
+--enable_warnings
+drop table test_replace1;
+drop table test_replace2;
+
+

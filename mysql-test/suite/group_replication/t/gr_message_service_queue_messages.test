@@ -132,6 +132,7 @@ SET DEBUG_SYNC= "RESET";
 --echo # 11. Assert server2 received both messages transmitted by GR message
 --echo #     delivery
 
+sleep 2;
 --let $assert_file= $MYSQLTEST_VARDIR/tmp/gr_message_service_queue_messages.2.err
 --let $assert_count = 1
 --let $assert_select = Plugin replication_observers_example reported: 'Service message recv TAG: "tag", TAG_SIZE: 3, MSG: "Server2 sent a message", MSG_SIZE: 22.'

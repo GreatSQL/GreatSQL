@@ -1,0 +1,508 @@
+[# test new added unique key become pk, original implicit pk to unique key]
+create table t1 (a int not null, b int not null, unique key(a));
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  UNIQUE KEY `a` (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t1 values (1,11),(2,22),(3,33);
+select * from t1;
+a	b
+1	11
+2	22
+3	33
+alter table t1 add unique key(b), drop key a, add unique key(a), algorithm=inplace;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  UNIQUE KEY `b` (`b`),
+  UNIQUE KEY `a` (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t1;
+a	b
+1	11
+2	22
+3	33
+
+[# test new added unique key still be unique key, original candidate key promoted to pk]
+create table t2 (a int not null, b int not null, c int not null, unique key(a), unique key (b));
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `a` (`a`),
+  UNIQUE KEY `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t2 values (1,11,111),(2,22,222),(3,33,333);
+select* from t2;
+a	b	c
+1	11	111
+2	22	222
+3	33	333
+alter table t2 add unique key(c), drop key a, add unique key(a), algorithm=inplace;
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `b` (`b`),
+  UNIQUE KEY `c` (`c`),
+  UNIQUE KEY `a` (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t2;
+a	b	c
+1	11	111
+2	22	222
+3	33	333
+
+[# test behaviour of dropping primary key not changed ]
+create table t3 (a int primary key, b int not null);
+show create table t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t3 values (1,11),(2,22),(3,33);
+select * from t3;
+a	b
+1	11
+2	22
+3	33
+alter table t3 drop primary key, algorithm=inplace;
+ERROR 0A000: ALGORITHM=INPLACE is not supported. Reason: Dropping a primary key is not allowed without also adding a new primary key. Try ALGORITHM=COPY.
+alter table t3 drop primary key, algorithm=copy;
+show create table t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `a` int NOT NULL,
+  `b` int NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t3;
+a	b
+1	11
+2	22
+3	33
+
+[# test behaviour of dropping-adding primary key not changed ]
+create table t4 (a int primary key, b int not null);
+show create table t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t4 values (1,11),(2,22),(3,33);
+select * from t4;
+a	b
+1	11
+2	22
+3	33
+alter table t4 drop primary key, add primary key (b), algorithm=instant;
+ERROR 0A000: ALGORITHM=INSTANT is not supported for this operation. Try ALGORITHM=COPY/INPLACE.
+alter table t4 drop primary key, add primary key (b), algorithm=inplace;
+show create table t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t4;
+a	b
+1	11
+2	22
+3	33
+
+[# test if candidate key change order]
+create table t5 (a int not null, b int not null, c int not null, primary key(a), unique key(b));
+show create table t5;
+Table	Create Table
+t5	CREATE TABLE `t5` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t5 values (1,11,111),(2,22,222),(3,33,333);
+select * from t5;
+a	b	c
+1	11	111
+2	22	222
+3	33	333
+alter table t5 add unique key(c), drop key b, add unique key(b), algorithm=inplace;
+show create table t5;
+Table	Create Table
+t5	CREATE TABLE `t5` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `c` (`c`),
+  UNIQUE KEY `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t5;
+a	b	c
+1	11	111
+2	22	222
+3	33	333
+
+[# test if candidate key change order]
+create table t6 (a int not null, b int not null, c int not null, primary key(a), unique key(b));
+show create table t6;
+Table	Create Table
+t6	CREATE TABLE `t6` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t6 values (1,11,111),(2,22,222),(3,33,333);
+select * from t6;
+a	b	c
+1	11	111
+2	22	222
+3	33	333
+alter table t6 add key(c) , drop key b, add key(b), algorithm=inplace;
+show create table t6;
+Table	Create Table
+t6	CREATE TABLE `t6` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`a`),
+  KEY `c` (`c`),
+  KEY `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t6;
+a	b	c
+1	11	111
+2	22	222
+3	33	333
+
+[# test implicitly drop implicit-pk, add non implicit pk]
+create table t7 (a int not null, b int not null, c int not null, unique key(a), unique key(b));
+show create table t7;
+Table	Create Table
+t7	CREATE TABLE `t7` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `a` (`a`),
+  UNIQUE KEY `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t7 values (1,11,111),(2,22,222),(3,33,333);
+select * from t7;
+a	b	c
+1	11	111
+2	22	222
+3	33	333
+alter table t7 drop column a, add unique key(c), algorithm=inplace;
+show create table t7;
+Table	Create Table
+t7	CREATE TABLE `t7` (
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `b` (`b`),
+  UNIQUE KEY `c` (`c`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t7;
+b	c
+11	111
+22	222
+33	333
+
+[# test implicitly drop pk, add non implicit pk]
+create table t8 (a int not null, b int not null, c int not null, primary key(a), unique key(b));
+show create table t8;
+Table	Create Table
+t8	CREATE TABLE `t8` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t8 values (1,11,111),(2,22,222),(3,33,333);
+select * from t8;
+a	b	c
+1	11	111
+2	22	222
+3	33	333
+alter table t8 drop column a, add unique key(c), algorithm=inplace;
+show create table t8;
+Table	Create Table
+t8	CREATE TABLE `t8` (
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `b` (`b`),
+  UNIQUE KEY `c` (`c`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t8;
+b	c
+11	111
+22	222
+33	333
+
+[# test implicitly drop pk by drop column only]
+create table t9 (a int not null, b int not null, c int not null, primary key (a), key(b), unique key(c));
+show create table t9;
+Table	Create Table
+t9	CREATE TABLE `t9` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `c` (`c`),
+  KEY `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t9 values (1,11,111),(2,22,222),(3,33,333);
+select * from t9;
+a	b	c
+1	11	111
+2	22	222
+3	33	333
+alter table t9 drop column a, algorithm=inplace;
+show create table t9;
+Table	Create Table
+t9	CREATE TABLE `t9` (
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `c` (`c`),
+  KEY `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t9;
+b	c
+11	111
+22	222
+33	333
+
+[################# restart database ################]
+# restart
+
+[# test select OK]
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  UNIQUE KEY `b` (`b`),
+  UNIQUE KEY `a` (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t1;
+a	b
+1	11
+2	22
+3	33
+explain select a,b from t1 where a=2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	a	a	4	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select '2' AS `a`,'22' AS `b` from `test`.`t1` where true
+select a,b from t1 where a=2;
+a	b
+2	22
+
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `b` (`b`),
+  UNIQUE KEY `c` (`c`),
+  UNIQUE KEY `a` (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t2;
+a	b	c
+1	11	111
+2	22	222
+3	33	333
+explain select c,b from t2 where c=222;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	const	c	c	4	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select '222' AS `c`,'22' AS `b` from `test`.`t2` where true
+select c,b from t2 where c=222;
+c	b
+222	22
+
+show create table t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `a` int NOT NULL,
+  `b` int NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t3;
+a	b
+1	11
+2	22
+3	33
+explain select * from t3 where a=2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Parallel execute (1 workers)
+2	SIMPLE	t3	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t3`.`a` AS `a`,`test`.`t3`.`b` AS `b` from `test`.`t3` where (`test`.`t3`.`a` = 2)
+select * from t3 where a=2;
+a	b
+2	22
+
+show create table t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  PRIMARY KEY (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t4;
+a	b
+1	11
+2	22
+3	33
+explain select * from t4 where b=22;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t4	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '2' AS `a`,'22' AS `b` from `test`.`t4` where true
+select * from t4 where b=22;
+a	b
+2	22
+
+show create table t5;
+Table	Create Table
+t5	CREATE TABLE `t5` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `c` (`c`),
+  UNIQUE KEY `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t5;
+a	b	c
+1	11	111
+2	22	222
+3	33	333
+explain select c,a from t5 where c=222;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t5	NULL	const	c	c	4	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select '222' AS `c`,'2' AS `a` from `test`.`t5` where true
+select c,a from t5 where c=222;
+c	a
+222	2
+
+show create table t6;
+Table	Create Table
+t6	CREATE TABLE `t6` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`a`),
+  KEY `c` (`c`),
+  KEY `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t6;
+a	b	c
+1	11	111
+2	22	222
+3	33	333
+explain select c,a from t6 where c=222;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Parallel execute (1 workers)
+2	SIMPLE	t6	NULL	ref	c	c	4	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t6`.`c` AS `c`,`test`.`t6`.`a` AS `a` from `test`.`t6` where (`test`.`t6`.`c` = 222)
+select c,a from t6 where c=222;
+c	a
+222	2
+
+show create table t7;
+Table	Create Table
+t7	CREATE TABLE `t7` (
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `b` (`b`),
+  UNIQUE KEY `c` (`c`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t7;
+b	c
+11	111
+22	222
+33	333
+explain select c,b from t7 where c=222;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t7	NULL	const	c	c	4	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select '222' AS `c`,'22' AS `b` from `test`.`t7` where true
+select c,b from t7 where c=222;
+c	b
+222	22
+
+show create table t8;
+Table	Create Table
+t8	CREATE TABLE `t8` (
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `b` (`b`),
+  UNIQUE KEY `c` (`c`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t8;
+b	c
+11	111
+22	222
+33	333
+explain select c,b from t8 where c=222;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t8	NULL	const	c	c	4	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select '222' AS `c`,'22' AS `b` from `test`.`t8` where true
+select c,b from t8 where c=222;
+c	b
+222	22
+
+show create table t9;
+Table	Create Table
+t9	CREATE TABLE `t9` (
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `c` (`c`),
+  KEY `b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t9;
+b	c
+11	111
+22	222
+33	333
+explain select b,c from t9 where b=22;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Parallel execute (1 workers)
+2	SIMPLE	t9	NULL	ref	b	b	4	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t9`.`b` AS `b`,`test`.`t9`.`c` AS `c` from `test`.`t9` where (`test`.`t9`.`b` = 22)
+select b,c from t9 where b=22;
+b	c
+22	222
+
+[# cleanup]
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+drop table t5;
+drop table t6;
+drop table t7;
+drop table t8;
+drop table t9;

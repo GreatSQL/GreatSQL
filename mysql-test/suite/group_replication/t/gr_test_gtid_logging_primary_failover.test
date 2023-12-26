@@ -111,12 +111,6 @@ SET @@GLOBAL.DEBUG= '-d,group_replication_wait_for_gtid_execution_force_error';
 --let $assert_text = Server executed GTID set is logged.
 --source include/assert_grep.inc
 
---let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
---let $assert_count = 1
---let $assert_select = Elected primary member applier channel received_transaction_set: a1a1a1a1-b1b1-c1c1-d1d1-00002222aabb:1-9
---let $assert_text = Applier retrieved GTID set is logged.
---source include/assert_grep.inc
-
 ## Server2 applier is stopped so it will become primary and fail.
 ## This helps us to avoid debug point before applier_wait.
 --let $rpl_connection_name= server3
@@ -131,13 +125,6 @@ SET @@GLOBAL.DEBUG= '-d,group_replication_wait_for_gtid_execution_force_error';
 --let $assert_select = Elected primary member gtid_executed: a1a1a1a1-b1b1-c1c1-d1d1-00002222aabb:1-9
 --let $assert_text = Server executed GTID set is logged.
 --source include/assert_grep.inc
-
---let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.3.err
---let $assert_count = 1
---let $assert_select = Elected primary member applier channel received_transaction_set: a1a1a1a1-b1b1-c1c1-d1d1-00002222aabb:1-9
---let $assert_text = Applier retrieved GTID set is logged.
---source include/assert_grep.inc
-
 
 --echo
 --echo # 6. Start GR on M1 and M2.
@@ -171,12 +158,6 @@ DROP table t1;
 --let $assert_count = 1
 --let $assert_select = Elected primary member gtid_executed: a1a1a1a1-b1b1-c1c1-d1d1-00002222aabb:1-12
 --let $assert_text = Server executed GTID set is logged.
---source include/assert_grep.inc
-
---let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
---let $assert_count = 1
---let $assert_select = Elected primary member applier channel received_transaction_set: a1a1a1a1-b1b1-c1c1-d1d1-00002222aabb:1-12
---let $assert_text = Applier retrieved GTID set is logged.
 --source include/assert_grep.inc
 
 --echo

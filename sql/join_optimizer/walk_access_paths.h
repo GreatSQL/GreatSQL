@@ -150,6 +150,14 @@ void WalkAccessPaths(AccessPathPtr path, JoinPtr join,
                       cross_query_blocks, std::forward<Func &&>(func),
                       post_order_traversal);
       break;
+    case AccessPath::CONNECT_BY_SCAN:
+      WalkAccessPaths(path->connect_by_scan().src_path, join,
+                      cross_query_blocks, std::forward<Func &&>(func),
+                      post_order_traversal);
+      WalkAccessPaths(path->connect_by_scan().table_path, join,
+                      cross_query_blocks, std::forward<Func &&>(func),
+                      post_order_traversal);
+      break;
     case AccessPath::LIMIT_OFFSET:
       WalkAccessPaths(path->limit_offset().child, join, cross_query_blocks,
                       std::forward<Func &&>(func), post_order_traversal);
@@ -302,6 +310,8 @@ void WalkTablesUnderAccessPath(AccessPath *root_path, Func &&func,
             return func(path->stream().table);
           case AccessPath::MATERIALIZE:
             return func(path->materialize().param->table);
+          case AccessPath::CONNECT_BY_SCAN:
+            return func(path->connect_by_scan().table);
           case AccessPath::MATERIALIZED_TABLE_FUNCTION:
             return func(path->materialized_table_function().table);
           case AccessPath::ALTERNATIVE:

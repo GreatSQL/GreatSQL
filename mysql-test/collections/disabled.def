@@ -195,6 +195,14 @@ group_replication.gr_xa_commit_failure_before_gtid_externalization @windows : BU
 group_replication.gr_xa_commit_one_phase_failure_before_gtid_externalization @windows : BUG#34155238 Disabled until bug is fixed
 group_replication.gr_xa_prepare_failure_before_gtid_externalization @windows : BUG#34155238 Disabled until bug is fixed
 group_replication.gr_xa_rollback_failure_before_gtid_externalization @windows : BUG#34155238 Disabled until bug is fixed
+
+group_replication.gr_singlewriter_enabled_on_mode_switch          : BUG#0 skip singlewriter
+
+group_replication.gr_member_status_applier_error_bug              : BUG#0 skip
+group_replication.gr_parallel_applier_indexes_commit_order        : BUG#0 skip since garbage logical changed
+group_replication.gr_switch_primary_timeout_node_kill             : BUG#0 skip online primary change logic changed
+group_replication.gr_startup_check_node_seed_skips_own_address_v6 : BUG#0 skip ipv6 test for docker
+group_replication.gr_startup_check_node_seed_skips_own_address    : BUG#0 skip ipv6 test for docker
 group_replication.gr_member_status_applier_error_bug              : BUG#0 skip
 group_replication.gr_parallel_applier_indexes_commit_order        : BUG#0 skip since garbage logical changed
 
@@ -214,43 +222,6 @@ main.percona_enforce_storage_engine_disabled : BUG#0 disabled, failed when run a
 main.persisted_variables_bugs_fast : BUG#0 disabled, failed when run as root
 main.resource_group_thr_prio_unsupported : BUG#0 disabled, failed when run as root
 main.restart_server : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_applier_reset : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_basics : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_basics_with_ssl : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_clone_on_server_start : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_clone_operations_on_runnning_member : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_different_recovery_user : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_error_fallback : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_no_managed_restart : BUG#0 disabled, unstable
-group_replication.gr_clone_integration_no_privileges : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_purged_donor : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_with_consistency_after : BUG#0 disabled, failed when run as root
-group_replication.gr_member_status_applier_error_bug  : BUG#0 disabled, unstable
-group_replication.gr_recovery_endpoints_invalid_donor : BUG#0 disabled, failed when run as root
-group_replication.gr_recovery_endpoints_iterate_list_clone : BUG#0 disabled, failed when run as root
-group_replication.gr_recovery_endpoints_multiple_valid : BUG#0 disabled, failed when run as root
-group_replication.gr_recovery_endpoints_no_fallback : BUG#0 disabled, failed when run as root
-group_replication.gr_recovery_endpoints_retry_clone : BUG#0 disabled, failed when run as root
-group_replication.gr_start_gr_credential_options_clone : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_stop_primary_member : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_stop_joiner_during_clone : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_start_gr_during_user_clone : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_basics_with_ssl_mysql : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_ddl_error : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_clone_on_rejoin : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_stop_donor_during_clone : BUG#0 disabled, failed when run as root
-group_replication.gr_autorejoin_with_clone_while_recovery_locked : BUG#0 disabled, failed when run as root
-group_replication.gr_multiple_starts_after_clone : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_applier_stop : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_stop_donor_during_clone_failover : BUG#0 disabled, failed when run as root
-group_replication.gr_certifier_garbage_collection_with_clone : BUG#0 disabled, failed when run as root
-group_replication.gr_acf_receiver_clone_on_rejoin : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_kill_donor_during_clone : BUG#0 disabled, failed when run as root
-group_replication.gr_clone_integration_recovery_priv_user_preservation : BUG#0 disabled, failed when run as root
-group_replication.gr_switch_primary_timeout_node_kill: BUG#0 disabled, conflict logic for mysql offical of online change primary key
-group_replication.gr_check_count_tx_remote_applier_queue_2 : BUG#0 disable, unstable, TODO fix it
-group_replication.gr_singlewriter_enabled_on_mode_switch : BUG#0 disable, unstable, TODO fix it
-group_replication.gr_stable_set_on_view_change : BUG#0 disable, unstable, TODO fix it
 main.dd_bootstrap : BUG#0 disabled, failed when run as root
 main.read_only_ddl : BUG#0 disabled, failed when run as root
 main.upgrade : BUG#0 disabled, failed when run as root
@@ -313,8 +284,7 @@ innodb.log_upgrade : BUG#0 disabled, failed when run as root
 innodb.percona_crash_recovery_innodb_status : BUG#0 disabled, failed when run as root 
 innodb.tablespace_temp_table_debug : BUG#0 disabled, failed when run as root 
 innodb.blob-crash : BUG#0 disabled, failed when run as root 
-innodb.ddl_kill   : BUG#0 disabled, unstable
-
+innodb.partition_import_57 : BUG#0 disabled, failed when run as root 
 
 
 #TBD

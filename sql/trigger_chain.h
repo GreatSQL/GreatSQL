@@ -64,6 +64,8 @@ class Trigger_chain {
 
   bool has_updated_trigger_fields(const MY_BITMAP *used_fields);
 
+  bool execute_asc{true};
+
  private:
   /// List of triggers of this chain.
   List<Trigger> m_triggers;

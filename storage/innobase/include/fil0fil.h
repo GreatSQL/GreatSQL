@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2022, Oracle and/or its affiliates.
+Copyright (c) 2023, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -1641,7 +1642,8 @@ datafile, fil_space_t & fil_node_t entries from the file_system_t cache.
 for this table in the buffer pool.
 @return DB_SUCCESS, DB_TABLESPCE_NOT_FOUND or DB_IO_ERROR */
 [[nodiscard]] dberr_t fil_delete_tablespace(space_id_t space_id,
-                                            buf_remove_t buf_remove);
+                                            buf_remove_t buf_remove,
+                                            const char *new_filepath = nullptr);
 
 /** Open a single-table tablespace and optionally do some validation such
 as checking that the space id is correct. If the file is already open,

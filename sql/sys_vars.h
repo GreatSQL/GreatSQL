@@ -1176,15 +1176,10 @@ class Sys_var_version : public Sys_var_charptr {
 
   ~Sys_var_version() override = default;
 
-  const uchar *global_value_ptr(THD *thd, std::string_view keycache_name
-                                [[maybe_unused]]) override {
-    // mod for greatdb
-    /*
-      const char *const *version_ptr = reinterpret_cast<const char *const *>(
-      Sys_var_charptr::global_value_ptr(thd, keycache_name));
-    */
-    const char *const *version_ptr =
-        reinterpret_cast<const char *const *>(&opt_fake_serv_vers_num);
+  const uchar *global_value_ptr(THD *thd,
+                                std::string_view keycache_name) override {
+    const char *const *version_ptr = reinterpret_cast<const char *const *>(
+        Sys_var_charptr::global_value_ptr(thd, keycache_name));
     if (version_ptr == nullptr || *version_ptr == nullptr) return nullptr;
 
     sys_var *suffix_var = find_static_system_variable("version_suffix");

@@ -4,6 +4,7 @@
 
 <copyright>
   Copyright (c) 2003, 2022, Oracle and/or its affiliates.
+  Copyright (c) 2023, GreatDB Software Co., Ltd.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -416,6 +417,19 @@ To make maintaining easier please:
     <flag>compiled</flag>
   </collation>
   <collation name="gb18030_bin" id="249" order="Binary">
+    <flag>binary</flag>
+    <flag>compiled</flag>
+  </collation>
+</charset>
+
+<charset name="gb18030_2022">
+  <family>East Asian</family>
+  <description>China National Standard GB18030-2022</description>
+  <collation name="gb18030_2022_chinese_ci" id="217" order="Chinese">
+    <flag>primary</flag>
+    <flag>compiled</flag>
+  </collation>
+  <collation name="gb18030_2022_bin" id="216" order="Binary">
     <flag>binary</flag>
     <flag>compiled</flag>
   </collation>

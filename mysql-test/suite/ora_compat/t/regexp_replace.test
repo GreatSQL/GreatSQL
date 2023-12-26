@@ -1,0 +1,421 @@
+set sql_mode='oracle,emptystring_equal_null,no_backslash_escapes';
+
+--echo #
+--echo #  from oracle
+--echo #
+SELECT regexp_replace('111.222.3333', '([[:digit:]]{3})\.([[:digit:]]{3})\.([[:digit:]]{4})', '(\1) \2-\3') AS REGEXP_REPLACE FROM DUAL;
+SELECT regexp_replace('fuzhou', '(.)', '\1 ') AS REGEXP_REPLACE FROM DUAL;
+SELECT REGEXP_REPLACE('500   Oracle     Parkway,    Redwood  Shores, CA', '( ){2,}', ' ') AS REGEXP_REPLACE FROM DUAL;
+
+CREATE TABLE regexp_temp(empName varchar2(20), emailID varchar2(20));
+INSERT INTO regexp_temp (empName, emailID) VALUES ('John Doe', 'johndoe@example.com');
+INSERT INTO regexp_temp (empName, emailID) VALUES ('Jane Doe', 'janedoe@example.com');
+SELECT empName, REGEXP_REPLACE (empName, 'Jane', 'John') AS REGEXP_REPLACE FROM regexp_temp;
+SELECT empName, REGEXP_REPLACE (empName, 'John', 'Jane') AS REGEXP_REPLACE  FROM regexp_temp;
+drop table regexp_temp;
+
+WITH strings AS (   
+  SELECT 'abc123' s FROM dual union all   
+  SELECT '123abc' s FROM dual union all   
+  SELECT 'a1b2c3' s FROM dual   
+)   
+SELECT s, regexp_replace(s, '[0-9]', '') AS REGEXP_REPLACE FROM strings;
+
+WITH strings AS (   
+  SELECT 'abc123' s from DUAL union all   
+  SELECT '123abc' s from DUAL union all   
+  SELECT 'a1b2c3' s from DUAL   
+)   
+SELECT s, REGEXP_REPLACE(s, '[0-9]', '', 1, 1) AS REGEXP_REPLACE FROM strings;
+
+WITH strings AS (   
+  SELECT 'abc123' s from DUAL union all   
+  SELECT '123abc' s from DUAL union all   
+  SELECT 'a1b2c3' s from DUAL   
+)   
+SELECT s, REGEXP_REPLACE(s, '[0-9]', '', 1, 2) AS REGEXP_REPLACE FROM strings;
+
+WITH strings AS (   
+  SELECT 'Hello  World' s FROM dual union all   
+  SELECT 'Hello        World' s FROM dual union all   
+  SELECT 'Hello,   World  !' s FROM dual   
+)   
+SELECT s, regexp_replace(s, ' {2,}', ' ') AS REGEXP_REPLACE FROM strings;
+
+WITH strings as (   
+  SELECT 'AddressLine1' s FROM dual union all   
+  SELECT 'ZipCode' s FROM dual union all   
+  SELECT 'Country' s FROM dual   
+)   
+SELECT s, lower(regexp_replace(s, '([A-Z0-9])', '_\1', 2)) AS REGEXP_REPLACE FROM strings;
+
+WITH date_strings AS (   
+  SELECT  '2015-01-01' d from dual union all   
+  SELECT '2000-12-31' d from dual union all   
+  SELECT '900-01-01' d from dual   
+)   
+SELECT d, regexp_replace(d, '([[:digit:]]+)-([[:digit:]]{2})-([[:digit:]]{2})', '\3.\2.\1')  AS REGEXP_REPLACE FROM date_strings;
+
+WITH strings as (   
+  SELECT 'NEW YORK' s FROM dual union all   
+  SELECT 'New York' s FROM dual union all   
+  SELECT 'new york' s FROM dual   
+)   
+SELECT s,  
+    regexp_replace(s, '[a-z]', '1', 1, 0, 'i') AS CASE_INSENSITIVE,  
+    regexp_replace(s, '[a-z]', '1', 1, 0, 'c') AS CASE_SENSITIVE,  
+    regexp_replace(s, '[a-zA-Z]', '1', 1, 0, 'c') AS CASE_SENSITIVE_MATCHING  
+FROM strings;
+
+--echo #
+--echo #  compatibility
+--echo #
+# default value or null value
+--error 1582
+select regexp_replace('') as regexp_replace from dual;
+select regexp_replace('', '') as regexp_replace from dual;
+select regexp_replace('', '', '') as regexp_replace from dual;
+
+select regexp_replace('', '[[:digit:]]') as regexp_replace from dual;
+select regexp_replace('', '[[:digit:]]', '*') as regexp_replace from dual;
+select regexp_replace('', '', '*') as regexp_replace from dual;
+select regexp_replace('', '[[:digit:]]', '') as regexp_replace from dual;
+
+select regexp_replace('111', '') as regexp_replace from dual;
+select regexp_replace('111', '', '*') as regexp_replace from dual;
+select regexp_replace('111', '', '') as regexp_replace from dual;
+
+select regexp_replace('111', '[[:digit:]]', '') as regexp_replace from dual;
+select regexp_replace('111', '[a-z]*', '') as regexp_replace from dual;
+
+# backreferences of subexpressions
+select regexp_replace('111', '[[:digit:]]', '$$') as regexp_replace from dual;
+select regexp_replace('111', '[[:digit:]]', '$1') as regexp_replace from dual;
+select regexp_replace('111', '[[:digit:]]', '\\1') as regexp_replace from dual;
+select regexp_replace('111', '[[:digit:]]', '\1') as regexp_replace from dual;
+select regexp_replace('111', '([[:digit:]])', '\1') as regexp_replace from dual;
+select regexp_replace('111', '([[:digit:]])', '\2') as regexp_replace from dual;
+select regexp_replace('111', '([[:digit:]])', '\20') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))', '\2') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))([[:digit:]])?', '.\1') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))([[:digit:]])?', '.\2') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))([[:digit:]])?', '.\3') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))([[:digit:]])?', '.\4') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))([[:digit:]])?', '.\0') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))([[:digit:]])?', '.\') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))([[:digit:]])?', '.\\\') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))([[:digit:]])?', '.\\\\\') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))([[:digit:]])?', '.\1\\\') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))([[:digit:]])?', '.\我\\\') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))([[:digit:]])?', '.\\') as regexp_replace from dual;
+select regexp_replace('111', '(([[:digit:]]))([[:digit:]])?', '.\\\\') as regexp_replace from dual;
+SELECT regexp_replace('111.222.3333 444.555.6666', '([[:digit:]]{3})\.([[:digit:]]{3})\.([[:digit:]]{4})', '(\1) \2-\3') AS REGEXP_REPLACE FROM DUAL;
+SELECT regexp_replace('111.222.3333 444.555.6666', '([[:digit:]]{3})\.([[:digit:]]{3})\.([[:digit:]]{4})', '(\\1) \2-\3') AS REGEXP_REPLACE FROM DUAL;
+SELECT regexp_replace('111.222.333.444.555.666.777.888.999.000', 
+	'([[:digit:]]{3})\.([[:digit:]]{3})\.([[:digit:]]{3})\.([[:digit:]]{3}\.([[:digit:]]{3})\.([[:digit:]]{3})\.([[:digit:]]{3})\.([[:digit:]]{3})\.([[:digit:]]{3})\.([[:digit:]]{3}))', 
+	'(\10) \2-\3') AS REGEXP_REPLACE FROM DUAL;
+SELECT regexp_replace('aaa BBB ccc 12\\', '\\', '\1n') AS REGEXP_REPLACE FROM DUAL;
+SELECT regexp_replace('aaa BBB ccc 12\2', '(\\)', '\1n') AS REGEXP_REPLACE FROM DUAL;
+SELECT regexp_replace('aaa BBB ccc 12\2', '(\\2)', '\1n') AS REGEXP_REPLACE FROM DUAL;
+SELECT regexp_replace('12\$2', '(\$2)', '\1n') AS REGEXP_REPLACE FROM DUAL;
+SELECT regexp_replace('$2abc', '(\$\d)(abc)', '\1n') AS REGEXP_REPLACE FROM DUAL;
+
+# position
+select regexp_replace('111222333', '[[:digit:]]{3}', '***') as regexp_replace from dual;
+--error 1583
+select regexp_replace('111222333', '[[:digit:]]{3}', '***', 0) as regexp_replace from dual;
+select regexp_replace('111222333', '[[:digit:]]{3}', '***', 1) as regexp_replace from dual;
+select regexp_replace('111222333', '[[:digit:]]{3}', '***', 2) as regexp_replace from dual;
+select regexp_replace('你你你', '你', '*', 1) as regexp_replace from dual;
+select regexp_replace('你你你', '你', '*', 2) as regexp_replace from dual;
+
+# occurrence
+select regexp_replace('111222333', '[[:digit:]]{3}', '***', 1) as regexp_replace from dual;
+select regexp_replace('111222333', '[[:digit:]]{3}', '***', 1, 0) as regexp_replace from dual;
+select regexp_replace('111222333', '[[:digit:]]{3}', '***', 1, 1) as regexp_replace from dual;
+select regexp_replace('111222333', '[[:digit:]]{3}', '***', 1, 2) as regexp_replace from dual;
+select regexp_replace('111222333', '[[:digit:]]{3}', '***', 1, 3) as regexp_replace from dual;
+select regexp_replace('你你你', '你', '*', 1, 0) as regexp_replace from dual;
+select regexp_replace('你你你', '你', '*', 1, 1) as regexp_replace from dual;
+
+# match_param
+select regexp_replace('aaabbbccc123', '[a-z]{3}', '***', 1, 0) as regexp_replace from dual;
+select regexp_replace('aaabbbccc123', '[a-z]{3}', '***', 1, 0, 'i') as regexp_replace from dual;
+select regexp_replace('aaabbbccc123', '[a-z]{3}', '***', 1, 0, 'c') as regexp_replace from dual;
+select regexp_replace('aaabbbccc123', '[a-z]{3}', '***', 1, 0, 'ic') as regexp_replace from dual;
+select regexp_replace('aaabbbccc123', '[a-z]{3}', '***', 1, 0, 'ci') as regexp_replace from dual;
+
+select regexp_replace('aaa
+bbbccc123', '.', '*', 1, 0) as regexp_replace from dual;
+select regexp_replace('aaa
+bbbccc123', '.', '*', 1, 0, 'n') as regexp_replace from dual;
+
+select regexp_replace('aaa
+bbbccc123', '^a', '*', 1, 0, 'm') as regexp_replace from dual;
+select regexp_replace('aaa
+bbbccc123', '^b', '*', 1, 0, 'm') as regexp_replace from dual;
+select regexp_replace('aaa
+bbbccc123', '^[a-z]', '*', 1, 0, 'im') as regexp_replace from dual;
+select regexp_replace('aaa
+bbbccc123', '[a-z]$', '*', 1, 0, 'im') as regexp_replace from dual;
+select regexp_replace('aaa
+bbbccc123', '[0-9]$', '*', 1, 0, 'im') as regexp_replace from dual;
+select regexp_replace('aaa
+bbbccc123', '^[a-z]*$', '*', 1, 0, 'im') as regexp_replace from dual;
+select regexp_replace('aaa
+bbbccc123', '^[a-z].*[0-9]$', '*', 1, 0, 'im') as regexp_replace from dual;
+
+# 'x'
+select regexp_replace('aaa bbb ccc 123', 'aaa bbb', '*', 1, 0) as regexp_replace from dual;
+select regexp_replace('aaa bbb ccc 123', 'aaa bbb', '*', 1, 0, 'x') as regexp_replace from dual;
+select regexp_replace('aaabbb ccc 123', 'aaa bbb', '*', 1, 0, 'x') as regexp_replace from dual;
+select regexp_replace('aaa bbb ccc 123', '\s+', '*', 1, 0) as regexp_replace from dual;
+select regexp_replace('aaa bbb ccc 123', '\s+', '*', 1, 0, 'x') as regexp_replace from dual;
+select regexp_replace('aaa bbb ccc 123', ' ', '*', 1, 0) as regexp_replace from dual;
+--error 3685
+select regexp_replace('aaa bbb ccc 123', ' ', '*', 1, 0, 'x') as regexp_replace from dual;
+select regexp_replace('aaa bbb ccc 123', '\ ', '*', 1, 0, 'x') as regexp_replace from dual;
+select regexp_replace('aaa bbb ccc 123', 'a ', '*', 1, 0, 'x') as regexp_replace from dual;
+select regexp_replace('aaa bbb ccc 123', 'a', '*', 1, 0, 'x') as regexp_replace from dual;
+select regexp_replace('aaa bbb ccc 123', 'a\n', '*', 1, 0, 'x') as regexp_replace from dual;
+
+
+--echo #
+--echo # from native
+--echo #
+--echo # regexp_replace(), three arguments.
+select regexp_replace( 'aaa', 'a', 'x' ) from dual;
+select regexp_replace( 'abc', 'b', 'x' ) from dual;
+select regexp_replace( null, 'a', 'x' ) from dual;
+select regexp_replace( 'aaa', null, 'x' ) from dual;
+select regexp_replace( 'aaa', 'a', null ) from dual;
+--echo # this tests that the correct character set is declared. if we don't
+--echo # declare it correctly, the utf-16 sequence will be interpreted as a
+--echo # zero-terminated string consisting of 'x', and the
+--echo # result will thus be 'x'.
+select concat( regexp_replace( 'aaa', 'a', 'x' ), 'x' ) from dual;
+
+--echo # regexp_replace(), four arguments.
+--error 1583
+select regexp_replace( 'aaa', 'a', 'x', 0 ) from dual;
+select regexp_replace( 'aaa', 'a', 'x', 1 ) from dual;
+
+select regexp_replace( 'a', 'a+', 'b', 4 ) from dual;
+select regexp_replace( 'a', 'a+', 'b', 3 ) from dual;
+select regexp_replace( 'a', 'a+', 'b', 2 ) from dual;
+select regexp_replace( 'a', 'a+', 'b', 1 ) from dual;
+
+--echo # regexp_replace(), five arguments.
+--error 1583
+select regexp_replace( 'aaabbccbbddaa', 'b+', 'x', 0, 1 ) from dual;
+select regexp_replace( 'aaabbccbbddaa', 'b+', 'x', 1, 1 ) from dual;
+select regexp_replace( 'aaabbccbbddaa', 'b+', 'x', 1, 2 ) from dual;
+select regexp_replace( 'aaabbccbbddaa', '(b+)', '<\1>', 1, 2 ) from dual;
+select regexp_replace( 'aaabbccbbddaa', 'x+', 'x', 1, 0 ) from dual;
+select regexp_replace( 'aaabbccbbddaa', 'b+', 'x', 1, 0 ) from dual;
+select regexp_replace( 'aaab', 'b', 'x', 1, 2 ) from dual;
+select regexp_replace( 'aaabccc', 'b', 'x', 1, 2 ) from dual;
+
+select regexp_replace( 'abc', 'b', 'x' ) from dual;
+select regexp_replace( 'abcbdb', 'b', 'x' ) from dual;
+
+select regexp_replace( 'abcbdb', 'b', 'x', 3 ) from dual;
+select regexp_replace( 'aaabcbdb', 'b', 'x', 1 ) from dual;
+select regexp_replace( 'aaabcbdb', 'b', 'x', 2 ) from dual;
+select regexp_replace( 'aaabcbdb', 'b', 'x', 3 ) from dual;
+
+--error 3685
+select regexp_replace( 'a', '[[:invalid_bracket_expression:]]', '\1' ) from dual;
+
+--echo #
+--echo # test of the dynamic buffer in regexp_replace.
+--echo #
+select regexp_replace( 'aaa', 'a', 'x', 2 ) from dual;
+select regexp_replace( 'aaa', 'a', 'xx', 2 ) from dual;
+
+--echo #
+--echo # typecasts.
+--echo #
+create table t_regexp_replace
+(
+  a real,
+  b int,
+  c char(100),
+  d decimal
+);
+
+--error 1265
+insert into t_regexp_replace ( a ) values ( regexp_replace('a', 'a', 'a') );
+--error 1366
+insert into t_regexp_replace ( b ) values ( regexp_replace('a', 'a', 'a') );
+insert into t_regexp_replace ( c ) values ( regexp_replace('a', 'a', 'a') );
+--error 1366
+insert into t_regexp_replace ( d ) values ( regexp_replace('a', 'a', 'a') );
+select * from t_regexp_replace;
+drop table t_regexp_replace;
+
+--echo # at the time of writing, val_int() is not called when inserting into an
+--echo # int column.
+select cast( regexp_replace('a', 'a', 'a') as signed integer ) from dual;
+
+--echo # casting to datetime/time
+--echo # due to the class hierarchy of function objects, these have to be
+--echo # copy-pasted.
+select cast( regexp_replace('a', 'a', 'a') as datetime ) from dual;
+select cast( regexp_replace('a', 'a', 'a') as time ) from dual;
+
+
+set global net_buffer_length = 1024;
+set global max_allowed_packet = @@global.net_buffer_length;
+select @@global.max_allowed_packet;
+
+--echo # we need to start a new session in order for the changes to the session
+--echo # version of max_allowed_packet to take effect.
+
+--connect(conn1,localhost,root,,)
+--echo # this is now the replacement buffer size in utf-16 characters.
+set @buf_sz_utf16 = @@global.max_allowed_packet / length( _utf16'x' );
+select @buf_sz_utf16;
+select length(regexp_replace( repeat('a', @buf_sz_utf16), 'a', 'b' ));
+--error 3684
+select length(regexp_replace( repeat('a', @buf_sz_utf16 + 1), 'a', 'b' ));
+--error 3684
+select length(regexp_replace( repeat('a', @buf_sz_utf16), 'a', 'bb' ));
+--disconnect conn1
+--connection default
+
+set global net_buffer_length = default;
+set global max_allowed_packet = default;
+
+--echo #
+--echo # test that the replacement buffer can grow beyond the maximum varchar
+--echo # column length.
+--echo #
+create table t_regexp_replace ( a text );
+# the maximum varchar length, divided by max multibyte character length,
+# plus one.
+insert into t_regexp_replace values ( repeat( 'a', 16384 ) );
+select char_length ( regexp_replace( a, 'a', 'b' ) ) from t_regexp_replace;
+set global  regexp_time_limit = 10000;
+select regexp_like ( regexp_replace( a, 'a', 'b' ), 'b{16384}' ) from t_regexp_replace;
+set global  regexp_time_limit = default;
+drop table t_regexp_replace;
+
+--echo #
+--echo # bug#27252630: regexp functions ignore nulls
+--echo #
+select regexp_replace ( 'a', 'a', 'a', null );
+select regexp_replace ( 'a', 'a', 'a', 1, null );
+select regexp_replace ( 'a', 'a', 'a', 1, 0, null );
+select regexp_replace ( 'a', 'a', 'b', 1, 0, null ) from dual;
+select regexp_replace ( 'a', 'a', 'b', 1, 0, null ) from dual;
+select regexp_replace ( 'a
+a', '.', 'b', 1, 0, null ) from dual;
+select regexp_replace ( 'ac
+ad', '^a.*', 'b', 1, 0, null ) from dual;
+select regexp_replace ( 'ab', 'a b', 'c', 1, 0, null ) from dual;
+
+--echo #
+--echo # bug#28027093: regexp_replace truncate update
+--echo #
+create table t_regexp_replace ( a char(3) );
+insert into t_regexp_replace values ( regexp_replace ('a', 'a', 'x') );
+select * from t_regexp_replace;
+update t_regexp_replace set a = regexp_replace ( 'b', 'b', 'y' );
+select * from t_regexp_replace;
+drop table t_regexp_replace;
+
+--echo #
+--echo # bug#29231490: regexp functions fail to use codepoint positions
+--echo #
+
+--echo # sushi emoji, may not render in your editor.
+set names default;
+select regexp_replace( '🍣🍣🍣', '.', 'a', 2 );
+select regexp_replace( '🍣🍣🍣', '.', 'a', 2, 2 );
+
+--echo #
+--echo # regexp_replace does not convert result character set
+--echo #
+select hex(regexp_replace( convert( 'abcd' using utf8mb4 ), 'c', ''));
+select hex(regexp_replace( convert( 'abcd' using utf16 ), 'c', ''));
+
+--echo #
+--echo # small part of the test. making sure you can't mix binary strings with
+--echo # any other character set. see regular_expressions_utf-8_big.test for the
+--echo # big part.
+--echo #
+--error 3995
+select regexp_replace('01', '01', x'02');
+--error 3995
+select regexp_replace('01', x'01', '02');
+--error 3995
+select regexp_replace('01', x'01', x'02');
+--error 3995
+select regexp_replace(x'01', '01', '02');
+--error 3995
+select regexp_replace(x'01', '01', x'02');
+--error 3995
+select regexp_replace(x'01', x'01', '02');
+
+--echo # when any argument is null, the result of a regular expression function
+--echo # is also null, obviously. these tests are only here to show that we
+--echo # don't mistakenly reject null values based on character set.
+select regexp_replace(1, 1, 'a');
+select regexp_replace(1, 'a', 1);
+select regexp_replace(1, 'a', 'a');
+select regexp_replace('a', 1, 1);
+select regexp_replace('a', 1, 'a');
+select regexp_replace('a', 'a', 1);
+
+select regexp_replace(null, null, 'a');
+select regexp_replace(null, 'a', null);
+select regexp_replace(null, 'a', 'a');
+select regexp_replace('a', null, null);
+select regexp_replace('a', null, 'a');
+select regexp_replace('a', 'a', null);
+
+--echo #
+--echo # bug#31031888: regexp_replace and regexp_substr still add null
+--echo # bytes
+--echo #
+select hex(regexp_replace(x'01', x'01', x'02'));
+create table t_regexp_replace as select regexp_replace(x'01', x'01', x'02');
+show create table t_regexp_replace;
+select hex(`regexp_replace(x'01', x'01', x'02')`) from t_regexp_replace;
+drop table t_regexp_replace;
+
+--echo #
+--echo # store routine
+--echo #
+delimiter //;
+create procedure p1() as
+begin
+	select regexp_replace('111.222.3333', '([[:digit:]]{3})\.([[:digit:]]{3})\.([[:digit:]]{4})', '(\1) \2-\3') as regexp_replace from dual;
+	select regexp_replace('aaabbb ccc 123', 'aaa bbb', '*', 1, 0, 'x') as regexp_replace from dual;
+end;//
+call p1()//
+call p1()//
+drop procedure p1;
+
+create function f1() return varchar(1024) as
+	s1 varchar(1024);
+	s2 varchar(1024);
+begin
+	select regexp_replace('111.222.3333', '([[:digit:]]{3})\.([[:digit:]]{3})\.([[:digit:]]{4})', '(\1) \2-\3') into s1 from dual;
+	select regexp_replace('aaabbb ccc 123', 'aaa bbb', '*', 1, 0, 'x') into s2 from dual;
+	return concat(s1, ', ' , s2);
+end;//
+select f1()//
+select f1()//
+drop function f1;//
+
+delimiter ;//
+
+create table t_regexp_replace ( a text );
+set @context = '';
+create trigger test_tri before insert on t_regexp_replace for each row set @context = regexp_replace(:new.a, '([[:digit:]]{3})\.([[:digit:]]{3})\.([[:digit:]]{4})', '(\1) \2-\3');
+insert into t_regexp_replace(a) values('111.222.3333');
+select @context;
+drop trigger test_tri;
+drop table t_regexp_replace;

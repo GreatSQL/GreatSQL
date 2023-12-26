@@ -113,14 +113,15 @@ class Events {
   static void init_mutexes();
 
   static bool create_event(THD *thd, Event_parse_data *parse_data,
-                           bool if_exists);
+                           bool if_exists, String *job = nullptr);
 
   static bool update_event(THD *thd, Event_parse_data *parse_data,
                            const LEX_CSTRING *new_dbname,
-                           const LEX_CSTRING *new_name);
+                           const LEX_CSTRING *new_name, bool run = false,
+                           String *job = nullptr);
 
   static bool drop_event(THD *thd, LEX_CSTRING dbname, LEX_CSTRING name,
-                         bool if_exists);
+                         bool if_exists, bool is_dbms_job = false);
 
   static bool lock_schema_events(THD *thd, const dd::Schema &schema);
 

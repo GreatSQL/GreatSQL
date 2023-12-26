@@ -51,6 +51,7 @@
 #include "sql/sql_servers.h"
 #include "sql/sql_table.h"  // mysql_alter_table,
 #include "sql/table.h"
+#include "sql/table_cache.h"
 #include "template_utils.h"  // delete_container_pointers
 
 bool has_external_data_or_index_dir(partition_info &pi);
@@ -246,6 +247,32 @@ bool Sql_cmd_alter_table::execute(THD *thd) {
   Query_block *query_block = lex->query_block;
   /* first table of first Query_block */
   Table_ref *first_table = query_block->get_table_list();
+
+  if (is_temporary_table(first_table) && first_table->table->m_is_ora_tmp) {
+    if (!first_table->table->m_global_tmp) {
+      my_error(ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE, MYF(0));
+      return true;
+    }
+
+    /*
+      only handle the temp table in first_table.
+      all other transactional temp tables are handled at the end of transaction
+      which occurs after alter-table statement.
+    */
+    if (first_table->table->m_trans_tmp) {
+      first_table->table->file->ha_reset();
+      close_temporary_table(thd, first_table->table, true, true);
+      first_table->table = nullptr;
+    }
+  }
+  /* if first_table is a MySQL tmp table, don't check global temp table cache */
+  if (!(is_temporary_table(first_table) && !first_table->table->m_is_ora_tmp) &&
+      is_in_global_temp_table_cache(thd, first_table->db,
+                                    first_table->table_name)) {
+    my_error(ER_GLOBAL_TEMP_TABLE_IN_USE, MYF(0));
+    return true;
+  }
+
   /*
     Code in mysql_alter_table() may modify its HA_CREATE_INFO argument,
     so we have to use a copy of this structure to make execution

@@ -89,8 +89,9 @@ UPDATE t1 set a= 1 where a= 10;
 --let $assert_cond= [SELECT COUNT(*) AS count FROM t1 where t1.a= 20, count, 1]= 1
 --source include/assert.inc
 
---let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE State = 'debug sync point: now'
---source include/wait_condition.inc
+--disable_query_log
+SET DEBUG_SYNC='now wait_for signal.group_replication_before_message_broadcast_reached';
+--enable_query_log
 
 --echo
 --echo ## 3.3. Execute a transaction on server2, that will reach first
@@ -180,8 +181,9 @@ INSERT INTO t1 VALUES (2);
 --echo ## group_replication_before_message_broadcast debug sync point.
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc
---let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE State = 'debug sync point: now'
---source include/wait_condition.inc
+--disable_query_log
+SET DEBUG_SYNC='now wait_for signal.group_replication_before_message_broadcast_reached';
+--enable_query_log
 
 --echo
 --echo ## 4.3 Execute a non-conflicting transaction on server2, that will reach

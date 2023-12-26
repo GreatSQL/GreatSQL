@@ -1478,6 +1478,17 @@ PQ_CLONE_DEF(Item_date_add_interval) {
 }
 PQ_CLONE_RETURN
 
+PQ_CLONE_DEF(Item_func_add_months) {
+  Item *arg_a = args[0]->pq_clone(thd, select);
+  Item *arg_b = args[1]->pq_clone(thd, select);
+  if (arg_a == nullptr || arg_b == nullptr) return nullptr;
+  new_item = new (thd->pq_mem_root) Item_func_add_months(arg_a, arg_b);
+  if (new_item) {
+    new_item->set_data_type(data_type());
+  }
+}
+PQ_CLONE_RETURN
+
 COPY_FUNC_ITEM(Item_func_add_time, POS(), ARG0, ARG1, m_datetime,
                m_sign == -1 ? true : false)
 
@@ -1491,6 +1502,18 @@ PQ_COPY_FROM_DEF(Item_func_str_to_date, Item_temporal_hybrid_func) {
 PQ_COPY_FROM_RETURN
 
 COPY_FUNC_ITEM(Item_typecast_char, thd, ARG0, m_cast_length, m_cast_cs)
+
+/* Item_to_clob start */
+PQ_CLONE_DEF(Item_to_clob) {
+  PQ_CLONE_ARGS
+
+  PT_item_list pt_item_list;
+  pt_item_list.value = item_list;
+
+  new_item = new (thd->pq_mem_root) Item_to_clob(thd, POS(), &pt_item_list);
+}
+PQ_CLONE_RETURN
+/* Item_to_clob end */
 
 PQ_CLONE_DEF(Item_date_literal) {
   MYSQL_TIME ltime;
@@ -1862,6 +1885,14 @@ PQ_CLONE_DEF(Item_func_version) {
 }
 PQ_CLONE_RETURN
 
+/* Item_func_lnnvl pq start */
+PQ_CLONE_DEF(Item_func_lnnvl) {
+  PQ_CLONE_ARGS
+  new_item = new (thd->pq_mem_root) Item_func_lnnvl(POS(), item_list[0]);
+}
+PQ_CLONE_RETURN
+/* Item_func_lnnvl pq end */
+
 PQ_CLONE_DEF(PTI_function_call_nonkeyword_now) {
   new_item =
       new (thd->pq_mem_root) PTI_function_call_nonkeyword_now(POS(), decimals);
@@ -1980,5 +2011,7 @@ Item *Item_time_with_ref::pq_clone(THD *thd, Query_block *select) {
 
   return ref->pq_clone(thd, select);
 }
+
+COPY_FUNC_ITEM(Item_func_rawtohex, POS(), ARG0)
 
 #endif

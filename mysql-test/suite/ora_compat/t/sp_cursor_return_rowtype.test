@@ -1,0 +1,647 @@
+set sql_mode="oracle";
+set @@udt_format_result='DBA';
+
+CREATE TABLE t1 (a INT, b VARCHAR(3));
+insert into t1 values(1,'aa'),(2,'bb'),(3,'cc'),(4,'dd'),(5,'ee') ;
+create or replace type t_air as object(id int,type varchar(20));
+create table tt_air(id int,name1 t_air);
+create or replace type t_air_table as table of t_air;
+
+--echo #
+--echo # test of cursor return record%type is select_stmt
+--echo #
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+CREATE or replace PROCEDURE p1() as
+  type record is record(
+  id int := 1,
+  name_d  varchar(200));
+  CURSOR c return record%type IS SELECT a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of cursor return record%type is select_stmt
+--echo #
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+CREATE or replace PROCEDURE p1() as
+  CURSOR c return t1.id%type IS SELECT a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of cursor return record%type is select_stmt
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type record1 is record(
+  id int := 1,
+  name_d  varchar(200));
+  record2 record1;
+  CURSOR c return record2%type IS SELECT a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+call p1;
+
+--echo #
+--echo # test of cursor return record is select_stmt
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type record is record(
+  id int := 1,
+  name_d  varchar(200));
+  CURSOR c return record IS SELECT a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+call p1;
+
+--echo #
+--echo # test of cursor return record is select_stmt with different type
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type record is record(
+  id int := 1,
+  name_d int);
+  CURSOR c return record IS SELECT * FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c;
+  fetch c into a1,b1;
+end;
+$$
+DELIMITER ;$$
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+call p1;
+
+--echo #
+--echo # test of cursor return table%rowtype is select_stmt with different type
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c return t1%rowtype IS SELECT a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+call p1;
+
+--echo #
+--echo # test of cursor return table%rowtype is select_stmt with different type
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c return t1%rowtype IS SELECT b,a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c;
+  fetch c into a1,b1;
+end;
+$$
+DELIMITER ;$$
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+call p1;
+
+--echo #
+--echo # test of cursor return cursor%rowtype is select_stmt with different type
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c IS SELECT a FROM t1 WHERE a>3;
+  CURSOR c1 return c%rowtype IS SELECT * FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c1;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+call p1;
+
+--echo #
+--echo # test of cursor return cursor%rowtype is select_stmt with different type
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c IS SELECT * FROM t1 WHERE a>3;
+  CURSOR c1 return c%rowtype IS SELECT b,a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c1;
+  fetch c1 into a1,b1;
+end;
+$$
+DELIMITER ;$$
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+call p1;
+
+--echo #
+--echo # test of type is ref cursor return record%type
+--echo #
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+CREATE or replace PROCEDURE p1() as
+  type record is record(
+  id int := 1,
+  name_d  varchar(200));
+  TYPE ref_rs1 IS REF CURSOR RETURN record%type;
+  c ref_rs1;
+begin
+  open c for select a from t1;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of type is ref cursor return record%type
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type record2 is record(
+  id int := 1,
+  name_d  varchar(200));
+  record1 record2;
+  TYPE ref_rs1 IS REF CURSOR RETURN record1%type;
+  c ref_rs1;
+begin
+  open c for select a from t1;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+call p1;
+
+--echo #
+--echo # test of type is ref cursor return record%type
+--echo #
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+CREATE or replace PROCEDURE p1() as
+  TYPE ref_rs1 IS REF CURSOR RETURN t1.id%type;
+  c ref_rs1;
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of cursor return ref cursor%rowtype is select_stmt with different type
+--echo #
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE or replace PROCEDURE p1() as
+  TYPE ref_rs1 IS REF CURSOR RETURN t1%rowtype;
+  CURSOR c1 return ref_rs1%rowtype IS SELECT a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c1;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of cursor return ref cursor%rowtype is select_stmt with different type
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE ref_rs1 IS REF CURSOR RETURN t1%rowtype;
+  c2 ref_rs1;
+  CURSOR c1 return c2%rowtype IS SELECT a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c1;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+call p1;
+
+--echo #
+--echo # test of cursor return ref cursor%rowtype is select_stmt with different type
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE ref_rs1 IS REF CURSOR RETURN t1%rowtype;
+  c2 ref_rs1;
+  CURSOR c1 return c2%rowtype IS SELECT b,a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c1;
+  fetch c1 into a1,b1;
+end;
+$$
+DELIMITER ;$$
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+call p1;
+
+--echo #
+--echo # test of type IS REF CURSOR return record%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c1 IS SELECT b,a FROM t1 WHERE a>3;
+  TYPE ref_rs1 IS REF CURSOR RETURN c1%rowtype;
+  c2 ref_rs1;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c2 for select a from t1;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+call p1;
+
+--echo #
+--echo # test of type IS REF CURSOR return record%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type record1 is record(
+  id int := 1,
+  name_d int);
+  record2 record1;
+  TYPE ref_rs1 IS REF CURSOR RETURN record2%type;
+  c1 ref_rs1;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c1 for select a from t1;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+call p1;
+
+--echo #
+--echo # test of cursor return ref cursor%rowtype is select_stmt with different type
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE ref_rs1 IS REF CURSOR RETURN t1%rowtype;
+  c2 ref_rs1;
+  CURSOR c1 return c2%rowtype IS SELECT b,a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c1;
+  fetch c1 into a1,b1;
+end;
+$$
+DELIMITER ;$$
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+call p1;
+
+--echo #
+--echo # test of cursor return ref cursor%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c IS SELECT b,a FROM t1 WHERE a>3;
+  TYPE ref_rs1 IS REF CURSOR RETURN c%rowtype;
+  c2 ref_rs1;
+  CURSOR c1 return c2%rowtype IS SELECT a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c1;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+call p1;
+
+--echo #
+--echo # test of return static cursor twice
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c IS SELECT * FROM t1 WHERE a>3;
+  TYPE ref_rs1 IS REF CURSOR RETURN c%rowtype;
+  CURSOR c1 return c%rowtype IS SELECT * FROM t1 WHERE a<3;
+  c2 ref_rs1;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c1;
+  loop
+    fetch c1 into a1,b1;
+    exit when c1%notfound;
+    select a1,b1;
+  end loop;
+  open c2 for select * from t1 where a=4;
+  loop
+    fetch c2 into a1,b1;
+    exit when c2%notfound;
+    select a1,b1;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of cursor return udt%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c1 return t_air%rowtype IS SELECT a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c1;
+end;
+$$
+DELIMITER ;$$
+--error ER_NO_SUCH_TABLE
+call p1;
+
+--echo #
+--echo # test of cursor return db2.udt%rowtype and change udt
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c1 return t_air_table%rowtype IS SELECT a FROM t1 WHERE a>3;
+  a1 int;
+  b1 varchar(20);
+begin
+  open c1;
+end;
+$$
+--error ER_NO_SUCH_TABLE
+DELIMITER ;$$
+
+--echo #
+--echo # test of static cursor return is select_stmt
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type t_test1 is record(
+  id int := 1,
+  type1  varchar(200));
+ t_test t_test1;
+  CURSOR c return t_test%type IS SELECT * FROM t1 WHERE a>3;
+  CURSOR sc1 RETURN c%rowtype IS SELECT * FROM t1 WHERE a<3;
+  CURSOR sc2 RETURN sc1%rowtype IS SELECT * FROM t1 WHERE a=4;
+  CURSOR sc3 RETURN sc2%rowtype IS SELECT * FROM t1 WHERE a=5;
+  a1 int;
+  b1 varchar(20);
+begin
+  open sc2;
+  loop
+    fetch sc2 into a1,b1;
+    exit when sc2%notfound;
+    select a1,b1;
+  end loop;
+  for i in sc3 loop
+    select i.id,i.type1;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of strong cursor set to strong cursor
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c IS SELECT * FROM t1 WHERE a>3;
+  CURSOR sc1 RETURN c%rowtype IS SELECT * FROM t1 WHERE a<3;
+  CURSOR sc2 RETURN sc1%rowtype IS SELECT * FROM t1 WHERE a<3;
+  TYPE ref_rs1 IS REF CURSOR RETURN sc2%rowtype;
+  TYPE ref_rs2 IS REF CURSOR RETURN t1%rowtype;
+  c1 ref_rs1;
+  c2 ref_rs2;
+  a int;
+  b varchar(20);
+begin
+  c1 := c2;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_UDT_DATA_TYPE
+call p1;
+
+--echo #
+--echo # test of strong cursor set to strong cursor
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c IS SELECT * FROM t1 WHERE a>3;
+  CURSOR sc1 RETURN c%rowtype IS SELECT * FROM t1 WHERE a<3;
+  CURSOR sc2 RETURN sc1%rowtype IS SELECT * FROM t1 WHERE a<3;
+  TYPE ref_rs1 IS REF CURSOR RETURN sc2%rowtype;
+  c1 ref_rs1;
+  TYPE ref_rs2 IS REF CURSOR RETURN c1%rowtype;
+  c2 ref_rs2;
+  a int;
+  b varchar(20);
+begin
+  c1 := c2;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_UDT_DATA_TYPE
+call p1;
+
+
+--echo #
+--echo # test of procedure in sys_refcursor
+--echo #
+DELIMITER $$;
+create or replace function returnacursor() return sys_refcursor 
+as
+  TYPE ref_rs2 IS REF CURSOR RETURN t1%rowtype;
+  v_csr ref_rs2;
+  a1 char(20);
+begin
+    open v_csr for select * from t1 WHERE a=3;
+    return v_csr;
+END;
+$$
+
+CREATE or replace PROCEDURE p1() as
+  c sys_refcursor;
+  c1 sys_refcursor;
+  a int;
+  b varchar(20);
+begin
+  c := returnacursor();
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1;
+drop function returnacursor;
+
+--echo #
+--echo # test of procedure in out sys_refcursor
+--echo #
+DELIMITER $$;
+ create or replace procedure pro_return(ref_rs in out sys_refcursor) is
+ str varchar(30);
+  a1 int;
+  b varchar(30);
+  TYPE ref_rs2 IS REF CURSOR RETURN t1%rowtype;
+  v_csr ref_rs2;
+  begin
+  open v_csr for select * from t1;
+  ref_rs := v_csr;
+ end;
+$$
+CREATE or replace PROCEDURE p1() as
+  CURSOR cc IS SELECT a FROM t1 WHERE a>3;
+  TYPE ref_rs2 IS REF CURSOR RETURN cc%rowtype;
+  c ref_rs2;
+  c1 sys_refcursor;
+  a1 int;
+  b1 varchar(20);
+begin
+  call pro_return(c);
+  loop
+    fetch c into a1,b1;
+    exit when c%notfound;
+    select a1,b1;
+  end loop;
+  close c;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+call p1;
+
+--echo #
+--echo # test of ref cursor%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE ref_rs2 IS REF CURSOR RETURN t1%rowtype;
+  c ref_rs2;
+  a1 c%rowtype;
+begin
+  a1.a := 10;
+  a1.b := 'bb';
+  select a1;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of ref cursor%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR cc IS SELECT a FROM t1 WHERE a>3;
+  TYPE ref_rs2 IS REF CURSOR RETURN cc%rowtype;
+  c ref_rs2;
+  a1 c%rowtype;
+begin
+  a1.a := 10;
+  select a1;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of ref cursor%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  c sys_refcursor;
+  a1 c%rowtype;
+begin
+  a1.a := 10;
+  select a1;
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1;
+
+--echo # test of ref cursor%rowtype and %type
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR cc RETURN t1%rowtype IS SELECT * FROM t1 WHERE a>3;
+  TYPE ref_rs2 IS REF CURSOR RETURN cc%rowtype;
+  c ref_rs2;
+  a1 c%rowtype;
+  b a1%type;
+begin
+  a1.a := 10;
+  a1.b := 'bb';
+  b.a := 100;
+  b.b := 'bbb';
+  select a1,b;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of procedure in sys_refcursor
+--echo #
+DELIMITER $$;
+create or replace function f1() return int 
+as
+  TYPE ref_rs2 IS REF CURSOR RETURN t1%rowtype;
+  v_csr ref_rs2;
+  a1 varchar(200);
+begin
+    a1:='select * from t1 WHERE a=3';
+    open v_csr for a1;
+    return 1;
+END;
+$$
+DELIMITER ;$$
+insert into t1 values(f1(),'cc');
+select * from t1;
+drop function f1;
+
+drop procedure pro_return;
+drop procedure p1;
+drop table t1;
+drop table tt_air;
+drop type t_air_table;
+drop type t_air;
+
+
+

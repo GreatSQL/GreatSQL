@@ -1,6 +1,7 @@
 #ifndef DD_SP_INCLUDED
 #define DD_SP_INCLUDED
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -50,7 +51,7 @@ void prepare_sp_chistics_from_dd_routine(const dd::Routine *routine,
   @param[out]  return_type_str  Stored routine return type in string format.
 */
 
-void prepare_return_type_string_from_dd_routine(
+bool prepare_return_type_string_from_dd_routine(
     THD *thd, const dd::Routine *routine, dd::String_type *return_type_str);
 
 /**

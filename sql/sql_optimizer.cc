@@ -194,10 +194,13 @@ JOIN::JOIN(THD *thd_arg, Query_block *select)
       pq_last_sort_idx(-1),
       m_windows(select->m_windows),
       /*
-        Those four members are meaningless before JOIN::optimize(), so force a
+        Those seven members are meaningless before JOIN::optimize(), so force a
         crash if they are used before that.
       */
       where_cond(reinterpret_cast<Item *>(1)),
+      start_with_cond(reinterpret_cast<Item *>(1)),
+      connect_by_cond(reinterpret_cast<Item *>(1)),
+      after_connect_by_cond(reinterpret_cast<Item *>(1)),
       having_cond(reinterpret_cast<Item *>(1)),
       having_for_explain(reinterpret_cast<Item *>(1)),
       tables_list(reinterpret_cast<Table_ref *>(1)),
@@ -526,6 +529,10 @@ bool JOIN::optimize(bool finalize_access_paths) {
   if (query_block->get_optimizable_conditions(thd, &where_cond, &having_cond))
     return true;
 
+  if (query_block->get_optimizable_connect_by(
+          thd, &start_with_cond, &connect_by_cond, &after_connect_by_cond))
+    return true;
+
   for (Item_rollup_group_item *item : query_block->rollup_group_items) {
     rollup_group_items.push_back(item);
   }
@@ -650,6 +657,101 @@ bool JOIN::optimize(bool finalize_access_paths) {
       goto setup_subq_exit;
     }
   }
+  if (connect_by_cond) {
+    if (start_with_cond) {
+      if (optimize_cond(thd, &start_with_cond, &cond_equal, nullptr,
+                        &query_block->start_with_value)) {
+        error = 1;
+        DBUG_PRINT("error", ("Error from optimize_cond"));
+        return true;
+      }
+      if (query_block->start_with_value == Item::COND_FALSE) {
+        zero_result_cause = "Impossible WHERE(start_with)";
+        best_rowcount = 0;
+        create_access_paths_for_zero_rows();
+        goto setup_subq_exit;
+      }
+
+      if (start_with_cond != nullptr) {
+        start_with_cond = substitute_for_best_equal_field(thd, start_with_cond,
+                                                          cond_equal, nullptr);
+        if (start_with_cond == nullptr) return true;
+        start_with_cond->update_used_tables();
+      }
+    }
+    // connect by at least 1 rows
+    if (optimize_cond(thd, &connect_by_cond, &cond_equal, nullptr,
+                      &query_block->connect_by_value)) {
+      error = 1;
+      DBUG_PRINT("error", ("Error from optimize_cond"));
+      return true;
+    }
+    if (connect_by_cond != nullptr) {
+      connect_by_cond = substitute_for_best_equal_field(thd, connect_by_cond,
+                                                        cond_equal, nullptr);
+      if (connect_by_cond == nullptr) return true;
+      connect_by_cond->update_used_tables();
+    }
+    if (query_block->connect_by_value == Item::COND_TRUE) {
+      my_error(ER_CONNECT_BY_LOOP, MYF(0));
+      return true;
+    }
+
+    if (query_block->connect_by_value == Item::COND_FALSE) {
+      // if exists start with
+      if (connect_by_cond == nullptr) {
+        bool new_where_optimized = true;
+        if (start_with_cond != nullptr) {
+          if (where_cond != nullptr) {
+            where_cond = and_items(start_with_cond, where_cond);
+          } else {
+            where_cond = start_with_cond;
+            new_where_optimized = false;
+          }
+        }
+        if (after_connect_by_cond != nullptr) {
+          if (where_cond != nullptr) {
+            where_cond = and_items(after_connect_by_cond, where_cond);
+          } else {
+            where_cond = after_connect_by_cond;
+          }
+        }
+        if (where_cond && new_where_optimized) {
+          if (optimize_cond(thd, &where_cond, &cond_equal, nullptr,
+                            &query_block->cond_value)) {
+            error = 1;
+            DBUG_PRINT("error", ("Error from optimize_cond"));
+            return true;
+          }
+          if (query_block->cond_value == Item::COND_FALSE) {
+            zero_result_cause = "Impossible WHERE";
+            best_rowcount = 0;
+            create_access_paths_for_zero_rows();
+            goto setup_subq_exit;
+          }
+        }
+      }
+    } else if (after_connect_by_cond) {
+      if (optimize_cond(thd, &after_connect_by_cond, &cond_equal, nullptr,
+                        &query_block->after_connect_by_value)) {
+        error = 1;
+        DBUG_PRINT("error", ("Error from optimize_cond"));
+        return true;
+      }
+      if (query_block->after_connect_by_value == Item::COND_FALSE) {
+        zero_result_cause = "Impossible WHERE";
+        best_rowcount = 0;
+        create_access_paths_for_zero_rows();
+        goto setup_subq_exit;
+      }
+      if (after_connect_by_cond) {
+        after_connect_by_cond = substitute_for_best_equal_field(
+            thd, after_connect_by_cond, cond_equal, nullptr);
+        if (after_connect_by_cond == nullptr) return true;
+        after_connect_by_cond->update_used_tables();
+      }
+    }
+  }
 
   if (thd->lex->sql_command == SQLCOM_INSERT_SELECT ||
       thd->lex->sql_command == SQLCOM_INSERT_ALL_SELECT ||
@@ -739,7 +841,7 @@ bool JOIN::optimize(bool finalize_access_paths) {
         goto setup_subq_exit;
     }
   }
-  if (tables_list == nullptr) {
+  if (tables_list == nullptr && connect_by_cond == nullptr) {
     DBUG_PRINT("info", ("No tables"));
     best_rowcount = 1;
     error = 0;
@@ -1111,10 +1213,12 @@ bool JOIN::optimize(bool finalize_access_paths) {
       Force using of tmp table if sorting by a SP or UDF function due to
       their expensive and probably non-deterministic nature.
     */
+    bool non_native_nulls_pos = !plan_is_single_table() && !skip_sort_order;
     for (ORDER *tmp_order = order.order; tmp_order;
          tmp_order = tmp_order->next) {
       Item *item = *tmp_order->item;
-      if (item->is_expensive()) {
+      if (item->is_expensive() ||
+          (non_native_nulls_pos && tmp_order->nulls_pos != NULLS_POS_MYSQL)) {
         /* Force tmp table without sort */
         simple_order = simple_group = false;
         break;
@@ -1203,7 +1307,7 @@ bool JOIN::optimize(bool finalize_access_paths) {
 
   if (!plan_is_const()) {
     // Test if we can use an index instead of sorting
-    test_skip_sort();
+    if (!connect_by_cond) test_skip_sort();
 
     if (finalize_table_conditions(thd)) return true;
   }
@@ -1376,6 +1480,7 @@ bool JOIN::pq_copy_from(JOIN *orig) {
   query_expression()->offset_limit_cnt = 0;
   pq_stable_sort = orig->pq_stable_sort;
   saved_optimized_vars = orig->saved_optimized_vars;
+  connect_by_cond = orig->connect_by_cond;
 
   return false;
 }
@@ -1767,7 +1872,7 @@ bool JOIN::optimize_distinct_group_order() {
   JOIN_TAB *const tab = best_ref[const_tables];
 
   if (plan_is_single_table() && (!group_list.empty() || select_distinct) &&
-      !tmp_table_param->sum_func_count &&
+      !tmp_table_param->sum_func_count && !connect_by_cond &&
       (!tab->range_scan() ||
        tab->range_scan()->type != AccessPath::GROUP_INDEX_SKIP_SCAN)) {
     if (!group_list.empty() && rollup_state == RollupState::NONE &&
@@ -3191,7 +3296,10 @@ void JOIN::adjust_access_methods() {
   for (uint i = const_tables; i < tables; i++) {
     JOIN_TAB *const tab = best_ref[i];
     Table_ref *const tl = tab->table_ref;
-
+    Query_block *outer_query_block = (tl && tl->query_block)
+                                         ? tl->query_block->outer_query_block()
+                                         : nullptr;
+    if (outer_query_block && outer_query_block->has_foj()) continue;
     if (tab->type() == JT_ALL) {
       /*
        It's possible to speedup query by switching from full table scan to
@@ -3335,6 +3443,7 @@ bool JOIN::get_best_combination() {
       1? + // For aggregation functions aggregated in outer query
            // when used with distinct
       1? + // For ORDER BY
+      1? + // connect by
       1?   // buffer result
 
     Up to 2 tmp tables + N window output tmp are allocated (NOTE: windows also
@@ -3345,7 +3454,7 @@ bool JOIN::get_best_combination() {
            ? 1
            : 0) +
       (select_distinct ? (tmp_table_param->outer_sum_func_count ? 2 : 1) : 0) +
-      (order.empty() ? 0 : 1) +
+      (order.empty() ? 0 : 1) + (connect_by_cond ? 1 : 0) +
       (query_block->active_options() &
                (SELECT_BIG_RESULT | OPTION_BUFFER_RESULT)
            ? 1
@@ -3467,14 +3576,15 @@ bool JOIN::get_best_combination() {
         ::destroy(tab->range_scan());
         tab->set_range_scan(nullptr);
       }
-      if (!pos->key) {
+      if (!pos->key || tab->table_ref->foj_inner || tab->table_ref->foj_outer) {
         if (tab->range_scan())
           tab->set_type(calc_join_type(tab->range_scan()));
         else
           tab->set_type(JT_ALL);
-      } else
+      } else {
         // REF or RANGE, clarify later when prefix tables are set for JOIN_TABs
         tab->set_type(JT_REF);
+      }
     }
     assert(tab->type() != JT_UNKNOWN);
 
@@ -4724,7 +4834,7 @@ bool build_equal_items(THD *thd, Item *cond, Item **retcond,
       if (table->join_cond_optim()) {
         mem_root_deque<Table_ref *> *nested_join_list =
             table->nested_join ? &table->nested_join->m_tables : nullptr;
-        Item *join_cond;
+        Item *join_cond{nullptr};
         if (build_equal_items(thd, table->join_cond_optim(), &join_cond,
                               inherited, do_inherit, nested_join_list,
                               &table->cond_equal))
@@ -5862,6 +5972,10 @@ bool JOIN::extract_const_tables() {
         We do not currently pull out const tables from semi-join nests.
       */
       extract_method = extract_no_table;
+    } else if (tl->foj_inner || tl->foj_outer) {
+      extract_method = extract_no_table;
+    } else if (tl->has_connect_by()) {
+      extract_method = extract_no_table;
     } else if (tab->join_cond()) {
       // tab is the only inner table of an outer join, extract empty tables
       extract_method = extract_empty_table;
@@ -6042,6 +6156,7 @@ bool JOIN::extract_func_dependent_tables() {
              6. are not going to be used, typically because they are streamed
                 instead of materialized
                 (see Query_expression::can_materialize_directly_into_result()).
+             7. are on either side of a full join
           */
           if (eq_part.is_prefix(table->key_info[key].user_defined_key_parts) &&
               !tl->is_fulltext_searched() &&                              // 1
@@ -6049,7 +6164,8 @@ bool JOIN::extract_func_dependent_tables() {
               !(tl->embedding && tl->embedding->is_sj_or_aj_nest()) &&    // 3
               !(tab->join_cond() && tab->join_cond()->is_expensive()) &&  // 4
               !(table->file->ha_table_flags() & HA_BLOCK_CONST_TABLE) &&  // 5
-              table->is_created()) {                                      // 6
+              table->is_created() &&                                      // 6
+              !tl->foj_inner && !tl->foj_outer) {                         // 7
             if (table->key_info[key].flags & HA_NOSAME) {
               if (const_ref == eq_part) {  // Found everything for ref.
                 ref_changed = true;
@@ -7835,7 +7951,7 @@ bool add_key_fields(THD *thd, JOIN *join, Key_field **key_fields,
             for (uint j = 1; j < cond_func->argument_count(); ++j) {
               // Here we pick out the i:th column in the j:th row.
               Item *rhs_item = cond_func->arguments()[j];
-              assert(rhs_item->type() == Item::ROW_ITEM);
+              // assert(rhs_item->type() == Item::ROW_ITEM);
               Item_row *rhs_row = static_cast<Item_row *>(rhs_item);
               assert(rhs_row->cols() == lhs_row->cols());
               Item **rhs_expr_ptr = rhs_row->addr(i);
@@ -8260,6 +8376,7 @@ bool is_indexed_agg_distinct(JOIN *join,
 
   if (join->primary_tables > 1 ||             /* reference more than 1 table */
       join->select_distinct ||                /* or a DISTINCT */
+      join->connect_by_cond ||                /* connect by  */
       join->query_block->olap == ROLLUP_TYPE) /* Check (B3) for ROLLUP */
     return false;
 
@@ -8758,6 +8875,7 @@ void JOIN::make_outerjoin_info() {
     const bool sj_mat_inner =
         sj_is_materialize_strategy(tab->get_sj_strategy());
 
+    if (tbl->foj_inner || tbl->foj_outer) tab->set_foj(true);
     if (tbl->outer_join) {
       /*
         Table tab is the only one inner table for outer join.
@@ -8768,6 +8886,9 @@ void JOIN::make_outerjoin_info() {
       tab->set_first_inner(i);
       tab->init_join_cond_ref(tbl);
       tab->cond_equal = tbl->cond_equal;
+      if (tbl->foj_inner) {
+        tab->set_last_foj_inner(i);
+      }
       /*
         If this outer join nest is embedded in another join nest,
         link the join-tabs:
@@ -8778,8 +8899,9 @@ void JOIN::make_outerjoin_info() {
         if (!sj_mat_inner ||
             (tab->emb_sj_nest->sj_inner_tables &
              best_ref[outer_join_nest->nested_join->first_nested]
-                 ->table_ref->map()))
+                 ->table_ref->map())) {
           tab->set_first_upper(outer_join_nest->nested_join->first_nested);
+        }
       }
     }
     for (Table_ref *embedding = tbl->embedding; embedding;
@@ -8806,12 +8928,14 @@ void JOIN::make_outerjoin_info() {
           if (!sj_mat_inner ||
               (tab->emb_sj_nest->sj_inner_tables &
                best_ref[outer_join_nest->nested_join->first_nested]
-                   ->table_ref->map()))
+                   ->table_ref->map())) {
             tab->set_first_upper(outer_join_nest->nested_join->first_nested);
+          }
         }
       }
-      if (tab->first_inner() == NO_PLAN_IDX)
+      if (tab->first_inner() == NO_PLAN_IDX) {
         tab->set_first_inner(nested_join->first_nested);
+      }
       /*
         If including the sj-mat tmp table, this also implicitly
         includes the inner tables of the sj-nest.
@@ -8821,6 +8945,8 @@ void JOIN::make_outerjoin_info() {
       if (nested_join->nj_counter < nested_join->nj_total) break;
       // Table tab is the last inner table for nested join.
       best_ref[nested_join->first_nested]->set_last_inner(i);
+      if (embedding->foj_inner)
+        best_ref[nested_join->first_nested]->set_last_foj_inner(i);
     }
   }
 }
@@ -9814,7 +9940,9 @@ static bool make_join_query_block(JOIN *join, Item *cond) {
     and if it is not satisfied then the join has empty result
   */
   Item *const_cond = nullptr;
-  if (cond)
+  // Skip const table reading to avoid Impossible WHERE
+  // before a table is full joined
+  if (!join->query_block->has_foj() && cond)
     const_cond = make_cond_for_table(thd, cond, join->const_table_map,
                                      table_map(0), true);
 
@@ -10529,8 +10657,7 @@ ORDER *JOIN::remove_const(ORDER *first_order, Item *cond, bool change,
   @param[out] cond_value    Not changed if cond was empty
                               COND_TRUE if cond is always true
                               COND_FALSE if cond is impossible
-                              COND_OK otherwise
-
+re
 
   @returns false if success, true if error
 */
@@ -10554,6 +10681,7 @@ bool optimize_cond(THD *thd, Item **cond, COND_EQUAL **cond_equal,
   */
   assert(*cond || join_list);
 
+  bool has_foj = thd->lex->current_query_block()->has_foj();
   /*
     Build all multiple equality predicates and eliminate equality
     predicates that can be inferred from these multiple equalities.
@@ -10564,7 +10692,7 @@ bool optimize_cond(THD *thd, Item **cond, COND_EQUAL **cond_equal,
     This is performed for the WHERE condition and any join conditions, but
     not for the HAVING condition.
   */
-  if (join_list) {
+  if (join_list && !has_foj) {
     Opt_trace_object step_wrapper(trace);
     step_wrapper.add_alnum("transformation", "equality_propagation");
     {
@@ -10598,7 +10726,7 @@ bool optimize_cond(THD *thd, Item **cond, COND_EQUAL **cond_equal,
   */
   DBUG_EXECUTE("where",
                print_where(thd, *cond, "after const change", QT_ORDINARY););
-  if (*cond) {
+  if (*cond && !has_foj) {
     Opt_trace_object step_wrapper(trace);
     step_wrapper.add_alnum("transformation", "trivial_condition_removal");
     {
@@ -11043,6 +11171,73 @@ void JOIN::optimize_keyuse() {
     */
     if (keyuse->used_tables == OUTER_REF_TABLE_BIT) keyuse->ref_table_rows = 1;
   }
+}
+
+bool connect_by_cond_lookup_ref(THD *thd, Item *cond,
+                                mem_root_deque<Item *> *idx_field_list,
+                                mem_root_deque<Item *> *connect_by_list,
+                                List<Item> *other_list, List<Item> *rownum_it,
+                                List<Item> *other_list2) {
+  Mem_root_array<Item *> condition_parts(thd->mem_root);
+  ExtractConditions(cond, &condition_parts);
+
+  auto add_item = [](mem_root_deque<Item *> *item_list, Item *it) {
+    switch (it->type()) {
+      case Item::REF_ITEM:
+        // Item_view_ref result_field is different from real_item result field
+        // real_item result_field is source table
+        //  Item_view_ref result_field is current_fields
+        item_list->push_back(it);
+        break;
+      case Item::FIELD_ITEM:
+        for (auto curr_item : *item_list) {
+          if (curr_item->eq(it, true)) return true;
+        }
+        item_list->push_back(it);
+        break;
+      default:
+        return true;
+    }
+    return false;
+  };
+
+  bool is_connect_by_index = false;
+  for (auto it : condition_parts) {
+    if (it->has_rownum_expr()) {
+      rownum_it->push_back(it);
+      continue;
+    }
+
+    is_connect_by_index = false;
+    if (it->has_connect_by_func() && (it->type() == Item::FUNC_ITEM)) {
+      auto cond_func = dynamic_cast<Item_func *>(it);
+      if (!cond_func) return true;
+      if (cond_func->functype() == Item_func::EQ_FUNC ||
+          cond_func->functype() == Item_func::EQUAL_FUNC) {
+        // Item_ref -> item_field
+        if (is_local_field(cond_func->arguments()[0])) {
+          if (!add_item(idx_field_list, cond_func->arguments()[0])) {
+            connect_by_list->push_back(cond_func->arguments()[1]);
+            is_connect_by_index = true;
+          }
+        }
+
+        if (is_local_field(cond_func->arguments()[1])) {
+          if (!add_item(idx_field_list, cond_func->arguments()[1])) {
+            connect_by_list->push_back(cond_func->arguments()[0]);
+            is_connect_by_index = true;
+          }
+        }
+        // is_connect_by_index
+      }
+    }
+    if (!is_connect_by_index) {
+      other_list->push_back(it);
+    } else {
+      other_list2->push_back(it);
+    }
+  }
+  return false;
 }
 
 /**
@@ -11843,6 +12038,12 @@ double EstimateRowAccesses(const AccessPath *path, double num_evaluations,
             rows += EstimateRowAccesses(
                 subpath->temptable_aggregate().subquery_path, num_evaluations,
                 kNoLimit);
+            return true;
+          }
+          case AccessPath::CONNECT_BY_SCAN: {
+            // Connect by needs to read the entire input.
+            rows += EstimateRowAccesses(subpath->connect_by_scan().src_path,
+                                        num_evaluations, kNoLimit);
             return true;
           }
           case AccessPath::MATERIALIZE: {

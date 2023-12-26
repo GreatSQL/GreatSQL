@@ -7,7 +7,7 @@ perfschema.table_aggregate_global_4u_3t           : BUG#245 PFS
 perfschema.misc                                   : BUG#245 PFS
 perfschema.table_aggregate_global_2u_2t           : BUG#245 PFS
 main.events_1                                     : BUG#255 EVENT DATETIME
-# main.range_with_memory_limit                      : BUG#258 ANALYZE_TABLE
+#main.range_with_memory_limit                      : BUG#258 ANALYZE_TABLE
 main.filesort_debug                               : BUG#254 DEBUG_SYNC
 main.events_bugs                                  : Bug#39863 events_bugs
 main.events_1                                     : BUG#255 EVENT DATETIME

@@ -136,8 +136,10 @@ int Applier_handler::handle_event(Pipeline_event *event, Continuation *cont) {
         gr_applier_vars.apply_events, gr_applier_vars.io_buffer_events);
 
     if (event->get_event_type() == binary_log::GTID_LOG_EVENT) {
-      applier_module->get_pipeline_stats_member_collector()
-          ->increment_transactions_waiting_apply();
+      if (!event->is_view_generated()) {
+        applier_module->get_pipeline_stats_member_collector()
+            ->increment_transactions_waiting_apply();
+      }
     }
   }
 

@@ -2,6 +2,7 @@
 #define SQL_VIEW_INCLUDED
 
 /* Copyright (c) 2004, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -55,7 +56,8 @@ bool insert_view_fields(mem_root_deque<Item *> *list, Table_ref *view);
 typedef Mem_root_array_YY<LEX_CSTRING> Create_col_name_list;
 bool check_duplicate_names(const Create_col_name_list *column_names,
                            const mem_root_deque<Item *> &item_list,
-                           bool gen_unique_view_names);
+                           bool gen_unique_view_names,
+                           bool is_force_view = false);
 void make_valid_column_names(LEX *lex);
 
 bool open_and_read_view(THD *thd, TABLE_SHARE *share, Table_ref *view_ref);

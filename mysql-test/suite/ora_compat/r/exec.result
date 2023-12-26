@@ -1,0 +1,51 @@
+ERROR at line 20: Usage: EXEC statement
+1
+1
+1
+1
+1
+1
+p1+p2
+3
+1
+1
+1
+1
+1
+1
+p1+p2
+3
+200
+200
+--------------
+set sql_mode=oracle
+--------------
+
+--------------
+begin select 20; end
+--------------
+
+20
+20
+--------------
+set sql_mode=oracle
+--------------
+
+--------------
+begin select 22; end
+--------------
+
+22
+22
+--------------
+set sql_mode=oracle
+--------------
+
+--------------
+begin select 24; select 26; end
+--------------
+
+24
+24
+26
+26

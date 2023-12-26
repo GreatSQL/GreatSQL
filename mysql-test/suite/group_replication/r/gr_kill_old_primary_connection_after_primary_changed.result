@@ -1,0 +1,71 @@
+include/group_replication.inc [rpl_server_count=3]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+
+############################################################
+# 1. Deploy one group which have 3 members in single primary mode.
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+[connection server2]
+include/start_group_replication.inc
+[connection server3]
+include/start_group_replication.inc
+include/rpl_gr_wait_for_number_of_members.inc
+[connection server1]
+INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so';
+create user test_user;
+grant all on *.* to test_user;
+create user test_user1;
+grant all on *.* to test_user1;
+
+############################################################
+# 2. set mgr_exit_primary_kill_connection_mode = OFF, check connection nums after primary changed
+[connection server1]
+SELECT group_replication_set_as_primary("MEMBER2_UUID");
+group_replication_set_as_primary("MEMBER2_UUID")
+Primary server switched to: MEMBER2_UUID
+[connection server2]
+include/gr_assert_primary_member.inc
+[connection server1]
+select count(*) from performance_schema.threads where PROCESSLIST_USER = "test_user" or PROCESSLIST_USER = "test_user1";
+count(*)
+2
+SELECT group_replication_set_as_primary("MEMBER1_UUID");
+group_replication_set_as_primary("MEMBER1_UUID")
+Primary server switched to: MEMBER1_UUID
+include/gr_assert_primary_member.inc
+
+############################################################
+# 3. set mgr_exit_primary_kill_connection_mode = ON, check connection nums after primary changed
+[connection server1]
+set global greatdb_ha_mgr_exit_primary_kill_connection_mode = ON;
+[connection server2]
+SELECT group_replication_set_as_primary("MEMBER2_UUID");
+group_replication_set_as_primary("MEMBER2_UUID")
+Primary server switched to: MEMBER2_UUID
+include/gr_assert_primary_member.inc
+include/rpl_reconnect.inc
+select count(*) from performance_schema.threads where PROCESSLIST_USER = "test_user" or PROCESSLIST_USER = "test_user1";
+count(*)
+0
+
+############################################################
+# 4. clean up
+[connection server1]
+SELECT group_replication_set_as_primary("MEMBER1_UUID");
+group_replication_set_as_primary("MEMBER1_UUID")
+Primary server switched to: MEMBER1_UUID
+include/gr_assert_primary_member.inc
+set global greatdb_ha_mgr_exit_primary_kill_connection_mode = OFF;
+UNINSTALL PLUGIN greatdb_ha;
+drop user test_user;
+drop user test_user1;
+[connection server3]
+include/stop_group_replication.inc
+[connection server2]
+include/stop_group_replication.inc
+[connection server1]
+include/stop_group_replication.inc
+include/group_replication_end.inc

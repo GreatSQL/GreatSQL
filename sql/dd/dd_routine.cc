@@ -200,6 +200,12 @@ static void fill_parameter_info_from_field(THD *thd, Create_field *field,
     param_options->set("geom_type", field->geom_type);
   }
 
+  // Set sys_refcursor type
+  if (field->ora_record.is_ref_cursor) {
+    Properties *param_options = &param->options();
+    param_options->set("sys_refcursor", 1);
+  }
+
   // Set elements of enum or set data type.
   if (field->interval) {
     assert(field->sql_type == MYSQL_TYPE_ENUM ||
@@ -218,6 +224,13 @@ static void fill_parameter_info_from_field(THD *thd, Create_field *field,
 
   // Set collation id.
   param->set_collation_id(field->charset->number);
+  if (field->udt_name.length != 0) {
+    Properties *param_options = &param->options();
+    String_type udt_name(field->udt_name.str, field->udt_name.length);
+    String_type udt_db_name(field->udt_db_name.str, field->udt_db_name.length);
+    param_options->set("udt_name", udt_name);
+    param_options->set("udt_db_name", udt_db_name);
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -320,6 +333,10 @@ static bool fill_routine_parameters_info(THD *thd, sp_head *sp,
       if (!(field_def->flags & NOT_NULL_FLAG)) f->set_null();
 
       type_conversion_status res = d->save_in_field(f, true);
+      if (f->is_flag_set(BLOB_FLAG)) {
+        Field_blob *field_blob = dynamic_cast<Field_blob *>(f);
+        if (field_blob) field_blob->mem_free();
+      }
 
       if (res != TYPE_OK && res != TYPE_NOTE_TIME_TRUNCATED &&
           res != TYPE_NOTE_TRUNCATED) {
@@ -498,7 +515,9 @@ static bool fill_dd_routine_info(THD *thd, const dd::Schema &schema,
     sp_pcontext *sp_root_parsing_ctx = sp->get_root_parsing_context();
     List<Create_field> field_def_lst;
     List<sp_variable> vars_list;
-    sp_root_parsing_ctx->retrieve_field_definitions(&field_def_lst, &vars_list);
+    uint udt_var_count_diff = 0;
+    sp_root_parsing_ctx->retrieve_field_definitions(
+        &field_def_lst, &vars_list, nullptr, &udt_var_count_diff);
     if (create_cfield_from_dd_columns(thd, sp->m_db.str, routine,
                                       &field_def_lst, &reclength))
       return true;

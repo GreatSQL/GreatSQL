@@ -2590,17 +2590,76 @@ Time_zone *Item_func_curtime_utc::time_zone() { return my_tz_UTC; }
 
 /* NOW() and UTC_TIMESTAMP () */
 
-bool Item_func_now::resolve_type(THD *) {
+void Item_func_now::convert_to_ora_current_timestamp(MYSQL_TIME *ltime,
+                                                     Time_zone *tz,
+                                                     uint8 decimals,
+                                                     String *str) {
+  std::string format("%d-%m-%y %h:%i:%s");
+  Date_time_format date_time_format;
+  date_time_format.format.str = format.c_str();
+  date_time_format.format.length = format.length();
+  make_date_time(&date_time_format, ltime, MYSQL_TIMESTAMP_DATE, str);
+
+  // append usecond
+  if (decimals > 0) {
+    ulong us = ltime->second_part / pow(10, DATETIME_MAX_DECIMALS - decimals);
+    char intbuff[16] = {0};
+    ulong length = longlong10_to_str(us, intbuff, 10) - intbuff;
+    str->append(".", 1);
+    str->append_with_prefill(intbuff, length, decimals, '0');
+  }
+
+  // append am pm
+  uint hours_i = ltime->hour % 24;
+  str->append(" ", 1);
+  str->append(hours_i < 12 ? "AM" : "PM", 2);
+
+  // append time_zone info;
+  str->append(" ", 1);
+  if (tz->get_timezone_type() == Time_zone::TZ_OFFSET) {
+    str->append(*tz->get_name());
+  } else {
+    bool not_used = false;
+    my_time_t t_0 = tz->TIME_to_gmt_sec(ltime, &not_used);
+    my_time_t t_1 = my_tz_OFFSET0->TIME_to_gmt_sec(ltime, &not_used);
+    long offset = t_1 - t_0;
+    char name_buff[7 + 16] = {0};
+    uint hours = abs((int)(offset / SECS_PER_HOUR));
+    uint minutes = abs((int)(offset % SECS_PER_HOUR / SECS_PER_MIN));
+    size_t length = snprintf(name_buff, sizeof(name_buff), "%s%02d:%02d",
+                             (offset >= 0) ? "+" : "-", hours, minutes);
+    str->append(name_buff, length, &my_charset_numeric);
+  }
+}
+
+bool Item_func_now::resolve_type(THD *thd) {
   if (check_precision()) return true;
 
-  set_data_type_datetime(decimals);
+  is_ora_current_timestmap = false;
+  if (thd->variables.sql_mode & MODE_ORACLE && is_current_timestmap) {
+    is_ora_current_timestmap = true;
+    if (!is_dec_appoint) {
+      decimals = 6;
+    }
+    uint8 dec = decimals;
+    set_data_type_string(48U, default_charset());
+    decimals = dec;
+  } else {
+    set_data_type_datetime(decimals);
+  }
 
   return false;
 }
 
 void Item_func_now_local::store_in(Field *field) {
   THD *thd = current_thd;
-  const my_timeval tm = thd->query_start_timeval_trunc(field->decimals());
+  uint dec = field->decimals();
+  if ((thd->variables.sql_mode & MODE_ORACLE) &&
+      (field->auto_flags & Field::VARCHAR_DEFAULT_CURRENT_TIMESTAP) &&
+      !(field->auto_flags & Field::CURRENT_TIMESTAMP_DEC_APPOINT)) {
+    dec = 6;
+  }
+  const my_timeval tm = thd->query_start_timeval_trunc(dec);
   field->set_notnull();
   return field->store_timestamp(&tm);
 }
@@ -2634,22 +2693,42 @@ bool Item_func_now::get_date(MYSQL_TIME *res, my_time_flags_t) {
 
 String *Item_func_now::val_str(String *str) {
   assert(fixed == 1);
+
   MYSQL_TIME_cache tm;
   tm.set_datetime(current_thd->query_start_timeval_trunc(decimals), decimals,
                   time_zone());
-  if (str->alloc(26)) return nullptr;
+  if (is_ora_current_timestmap) {
+    str->set_charset(&my_charset_numeric);
+    MYSQL_TIME ltime;
+    tm.get_time(&ltime);
+    Item_func_now::convert_to_ora_current_timestamp(&ltime, time_zone(),
+                                                    decimals, str);
+  } else {
+    if (str->alloc(26)) return nullptr;
 
-  str->set_charset(&my_charset_numeric);
-  str->length(my_TIME_to_str(*tm.get_TIME_ptr(), (char *)str->ptr(), decimals));
+    str->set_charset(&my_charset_numeric);
+    str->length(
+        my_TIME_to_str(*tm.get_TIME_ptr(), (char *)str->ptr(), decimals));
+  }
 
   return str;
 }
 
 type_conversion_status Item_func_now::save_in_field_inner(Field *to, bool) {
   to->set_notnull();
+
   MYSQL_TIME_cache tm;
   tm.set_datetime(current_thd->query_start_timeval_trunc(decimals), decimals,
                   time_zone());
+  if (is_ora_current_timestmap) {
+    String str;
+    str.set_charset(&my_charset_numeric);
+    MYSQL_TIME ltime;
+    tm.get_time(&ltime);
+    Item_func_now::convert_to_ora_current_timestamp(&ltime, time_zone(),
+                                                    decimals, &str);
+    return to->store(str.ptr(), str.length(), str.charset());
+  }
 
   return to->store_time(tm.get_TIME_ptr(), decimals);
 }
@@ -4771,6 +4850,16 @@ bool Item_func_to_char::resolve_type(THD *thd) {
   set_data_type_string(char_length);
   set_nullable(true);
 
+  if (args[0]->type() == Item::FUNC_ITEM) {
+    Item_func *func = down_cast<Item_func *>(args[0]);
+    if (func->functype() == Item_func::NOW_FUNC) {
+      Item_func_now *item_now = down_cast<Item_func_now *>(args[0]);
+      if (item_now != nullptr && item_now->is_ora_current_timestmap) {
+        item_now->set_data_type_datetime(item_now->decimals);
+      }
+    }
+  }
+
   switch (args[0]->data_type()) {
     case MYSQL_TYPE_TIMESTAMP:
     case MYSQL_TYPE_DATE:
@@ -6704,9 +6793,9 @@ void Item_func_months_between::print(const THD *thd, String *str,
                                      enum_query_type query_type) const {
   str->append(func_name());
   str->append('(');
-  args[0]->print(thd, str, query_type);
-  str->append(',');
   args[1]->print(thd, str, query_type);
+  str->append(',');
+  args[0]->print(thd, str, query_type);
   str->append(')');
 }
 
@@ -6975,6 +7064,16 @@ void Item_func_trunc::check_trunc_number_params() {
   }
 }
 
+longlong Item_func_trunc::get_decimal_place() {
+  longlong decimal_place = UINT64_MAX;
+
+  my_decimal a, b;
+  my_decimal *d = args[1]->val_decimal(&a);
+  if (my_decimal_round(E_DEC_FATAL_ERROR, d, 0, true, &b)) return decimal_place;
+  my_decimal2int(0, &b, false, &decimal_place);
+  return decimal_place;
+}
+
 double Item_func_trunc::real_op() {
   // use args[0]->val_str() to avoid potential data loss of values with
   // double/float types, Refer to the result of truncate, which use val_real()
@@ -6995,7 +7094,7 @@ double Item_func_trunc::real_op() {
   }
   const char *begin = str_value->ptr();
   const char *end = begin + str_value->length();
-  longlong decimal_places = args[1]->val_int();
+  longlong decimal_places = get_decimal_place();
   my_decimal val1, val2;
   double res = 0.0;
 
@@ -7016,7 +7115,7 @@ my_decimal *Item_func_trunc::decimal_op(my_decimal *decimal_value) {
   decimals =
       args[0]->null_value ? DECIMAL_MAX_SCALE : decimal_actual_fraction(value);
 
-  longlong dec = args[1]->val_int();
+  longlong dec = get_decimal_place();
   if (dec >= 0 || args[1]->unsigned_flag)
     dec = min<ulonglong>(dec, decimals);
   else if (dec < INT_MIN)

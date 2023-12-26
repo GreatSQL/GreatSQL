@@ -1,0 +1,166 @@
+
+[### test show create ###]
+create sequence seq start with 20 minvalue 1;
+show create sequence SEQ;
+ERROR HY000: read sequence value failed, cause sequence cache entity not found, maybe dropped!
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 20 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 20 NOORDER
+drop sequence seq;
+create sequence seq start with 20 nominvalue;
+show create sequence Seq;
+ERROR HY000: read sequence value failed, cause sequence cache entity not found, maybe dropped!
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 20 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 20 NOORDER
+drop sequence seq;
+create sequence seq start with 20 minvalue 10;
+show create sequence seQ;
+ERROR HY000: read sequence value failed, cause sequence cache entity not found, maybe dropped!
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 20 MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 20 NOORDER
+drop sequence seq;
+create sequence seq maxvalue 1024;
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 1 MINVALUE 1 MAXVALUE 1024 INCREMENT BY 1 NOCYCLE CACHE 20 NOORDER
+drop sequence seq;
+create sequence seq nomaxvalue;
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 1 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 20 NOORDER
+drop sequence seq;
+create sequence seq cache 100;
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 1 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 100 NOORDER
+drop sequence seq;
+create sequence seq nocache;
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 1 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE NOCACHE NOORDER
+drop sequence seq;
+create sequence seq order;
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 1 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 20 ORDER
+drop sequence seq;
+create sequence seq noorder;
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 1 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 20 NOORDER
+drop sequence seq;
+create sequence seq cycle maxvalue 30;
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 1 MINVALUE 1 MAXVALUE 30 INCREMENT BY 1 CYCLE CACHE 20 NOORDER
+drop sequence seq;
+create sequence seq nocycle;
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 1 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 20 NOORDER
+drop sequence seq;
+
+[### test start_with in show sequence]
+[connect conn1]
+create sequence seq;
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 1 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 20 NOORDER
+select seq.nextval;
+nextval
+1
+select seq.nextval;
+nextval
+2
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 3 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 20 NOORDER
+[connect conn2]
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 3 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 20 NOORDER
+select seq.nextval;
+nextval
+3
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 4 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 20 NOORDER
+[connect conn1]
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 4 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 20 NOORDER
+drop sequence seq;
+create sequence seq start with 20 cache 1;
+select seq.nextval;
+nextval
+20
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 21 MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 NOCYCLE CACHE 1 NOORDER
+drop sequence seq;
+create sequence seq start with 20 increment by 2 maxvalue 21;
+select seq.nextval;
+nextval
+20
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 20 MINVALUE 1 MAXVALUE 21 INCREMENT BY 2 NOCYCLE CACHE 20 NOORDER
+drop sequence seq;
+create sequence seq start with 20 maxvalue 40 cache 1 increment by -1;
+select seq.nextval;
+nextval
+20
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 19 MINVALUE -999999999999999999999999999 MAXVALUE 40 INCREMENT BY -1 NOCYCLE CACHE 1 NOORDER
+drop sequence seq;
+create sequence seq start with 20 maxvalue 40 minvalue 19 cache 1 increment by -2;
+select seq.nextval;
+nextval
+20
+show create sequence seq;
+Sequence	Create Sequence
+seq	CREATE SEQUENCE `seq` START WITH 20 MINVALUE 19 MAXVALUE 40 INCREMENT BY -2 NOCYCLE CACHE 1 NOORDER
+drop sequence seq;
+
+[### test show sequences]
+create sequence seq1;
+create sequence seq2;
+show sequences;
+Sequences_in_test
+seq1
+seq2
+show full sequences;
+Sequences_in_test	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+seq1	1	1	9999999999999999999999999999	1	0	20	0
+seq2	1	1	9999999999999999999999999999	1	0	20	0
+show extended sequences;
+Sequences_in_test
+seq1
+seq2
+show extended full sequences;
+Sequences_in_test	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+seq1	1	1	9999999999999999999999999999	1	0	20	0
+seq2	1	1	9999999999999999999999999999	1	0	20	0
+show sequences from test;
+Sequences_in_test
+seq1
+seq2
+show sequences in test;
+Sequences_in_test
+seq1
+seq2
+show sequences like 'seq%';
+Sequences_in_test (seq%)
+seq1
+seq2
+show sequences like 'seq2%';
+Sequences_in_test (seq2%)
+seq2
+show sequences where sequences_in_test like '%_1';
+Sequences_in_test
+seq1
+drop sequence seq1;
+drop sequence seq2;

@@ -1,0 +1,22 @@
+select chr(90);
+chr(90)
+Z
+select chr(90 using utf8);
+chr(90 using utf8)
+Z
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+select chr(90 using utf8mb4);
+chr(90 using utf8mb4)
+Z
+create table test1 (id int ,cc char(10));
+insert into test1 values (90 , 'Z' ), (91, 'Z');
+select  strcmp(chr(id),cc)  from test1;
+strcmp(chr(id),cc)
+0
+-1
+drop table test1;
+create  table  chr( id int);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'chr( id int)' at line 1
+create table test2( chr int, cc char(10) );
+drop table test2;

@@ -628,6 +628,13 @@ enum enum_alter_inplace_result {
 #define HA_LEX_CREATE_TABLE_OF 16
 #define HA_MAX_REC_LENGTH 65535U
 
+/* ora_tmp_table_option */
+#define HA_ORA_TMP_TABLE 1 /* set for oracle grammar */
+#define HA_ORA_TMP_TABLE_TRANS 2 /* transactional temp table */
+#define HA_ORA_TMP_TABLE_SESS 4 /* session temp table */
+#define HA_ORA_TMP_TABLE_PRIV 8 /* private temp table */
+#define HA_ORA_TMP_TABLE_GLOBAL 16 /* global temp table: meta creation only */
+
 /**
   Options for the START TRANSACTION statement.
 
@@ -684,6 +691,7 @@ enum legacy_db_type {
   DB_TYPE_TOKUDB = 41,
   DB_TYPE_ROCKSDB = 42,
   DB_TYPE_FIRST_DYNAMIC = 43,
+  DB_TYPE_DLK_DB = 44,
   DB_TYPE_DEFAULT = 127  // Must be last
 };
 
@@ -814,6 +822,12 @@ constexpr const uint64_t HA_CREATE_USED_READ_ONLY{1ULL << 34};
   specified in the CREATE TABLE statement
 */
 constexpr const uint64_t HA_CREATE_USED_AUTOEXTEND_SIZE{1ULL << 35};
+
+/**
+ external table.
+*/
+#define HA_CREATE_USED_EXTERNAL_DATADIR (1L << 36)
+#define HA_CREATE_USED_EXTERNAL_TABLE (1L << 37)
 
 /*
   End of bits used in used_fields
@@ -3134,6 +3148,9 @@ struct HA_CREATE_INFO {
   LEX_CSTRING secondary_engine{nullptr, 0};
 
   const char *data_file_name{nullptr};
+  // external file name
+  const char *external_file_name{nullptr};
+
   const char *index_file_name{nullptr};
   const char *alias{nullptr};
   ulonglong max_rows{0};
@@ -3208,6 +3225,14 @@ struct HA_CREATE_INFO {
   Item *zip_dict_name{nullptr};
   LEX_CSTRING udt_db_name{NULL_CSTR};
   LEX_CSTRING udt_name{NULL_CSTR};
+
+  /* ora_tmp_table_options */
+  uint ora_tmp_table_options{0}; /* OR of HA_ORA_TMP_TABLE_ options */
+
+  /** SELECT of CREATE materialized VIEW statement */
+  bool is_materialized_view{false};
+  LEX_STRING create_view_query_block{NULL_STR};
+  LEX_STRING create_view_query_block_utf8{NULL_STR};
 };
 
 /**

@@ -48,7 +48,7 @@ ENDIF()
 IF(CAT_EXECUTABLE)
   SET(CAT_COMMAND COMMAND
     ${CMAKE_COMMAND} -E chdir  ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CAT_EXECUTABLE} ${MYSQL_SYSTEM_TABLES_SQL} ${MYSQL_SYSTEM_TABLES_FIX_SQL} >
+    ${CAT_EXECUTABLE} ${MYSQL_SYSTEM_TABLES_SQL} ${MYSQL_SYSTEM_TABLES_FIX_SQL} mysql_greatdb_tables_fix.sql >
     ${CMAKE_CURRENT_BINARY_DIR}/mysql_fix_privilege_tables.sql
   )
 ELSEIF(WIN32)
@@ -56,7 +56,7 @@ ELSEIF(WIN32)
     native_outfile )
   SET(CAT_COMMAND
     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_SOURCE_DIR}
-    cmd /c copy /b ${MYSQL_SYSTEM_TABLES_SQL} + ${MYSQL_SYSTEM_TABLES_FIX_SQL}
+    cmd /c copy /b ${MYSQL_SYSTEM_TABLES_SQL} + ${MYSQL_SYSTEM_TABLES_FIX_SQL} + mysql_greatdb_tables_fix.sql
     ${native_outfile} )
 ELSE()
   MESSAGE(FATAL_ERROR "Cannot concatenate files")
@@ -74,6 +74,7 @@ ADD_CUSTOM_COMMAND(
   DEPENDS comp_sql
   ${CMAKE_CURRENT_SOURCE_DIR}/${MYSQL_SYSTEM_TABLES_SQL}
   ${CMAKE_CURRENT_SOURCE_DIR}/${MYSQL_SYSTEM_TABLES_FIX_SQL}
+  ${CMAKE_CURRENT_SOURCE_DIR}/mysql_greatdb_tables_fix.sql
 )
 
 # Add target for the above to be built
@@ -159,6 +160,17 @@ ADD_CUSTOM_COMMAND(
   ${CMAKE_CURRENT_SOURCE_DIR}/firewall_stored_procedures.sql
 )
 
+ADD_CUSTOM_COMMAND(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sql_commands_greatdb_tables.h
+  COMMAND comp_sql
+  mysql_greatdb_tables
+  ${CMAKE_CURRENT_SOURCE_DIR}/mysql_greatdb_tables.sql
+  sql_commands_greatdb_tables.h
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  DEPENDS comp_sql
+  ${CMAKE_CURRENT_SOURCE_DIR}/mysql_greatdb_tables.sql
+)
+
 # Add target for the above to be built
 IF(NOT WITHOUT_SERVER)
   MY_ADD_CUSTOM_TARGET(GenBootstrapPriv
@@ -169,6 +181,7 @@ IF(NOT WITHOUT_SERVER)
     ${CMAKE_CURRENT_BINARY_DIR}/sql_commands_help_data.h
     ${CMAKE_CURRENT_BINARY_DIR}/sql_commands_system_tables_data_fix.h
     ${CMAKE_CURRENT_BINARY_DIR}/sql_firewall_stored_procedures.h
+    ${CMAKE_CURRENT_BINARY_DIR}/sql_commands_greatdb_tables.h
   )
 ENDIF()
 

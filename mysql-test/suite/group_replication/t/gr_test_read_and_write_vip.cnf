@@ -1,0 +1,42 @@
+!include ../my.cnf
+
+[mysqld.1]
+loose-greatdb_ha_port = 3400
+loose-greatdb_ha_mgr_read_vip_floating_type = "TO_ANOTHER_SECONDARY"
+loose-greatdb_ha_mgr_vip_ip = 192.168.2.127
+loose-greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129"
+loose-greatdb_ha_mgr_vip_mask = 255.255.255.0
+loose-greatdb_ha_enable_mgr_vip = 1
+loose-greatdb_ha_mgr_vip_nic = 'eno1:0'
+loose-group_replication_single_primary_mode= TRUE
+loose-group_replication_enforce_update_everywhere_checks= FALSE
+loose-group_replication_member_weight=80
+
+[mysqld.2]
+loose-greatdb_ha_port = 3401
+loose-greatdb_ha_mgr_read_vip_floating_type = "TO_ANOTHER_SECONDARY"
+loose-greatdb_ha_mgr_vip_ip = 192.168.2.127
+loose-greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129"
+loose-greatdb_ha_mgr_vip_mask = 255.255.255.0
+loose-greatdb_ha_enable_mgr_vip = 1
+loose-greatdb_ha_mgr_vip_nic = 'eno1:1'
+loose-group_replication_single_primary_mode= TRUE
+loose-group_replication_enforce_update_everywhere_checks= FALSE
+loose-group_replication_member_weight=70
+
+[mysqld.3]
+loose-greatdb_ha_port = 3402
+loose-greatdb_ha_mgr_read_vip_floating_type = "TO_ANOTHER_SECONDARY"
+loose-greatdb_ha_mgr_vip_ip = 192.168.2.127
+loose-greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129"
+loose-greatdb_ha_mgr_vip_mask = 255.255.255.0
+loose-greatdb_ha_enable_mgr_vip = 1
+loose-greatdb_ha_mgr_vip_nic = 'eno1:2'
+loose-group_replication_single_primary_mode= TRUE
+loose-group_replication_enforce_update_everywhere_checks= FALSE
+loose-group_replication_member_weight=60
+
+
+[ENV]
+SERVER_MYPORT_3=		@mysqld.3.port
+SERVER_MYSOCK_3=		@mysqld.3.socket

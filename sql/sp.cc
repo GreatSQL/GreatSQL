@@ -449,6 +449,30 @@ bool sp_get_ora_type_reclength(THD *thd, const LEX_CSTRING db,
   return false;
 }
 
+/* Get options about udt object.*/
+void get_udt_info_from_dd_routine(THD *thd, const dd::Routine *routine,
+                                  LEX_CSTRING *nested_table_udt,
+                                  enum_udt_table_of_type *table_type,
+                                  ulonglong *varray_limit) {
+  const dd::Properties *routine_options = &routine->options();
+  if (routine_options->exists("nested_table_udt")) {
+    routine_options->get("nested_table_udt", nested_table_udt, thd->mem_root);
+  }
+  uint type_udt = 255;
+  if (routine_options->exists("table_type")) {
+    routine_options->get("table_type", &type_udt);
+  }
+  if (routine_options->exists("varray_limit")) {
+    routine_options->get("varray_limit", varray_limit);
+  }
+  if (type_udt == 0)
+    *table_type = enum_udt_table_of_type::TYPE_VARRAY;
+  else if (type_udt == 1)
+    *table_type = enum_udt_table_of_type::TYPE_TABLE;
+  else
+    *table_type = enum_udt_table_of_type::TYPE_INVALID;
+}
+
 /**
   Find routine definition in data dictionary table and create corresponding
   sp_head object for it.
@@ -520,7 +544,9 @@ static enum_sp_return_code db_find_routine(THD *thd, enum_sp_type type,
 
   // prepare stored routine's return type string.
   dd::String_type return_type_str;
-  prepare_return_type_string_from_dd_routine(thd, routine, &return_type_str);
+  if (prepare_return_type_string_from_dd_routine(thd, routine,
+                                                 &return_type_str))
+    return SP_INTERNAL_ERROR;
 
   // prepare stored routine's parameters string.
   dd::String_type params_str;
@@ -545,13 +571,22 @@ static enum_sp_return_code db_find_routine(THD *thd, enum_sp_type type,
     db = fake_for->m_db;
     fake_synonym = true;
   }
+  /* Get options about udt object.*/
+  LEX_CSTRING nested_table_udt = NULL_CSTR;
+  ulonglong varray_limit = 0;
+  enum_udt_table_of_type enum_table_type = enum_udt_table_of_type::TYPE_INVALID;
+  if (type == enum_sp_type::TYPE) {
+    get_udt_info_from_dd_routine(thd, routine, &nested_table_udt,
+                                 &enum_table_type, &varray_limit);
+  }
+
   ret = db_load_routine(
       thd, type, db.str, db.length, routine->name().c_str(),
       routine->name().length(), sphp, routine->sql_mode(), params_str.c_str(),
       return_type_str.c_str(), routine->definition().c_str(), &sp_chistics,
       routine->definer_user().c_str(), routine->definer_host().c_str(),
       routine->created(true), routine->last_altered(true), creation_ctx,
-      fake_synonym);
+      fake_synonym, nested_table_udt, enum_table_type, varray_limit);
   return ret;
 }
 
@@ -675,7 +710,9 @@ enum_sp_return_code db_load_routine(
     sql_mode_t sql_mode, const char *params, const char *returns,
     const char *body, st_sp_chistics *sp_chistics, const char *definer_user,
     const char *definer_host, longlong created, longlong modified,
-    Stored_program_creation_ctx *creation_ctx, bool fake_synonym) {
+    Stored_program_creation_ctx *creation_ctx, bool fake_synonym,
+    LEX_CSTRING nested_table_udt, enum_udt_table_of_type type_udt,
+    ulonglong varray_limit) {
   LEX *old_lex = thd->lex, newlex;
   char saved_cur_db_name_buf[NAME_LEN + 1];
   LEX_STRING saved_cur_db_name = {saved_cur_db_name_buf,
@@ -697,8 +734,8 @@ enum_sp_return_code db_load_routine(
   if (!create_string(thd, &defstr, type, nullptr, 0, sp_name, sp_name_len,
                      params, strlen(params), returns, strlen(returns), body,
                      strlen(body), sp_chistics, user, host, sql_mode, false,
-                     NULL_STR, NULL_STR, enum_udt_table_of_type::TYPE_INVALID,
-                     0)) {
+                     LEX_STRING{const_cast<char *>(sp_db), strlen(sp_db)},
+                     to_lex_string(nested_table_udt), type_udt, varray_limit)) {
     ret = SP_INTERNAL_ERROR;
     goto end;
   }
@@ -1148,6 +1185,13 @@ bool sp_create_routine(THD *thd, sp_head *sp, const LEX_USER *definer,
 
   dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   const dd::Schema *schema = nullptr;
+  int sp_type = (int)sp->m_type;
+  if (sp->m_type == enum_sp_type::PACKAGE_SPEC ||
+      sp->m_type == enum_sp_type::PACKAGE_BODY) {
+    sp_type = (int)enum_sp_type::PACKAGE_BODY;
+  }
+  std::string unit_name(sp->m_name.str, sp->m_name.length);
+  std::string unit_db(sp->m_db.str, sp->m_db.length);
 
   // Check whether routine with same name already exists.
   if (check_routine_already_exists(thd, sp, if_not_exists, sp_already_exists)) {
@@ -1226,6 +1270,8 @@ bool sp_create_routine(THD *thd, sp_head *sp, const LEX_USER *definer,
 
   // Invalidate stored routine cache.
   sp_cache_invalidate();
+  Sp_version_changed::get_instance()->sp_version_changed(unit_db, sp_type,
+                                                         unit_name);
 
   return false;
 
@@ -1381,6 +1427,14 @@ enum_sp_return_code sp_drop_routine(THD *thd, enum_sp_type type,
   // Invalidate routine cache.
   {
     sp_cache_invalidate();
+    std::string unit_db(name->m_db.str, name->m_db.length);
+    std::string unit_name(name->m_name.str, name->m_name.length);
+    int sp_type = (int)(type);
+    if (type == enum_sp_type::PACKAGE_SPEC) {
+      sp_type = (int)enum_sp_type::PACKAGE_BODY;
+    }
+    Sp_version_changed::get_instance()->sp_version_clear(unit_db, sp_type,
+                                                         unit_name);
 
     /*
       A lame workaround for lack of cache flush:
@@ -1904,31 +1958,22 @@ static bool show_create_routine_from_dd_routine(THD *thd, enum_sp_type type,
 
   // prepare stored routine return type string.
   dd::String_type return_type_str;
-  prepare_return_type_string_from_dd_routine(thd, routine, &return_type_str);
+  if (prepare_return_type_string_from_dd_routine(thd, routine,
+                                                 &return_type_str))
+    return true;
 
   // Prepare stored routine definition string.
   String defstr;
   defstr.set_charset(system_charset_info);
-  const dd::Properties *options = &routine->options();
+  /* Get options about udt object.*/
   LEX_CSTRING nested_table_udt = NULL_CSTR;
-  uint type_udt = 255;
   ulonglong varray_limit = 0;
-  if (options->exists("nested_table_udt")) {
-    options->get("nested_table_udt", &nested_table_udt, thd->mem_root);
+  enum_udt_table_of_type enum_table_type = enum_udt_table_of_type::TYPE_INVALID;
+  if (type == enum_sp_type::TYPE) {
+    get_udt_info_from_dd_routine(thd, routine, &nested_table_udt,
+                                 &enum_table_type, &varray_limit);
   }
-  if (options->exists("table_type")) {
-    options->get("table_type", &type_udt);
-  }
-  if (options->exists("varray_limit")) {
-    options->get("varray_limit", &varray_limit);
-  }
-  enum_udt_table_of_type enum_table_type;
-  if (type_udt == 0)
-    enum_table_type = enum_udt_table_of_type::TYPE_VARRAY;
-  else if (type_udt == 1)
-    enum_table_type = enum_udt_table_of_type::TYPE_TABLE;
-  else
-    enum_table_type = enum_udt_table_of_type::TYPE_INVALID;
+
   if (!create_string(
           thd, &defstr, type, nullptr, 0, routine->name().c_str(),
           routine->name().length(), routine->parameter_str().c_str(),
@@ -2115,14 +2160,15 @@ class Package_name_split : public LEX_CSTRING {
 };
 
 static void get_package_body_routine(bool in_package_body, enum_sp_type type,
-                                     const sp_name *name, sp_head **sp) {
+                                     const sp_name *name, sp_head **sp,
+                                     sp_signature *sig) {
   if (in_package_body && *sp) {
     sp_package *spec = (*sp)->get_package();
     if (spec == NULL)
       *sp = NULL;
     else {
-      LEX *lex =
-          spec->m_routine_implementations.find_qualified(name->m_name, type);
+      LEX *lex = spec->m_routine_implementations.find_qualified(name->m_name,
+                                                                type, sig);
       *sp = lex ? lex->sphead : NULL;
     }
   }
@@ -2146,7 +2192,8 @@ static void get_package_body_routine(bool in_package_body, enum_sp_type type,
 */
 
 sp_head *sp_find_routine(THD *thd, enum_sp_type type, sp_name *name,
-                         sp_cache **cp, bool cache_only, sp_name *pkgname) {
+                         sp_cache **cp, bool cache_only, sp_name *pkgname,
+                         sp_signature *sig) {
   DBUG_TRACE;
   DBUG_PRINT("enter", ("name:  %.*s.%.*s  type: %d  cache only %d",
                        static_cast<int>(name->m_db.length), name->m_db.str,
@@ -2181,7 +2228,7 @@ sp_head *sp_find_routine(THD *thd, enum_sp_type type, sp_name *name,
   else
     sp = sp_cache_lookup(cp, name);
   if (sp != nullptr) {
-    get_package_body_routine(in_package_body, type, name, &sp);
+    get_package_body_routine(in_package_body, type, name, &sp, sig);
     return sp;
   }
 
@@ -2194,7 +2241,7 @@ sp_head *sp_find_routine(THD *thd, enum_sp_type type, sp_name *name,
     }
   }
 
-  get_package_body_routine(in_package_body, type, name, &sp);
+  get_package_body_routine(in_package_body, type, name, &sp, sig);
   return sp;
 }
 
@@ -2213,7 +2260,7 @@ sp_head *sp_find_routine(THD *thd, enum_sp_type type, sp_name *name,
 */
 
 sp_head *sp_setup_routine(THD *thd, enum_sp_type type, sp_name *name,
-                          sp_cache **cp, sp_name *pkgname) {
+                          sp_cache **cp, sp_name *pkgname, sp_signature *sig) {
   DBUG_TRACE;
   DBUG_PRINT("enter", ("name:  %.*s.%.*s  type: %d ",
                        static_cast<int>(name->m_db.length), name->m_db.str,
@@ -2246,7 +2293,7 @@ sp_head *sp_setup_routine(THD *thd, enum_sp_type type, sp_name *name,
       sp = sp_cache_lookup(cp, pkgname);
     else
       sp = sp_cache_lookup(cp, name);
-    get_package_body_routine(in_package_body, type, name, &sp);
+    get_package_body_routine(in_package_body, type, name, &sp, sig);
     if (sp == nullptr) return nullptr;
   }
 
@@ -2336,27 +2383,27 @@ bool sp_exist_routines(THD *thd, Table_ref *routines, enum_sp_type sp_type) {
 
     sp_name pkgname(NULL_CSTR, NULL_STR, false);
     if (sp_resolve_package_routine(thd, sp_type, thd->lex->sphead, name,
-                                   &pkgname))
+                                   &pkgname, nullptr))
       return true;
 
     if (sp_type == enum_sp_type::PROCEDURE)
       sp_object_found = sp_find_routine(thd, sp_type, name, &thd->sp_proc_cache,
-                                        false, &pkgname) != nullptr;
+                                        false, &pkgname, nullptr) != nullptr;
     else if (sp_type == enum_sp_type::FUNCTION)
       sp_object_found = sp_find_routine(thd, sp_type, name, &thd->sp_func_cache,
-                                        false, &pkgname) != nullptr;
+                                        false, &pkgname, nullptr) != nullptr;
     else if (sp_type == enum_sp_type::PACKAGE_SPEC)
       sp_object_found =
           sp_find_routine(thd, sp_type, name, &thd->sp_package_spec_cache,
-                          false, &pkgname) != nullptr;
+                          false, &pkgname, nullptr) != nullptr;
     else if (sp_type == enum_sp_type::PACKAGE_BODY)
       sp_object_found =
           sp_find_routine(thd, sp_type, name, &thd->sp_package_body_cache,
-                          false, &pkgname) != nullptr;
+                          false, &pkgname, nullptr) != nullptr;
     else if (sp_type == enum_sp_type::TYPE)
       sp_object_found =
           sp_find_routine(thd, sp_type, name, &thd->sp_ora_type_cache, false,
-                          &pkgname) != nullptr;
+                          &pkgname, nullptr) != nullptr;
     else
       return true;
 
@@ -2405,13 +2452,12 @@ bool sp_exist_routines(THD *thd, Table_ref *routines, enum_sp_type sp_type) {
     the set).
 */
 
-static bool sp_add_used_routine(Query_tables_list *prelocking_ctx,
-                                Query_arena *arena, const uchar *key,
-                                size_t key_length, size_t db_length,
-                                const char *name, size_t name_length,
-                                Table_ref *belong_to_view,
-                                const char *pkg_name = nullptr,
-                                size_t pkg_name_length = 0) {
+static bool sp_add_used_routine(
+    Query_tables_list *prelocking_ctx, Query_arena *arena, const uchar *key,
+    size_t key_length, size_t db_length, const char *name, size_t name_length,
+    Table_ref *belong_to_view, const char *pkg_name = nullptr,
+    size_t pkg_name_length = 0, sp_signature *sig = nullptr,
+    uint key_add_length = 0) {
   if (prelocking_ctx->sroutines == nullptr) {
     prelocking_ctx->sroutines.reset(
         new malloc_unordered_map<std::string, Sroutine_hash_entry *>(
@@ -2441,12 +2487,16 @@ static bool sp_add_used_routine(Query_tables_list *prelocking_ctx,
       rn->m_pkg_name.str[pkg_name_length] = '\0';
     }
 
+    rn->m_sig = sig ? sig->clone(arena->mem_root) : nullptr;
+    rn->m_key_add_length = key_add_length;
+
     rn->m_object_name = {nullptr, 0};
     if (rn->use_normalized_key() &&
         lex_string_strmake(arena->mem_root, &(rn->m_object_name), name,
                            name_length))
       return false;  // OOM, Error will be reported using fatal_error().
 
+    // key_str is set in caller where overload_index is included.
     prelocking_ctx->sroutines->emplace(key_str, rn);
     prelocking_ctx->sroutines_list.link_in_list(rn, &rn->next);
     rn->belong_to_view = belong_to_view;
@@ -2499,12 +2549,14 @@ bool sp_add_used_routine(Query_tables_list *prelocking_ctx, Query_arena *arena,
                          bool lowercase_db,
                          Sp_name_normalize_type name_normalize_type,
                          bool own_routine, Table_ref *belong_to_view,
-                         const char *pkg_name, size_t pkg_name_length) {
+                         const char *pkg_name, size_t pkg_name_length,
+                         sp_signature *sig) {
   // Length of routine name components needs to be checked earlier.
   assert(db_length <= NAME_LEN && name_length <= NAME_LEN);
 
-  uchar key[1 + NAME_LEN + 1 + NAME_LEN + 1];
+  uchar key[1 + NAME_LEN + 1 + NAME_LEN + 1 + 4 + 1];
   size_t key_length = 0;
+  uint key_add_length = 0;
 
   key[key_length++] = static_cast<uchar>(type);
   memcpy(key + key_length, db, db_length + 1);
@@ -2563,6 +2615,12 @@ bool sp_add_used_routine(Query_tables_list *prelocking_ctx, Query_arena *arena,
       key_length += dd::normalize_string(cs, name, (char *)(key) + key_length,
                                          NAME_CHAR_LEN * 2);
       *(key + key_length++) = 0;
+
+      if (sig && sig->m_inited && sig->m_overload_index) {
+        int4store(key + key_length, (uint32)sig->m_overload_index);
+        key_add_length = 4;
+        key_length += key_add_length;
+      }
       break;
     }
     default:
@@ -2572,7 +2630,7 @@ bool sp_add_used_routine(Query_tables_list *prelocking_ctx, Query_arena *arena,
 
   if (sp_add_used_routine(prelocking_ctx, arena, key, key_length, db_length,
                           name, name_length, belong_to_view, pkg_name,
-                          pkg_name_length)) {
+                          pkg_name_length, sig, key_add_length)) {
     if (own_routine) {
       prelocking_ctx->sroutines_list_own_last =
           prelocking_ctx->sroutines_list.next;
@@ -2634,7 +2692,7 @@ void sp_update_stmt_used_routines(
     (void)sp_add_used_routine(
         prelocking_ctx, thd->stmt_arena, pointer_cast<const uchar *>(rt->m_key),
         rt->m_key_length, rt->m_db_length, rt->name(), rt->name_length(),
-        belong_to_view, rt->m_pkg_name.str, rt->m_pkg_name.length);
+        belong_to_view, rt->m_pkg_name.str, rt->m_pkg_name.length, rt->m_sig);
   }
 }
 
@@ -2659,7 +2717,7 @@ void sp_update_stmt_used_routines(THD *thd, Query_tables_list *prelocking_ctx,
     (void)sp_add_used_routine(
         prelocking_ctx, thd->stmt_arena, pointer_cast<const uchar *>(rt->m_key),
         rt->m_key_length, rt->m_db_length, rt->name(), rt->name_length(),
-        belong_to_view, rt->m_pkg_name.str, rt->m_pkg_name.length);
+        belong_to_view, rt->m_pkg_name.str, rt->m_pkg_name.length, rt->m_sig);
 }
 
 /**
@@ -2719,7 +2777,8 @@ enum_sp_return_code sp_cache_routine(THD *thd, Sroutine_hash_entry *rt,
          rt == thd->lex->sroutines_list.first);
 #endif
 
-  return sp_cache_routine(thd, type, &name, lookup_only, sp, &pkgname);
+  return sp_cache_routine(thd, type, &name, lookup_only, sp, &pkgname,
+                          rt->m_sig);
 }
 
 /**
@@ -2744,7 +2803,8 @@ enum_sp_return_code sp_cache_routine(THD *thd, Sroutine_hash_entry *rt,
 
 enum_sp_return_code sp_cache_routine(THD *thd, enum_sp_type type,
                                      const sp_name *name, bool lookup_only,
-                                     sp_head **sp, const sp_name *pkgname) {
+                                     sp_head **sp, const sp_name *pkgname,
+                                     sp_signature *sig) {
   DBUG_TRACE;
 
   assert(type == enum_sp_type::FUNCTION || type == enum_sp_type::PROCEDURE ||
@@ -2792,14 +2852,23 @@ enum_sp_return_code sp_cache_routine(THD *thd, enum_sp_type type,
   else
     *sp = sp_cache_lookup(spc, name);
 
+  /*
+    system packages synonym always sets m_fake_synonym flag.
+    For such sp_head, it should not be referred using db.pkg.routine format.
+    If a system package is loaded for sys schema, its m_fake_synonym flag will
+    not be set as a normal package does.
+    ref. sp_namef for how m_pkg_db is set.
+  */
+  if (*sp && (*sp)->m_fake_synonym && name->m_pkg_db.length != 0) *sp = nullptr;
+
   if (lookup_only) {
-    get_package_body_routine(in_package_body, type, name, sp);
+    get_package_body_routine(in_package_body, type, name, sp, sig);
     return SP_OK;
   }
 
   if (*sp) {
     sp_cache_flush_obsolete(spc, sp);
-    get_package_body_routine(in_package_body, type, name, sp);
+    get_package_body_routine(in_package_body, type, name, sp, sig);
     if (*sp) return SP_OK;
   }
 
@@ -2831,7 +2900,7 @@ enum_sp_return_code sp_cache_routine(THD *thd, enum_sp_type type,
   switch (ret) {
     case SP_OK:
       sp_cache_insert(spc, *sp);
-      get_package_body_routine(in_package_body, type, name, sp);
+      get_package_body_routine(in_package_body, type, name, sp, sig);
       break;
     case SP_DOES_NOT_EXISTS:
       ret = SP_OK;
@@ -3048,7 +3117,9 @@ sp_head *sp_load_for_information_schema(THD *thd, LEX_CSTRING db_name,
 
   // Prepare stored routine return type string.
   dd::String_type return_type_str;
-  prepare_return_type_string_from_dd_routine(thd, routine, &return_type_str);
+  if (prepare_return_type_string_from_dd_routine(thd, routine,
+                                                 &return_type_str))
+    return nullptr;
 
   // Prepare stored routine parameter's string.
   dd::String_type params_str;
@@ -3166,6 +3237,7 @@ void sp_finish_parsing(THD *thd) {
   if (sp->m_parser_data.get_body_start_ptr() != NULL) sp->set_body_end(thd);
 
   sp->m_parser_data.finish_parsing_sp_body(thd);
+  thd->lex->sphead->m_parser_data.check_unresolved_goto();
 }
 
 /// @return Item_result code corresponding to the RETURN-field type code.
@@ -3226,7 +3298,8 @@ uint sp_get_flags_for_command(LEX *lex) {
 
   switch (lex->sql_command) {
     case SQLCOM_SELECT:
-      if (lex->result) {
+      // explain will send result to client no matter INTO-clause exists or not.
+      if (lex->explain_format == nullptr && lex->result) {
         flags = 0; /* This is a SELECT with INTO clause */
         break;
       }
@@ -3277,6 +3350,7 @@ uint sp_get_flags_for_command(LEX *lex) {
     case SQLCOM_SHOW_STATUS_PACKAGE_BODY:
     case SQLCOM_SHOW_STATUS_TYPE:
     case SQLCOM_SHOW_STORAGE_ENGINES:
+    case SQLCOM_SHOW_SEQUENCES:
     case SQLCOM_SHOW_TABLES:
     case SQLCOM_SHOW_TABLE_STATUS:
     case SQLCOM_SHOW_VARIABLES:
@@ -3385,6 +3459,7 @@ uint sp_get_flags_for_command(LEX *lex) {
     case SQLCOM_ALTER_RESOURCE_GROUP:
     case SQLCOM_DROP_RESOURCE_GROUP:
     case SQLCOM_ALTER_TABLESPACE:
+    case SQLCOM_ALTER_TRIGGER:
       flags = sp_head::HAS_COMMIT_OR_ROLLBACK;
       break;
     default:
@@ -3435,17 +3510,21 @@ bool sp_check_name(LEX_STRING *ident) {
     non-NULL  prepared item
 */
 Item *sp_prepare_func_item(THD *thd, Item **it_addr) {
+  Prepared_stmt_arena_holder ps_arena_holder(thd);
+  Prepare_error_tracker tracker(thd);
   // Item_splocal_row_field and Item_splocal_row_field_by_name need fix field.
-  if ((*it_addr)->type() == Item::ORACLE_ROWTYPE_ITEM ||
-      (*it_addr)->type() == Item::ORACLE_ROWTYPE_TABLE_ITEM) {
+  if ((*it_addr)->is_splocal() &&
+      ((*it_addr)->type() == Item::ORACLE_ROWTYPE_ITEM ||
+       (*it_addr)->type() == Item::ORACLE_ROWTYPE_TABLE_ITEM)) {
     if ((*it_addr)->fix_fields(thd, it_addr)) return nullptr;
   }
   /* Item_func_udt_constructor and Item_func_udt_table and
     need fix field.
   */
   Item_func *item_func = dynamic_cast<Item_func *>(*it_addr);
-  if (item_func && (item_func->functype() == Item_func::UDT_TABLE_FUNC ||
-                    item_func->functype() == Item_func::UDT_FUNC)) {
+  if (item_func && item_func->fixed &&
+      (item_func->functype() == Item_func::UDT_TABLE_FUNC ||
+       item_func->functype() == Item_func::UDT_FUNC)) {
     if (item_func->refix_fields()) return nullptr;
   }
   /*When it's Item_splocal_row_field_table_by_name and
@@ -3464,9 +3543,6 @@ Item *sp_prepare_func_item(THD *thd, Item **it_addr) {
     thd->lex->set_exec_started();
     return *it_addr;
   }
-
-  Prepared_stmt_arena_holder ps_arena_holder(thd);
-  Prepare_error_tracker tracker(thd);
 
   if ((*it_addr)->fix_fields(thd, it_addr) || (*it_addr)->check_cols(1)) {
     DBUG_PRINT("info", ("fix_fields() failed"));
@@ -3510,13 +3586,15 @@ bool sp_eval_expr(THD *thd, Field *result_field, Item **expr_item_ptr) {
       thd->get_transaction()->get_unsafe_rollback_flags(Transaction_ctx::STMT);
 
   Field_row *field_row = dynamic_cast<Field_row *>(result_field);
+  Field_refcursor *field_refcursor =
+      dynamic_cast<Field_refcursor *>(result_field);
   if (!*expr_item_ptr) goto error;
 
   if (!(expr_item = sp_prepare_func_item(thd, expr_item_ptr))) goto error;
   /*When record.record_table := 1,it sets wrong value.*/
-  if (field_row) {
-    if (expr_item->result_type() != ROW_RESULT &&
-        expr_item->type() != Item::NULL_ITEM) {
+  if (field_row && !field_refcursor) {
+    if (expr_item->this_item()->result_type() != ROW_RESULT &&
+        expr_item->this_item()->type() != Item::NULL_ITEM) {
       my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), expr_item->item_name.ptr());
       goto error;
     }
@@ -3762,7 +3840,7 @@ int sp_cache_routine_reentrant(THD *thd, enum_sp_type type, sp_name *name,
   newlex.set_current_query_block(nullptr);
   thd->lex = &newlex;
 
-  ret = sp_cache_routine(thd, type, name, false, sp, nullptr);
+  ret = sp_cache_routine(thd, type, name, false, sp, nullptr, nullptr);
 
   thd->lex->sphead = NULL;
   lex_end(thd->lex);
@@ -3971,7 +4049,8 @@ static bool is_package_public_routine(THD *thd, const LEX_CSTRING &db,
                                       const LEX_STRING &package,
                                       const LEX_STRING &routine,
                                       enum_sp_type type, bool *fake,
-                                      LEX_CSTRING &pkg_db) {
+                                      LEX_CSTRING &pkg_db, sp_head *caller,
+                                      sp_signature *sig) {
   sp_head *sp = NULL;
   sp_name tmp(db, package, true);
   tmp.m_pkg_db = pkg_db;
@@ -3981,7 +4060,12 @@ static bool is_package_public_routine(THD *thd, const LEX_CSTRING &db,
       sp_cache_routine_reentrant(thd, enum_sp_type::PACKAGE_SPEC, &tmp, &sp);
   if (!ret && sp && fake) *fake = sp->m_fake_synonym;
   sp_package *spec = (!ret && sp) ? sp->get_package() : NULL;
-  return spec && spec->m_routine_declarations.find(routine, type);
+  bool same_pkg = caller && caller->m_parent && spec &&
+                  sp_eq_routine_name(caller->m_parent->m_qname, spec->m_qname);
+  if (!same_pkg && sig) sig->m_lookup_public = true;
+  auto rc = spec && spec->m_routine_declarations.find(routine, type, sig);
+  if (!rc && sig) sig->m_lookup_public = false;
+  return rc;
 }
 
 /*
@@ -4004,7 +4088,8 @@ static bool is_package_public_routine(THD *thd, const LEX_CSTRING &db,
 static bool is_package_public_routine_quick(THD *thd, const LEX_CSTRING &db,
                                             const LEX_STRING &pkgname,
                                             const LEX_STRING &name,
-                                            enum_sp_type type) {
+                                            enum_sp_type type,
+                                            sp_signature *sig) {
   sp_name tmp(db, pkgname, true);
   // @@TDOO@@ how to release m_qname ?
   tmp.init_qname(thd);
@@ -4012,7 +4097,7 @@ static bool is_package_public_routine_quick(THD *thd, const LEX_CSTRING &db,
   sp_head *sp = sp_cache_lookup(&thd->sp_package_spec_cache, &tmp);
   sp_package *pkg = sp ? sp->get_package() : NULL;
   assert(pkg);  // Must already be cached
-  return pkg && pkg->m_routine_declarations.find(name, type);
+  return pkg && pkg->m_routine_declarations.find(name, type, sig);
 }
 
 /*
@@ -4022,11 +4107,11 @@ static bool is_package_public_routine_quick(THD *thd, const LEX_CSTRING &db,
 static bool is_package_body_routine(THD *, sp_package *pkg,
                                     const LEX_STRING &name1,
                                     const LEX_STRING &name2, enum_sp_type type,
-                                    bool *fake) {
+                                    bool *fake, sp_signature *sig) {
   if (fake) *fake = pkg->m_fake_synonym;
   return sp_eq_routine_name(pkg->m_name, name1) &&
-         (pkg->m_routine_declarations.find(name2, type) ||
-          pkg->m_routine_implementations.find(name2, type));
+         (pkg->m_routine_declarations.find(name2, type, sig) ||
+          pkg->m_routine_implementations.find(name2, type, sig));
 }
 
 /*
@@ -4036,7 +4121,7 @@ static bool is_package_body_routine(THD *, sp_package *pkg,
 */
 bool sp_resolve_package_routine_explicit(THD *thd, enum_sp_type type,
                                          sp_head *caller, sp_name *name,
-                                         sp_name *pkgname) {
+                                         sp_name *pkgname, sp_signature *sig) {
   sp_package *pkg;
 
   /*
@@ -4054,14 +4139,15 @@ bool sp_resolve_package_routine_explicit(THD *thd, enum_sp_type type,
   LEX_CSTRING pkg_db = name->m_pkg_db;
   bool fake = false;
   if (is_package_public_routine(thd, tmpdb, m_db, name->m_name, type, &fake,
-                                pkg_db) ||
+                                pkg_db, caller, sig) ||
       // Check if a package routine calls a private routine
       (caller && caller->m_parent &&
        is_package_body_routine(thd, caller->m_parent, m_db, name->m_name, type,
-                               &fake)) ||
+                               &fake, sig)) ||
       // Check if a package initialization sections calls a private routine
       (caller && (pkg = caller->get_package()) &&
-       is_package_body_routine(thd, pkg, m_db, name->m_name, type, &fake))) {
+       is_package_body_routine(thd, pkg, m_db, name->m_name, type, &fake,
+                               sig))) {
     // thd->db() may be freed, so get the newest copy here.
     if (name->m_pkg_db.length == 0) tmpdb = thd->db();
     pkgname->copy(thd->mem_root, tmpdb, m_db);
@@ -4100,7 +4186,7 @@ bool sp_resolve_package_routine_explicit(THD *thd, enum_sp_type type,
 */
 bool sp_resolve_package_routine_implicit(THD *thd, enum_sp_type type,
                                          sp_head *caller, sp_name *name,
-                                         sp_name *pkgname) {
+                                         sp_name *pkgname, sp_signature *sig) {
   sp_package *pkg;
 
   if (!caller || !caller->m_name.length) {
@@ -4136,10 +4222,12 @@ bool sp_resolve_package_routine_implicit(THD *thd, enum_sp_type type,
       - yyy() is declared in the corresponding CREATE PACKAGE
     */
     if (sp_eq_routine_name(tmpname, name->m_name) ||
-        caller->m_parent->m_routine_implementations.find(name->m_name, type) ||
-        caller->m_parent->m_routine_declarations.find(name->m_name, type) ||
+        caller->m_parent->m_routine_implementations.find(name->m_name, type,
+                                                         sig) ||
+        caller->m_parent->m_routine_declarations.find(name->m_name, type,
+                                                      sig) ||
         is_package_public_routine_quick(thd, caller_db, pkgstr, name->m_name,
-                                        type)) {
+                                        type, sig)) {
       assert(ret == SP_OK);
       pkgname->copy(thd->mem_root, caller_db, pkgstr);
       pkgname->init_qname(thd);
@@ -4152,7 +4240,7 @@ bool sp_resolve_package_routine_implicit(THD *thd, enum_sp_type type,
   }
 
   if ((pkg = caller->get_package()) &&
-      pkg->m_routine_implementations.find(name->m_name, type)) {
+      pkg->m_routine_implementations.find(name->m_name, type, sig)) {
     pkgname->m_db = caller_db;
     pkgname->m_name = caller->m_name;
     // sp_cache_lookup() uses m_qname to lookup in cache.
@@ -4182,14 +4270,15 @@ bool sp_resolve_package_routine_implicit(THD *thd, enum_sp_type type,
   @retval         true    on error (e.g. EOM, could not read CREATE PACKAGE)
 */
 bool sp_resolve_package_routine(THD *thd, enum_sp_type type, sp_head *caller,
-                                sp_name *name, sp_name *pkgname) {
+                                sp_name *name, sp_name *pkgname,
+                                sp_signature *sig) {
   if (!(thd->variables.sql_mode & MODE_ORACLE)) return false;
   if (!thd->db().length && !name->m_pkg_db.length) return false;
 
   return name->m_explicit_name ? sp_resolve_package_routine_explicit(
-                                     thd, type, caller, name, pkgname)
+                                     thd, type, caller, name, pkgname, sig)
                                : sp_resolve_package_routine_implicit(
-                                     thd, type, caller, name, pkgname);
+                                     thd, type, caller, name, pkgname, sig);
 }
 
 /*

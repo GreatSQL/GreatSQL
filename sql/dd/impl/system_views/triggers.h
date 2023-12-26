@@ -58,7 +58,8 @@ class Triggers : public System_view_impl<System_view_select_definition_impl> {
     FIELD_DEFINER,
     FIELD_CHARACTER_SET_CLIENT,
     FIELD_COLLATION_CONNECTION,
-    FIELD_DATABASE_COLLATION
+    FIELD_DATABASE_COLLATION,
+    FIELD_EVENT_STATUS
   };
 
   Triggers();

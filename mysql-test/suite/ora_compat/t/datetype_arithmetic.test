@@ -49,9 +49,48 @@ INSERT INTO test_date(n,c) VALUES (-1, to_date('23:59:59','HH24:MI:SS') );
 INSERT INTO test_date(n,c) VALUES (1.2333,to_date('23:59:59','HH24:MI:SS') );
 INSERT INTO test_date(n,c) VALUES (-1.2333,to_date('23:59:59','HH24:MI:SS') );
 select c, n,c+n as sum from test_date order by id;
+
 select c, cast(n as SIGNED ),c+ cast(n as SIGNED) as sum from test_date order by id;
+
 drop table test_date;
 
+delimiter //;
+
+CREATE or replace PROCEDURE p1 as
+ dt datetime;
+ dt1 datetime;
+ diff int;
+BEGIN
+   dt := to_date(sysdate, 'yyyy-mm-dd hh24:mi:ss.ff6')-1;
+   dt1 := to_date(sysdate, 'yyyy-mm-dd hh24:mi:ss.ff6');
+   select dt,dt1,dt-dt1 from dual;
+   dt := to_date(sysdate, 'yyyy-mm-dd hh24:mi:ss.ff6') + 10;
+   select dt,dt1,dt-dt1 from dual;
+   diff:= dt - dt1;
+   select diff from dual;
+end
+//
+delimiter ;//
+
+set timestamp=1631848176;
+call p1();
+drop procedure p1;
+
+
+
+delimiter //;
+CREATE or replace PROCEDURE p1(par IN datetime) as
+BEGIN
+  select par;
+  par := to_date(par, 'yyyy-mm-dd hh24:mi:ss')-1;
+  select par;
+ end;
+//
+delimiter ;//
+
+set timestamp=1631848176;
+call p1(sysdate);
+drop procedure p1;
 
 select to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 1;
 select to_date('0000-01-01 00:00:00','yyyy-mm-dd HH24:MI:SS')  - 0;

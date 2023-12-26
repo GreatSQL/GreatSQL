@@ -141,6 +141,7 @@ struct plugin_options_variables {
   char *group_seeds_var;
   char *force_members_var;
   bool bootstrap_group_var;
+  bool is_set_read_only_for_slave_primary;
   ulong poll_spin_loops_var;
 
 #define DEFAULT_MEMBER_EXPEL_TIMEOUT 5
@@ -164,6 +165,7 @@ struct plugin_options_variables {
 
   ulong recovery_retry_count_var;
   ulong recovery_reconnect_interval_var;
+  ulonglong donor_threshold_var;
   bool recovery_use_ssl_var;
   char *recovery_ssl_ca_var;
   char *recovery_ssl_capath_var;

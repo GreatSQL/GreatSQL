@@ -533,6 +533,15 @@ class JOIN {
     Initialized by Query_block::get_optimizable_conditions().
   */
   Item *where_cond;
+
+  /**
+   * join with connect by start with
+   *
+   */
+  Item *start_with_cond;
+  Item *connect_by_cond;
+  Item *after_connect_by_cond;
+
   /**
     Optimized HAVING clause item tree (valid for one single execution).
     Used in JOIN execution, as last "row filtering" step. With one exception:
@@ -1330,6 +1339,34 @@ double find_worst_seeks(const TABLE *table, double num_rows,
  */
 bool ref_lookup_subsumes_comparison(THD *thd, Field *field, Item *right_item,
                                     bool *subsumes);
+
+/**
+ * splite connect by cond
+ * if cond has
+ *  connect_by_func  = item_field  -> get this item
+ *  .....
+ *
+ *   prior id = pid and prior cc = id
+ *
+ *   idx_field_list: { pid, id }
+ *   connect_by_list: { prior id, prior cc}
+ *
+ *
+ *
+  @param thd            thread handler
+  @param cond           connect by cond
+  @param[out] idx_field_list  get item_list if Item_field = Item_Connect_by_func
+  @param[out] connect_by_list get include idx_field_list item list
+  @param[out] other_list
+  @param[out] rownum_list  if item include rownum
+
+  @returns false if success, true if error
+*/
+bool connect_by_cond_lookup_ref(THD *thd, Item *cond,
+                                mem_root_deque<Item *> *idx_field_list,
+                                mem_root_deque<Item *> *connect_by_list,
+                                List<Item> *other_list, List<Item> *rownum_list,
+                                List<Item> *other_list2);
 
 /**
   Checks if we need to create iterators for this query. We usually have to. The

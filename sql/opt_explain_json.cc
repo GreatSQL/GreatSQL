@@ -1776,6 +1776,8 @@ bool Explain_format_JSON::begin_context(enum_parsing_context ctx_arg,
              current_context->type == CTX_DERIVED ||
              current_context->type == CTX_OPTIMIZED_AWAY_SUBQUERY ||
              current_context->type == CTX_WHERE ||
+             current_context->type == CTX_CONNECT_BY ||
+             current_context->type == CTX_START_WITH ||
              current_context->type == CTX_HAVING ||
              current_context->type == CTX_ORDER_BY_SQ ||
              current_context->type == CTX_GROUP_BY_SQ ||
@@ -1992,6 +1994,24 @@ bool Explain_format_JSON::begin_context(enum_parsing_context ctx_arg,
       current_context = ctx;
       break;
     }
+    case CTX_CONNECT_BY: {
+      assert(subquery != nullptr);
+      subquery_ctx *ctx = new (*THR_MALLOC)
+          subquery_ctx(CTX_CONNECT_BY, nullptr, current_context);
+      if (ctx == nullptr || current_context->add_where_subquery(ctx, subquery))
+        return true;
+      current_context = ctx;
+      break;
+    }
+    case CTX_START_WITH: {
+      assert(subquery != nullptr);
+      subquery_ctx *ctx = new (*THR_MALLOC)
+          subquery_ctx(CTX_START_WITH, nullptr, current_context);
+      if (ctx == nullptr || current_context->add_where_subquery(ctx, subquery))
+        return true;
+      current_context = ctx;
+      break;
+    }
     case CTX_GATHER: {
       join_ctx *ctx = new (*THR_MALLOC)
           join_ctx(CTX_GATHER, K_QUERY_BLOCK, current_context);
@@ -2035,6 +2055,8 @@ bool Explain_format_JSON::begin_context(enum_parsing_context ctx_arg,
              current_context->type == CTX_DERIVED ||
              current_context->type == CTX_OPTIMIZED_AWAY_SUBQUERY ||
              current_context->type == CTX_WHERE ||
+             current_context->type == CTX_CONNECT_BY ||
+             current_context->type == CTX_START_WITH ||
              current_context->type == CTX_HAVING ||
              current_context->type == CTX_ORDER_BY_SQ ||
              current_context->type == CTX_GROUP_BY_SQ ||

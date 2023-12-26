@@ -1,4 +1,5 @@
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,10 +28,12 @@
 #include "my_inttypes.h"
 #include "my_sys.h"
 #include "mysqld_error.h"
+#include "sql/auth/auth_acls.h"
 #include "sql/current_thd.h"
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
+#include "sql/thd_raii.h"
 #include "sql/thr_malloc.h"
 #include "sql_string.h"
 
@@ -207,4 +210,22 @@ Item *Item_row::transform(Item_transformer transformer, uchar *arg) {
 
 void Item_row::bring_value() {
   for (uint i = 0; i < arg_count; i++) items[i]->bring_value();
+}
+
+void Item_row::setup_pivot_name(THD *thd) {
+  assert(m_is_pivot_ref);
+  char buff[MAX_FIELD_WIDTH];
+  String str(buff, sizeof(buff), system_charset_info);
+  str.length(0);
+  for (uint i = 0; i < arg_count; i++) {
+    if (i) str.append('_');
+    items[i]->print(thd, &str, QT_ORDINARY);
+  }
+  item_name.copy(str.c_ptr_safe(), str.length(), system_charset_info, false);
+}
+
+void Item_row::setup_used_tables() {
+  for (uint i = 0; i < arg_count; i++) {
+    used_tables_cache = used_tables_cache & items[i]->used_tables();
+  }
 }

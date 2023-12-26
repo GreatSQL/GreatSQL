@@ -12,6 +12,7 @@ CALL mtr.add_suppression("Column count of");
 CALL mtr.add_suppression("Incorrect definition of table");
 CALL mtr.add_suppression("Cannot load from");
 CALL mtr.add_suppression("Storage engine 'MyISAM' does not");
+CALL mtr.add_suppression("System table 'greatdb_sequences' is expected to be transactional");
 
 --echo #-----------------------------------------------------------------------
 --echo # Test cases to verify system table's behavior with storage engines
@@ -30,26 +31,27 @@ CREATE USER 'user1'@'%';
 CREATE TABLE t1 (f1 INT);
 
 # mysql.func
---replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
-eval CREATE FUNCTION sequence RETURNS INTEGER SONAME "$UDF_EXAMPLE_LIB";
-RENAME TABLE mysql.func TO mysql.func_bkp;
-CREATE TABLE mysql.func ENGINE='MyISAM' AS SELECT * FROM mysql.func_bkp;
---echo # Without the fix, following statement results in the assert
---echo # condition failure.
---error ER_UNSUPPORTED_ENGINE
-CREATE FUNCTION udf_func RETURNS STRING SONAME 'udf_func.so';
---error ER_UNSUPPORTED_ENGINE
-DROP FUNCTION sequence;
+## [conflict with oracle sequence]
+#--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+#eval CREATE FUNCTION sequence RETURNS INTEGER SONAME "$UDF_EXAMPLE_LIB";
+#RENAME TABLE mysql.func TO mysql.func_bkp;
+#CREATE TABLE mysql.func ENGINE='MyISAM' AS SELECT * FROM mysql.func_bkp;
+#--echo # Without the fix, following statement results in the assert
+#--echo # condition failure.
+#--error ER_UNSUPPORTED_ENGINE
+#CREATE FUNCTION udf_func RETURNS STRING SONAME 'udf_func.so';
+#--error ER_UNSUPPORTED_ENGINE
+#DROP FUNCTION sequence;
 
-ALTER TABLE mysql.func ENGINE='InnoDB',
-                       DROP COLUMN ret;
---error ER_COL_COUNT_DOESNT_MATCH_CORRUPTED_V2
-CREATE FUNCTION udf_func RETURNS STRING SONAME 'udf_func.so';
---error ER_COL_COUNT_DOESNT_MATCH_CORRUPTED_V2
-DROP FUNCTION sequence;
-DROP TABLE mysql.func;
-RENAME TABLE mysql.func_bkp TO mysql.func;
-DROP FUNCTION sequence;
+#ALTER TABLE mysql.func ENGINE='InnoDB',
+#                       DROP COLUMN ret;
+#--error ER_COL_COUNT_DOESNT_MATCH_CORRUPTED_V2
+#CREATE FUNCTION udf_func RETURNS STRING SONAME 'udf_func.so';
+#--error ER_COL_COUNT_DOESNT_MATCH_CORRUPTED_V2
+#DROP FUNCTION sequence;
+#DROP TABLE mysql.func;
+#RENAME TABLE mysql.func_bkp TO mysql.func;
+#DROP FUNCTION sequence;
 
 # mysql.plugin
 RENAME TABLE mysql.plugin TO mysql.plugin_bkp;

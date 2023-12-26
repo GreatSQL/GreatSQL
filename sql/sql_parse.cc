@@ -98,6 +98,7 @@
 #include "sql/error_handler.h"  // Strict_error_handler
 #include "sql/events.h"         // Events
 #include "sql/field.h"
+#include "sql/gdb_sequence.h"
 #include "sql/gis/srid.h"
 #include "sql/item.h"
 #include "sql/item_cmpfunc.h"
@@ -579,6 +580,8 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_DROP_VIEW] = CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_CREATE_TRIGGER] =
       CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
+  sql_command_flags[SQLCOM_ALTER_TRIGGER] =
+      CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_DROP_TRIGGER] =
       CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_CREATE_EVENT] =
@@ -587,7 +590,6 @@ void init_sql_command_flags() {
       CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_DROP_EVENT] = CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_IMPORT] = CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
-
   sql_command_flags[SQLCOM_UPDATE] = CF_CHANGES_DATA | CF_REEXECUTION_FRAGILE |
                                      CF_CAN_GENERATE_ROW_EVENTS |
                                      CF_OPTIMIZER_TRACE | CF_CAN_BE_EXPLAINED;
@@ -704,6 +706,9 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_BINLOG_BASE64_EVENT] =
       CF_STATUS_COMMAND | CF_CAN_GENERATE_ROW_EVENTS;
 
+  sql_command_flags[SQLCOM_SHOW_SEQUENCES] =
+      (CF_STATUS_COMMAND | CF_SHOW_TABLE_COMMAND | CF_HAS_RESULT_SET |
+       CF_REEXECUTION_FRAGILE);
   sql_command_flags[SQLCOM_SHOW_TABLES] =
       (CF_STATUS_COMMAND | CF_SHOW_TABLE_COMMAND | CF_HAS_RESULT_SET |
        CF_REEXECUTION_FRAGILE);
@@ -747,6 +752,12 @@ void init_sql_command_flags() {
       CF_CHANGES_DATA | CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
   sql_command_flags[SQLCOM_CREATE_ROLE] =
       CF_CHANGES_DATA | CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
+  sql_command_flags[SQLCOM_CREATE_SEQUENCE] =
+      CF_CHANGES_DATA | CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
+  sql_command_flags[SQLCOM_DROP_SEQUENCE] =
+      CF_CHANGES_DATA | CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
+  sql_command_flags[SQLCOM_ALTER_SEQUENCE] =
+      CF_CHANGES_DATA | CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
 
   sql_command_flags[SQLCOM_OPTIMIZE] = CF_CHANGES_DATA;
   sql_command_flags[SQLCOM_ALTER_INSTANCE] = CF_CHANGES_DATA;
@@ -780,6 +791,9 @@ void init_sql_command_flags() {
       CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS | CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SET_RESOURCE_GROUP] =
       CF_CHANGES_DATA | CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_CREATE_SEQUENCE] |= CF_AUTO_COMMIT_TRANS;
+  sql_command_flags[SQLCOM_DROP_SEQUENCE] |= CF_AUTO_COMMIT_TRANS;
+  sql_command_flags[SQLCOM_ALTER_SEQUENCE] |= CF_AUTO_COMMIT_TRANS;
 
   sql_command_flags[SQLCOM_CLONE] =
       CF_AUTO_COMMIT_TRANS | CF_ALLOW_PROTOCOL_PLUGIN;
@@ -797,7 +811,8 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_EXECUTE] = CF_CAN_GENERATE_ROW_EVENTS;
   sql_command_flags[SQLCOM_COMPOUND] = CF_CAN_GENERATE_ROW_EVENTS;
 
-  sql_command_flags[SQLCOM_EXECUTE_IMMEDIATE] = CF_CAN_GENERATE_ROW_EVENTS;
+  sql_command_flags[SQLCOM_EXECUTE_IMMEDIATE] =
+      CF_REEXECUTION_FRAGILE | CF_CAN_GENERATE_ROW_EVENTS;
   /*
     The following admin table operations are allowed
     on log tables.
@@ -882,6 +897,7 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_REPAIR] |= CF_PREOPEN_TMP_TABLES;
   sql_command_flags[SQLCOM_PRELOAD_KEYS] |= CF_PREOPEN_TMP_TABLES;
   sql_command_flags[SQLCOM_ASSIGN_TO_KEYCACHE] |= CF_PREOPEN_TMP_TABLES;
+  sql_command_flags[SQLCOM_EXECUTE_IMMEDIATE] |= CF_PREOPEN_TMP_TABLES;
 
   /*
     DDL statements that should start with closing opened handlers.
@@ -925,6 +941,7 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_CREATE_VIEW] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_DROP_VIEW] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_CREATE_TRIGGER] |= CF_DISALLOW_IN_RO_TRANS;
+  sql_command_flags[SQLCOM_ALTER_TRIGGER] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_DROP_TRIGGER] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_CREATE_EVENT] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_ALTER_EVENT] |= CF_DISALLOW_IN_RO_TRANS;
@@ -938,6 +955,9 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_CREATE_SERVER] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_ALTER_SERVER] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_DROP_SERVER] |= CF_DISALLOW_IN_RO_TRANS;
+  sql_command_flags[SQLCOM_CREATE_SEQUENCE] |= CF_DISALLOW_IN_RO_TRANS;
+  sql_command_flags[SQLCOM_DROP_SEQUENCE] |= CF_DISALLOW_IN_RO_TRANS;
+  sql_command_flags[SQLCOM_ALTER_SEQUENCE] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_CREATE_FUNCTION] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_CREATE_PROCEDURE] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_CREATE_SPFUNCTION] |= CF_DISALLOW_IN_RO_TRANS;
@@ -983,6 +1003,7 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_DROP_TABLE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_DROP_INDEX] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_DATABASES] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_SHOW_SEQUENCES] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_TABLES] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_FIELDS] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_SHOW_KEYS] |= CF_ALLOW_PROTOCOL_PLUGIN;
@@ -1080,11 +1101,12 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_SHOW_STATUS_FUNC] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_PREPARE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_EXECUTE] |= CF_ALLOW_PROTOCOL_PLUGIN;
-  sql_command_flags[SQLCOM_EXECUTE_IMMEDIATE] = CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_EXECUTE_IMMEDIATE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_DEALLOCATE_PREPARE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_CREATE_VIEW] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_DROP_VIEW] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_CREATE_TRIGGER] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_ALTER_TRIGGER] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_DROP_TRIGGER] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_XA_START] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_XA_END] |= CF_ALLOW_PROTOCOL_PLUGIN;
@@ -1100,6 +1122,9 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_CREATE_SERVER] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_DROP_SERVER] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_ALTER_SERVER] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_CREATE_SEQUENCE] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_DROP_SEQUENCE] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_ALTER_SEQUENCE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_CREATE_EVENT] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_ALTER_EVENT] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_DROP_EVENT] |= CF_ALLOW_PROTOCOL_PLUGIN;
@@ -1192,6 +1217,8 @@ void init_sql_command_flags() {
       CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
   sql_command_flags[SQLCOM_CREATE_TRIGGER] |=
       CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
+  sql_command_flags[SQLCOM_ALTER_TRIGGER] |=
+      CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
   sql_command_flags[SQLCOM_DROP_TRIGGER] |=
       CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
   sql_command_flags[SQLCOM_IMPORT] |=
@@ -1216,6 +1243,7 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_SHOW_CHARSETS] |= CF_SHOW_USES_SYSTEM_VIEW;
   sql_command_flags[SQLCOM_SHOW_COLLATIONS] |= CF_SHOW_USES_SYSTEM_VIEW;
   sql_command_flags[SQLCOM_SHOW_DATABASES] |= CF_SHOW_USES_SYSTEM_VIEW;
+  sql_command_flags[SQLCOM_SHOW_SEQUENCES] |= CF_SHOW_USES_SYSTEM_VIEW;
   sql_command_flags[SQLCOM_SHOW_TABLES] |= CF_SHOW_USES_SYSTEM_VIEW;
   sql_command_flags[SQLCOM_SHOW_TABLE_STATUS] |= CF_SHOW_USES_SYSTEM_VIEW;
   sql_command_flags[SQLCOM_SHOW_FIELDS] |= CF_SHOW_USES_SYSTEM_VIEW;
@@ -2705,11 +2733,17 @@ bool shutdown(THD *thd, enum mysql_enum_shutdown_level level) {
   my_ok(thd);
 
   LogErr(SYSTEM_LEVEL, ER_SERVER_SHUTDOWN_INFO,
-         thd->security_context()->user().str, fake_serv_vers,
+         thd->security_context()->user().str, server_version,
          MYSQL_COMPILATION_COMMENT_SERVER);
 
   DBUG_PRINT("quit", ("Got shutdown command for level %u", level));
   query_logger.general_log_print(thd, COM_QUERY, NullS);
+
+  /* add for GreatDB: close attachecd session on sequence entity.
+     when close cmd_service's session, current THD must exists, so mv
+     the "sequences_close()" function here. */
+  sequences_close();
+
   kill_mysql();
   res = true;
 
@@ -2838,7 +2872,7 @@ bool alloc_query(THD *thd, const char *packet, size_t packet_length) {
   return false;
 }
 
-static bool sp_process_definer(THD *thd) {
+bool sp_process_definer(THD *thd) {
   DBUG_TRACE;
 
   LEX *lex = thd->lex;
@@ -3011,6 +3045,7 @@ err:
   trans_rollback(thd);
   /* Close tables and release metadata locks. */
   close_thread_tables(thd);
+  close_temporary_tables_for_trans(thd);
   assert(!thd->locked_tables_mode);
   thd->mdl_context.release_transactional_locks();
   return true;
@@ -3547,6 +3582,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
   if (lex->opt_hints_global && lex->opt_hints_global->sys_var_hint)
     lex->opt_hints_global->sys_var_hint->update_vars(thd);
 
+  /* Update system variables specified in update wait n. */
+  if (lex->lock_wait_var) lex->lock_wait_var->update_vars(thd);
+
   /* Check if the statement fulfill the requirements on ACL CACHE */
   if (!command_satisfy_acl_cache_requirement(lex->sql_command)) {
     my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--skip-grant-tables");
@@ -3576,7 +3614,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
       break;
     }
     case SQLCOM_EXECUTE_IMMEDIATE: {
-      mysql_sql_stmt_execute_immediate(thd);
+      res = lex->m_sql_cmd->execute(thd);
       break;
     }
     case SQLCOM_DEALLOCATE_PREPARE: {
@@ -3845,6 +3883,26 @@ int mysql_execute_command(THD *thd, bool first_level) {
       assert(first_table == all_tables && first_table != nullptr);
       Table_ref *table;
       for (table = first_table; table; table = table->next_local->next_local) {
+        /* if first_table is a MySQL tmp table, don't check global temp table
+           cache */
+        TABLE *tbl = find_temporary_table(thd, first_table);
+        if (!(tbl && !tbl->m_is_ora_tmp) &&
+            is_in_global_temp_table_cache(thd, table->db, table->table_name)) {
+          my_error(ER_GLOBAL_TEMP_TABLE_IN_USE, MYF(0));
+          goto error;
+        }
+        const char *table_name = table->table_name;
+        /* if source table is private table prefix, unsupport such rename */
+        if (PT_create_table_stmt::is_private_temp_table_prefix(table_name)) {
+          my_error(ER_UNSUPPORTED_PRIVATE_TEMP_TABLE_FEATURE, MYF(0));
+          goto error;
+        }
+
+        table_name = table->next_local->table_name;
+        if (PT_create_table_stmt::is_private_temp_table_prefix(table_name)) {
+          my_error(ER_INVALID_GLOBAL_TEMP_TABLE_PREFIX, MYF(0));
+          goto error;
+        }
         if (check_access(thd, ALTER_ACL | DROP_ACL, table->db,
                          &table->grant.privilege, &table->grant.m_internal,
                          false, false) ||
@@ -4407,8 +4465,6 @@ int mysql_execute_command(THD *thd, bool first_level) {
             goto error;
           }
         }
-        // @@TODO@@ add support for TYPE_ENUM_PACKAGE_SPEC and
-        // TYPE_ENUM_PACKAGE_BODY
         if (lex->type == TYPE_ENUM_PROCEDURE ||
             lex->type == TYPE_ENUM_FUNCTION ||
             lex->type == TYPE_ENUM_PACKAGE_SPEC ||
@@ -4601,6 +4657,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
           (lex->tx_release == TVL_YES ||
            (thd->variables.completion_type == 2 && lex->tx_release != TVL_NO));
       if (trans_commit(thd)) goto error;
+      close_temporary_tables_for_trans(thd);
       thd->mdl_context.release_transactional_locks();
       /* Begin transaction with the same isolation level. */
       if (tx_chain) {
@@ -4625,6 +4682,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
           (lex->tx_release == TVL_YES ||
            (thd->variables.completion_type == 2 && lex->tx_release != TVL_NO));
       if (trans_rollback(thd)) goto error;
+      close_temporary_tables_for_trans(thd);
       thd->mdl_context.release_transactional_locks();
       /* Begin transaction with the same isolation level. */
       if (tx_chain) {
@@ -4940,6 +4998,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
       break;
     }
     case SQLCOM_CREATE_TRIGGER:
+    case SQLCOM_ALTER_TRIGGER:
     case SQLCOM_DROP_TRIGGER: {
       /* Conditionally writes to binlog. */
       assert(lex->m_sql_cmd != nullptr);
@@ -4967,6 +5026,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
     case SQLCOM_CREATE_SERVER:
     case SQLCOM_CREATE_RESOURCE_GROUP:
     case SQLCOM_ALTER_SERVER:
+    case SQLCOM_CREATE_SEQUENCE:
+    case SQLCOM_DROP_SEQUENCE:
+    case SQLCOM_ALTER_SEQUENCE:
     case SQLCOM_ALTER_RESOURCE_GROUP:
     case SQLCOM_DROP_RESOURCE_GROUP:
     case SQLCOM_DROP_SERVER:
@@ -5036,6 +5098,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
     case SQLCOM_SHOW_STATUS:
     case SQLCOM_SHOW_STORAGE_ENGINES:
     case SQLCOM_SHOW_TABLE_STATUS:
+    case SQLCOM_SHOW_SEQUENCES:
     case SQLCOM_SHOW_TABLES:
     case SQLCOM_SHOW_TRIGGERS:
     case SQLCOM_SHOW_STATUS_PROC:
@@ -5231,6 +5294,9 @@ finish:
   if (lex->opt_hints_global && lex->opt_hints_global->sys_var_hint)
     lex->opt_hints_global->sys_var_hint->restore_vars(thd);
 
+  /* Restore system variables which were changed by update wait n. */
+  if (lex->lock_wait_var) lex->lock_wait_var->restore_vars(thd);
+
   THD_STAGE_INFO(thd, stage_query_end);
 
   // Check for receiving a recent kill signal
@@ -5264,12 +5330,23 @@ finish:
   assert(!thd->in_active_multi_stmt_transaction() ||
          thd->in_multi_stmt_transaction_mode());
 
+  bool ora_create_gt_instance = thd->m_ora_create_global_temp_instance &&
+                                lex->sql_command == SQLCOM_CREATE_TABLE;
+  bool ora_close_trans_temp = !thd->in_sub_stmt &&
+                              !thd->in_active_multi_stmt_transaction() &&
+                              !ora_create_gt_instance;
   if (!thd->in_sub_stmt) {
     mysql_audit_notify(thd,
                        first_level ? MYSQL_AUDIT_QUERY_STATUS_END
                                    : MYSQL_AUDIT_QUERY_NESTED_STATUS_END,
                        first_level ? "MYSQL_AUDIT_QUERY_STATUS_END"
                                    : "MYSQL_AUDIT_QUERY_NESTED_STATUS_END");
+
+    /*
+      @@NOTE@@ don't call close_temporary_tables_for_trans(thd); here
+      it should be called after lex->cleanup(true), otherwise create table
+      as query may assert.
+    */
 
     /* report error issued during command execution */
     if ((thd->is_error() && !early_error_on_rep_command) ||
@@ -5293,8 +5370,14 @@ finish:
 
   lex->cleanup(true);
 
+  if (ora_close_trans_temp) {
+    /* if not in_sub_stmt and autocommit=on, always close trans tmp tables */
+    close_temporary_tables_for_trans(thd);
+  }
+
   /* Free tables */
   THD_STAGE_INFO(thd, stage_closing_tables);
+  if (!ora_create_gt_instance) close_temporary_tables_for_eos(thd);
   close_thread_tables(thd);
 
   // Rollback any item transformations made during optimization and execution
@@ -5934,7 +6017,8 @@ bool Alter_info::add_field(
         if (default_value == nullptr) return true;
       } else if (func->functype() != Item_func::NOW_FUNC ||
                  !real_type_with_now_as_default(type) ||
-                 default_value->decimals != datetime_precision) {
+                 (default_value->decimals != datetime_precision &&
+                  type != MYSQL_TYPE_VARCHAR)) {
         my_error(ER_INVALID_DEFAULT, MYF(0), field_name->str);
         return true;
       }
@@ -6087,6 +6171,34 @@ bool PT_common_table_expr::make_subquery_node(THD *thd, PT_subquery **node) {
   }
   *node = m_subq_node;
   return false;
+}
+
+Item *string_to_expr(THD *thd, const char *expr_str, size_t length) {
+  LEX *const old_lex = thd->lex;
+  LEX new_lex;
+  thd->lex = &new_lex;
+  if (lex_start(thd)) {
+    thd->lex = old_lex;
+    return nullptr;  // OOM
+  }
+  // Get a newly created item from parser
+  Expression_parser_state parser_state;
+  parser_state.init(thd, expr_str, length);
+
+  Parser_state *old = thd->m_parser_state;
+  thd->m_parser_state = &parser_state;
+
+  // parser_state.m_lip.stmt_prepare_mode = old->m_lip.stmt_prepare_mode;
+  parser_state.m_lip.multi_statements = false;  // A safety measure.
+  parser_state.m_lip.m_digest = nullptr;
+
+  bool result = thd->sql_parser();
+  thd->m_parser_state = old;
+  // End of parsing.
+  lex_end(thd->lex);
+  // restore
+  thd->lex = old_lex;
+  return result ? nullptr : parser_state.result;
 }
 
 /**
@@ -6472,6 +6584,7 @@ Table_ref *Query_block::add_table_to_list(
     if (lex->sql_command == SQLCOM_CREATE_VIEW)
       first_table = first_table ? first_table->next_local : nullptr;
     for (Table_ref *tables = first_table; tables; tables = tables->next_local) {
+      if ((table_options & TL_OPTION_FOR_TMP)) continue;
       if (!my_strcasecmp(table_alias_charset, alias_str, tables->alias) &&
           !strcmp(ptr->db, tables->db)) {
         my_error(ER_NONUNIQ_TABLE, MYF(0), alias_str); /* purecov: tested */
@@ -7007,6 +7120,32 @@ err:
   if (ret_val == ER_WRONG_VALUE)
     my_error(ER_WRONG_VALUE, MYF(0), "path", file_name);
   return true;
+}
+
+bool append_dir_to_file(THD *thd, const char *data_file_name,
+                        const char **external_name) {
+  char tmp_name[FN_REFLEN] = {0};
+
+  /* Check that the filename is not too long and it's a hard path */
+  if ((strlen(data_file_name) + strlen(*external_name)) > FN_REFLEN) {
+    my_error(ER_PATH_LENGTH, MYF(0), "DIRECTORY");
+    return true;
+  }
+  // not allow /
+  if (!test_if_hard_path(data_file_name)) {
+    my_error(ER_WRONG_VALUE, MYF(0), "DIRECTORY", data_file_name);
+    return true;
+  }
+
+  fn_format(tmp_name, *external_name, data_file_name, "", MY_UNPACK_FILENAME);
+  auto real_len = strlen(tmp_name);
+
+  auto ptr = (char *)thd->alloc((size_t)real_len + 1);
+  if (ptr == nullptr) return ER_OUTOFMEMORY;  // End of memory
+
+  strcpy(ptr, tmp_name);
+  *external_name = ptr;
+  return false;
 }
 
 /** If pointer is not a null pointer, append filename to it. */

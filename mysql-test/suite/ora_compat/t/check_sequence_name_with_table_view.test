@@ -1,0 +1,81 @@
+--echo [### normal test : old failure1]
+create table test (c1 int primary key auto_increment, c2 varchar(50))engine = innodb;
+create table test_test (c1 int, c3 varchar(50))engine = innodb;
+--error ER_TABLE_EXISTS_ERROR
+create view test as select * from test_test;
+drop table test;
+drop table test_test;
+
+
+--echo [### normal test : old failure2]
+create table test_test (c1 int, c3 varchar(50))engine = innodb;
+create view test as select * from test_test;
+--error ER_TABLE_EXISTS_ERROR
+create table test (c1 long primary key, c3 varchar(100))engine = innodb;
+drop table test_test;
+drop view test;
+
+
+--echo [### rename duplicate test : normal old failure3]
+create table test1 (c3 int primary key auto_increment, c4 double)engine = innodb;
+create table test_test (c1 int, c3 varchar(50))engine = innodb;
+create view test as select * from test_test;
+--error ER_TABLE_EXISTS_ERROR
+rename table test1 to test;
+--error ER_TABLE_EXISTS_ERROR
+rename table test to test1;
+drop table test1;
+drop table test_test;
+drop view test;
+
+
+--echo [### create sequence test : common failure4]
+create table test2 (c1 int primary key) engine = innodb;
+--error ER_GDB_CREATE_SEQUENCE
+create sequence test2 start with 2 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+drop table test2;
+
+
+--echo [### create sequence test : common failure5]
+create table test_test (c1 int primary key, c2 varchar(50)) engine = innodb;
+create view test3 as select * from test_test;
+--error ER_GDB_CREATE_SEQUENCE
+create sequence test3 start with 2000 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+drop table test_test;
+drop view test3;
+
+
+--echo [### duplicate test common failure6]
+create sequence test4 start with 2000 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+--error ER_GDB_DUPLICATE_SEQ_NAME
+create table test4 (c1 int primary key) engine = innodb;
+drop sequence test4;
+
+
+--echo [### duplicate test common failure7]
+create sequence test5 start with 2000 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+create table test_test (c1 int, c2 varchar(50))engine = innodb;
+--error ER_GDB_DUPLICATE_SEQ_NAME
+create view test5 as select * from test_test;
+drop sequence test5;
+drop table test_test;
+
+
+--echo [### rename duplicate test common failure8]
+create sequence test6 start with 2000 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+create table test_test (c1 int, c2 varchar(50))engine = innodb;
+--error ER_GDB_DUPLICATE_SEQ_NAME
+rename table test_test to test6;
+drop sequence test6;
+drop table test_test;
+
+
+--echo [### rename duplicate test common failure9]
+create sequence test7 start with 2000 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+create table test_test (c1 int, c2 varchar(50))engine = innodb;
+create view view7 as select * from test_test;
+--error ER_GDB_DUPLICATE_SEQ_NAME
+rename table view7 to test7;
+drop sequence test7;
+drop table test_test;
+drop view view7;

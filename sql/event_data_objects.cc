@@ -40,6 +40,7 @@
 #include "mysql_time.h"
 #include "mysqld.h"
 #include "mysqld_error.h"
+#include "scope_guard.h"
 #include "sql/auth/auth_acls.h"
 // struct Time_zone
 #include "sql/auth/auth_common.h"  // EVENT_ACL
@@ -49,6 +50,7 @@
 #include "sql/dd/types/event.h"
 #include "sql/derror.h"
 #include "sql/event_parse_data.h"
+#include "sql/event_scheduler.h"  // Event_worker_thread
 #include "sql/events.h"
 // append_identifier
 #include "sql/log.h"
@@ -252,6 +254,8 @@ Event_queue_element::Event_queue_element()
       m_ends_null(true),
       m_execute_at_null(true),
       m_expression(0),
+      m_interval_expr_str(NULL_CSTR),
+      m_sql_mode(0),
       m_dropped(false),
       m_execution_count(0) {}
 
@@ -270,7 +274,7 @@ Event_queue_element::~Event_queue_element() = default;
     Event_timed::Event_timed()
 */
 
-Event_timed::Event_timed() : m_created(0), m_modified(0), m_sql_mode(0) {
+Event_timed::Event_timed() : m_created(0), m_modified(0) {
   DBUG_TRACE;
   init();
 }
@@ -394,6 +398,14 @@ bool Event_queue_element::fill_event_info(THD *thd, const dd::Event &event_obj,
   m_originator = event_obj.originator();
   m_on_completion = dd::get_old_on_completion(event_obj.on_completion());
 
+  if (!event_obj.comment().empty()) {
+    dd::String_type expr_str("");
+    if (dd::get_interval_str(event_obj.comment(), expr_str)) {
+      m_interval_expr_str = make_lex_cstring(&mem_root, expr_str);
+    }
+  }
+  m_sql_mode = event_obj.sql_mode();
+
   return false;
 }
 
@@ -425,7 +437,6 @@ bool Event_timed::fill_event_info(THD *thd, const dd::Event &event_obj,
   m_modified = event_obj.last_altered(true);
 
   m_comment = make_lex_string(&mem_root, event_obj.comment());
-  m_sql_mode = event_obj.sql_mode();
 
   return false;
 }
@@ -672,6 +683,33 @@ bool Event_queue_element::compute_next_execution_time(THD *thd) {
   DBUG_PRINT("enter",
              ("starts: %lu  ends: %lu  last_executed: %lu  this: %p",
               (long)m_starts, (long)m_ends, (long)m_last_executed, this));
+  auto job_next_time = [&](my_time_t &next_exec_time) {
+    auto save_mode = thd->variables.sql_mode;
+    thd->variables.sql_mode |= m_sql_mode;
+
+    auto interval_expr = string_to_expr(thd, m_interval_expr_str.str,
+                                        m_interval_expr_str.length);
+    if (interval_expr == nullptr) {
+      thd->variables.sql_mode = save_mode;
+      return true;
+    }
+    if (!interval_expr->fixed &&
+        interval_expr->fix_fields(thd, &interval_expr)) {
+      thd->variables.sql_mode = save_mode;
+      return true;
+    }
+    MYSQL_TIME next;
+    if (interval_expr->get_date(&next, TIME_FUZZY_DATE | TIME_NO_ZERO_DATE)) {
+      thd->variables.sql_mode = save_mode;
+      return true;
+    }
+
+    bool is_in_dst_gap_ignored;
+    next_exec_time =
+        m_time_zone->TIME_to_gmt_sec(&next, &is_in_dst_gap_ignored);
+    thd->variables.sql_mode = save_mode;
+    return false;
+  };
 
   if (m_status != Event_parse_data::ENABLED) {
     DBUG_PRINT("compute_next_execution_time",
@@ -746,11 +784,14 @@ bool Event_queue_element::compute_next_execution_time(THD *thd) {
 
     {
       my_time_t next_exec;
-
-      if (get_next_time(m_time_zone, &next_exec, m_starts, time_now,
-                        (int)m_expression, m_interval))
-        goto err;
-
+      if (m_interval_expr_str.str != nullptr &&
+          m_interval_expr_str.length != 0) {
+        if (job_next_time(next_exec)) goto err;
+      } else {
+        if (get_next_time(m_time_zone, &next_exec, m_starts, time_now,
+                          (int)m_expression, m_interval))
+          goto err;
+      }
       /* There was previous execution */
       if (m_ends < next_exec) {
         DBUG_PRINT("info", ("Next execution of %s after ENDS. Stop executing.",
@@ -777,9 +818,14 @@ bool Event_queue_element::compute_next_execution_time(THD *thd) {
     */
     if (m_last_executed) {
       my_time_t next_exec;
-      if (get_next_time(m_time_zone, &next_exec, m_starts, time_now,
-                        (int)m_expression, m_interval))
-        goto err;
+      if (m_interval_expr_str.str != nullptr &&
+          m_interval_expr_str.length != 0) {
+        if (job_next_time(next_exec)) goto err;
+      } else {
+        if (get_next_time(m_time_zone, &next_exec, m_starts, time_now,
+                          (int)m_expression, m_interval))
+          goto err;
+      }
       m_execute_at = next_exec;
       DBUG_PRINT("info", ("Next[%lu]", (ulong)next_exec));
     } else {
@@ -801,15 +847,17 @@ bool Event_queue_element::compute_next_execution_time(THD *thd) {
       if (!m_last_executed) {
         DBUG_PRINT("info", ("Not executed so far."));
       }
-
-      {
-        my_time_t next_exec;
+      my_time_t next_exec;
+      if (m_interval_expr_str.str != nullptr &&
+          m_interval_expr_str.length != 0) {
+        if (job_next_time(next_exec)) goto err;
+      } else {
         if (get_next_time(m_time_zone, &next_exec, m_starts, time_now,
                           (int)m_expression, m_interval))
           goto err;
-        m_execute_at = next_exec;
         DBUG_PRINT("info", ("Next[%lu]", (ulong)next_exec));
       }
+      m_execute_at = next_exec;
       m_execute_at_null = false;
     } else {
       /* this is a dead branch, because starts is always set !!! */
@@ -825,11 +873,14 @@ bool Event_queue_element::compute_next_execution_time(THD *thd) {
         m_execute_at = time_now;
       else {
         my_time_t next_exec;
-
-        if (get_next_time(m_time_zone, &next_exec, m_starts, time_now,
-                          (int)m_expression, m_interval))
-          goto err;
-
+        if (m_interval_expr_str.str != nullptr &&
+            m_interval_expr_str.length != 0) {
+          if (job_next_time(next_exec)) goto err;
+        } else {
+          if (get_next_time(m_time_zone, &next_exec, m_starts, time_now,
+                            (int)m_expression, m_interval))
+            goto err;
+        }
         if (m_ends < next_exec) {
           DBUG_PRINT("info", ("Next execution after ENDS. Stop executing."));
           m_execute_at = 0;
@@ -966,6 +1017,11 @@ bool Event_job_data::construct_sp_sql(THD *thd, String *sp_sql) {
     root to avoid multiple [re]allocations on system heap
   */
   buffer.length = STATIC_SQL_LENGTH + m_event_name.length + m_definition.length;
+
+  if (thd->variables.sql_mode & MODE_ORACLE) {
+    buffer.length += oracle_style_len;
+  }
+
   if (!(buffer.str = (char *)thd->alloc(buffer.length))) return true;
 
   sp_sql->set(buffer.str, buffer.length, system_charset_info);
@@ -988,8 +1044,14 @@ bool Event_job_data::construct_sp_sql(THD *thd, String *sp_sql) {
     resets of security contexts.
   */
   sp_sql->append(STRING_WITH_LEN("() SQL SECURITY INVOKER "));
+  if (thd->variables.sql_mode & MODE_ORACLE) {
+    sp_sql->append(STRING_WITH_LEN("AS BEGIN "));
+  }
 
   sp_sql->append(m_definition.str, m_definition.length);
+  if (thd->variables.sql_mode & MODE_ORACLE) {
+    sp_sql->append(STRING_WITH_LEN(" END"));
+  }
 
   return thd->is_fatal_error();
 }
@@ -1001,7 +1063,7 @@ bool Event_job_data::construct_sp_sql(THD *thd, String *sp_sql) {
   @retval false success
 */
 
-bool Event_job_data::execute(THD *thd, bool drop) {
+bool Event_job_data::execute(THD *thd, bool drop, bool reset) {
   String sp_sql;
   Security_context event_sctx, *save_sctx = nullptr;
   mem_root_deque<Item *> empty_item_list(thd->mem_root);
@@ -1010,9 +1072,9 @@ bool Event_job_data::execute(THD *thd, bool drop) {
   PSI_statement_locker *parent_locker = thd->m_statement_psi;
 
   DBUG_TRACE;
-
-  mysql_reset_thd_for_next_command(thd);
-
+  if (reset) {
+    mysql_reset_thd_for_next_command(thd);
+  }
   /*
     MySQL parser currently assumes that current database is either
     present in THD or all names in all statements are fully specified.
@@ -1285,6 +1347,212 @@ bool event_basic_identifier_equal(LEX_CSTRING db, LEX_CSTRING name,
                                   Event_basic *b) {
   return !sortcmp_lex_string(name, b->m_event_name, system_charset_info) &&
          !sortcmp_lex_string(db, b->m_schema_name, system_charset_info);
+}
+
+bool create_new_event_job(THD *thd, String *job_name, String *event_body,
+                          Item *next_date, String *interval_str, bool broken) {
+  auto event_parse_data = new (thd->mem_root) Event_parse_data();
+  if (event_parse_data == nullptr) {
+    return true;
+  }
+
+  // auto event_name
+  auto sp_event_name =
+      new (thd->mem_root) sp_name(thd->db(), job_name->lex_string(), false);
+  if (sp_event_name == nullptr) {
+    return true;
+  }
+
+  sp_event_name->init_qname(thd);
+
+  event_parse_data->identifier = sp_event_name;
+
+  event_parse_data->on_completion = Event_parse_data::ON_COMPLETION_DROP;
+  // event_parse_data->status_changed= true;
+  event_parse_data->body_changed = true;
+  event_parse_data->item_starts = next_date;
+
+  Item *interval_item =
+      string_to_expr(thd, interval_str->ptr(), interval_str->length());
+  if (interval_item == nullptr) {
+    my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "INTERVAL", "submit");
+    return 1;
+  }
+  if (!interval_item->fixed && interval_item->fix_fields(thd, &interval_item)) {
+    my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "INTERVAL", "submit");
+    return true;
+  }
+
+  MYSQL_TIME now;
+  MYSQL_TIME next_time;
+  thd->time_zone()->gmt_sec_to_TIME(&now, thd->query_start_timeval_trunc(6));
+
+  if (interval_item->get_date(&next_time,
+                              TIME_NO_ZERO_DATE | TIME_FUZZY_DATE)) {
+    my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "INTERVAL", "submit");
+    return true;
+  }
+
+  if (my_time_compare(now, next_time) == 1) {
+    my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "INTERVAL", "submit");
+    return true;
+  }
+
+  event_parse_data->item_expression = interval_item;
+  event_parse_data->is_dbms_job = true;
+  event_parse_data->interval = INTERVAL_SECOND;
+
+  event_parse_data->status_changed = true;
+  event_parse_data->status =
+      (broken == 0 ? Event_parse_data::ENABLED : Event_parse_data::DISABLED);
+  // auto commit
+  Disable_autocommit_guard autocommit_guard(thd);
+  // define
+  thd->lex->definer = 0;
+  if (sp_process_definer(thd)) {
+    return true;
+  }
+
+  auto old_cmd = thd->lex->sql_command;
+  thd->lex->sql_command = SQLCOM_CREATE_EVENT;
+  auto grd = create_scope_guard([&]() { thd->lex->sql_command = old_cmd; });
+
+  if (Events::create_event(thd, event_parse_data, false, event_body)) {
+    DBUG_PRINT("info", ("report_error: %d", thd->is_error()));
+    return true;
+  }
+  return false;
+}
+
+bool update_event_job_status(THD *thd, String *job_name, bool run,
+                             bool status) {
+  auto event_parse_data = new (thd->mem_root) Event_parse_data();
+  if (event_parse_data == nullptr) {
+    return true;
+  }
+  // auto event_name
+  auto sp_event_name =
+      new (thd->mem_root) sp_name(thd->db(), job_name->lex_string(), false);
+  if (sp_event_name == nullptr) {
+    return true;
+  }
+  sp_event_name->init_qname(thd);
+  event_parse_data->identifier = sp_event_name;
+  event_parse_data->on_completion = Event_parse_data::ON_COMPLETION_DEFAULT;
+  event_parse_data->status_changed = true;
+  event_parse_data->status =
+      status ? Event_parse_data::ENABLED : Event_parse_data::DISABLED;
+  event_parse_data->body_changed = false;
+  // auto commit
+  Disable_autocommit_guard autocommit_guard(thd);
+  // define
+  thd->lex->definer = 0;
+  if (sp_process_definer(thd)) {
+    return true;
+  }
+
+  // Disable_binlog_guard binlog_guard(thd);
+  auto old_cmd = thd->lex->sql_command;
+  thd->lex->sql_command = SQLCOM_ALTER_EVENT;
+  auto grd = create_scope_guard([&]() { thd->lex->sql_command = old_cmd; });
+  event_parse_data->is_dbms_job = true;
+
+  if (Events::update_event(thd, event_parse_data, nullptr, nullptr, run)) {
+    DBUG_PRINT("info", ("report_error: %d", thd->is_error()));
+    return true;
+  }
+  return false;
+}
+
+bool change_event_job(THD *thd, String *job_name, String *event_body,
+                      Item *next_date, String *interval_str) {
+  auto event_parse_data = new (thd->mem_root) Event_parse_data();
+  if (event_parse_data == nullptr) {
+    return true;
+  }
+  // auto event_name
+  auto sp_event_name =
+      new (thd->mem_root) sp_name(thd->db(), job_name->lex_string(), false);
+  if (sp_event_name == nullptr) {
+    return true;
+  }
+  sp_event_name->init_qname(thd);
+  event_parse_data->identifier = sp_event_name;
+  event_parse_data->status_changed = false;
+  event_parse_data->item_starts = next_date;
+
+  if (interval_str != nullptr) {
+    Item *interval_item =
+        string_to_expr(thd, interval_str->ptr(), interval_str->length());
+    if (interval_item == nullptr) {
+      my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "INTERVAL", "change");
+      return 1;
+    }
+    if (!interval_item->fixed &&
+        interval_item->fix_fields(thd, &interval_item)) {
+      my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "INTERVAL", "change");
+      return true;
+    }
+    event_parse_data->item_expression = interval_item;
+    event_parse_data->interval = INTERVAL_SECOND;
+    MYSQL_TIME now;
+    MYSQL_TIME next_time;
+    thd->time_zone()->gmt_sec_to_TIME(&now, thd->query_start_timeval_trunc(6));
+
+    if (interval_item->get_date(&next_time,
+                                TIME_NO_ZERO_DATE | TIME_FUZZY_DATE)) {
+      my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "INTERVAL", "change");
+      return true;
+    }
+
+    if (my_time_compare(now, next_time) == 1) {
+      my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "INTERVAL", "change");
+      return true;
+    }
+  }
+
+  event_parse_data->is_dbms_job = true;
+
+  if (event_body != nullptr) {
+    event_parse_data->body_changed = true;
+  } else {
+    event_parse_data->body_changed = false;
+  }
+  // auto commit
+  Disable_autocommit_guard autocommit_guard(thd);
+  // define
+  thd->lex->definer = 0;
+  if (sp_process_definer(thd)) {
+    return true;
+  }
+
+  auto old_cmd = thd->lex->sql_command;
+  thd->lex->sql_command = SQLCOM_ALTER_EVENT;
+  auto grd = create_scope_guard([&]() { thd->lex->sql_command = old_cmd; });
+
+  if (Events::update_event(thd, event_parse_data, nullptr, nullptr, false,
+                           event_body)) {
+    DBUG_PRINT("info", ("report_error: %d", thd->is_error()));
+    return true;
+  }
+  return false;
+}
+
+bool drop_event_job(THD *thd, String *job_name) {
+  // auto commit
+  Disable_autocommit_guard autocommit_guard(thd);
+  // define
+  thd->lex->definer = 0;
+  if (sp_process_definer(thd)) {
+    return true;
+  }
+
+  auto old_cmd = thd->lex->sql_command;
+  thd->lex->sql_command = SQLCOM_DROP_EVENT;
+  auto grd = create_scope_guard([&]() { thd->lex->sql_command = old_cmd; });
+
+  return Events::drop_event(thd, thd->db(), job_name->lex_cstring(), false,
+                            true);
 }
 
 /**

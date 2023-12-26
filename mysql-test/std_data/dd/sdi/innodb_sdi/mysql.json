@@ -20271,7 +20271,7 @@
                 "engine_attribute": "",
                 "secondary_engine_attribute": "",
                 "column_key": 4,
-                "column_type_utf8": "enum('BASE TABLE','VIEW','SYSTEM VIEW')",
+                "column_type_utf8": "enum('BASE TABLE','VIEW','SYSTEM VIEW','MATERIALIZED VIEW')",
                 "elements": [
                     {
                         "name": "QkFTRSBUQUJMRQ==", "decoded-name": "BASE TABLE",
@@ -20284,6 +20284,10 @@
                     {
                         "name": "U1lTVEVNIFZJRVc=", "decoded-name": "SYSTEM VIEW",
                         "index": 3
+                    },
+                    {
+                        "name": "TUFURVJJQUxJWkVEIFZJRVc=", "decoded-name": "MATERIALIZED VIEW",
+                        "index": 4
                     }
                 ],
                 "collation_id": X,

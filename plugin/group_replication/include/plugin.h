@@ -53,6 +53,8 @@
 #include "plugin/group_replication/include/services/server_services_references.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_interface.h"
 
+#define DBUG_ASSERT(a) assert(a)
+
 // Forward declarations
 class Autorejoin_thread;
 class Transaction_consistency_manager;
@@ -284,6 +286,7 @@ int plugin_group_replication_deinit(void *p);
 int plugin_group_replication_start(char **error_message = nullptr);
 int plugin_group_replication_stop(char **error_message = nullptr);
 bool plugin_is_group_replication_running();
+bool is_set_read_only_for_slave_primary();
 bool plugin_is_group_replication_cloning();
 bool is_plugin_auto_starting_on_non_bootstrap_member();
 bool is_plugin_configured_and_starting();

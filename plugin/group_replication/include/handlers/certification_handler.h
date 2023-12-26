@@ -54,17 +54,23 @@ class Certification_handler : public Event_handler {
   Data_packet *transaction_context_packet;
   Pipeline_event *transaction_context_pevent;
 
+  /** Are view change on wait for application */
+  bool m_view_change_event_on_wait;
+
   /** View change information information stored for delay */
   struct View_change_stored_info {
     Pipeline_event *view_change_pevent;
+    std::string local_gtid_certified;
     Gtid view_change_gtid;
-    binlog::BgcTicket::ValueType bgc_ticket;
-    View_change_stored_info(Pipeline_event *vc_pevent, Gtid gtid,
-                            binlog::BgcTicket::ValueType bgc_ticket)
+    View_change_stored_info(Pipeline_event *vc_pevent,
+                            std::string &local_gtid_string, Gtid gtid)
         : view_change_pevent(vc_pevent),
-          view_change_gtid(gtid),
-          bgc_ticket(bgc_ticket) {}
+          local_gtid_certified(local_gtid_string),
+          view_change_gtid(gtid) {}
   };
+
+  /** All the VC events pending application due to timeout */
+  std::list<View_change_stored_info *> pending_view_change_events;
   /** All the VC events pending application due to consistent transactions */
   std::list<std::unique_ptr<View_change_stored_info>>
       pending_view_change_events_waiting_for_consistent_transactions;
@@ -138,6 +144,21 @@ class Certification_handler : public Event_handler {
   int extract_certification_info(Pipeline_event *pevent, Continuation *cont);
 
   /**
+    This methods guarantees that the view change event is logged after local
+    transactions are executed.
+
+    @param local_gtid_certified_string  The set to wait.
+                                        If not defined, it extracts the current
+    certified set
+
+    @retval 0                        OK
+    @retval LOCAL_WAIT_TIMEOUT_ERROR Timeout error on wait
+    @retval !=0                      Wait or interface error
+  */
+  int wait_for_local_transaction_execution(
+      std::string &local_gtid_certified_string);
+
+  /**
     Create a transactional block for the received log event
     GTID
     BEGIN
@@ -145,11 +166,8 @@ class Certification_handler : public Event_handler {
     COMMIT
 
     @param[in] pevent          the event to be injected
-    @param[in] gtid            The transaction GTID
+    @param[in, out] gtid       The transaction GTID
                                If {-1, -1}, one will be generated.
-    @param[in] bgc_ticket      The commit ticket order for this transaction
-                               on the binlog group commit.
-                               If 0, one will be generated.
     @param[in] cont            the object used to wait
 
 
@@ -157,8 +175,7 @@ class Certification_handler : public Event_handler {
       @retval 0      OK
       @retval !=0    Error
   */
-  int inject_transactional_events(Pipeline_event *pevent, Gtid gtid,
-                                  binlog::BgcTicket::ValueType bgc_ticket,
+  int inject_transactional_events(Pipeline_event *pevent, Gtid *gtid,
                                   Continuation *cont);
 
   /**
@@ -166,31 +183,58 @@ class Certification_handler : public Event_handler {
     finish.
 
     @param[in] view_pevent             the event to be injected
+    @param[in, out] local_gtid_string  The local certified transaction set to
+    wait If empty, one will be assigned even on timeout
+    @param[in, out] gtid               The transaction GTID
+                                       If {-1, -1}, one will be generated.
     @param[in] cont                    the object used to wait
+
+
+    @return the operation status
+      @retval 0      OK
+      @retval LOCAL_WAIT_TIMEOUT_ERROR Timeout error on wait for local
+    transactions
+      @retval !=0    Error
+  */
+  int log_view_change_event_in_order(Pipeline_event *view_pevent,
+                                     std::string &local_gtid_string, Gtid *gtid,
+                                     Continuation *cont);
+
+  /**
+    Store the event for future logging as a timeout occurred.
+    This method does 2 things:
+      1. If not stored in the past, it stores the Pipeline event to
+      be logged in the future
+      2. It queues again in the applier a fake View change log event
+      to ensure the logging method will be invoked eventually
+
+    @param[in] pevent             The event to be stored
+    @param[in] local_gtid_certified_string The local certified transaction set
+    to wait
+    @param[in] gtid               The transaction GTID
+    @param[in] cont               Used to discard or not the transaction
 
 
     @return the operation status
       @retval 0      OK
       @retval !=0    Error
   */
-  int log_view_change_event_in_order(Pipeline_event *view_pevent,
-                                     Continuation *cont);
+  int store_view_event_for_delayed_logging(
+      Pipeline_event *pevent, std::string &local_gtid_certified_string,
+      Gtid gtid, Continuation *cont);
 
   /**
-    Generate a commit order ticket for the View_change transaction.
+    Logs all the delayed View Change log events stored.
 
-    More precisely it will:
-     1) increment the current ticket so that the all transactions
-        ordered before view will have a ticket smaller than the one
-        assigned to the view.
-     2) generate the ticket for the view.
-     3) increment again the current ticket so that all transactions
-        ordered after the view will have a ticket greater that the
-        one assigned to the view.
+    @param[in] cont       the object used to mark error or success
 
-    @return the ticket generated for the view
+    @return the operation status
+      @retval 0      OK
+      @retval LOCAL_WAIT_TIMEOUT_ERROR Timeout error on wait for local
+    transactions
+      @retval !=0    Error
   */
-  binlog::BgcTicket::ValueType generate_view_change_bgc_ticket();
+  int log_delayed_view_change_events(Continuation *cont);
 };
 
 #endif /* CERTIFICATION_HANDLER_INCLUDE */

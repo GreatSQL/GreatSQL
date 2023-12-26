@@ -1,0 +1,488 @@
+
+--disable_warnings
+drop table if exists t1,t2,t3,t4;
+--enable_warnings
+create table t1(id serial primary key , col1 char(20) , col2 varchar(100));
+create table t2(id serial primary key , col1 char(20) , col2 varchar(100));
+create table t3(id serial primary key , col1 char(20) , col2 varchar(100));
+create table t4(id serial primary key , col1 char(20) , col2 varchar(100));
+
+insert into t1 select 0 , 'test_col1_0' , 'test1_col2_0' from dual;
+insert into t1 select 0 , 'test_col1_1' , 'test1_col2_0' from dual;
+insert into t1 select 0 , 'test_col1_2' , 'test1_col2_0' from dual;
+
+insert all
+into t2
+into t3(id, col2, col1) values (id, col1, col2)
+into t4 values( id+1, col2, col1)
+select  id , col1, col2 from t1 ;
+
+select * from t2;
+select * from t3;
+select * from t4;
+
+truncate table t2;
+
+--error ER_DUP_ENTRY
+insert all
+into t2
+into t3(id, col1, col2)
+select id , col1, col2 from t1 ;
+
+truncate table t2;
+truncate table t3;
+truncate table t4;
+ 
+insert all
+into t2
+into t3(id, col1, col2)
+into t4  values( 0, 'test4col_1', col2)
+select  id , col1, col2 from t1 ;
+
+select * from t2;
+select * from t3;
+select * from t4;
+ 
+truncate table t2;
+truncate table t3;
+truncate table t4;
+
+insert all
+into t2 values (0, 'test2_col1', 'test2_col2')
+into t3 (id, col2, col1) values (0, 'test3_col2', 'test3_col1')
+into t4 (col2,id) values ('test_col2' , 10)
+select 1 from dual;
+
+select * from t2;
+select * from t3;
+select * from t4;
+
+## test last_insert_id
+truncate table t2;
+truncate table t3;
+truncate table t4;
+
+insert all
+into t2(id, col1) values (0,'insert_value1')
+into t2(id, col1) values (0,'insert_value2')
+into t2(id, col1) values (0,'insert_value3')
+select 1 from dual;
+
+select last_insert_id();
+
+select * from t2;
+
+## test trigger
+
+truncate table t2;
+
+create table cj(id char(20), val_id int);
+
+insert into cj values('t2', 0);
+
+delimiter |;
+create trigger upd_t2 after update on t2 for each row
+begin
+update cj set val_id = new.id;
+end|
+
+create trigger i_t2 after insert on t2 for each row
+begin
+insert into t4 values(new.id, new.col1 , new.col2);
+end|
+
+create trigger del_t2 after delete on t2 for each row
+begin
+delete from t3  where id = old.id;
+end|
+delimiter ;|
+
+truncate table t2;
+
+insert all into t2 into t3 select * from t1;
+
+select * from cj;
+
+select * from t4;
+select * from t2;
+
+delete from t2;
+select * from t3;
+drop trigger upd_t2;
+drop trigger del_t2;
+drop trigger i_t2;
+drop table cj;
+create table nokey(id int, col1 varchar(100));
+insert all
+into nokey(id, col1) values (1,'insert_value1')
+into nokey(id, col1) values (1,'insert_value2')
+into nokey(id, col1) values (1,'insert_value3')
+select 1 from dual;
+
+select * from nokey;
+drop table nokey;
+
+## prepare stmt
+
+SET @v0 = 0;
+SET @v1 = 'test2';
+
+prepare stmt from "insert all into t1(id, col1,col2) values (?, 'test1', ?) select 1 from dual";
+EXECUTE stmt USING @v0, @v1;
+DEALLOCATE prepare stmt;
+
+select * from t1;
+
+truncate table t2;
+
+prepare stmt FROM "INSERT all INTO  t2(col1, id, col2 ) values (col1, id,col2)
+ SELECT  id,col1, col2 from t1
+ LIMIT 1";
+
+EXECUTE stmt;
+--error ER_DUP_ENTRY
+EXECUTE stmt;
+--error ER_DUP_ENTRY
+EXECUTE stmt;
+
+DEALLOCATE prepare stmt;
+
+truncate table t2;
+
+--error ER_FIELD_SPECIFIED_TWICE
+INSERT all  INTO t1(id, col1, col1, col2, col2) VALUES (0, 'col1', 'col1', 2, 2) select 1 from dual;
+
+--error ER_WRONG_VALUE_COUNT_ON_ROW
+insert all into t2  select 1 from dual;
+
+--error ER_BAD_FIELD_ERROR
+insert all 
+into t3(id, col2, col1) values (id, col1, col3)
+into t4 values( id+1, col2, col1)
+select  id , col1, col2 from t1 ;
+
+#not all insert view
+
+create view  view1 as (select * from t2);
+--error ER_INSERT_ALL_NOT_USE_VIEW
+insert all into view1  into t3 select * from t1;
+
+drop view view1;
+
+
+# Test that caused uninitialized memory access in auto_increment_key update
+CREATE TABLE auto_inc1 ( USID INTEGER UNSIGNED, ServerID TINYINT UNSIGNED, State ENUM ('unknown', 'Access-Granted', 'Session-Active', 'Session-Closed' ) NOT NULL DEFAULT 'unknown', SessionID CHAR(32), User CHAR(32) NOT NULL DEFAULT '<UNKNOWN>', NASAddr INTEGER UNSIGNED, NASPort INTEGER UNSIGNED, NASPortType INTEGER UNSIGNED, ConnectSpeed INTEGER UNSIGNED, CarrierType CHAR(32), CallingStationID CHAR(32), CalledStationID CHAR(32), AssignedAddr INTEGER UNSIGNED, SessionTime INTEGER UNSIGNED, PacketsIn INTEGER UNSIGNED, OctetsIn INTEGER UNSIGNED, PacketsOut INTEGER UNSIGNED, OctetsOut INTEGER UNSIGNED, TerminateCause INTEGER UNSIGNED, UnauthTime TINYINT UNSIGNED, AccessRequestTime DATETIME, AcctStartTime DATETIME, AcctLastTime DATETIME, LastModification TIMESTAMP NOT NULL);
+CREATE TABLE auto_inc2 ( USID INTEGER UNSIGNED AUTO_INCREMENT, ServerID TINYINT UNSIGNED, State ENUM ('unknown', 'Access-Granted', 'Session-Active', 'Session-Closed' ) NOT NULL DEFAULT 'unknown', SessionID CHAR(32), User TEXT NOT NULL, NASAddr INTEGER UNSIGNED, NASPort INTEGER UNSIGNED, NASPortType INTEGER UNSIGNED, ConnectSpeed INTEGER UNSIGNED, CarrierType CHAR(32), CallingStationID CHAR(32), CalledStationID CHAR(32), AssignedAddr INTEGER UNSIGNED, SessionTime INTEGER UNSIGNED, PacketsIn INTEGER UNSIGNED, OctetsIn INTEGER UNSIGNED, PacketsOut INTEGER UNSIGNED, OctetsOut INTEGER UNSIGNED, TerminateCause INTEGER UNSIGNED, UnauthTime TINYINT UNSIGNED, AccessRequestTime DATETIME, AcctStartTime DATETIME, AcctLastTime DATETIME, LastModification TIMESTAMP NOT NULL, INDEX(USID,ServerID,NASAddr,SessionID), INDEX(AssignedAddr));
+CREATE TABLE auto_inc3 ( USID INTEGER UNSIGNED AUTO_INCREMENT, ServerID TINYINT UNSIGNED, State ENUM ('unknown', 'Access-Granted', 'Session-Active', 'Session-Closed' ) NOT NULL DEFAULT 'unknown', SessionID CHAR(32), User TEXT NOT NULL, NASAddr INTEGER UNSIGNED, NASPort INTEGER UNSIGNED, NASPortType INTEGER UNSIGNED, ConnectSpeed INTEGER UNSIGNED, CarrierType CHAR(32), CallingStationID CHAR(32), CalledStationID CHAR(32), AssignedAddr INTEGER UNSIGNED, SessionTime INTEGER UNSIGNED, PacketsIn INTEGER UNSIGNED, OctetsIn INTEGER UNSIGNED, PacketsOut INTEGER UNSIGNED, OctetsOut INTEGER UNSIGNED, TerminateCause INTEGER UNSIGNED, UnauthTime TINYINT UNSIGNED, AccessRequestTime DATETIME, AcctStartTime DATETIME, AcctLastTime DATETIME, LastModification TIMESTAMP NOT NULL, INDEX(USID,ServerID,NASAddr,SessionID), INDEX(AssignedAddr));
+
+INSERT INTO auto_inc1 VALUES (39,42,'Access-Granted','46','491721000045',2130706433,17690,NULL,NULL,'Localnet','491721000045','49172200000',754974766,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2003-07-18 00:11:21',NULL,NULL,20030718001121);
+INSERT all INTO auto_inc2 into auto_inc3 SELECT USID, ServerID, State, SessionID, User, NASAddr, NASPort, NASPortType, ConnectSpeed, CarrierType, CallingStationID, CalledStationID, AssignedAddr, SessionTime, PacketsIn, OctetsIn, PacketsOut, OctetsOut, TerminateCause, UnauthTime, AccessRequestTime, AcctStartTime, AcctLastTime, LastModification from auto_inc1 LIMIT 1;
+
+select * from auto_inc2;
+select * from auto_inc3;
+
+drop table auto_inc1,auto_inc2,auto_inc3;
+
+# partition table insert all
+CREATE TABLE employees (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `fname` varchar(25) NOT NULL,
+  `lname` varchar(25) NOT NULL,
+  `store_id` int(11) NOT NULL,
+  `department_id` int(11) NOT NULL,
+  PRIMARY KEY (`id`)
+)PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (5)  ,
+ PARTITION p1 VALUES LESS THAN (10)  ,
+ PARTITION p2 VALUES LESS THAN MAXVALUE );
+
+INSERT all
+INTO employees PARTITION (p0) VALUES  (3, 'Tim', 'Greene', 3, 1)
+INTO employees PARTITION (p1,p2) values  (8, 'Linda', 'Mills', 2, 1)
+select 1 from dual;
+
+--error ER_ROW_DOES_NOT_MATCH_GIVEN_PARTITION_SET
+INSERT all
+INTO employees PARTITION (p0) VALUES  (23, 'Tim', 'Greene', 3, 1)
+INTO employees PARTITION (p1) values  (8, 'Linda', 'Mills', 2, 1)
+select 1 from dual;
+
+
+explain 
+INSERT all 
+INTO employees PARTITION (p0) VALUES  (3, 'Tim', 'Greene', 3, 1)
+INTO employees PARTITION (p1,p2) values (8, 'Linda', 'Mills', 2, 1)
+select 1 from dual;
+
+drop table employees;
+
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree insert all
+into t2 
+into t3(id, col2, col1) values (id, col1, col2)
+into t4 values( id+1, col2, col1)
+select  id , col1, col2 from t1 ;
+
+# simple table
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain insert all into t2 into t3 into t4
+select * from t1 ;
+
+drop table t1,t2,t3,t4;
+
+## show warings
+create table t_date(c1 int);
+create table t_date2(c1 int);
+set sql_mode='';
+
+insert all into t_date(c1) values (id) into t_date2(c1) values (id) select 11111111111111111 as id from dual;
+
+
+drop table t_date,t_date2;
+
+create table nokey(id int, col1 varchar(100));
+insert into nokey values( 1, '123');
+insert all into nokey select * from nokey ;
+
+explain insert all into nokey select * from nokey;
+
+drop table nokey;
+
+create table t1 (id int, c char(1));
+set OPTIMIZER_TRACE="enabled=on";
+--error ER_WRONG_VALUE_COUNT_ON_ROW
+insert all into t1 select 1 from dual;
+SELECT * FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+drop table t1;
+
+
+# partition table, primary key, auto increment column for conditional insert
+CREATE TABLE employees (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `fname` varchar(25) NOT NULL,
+  `lname` varchar(25) NOT NULL,
+  `store_id` int(11) NOT NULL,
+  `department_id` int(11) NOT NULL,
+  `cond_value` int NOT NULL,
+  PRIMARY KEY (`id`)
+)PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (5)  ,
+ PARTITION p1 VALUES LESS THAN (10)  ,
+ PARTITION p2 VALUES LESS THAN MAXVALUE );
+
+TRUNCATE employees;
+INSERT ALL
+WHEN 3>x THEN
+  INTO employees PARTITION (p0) VALUES (4, 'Gary', 'Kang', 4, 5, x)
+  INTO employees PARTITION (p2) VALUES (31, 'Tim1', 'Greene1', 31, 11, x)
+WHEN 2>x THEN
+  INTO employees PARTITION (p0) VALUES (3,   'Tim',  'Greene',  3,  1, x)
+ELSE
+  INTO employees PARTITION (p1,p2) VALUES (8, 'Linda', 'Mills', 2, 1, x)
+  INTO employees PARTITION (p1,p2) VALUES (48, 'Linda4', 'Mills4', 42, 41, x)
+SELECT 4 x FROM dual;
+SELECT * FROM employees;
+SELECT '2 rows expected';
+
+TRUNCATE employees;
+INSERT ALL
+WHEN 3>x THEN
+  INTO employees PARTITION (p0) VALUES (4, 'Gary', 'Kang', 4, 5, x)
+  INTO employees PARTITION (p2) VALUES (31, 'Tim1', 'Greene1', 31, 11, x)
+WHEN 2>x THEN
+  INTO employees PARTITION (p0) VALUES (3,   'Tim',  'Greene',  3,  1, x)
+ELSE
+  INTO employees PARTITION (p1,p2) VALUES (8, 'Linda', 'Mills', 2, 1, x)
+  INTO employees PARTITION (p1,p2) VALUES (48, 'Linda4', 'Mills4', 42, 41, x)
+SELECT 2 x FROM dual;
+SELECT * FROM employees;
+SELECT '4 rows expected';
+
+TRUNCATE employees;
+INSERT ALL
+WHEN 3>x THEN
+  INTO employees PARTITION (p0) VALUES (4, 'Gary', 'Kang', 4, 5, x)
+  INTO employees PARTITION (p2) VALUES (31, 'Tim1', 'Greene1', 31, 11, x)
+WHEN 2>x THEN
+  INTO employees PARTITION (p0) VALUES (3,   'Tim',  'Greene',  3,  1, x)
+ELSE
+  INTO employees PARTITION (p1,p2) VALUES (8, 'Linda', 'Mills', 2, 1, x)
+  INTO employees PARTITION (p1,p2) VALUES (48, 'Linda4', 'Mills4', 42, 41, x)
+SELECT 1 x FROM dual;
+SELECT * FROM employees;
+SELECT '5 rows expected';
+
+SET SQL_MODE=ORACLE;
+TRUNCATE employees;
+INSERT FIRST
+WHEN 3>x THEN
+  INTO employees PARTITION (p0) VALUES (4, 'Gary', 'Kang', 4, 5, x)
+  INTO employees PARTITION (p2) VALUES (31, 'Tim1', 'Greene1', 31, 11, x)
+WHEN 2>x THEN
+  INTO employees PARTITION (p0) VALUES (3,   'Tim',  'Greene',  3,  1, x)
+ELSE
+  INTO employees PARTITION (p1,p2) VALUES (8, 'Linda', 'Mills', 2, 1, x)
+  INTO employees PARTITION (p1,p2) VALUES (48, 'Linda4', 'Mills4', 42, 41, x)
+SELECT 4 x FROM dual;
+SELECT * FROM employees;
+SELECT '8/48 expected';
+
+TRUNCATE employees;
+INSERT FIRST
+WHEN 3>x THEN
+  INTO employees PARTITION (p0) VALUES (4, 'Gary', 'Kang', 4, 5, x)
+  INTO employees PARTITION (p2) VALUES (31, 'Tim1', 'Greene1', 31, 11, x)
+WHEN 2>x THEN
+  INTO employees PARTITION (p0) VALUES (3,   'Tim',  'Greene',  3,  1, x)
+ELSE
+  INTO employees PARTITION (p1,p2) VALUES (8, 'Linda', 'Mills', 2, 1, x)
+  INTO employees PARTITION (p1,p2) VALUES (48, 'Linda4', 'Mills4', 42, 41, x)
+SELECT 2 x FROM dual;
+SELECT * FROM employees;
+SELECT 'Gary/Tim1 expected';
+
+TRUNCATE employees;
+INSERT FIRST
+WHEN 2>x THEN
+  INTO employees PARTITION (p0) VALUES (3,   'Tim',  'Greene',  3,  1, x)
+WHEN 3>x THEN
+  INTO employees PARTITION (p0) VALUES (4, 'Gary', 'Kang', 4, 5, x)
+  INTO employees PARTITION (p2) VALUES (31, 'Tim1', 'Greene1', 31, 11, x)
+ELSE
+  INTO employees PARTITION (p1,p2) VALUES (8, 'Linda', 'Mills', 2, 1, x)
+  INTO employees PARTITION (p1,p2) VALUES (48, 'Linda4', 'Mills4', 42, 41, x)
+SELECT 2 x FROM dual;
+SELECT * FROM employees;
+SELECT 'Gary/Tim1 expected';
+
+TRUNCATE employees;
+INSERT FIRST
+WHEN 3>x THEN
+  INTO employees PARTITION (p0) VALUES (4, 'Gary', 'Kang', 4, 5, x)
+  INTO employees PARTITION (p2) VALUES (31, 'Tim1', 'Greene1', 31, 11, x)
+WHEN 2>x THEN
+  INTO employees PARTITION (p0) VALUES (3,   'Tim',  'Greene',  3,  1, x)
+ELSE
+  INTO employees PARTITION (p1,p2) VALUES (8, 'Linda', 'Mills', 2, 1, x)
+  INTO employees PARTITION (p1,p2) VALUES (48, 'Linda4', 'Mills4', 42, 41, x)
+SELECT 1 x FROM dual;
+SELECT * FROM employees;
+SELECT 'Gary/Tim1 expected';
+
+TRUNCATE employees;
+INSERT FIRST
+WHEN 2>x THEN
+  INTO employees PARTITION (p0) VALUES (3,   'Tim',  'Greene',  3,  1, x)
+WHEN 3>x THEN
+  INTO employees PARTITION (p0) VALUES (4, 'Gary', 'Kang', 4, 5, x)
+  INTO employees PARTITION (p2) VALUES (31, 'Tim1', 'Greene1', 31, 11, x)
+ELSE
+  INTO employees PARTITION (p1,p2) VALUES (8, 'Linda', 'Mills', 2, 1, x)
+  INTO employees PARTITION (p1,p2) VALUES (48, 'Linda4', 'Mills4', 42, 41, x)
+SELECT 1 x FROM dual;
+SELECT * FROM employees;
+SELECT 'Tim expected';
+
+--error ER_INSERT_ALL_ELSE_TWICE
+INSERT FIRST
+WHEN 2>x THEN
+  INTO employees PARTITION (p0) VALUES (3,   'Tim',  'Greene',  3,  1, x)
+ELSE
+  INTO employees PARTITION (p1,p2) VALUES (8, 'Linda', 'Mills', 2, 1, x)
+ELSE
+  INTO employees PARTITION (p1,p2) VALUES (48, 'Linda4', 'Mills4', 42, 41, x)
+SELECT 1 x FROM dual;
+
+--error ER_INSERT_ALL_WHEN_AFTER_ELSE_NOT_ALLOW
+INSERT FIRST
+WHEN 2>x THEN
+  INTO employees PARTITION (p0) VALUES (3,   'Tim',  'Greene',  3,  1, x)
+ELSE
+  INTO employees PARTITION (p1,p2) VALUES (8, 'Linda', 'Mills', 2, 1, x)
+WHEN 3>x THEN
+  INTO employees PARTITION (p1,p2) VALUES (48, 'Linda4', 'Mills4', 42, 41, x)
+SELECT 1 x FROM dual;
+
+--error ER_INSERT_ALL_WHEN_ELSE_NOT_ALLOW
+INSERT ALL
+  INTO employees PARTITION (p0) VALUES (3,   'Tim',  'Greene',  3,  1, x)
+WHEN 3>x THEN
+  INTO employees PARTITION (p0) VALUES (4, 'Gary', 'Kang', 4, 5, x)
+ELSE
+  INTO employees PARTITION (p1,p2) VALUES (8, 'Linda', 'Mills', 2, 1, x)
+SELECT 1 x FROM dual;
+
+--error ER_INSERT_FIRST_WITHOUT_WHEN
+INSERT FIRST
+  INTO employees PARTITION (p0) VALUES (3,   'Tim',  'Greene',  3,  1, x)
+  INTO employees PARTITION (p0) VALUES (4, 'Gary', 'Kang', 4, 5, x)
+  INTO employees PARTITION (p1,p2) VALUES (8, 'Linda', 'Mills', 2, 1, x)
+SELECT 1 x FROM dual;
+SET SQL_MODE=DEFAULT;
+
+DROP TABLE employees;
+
+CREATE TABLE employees (
+  ID decimal(11,0) NOT NULL ,
+  FNAME VARCHAR(25 ) NOT NULL ,
+  LNAME VARCHAR(25 ) NOT NULL ,
+  STORE_ID decimal(11,0) NOT NULL ,
+  DEPARTMENT_ID decimal(11,0) NOT NULL
+);
+
+CREATE TABLE employees2    (
+  ID decimal(11,0) NOT NULL ,
+  FNAME VARCHAR(25 ) NOT NULL ,
+  LNAME VARCHAR(25 ) NOT NULL ,
+  STORE_ID decimal(11,0) NOT NULL ,
+  DEPARTMENT_ID decimal(11,0) NOT NULL
+);
+
+CREATE TABLE `t1` (
+   `id` int DEFAULT NULL,
+   `name` varchar(100) NOT NULL,
+   `code` varchar(255) DEFAULT NULL,
+   PRIMARY KEY (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT ALL
+WHEN 3>x THEN
+  INTO employees  VALUES (x, 'Gary', 'Kang', 4, 5)
+  INTO employees  VALUES (x, 'Tim1', 'Greene1', 31, 11)
+WHEN 2<x THEN
+  INTO employees2  VALUES (x,   'Tim',  'Greene',  3,  1)
+ELSE
+  INTO employees  VALUES (x, 'Linda', 'Mills', 2, 1)
+  INTO employees VALUES (x, 'Linda4', 'Mills4', 42, 41)
+SELECT id x FROM t1;
+
+DROP TABLE employees;
+DROP TABLE employees2;
+DROP TABLE t1;
+
+DROP TABLE IF EXISTS temp1,temp2,temp3;
+CREATE TABLE temp1 (id number(5,0),type varchar2(10));
+CREATE TABLE temp2 like temp1;
+CREATE TABLE temp3 like temp1;
+
+insert into temp1 values(1,'aa');
+insert into temp1 values(2,'bb');
+insert into temp2 values(11,'xx11');
+insert into temp2 values(22,'xx22');
+
+insert all into temp3
+select * from temp1
+union
+select * from temp2;
+
+select * from temp3;
+
+--replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/  /rows=\d+(\.\.\d+\.\d+)?/rows=***/
+explain format=tree insert all into temp3
+select * from temp1
+union
+select * from temp2;
+
+drop table temp1;
+drop table temp2;
+drop table temp3;

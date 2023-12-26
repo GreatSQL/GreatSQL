@@ -1,0 +1,217 @@
+include/group_replication.inc [rpl_server_count=3]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+
+############################################################
+# 1. Deploy one group which have 3 members in single primary mode.
+[connection server1]
+INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so';
+set global debug = 'd,test_vip';
+include/start_and_bootstrap_group_replication.inc
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127,192.168.2.128,192.168.2.129
+[connection server2]
+INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so';
+set global debug = 'd,test_vip';
+include/start_group_replication.inc
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER2_UUID::192.168.2.128,192.168.2.129
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER2_UUID::192.168.2.128,192.168.2.129
+[connection server3]
+INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so';
+set global debug = 'd,test_vip';
+include/start_group_replication.inc
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER2_UUID::192.168.2.129;MEMBER3_UUID::192.168.2.128
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER2_UUID::192.168.2.129;MEMBER3_UUID::192.168.2.128
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER2_UUID::192.168.2.129;MEMBER3_UUID::192.168.2.128
+
+############################################################
+# 2. test MGR status change then check vip_tope status
+[connection server2]
+# test change master to server2
+SELECT group_replication_set_as_primary("MEMBER2_UUID");
+group_replication_set_as_primary("MEMBER2_UUID")
+Primary server switched to: MEMBER2_UUID
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.129;MEMBER2_UUID::192.168.2.127;MEMBER3_UUID::192.168.2.128
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.129;MEMBER2_UUID::192.168.2.127;MEMBER3_UUID::192.168.2.128
+[connection server3]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.129;MEMBER2_UUID::192.168.2.127;MEMBER3_UUID::192.168.2.128
+# primary server2 stop group_replication, then check vip_tope
+[connection server2]
+include/stop_group_replication.inc
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER3_UUID::192.168.2.128,192.168.2.129
+[connection server3]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER3_UUID::192.168.2.128,192.168.2.129
+[connection server2]
+include/start_group_replication.inc
+# secondary server3, server2 stop group_replication, then check vip_tope
+[connection server3]
+include/stop_group_replication.inc
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER2_UUID::192.168.2.128,192.168.2.129
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER2_UUID::192.168.2.128,192.168.2.129
+[connection server2]
+include/stop_group_replication.inc
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127,192.168.2.128,192.168.2.129
+[connection server2]
+include/start_group_replication.inc
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER2_UUID::192.168.2.128,192.168.2.129
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER2_UUID::192.168.2.128,192.168.2.129
+[connection server3]
+include/start_group_replication.inc
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER2_UUID::192.168.2.129;MEMBER3_UUID::192.168.2.128
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER2_UUID::192.168.2.129;MEMBER3_UUID::192.168.2.128
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.127;MEMBER2_UUID::192.168.2.129;MEMBER3_UUID::192.168.2.128
+
+############################################################
+# 3. check greatdb_ha variables change then check vip_tope status
+[connection server1]
+set global greatdb_ha_mgr_vip_ip = "192.168.2.";
+ERROR 42000: vip format is incorrect
+# test set write vip, and check vip_tope changed
+set global greatdb_ha_mgr_vip_ip = "192.168.2.126";
+[connection server2]
+set global greatdb_ha_mgr_vip_ip = "192.168.2.126";
+[connection server3]
+set global greatdb_ha_mgr_vip_ip = "192.168.2.126";
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.126;MEMBER2_UUID::192.168.2.129;MEMBER3_UUID::192.168.2.128
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.126;MEMBER2_UUID::192.168.2.129;MEMBER3_UUID::192.168.2.128
+[connection server3]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.126;MEMBER2_UUID::192.168.2.129;MEMBER3_UUID::192.168.2.128
+[connection server1]
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.";
+ERROR 42000: read vip format is incorrect
+# test set read vip, and read vip nums larger than secondary_members nums
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.130";
+[connection server2]
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.130";
+[connection server3]
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.130";
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.126;MEMBER2_UUID::192.168.2.129,192.168.2.130;MEMBER3_UUID::192.168.2.128
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.126;MEMBER2_UUID::192.168.2.129,192.168.2.130;MEMBER3_UUID::192.168.2.128
+[connection server3]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.126;MEMBER2_UUID::192.168.2.129,192.168.2.130;MEMBER3_UUID::192.168.2.128
+# test set read vip, and read vip nums less than secondary_members nums
+[connection server1]
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128";
+[connection server2]
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128";
+[connection server3]
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128";
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.126;MEMBER2_UUID::;MEMBER3_UUID::192.168.2.128
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.126;MEMBER2_UUID::;MEMBER3_UUID::192.168.2.128
+[connection server3]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.126;MEMBER2_UUID::;MEMBER3_UUID::192.168.2.128
+[connection server1]
+# test set read vip, and read vip nums larger than secondary_members nums when greatdb_ha_mgr_read_vip_floating_type is TO_PRIMARY
+set global greatdb_ha_mgr_read_vip_floating_type=TO_PRIMARY;
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.130";
+[connection server1]
+set global greatdb_ha_mgr_read_vip_floating_type=TO_PRIMARY;
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.130";
+[connection server1]
+set global greatdb_ha_mgr_read_vip_floating_type=TO_PRIMARY;
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.130";
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.126,192.168.2.130;MEMBER2_UUID::192.168.2.129;MEMBER3_UUID::192.168.2.128
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.126,192.168.2.130;MEMBER2_UUID::192.168.2.129;MEMBER3_UUID::192.168.2.128
+[connection server3]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::192.168.2.126,192.168.2.130;MEMBER2_UUID::192.168.2.129;MEMBER3_UUID::192.168.2.128
+
+############################################################
+# 4. clean up
+[connection server1]
+UNINSTALL PLUGIN greatdb_ha;
+set global debug = '';
+[connection server3]
+include/stop_group_replication.inc
+UNINSTALL PLUGIN greatdb_ha;
+set global debug = '';
+[connection server2]
+include/stop_group_replication.inc
+UNINSTALL PLUGIN greatdb_ha;
+set global debug = '';
+[connection server1]
+include/stop_group_replication.inc
+include/group_replication_end.inc

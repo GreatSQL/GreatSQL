@@ -49,6 +49,7 @@
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
+#include "sql/dd/cache/dictionary_client.h"
 #include "sql/dd/collection.h"
 #include "sql/dd/dd_table.h"       // dd::FIELD_NAME_SEPARATOR_CHAR
 #include "sql/dd/dd_tablespace.h"  // dd::get_tablespace_name
@@ -61,6 +62,7 @@
 #include "sql/dd/impl/utils.h"  // dd::eat_str
 #include "sql/dd/properties.h"  // dd::Properties
 #include "sql/dd/string_type.h"
+#include "sql/dd/types/abstract_table.h"
 #include "sql/dd/types/check_constraint.h"     // dd::Check_constraint
 #include "sql/dd/types/column.h"               // dd::enum_column_types
 #include "sql/dd/types/column_type_element.h"  // dd::Column_type_element
@@ -72,9 +74,10 @@
 #include "sql/dd/types/partition.h"        // dd::Partition
 #include "sql/dd/types/partition_value.h"  // dd::Partition_value
 #include "sql/dd/types/routine.h"          // dd::Routine
-#include "sql/dd/types/table.h"            // dd::Table
-#include "sql/default_values.h"            // prepare_default_value_buffer...
-#include "sql/error_handler.h"             // Internal_error_handler
+#include "sql/dd/types/schema.h"
+#include "sql/dd/types/table.h"  // dd::Table
+#include "sql/default_values.h"  // prepare_default_value_buffer...
+#include "sql/error_handler.h"   // Internal_error_handler
 #include "sql/field.h"
 #include "sql/gis/srid.h"
 #include "sql/handler.h"
@@ -274,6 +277,10 @@ static bool prepare_share(THD *thd, TABLE_SHARE *share,
   // Mark 'system' tables (tables with one row) to help the Optimizer.
   share->system =
       ((share->max_rows == 1) && (share->min_rows == 1) && (share->keys == 0));
+
+  // Save the materialized view flag bit
+  if (table_def->is_materialized_view())
+    share->is_materialized_view = table_def->is_materialized_view();
 
   bool use_extended_sk = ha_check_storage_engine_flag(
       share->db_type(), HTON_SUPPORTS_EXTENDED_KEYS);
@@ -652,6 +659,9 @@ static bool fill_share_from_dd(THD *thd, TABLE_SHARE *share,
         &share->mem_root, udt_name.c_str(), udt_name.length() + 1));
   }
 
+  if (table_options.exists("ora_temp"))
+    table_options.get("ora_temp", &share->ora_tmp_table_options);
+
   // Options from HA_CREATE_INFO::table_options/TABLE_SHARE::db_create_options.
   share->db_create_options = 0;
 
@@ -756,6 +766,18 @@ static bool fill_share_from_dd(THD *thd, TABLE_SHARE *share,
     share->comment.length = comment.length();
   }
 
+  // Read materialized definition
+  if (tab_obj->is_materialized_view()) {
+    share->definition.str =
+        strmake_root(&share->mem_root, tab_obj->definition().c_str(),
+                     tab_obj->definition().length());
+    share->definition.length = tab_obj->definition().length();
+    share->definition_utf8.str =
+        strmake_root(&share->mem_root, tab_obj->definition_utf8().c_str(),
+                     tab_obj->definition_utf8().length() + 1);
+    share->definition_utf8.length = tab_obj->definition_utf8().length();
+  }
+
   // Copy SE attributes into share's memroot
   share->engine_attribute = LexStringDupRootUnlessEmpty(
       &share->mem_root, tab_obj->engine_attribute());
@@ -778,6 +800,16 @@ static bool fill_share_from_dd(THD *thd, TABLE_SHARE *share,
   if (table_options.exists("explicit_encryption")) {
     table_options.get("explicit_encryption", &share->explicit_encryption);
   }
+
+  if (table_options.exists("external_file_name")) {
+    table_options.get("external_file_name", &share->external_file_name,
+                      &share->mem_root);
+
+    if (table_options.exists("external_data_dir")) {
+      table_options.get("external_data_dir", &share->external_data_dir);
+    }
+  }
+
   return false;
 }
 
@@ -822,6 +854,20 @@ inline void get_auto_flags(const dd::Column &col_obj, uint &auto_flags) {
                   ')'));
 
       auto_flags |= Field::DEFAULT_NOW;
+      auto field_type = dd_get_old_field_type(col_obj.type());
+      if (field_type == MYSQL_TYPE_VARCHAR) {
+        uint32 default_ct = 0;
+        const dd::Properties &column_options = col_obj.options();
+        if (column_options.exists("varchar_default_ct")) {
+          column_options.get("varchar_default_ct", &default_ct);
+        }
+        if (default_ct == 1) {
+          auto_flags |= Field::VARCHAR_DEFAULT_CURRENT_TIMESTAP;
+          if (col_obj.default_option().size() >= 20) {
+            auto_flags |= Field::CURRENT_TIMESTAMP_DEC_APPOINT;
+          }
+        }
+      }
     } else {
       auto_flags |= Field::GENERATED_FROM_EXPRESSION;
     }
@@ -907,6 +953,9 @@ static Field *make_field(const dd::Column &col_obj, const CHARSET_INFO *charset,
                                                : col_obj.numeric_scale();
   } else
     decimals = 0;
+  if (field_type == MYSQL_TYPE_VARCHAR) {
+    decimals = col_obj.datetime_precision();
+  }
 
   auto geom_type = Field::GEOM_GEOMETRY;
   // Read geometry sub type
@@ -932,7 +981,7 @@ static Field *make_field(const dd::Column &col_obj, const CHARSET_INFO *charset,
                     col_obj.is_nullable(), col_obj.is_zerofill(),
                     col_obj.is_unsigned(), decimals, treat_bit_as_char, 0,
                     col_obj.srs_id(), col_obj.is_array(), false, false, &ident,
-                    share->db.str);
+                    to_lex_string(share->db));
 }
 
 /**
@@ -1056,19 +1105,31 @@ static bool fill_column_from_dd(THD *thd, TABLE_SHARE *share,
     MYSQL_LEX_CSTRING ident = NULL_CSTR;
     column_options->get("udt_name", &ident, thd->mem_root);
     /* If the share has partition by option,the share->db will be db/table_name,
-      so must trim the /table_name to get the correct db name.Thd database name
-      can't contain /,so can trim the /table_name to valid the db name.
+      so get db name from dd instead of share->db.
     */
-    String db_str{share->db.str, share->db.length, &my_charset_bin};
-    String slash{"/", 1, &my_charset_bin};
-    String blank_char{"", 1, &my_charset_bin};
-    int slash_pos = db_str.strstr(slash, 0);
-    if (slash_pos > 0)
-      db_str.replace(slash_pos, db_str.length() - slash_pos, blank_char);
+    const char *db = share->db.str;
+    const dd::Column_impl *col = dynamic_cast<const dd::Column_impl *>(col_obj);
+    if (col && !share->is_force_view && !share->is_view) {
+      const dd::Abstract_table *abstract_table_def = &(col_obj->table());
+      if (abstract_table_def &&
+          abstract_table_def->type() == dd::enum_table_type::BASE_TABLE) {
+        const dd::Table_impl *dd_table =
+            dynamic_cast<const dd::Table_impl *>(abstract_table_def);
+        dd::Schema *schema = nullptr;
+        dd::cache::Dictionary_client *client = thd->dd_client();
+        dd::cache::Dictionary_client::Auto_releaser releaser(client);
+        int error = client->acquire_uncached<dd::Schema>(dd_table->schema_id(),
+                                                         &schema);
+        if (error) return true;
+        db = schema->name().c_str();
+      }
+    }
+
     ulong length_table = dd::get_udt_size_and_supporting_table(
-        thd, &share->mem_root, db_str.ptr(), ident, &m_type_table, s.c_str());
+        thd, &share->mem_root, db, ident, &m_type_table, s.c_str());
     if (length_table == 0) return true;
-    reg_field->set_udt_table(m_type_table);
+    Field_udt_type *field_udt = dynamic_cast<Field_udt_type *>(reg_field);
+    field_udt->set_udt_table(m_type_table);
   }
 
   // Handle generated columns

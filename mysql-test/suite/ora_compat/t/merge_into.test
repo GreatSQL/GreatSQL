@@ -1,0 +1,577 @@
+--source include/elide_costs.inc
+--disable_warnings
+# Create tables for merge into testcases
+create table t1(
+  id bigint(10),
+  name varchar(16),
+  sale bigint(10),
+  operatime datetime
+);
+
+create table t2(
+  id bigint(10) ,
+  name varchar(16),
+  sale bigint(20)
+);
+
+insert into t2 values(1,'xiaohong',300);
+insert into t2 values(2,'xiaoming',400);
+insert into t2 values(3,'xiaoxiao',900);
+insert into t2 values(4,'nathan',1200);
+
+create table t3(
+  id bigint(10) primary key,
+  name varchar(16),
+  sale bigint(10),
+  operatime datetime
+);
+
+create table t4(
+  id bigint(10) primary key,
+  name varchar(16),
+  sale bigint(10),
+  operatime datetime
+);
+INSERT INTO t4 VALUES(1,'xiaohong',1000,str_to_date('19990101','%Y%m%d'));
+INSERT INTO t4 VALUES(2,'xiaoming',500,str_to_date('19990102','%Y%m%d'));
+
+# Merge into testcases
+## Fundermental case
+insert into t1 values(1,'xiaohong',1000, str_to_date('19980101','%Y%m%d'));
+insert into t1 values(2,'xiaoming',500,str_to_date('19980102','%Y%m%d'));
+
+MERGE INTO t1
+USING t2
+ON ( t2.id = t1.id )
+WHEN MATCHED THEN
+UPDATE SET t1.name=t2.name, t1.sale=t2.sale
+WHEN NOT MATCHED THEN
+INSERT (t1.id, t1.name, t1.sale, t1.operatime)
+VALUES (t2.id, t2.name, t2.sale, str_to_date('20210102','%Y%m%d'));
+
+SELECT * FROM t1;
+TRUNCATE TABLE t1;
+
+## Update clause with where condition
+insert into t1 values(1,'xiaohong',1000, str_to_date('19980101','%Y%m%d'));
+insert into t1 values(2,'xiaoming',500,str_to_date('19980102','%Y%m%d'));
+
+MERGE INTO t1
+USING t2
+ON ( t2.id = t1.id )
+WHEN MATCHED THEN
+UPDATE SET t1.name=t2.name, t1.sale=t2.sale WHERE t1.id=1
+WHEN NOT MATCHED THEN
+INSERT (t1.id, t1.name, t1.sale, t1.operatime)
+VALUES (t2.id, t2.name, t2.sale, str_to_date('20210102','%Y%m%d'));
+
+SELECT * FROM t1;
+TRUNCATE TABLE t1;
+
+## Insert clause without column list
+insert into t1 values(1,'xiaohong',1000, str_to_date('19980101','%Y%m%d'));
+insert into t1 values(2,'xiaoming',500,str_to_date('19980102','%Y%m%d'));
+
+MERGE INTO t1
+USING t2
+ON ( t2.id = t1.id )
+WHEN MATCHED THEN
+UPDATE SET t1.name=t2.name, t1.sale=t2.sale
+WHEN NOT MATCHED THEN
+INSERT
+VALUES (t2.id, t2.name, t2.sale, str_to_date('20210102','%Y%m%d'));
+
+SELECT * FROM t1;
+TRUNCATE TABLE t1;
+
+## ON (1=1)
+MERGE INTO t3
+USING (SELECT * FROM t2 WHERE id <> 100) t4
+ON ( 1 = 1)
+WHEN MATCHED THEN
+UPDATE SET
+	t3.name=t4.name,
+	t3.sale=t4.sale +t3.id +20
+WHEN NOT MATCHED THEN
+INSERT
+VALUES (t4.id, t4.name, t4.sale +t4.id +10, str_to_date('20210102','%Y%m%d'));
+
+SELECT * FROM t3;
+TRUNCATE TABLE t3;
+
+## ON (1=0)
+MERGE INTO t3
+USING (SELECT * FROM t2 WHERE id <> 100) t4
+ON ( 1 = 0)
+WHEN MATCHED THEN
+UPDATE SET
+  t3.name=t4.name,
+  t3.sale=t4.sale +t3.id +20
+WHEN NOT MATCHED THEN
+INSERT
+VALUES (t4.id, t4.name, t4.sale +t4.id +10, str_to_date('20210102','%Y%m%d'));
+
+SELECT * FROM t3;
+TRUNCATE TABLE t3;
+
+## Merge target table by using derived table as source
+INSERT INTO t3 VALUES(1,'xiaohong',1000, str_to_date('19991001','%Y%m%d'));
+INSERT INTO t3 VALUES(2,'xiaoming',500, str_to_date('19990930','%Y%m%d'));
+
+MERGE INTO t3
+USING (SELECT * FROM t2 WHERE id <> 100) t4
+ON (t3.id = t4.id)
+WHEN MATCHED THEN
+UPDATE SET
+  t3.name=t4.name,
+  t3.sale=t4.sale +t3.id +20
+WHEN NOT MATCHED THEN
+INSERT
+VALUES (t4.id, t4.name, t4.sale +t4.id +10, str_to_date('20210101','%Y%m%d'));
+
+SELECT * FROM t3;
+TRUNCATE TABLE t3;
+
+# In the 'when not matched' clause,
+# columns of target table should not be refered
+--error ER_INSERT_WHERE_REFER_TARGET_TABLE
+MERGE INTO t3
+USING (SELECT * FROM t2 WHERE id <> 100) t4
+ON (t3.id = t4.id)
+WHEN NOT MATCHED THEN
+INSERT
+VALUES (t4.id, t4.name, t4.sale, str_to_date('20210101','%Y%m%d'))
+WHERE id<>1;
+
+# merge into a view is not support
+set sql_mode=oracle;
+create view v_t3 as select * from t3;
+--error ER_NON_INSERTABLE_TABLE
+MERGE INTO v_t3
+USING t2
+ON (t3.id = t2.id)
+WHEN NOT MATCHED THEN
+INSERT
+VALUES (t2.id, t2.name, t2.sale, str_to_date('20210101','%Y%m%d'));
+drop view v_t3;
+
+CREATE TABLE bonuses (employee_id NUMBER, bonus NUMBER DEFAULT 100);
+insert into bonuses values(100, 100);
+insert into bonuses values(200, 200);
+
+CREATE VIEW v_bonuses AS SELECT employee_id,bonus FROM bonuses;
+
+--error ER_MERGE_TARGET_VIEW_DELETE_NOT_SUPPORT
+MERGE INTO v_bonuses a
+USING (SELECT * FROM bonuses) b
+ON (a.employee_id = b.employee_id)
+WHEN MATCHED THEN
+UPDATE SET a.bonus=b.bonus+1
+DELETE WHERE (b.bonus < 100);
+
+MERGE INTO v_bonuses a
+USING (SELECT * FROM bonuses) b
+ON (a.employee_id = b.employee_id)
+WHEN MATCHED THEN
+UPDATE SET a.bonus=b.bonus+1;
+SELECT * FROM v_bonuses;
+
+DROP VIEW v_bonuses;
+DROP TABLE bonuses;
+set sql_mode=default;
+
+# prepare statement use case
+PREPARE stmt1 FROM 'MERGE INTO t3
+USING t2
+ON (t2.id = t3.id)
+WHEN NOT MATCHED THEN
+INSERT
+VALUES (t2.id, t2.name, t2.sale, str_to_date(''20210101'',''%Y%m%d''))';
+execute stmt1;
+select * from t3;
+truncate t3;
+
+# merge into in procedure
+INSERT INTO t3 VALUES(1,'xiaohong',1000, str_to_date('19991001','%Y%m%d'));
+INSERT INTO t3 VALUES(2,'xiaoming',500, str_to_date('19990930','%Y%m%d'));
+
+create procedure p1()
+merge into t3
+using t2
+on ( t2.id = t3.id )
+when matched then
+update set t3.name=t2.name, t3.sale=t2.sale
+when not matched then
+insert (t3.id, t3.name, t3.sale, t3.operatime)
+values (t2.id, t2.name, t2.sale, str_to_date('20210102','%Y%m%d'));
+call p1();
+select * from t3;
+drop procedure p1;
+truncate table t3;
+
+# check if keyword 'merge' used as an identifier still works fine.
+delimiter //;
+create procedure p1(x int) merge: loop if x=0 THEN leave merge; end if; set x=x+1; end loop merge//
+drop procedure p1//
+delimiter ;//
+
+# check 'merge into' as the first statement of a compound statement
+delimiter //;
+create procedure p1()
+begin
+merge into t3
+using t2
+on ( t2.id = t3.id )
+when matched then
+update set t3.name=t2.name, t3.sale=t2.sale
+when not matched then
+insert (t3.id, t3.name, t3.sale, t3.operatime)
+values (t2.id, t2.name, t2.sale, str_to_date('20210102','%Y%m%d'));
+end; //
+delimiter ;//
+INSERT INTO t3 VALUES(1,'xiaohong',1000, str_to_date('19991001','%Y%m%d'));
+INSERT INTO t3 VALUES(2,'xiaoming',500, str_to_date('19990930','%Y%m%d'));
+call p1();
+select * from t3;
+drop procedure p1;
+truncate table t3;
+
+delimiter //;
+create procedure p1(x int) begin
+merge: loop if x=0 THEN leave merge; end if; set x=x+1; end loop merge ;
+end; //
+drop procedure p1//
+delimiter ;//
+
+set sql_mode=oracle;
+delimiter //;
+create procedure p1() as
+begin
+merge into t3
+using t2
+on ( t2.id = t3.id )
+when matched then
+update set t3.name=t2.name, t3.sale=t2.sale
+when not matched then
+insert (t3.id, t3.name, t3.sale, t3.operatime)
+values (t2.id, t2.name, t2.sale, str_to_date('20210102','%Y%m%d'));
+end; //
+delimiter ;//
+INSERT INTO t3 VALUES(1,'xiaohong',1000, str_to_date('19991001','%Y%m%d'));
+INSERT INTO t3 VALUES(2,'xiaoming',500, str_to_date('19990930','%Y%m%d'));
+call p1();
+select * from t3;
+drop procedure p1;
+truncate table t3;
+
+# check if no interference of insertion and outer-join scan
+drop table t1;
+drop table t2;
+create table t1(c1 number primary key, c2 number, c3 number, c4 number);
+create table t2(c1 number primary key, c2 number, c3 number, c4 number);
+insert into t1 values (1,1,1,1), (2,2,2,2), (3,3,3,3), (4,4,4,4);
+insert into t2 values (1,1,1,1);
+merge into t2 using t1 on (t1.c1=t2.c1)
+when matched then
+update set t2.c4=t1.c4+1000
+when not matched then
+insert (t2.c1, t2.c3) values (t1.c1+1, t1.c3);
+select * from t2;
+
+# check auto_increment column
+drop table t1;
+drop table t4;
+create table t1 (c1 int primary key, c2 int, c3 int, c4 int);
+create table t4 (c1 int auto_increment primary key, c2 int, c3 int, c4 int);
+insert into t1 values (1,1,1,1), (2,2,2,2), (3,3,3,3), (4,4,4,4);
+insert into t4 values (1,1,1,1);
+merge into t4 using t1 on (t1.c1=t4.c1)
+when matched then
+update set t4.c3=t1.c3+t4.c3, t4.c4=t1.c4+t4.c4
+when not matched then
+insert (c2,c3,c4) values (t1.c2,t1.c3,t1.c4);
+select * from t4;
+
+# source /target with the same table
+drop table t1;
+create table t1 (id bigint(10), name varchar(16), sale bigint(10), op bigint);
+insert into t1 values (NULL, NULL, NULL, 1234);
+merge into t1
+using t1 t2
+on (t2.id = t1.id)
+when not matched then
+insert (t1.id, t1.name, sale, op)
+value (t2.id, t2.name, t2.sale, 4321);
+select * from t1;
+
+# target table should not be shown in VALUE clause.
+drop table t1;
+create table t1 (id bigint(10), name varchar(16), sale bigint(10), op bigint);
+insert into t1 values (NULL, NULL, NULL, 1234);
+--error ER_NOT_SUPPORTED_YET
+merge into t1 using t1 t2 on (t2.id = t1.id)
+when not matched then
+insert (t1.id, t1.name, sale, op)
+value (t2.id, t1.name, t2.sale, 4321);
+
+--error ER_NOT_SUPPORTED_YET
+merge into t1 using t1 t2 on (t2.id = t1.id)
+when not matched then
+insert (t1.id, t1.name, sale, op)
+value (t2.id, name, t2.sale, 4321);
+
+## unable to get a stable set of rows in the source tables
+drop table t1;
+drop table t2;
+create table t1(id number,val varchar(100));
+
+insert into t1 values (1,'101');
+insert into t1 values (2,'102');
+
+create table t2(id number,val varchar(100));
+insert into t2 values (2,'103');
+insert into t2 values (2,'104');
+
+select *,'before' from t1 order by id;
+select *,'before' from t2 order by id;
+
+--error ER_MERGE_UPDATE_UNSTABLE_SET
+merge into t1
+using t2
+on(t1.id=t2.id)
+when matched then
+update set t1.val = t2.val ;
+
+select *,'after' from t1 order by id;
+
+# check stable update set
+drop table t1;
+drop table t2;
+
+create table t1 (a number, b varchar(100));
+create table t2 (a number, b varchar(100));
+
+# both empty, no matched set, always stable
+# --error 0
+merge into t2 using t1 on (1=1)
+when matched then update set t2.a = t1.b
+when not matched then insert (a, b) values (1, '2');
+select *,'phase1' from t2;
+
+truncate table t2;
+
+# target empty, no matched set, always stable
+insert into t1 values (1, '10');
+insert into t1 values (1, '20');
+
+select *,'phase2 before' from t2 right outer join t1 on (1=1);
+merge into t2 using t1 on (1=1)
+when matched then update set t2.b = t1.b
+when not matched then insert (a, b) values (t1.a, t1.b);
+select *,'phase2 after' from t2;
+
+# target one row, same row matched by two source rows. throw error
+insert into t2 values (1, '30');
+select *,'phase3 before' from t1 right outer join t2 on (t1.a=t2.a);
+select *,'phase3 t1' from t1;
+select *,'phase3 t2' from t2;
+
+--error ER_MERGE_UPDATE_UNSTABLE_SET
+merge into t2 using t1 on (t1.a=t2.a)
+when matched then update set t2.b = t1.b
+when not matched then insert (a, b) values (1, '2');
+select *,'phase3 after' from t1 right outer join t2 on (t1.a=t2.a);
+select *,'phase3 t1' from t1;
+select *,'phase3 t2' from t2;
+
+# test trigger
+set sql_mode=default;
+create table trglog (msg varchar(256));
+drop table t1;
+drop table t2;
+
+create table t1(c1 int auto_increment primary key, c2 int, c3 int, c4 int);
+create table t2(c1 int auto_increment primary key, c2 int, c3 int, c4 int);
+
+insert into t1 values (1,1,1,1),(2,2,2,2),(3,3,3,3),(4,4,4,4),(5,5,5,5);
+insert into t2 values (1,1,1,1),(2,2,2,2);
+
+create trigger before_update_t2
+before update
+on t2 for each row
+        insert into trglog values (concat('before-update-t2, old.c3 ',
+                OLD.c3, ' new.c3 ', NEW.c3));
+
+create trigger after_update_t2
+after update
+on t2 for each row
+        insert into trglog values (concat('after-update-t2, old.c3 ',
+                OLD.c3, ' new.c3 ', NEW.c3));
+
+create trigger before_insert_t2
+before insert
+on t2 for each row
+        insert into trglog values (concat('before-insert-t2, new.c1 ',
+                NEW.c1));
+
+create trigger after_insert_t2
+after insert
+on t2 for each row
+        insert into trglog values (concat('after-insert-t2, new.c1 ',
+                NEW.c1));
+
+create trigger before_delete_t2
+before delete
+on t2 for each row
+        insert into trglog values (concat('before-delete-t2, old.c3 ',
+                OLD.c3, ' old.c4 ', OLD.c4));
+
+create trigger after_delete_t2
+after delete
+on t2 for each row
+        insert into trglog values (concat('after-delete-t2, old.c3 ',
+                OLD.c3, ' old.c4 ', OLD.c4));
+
+merge into t2 using t1 on (t1.c1=t2.c1)
+when matched then update set t2.c3=t1.c3+t2.c3, t2.c4=t1.c4+t2.c4
+when not matched then insert (c2,c3,c4) values (t1.c2,t1.c3,t1.c4);
+select * from t2;
+
+insert into trglog values ('----- matched/not matched above');
+
+delete from t2 where c1>2;
+
+merge into t2 using t1 on (t1.c1=t2.c1)
+when matched then update set t2.c3=t1.c3+t2.c3, t2.c4=t1.c4+t2.c4 delete where t2.c4=6;
+select * from t2;
+
+insert into trglog values ('----- matched above');
+
+delete from t2 where c1>2;
+
+merge into t2 using t1 on (t1.c1=t2.c1)
+when not matched then insert (c2,c3,c4) values (t1.c2,t1.c3,t1.c4);
+select * from t2;
+
+insert into trglog values ('----- not matched above');
+select * from trglog;
+
+drop table trglog;
+
+# table with auto_increment column
+drop table if exists t1;
+drop table if exists t2;
+create table t1(c1 int auto_increment primary key, c2 int, c3 int, c4 int);
+create table t2(c1 int auto_increment primary key, c2 int, c3 int, c4 int);
+
+insert into t1 values (1,1,1,1),(2,2,2,2),(3,3,3,3),(4,4,4,4),(5,5,5,5);
+insert into t2 values (1,1,1,1),(2,2,2,2);
+
+merge into t2 using t1 on (t1.c1=t2.c1)
+when matched then update set t2.c3=t1.c3+t2.c3, t2.c4=t1.c4+t2.c4
+when not matched then insert values(t1.c1, t1.c2, t1.c3, t1.c4);
+select * from t1;
+select * from t2;
+
+# column conflict on same table alias
+set sql_mode=oracle;
+drop table if exists t1;
+drop table if exists t2;
+create table t1 (col number, col1 number, col2 number);
+create table t2 (col number, col1 number, col2 number);
+
+insert into t1 values (1, 2, 3), (2, 298, 3);
+insert into t2 values (3, 2, 3), (4, 5, 6);
+
+--error ER_NON_UNIQ_ERROR
+merge into t1 a using (select col, col2 from t2) a on (a.col='12')
+when not matched then insert (a.col) values('123');
+
+# digest testing
+select statement_digest_text('merge /*+ sql_mode=oracle */into t1 using t2 on (t2.id=t1.id) when matched then update set t1.name=concat(''up_name_'', t2.name);');
+select statement_digest_text('merge   /*+ sql_mode= oracle */into t1 using t2 on (t2.id=t1.id) when matched then update  set t1.name=concat(''up_name_'', t2.name );');
+
+#Drop tables
+--enable_warnings
+drop table t1, t2, t3, t4;
+
+# explain analyze testing
+create table t1 (id int, aval1 int, aval2 int);
+create table t2 (id int, bval1 int, bval2 int, bval3 int);
+insert into t1 values (1, 405, 45), (2, 401, 41), (3, 200, 20), (4, 400, 40);
+insert into t2 (id, bval1, bval2) values (701, 405, 16), (704, 409, 14), (706, 403, 13), (709, 401, 12);
+
+SELECT t2.id,t2.bval1,t2.bval2,
+t1.id,t1.aval1
+FROM t2
+RIGHT JOIN t1
+ON t2.bval1=t1.aval1;
+--replace_regex $elide_costs_and_time
+explain analyze
+merge into t2 using (select * from t1) b on (t2.bval1 = b.aval1)
+when matched then update SET bval3 = b.aval2;
+
+select * from t2;
+merge into t2 using (select * from t1) b on (t2.bval1 = b.aval1)
+when matched then update SET bval3 = b.aval2;
+select * from t2;
+
+drop table t1, t2;
+
+--echo # security check
+create table t_merge_into_target(t_id int, t_name varchar2(16), t_sale int, t_operatime int);
+insert into t_merge_into_target values(1, 'Cindy', 1000, 1000);
+
+create table t_merge_into_driver(d_id int, d_name varchar2(16), d_sale int);
+insert into t_merge_into_driver values(1, 'Cindy', 300);
+insert into t_merge_into_driver values(20, 'James', 400);
+insert into t_merge_into_driver values(30, 'John', 900);
+insert into t_merge_into_driver values(40, 'Peter', 1200);
+
+select * from t_merge_into_target;
+select * from t_merge_into_driver;
+
+create user mergeinto@localhost identified by '';
+grant select on test.* to 'mergeinto'@'localhost';
+grant update on test.t_merge_into_target to 'mergeinto'@'localhost';
+show grants for 'mergeinto'@'localhost';
+flush privileges;
+
+connect (conn1,localhost,mergeinto,,test);
+--error ER_TABLEACCESS_DENIED_ERROR
+merge into t_merge_into_target using t_merge_into_driver on (t_id = d_id)
+when matched then
+update set t_sale = t_sale + 1 delete where t_sale > 100
+when not matched then
+insert values (d_id, d_name, d_sale, 1020);
+--error ER_TABLEACCESS_DENIED_ERROR
+merge into t_merge_into_target using t_merge_into_driver on (t_id = d_id)
+when matched then
+update set t_sale = t_sale + 1 delete where t_sale > 100;
+--error ER_TABLEACCESS_DENIED_ERROR
+merge into t_merge_into_target using t_merge_into_driver on (t_id = d_id)
+when matched then
+update set t_sale = t_sale + 1
+when not matched then
+insert values (d_id, d_name, d_sale, 1020);
+merge into t_merge_into_target using t_merge_into_driver on (t_id = d_id)
+when matched then
+update set t_sale = t_sale + 1;
+
+connection default;
+grant insert on test.t_merge_into_target to 'mergeinto'@'localhost';
+show grants for 'mergeinto'@'localhost';
+flush privileges;
+
+connection conn1;
+--error ER_TABLEACCESS_DENIED_ERROR
+merge into t_merge_into_target using t_merge_into_driver on (t_id = d_id)
+when matched then
+update set t_sale = t_sale + 1 delete where t_sale > 100
+when not matched then
+insert values (d_id, d_name, d_sale, 1020);
+
+connection default;
+drop user mergeinto@localhost;
+drop table t_merge_into_target;
+drop table t_merge_into_driver;

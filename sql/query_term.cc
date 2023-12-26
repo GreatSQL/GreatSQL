@@ -339,6 +339,11 @@ static void dumpAccessPath(int level, AccessPath *p, std::ostringstream &buf) {
         str.append(p->temptable_aggregate().table->alias);
         p = p->temptable_aggregate().subquery_path;
         break;
+      case AccessPath::CONNECT_BY_SCAN:
+        str.append("AccessPath::CONNECT_BY ");
+        str.append(p->connect_by_scan().table->alias);
+        p = p->connect_by_scan().src_path;
+        break;
       case AccessPath::STREAM:
         str.append("AccessPath::STREAM ");
         p = p->stream().child;

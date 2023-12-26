@@ -46,7 +46,7 @@
 /**
   Maximum size of a message stored in a single entry in the circular buffer.
 */
-#define GCS_MAX_LOG_BUFFER 512
+#define GCS_MAX_LOG_BUFFER 544  // 512 + 32 (time len)
 
 /**
   Default number of circular buffer entries.
@@ -664,19 +664,18 @@ class Gcs_default_debugger {
     struct tm *tm_p;
     if (gettimeofday(&tv, nullptr) != -1) {
       if ((tm_p = localtime((const time_t *)&tv.tv_sec))) {
-        (void)sprintf(buffer,
-                      /* "%04d-%02d-%02d " */
-                      "%02d:%02d:%02d.%06d ",
-                      /*tm_p->tm_year + 1900, tm_p->tm_mon + 1, tm_p->tm_mday,*/
+        (void)sprintf(buffer, "%04d-%02d-%02dT%02d:%02d:%02d.%06d ",
+                      tm_p->tm_year + 1900, tm_p->tm_mon + 1, tm_p->tm_mday,
                       tm_p->tm_hour, tm_p->tm_min, tm_p->tm_sec,
                       (int)(tv.tv_usec));
       }
     }
 
     size_t len = strlen(buffer);
-    strcpy(buffer + len, GCS_PREFIX);
+    strcpy(buffer + len, GCS_DEBUG_PREFIX);
+    strcpy(buffer + len + GCS_DEBUG_PREFIX_SIZE, GCS_PREFIX);
 
-    return len + GCS_PREFIX_SIZE;
+    return len + GCS_DEBUG_PREFIX_SIZE + GCS_PREFIX_SIZE;
   }
 
   /**

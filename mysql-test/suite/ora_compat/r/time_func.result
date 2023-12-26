@@ -192,7 +192,7 @@ drop table t1;
 create table t1(c1 int default (months_between('20220204','20220203')));
 explain format=tree  SELECT c1 FROM t1 WHERE MONTHS_BETWEEN(c1,'20210201')=1;
 EXPLAIN
--> Filter: (months_between('20210201',t1.c1) = 1)  (cost=# rows=#)
+-> Filter: (months_between(t1.c1,'20210201') = 1)  (cost=# rows=#)
     -> Table scan on t1  (cost=# rows=#)
 
 drop table t1;
@@ -205,6 +205,16 @@ t1	CREATE TABLE "t1" (
   "c1" int DEFAULT (months_between(_utf8mb4'20210101',_utf8mb4'20210201'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 drop table t1;
+explain select months_between('20231223','20231023');
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Note	1003	/* select#1 */ select months_between('20231223','20231023') AS "months_between('20231223','20231023')"
+explain select months_between('20210329','20231025');
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Note	1003	/* select#1 */ select months_between('20210329','20231025') AS "months_between('20210329','20231025')"
 set sql_mode=oracle;
 create table t1(c1 datetime default(add_months('2022-01-31',1)), c2 int, c3 double, c4 decimal(10,2));
 show create table t1;

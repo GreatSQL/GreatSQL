@@ -62,6 +62,7 @@ Applier_module::Applier_module()
       applier_error(0),
       suspended(false),
       incoming(nullptr),
+      delayed_packets_queue(nullptr),
       pipeline(nullptr),
       stop_wait_timeout(LONG_TIMEOUT),
       applier_channel_observer(nullptr) {
@@ -74,8 +75,11 @@ Applier_module::Applier_module()
   mysql_cond_init(key_GR_COND_applier_module_wait,
                   &suspension_waiting_condition);
 
+  has_delayed_view_change_event = false;
 #ifndef NDEBUG
   wait_online = false;
+  conditional_trap = 0;
+
 #endif
 }
 
@@ -87,6 +91,15 @@ Applier_module::~Applier_module() {
       delete packet;
     }
     delete incoming;
+  }
+
+  if (this->delayed_packets_queue) {
+    while (!this->delayed_packets_queue->empty()) {
+      Packet *packet = this->delayed_packets_queue->front();
+      this->delayed_packets_queue->pop_front();
+      delete packet;
+    }
+    delete delayed_packets_queue;
   }
 
   delete applier_channel_observer;
@@ -110,6 +123,7 @@ int Applier_module::setup_applier_module(Handler_pipeline_type pipeline_type,
 
   // create the receiver queue
   this->incoming = new Synchronized_queue<Packet *>(key_transaction_data);
+  this->delayed_packets_queue = new std::deque<Packet *>();
 
   stop_wait_timeout = stop_timeout;
 
@@ -331,7 +345,8 @@ int Applier_module::apply_view_change_packet(
                         "prepared transactions",
                         view_change_packet->view_id.c_str()));
     transaction_consistency_manager->schedule_view_change_event(pevent);
-    pevent->set_delayed_view_change_waiting_for_consistent_transactions();
+    has_delayed_view_change_event = true;
+    return error;
   }
 
   error = inject_event_into_pipeline(pevent, cont);
@@ -451,6 +466,77 @@ int Applier_module::apply_leaving_members_action_packet(
       packet->m_leaving_members);
 }
 
+/**
+  Fix sync problems for after consistency when view change is happened
+*/
+void Applier_module::add_delayed_packets() {
+  incoming->push_all(delayed_packets_queue);
+}
+
+bool Applier_module::check_remote_prepare_before_view_change(
+    Transaction_prepared_action_packet *packet) {
+  return transaction_consistency_manager->is_remote_prepare_before_view_change(
+      packet->get_sid(), packet->m_gno);
+}
+
+bool Applier_module::check_and_delay_packet_after_delayed_view_change(
+    Packet *packet) {
+  bool expected = true;
+  int packet_type = packet->get_packet_type();
+  switch (packet_type) {
+    case TRANSACTION_PREPARED_PACKET_TYPE:
+      DBUG_EXECUTE_IF("consistency_after_conditional_trap", {
+        if (conditional_trap) {
+          const char act[] =
+              "now signal "
+              "signal.consistency_after_conditional_trap_waiting "
+              "wait_for "
+              "signal.consistency_after_conditional_trap_continue "
+              "NO_CLEAR_EVENT";
+          DBUG_ASSERT(
+              !debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+        }
+      });
+      DBUG_EXECUTE_IF("consistency_after_set_trap", { conditional_trap = 1; });
+
+      if (!check_remote_prepare_before_view_change(
+              static_cast<Transaction_prepared_action_packet *>(packet))) {
+        LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                        "packet type is not expected:%d, buffer it",
+                        packet_type);
+        this->incoming->pop();
+        this->delayed_packets_queue->push_back(packet);
+        expected = false;
+      }
+      break;
+    case SYNC_BEFORE_EXECUTION_PACKET_TYPE:
+    case ACTION_PACKET_TYPE:
+    case VIEW_CHANGE_PACKET_TYPE:
+    case DATA_PACKET_TYPE:
+    case SINGLE_PRIMARY_PACKET_TYPE:
+    case LEAVING_MEMBERS_PACKET_TYPE:
+    case CERTIFICATION_PACKET_TYPE:
+      LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                      "packet type is not expected:%d, buffer it", packet_type);
+      this->incoming->pop();
+      this->delayed_packets_queue->push_back(packet);
+      expected = false;
+      break;
+    case SYNC_PREPARED_COMPLETE_TYPE:
+      break;
+    default:
+      LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
+                      "packet type is not expected:%d", packet_type);
+      DBUG_ASSERT(0);
+  }
+
+  if (expected) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 int Applier_module::apply_certification_change_action_packet(
     Certification_packet *packet) {
   return (get_certification_handler()->get_certifier()->handle_certifier_data(
@@ -542,7 +628,6 @@ int Applier_module::applier_thread_handle() {
 
   // applier main loop
   while (!applier_error && !packet_application_error && !loop_termination) {
-    if (is_applier_thread_aborted()) break;
     if (is_applier_thread_aborted()) {
       if (remaining_packets_inited) {
         remaining_packets_to_be_processed--;
@@ -594,6 +679,12 @@ int Applier_module::applier_thread_handle() {
     DBUG_EXECUTE_IF(
         "group_replication_before_commit_wait_recovery_message_applied",
         { wait_online = true; };);
+
+    if (has_delayed_view_change_event) {
+      if (check_and_delay_packet_after_delayed_view_change(packet)) {
+        continue;
+      }
+    }
 
     switch (packet->get_packet_type()) {
       case ACTION_PACKET_TYPE:
@@ -655,6 +746,14 @@ int Applier_module::applier_thread_handle() {
             static_cast<Certification_packet *>(packet));
         this->incoming->pop();
         break;
+      case SYNC_PREPARED_COMPLETE_TYPE:
+        has_delayed_view_change_event = false;
+        this->incoming->pop();
+        if (delayed_packets_queue->size() > 0) {
+          add_delayed_packets();
+        }
+        break;
+
       default:
         assert(0); /* purecov: inspected */
     }

@@ -60,6 +60,15 @@ RESET SLAVE ALL FOR CHANNEL "group_replication_applier";
 --enable_result_log
 
 }
+--let $group_rep_exist= `SELECT COUNT(*) FROM mysql.slave_relay_log_info WHERE channel_name='group_replication_recovery'`
+if ($group_rep_exist) {
+--disable_result_log
+--disable_query_log
+RESET SLAVE ALL FOR CHANNEL "group_replication_recovery";
+--enable_query_log
+--enable_result_log
+
+}
 
 #
 # Test with the relay log repository set to FILE

@@ -1,0 +1,53 @@
+connect (conn1_1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn1_2,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+--connection conn1_1
+--echo [session_isolation: connection conn1_1]
+create sequence seq;
+--error ER_GDB_READ_SEQUENCE
+select seq.currval;
+select seq.nextval;
+select seq.nextval;
+select seq.currval;
+
+--connection conn1_2
+--echo [session_isolation: connection conn1_2]
+--error ER_GDB_READ_SEQUENCE
+select seq.currval;
+select seq.nextval;
+select seq.currval;
+
+
+--connection conn1_1
+--echo [drop_and_recreate: connection conn1_1]
+drop sequence seq;
+create sequence seq;
+
+--connection conn1_2
+--echo [drop_and_recreate: connection conn1_2]
+--error ER_GDB_READ_SEQUENCE
+select seq.currval;
+select seq.nextval;
+
+
+-- connection conn1_1
+--echo [alter: connection conn1_1]
+select seq.nextval;
+alter sequence seq increment by 5;
+select seq.currval;
+select seq.nextval;
+
+-- connection conn1_2
+--echo [alter: connection conn1_2]
+select seq.currval;
+select seq.nextval;
+select seq.currval;
+
+
+--connection conn1_1
+--echo [cleanup seq: connection conn1_]
+drop sequence seq;
+
+--echo [finalize]
+--disconnect conn1_1
+--disconnect conn1_2

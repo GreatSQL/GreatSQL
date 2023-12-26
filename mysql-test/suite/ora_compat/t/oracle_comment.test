@@ -1,0 +1,480 @@
+CREATE TABLE test_comment(a int, b int, c int);
+insert into test_comment values(1, 2, 3),(4, 5, 6);
+
+--echo #
+--echo # default mode
+--echo #
+SELECT a, --b, c FROM test_comment;  
+
+SELECT a, -- b, c FROM test_comment
+	c FROM test_comment;
+
+SELECT a,
+	--b,
+	c
+	FROM test_comment;
+
+SELECT a,
+	-- b,
+	c
+	FROM test_comment;
+
+SELECT a, --
+	b,
+  c FROM test_comment; 
+
+SELECT a, --
+	--b,
+  c FROM test_comment; 
+
+SELECT a, --
+	-- b,
+	c FROM test_comment;
+
+DELIMITER //;
+CREATE PROCEDURE p1()
+BEGIN
+	SELECT a, 
+		--b, 
+		c 
+		FROM test_comment;
+	
+	SELECT a, 
+		-- b, 
+		c 
+		FROM test_comment;
+	
+	SELECT -- a FOMR test_comment;
+		b,
+		c
+		FROM test_comment;
+END;//
+DELIMITER ;//
+
+CALL p1();
+
+DROP PROCEDURE p1;
+
+--error 1064
+CREATE TABLE test_dml_comment(
+	a int,
+	b int not null default --0,
+	c int
+);
+
+CREATE TABLE test_dml_comment(
+	a int,
+	b int not null default -- 0
+	0,
+	c int
+);
+
+INSERT INTO test_dml_comment(a, b, c) values(
+	1,
+	--2,
+	3
+);
+INSERT INTO test_dml_comment(a, c) values (
+	4,
+	-- 5,
+	6
+);
+SELECT * FROM test_dml_comment;
+
+UPDATE test_dml_comment SET b = 5 WHERE b = --0;
+SELECT * FROM test_dml_comment;
+UPDATE test_dml_comment SET b = 0 WHERE b = -- 5
+--5;
+SELECT * FROM test_dml_comment;
+
+DELETE FROM test_dml_comment WHERE a = --1;
+SELECT * FROM test_dml_comment;
+DELETE FROM test_dml_comment WHERE a = -- 4
+--4;
+SELECT * FROM test_dml_comment;
+
+DROP TABLE test_dml_comment;
+
+--echo #
+--echo # oracle mode
+--echo #
+SET SQL_MODE=oracle;
+
+SELECT a, --b
+	c FROM test_comment;
+
+SELECT a, -- b	
+	c FROM test_comment;
+
+SELECT a,
+  --b,
+  c FROM test_comment;
+
+SELECT a,
+  -- b,
+  c FROM test_comment;
+
+SELECT a, --
+	b,
+  c FROM test_comment;
+
+SELECT a, --
+	--b,
+  c FROM test_comment;
+
+SELECT a, --
+	-- b,
+	c FROM test_comment;
+
+DELIMITER //;
+CREATE PROCEDURE p1 AS
+BEGIN
+	SELECT a, 
+		--b, 
+		c 
+		FROM test_comment;
+	
+	SELECT a, 
+		-- b, 
+		c 
+		FROM test_comment;
+	
+	SELECT -- a FOMR test_comment;
+		b,
+		c
+		FROM test_comment;
+	
+	SELECT --a FOMR test_comment;
+		b,
+		c
+		FROM test_comment;
+END;//
+DELIMITER ;//
+
+CALL p1();
+
+DROP PROCEDURE p1;
+
+CREATE TABLE test_dml_comment(
+	a int,
+	b int not null default --0,
+	0,
+	c int
+);
+
+INSERT INTO test_dml_comment(a, c) values(
+	1,
+	--2,
+	3
+);
+INSERT INTO test_dml_comment(a, c) values(
+	4,
+	-- 5,
+	6
+);
+SELECT * FROM test_dml_comment;
+
+UPDATE test_dml_comment SET b = 2 WHERE a = --0
+1;
+SELECT * FROM test_dml_comment;
+UPDATE test_dml_comment SET b = 5 WHERE a = -- 4
+4;
+SELECT * FROM test_dml_comment;
+
+DELETE FROM test_dml_comment WHERE a = --0
+1;
+SELECT * FROM test_dml_comment;
+DELETE FROM test_dml_comment WHERE a = -- 4
+4;
+SELECT * FROM test_dml_comment;
+
+DROP TABLE test_dml_comment;
+
+CREATE TABLE test_dml_comment(
+	a int,
+	b int not null default -- 0
+	0,
+	c int
+);
+
+INSERT INTO test_dml_comment(a, c) values (
+	1,
+	--2,
+	3
+);
+INSERT INTO test_dml_comment(a, c) values (
+	4,
+	-- 5,
+	6
+);
+SELECT * FROM test_dml_comment;
+
+UPDATE test_dml_comment SET b = 2 WHERE a = --0
+1;
+SELECT * FROM test_dml_comment;
+UPDATE test_dml_comment SET b = 5 WHERE a = -- 4
+4;
+SELECT * FROM test_dml_comment;
+
+DELETE FROM test_dml_comment WHERE a = --0
+1;
+SELECT * FROM test_dml_comment;
+DELETE FROM test_dml_comment WHERE a = -- 4
+4;
+SELECT * FROM test_dml_comment;
+
+###test view###
+
+drop view if exists view_test_comment;
+create view view_test_comment as--select sysdate from dual
+--select sysdate from dual
+select * from test_comment;
+
+DELIMITER //;
+drop view if exists view_test_comment;
+create view view_test_comment as--select sysdate from dual;
+--select sysdate from dual;
+select * from test_comment;
+//
+DELIMITER ;//
+
+
+drop view if exists view_test_comment;
+create view view_test_comment as-- select sysdate from dual
+-- select sysdate from dual
+select * from test_comment;
+
+DELIMITER //;
+drop view if exists view_test_comment;
+create view view_test_comment as-- select sysdate from dual;
+-- select sysdate from dual;
+select * from test_comment;
+//
+DELIMITER ;//
+
+drop view view_test_comment;
+
+###test function###
+set global log_bin_trust_function_creators = 1;
+
+DELIMITER //;
+create or replace function func_calc return number is--select sysdate from dual
+--select sysdate from dual
+temp int := 0;--select sysdate from dual
+--select sysdate from dual
+begin--select sysdate from dual
+return temp;--select sysdate from dual
+--select sysdate from dual
+end;--select sysdate from dual
+
+
+create or replace function func_calc return number is--select sysdate from dual;
+--select sysdate from dual;
+temp int := 0;--select sysdate from dual;
+--select sysdate from dual;
+begin--select sysdate from dual;
+return temp;--select sysdate from dual;
+--select sysdate from dual;
+end;--select sysdate from dual;
+
+create or replace function func_calc return number is-- select sysdate from dual
+-- select sysdate from dual
+temp int := 0;-- select sysdate from dual
+-- select sysdate from dual
+begin-- select sysdate from dual
+return temp;-- select sysdate from dual
+-- select sysdate from dual
+end;-- select sysdate from dual
+
+
+create or replace function func_calc return number is-- select sysdate from dual;
+-- select sysdate from dual;
+temp int := 0;-- select sysdate from dual;
+-- select sysdate from dual;
+begin-- select sysdate from dual;
+return temp;-- select sysdate from dual;
+-- select sysdate from dual;
+end;-- select sysdate from dual;
+
+drop function func_calc;
+//
+
+
+###test procedure###
+declare--select sysdate from dual
+--select sysdate from dual
+temp varchar2(10);--select sysdate from dual
+--select sysdate from dual
+begin--select sysdate from dual
+--select sysdate from dual
+delete from test_comment where a=99;--select sysdate from dual
+--select sysdate from dual
+end;--select sysdate from dual
+//
+
+declare--select sysdate from dual;
+--select sysdate from dual;
+temp varchar2(10);--select sysdate from dual;
+--select sysdate from dual;
+begin--select sysdate from dual;
+--select sysdate from dual;
+delete from test_comment where a=99;--select sysdate from dual;
+--select sysdate from dual;
+end;--select sysdate from dual;
+//
+
+declare-- select sysdate from dual
+-- select sysdate from dual
+temp varchar2(10);-- select sysdate from dual
+-- select sysdate from dual
+begin-- select sysdate from dual
+-- select sysdate from dual
+delete from test_comment where a=99;-- select sysdate from dual
+-- select sysdate from dual
+end;-- select sysdate from dual
+//
+
+declare-- select sysdate from dual;
+-- select sysdate from dual;
+temp varchar2(10);-- select sysdate from dual;
+-- select sysdate from dual;
+begin-- select sysdate from dual;
+-- select sysdate from dual;
+delete from test_comment where a=99;-- select sysdate from dual;
+-- select sysdate from dual;
+end;-- select sysdate from dual;
+//
+
+
+create or replace procedure proc_calc as--select sysdate from dual
+--select sysdate from dual
+temp varchar2(10);--select sysdate from dual
+--select sysdate from dual
+begin--select sysdate from dual
+--select sysdate from dual
+delete from test_comment where a=99;--select sysdate from dual
+--select sysdate from dual
+end;--select sysdate from dual
+//
+
+call proc_calc();--select sysdate from dual
+
+create or replace procedure proc_calc as--select sysdate from dual;
+--select sysdate from dual;
+temp varchar2(10);--select sysdate from dual;
+--select sysdate from dual;
+begin--select sysdate from dual;
+--select sysdate from dual;
+delete from test_comment where a=99;--select sysdate from dual;
+--select sysdate from dual;
+end;--select sysdate from dual;
+//
+
+call proc_calc();--select sysdate from dual;
+
+create or replace procedure proc_calc as-- select sysdate from dual
+-- select sysdate from dual
+temp varchar2(10);-- select sysdate from dual
+-- select sysdate from dual
+begin-- select sysdate from dual
+-- select sysdate from dual
+delete from test_comment where a=99;-- select sysdate from dual
+-- select sysdate from dual
+end;-- select sysdate from dual
+//
+
+call proc_calc();-- select sysdate from dual
+
+create or replace procedure proc_calc as-- select sysdate from dual;
+-- select sysdate from dual;
+temp varchar2(10);-- select sysdate from dual;
+-- select sysdate from dual;
+begin-- select sysdate from dual;
+-- select sysdate from dual;
+delete from test_comment where a=99;-- select sysdate from dual;
+-- select sysdate from dual;
+end;-- select sysdate from dual;
+//
+
+call proc_calc();-- select sysdate from dual;
+
+drop procedure proc_calc;--select sysdate from dual
+//
+
+###test trigger###
+
+create trigger trig_calc before insert--select sysdate from dual
+--select sysdate from dual
+on test_comment for each row--select sysdate from dual
+--select sysdate from dual
+begin--select sysdate from dual
+--select sysdate from dual
+	if :new.a<0 then--select sysdate from dual
+	--select sysdate from dual
+		:new.b:=99;--select sysdate from dual
+		--select sysdate from dual
+	end if;--select sysdate from dual
+	--select sysdate from dual
+end;--select sysdate from dual
+//
+
+drop trigger trig_calc;--select sysdate from dual--select sysdate from dual
+
+create trigger trig_calc before insert--select sysdate from dual;
+--select sysdate from dual;
+on test_comment for each row--select sysdate from dual;
+--select sysdate from dual;
+begin--select sysdate from dual;
+--select sysdate from dual;
+	if :new.a<0 then--select sysdate from dual;
+	--select sysdate from dual;
+		:new.b:=99;--select sysdate from dual;
+		--select sysdate from dual;
+	end if;--select sysdate from dual;
+	--select sysdate from dual;
+end;--select sysdate from dual;
+//
+
+drop trigger trig_calc;--select sysdate from dual;--select sysdate from dual;
+
+create trigger trig_calc before insert-- select sysdate from dual
+-- select sysdate from dual
+on test_comment for each row-- select sysdate from dual
+-- select sysdate from dual
+begin-- select sysdate from dual
+-- select sysdate from dual
+	if :new.a<0 then-- select sysdate from dual
+	-- select sysdate from dual
+		:new.b:=99;-- select sysdate from dual
+		-- select sysdate from dual
+	end if;-- select sysdate from dual
+	-- select sysdate from dual
+end;-- select sysdate from dual
+//
+
+drop trigger trig_calc;-- select sysdate from dual-- select sysdate from dual
+
+create trigger trig_calc before insert-- select sysdate from dual;
+-- select sysdate from dual;
+on test_comment for each row-- select sysdate from dual;
+-- select sysdate from dual;
+begin-- select sysdate from dual;
+-- select sysdate from dual;
+	if :new.a<0 then-- select sysdate from dual;
+	-- select sysdate from dual;
+		:new.b:=99;-- select sysdate from dual;
+		-- select sysdate from dual;
+	end if;-- select sysdate from dual;
+	-- select sysdate from dual;
+end;-- select sysdate from dual;
+//
+
+drop trigger trig_calc;-- select sysdate from dual;-- select sysdate from dual;
+//
+
+DELIMITER ;//
+
+DROP TABLE test_dml_comment;
+
+
+DROP TABLE test_comment;

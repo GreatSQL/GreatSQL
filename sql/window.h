@@ -110,7 +110,7 @@ class Window {
    *------------------------------------------------------------------------*/
  protected:
   Query_block *m_query_block;           ///< The SELECT the window is on
-  PT_order_list *const m_partition_by;  ///< \<window partition clause\>
+  PT_order_list *m_partition_by;        ///< \<window partition clause\>
   PT_order_list *m_order_by;            ///< \<window order clause\>
   bool m_order_by_print{true};          ///< whether print order_by clause
   ORDER *m_sorting_order;               ///< merged partition/order by
@@ -153,6 +153,11 @@ class Window {
     the current row to evaluate the wf for the current row
   */
   bool m_needs_partition_cardinality;
+
+  /**
+    used for ratio_to_report
+  */
+  bool m_only_need_do_second_phase;
 
   /**
     The functions are optimizable with ROW unit. For example SUM is, MAX is
@@ -648,12 +653,20 @@ class Window {
   bool m_do_copy_null;
 
   /**
+    Execution state: for retio_to_report(),when it's second phase,it only needs
+    to do div without do add().
+  */
+  bool m_do_second_phase;
+
+  /**
     Execution state: do inverse, e.g. subtract rather than add in aggregates.
     Used for optimizing computation of sliding frames for eligible aggregates,
     cf. Item_sum::check_wf_semantics.
   */
   bool m_inverse_aggregation;
 
+  int keep_dir{0};
+  bool has_keep_over{false};
   /*------------------------------------------------------------------------
    *
    * Constructors
@@ -678,6 +691,7 @@ class Window {
         m_needs_peerset(false),
         m_needs_last_peer_in_frame(false),
         m_needs_partition_cardinality(false),
+        m_only_need_do_second_phase(false),
         m_row_optimizable(true),
         m_range_optimizable(true),
         m_static_aggregates(false),
@@ -708,6 +722,7 @@ class Window {
         m_last_rowno_in_range_frame(0),
         m_is_last_row_in_frame(false),
         m_do_copy_null(false),
+        m_do_second_phase(false),
         m_inverse_aggregation(false) {
     m_opt_nth_row.m_offsets.init_empty_const();
     m_opt_lead_lag.m_offsets.init_empty_const();
@@ -753,6 +768,10 @@ class Window {
   */
   void set_order_list(PT_order_list *ord) { m_order_by = ord; }
 
+  PT_order_list *get_partition_list(void) { return m_partition_by; }
+  void set_partition_list(PT_order_list *partition) {
+    m_partition_by = partition;
+  }
   /**
     Mark to print the ORDER BY list or not.
     Currently, only Item_func_group_concat uses it.
@@ -890,6 +909,8 @@ class Window {
     in a window function OVER clause.
   */
   bool is_reference() const { return m_is_reference; }
+
+  Item_string *inherit_from() const { return m_inherit_from; }
 
   /**
     Check if the just read input row marks the start of a new partition.
@@ -1109,6 +1130,11 @@ class Window {
   }
 
   /**
+    If we need to use for ratio_to_report.
+    @returns true if that is the case, else false
+  */
+  bool only_need_do_second_phase() const { return m_only_need_do_second_phase; }
+  /**
     Return true if the set of window functions are all ROW unit optimizable.
     Only relevant if m_needs_buffering and m_row_optimizable are true.
   */
@@ -1274,6 +1300,16 @@ class Window {
   void set_do_copy_null(bool b) { m_do_copy_null = b; }
 
   /**
+    See #m_do_second_phase
+  */
+  bool do_second_phase() const { return m_do_second_phase; }
+
+  /**
+    See #m_do_second_phase
+  */
+  void set_do_second_phase(bool b) { m_do_second_phase = b; }
+
+  /**
     See #m_inverse_aggregation
   */
   bool do_inverse() const { return m_inverse_aggregation; }
@@ -1401,6 +1437,11 @@ class Window {
   void set_row_has_fields_in_out_table(int64 rowno) {
     m_row_has_fields_in_out_table = rowno;
   }
+
+  int get_keep_dir() { return keep_dir; }
+  Query_block *get_query_block() { return m_query_block; }
+  bool has_keep_over_clause() { return has_keep_over; }
+  void set_has_keep_over_clause(bool v) { has_keep_over = v; }
 
   /**
     Free up any resource used to process the window functions of this window,

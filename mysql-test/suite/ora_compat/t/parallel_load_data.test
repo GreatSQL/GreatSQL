@@ -33,6 +33,7 @@ TRUNCATE TABLE t1;
 
 SET @@gdb_parallel_load = on;
 SELECT @@gdb_parallel_load_chunk_size INTO @old_chunk_size;
+SELECT @@gdb_parallel_load_workers INTO @old_workers;
 SET @@gdb_parallel_load_chunk_size = 65536;
 --enable_info
 --replace_result $MYSQLTEST_VARDIR tmp_dir
@@ -43,7 +44,7 @@ SELECT COUNT(*) FROM t1;
 --echo
 --echo [## test unreadable char ##]
 --replace_result $MYSQLTEST_VARDIR tmp_dir
---exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+--remove_file $MYSQLTEST_VARDIR/parallel_load_outfile.txt
 --replace_result $MYSQLTEST_VARDIR tmp_dir
 eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
 FIELDS TERMINATED BY 0x01 FROM t1 LIMIT 10;
@@ -64,7 +65,7 @@ PARTITION BY RANGE(c1) SUBPARTITION BY HASH(c1) SUBPARTITIONS 2
  PARTITION p2 VALUES LESS THAN(200) (SUBPARTITION s2, SUBPARTITION s3));
 INSERT INTO t1 VALUES (1,1),(2,2);
 --replace_result $MYSQLTEST_VARDIR tmp_dir
---exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+--remove_file $MYSQLTEST_VARDIR/parallel_load_outfile.txt
 --replace_result $MYSQLTEST_VARDIR tmp_dir
 eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' FROM t1;
 TRUNCATE TABLE t1;
@@ -75,7 +76,7 @@ TRUNCATE TABLE t1;
 eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
 INTO TABLE t1 PARTITION(s0);
 --replace_result $MYSQLTEST_VARDIR tmp_dir
---error ER_ROW_DOES_NOT_MATCH_GIVEN_PARTITION_SET
+--error ER_GDB_PARALLEL_LOAD
 eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt'
 INTO TABLE t1 PARTITION(s1);
 --replace_result $MYSQLTEST_VARDIR tmp_dir
@@ -90,7 +91,7 @@ SELECT COUNT(*) FROM t1;
 --disable_info
 --echo [full partitions]
 --replace_result $MYSQLTEST_VARDIR tmp_dir
---exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+--remove_file $MYSQLTEST_VARDIR/parallel_load_outfile.txt
 INSERT INTO t1 VALUES (101,1),(102,2);
 --replace_result $MYSQLTEST_VARDIR tmp_dir
 eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' FROM t1;
@@ -163,7 +164,7 @@ SELECT @@time_zone into @old_time_zone;
 SET @@time_zone='+08:00';
 INSERT INTO t1 values (1, '2021-07-23 3:30:00'),(2, '2021-07-23 3:30:00'),(3, '2021-07-23 13:30:00'),(4, '2021-07-23 13:30:00');
 --replace_result $MYSQLTEST_VARDIR tmp_dir
---exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+--remove_file $MYSQLTEST_VARDIR/parallel_load_outfile.txt
 --replace_result $MYSQLTEST_VARDIR tmp_dir
 eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' FROM t1;
 TRUNCATE TABLE t1;
@@ -206,7 +207,7 @@ INSERT INTO t1 (c2) SELECT c2 FROM t1; #256
 SELECT count(*) FROM t1;
 
 --replace_result $MYSQLTEST_VARDIR tmp_dir
---exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+--remove_file $MYSQLTEST_VARDIR/parallel_load_outfile.txt
 --replace_result $MYSQLTEST_VARDIR tmp_dir
 eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' FROM t1;
 TRUNCATE TABLE t1;
@@ -221,12 +222,115 @@ SELECT COUNT(*) FROM t1;
 --echo [only support hints about parallel load]
 --error ER_GDB_PARALLEL_LOAD
 LOAD /*+ SET_VAR(auto_increment_increment=2) */DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' INTO TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/parallel_load_outfile.txt
+
+--echo
+--echo [# bug8211: http://zbox.greatdb.com/zentao/task-view-14712.html]
+--echo [# refactor logic of split lines for parallel load]
+DROP TABLE t1;
+create table t1(c1 int primary key, c2 varchar(8), c3 varchar(8));
+insert into t1 values (1, 'aaa', '\\bc'), (2, 'bac', NULL), (3, 'bac', ''), (4, 'b\\adc', 'd');
+select * from t1;
+--enable_info ONCE
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/bug8211.txt' FROM t1;
+truncate table t1;
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--enable_info ONCE
+eval LOAD /*+ SET_VAR(gdb_parallel_load=ON) */DATA INFILE '$MYSQLTEST_VARDIR/bug8211.txt' INTO TABLE t1;
+select * from t1;
+--echo [#test no enough field]
+DROP TABLE t1;
+create table t1(c1 int primary key, c2 varchar(8), c3 varchar(8), c4 varchar(8));
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--enable_info ONCE
+--error ER_WARN_TOO_FEW_RECORDS
+eval LOAD /*+ SET_VAR(gdb_parallel_load=OFF) */DATA INFILE '$MYSQLTEST_VARDIR/bug8211.txt' INTO TABLE t1;
+select * from t1;
+truncate table t1;
+--enable_info ONCE
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--error ER_WARN_TOO_FEW_RECORDS
+eval LOAD /*+ SET_VAR(gdb_parallel_load=ON) */DATA INFILE '$MYSQLTEST_VARDIR/bug8211.txt' INTO TABLE t1;
+select * from t1;
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--enable_info ONCE
+eval LOAD /*+ SET_VAR(gdb_parallel_load=OFF) */DATA INFILE '$MYSQLTEST_VARDIR/bug8211.txt' ignore INTO TABLE t1;
+select * from t1;
+truncate table t1;
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--enable_info ONCE
+eval LOAD /*+ SET_VAR(gdb_parallel_load=ON) */DATA INFILE '$MYSQLTEST_VARDIR/bug8211.txt' ignore INTO TABLE t1;
+select * from t1;
+--echo [#test extra field]
+DROP TABLE t1;
+create table t1(c1 int primary key, c2 varchar(8));
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--enable_info ONCE
+--error ER_WARN_TOO_MANY_RECORDS
+eval LOAD /*+ SET_VAR(gdb_parallel_load=OFF) */DATA INFILE '$MYSQLTEST_VARDIR/bug8211.txt' INTO TABLE t1;
+select * from t1;
+truncate table t1;
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--enable_info ONCE
+--error ER_GDB_PARALLEL_LOAD
+eval LOAD /*+ SET_VAR(gdb_parallel_load=ON) */DATA INFILE '$MYSQLTEST_VARDIR/bug8211.txt' INTO TABLE t1;
+select * from t1;
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--enable_info ONCE
+eval LOAD /*+ SET_VAR(gdb_parallel_load=OFF) */DATA INFILE '$MYSQLTEST_VARDIR/bug8211.txt' ignore INTO TABLE t1;
+select * from t1;
+truncate table t1;
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--enable_info ONCE
+eval LOAD /*+ SET_VAR(gdb_parallel_load=ON) */DATA INFILE '$MYSQLTEST_VARDIR/bug8211.txt' ignore INTO TABLE t1;
+select * from t1;
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/bug8211.txt
+
+--echo
+--echo [#bug8762: crash if load local infile and worker failed]
+create sequence seq cache 10000;
+create table t1 (c1 int primary key, c2 varchar(128) default (repeat('a',128)) );
+insert into t1(c1) values (seq.nextval);
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+drop sequence seq;
+--enable_info ONCE
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval select * into outfile '$MYSQLTEST_VARDIR/bug8762.txt' from t1;
+truncate table t1;
+connect (conn1_2,127.0.0.1,root,,test);
+connection conn1_2;
+begin;
+select * from t1 for update;
+connection default;
+set @@gdb_parallel_load=on;
+set @@gdb_parallel_load_workers=2;
+set @@gdb_parallel_load_chunk_size=65536;
+select @@local_infile into @old_local_infile;
+set global local_infile=1;
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--error ER_GDB_PARALLEL_LOAD
+eval load data local infile '$MYSQLTEST_VARDIR/bug8762.txt' into table t1;
+set global local_infile = @old_local_infile;
+disconnect conn1_2;
+drop table t1;
+--remove_file $MYSQLTEST_VARDIR/bug8762.txt
+
 
 ##clean up
-DROP TABLE t1;
---replace_result $MYSQLTEST_VARDIR tmp_dir
---exec rm $MYSQLTEST_VARDIR/parallel_load_outfile.txt
 SET @@auto_increment_increment = @old_increment;
 SET @@auto_increment_offset = @old_offset;
 SET @@gdb_parallel_load = off;
 SET @@gdb_parallel_load_chunk_size = @old_chunk_size;
+SET @@gdb_parallel_load_workers = @old_workers;

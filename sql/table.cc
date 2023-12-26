@@ -635,9 +635,9 @@ bool TABLE_SHARE::export_structure(THD *thd, List<Create_field> *defs) {
       def->udt_name.str =
           thd->strmake(def->udt_name.str, strlen(def->udt_name.str));
     }
-    if (def->udt_db_name) {
-      const char *db_name = def->udt_db_name;
-      def->set_udt_db_name(thd->strmake(db_name, strlen(db_name)));
+    if (def->udt_db_name.str) {
+      LEX_CSTRING db_name = thd->strmake(to_lex_cstring(def->udt_db_name));
+      def->set_udt_db_name(to_lex_string(db_name));
     }
     def->comment = thd->strmake((*src)->comment);
     def->zip_dict_name = thd->strmake((*src)->zip_dict_name);
@@ -3315,6 +3315,10 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
       }
     }
 
+    // table outparam record is_materialized_view
+    outparam->is_materialized_view = share->is_materialized_view =
+        table_def->is_materialized_view();
+
     int ha_err;
     if ((ha_err = (outparam->file->ha_open(
              outparam, share->normalized_path.str,
@@ -3375,9 +3379,15 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
   } else if (outparam->file)  // if db_stat!=0, ha_open() set those pointers:
     outparam->file->change_table_ptr(outparam, share);
 
+  if (table_def_param && table_def_param->is_materialized_view()) {
+    outparam->is_materialized_view = outparam->s->is_materialized_view =
+        table_def_param->is_materialized_view();
+  }
+
   if ((share->table_category == TABLE_CATEGORY_LOG) ||
       (share->table_category == TABLE_CATEGORY_RPL_INFO) ||
-      (share->table_category == TABLE_CATEGORY_GTID)) {
+      (share->table_category == TABLE_CATEGORY_GTID) ||
+      (share->ora_tmp_table_options & HA_ORA_TMP_TABLE)) {
     outparam->no_replicate = true;
   } else if (outparam->file) {
     handler::Table_flags flags = outparam->file->ha_table_flags();
@@ -3390,6 +3400,12 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
 
   /* Increment the opened_tables counter, only when open flags set. */
   if (db_stat) thd->status_var.opened_tables++;
+
+  outparam->m_is_ora_tmp = (share->ora_tmp_table_options & HA_ORA_TMP_TABLE);
+  outparam->m_global_tmp =
+      (share->ora_tmp_table_options & HA_ORA_TMP_TABLE_GLOBAL);
+  outparam->m_trans_tmp =
+      (share->ora_tmp_table_options & HA_ORA_TMP_TABLE_TRANS);
 
   return 0;
 
@@ -4307,6 +4323,7 @@ void TABLE::reset() {
   file->ft_handler = nullptr;
 
   pos_in_table_list = nullptr;
+  is_materialized_view = false;
 }
 
 /**
@@ -8211,7 +8228,12 @@ bool TABLE::export_structure(THD *thd, List<Create_field> *defs) {
     // It must convert the Field to Create_field
     Create_field *def = new (thd->mem_root) Create_field();
     *def = Create_field(*src, NULL);
-    const char *db_name = s->db.length ? s->db.str : (*field)->orig_db_name;
+    LEX_CSTRING db_cstr = (*field)->orig_db_name
+                              ? LEX_CSTRING{(*field)->orig_db_name,
+                                            strlen((*field)->orig_db_name)}
+                              : thd->db();
+    LEX_STRING db_name = s->db.length ? to_lex_string(thd->strmake(s->db))
+                                      : to_lex_string(db_cstr);
     def->set_udt_db_name(db_name);
     def->flags &= (uint)~NOT_NULL_FLAG;
     if (prepare_sp_create_field(thd, def)) return true;

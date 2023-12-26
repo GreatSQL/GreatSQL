@@ -1,0 +1,429 @@
+# Skipping it for binlog_format=STATEMENT due to Unsafe statements:
+# unsafe auto-increment column, LIMIT clause.
+--source include/not_binlog_format_statement.inc
+
+#
+# test of updating of keys
+#
+set sql_mode='oracle';
+
+--disable_warnings
+drop table if exists t1,t2;
+--enable_warnings
+
+create table t1 (a int auto_increment , primary key (a));
+insert into t1 values (NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL),(NULL); 
+update t1 set (a) = (a+1) where a > 35;
+select * from t1;
+update t1 set (a) = (a+100) where a > 0;
+select * from t1;
+update t1 set (a) = a+100 limit 0;
+select * from t1;
+#
+# test of error ER_NOT_SUPPORTED_YET
+#
+--error ER_NOT_SUPPORTED_YET
+update t1 set () = (a+1);
+--error ER_NOT_SUPPORTED_YET
+update t1 set (a) = default;
+
+drop table t1;
+
+--disable_warnings
+CREATE TABLE t1
+ (
+ place_id int (10) unsigned NOT NULL,
+ shows int(10) unsigned DEFAULT '0' NOT NULL,
+ ishows int(10) unsigned DEFAULT '0' NOT NULL,
+ ushows int(10) unsigned DEFAULT '0' NOT NULL,
+ clicks int(10) unsigned DEFAULT '0' NOT NULL,
+ iclicks int(10) unsigned DEFAULT '0' NOT NULL,
+ uclicks int(10) unsigned DEFAULT '0' NOT NULL,
+ ts timestamp,
+ PRIMARY KEY (place_id,ts)
+ );
+--enable_warnings
+INSERT INTO t1 (place_id,shows,ishows,ushows,clicks,iclicks,uclicks,ts)
+VALUES (1,0,0,0,0,0,0,20000928174434);
+UPDATE t1 SET (shows,ishows,ushows,clicks,iclicks,uclicks) = (shows+1,ishows+1,ushows+1,clicks+1,iclicks+1,uclicks+1) WHERE place_id=1 AND ts>='2000-09-28 00:00:00';
+select * from t1;
+drop table t1;
+
+#
+# Test of ORDER BY
+#
+
+create table t1 (a int not null, b int not null, key (a));
+insert into t1 values (1,1),(1,2),(1,3),(3,1),(3,2),(3,3),(3,1),(3,2),(3,3),(2,1),(2,2),(2,3);
+SET @tmp=0;
+--disable_warnings
+update t1 set (b)=(@tmp:=@tmp+1) order by a;
+select * from t1;
+update t1 set (b)=(99) where a=1 order by b asc limit 1;
+select * from t1 order by a,b;
+update t1 set (b)=100 where a=1 order by b desc limit 2;
+select * from t1;
+update t1 set (b)=a+10+b where a=1 order by b;
+select * from t1 order by a,b;
+create table t2 (a int not null, b int not null);
+insert into t2 values (1,1),(1,2),(1,3);
+update t1 set (b)=(select distinct 1 from (select * from t2) a);
+select * from t1;
+drop table t1,t2;
+
+#
+# Bug#5553 - Multi table UPDATE IGNORE fails on duplicate keys 
+#
+
+CREATE TABLE t1 ( 
+   `colA` int(10) unsigned NOT NULL auto_increment,
+   `colB` int(11) NOT NULL default '0',
+   PRIMARY KEY  (`colA`)
+);
+INSERT INTO t1 VALUES (4433,5424);
+CREATE TABLE t2 (
+  `colC` int(10) unsigned NOT NULL default '0',
+  `colA` int(10) unsigned NOT NULL default '0',
+  `colD` int(10) unsigned NOT NULL default '0',
+  `colE` int(10) unsigned NOT NULL default '0',
+  `colF` int(10) unsigned NOT NULL default '0',
+  PRIMARY KEY  (`colC`,`colA`,`colD`,`colE`)
+);
+INSERT INTO t2 VALUES (3,4433,10005,495,500);
+INSERT INTO t2 VALUES (3,4433,10005,496,500);
+INSERT INTO t2 VALUES (3,4433,10009,494,500);
+INSERT INTO t2 VALUES (3,4433,10011,494,500);
+INSERT INTO t2 VALUES (3,4433,10005,497,500);
+INSERT INTO t2 VALUES (3,4433,10013,489,500);
+INSERT INTO t2 VALUES (3,4433,10005,494,500);
+INSERT INTO t2 VALUES (3,4433,10005,493,500);
+INSERT INTO t2 VALUES (3,4433,10005,492,500);
+UPDATE IGNORE t2,t1 set (t2.colE,colF)=(t2.colE + 1,0) WHERE t1.colA = t2.colA AND (t1.colB & 4096) > 0 AND (colE + 1) < colF;
+SELECT * FROM t2;
+DROP TABLE t1;
+DROP TABLE t2;
+--enable_warnings
+#
+# Bug #6054 
+#
+create table t1 (c1 int, c2 char(6), c3 int);
+create table t2 (c1 int, c2 char(6));
+insert into t1 values (1, 't1c2-1', 10), (2, 't1c2-2', 20);
+update t1 left join t2 on t1.c1 = t2.c1 set (t2.c2) = ('t2c2-1');
+select * from t2;
+update t1 left join t2 on t1.c1 = t2.c1 set (t2.c2) = ('t2c2-1') where t1.c3 = 10;
+select * from t2;
+drop table t1, t2;
+
+create table t1 ( a int, b int default 0, index (a) );
+insert into t1 (a) values (0),(0),(0),(0),(0),(0),(0),(0);
+
+select * from t1;
+update t1 set (a,b)=(a+10,1) order by a limit 3;
+select * from t1;
+update t1 set (a,b)=(a+11,2) order by a limit 3;
+select * from t1;
+update t1 set (a,b)=(a+12,3) order by a limit 3;
+select * from t1 order by a;
+
+drop table t1;
+
+--echo End of 5.0 tests
+
+--echo #
+--echo # test of TEMPORARY TABLE
+--echo #
+
+CREATE TABLE t1 (f1 INTEGER AUTO_INCREMENT, PRIMARY KEY (f1));
+CREATE TEMPORARY TABLE t2 LIKE t1;
+INSERT INTO t1 VALUES (1);
+INSERT INTO t2 VALUES (1);
+
+ALTER TABLE t2 COMMENT = 'ABC';
+UPDATE t2, t1 SET (t2.f1,t1.f1)=(2,9);
+select * from t1;
+select * from t2;
+ALTER TABLE t2 COMMENT = 'DEF';
+
+DROP TABLE t1, t2;
+
+--echo #
+--echo # test of view
+--echo # 
+
+CREATE TABLE t1 ( a INT, c int, KEY( a ) );
+INSERT INTO t1 VALUES (0,0), (1,1);
+CREATE VIEW v1 AS SELECT t11.a, t12.a AS b, t11.c FROM t1 t11, t1 t12;
+
+UPDATE v1 SET (a,c) = (1,4);
+select * from v1 ;
+select * from t1 ;
+DROP TABLE t1;
+DROP VIEW v1;
+
+--echo # Bug #21143080: UPDATE ON VARCHAR AND TEXT COLUMNS PRODUCE INCORRECT
+--echo #                RESULTS
+
+CREATE TABLE t1 (a VARCHAR(50), b TEXT, c CHAR(50)) ENGINE=INNODB;
+
+INSERT INTO t1 (a, b, c) VALUES ('start trail', '', 'even longer string');
+UPDATE t1 SET (b,a)=(a,'inject');
+SELECT a, b FROM t1;
+UPDATE t1 SET (b,c)=(c,'inject');
+SELECT c, b FROM t1;
+
+DROP TABLE t1;
+
+#
+# update set a ()=(select)
+#
+create table t1 (c1 int, c2 varchar(100), c3 int);
+create table t2 (c1 int, c2 varchar(100));
+insert into t1 values (1, 't1c2-1', 10), (2, 't1c2-2', 20),(3, 't1c3-3', 30);
+insert into t2 values (10, 't2c2-10'), (20, 't2c2-20');
+update t1 fir set (fir.c1,fir.c2,fir.c3) = (select sec.c1,sec.c2,sec.c1 from t2 sec where sec.c1=10) where fir.c1=1;
+select * from t1;
+update t1 fir set (fir.c1,fir.c2,fir.c3) = (select sec.c1,sec.c2,sec.c1 from t2 sec where sec.c1=3) where fir.c1=2;
+select * from t1;
+update t1 fir set (fir.c1,fir.c2,fir.c3) = (select sec.c1,sec.c2,sec.c1 from t2 sec where sec.c1=10) where fir.c1=10;
+select * from t1;
+DROP TABLE t1,t2;
+
+#
+# update set a,b ()=(select)
+#
+create table t1 (c1 int, c2 varchar(100), c3 int);
+create table t2 (c1 int, c2 varchar(100));
+create table t3 (c1 int, c2 varchar(100),c3 int, c4 varchar(100));
+insert into t1 values (1, 't1c2-1', 10), (2, 't1c2-2', 20),(3, 't1c3-3', 30);
+insert into t2 values (1, 't2c2-10'), (20, 't2c2-20'),(2, 't2c2-2');
+insert into t3 values (100, 't3c2-100', 100,'t3c2-100'), (200, 't3c2-200', 200,'t3c2-200'),(300, 't3c3-300', 300,'t3c2-300');
+--error ER_NOT_SUPPORTED_YET
+update t1 fir,t2 sec set (fir.c1,fir.c2,fir.c3,sec.c1,sec.c2) = (select thir.c1,thir.c2,thir.c3,thir.c1,thir.c4 from t3 thir where thir.c1=100) where fir.c1=sec.c1;
+--error ER_UPDATE_TABLE_USED
+UPDATE t2 SET (c1, c2)=(SELECT * FROM t2) WHERE c1=1;
+update t1 fir set (fir.c1,fir.c2,fir.c3) = (select thir.c1,thir.c2,sec.c1 from t2 sec,t3 thir where thir.c1=100 and sec.c1=20) where fir.c1=2;
+select * from t1;
+update t1 fir set (fir.c1,fir.c2,fir.c3) = (select thir.c1,thir.c2,sec.c1 from t2 sec,t3 thir where thir.c1=100 and sec.c1=20) order by fir.c1 desc limit 2;
+select * from t1;
+truncate table t1;
+insert into t1 values (4, 't1c2-4', 40), (5, 't1c2-5', 50),(6, 't1c3-6', 60);
+alter table t2 drop c2;
+update t1 fir set (fir.c1,fir.c2,fir.c3) = (select thir.c1,thir.c2,sec.c1 from t2 sec,t3 thir where thir.c1=100 and sec.c1=20) where fir.c1=4;
+select * from t1;
+DROP TABLE t1,t2,t3;
+
+#
+# procedure update
+#
+create table t1 (c1 int, c2 varchar(100), c3 int);
+create table t2 (c1 int, c2 varchar(100));
+insert into t1 values (1, 't1c2-1', 10), (2, 't1c2-2', 20),(3, 't1c3-3', 30);
+insert into t2 values (10, 't2c2-10'), (20, 't2c2-20');
+
+delimiter //;
+CREATE or replace procedure p1() as
+  var int;
+begin
+  update t1 fir set (fir.c1,fir.c2,fir.c3) = (select sec.c1,sec.c2,sec.c1 from t2 sec where sec.c1=10) where fir.c1=1;
+  select c3 into var from t1 where c1=10;
+  select var;
+end//
+delimiter ;//
+call p1;
+select * from t1;
+truncate table t1;
+insert into t1 values (1, 't1c2-1', 10), (2, 't1c2-2', 20),(3, 't1c3-3', 30);
+call p1;
+select * from t1;
+drop procedure p1;
+DROP TABLE t1,t2;
+
+--echo # test of function
+--echo #
+
+CREATE TABLE t1 (a VARCHAR(50), b VARCHAR(50), c CHAR(50)) ENGINE=INNODB;
+
+INSERT INTO t1 (a, b, c) VALUES ('start trail', 'bb', 'even longer string');
+UPDATE t1 SET (a,b,c)=(concat(a,b),concat(b,c),translate(a,'t','@@'));
+SELECT * FROM t1;
+drop table t1;
+
+--echo # test of DDL
+--echo #
+
+CREATE TABLE t1 (a VARCHAR(50), b VARCHAR(50), c CHAR(50)) ENGINE=INNODB;
+
+INSERT INTO t1 (a, b, c) VALUES ('start trail', 'bb', 'even longer string');
+UPDATE t1 SET (a,b,c)=(concat(a,b),concat(b,c),translate(a,'t','@@'));
+SELECT * FROM t1;
+truncate table t1;
+INSERT INTO t1 (a, b, c) VALUES ('start trail', 'bb', 'even longer string');
+UPDATE t1 SET (a,b,c)=('start trail1', 'bb1', 'even longer string1');
+SELECT * FROM t1;
+alter table t1 add i INT FIRST;
+INSERT INTO t1 (a, b, c) VALUES ('start trailadd', 'bbadd', 'even longer stringadd');
+UPDATE t1 SET (i,a,b,c)=(1,'start trail1', 'bb1', 'even longer string1') where a='start trailadd';
+SELECT * FROM t1;
+alter table t1 drop c;
+UPDATE t1 SET (i,a,b)=(2,'start traildrop', 'bbdrop');
+SELECT * FROM t1;
+ALTER TABLE t1 ALTER i SET DEFAULT 1000;
+INSERT INTO t1 (a, b) VALUES ('start traildef', 'bbdef');
+UPDATE t1 SET (a,b)=('start traildefup', 'bbdefup');
+SELECT * FROM t1;
+ALTER TABLE t1 RENAME TO t2;
+UPDATE t2 SET (i,a,b)=(3,'start trailrename', 'bbrename') where i=1000;
+SELECT * FROM t2;
+drop table t2;
+
+--echo # test of view and null value
+--echo #
+
+CREATE TABLE data (c1 int, c2 CHAR(10));
+INSERT INTO data VALUES (11, 'c 1'), (12, null), (null, 'null c1');
+CREATE VIEW v_1 AS SELECT * FROM data;
+CREATE TABLE tt1 (tc1 int,tc2 char(10));
+INSERT INTO tt1 VALUES (1,'aaa'), (2,'bbb'), (3,'ccc');
+UPDATE tt1 SET (tc1, tc2)=(SELECT * FROM v_1 where c1=10) WHERE tc1=1;
+select * from tt1;
+UPDATE tt1 SET (tc1, tc2)=(SELECT * FROM v_1 where c1=11) WHERE tc1 is null;
+select * from tt1;
+UPDATE tt1 SET (tc1, tc2)=(SELECT * FROM v_1 where c1 is null) WHERE tc1=2;
+select * from tt1;
+UPDATE tt1 SET (tc1, tc2)=(SELECT * FROM v_1 where c2 is null) WHERE tc1=3;
+select * from tt1;
+drop table data,tt1;
+drop view v_1;
+
+--echo # test of tmp table and null value
+--echo #
+
+CREATE TEMPORARY TABLE t12(c1 int, c2 CHAR(10));
+INSERT INTO t12 VALUES (10, 'aa'), (12, null), (null, 'ccc');
+CREATE TABLE tt1 (tc1 int,tc2 char(10));
+INSERT INTO tt1 VALUES (1,'aaa'), (2,'bbb'), (3,'ccc');
+UPDATE tt1 SET (tc1, tc2)=(SELECT * FROM t12 where c1=10) WHERE tc1=1;
+select * from tt1;
+UPDATE tt1 SET (tc1, tc2)=(SELECT * FROM t12 where c1=11) WHERE tc1=10;
+select * from tt1;
+UPDATE tt1 SET (tc1, tc2)=(SELECT * FROM t12 where c1 is null) WHERE tc1=2;
+select * from tt1;
+UPDATE tt1 SET (tc1, tc2)=(SELECT * FROM t12 where c2 is null) WHERE tc1=3;
+select * from tt1;
+drop table t12,tt1;
+
+--echo # test of trigger
+--echo #
+
+CREATE TEMPORARY TABLE t12(c1 int, c2 CHAR(10));
+INSERT INTO t12 VALUES (10, 'aa'), (12, null), (null, 'ccc');
+CREATE TABLE tt1 (tc1 int,tc2 char(10));
+INSERT INTO tt1 VALUES (1,'aaa'), (2,'bbb'), (3,'ccc');
+CREATE TABLE data (c1 int, c2 CHAR(10));
+INSERT INTO data VALUES (11, 'c 1'), (12, null), (null, 'null c1');
+CREATE TRIGGER SumOfSalary
+BEFORE INSERT ON data
+FOR EACH ROW
+UPDATE tt1 SET (tc1, tc2)=(SELECT * FROM t12 where c1=10) WHERE tc1=3;
+INSERT INTO data VALUES (4,'ddd');
+select * from tt1;
+drop TRIGGER SumOfSalary;
+drop table t12,tt1,data;
+
+--echo # test of subquery
+--echo #
+
+CREATE TEMPORARY TABLE t12(c1 int, c2 CHAR(10));
+INSERT INTO t12 VALUES (10, 'aa'), (12, null), (null, 'ccc');
+CREATE TABLE tt1 (c1 int,c2 char(10),c3 int);
+INSERT INTO tt1 VALUES (10,'tt1aa',10), (2,'tt1bbb',20), (3,'tt1ccc',30);
+update tt1 fir set (fir.c1,c2,fir.c3) = (select sec.c1,c2,c1 from t12 sec where c1=fir.c1) where c1=10;
+select * from tt1;
+drop table t12,tt1;
+
+--echo # test of bug#7479
+--echo #
+create table zgh_t1(a int, b char,c char,d int);
+insert into zgh_t1 values(1,'a',1,3);
+insert into zgh_t1 values(2,'b',2,4);
+insert into zgh_t1 values(3,'c',3,5);
+create table zgh_t2 as select * from zgh_t1;
+alter table zgh_t2 modify a int primary key;
+update zgh_t2 set b='d',c=2,d=6;
+insert into zgh_t2 values(4,'d',2,7);
+insert into zgh_t2 values(5,'e',2,8);
+insert into zgh_t2 values(6,'f',2,9);
+select * from zgh_t1;
+select * from zgh_t2;
+--error ER_NOT_SUPPORTED_YET
+update zgh_t2 set (a,b,c)=(c,d);
+update zgh_t2 set (b,c,d)=(select b,c,d from zgh_t1 where zgh_t1.a=zgh_t2.a) where c in (select c from zgh_t1);
+select * from zgh_t2;
+--error ER_NOT_SUPPORTED_YET
+UPDATE zgh_t1
+JOIN zgh_t2 ON zgh_t1.a = zgh_t2.a
+SET (zgh_t1.a,zgh_t1.b,zgh_t1.c)=(select a,b,c from zgh_t2);
+--error ER_NOT_SUPPORTED_YET
+UPDATE (zgh_t1
+JOIN zgh_t2 ON zgh_t1.a = zgh_t2.a)
+SET (zgh_t1.a,zgh_t1.b,zgh_t1.c)=(select a,b,c from zgh_t2);
+
+drop table zgh_t2;
+
+--echo # test of bug#8373
+--echo #
+CREATE OR REPLACE TYPE t_air as object(id int,type varchar(10)); 
+CREATE OR REPLACE TYPE t_air_table AS TABLE OF t_air;
+
+create table temp1 as select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'),t_air(3,'aa'),t_air(4,'bb')));
+
+UPDATE temp1 SET (id,type)=(select * from table(t_air_table(t_air(7777,'setTable()')))) 
+WHERE type IN (select type from table(t_air_table(t_air(3,'aa'),t_air(4,'bb'))) );
+
+--echo # test of vfield
+--echo #
+CREATE TABLE `triangle1` (
+  `sidea` INT(11) DEFAULT NULL,
+  `sideb` INT(11) DEFAULT NULL,
+  `sidec` INT(11) GENERATED ALWAYS AS (SQRT(((`sidea` * `sidea`) + (`sideb` * `sideb`)))) VIRTUAL
+) ENGINE=INNODB DEFAULT CHARSET=utf8mb4;
+insert into triangle1(sidea,sideb) values(2,4),(3,2);
+select * from triangle1;
+update triangle1 set (sidea,sideb)=(select c,d from zgh_t1 where zgh_t1.a=triangle1.sidea) where sideb in (select c from zgh_t1);
+select * from triangle1;
+
+--echo # test of bug9050
+--echo #
+create table test1(a int,b varchar(10));
+insert into test1 values(1,'aa'),(null,'bb'),(2,null);
+create view view1 as select * from test1;
+select * from view1;
+update view1 set (a,b)=(select 10,20 from dual);
+select * from view1;
+update view1 set (a,b)=(select c,b from zgh_t1 where a=3);
+select * from view1;
+drop table test1;
+drop view view1;
+
+drop table zgh_t1;
+drop table triangle1;
+drop table temp1;
+drop type t_air_table;
+drop type t_air;
+
+## bug8713
+create table t1(id int, c1 varchar2(32), c2 timestamp(3));
+insert into t1 values(1, 'aaaa', '2038-01-19 03:14:07.123');
+insert into t1 values(2, 'bbbb', '2028-01-19 03:14:07.123');
+select * from t1;
+update t1 set (c1,c2) = (select  '123.456' ,to_date('2023-01-02 10:11:12 PM', 'YYYY-MM-DD HH12:MI:SS PM') from dual) where id = 1;
+select * from t1;
+
+drop table t1;
+
+
+
+
+
+

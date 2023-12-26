@@ -142,7 +142,11 @@ bool Trigger_chain::execute_triggers(THD *thd) {
   Trigger *t;
 
   while ((t = it++)) {
-    if (t->execute(thd)) return true;
+    /* Execute Status is Enable Trigger */
+    if (t->get_event_status() ==
+            enum_trigger_event_status::TRG_STATUS_ENABLED &&
+        t->execute(thd))
+      return true;
   }
 
   return false;

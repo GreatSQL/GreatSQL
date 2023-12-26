@@ -78,6 +78,7 @@ INSERT INTO gr_options_that_cannot_be_change (name)
  AND VARIABLE_NAME != 'group_replication_request_time_threshold'
  AND VARIABLE_NAME != 'group_replication_applier_batch_size_threshold'
  AND VARIABLE_NAME != 'group_replication_auto_evict_timeout'
+ AND VARIABLE_NAME != 'group_replication_async_auto_failover_channel_read_only_mode'
  ORDER BY VARIABLE_NAME;
 SET SESSION sql_log_bin = 1;
 --let $gr_options_that_cannot_be_change_count= `SELECT COUNT(*) FROM gr_options_that_cannot_be_change;`

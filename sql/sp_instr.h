@@ -55,6 +55,7 @@ class sp_head;
 class sp_pcontext;
 class sp_variable;
 class Table_ref;
+class sp_pcursor;
 
 ///////////////////////////////////////////////////////////////////////////
 // This file contains SP-instruction classes.
@@ -192,6 +193,10 @@ class sp_instr : public sp_printable {
   }
 
   Query_arena m_arena;
+  // which line is the statement in the original stored procedure, function,
+  // package or trigger。wo can use the show command to see the actual line,
+  // such as show create procedure xxx
+  uint yylineno;
 
  protected:
   /// Show if this instruction is reachable within the SP
@@ -306,6 +311,7 @@ class sp_lex_instr : public sp_instr {
   */
   LEX *parse_expr(THD *thd, sp_head *sp);
 
+ public:
   /**
      Set LEX-object.
 
@@ -323,7 +329,6 @@ class sp_lex_instr : public sp_instr {
   */
   void free_lex();
 
- public:
   /////////////////////////////////////////////////////////////////////////
   // sp_instr implementation.
   /////////////////////////////////////////////////////////////////////////
@@ -337,6 +342,8 @@ class sp_lex_instr : public sp_instr {
     clear_da(thd);
     return validate_lex_and_execute_core(thd, nextp, true);
   }
+
+  void set_first_execution(bool exe) { m_first_execution = exe; }
 
  protected:
   /////////////////////////////////////////////////////////////////////////
@@ -574,6 +581,8 @@ class sp_instr_set : public sp_lex_instr {
     lex->sql_command = SQLCOM_SET_OPTION;
   }
 
+  Item *get_value_item() { return m_value_item; }
+
  protected:
   /// Frame offset.
   uint m_offset;
@@ -689,6 +698,36 @@ class sp_instr_set_row_field_table_by_name
       : sp_instr_set_row_field_by_name(ip, lex, offset, value_item, value_query,
                                        is_lex_owner, ctx, rh, field_name),
         m_args_list(args_list) {}
+
+  bool exec_core(THD *thd, uint *nextp) override;
+
+  void print(const THD *thd, String *str) override;
+
+#ifdef HAVE_PSI_INTERFACE
+ public:
+  static PSI_statement_info psi_info;
+  PSI_statement_info *get_psi_info() override { return &psi_info; }
+#endif
+};
+
+class sp_instr_set_row_field_table_by_index : public sp_instr_set {
+  // Prevent use of this
+  sp_instr_set_row_field_table_by_index(
+      const sp_instr_set_row_field_table_by_index &);
+  void operator=(sp_instr_set_row_field_table_by_index &);
+
+  Item *m_index;
+
+ public:
+  sp_instr_set_row_field_table_by_index(uint ip, LEX *lex, uint offset,
+                                        Item *value_item,
+                                        LEX_CSTRING value_query,
+                                        bool is_lex_owner, sp_pcontext *ctx,
+                                        const Sp_rcontext_handler *rh,
+                                        Item *index_arg)
+      : sp_instr_set(ip, lex, offset, value_item, value_query, is_lex_owner,
+                     ctx, rh),
+        m_index(index_arg) {}
 
   bool exec_core(THD *thd, uint *nextp) override;
 
@@ -1319,6 +1358,52 @@ class sp_instr_hpop : public sp_instr {
 
 ///////////////////////////////////////////////////////////////////////////
 
+class sp_instr_goto : public sp_instr {
+  uint m_cursor_count;
+  uint m_handler_count;
+  bool m_ignore_cursor_execute;
+  bool m_ignore_handler_execute;
+
+ public:
+  sp_instr_goto(uint ip, sp_pcontext *ctx)
+      : sp_instr(ip, ctx),
+        m_cursor_count(0),
+        m_handler_count(0),
+        m_ignore_cursor_execute(false),
+        m_ignore_handler_execute(false) {}
+
+  /////////////////////////////////////////////////////////////////////////
+  // sp_printable implementation.
+  /////////////////////////////////////////////////////////////////////////
+
+  void print(const THD *, String *str) override {
+    str->append(STRING_WITH_LEN("goto"));
+  }
+
+  /////////////////////////////////////////////////////////////////////////
+  // sp_instr implementation.
+  /////////////////////////////////////////////////////////////////////////
+
+  bool execute(THD *thd, uint *nextp) override;
+  void update_cursor_count(uint count) { m_cursor_count = count; }
+  void update_handler_count(uint count) { m_handler_count = count; }
+  void update_ignore_cursor_execute(bool ignore) {
+    m_ignore_cursor_execute = ignore;
+  }
+  void update_ignore_handler_execute(bool ignore) {
+    m_ignore_handler_execute = ignore;
+  }
+
+#ifdef HAVE_PSI_INTERFACE
+ public:
+  PSI_statement_info *get_psi_info() override { return &psi_info; }
+
+  static PSI_statement_info psi_info;
+#endif
+};
+
+///////////////////////////////////////////////////////////////////////////
+
 class sp_instr_hreturn : public sp_instr_jump {
  public:
   sp_instr_hreturn(uint ip, sp_pcontext *ctx);
@@ -1386,7 +1471,7 @@ class sp_instr_cpush : public sp_lex_instr {
       Cursors cause queries to depend on external state, so they are
       noncacheable.
     */
-    cursor_lex->safe_to_cache_query = false;
+    if (cursor_lex) cursor_lex->safe_to_cache_query = false;
   }
 
   /////////////////////////////////////////////////////////////////////////
@@ -1420,6 +1505,11 @@ class sp_instr_cpush : public sp_lex_instr {
     return false;
   }
 
+  bool copy_structure(THD *thd, sp_cursor *c, uint *nextp);
+
+  bool copy_structure_from_other_cursor(THD *thd, uint *nextp,
+                                        sp_cursor *c_return, sp_cursor *c);
+
  protected:
   /// This attribute keeps the cursor SELECT statement.
   LEX_CSTRING m_cursor_query;
@@ -1445,7 +1535,7 @@ class sp_instr_cpush_rowtype : public sp_instr_cpush {
                          LEX_CSTRING cursor_query, int cursor_idx)
       : sp_instr_cpush(ip, ctx, cursor_lex, cursor_query, cursor_idx),
         is_copy_struct(false),
-        m_var(0) {
+        m_var(-1) {
     /*
       Cursors cause queries to depend on external state, so they are
       noncacheable.
@@ -1470,11 +1560,13 @@ class sp_instr_cpush_rowtype : public sp_instr_cpush {
   /////////////////////////////////////////////////////////////////////////
   void set_var(int var_offset) { m_var = var_offset; }
 
+  int get_var() { return m_var; }
+
   /// It's for copy struct(true) or open cursor(false).
   bool is_copy_struct;
 
  private:
-  int m_var;
+  int m_var;  // for cursor%rowtype
 
 #ifdef HAVE_PSI_INTERFACE
  public:
@@ -1483,6 +1575,7 @@ class sp_instr_cpush_rowtype : public sp_instr_cpush {
   static PSI_statement_info psi_info;
 #endif
 };
+
 ///////////////////////////////////////////////////////////////////////////
 
 /**
@@ -1501,7 +1594,7 @@ class sp_instr_cpop : public sp_instr {
   void print(const THD *thd, String *str) override;
 
   /////////////////////////////////////////////////////////////////////////
-  // sp_instr implementation.
+  // sp_instr_cpop implementation.
   /////////////////////////////////////////////////////////////////////////
 
   bool execute(THD *thd, uint *nextp) override;
@@ -1552,6 +1645,93 @@ class sp_instr_copen : public sp_instr {
 #endif
 };
 
+///////////////////////////////////////////////////////////////////////////
+
+/**
+  sp_instr_copen_for represents OPEN statement (opens the cursor).
+*/
+class sp_instr_copen_for : public sp_lex_instr {
+ public:
+  sp_instr_copen_for(uint ip, sp_pcontext *ctx, LEX *cursor_lex, int spv_idx)
+      : sp_lex_instr(ip, ctx, cursor_lex, true), m_spv_idx(spv_idx) {}
+
+ protected:
+  /// Used to identify the cursor in the sp_rcontext.
+  int m_spv_idx;
+
+#ifdef HAVE_PSI_INTERFACE
+ public:
+  PSI_statement_info *get_psi_info() override { return &psi_info; }
+
+  static PSI_statement_info psi_info;
+#endif
+};
+
+class sp_instr_copen_for_sql : public sp_instr_copen_for {
+ public:
+  sp_instr_copen_for_sql(uint ip, sp_pcontext *ctx, LEX *cursor_lex,
+                         LEX_CSTRING cursor_query, int spv_idx)
+      : sp_instr_copen_for(ip, ctx, cursor_lex, spv_idx),
+        m_cursor_query(cursor_query),
+        m_valid(true) {}
+
+  /////////////////////////////////////////////////////////////////////////
+  // sp_printable implementation.
+  /////////////////////////////////////////////////////////////////////////
+
+  void print(const THD *thd, String *str) override;
+
+  /////////////////////////////////////////////////////////////////////////
+  // sp_lex_instr implementation.
+  /////////////////////////////////////////////////////////////////////////
+
+  bool execute(THD *thd, uint *nextp) override;
+
+  bool exec_core(THD *thd, uint *nextp) override;
+
+  bool is_invalid() const override { return !m_valid; }
+
+  void invalidate() override { m_valid = false; }
+
+  void get_query(String *sql_query) const override {
+    sql_query->append(m_cursor_query.str, m_cursor_query.length);
+  }
+
+ private:
+  LEX_CSTRING m_cursor_query;
+
+  bool m_valid;
+};
+
+class sp_instr_copen_for_ident : public sp_instr_copen_for {
+ public:
+  sp_instr_copen_for_ident(uint ip, sp_pcontext *ctx, LEX *lex,
+                           int cursor_spv_idx, int sql_spv_idx)
+      : sp_instr_copen_for(ip, ctx, lex, cursor_spv_idx),
+        m_sql_spv_idx(sql_spv_idx) {}
+
+  /////////////////////////////////////////////////////////////////////////
+  // sp_printable implementation.
+  /////////////////////////////////////////////////////////////////////////
+
+  void print(const THD *thd, String *str) override;
+
+  /////////////////////////////////////////////////////////////////////////
+  // sp_lex_instr implementation.
+  /////////////////////////////////////////////////////////////////////////
+
+  bool execute(THD *thd, uint *nextp) override;
+
+  bool exec_core(THD *thd, uint *nextp) override;
+
+  bool is_invalid() const override { return false; }
+
+  void invalidate() override {}
+
+ private:
+  int m_sql_spv_idx;
+};
+
 /**
   Initialize the structure of a cursor%ROWTYPE variable
   from the LEX containing the cursor SELECT statement.
@@ -1588,7 +1768,7 @@ class sp_instr_cursor_copy_struct : public sp_instr {
 class sp_instr_cclose : public sp_instr {
  public:
   sp_instr_cclose(uint ip, sp_pcontext *ctx, int cursor_idx)
-      : sp_instr(ip, ctx), m_cursor_idx(cursor_idx) {}
+      : sp_instr(ip, ctx), m_cursor_idx(cursor_idx), m_cursor_spv(nullptr) {}
 
   /////////////////////////////////////////////////////////////////////////
   // sp_printable implementation.
@@ -1602,9 +1782,16 @@ class sp_instr_cclose : public sp_instr {
 
   bool execute(THD *thd, uint *nextp) override;
 
+  void set_sysrefcursor_spvar(sp_variable *cursor_spv) {
+    m_cursor_spv = cursor_spv;
+  }
+
  private:
   /// Used to identify the cursor in the sp_rcontext.
   int m_cursor_idx;
+
+  /// the sp_variable of ref cursor.
+  sp_variable *m_cursor_spv;
 
 #ifdef HAVE_PSI_INTERFACE
  public:
@@ -1624,7 +1811,7 @@ class sp_instr_cclose : public sp_instr {
 class sp_instr_cfetch : public sp_instr {
  public:
   sp_instr_cfetch(uint ip, sp_pcontext *ctx, int cursor_idx)
-      : sp_instr(ip, ctx), m_cursor_idx(cursor_idx) {}
+      : sp_instr(ip, ctx), m_cursor_idx(cursor_idx), m_cursor_spv(nullptr) {}
 
   /////////////////////////////////////////////////////////////////////////
   // sp_printable implementation.
@@ -1640,12 +1827,19 @@ class sp_instr_cfetch : public sp_instr {
 
   void add_to_varlist(sp_variable *var) { m_varlist.push_back(var); }
 
+  void set_sysrefcursor_spvar(sp_variable *cursor_spv) {
+    m_cursor_spv = cursor_spv;
+  }
+
  protected:
   /// List of SP-variables to store fetched values.
   List<sp_variable> m_varlist;
 
   /// Used to identify the cursor in the sp_rcontext.
   int m_cursor_idx;
+
+  /// the sp_variable of ref cursor.
+  sp_variable *m_cursor_spv;
 
 #ifdef HAVE_PSI_INTERFACE
  public:
@@ -1664,9 +1858,8 @@ class sp_instr_cfetch : public sp_instr {
 */
 class sp_instr_cfetch_bulk : public sp_instr_cfetch {
  public:
-  sp_instr_cfetch_bulk(uint ip, sp_pcontext *ctx, int cursor_idx,
-                       uint row_count)
-      : sp_instr_cfetch(ip, ctx, cursor_idx), m_row_count(row_count) {}
+  sp_instr_cfetch_bulk(uint ip, sp_pcontext *ctx, int cursor_idx)
+      : sp_instr_cfetch(ip, ctx, cursor_idx) {}
 
   /////////////////////////////////////////////////////////////////////////
   // sp_printable implementation.

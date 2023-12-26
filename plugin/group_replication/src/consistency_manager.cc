@@ -248,6 +248,8 @@ int Transaction_consistency_info::handle_remote_prepare(
         }
 
         return CONSISTENCY_INFO_OUTCOME_COMMIT;
+      } else {
+        return CONSISTENCY_INFO_OUTCOME_COMMIT;
       }
     } else {
       if (m_transaction_prepared_locally) {
@@ -304,9 +306,6 @@ Transaction_consistency_manager::Transaction_consistency_manager()
               key_consistent_transactions_prepared)),
       m_new_transactions_waiting(
           Malloc_allocator<my_thread_id>(key_consistent_transactions_waiting)),
-      m_delayed_view_change_events(
-          Malloc_allocator<Transaction_consistency_manager_pevent_pair>(
-              key_consistent_transactions_delayed_view_change)),
       m_plugin_stopping(true),
       m_primary_election_active(false) {
   m_map_lock = new Checkable_rwlock(
@@ -347,8 +346,7 @@ void Transaction_consistency_manager::clear() {
   m_new_transactions_waiting.clear();
 
   while (!m_delayed_view_change_events.empty()) {
-    auto element = m_delayed_view_change_events.front();
-    delete element.first;
+    delete m_delayed_view_change_events.front();
     m_delayed_view_change_events.pop_front();
   }
   m_delayed_view_change_events.clear();
@@ -523,6 +521,48 @@ end:
   return error;
 }
 
+bool Transaction_consistency_manager::is_remote_prepare_before_view_change(
+    const rpl_sid *sid, rpl_gno gno) {
+  DBUG_TRACE;
+  rpl_sidno sidno = 0;
+
+  bool result = false;
+  if (sid != nullptr) {
+    /*
+     This transaction has a UUID different from the group name,
+     thence we need to fetch the corresponding sidno from the
+     global sid_map.
+    */
+    sidno = get_sidno_from_global_sid_map(*sid);
+    if (sidno <= 0) {
+      return result;
+      /* purecov: end */
+    }
+  } else {
+    /*
+      This transaction has the group name as UUID, so we can skip
+      a lock on global sid_map and use the cached group sidno.
+   */
+    sidno = get_group_sidno();
+  }
+
+  Transaction_consistency_manager_key key(sidno, gno);
+
+  m_map_lock->rdlock();
+  typename Transaction_consistency_manager_map::iterator it = m_map.find(key);
+  if (it != m_map.end()) {
+    Transaction_consistency_info *transaction_info = it->second;
+    if (transaction_info->is_local_transaction() &&
+        transaction_info->is_transaction_prepared_locally()) {
+      result = true;
+    }
+  }
+
+  m_map_lock->unlock();
+
+  return result;
+}
+
 int Transaction_consistency_manager::handle_remote_prepare(
     const rpl_sid *sid, rpl_gno gno, const Gcs_member_identifier &gcs_member_id,
     int *delayed) {
@@ -584,8 +624,6 @@ int Transaction_consistency_manager::handle_remote_prepare(
     Certifier_interface *certifier =
         applier_module->get_certification_handler()->get_certifier();
     if (certifier->is_certfy_gtid_committed(gtid)) {
-      LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-                      "Avoid fatal error for gtid:%" PRId64, gno);
       m_map_lock->unlock();
       return 0;
     }
@@ -613,33 +651,6 @@ int Transaction_consistency_manager::handle_remote_prepare(
               transaction_info->get_consistency_level()));
 
   int result = transaction_info->handle_remote_prepare(gcs_member_id);
-  if (transaction_info->is_transaction_prepared_locally()) {
-    auto it = m_delayed_view_change_events.begin();
-    while (it != m_delayed_view_change_events.end()) {
-      Transaction_consistency_manager_key view_key = it->second;
-      /*
-        Check if there is pending view change procesing post the current
-        transaction. If so, process all view changes which were queued post the
-        current transaction.
-      */
-      if (view_key == key) {
-        Pipeline_event *pevent = it->first;
-        Continuation cont;
-        pevent->set_delayed_view_change_resumed();
-        int error = applier_module->inject_event_into_pipeline(pevent, &cont);
-        if (!cont.is_transaction_discarded()) {
-          delete pevent;
-        }
-        m_delayed_view_change_events.erase(it++);
-        if (error) {
-          abort_plugin_process("unable to log the View_change_log_event");
-        }
-      } else {
-        ++it;
-      }
-    }
-  }
-
   if (CONSISTENCY_INFO_OUTCOME_ERROR == result) {
     /* purecov: begin inspected */
     m_map_lock->unlock();
@@ -958,6 +969,14 @@ bool Transaction_consistency_manager::has_local_prepared_transactions() {
 int Transaction_consistency_manager::schedule_view_change_event(
     Pipeline_event *pevent) {
   DBUG_TRACE;
+
+  Transaction_consistency_manager_key key(-1, -1);
+
+  m_prepared_transactions_on_my_applier_lock->wrlock();
+  m_prepared_transactions_on_my_applier.push_back(key);
+  m_delayed_view_change_events.push_back(pevent);
+  m_prepared_transactions_on_my_applier_lock->unlock();
+
   DBUG_EXECUTE_IF("group_replication_wait_schedule_view_change_event", {
     const char act[] =
         "now signal "
@@ -967,13 +986,6 @@ int Transaction_consistency_manager::schedule_view_change_event(
     assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
   };);
 
-#ifndef NDEBUG
-  m_map_lock->rdlock();
-  assert(!m_map.empty());
-  m_map_lock->unlock();
-#endif
-  m_delayed_view_change_events.push_back(
-      std::make_pair(pevent, m_last_local_transaction));
   return 0;
 }
 
@@ -1012,6 +1024,35 @@ int Transaction_consistency_manager::remove_prepared_transaction(
         error = 1;
         /* purecov: end */
       }
+    } else if (-1 == next_prepared.first && -1 == next_prepared.second) {
+      /*
+       * This is added in order to fix the problem of abnormal primary node
+       * rejection.
+       */
+      if (transaction_consistency_manager->has_local_prepared_transactions()) {
+        LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                        "Avoid serious bug when view changes when calling "
+                        "remove_prepared_transaction");
+        break;
+      }
+
+      /*
+        This is a view change that was waiting for prepared
+        transactions completion, now it is time to log it.
+      */
+      m_prepared_transactions_on_my_applier.pop_front();
+      Pipeline_event *pevent = m_delayed_view_change_events.front();
+      m_delayed_view_change_events.pop_front();
+
+      Continuation cont;
+      int error = applier_module->inject_event_into_pipeline(pevent, &cont);
+      delete pevent;
+      if (error) {
+        abort_plugin_process("unable to log the View_change_log_event");
+      }
+
+      applier_module->add_prepared_finished_packet();
+
     } else {
       break;
     }

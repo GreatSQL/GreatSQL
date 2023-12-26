@@ -98,6 +98,7 @@ Database: information_schema
 | FILES                                 |
 | GLOBAL_TEMPORARY_TABLES               |
 | INDEX_STATISTICS                      |
+| INNODB_ASYNC_PURGE_FILES              |
 | INNODB_BUFFER_PAGE                    |
 | INNODB_BUFFER_PAGE_LRU                |
 | INNODB_BUFFER_POOL_STATS              |
@@ -146,6 +147,7 @@ Database: information_schema
 | SCHEMATA                              |
 | SCHEMATA_EXTENSIONS                   |
 | SCHEMA_PRIVILEGES                     |
+| SEQUENCES                             |
 | STATISTICS                            |
 | ST_GEOMETRY_COLUMNS                   |
 | ST_SPATIAL_REFERENCE_SYSTEMS          |
@@ -191,6 +193,7 @@ Database: INFORMATION_SCHEMA
 | FILES                                 |
 | GLOBAL_TEMPORARY_TABLES               |
 | INDEX_STATISTICS                      |
+| INNODB_ASYNC_PURGE_FILES              |
 | INNODB_BUFFER_PAGE                    |
 | INNODB_BUFFER_PAGE_LRU                |
 | INNODB_BUFFER_POOL_STATS              |
@@ -239,6 +242,7 @@ Database: INFORMATION_SCHEMA
 | SCHEMATA                              |
 | SCHEMATA_EXTENSIONS                   |
 | SCHEMA_PRIVILEGES                     |
+| SEQUENCES                             |
 | STATISTICS                            |
 | ST_GEOMETRY_COLUMNS                   |
 | ST_SPATIAL_REFERENCE_SYSTEMS          |

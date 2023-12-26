@@ -158,7 +158,8 @@ class Pipeline_event {
         m_consistency_level(consistency_level),
         m_online_members(online_members),
         m_online_members_memory_ownership(true),
-        m_io_buffered(false) {}
+        m_io_buffered(false),
+        m_view_generated(false) {}
 
   /**
     Create a new pipeline wrapper based on a log event.
@@ -184,7 +185,8 @@ class Pipeline_event {
         m_consistency_level(consistency_level),
         m_online_members(online_members),
         m_online_members_memory_ownership(true),
-        m_io_buffered(false) {}
+        m_io_buffered(false),
+        m_view_generated(false) {}
 
   ~Pipeline_event() {
     if (packet != nullptr) {
@@ -339,6 +341,9 @@ class Pipeline_event {
   */
   Members_list *get_online_members() { return m_online_members; }
 
+  bool is_view_generated() { return m_view_generated; }
+  void set_view_generated() { m_view_generated = true; }
+
   /**
     Release memory ownership of m_online_members.
   */
@@ -454,9 +459,10 @@ class Pipeline_event {
   Format_description_log_event *format_descriptor;
   enum_group_replication_consistency_level m_consistency_level;
   Members_list *m_online_members;
-  bool m_online_members_memory_ownership;
   Processing_state m_packet_processing_state{Processing_state::DEFAULT};
+  bool m_online_members_memory_ownership;
   bool m_io_buffered;
+  bool m_view_generated;
 };
 
 /**

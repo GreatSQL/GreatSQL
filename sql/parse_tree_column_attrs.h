@@ -52,6 +52,7 @@
 #include "sql/parse_tree_helpers.h"  // move_cf_appliers
 #include "sql/parse_tree_node_base.h"
 #include "sql/parser_yystype.h"
+#include "sql/sp.h"
 #include "sql/sql_alter.h"
 #include "sql/sql_check_constraint.h"  // Sql_check_constraint_spec
 #include "sql/sql_class.h"
@@ -556,6 +557,7 @@ class PT_type : public Parse_tree_node {
   virtual List<String> *get_interval_list() const { return nullptr; }
   virtual bool is_serial_type() const { return false; }
   virtual Qualified_column_ident *get_udt_name() const { return nullptr; }
+  virtual bool is_sys_refcursor_type() const { return false; }
 };
 
 /**
@@ -735,6 +737,72 @@ class PT_udt_type : public PT_char_type {
   Qualified_column_ident *get_udt_name() const override { return m_udt_ident; }
 };
 
+class PT_row_type : public PT_type {
+  typedef PT_type supper;
+
+ public:
+  Qualified_column_ident *m_udt_ident{nullptr};
+  char *length{nullptr};
+  uint m_table_type{(uint)enum_udt_table_of_type::TYPE_INVALID};
+  Row_definition_list *m_row_def{nullptr};
+  Row_definition_table_list *m_row_def_table{nullptr};
+  ulonglong m_varray_limit{0};
+  LEX_CSTRING m_nested_table_udt_tmp{NULL_CSTR};
+
+ public:
+  PT_row_type(Qualified_column_ident *type_ident)
+      : PT_type(MYSQL_TYPE_NULL), m_udt_ident(type_ident) {}
+
+  Qualified_column_ident *get_udt_name() const override { return m_udt_ident; }
+  const char *get_length() const override { return length; }
+  const CHARSET_INFO *get_charset() const override { return &my_charset_bin; }
+
+  bool contextualize(Parse_context *pc) override {
+    if (supper::contextualize(pc)) return true;
+
+    List<Create_field> *field_def_list = nullptr;
+    ulong reclength = 0;
+    sql_mode_t sql_mode;
+    bool ret = sp_find_ora_type_create_fields(
+        pc->thd, to_lex_string(m_udt_ident->db),
+        to_lex_string(m_udt_ident->m_column), false, &field_def_list,
+        &reclength, &sql_mode, &m_nested_table_udt_tmp, &m_table_type,
+        &m_varray_limit);
+    if (ret || !reclength) {
+      my_error(ER_SP_DOES_NOT_EXIST, MYF(0), "TYPE", m_udt_ident->m_column.str);
+      return true;
+    }
+
+    length = new (pc->thd->mem_root) char[32];
+    memset(length, 0, 32);
+    if (!length) return true;
+    ullstr(reclength, length);
+
+    List_iterator_fast<Create_field> it_tmp(*field_def_list);
+    Create_field *def_tmp_udt;
+    Row_definition_list *rdl_tmp = nullptr;
+    for (uint j = 0; (def_tmp_udt = it_tmp++); j++) {
+      if (j == 0)
+        rdl_tmp = Row_definition_list::make(pc->thd->mem_root, def_tmp_udt);
+      else
+        rdl_tmp->append_uniq(pc->thd->mem_root, def_tmp_udt);
+    }
+
+    if (m_table_type != (uint)enum_udt_table_of_type::TYPE_VARRAY &&
+        m_table_type != (uint)enum_udt_table_of_type::TYPE_TABLE) {
+      m_row_def = rdl_tmp;
+    } else {
+      Row_definition_list *rdl_result = nullptr;
+      if (!rdl_tmp || rdl_tmp->make_new_create_field_to_store_index(
+                          pc->thd, 0, false, &rdl_result))
+        return true;
+      m_row_def_table =
+          Row_definition_table_list::make(pc->thd->mem_root, rdl_result);
+    }
+
+    return false;
+  }
+};
 /**
   Node for the YEAR type
 
@@ -895,6 +963,17 @@ class PT_json_type : public PT_type {
  public:
   PT_json_type() : PT_type(MYSQL_TYPE_JSON) {}
   const CHARSET_INFO *get_charset() const override { return &my_charset_bin; }
+};
+
+/**
+  Node for the SYS_REFCURSOR type
+
+  @ingroup ptn_column_types
+*/
+class PT_sys_refcursor_type : public PT_type {
+ public:
+  PT_sys_refcursor_type() : PT_type(MYSQL_TYPE_NULL) {}
+  bool is_sys_refcursor_type() const override { return true; }
 };
 
 /**

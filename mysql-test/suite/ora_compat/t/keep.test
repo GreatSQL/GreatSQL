@@ -1,0 +1,68 @@
+create table t1 (
+    id INT,
+    dept_id INT,
+    age INT,
+    name varchar(64),
+    salary INT
+);
+
+insert into t1 values
+(1, 1, 22, 'zs1', 8000),
+(2, 1, 30, 'zs2', 7000),
+(3, 1, 27, 'zs3', 9000),
+(4, 1, 25, 'zs4', 6000),
+(5, 1, 22, 'zs5', 5000),
+(6, 1, 30, 'zs6', 12000),
+(7, 1, 30, 'zs7', 9000),
+(101, 2, 27, 'zs101', 8000),
+(102, 2, 24, 'zs102', 5000),
+(103, 2, 24, 'zs103', 6000),
+(104, 2, 26, 'zs104', 6000),
+(105, 2, 27, 'zs105', 6000),
+(106, 2, 25, 'zs106', 3000),
+(201, 3, 28, 'zs201', 8000),
+(301, 4, 26, 'zs301', 9000),
+(302, 4, 29, 'zs302', 7000);
+
+select id, dept_id, age, salary, sum(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary from t1;
+select id, dept_id, age, salary, sum(salary) keep(dense_rank first order by age desc) over(partition by dept_id) aggrsalary from t1;
+select id, dept_id, age, salary, sum(salary) keep(dense_rank last order by age) over(partition by dept_id) aggrsalary from t1;
+select id, dept_id, age, salary, sum(salary) keep(dense_rank last order by age desc) over(partition by dept_id) aggrsalary from t1;
+
+select id, dept_id, age, salary, count(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary from t1;
+select id, dept_id, age, salary, count(salary) keep(dense_rank last order by age) over(partition by dept_id) aggrsalary from t1;
+
+select id, dept_id, age, salary, avg(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary from t1;
+select id, dept_id, age, salary, avg(salary) keep(dense_rank last order by age) over(partition by dept_id) aggrsalary from t1;
+
+select id, dept_id, age, salary, min(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary from t1;
+select id, dept_id, age, salary, min(salary) keep(dense_rank last order by age) over(partition by dept_id) aggrsalary from t1;
+
+select id, dept_id, age, salary, max(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary from t1;
+select id, dept_id, age, salary, max(salary) keep(dense_rank last order by age) over(partition by dept_id) aggrsalary from t1;
+
+select id, dept_id, age, salary, 
+sum(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary1,
+count(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary2,
+avg(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary3,
+min(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary4,
+max(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary5,
+sum(salary) over(partition by dept_id order by age) aggrsalary6
+from t1;
+
+
+select dept_id, sum(salary) keep(dense_rank first order by age) from t1 group by dept_id;
+select dept_id, sum(salary) keep(dense_rank last order by age) from t1 group by dept_id;
+
+select dept_id, sum(age) keep(dense_rank first order by age) from t1 group by dept_id;
+select dept_id, sum(salary) keep(dense_rank first order by age) c1, 
+sum(age) keep(dense_rank first order by age) c2 from t1 group by dept_id;
+
+select dept_id, age, sum(salary) keep(dense_rank first order by age) from t1 group by dept_id, age;
+
+select dept_id,age,salary,AVG(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary from t1 group by dept_id,age,salary;
+
+--error ER_PARSE_ERROR
+select id,dept_id,age,AVG(id) keep(dense_rank first order by age) over(partition by dept_id order by age) aggrsalary from t1;
+
+drop table t1;

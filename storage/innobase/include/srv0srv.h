@@ -3,6 +3,7 @@
 Copyright (c) 1995, 2022, Oracle and/or its affiliates.
 Copyright (c) 2008, 2009, Google Inc.
 Copyright (c) 2009, Percona Inc.
+Copyright (c) 2023, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -269,6 +270,9 @@ struct Srv_threads {
 
   /** Thread for GTID persistence */
   IB_thread m_gtid_persister;
+
+  /** Thread for data file async purge */
+  IB_thread m_file_async_purge;
 
 #ifdef UNIV_DEBUG
   /** Used in test scenario to delay threads' cleanup until the pre_dd_shutdown

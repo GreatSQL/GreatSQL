@@ -1,4 +1,5 @@
 /* Copyright (c) 2011, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -336,7 +337,7 @@ bool is_already_logged_transaction(const THD *thd) {
 
   @param  thd     The calling thread.
 */
-static inline void skip_statement(THD *thd) {
+static inline void skip_statement(const THD *thd [[maybe_unused]]) {
   DBUG_TRACE;
 
   DBUG_PRINT("info", ("skipping statement '%s'. "
@@ -344,12 +345,6 @@ static inline void skip_statement(THD *thd) {
                       "thd->thread_id=%u",
                       thd->query().str, thd->variables.gtid_next.type,
                       thd->lex->sql_command, thd->thread_id()));
-
-  /*
-    Despite the transaction was skipped, there is still the need
-    to notify that its session ticket was consumed.
-  */
-  Commit_stage_manager::get_instance().finish_session_ticket(thd);
 
 #ifndef NDEBUG
   const Gtid_set *executed_gtids = gtid_state->get_executed_gtids();

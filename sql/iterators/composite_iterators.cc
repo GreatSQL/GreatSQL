@@ -615,52 +615,6 @@ int NestedLoopIterator::Read() {
 }
 
 /**
-   This is a no-op class with a public interface identical to that of the
-   IteratorProfilerImpl class. This allows iterators with internal time
-   keeping (such as MaterializeIterator) to use the same code whether
-   time keeping is enabled or not. And all the mutators are inlinable no-ops,
-   so that there should be no runtime overhead.
-*/
-class DummyIteratorProfiler final : public IteratorProfiler {
- public:
-  struct TimeStamp {};
-
-  static TimeStamp Now() { return TimeStamp(); }
-
-  double GetFirstRowMs() const override {
-    assert(false);
-    return 0.0;
-  }
-
-  double GetLastRowMs() const override {
-    assert(false);
-    return 0.0;
-  }
-
-  uint64_t GetNumInitCalls() const override {
-    assert(false);
-    return 0;
-  }
-
-  uint64_t GetNumRows() const override {
-    assert(false);
-    return 0;
-  }
-
-  /*
-     The methods below are non-virtual with the same name and signature as
-     in IteratorProfilerImpl. The compiler should thus be able to suppress
-     calls to these for iterators without profiling.
-  */
-  void StopInit([[maybe_unused]] TimeStamp start_time) {}
-
-  void IncrementNumRows([[maybe_unused]] uint64_t materialized_rows) {}
-
-  void StopRead([[maybe_unused]] TimeStamp start_time,
-                [[maybe_unused]] bool read_ok) {}
-};
-
-/**
   Handles materialization; the first call to Init() will scan the given iterator
   to the end, store the results in a temporary table (optionally with
   deduplication), and then Read() will allow you to read that table repeatedly
@@ -953,6 +907,28 @@ bool MaterializeIterator<Profiler>::Init() {
   table()->set_not_started();
 
   if (!table()->is_created()) {
+    for (const materialize_iterator::QueryBlock &query_block :
+         m_query_blocks_to_materialize) {
+      JOIN *join = query_block.join;
+      if (join && join->m_windows.size() > 0) {
+        bool change_index = false;
+        for (Window &w : join->m_windows) {
+          if (w.get_keep_dir() != KEEP_DIR_NONE && !w.has_keep_over_clause() &&
+              w.get_query_block()->group_list.elements > 0) {
+            change_index = true;
+            break;
+          }
+        }
+
+        if (change_index) {
+          for (uint i = 0; i < table()->s->keys; i++) {
+            table()->s->key_info[i].flags &= (((ulong)-1) - 1);
+          }
+          break;
+        }
+      }
+    }
+
     if (instantiate_tmp_table(thd(), table())) {
       return true;
     }
@@ -1252,6 +1228,7 @@ bool MaterializeIterator<Profiler>::MaterializeQueryBlock(
   if (query_block.subquery_iterator->Init()) {
     return true;
   }
+  query_block.subquery_iterator->is_sub_queryp = true;
 
   PFSBatchMode pfs_batch_mode(query_block.subquery_iterator.get());
   const bool is_union_or_table = table()->is_union_or_table();
@@ -1264,6 +1241,7 @@ bool MaterializeIterator<Profiler>::MaterializeQueryBlock(
 
     if (join && join->query_block) {
       join->query_block->reset_rownum_read_flag();
+      join->query_block->reset_sequence_read_flag();
     }
     int error = query_block.subquery_iterator->Read();
     if (error > 0 || thd()->is_error())
@@ -1642,6 +1620,7 @@ int StreamingIterator::Read() {
     ++m_row_number;
   }
   if (m_join->query_block) {
+    m_join->query_block->reset_sequence_read_flag();
     m_join->query_block->reset_rownum_read_flag();
   }
   return 0;

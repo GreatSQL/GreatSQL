@@ -604,7 +604,7 @@ tables	CREATE TABLE `tables` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `schema_id` bigint unsigned NOT NULL,
   `name` varchar(64) <LCTN dependent collation> NOT NULL,
-  `type` enum('BASE TABLE','VIEW','SYSTEM VIEW') COLLATE utf8mb3_bin NOT NULL,
+  `type` enum('BASE TABLE','VIEW','SYSTEM VIEW','MATERIALIZED VIEW') COLLATE utf8mb3_bin NOT NULL,
   `engine` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL,
   `mysql_version_id` int unsigned NOT NULL,
   `row_format` enum('Fixed','Dynamic','Compressed','Redundant','Compact','Paged') COLLATE utf8mb3_bin DEFAULT NULL,
@@ -678,7 +678,7 @@ triggers	CREATE TABLE `triggers` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `schema_id` bigint unsigned NOT NULL,
   `name` varchar(64) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL,
-  `event_type` enum('INSERT','UPDATE','DELETE') COLLATE utf8mb3_bin NOT NULL,
+  `event_type` enum('INSERT','UPDATE','DELETE','INSERT OR UPDATE','INSERT OR DELETE','UPDATE OR DELETE','INSERT OR UPDATE OR DELETE') COLLATE utf8mb3_bin NOT NULL,
   `table_id` bigint unsigned NOT NULL,
   `action_timing` enum('BEFORE','AFTER') COLLATE utf8mb3_bin NOT NULL,
   `action_order` int unsigned NOT NULL,
@@ -734,5 +734,5 @@ Warnings:
 Warning	1681	Integer display width is deprecated and will be removed in a future release.
 include/assert.inc [The group concat max length is sufficient.]
 CHECK_STATUS
-The schema checksum corresponds to DD version 80025.
+The schema checksum corresponds to DD version 80030.
 include/assert.inc [The schema checksum corresponds to a known DD version.]

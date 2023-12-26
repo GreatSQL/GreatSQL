@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -134,10 +135,14 @@ Network_provider_manager::get_incoming_connections_provider() {
 bool Network_provider_manager::start_active_network_provider() {
   auto net_provider = this->get_active_provider();
 
-  if (!net_provider) return true;
+  if (!net_provider) {
+    G_INFO("net_provider is nill");
+    return true;
+  }
 
   set_incoming_connections_protocol(get_running_protocol());
 
+  G_INFO("start_active_network_provider calls configure");
   bool config_ok = net_provider->configure(m_active_provider_configuration);
 
   G_MESSAGE("Using %s as Communication Stack for XCom",

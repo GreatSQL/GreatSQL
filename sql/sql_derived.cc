@@ -577,7 +577,7 @@ static Item *parse_expression(THD *thd, Item *item, Query_block *query_block) {
   // Also do not write a cloned stored procedure variable to query logs.
   thd->lex->reparse_derived_table_condition = true;
   // Get the printout of the expression
-  StringBuffer<1024> str;
+  StringBuffer<1024> str(thd->charset());
   // For printing parameters we need to specify the flag QT_NO_DATA_EXPANSION
   // because for a case when statement gets reprepared during execution, we
   // still need Item_param::print() to print the '?' rather than the actual data
@@ -992,6 +992,12 @@ bool Table_ref::can_push_condition_to_derived(THD *thd) {
   Query_block const *master = unit->outer_query_block();
   bool has_rownum =
       (slave->has_rownum || (master && master->has_rownum)) ? true : false;
+  bool has_lnnvl_func =
+      (slave->has_lnnvl_func || (master && master->has_lnnvl_func)) ? true
+                                                                    : false;
+  bool has_foj =
+      (slave->has_foj() || (master && master->has_foj())) ? true : false;
+
   return hint_table_state(thd, this, DERIVED_CONDITION_PUSHDOWN_HINT_ENUM,
                           OPTIMIZER_SWITCH_DERIVED_CONDITION_PUSHDOWN) &&  // 1
          !unit->has_any_limit() &&                                         // 2
@@ -1001,7 +1007,10 @@ bool Table_ref::can_push_condition_to_derived(THD *thd) {
             common_table_expr()->recursive)) &&     // 4
          (thd->lex->set_var_list.elements == 0) &&  // 5
          !unit->m_reject_multiple_rows &&           // 6
-         !has_rownum;                               // 7
+         !has_rownum &&                             // 7
+         !unit->has_any_connect_by() &&             // 8
+         !has_lnnvl_func &&                         // 9
+         !has_foj;                                  // 10
 }
 
 /**
@@ -1693,6 +1702,8 @@ bool Table_ref::materialize_derived(THD *thd) {
   }
   bool res = unit->execute(thd);
 
+  thd->lex->reset_rownum_func();
+
   if (table->hash_field) {
     table->file->ha_index_or_rnd_end();
   }
@@ -1712,4 +1723,17 @@ bool Table_ref::materialize_derived(THD *thd) {
   table->set_not_started();
 
   return res;
+}
+
+bool Table_ref::has_connect_by() {
+  if (!is_view_or_derived()) return false;
+  Query_expression *const unit = derived_query_expression();
+  return unit->has_any_connect_by();
+}
+
+bool Table_ref::has_lnnvl() {
+  Query_block *const master_query_block = query_block->outer_query_block();
+
+  return (query_block && query_block->has_lnnvl_func) ||
+         (master_query_block && master_query_block->has_lnnvl_func);
 }

@@ -1,0 +1,112 @@
+connect (conn1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn2,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+--echo
+--echo [### test show create ###]
+create sequence seq start with 20 minvalue 1;
+--error ER_GDB_READ_SEQUENCE
+show create sequence SEQ;
+show create sequence seq;
+drop sequence seq;
+
+create sequence seq start with 20 nominvalue;
+--error ER_GDB_READ_SEQUENCE
+show create sequence Seq;
+show create sequence seq;
+drop sequence seq;
+
+create sequence seq start with 20 minvalue 10;
+--error ER_GDB_READ_SEQUENCE
+show create sequence seQ;
+show create sequence seq;
+drop sequence seq;
+
+create sequence seq maxvalue 1024;
+show create sequence seq;
+drop sequence seq;
+
+create sequence seq nomaxvalue;
+show create sequence seq;
+drop sequence seq;
+
+create sequence seq cache 100;
+show create sequence seq;
+drop sequence seq;
+
+create sequence seq nocache;
+show create sequence seq;
+drop sequence seq;
+
+create sequence seq order;
+show create sequence seq;
+drop sequence seq;
+
+create sequence seq noorder;
+show create sequence seq;
+drop sequence seq;
+
+create sequence seq cycle maxvalue 30;
+show create sequence seq;
+drop sequence seq;
+
+create sequence seq nocycle;
+show create sequence seq;
+drop sequence seq;
+
+--echo
+--echo [### test start_with in show sequence]
+connection conn1;
+--echo [connect conn1]
+create sequence seq;
+show create sequence seq;
+select seq.nextval;
+select seq.nextval;
+show create sequence seq;
+connection conn2;
+--echo [connect conn2]
+--let $wait_condition=select count(*)=1 from mysql.greatdb_sequences
+--source include/wait_condition.inc
+show create sequence seq;
+select seq.nextval;
+show create sequence seq;
+connection conn1;
+--echo [connect conn1]
+show create sequence seq;
+drop sequence seq;
+create sequence seq start with 20 cache 1;
+select seq.nextval;
+show create sequence seq;
+drop sequence seq;
+create sequence seq start with 20 increment by 2 maxvalue 21;
+select seq.nextval;
+show create sequence seq;
+drop sequence seq;
+create sequence seq start with 20 maxvalue 40 cache 1 increment by -1;
+select seq.nextval;
+show create sequence seq;
+drop sequence seq;
+create sequence seq start with 20 maxvalue 40 minvalue 19 cache 1 increment by -2;
+select seq.nextval;
+show create sequence seq;
+drop sequence seq;
+
+
+--echo
+--echo [### test show sequences]
+create sequence seq1;
+create sequence seq2;
+show sequences;
+show full sequences;
+show extended sequences;
+show extended full sequences;
+show sequences from test;
+show sequences in test;
+show sequences like 'seq%';
+show sequences like 'seq2%';
+show sequences where sequences_in_test like '%_1';
+drop sequence seq1;
+drop sequence seq2;
+
+## clean
+--disconnect conn1
+--disconnect conn2

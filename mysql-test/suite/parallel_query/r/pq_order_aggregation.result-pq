@@ -28,9 +28,10 @@ Table	Op	Msg_type	Msg_text
 pq_database.t1	analyze	status	OK
 explain select a, sum(a) from t1 group by a order by sum(a);
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	12	100.00	Using temporary; Using filesort
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	12	100.00	Parallel execute (3 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	12	100.00	Using temporary; Using filesort
 Warnings:
-Note	1003	/* select#1 */ select `pq_database`.`t1`.`a` AS `a`,sum(`pq_database`.`t1`.`a`) AS `sum(a)` from `pq_database`.`t1` group by `pq_database`.`t1`.`a` order by sum(`pq_database`.`t1`.`a`)
+Note	1003	/* select#1 */ select `pq_database`.`t1`.`a` AS `a`,sum(`pq_database`.`t1`.`a`) AS `sum(a)` from `pq_database`.`t1` group by `pq_database`.`t1`.`a` order by sum(`sum(a)`)
 select a, sum(a) from t1 group by a order by sum(a);
 a	sum(a)
 1	3

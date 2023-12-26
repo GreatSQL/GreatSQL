@@ -1,0 +1,1060 @@
+#
+# Tests for various concurrency-related aspects of ALTER、OPTIMIZE、TRUNCATE TABLE implemetation
+#
+
+--disable_warnings
+show variables like 'log_output';
+set global log_output='TABLE';
+set global slow_query_log='ON';
+SET GLOBAL long_query_time = 2;
+
+connect (addconroot, localhost, root,,);
+connect (addconroot2, localhost, root,,);
+--echo ########################################################################################
+--echo ALTER RENAME COLUMN-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo '----[connect default]'
+drop table if exists t1;
+create table t1 (id int);
+insert into t1 values (1),(2),(3);
+begin;
+insert into t1 values (4);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+--send alter table t1 rename column  id to id1, ALGORITHM=INPLACE, LOCK=NONE;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ########################################################################################
+--echo ALTER RENAME COLUMN-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t1;
+create table t1 (id int);
+insert into t1 values (1),(2),(3);
+begin;
+insert into t1 values (4);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send alter table t1 rename column  id to id1, ALGORITHM=INPLACE, LOCK=NONE;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+--echo ########################################################################################
+--echo ALTER RENAME TABLE-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo '----[connect default]'
+drop table if exists t1;
+create table t1 (id int);
+insert into t1 values (1),(2),(3);
+begin;
+insert into t1 values (4);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=off;
+--send alter table t1 rename to t11;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ########################################################################################
+--echo ALTER RENAME TABLE-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t1;
+create table t1 (id int);
+insert into t1 values (1),(2),(3);
+begin;
+insert into t1 values (4);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send alter table t1 rename to t11;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+--echo ########################################################################################
+--echo ALTER ADD COLUMN-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo '----[connect default]'
+drop table if exists t1;
+create table t1 (id int);
+insert into t1 values (1),(2),(3);
+begin;
+insert into t1 values (4);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=off;
+--send alter table t1 add column name varchar(100);
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ########################################################################################
+--echo ALTER ADD COLUMN-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t1;
+create table t1 (id int);
+insert into t1 values (1),(2),(3);
+begin;
+insert into t1 values (4);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send alter table t1 add column name varchar(100);
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+--echo ########################################################################################
+--echo ALTER DROP COLUMN-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo '----[connect default]'
+drop table if exists t1;
+create table t1 (id int,name varchar(100));
+insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
+begin;
+insert into t1 values (4,'name4');
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=off;
+--send alter table t1 drop column name;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(3);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ########################################################################################
+--echo ALTER DROP COLUMN-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t1;
+create table t1 (id int,name varchar(100));
+insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
+begin;
+insert into t1 values (4,'name4');
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send alter table t1 drop column name;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+--echo ########################################################################################
+--echo ALTER ADD PRIMARY KEY-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo '----[connect default]'
+drop table if exists t1;
+create table t1 (id int,name varchar(100));
+insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
+begin;
+insert into t1 values (4,'name4');
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=off;
+--send ALTER TABLE t1 ADD PRIMARY KEY (id);
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ########################################################################################
+--echo ALTER ADD PRIMARY KEY-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t1;
+create table t1 (id int,name varchar(100));
+insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
+begin;
+insert into t1 values (4,'name4');
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send ALTER TABLE t1 ADD PRIMARY KEY (id);
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+--echo ########################################################################################
+--echo ALTER ADD INDEX-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo '----[connect default]'
+drop table if exists t1;
+create table t1 (id int,name varchar(100));
+insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
+begin;
+insert into t1 values (4,'name4');
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=off;
+--send alter table t1 add index index_name(name);
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ######################################################################################## 
+--echo ALTER ADD INDEX-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t1;
+create table t1 (id int,name varchar(100));
+insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
+begin;
+insert into t1 values (4,'name4');
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send alter table t1 add index index_name(name);
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+--echo ########################################################################################
+--echo CREATE INDEX-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo '----[connect default]'
+drop table if exists t1;
+create table t1 (id int,name varchar(100));
+insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
+begin;
+insert into t1 values (4,'name4');
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=off;
+--send create index index_name on t1(name);
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ######################################################################################## 
+--echo CREATE INDEX-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t1;
+create table t1 (id int,name varchar(100));
+insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
+begin;
+insert into t1 values (4,'name4');
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send create index index_name on t1(name);
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+--echo ########################################################################################
+--echo ALTER DROP INDEX-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo '----[connect default]'
+drop table if exists t1;
+create table t1 (id int,name varchar(100),index index_name(name));
+insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
+begin;
+insert into t1 values (4,'name4');
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=off;
+--send alter table t1 drop index index_name;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ########################################################################################
+--echo ALTER DROP INDEX-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t1;
+create table t1 (id int,name varchar(100),index index_name(name));
+insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
+begin;
+insert into t1 values (4,'name4');
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send alter table t1 drop index index_name;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+--echo ########################################################################################
+--echo DROP INDEX-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo '----[connect default]'
+drop table if exists t1;
+create table t1 (id int,name varchar(100),index index_name(name));
+insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
+begin;
+insert into t1 values (4,'name4');
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=off;
+--send drop index index_name on t1;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ########################################################################################
+--echo DROP INDEX-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t1;
+create table t1 (id int,name varchar(100),index index_name(name));
+insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
+begin;
+insert into t1 values (4,'name4');
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send drop index index_name on t1;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select * from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+--echo ########################################################################################
+--echo ALTER ADD PARTITION-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo ----[connect default]
+drop table if exists t1;
+CREATE TABLE t1 (
+    id INT ,
+    name VARCHAR(50),
+    sale_date DATE
+)
+PARTITION BY RANGE (YEAR(sale_date)) (
+    PARTITION p0 VALUES LESS THAN (2020),
+    PARTITION p1 VALUES LESS THAN (2021),
+    PARTITION p2 VALUES LESS THAN (2022),
+    PARTITION p3 VALUES LESS THAN (2099)
+);
+insert into t1 values (1,'name1',sysdate);
+begin;
+insert into t1 values (2,'name3',sysdate);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=off;
+--send  ALTER TABLE t1 ADD PARTITION (PARTITION p5 VALUES LESS THAN (2100));
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select id from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ########################################################################################
+--echo ALTER ADD PARTITION-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t1;
+CREATE TABLE t1 (
+    id INT ,
+    name VARCHAR(50),
+    sale_date DATE
+)
+PARTITION BY RANGE (YEAR(sale_date)) (
+    PARTITION p0 VALUES LESS THAN (2020),
+    PARTITION p1 VALUES LESS THAN (2021),
+    PARTITION p2 VALUES LESS THAN (2022),
+    PARTITION p3 VALUES LESS THAN (2099)
+);
+insert into t1 values (1,'name1',sysdate);
+begin;
+insert into t1 values (2,'name3',sysdate);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send  ALTER TABLE t1 ADD PARTITION (PARTITION p5 VALUES LESS THAN (2100));
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select id from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+--echo ########################################################################################
+--echo ALTER DROP PARTITION-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo ----[connect default]
+drop table if exists t1;
+CREATE TABLE t1 (
+    id INT ,
+    name VARCHAR(50),
+    sale_date DATE
+)
+PARTITION BY RANGE (YEAR(sale_date)) (
+    PARTITION p0 VALUES LESS THAN (2020),
+    PARTITION p1 VALUES LESS THAN (2021),
+    PARTITION p2 VALUES LESS THAN (2022),
+    PARTITION p3 VALUES LESS THAN (2099)
+);
+insert into t1 values (1,'name1',sysdate);
+begin;
+insert into t1 values (2,'name3',sysdate);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=off;
+--send  ALTER TABLE t1 DROP PARTITION p0;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select id from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ########################################################################################
+--echo ALTER DROP PARTITION-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t1;
+CREATE TABLE t1 (
+    id INT ,
+    name VARCHAR(50),
+    sale_date DATE
+)
+PARTITION BY RANGE (YEAR(sale_date)) (
+    PARTITION p0 VALUES LESS THAN (2020),
+    PARTITION p1 VALUES LESS THAN (2021),
+    PARTITION p2 VALUES LESS THAN (2022),
+    PARTITION p3 VALUES LESS THAN (2099)
+);
+insert into t1 values (1,'name1',sysdate);
+begin;
+insert into t1 values (2,'name3',sysdate);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send  ALTER TABLE t1 DROP PARTITION p0;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select id from t1;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t1;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+--echo ########################################################################################
+--echo OPTIMIZE-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo '----[connect default]'
+drop table if exists t2;
+create table t2 (id int);
+insert into t2 values (1),(2),(3);
+begin;
+insert into t2 values (4);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=off;
+--send OPTIMIZE TABLE t2;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select * from t2;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t2;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t2' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ########################################################################################
+--echo OPTIMIZE-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t2;
+create table t2 (id int);
+insert into t2 values (1),(2),(3);
+begin;
+insert into t2 values (4);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send OPTIMIZE TABLE t2;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select * from t2;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t2;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t2' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--reap
+
+--echo ########################################################################################
+--echo TRUNCATE-----------lock_ddl_polling_mode = off----------------
+connection default;
+--echo ----[connect default]
+drop table if exists t3;
+create table t3 (id int);
+insert into t3 values (1),(2),(3);
+begin;
+insert into t3 values (4);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=off;
+--send TRUNCATE TABLE t3;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--send select * from t3;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t3;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t3' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+--reap
+
+--echo ########################################################################################
+--echo TRUNCATE-----------lock_ddl_polling_mode = on----------------
+connection default;
+--echo ----[connect default]
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table if exists t3;
+create table t3 (id int);
+insert into t3 values (1),(2),(3);
+begin;
+insert into t3 values (4);
+
+connection addconroot;
+--echo ----[connect addconroot]
+SET lock_wait_timeout = 10;
+SET lock_ddl_polling_mode=on;
+SET lock_ddl_polling_runtime=1000;
+--send TRUNCATE TABLE t3;
+
+connection addconroot2;
+--echo ----[connect addconroot2]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+select * from t3;
+
+connection default;
+--echo ----[connect default]
+do sleep(2);
+select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
+show create table t3;
+do sleep(8);
+SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t3' and TIME_TO_SEC(query_time) >= 5;
+
+connection addconroot;
+--echo ----[connect addconroot]
+--error ER_LOCK_WAIT_TIMEOUT
+--reap
+
+connection default;
+--echo ----[connect default]
+SET GLOBAL long_query_time = 10;
+set global log_output='FILE';
+TRUNCATE TABLE mysql.general_log;
+TRUNCATE TABLE mysql.slow_log;
+drop table t1,t2,t3;
+disconnect addconroot;
+disconnect addconroot2;
+--enable_warnings

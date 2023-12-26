@@ -1,0 +1,696 @@
+SET sql_mode=ORACLE;
+show variables like '%udt_format_result%';
+Variable_name	Value
+udt_format_result	BINARY
+set @@udt_format_result='DBA';
+create or replace type t_air as object(id int,type varchar(20));
+CREATE TABLE `test_type` (
+`c1` int NOT NULL,
+`c2` tinyint DEFAULT NULL,
+`c3` smallint DEFAULT NULL,
+`c4` mediumint DEFAULT NULL,
+`c5` int DEFAULT NULL,
+`c6` bigint DEFAULT NULL,
+`c7` bit(64) DEFAULT NULL,
+`c8` real(50,10) DEFAULT NULL,
+`c9` double(50,10) DEFAULT NULL,
+`c10` float(50,10) DEFAULT NULL,
+`c11` number(50,10) DEFAULT NULL,
+`c12` decimal(50,14) DEFAULT NULL,
+`c13` char(255) DEFAULT NULL,
+`c14` varchar(255) DEFAULT NULL,
+`c15` date DEFAULT NULL,
+`c16` time(6) DEFAULT NULL,
+`c17` year DEFAULT NULL,
+`c18` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+`c19` datetime(6) DEFAULT NULL,
+`c20` tinyblob,
+`c21` blob,
+`c22` mediumblob,
+`c23` longblob,
+`c24` tinytext,
+`c25` text,
+`c26` mediumtext,
+`c27` longtext,
+`c28` enum('','28c','-28b','288a') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+`c29` set('29c','29b','29a') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+`c30` binary(255) DEFAULT NULL,
+`c31` varbinary(255) DEFAULT NULL,
+`c32` point DEFAULT NULL,
+`c33` linestring DEFAULT NULL,
+`c34` polygon DEFAULT NULL,
+`c35` geometry DEFAULT NULL,
+`c36` multipoint DEFAULT NULL,
+`c37` multilinestring DEFAULT NULL,
+`c38` multipolygon DEFAULT NULL,
+`c39` geomcollection DEFAULT NULL,
+`json_value` json DEFAULT NULL,
+`name1` t_air
+) CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci engine=innodb;
+INSERT INTO `test_type` VALUES ('111', '21', '331', '444', '555', '6626', '77', '888.11', '999.1222', '101010.101011', '111111.222', '121212.111', '131313', '141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '242424', '252525', '262626', '272727', '28c', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门1", "deptId": "1", "deptLeaderId": "3"}',t_air(10,'aabb1'));
+INSERT INTO `test_type` VALUES ('111', '22', '332', '4444', '5525', '66622', '177', '88811.12', '9991.23333', '1010101.34', '11111111.222', '121212.222', '131313', '141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '242424', '252525', '262626', '272727', '288a', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门1", "deptId": "1", "deptLeaderId": "3"}',t_air(10,'aabb1'));
+INSERT INTO `test_type` VALUES ('111', null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, NULL,null,null);
+INSERT INTO `test_type` VALUES ('-111', '-23', '-333', '-4144', '-1555', '-666', '-1177', '-8881.33333', '-999.00002', '-101010.9999', '-11221111.999', '-121212122.2222', '-131313', '-141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '-28b', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门2", "deptId": "2", "deptLeaderId": "4"}',t_air(11,'aabb2'));
+INSERT INTO `test_type` VALUES ('-111', '-21', '-334', '-4424', '-5525', '-6636', '-1177', '88800.222', '9999.1222', '10101099.99111', '1111110.111100', '121212.98', '131313', '141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '288a', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门2", "deptId": "2", "deptLeaderId": "4"}',t_air(11,'aabb2'));
+INSERT INTO `test_type` VALUES ('-111', '-21', '-335', '-4414', '-5255', '-6166', '-7227', '-88800.10999', '-999.9876', '-10101099.98765', '-11111122.222', '-12121200.9876', '-131313', '-141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '-28b', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门2", "deptId": "2", "deptLeaderId": "4"}',t_air(11,'aabb2'));
+INSERT INTO `test_type` VALUES ('-111', '-22', '3330', '-44004', '5553', '-6', '-7227', '-88822.0097', '-999000.9999', '-101010111.9987', '-111111111.111', '-12121200.9987', '-131313', '-141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '-28b', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门2", "deptId": "2", "deptLeaderId": "4"}',t_air(11,'aabb2'));
+INSERT INTO `test_type` VALUES ('-112', '22', '-3311', '-44884', '-5553', '-666', '-717', '-888.888', '-999098.9876', '-101010987.98765', '-111111.0987', '-12121222.98765', '-131313', '\"name14\"', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '28c', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门3", "deptId": "3", "deptLeaderId": "5"}',t_air(12,'aabb3'));
+INSERT INTO `test_type` VALUES ('0', '22', '-3333', '-4144', '-5552', '-66116', '-7700', '-888986.234', '-999345.987', '-101010098.87609', '-1111112.987', '-121212234.56432', '-131313', '\"name14\"', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '-242424', '-252525', '-262626', '-272727', '-28b', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门3", "deptId": "3", "deptLeaderId": "5"}',t_air(12,'aabb3'));
+#
+# test of int type
+#
+SELECT  c5, c1, ratio_to_report(c5) over (partition by c1) c from test_type;
+c5	c1	c
+-5553	-112	1
+-1555	-111	0.2293
+-5525	-111	0.8147
+-5255	-111	0.7748
+5553	-111	-0.8188
+-5552	0	1
+555	111	0.0913
+5525	111	0.9087
+NULL	111	NULL
+SELECT  c5, c1, ratio_to_report(c5) over () c from test_type;
+c5	c1	c
+555	111	-0.047
+5525	111	-0.4679
+NULL	111	NULL
+-1555	-111	0.1317
+-5525	-111	0.4679
+-5255	-111	0.4451
+5553	-111	-0.4703
+-5553	-112	0.4703
+-5552	0	0.4702
+#
+# test of bit type
+#
+SELECT  c7, c1, ratio_to_report(c7) over (partition by c1) c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+SELECT  c7, c1, ratio_to_report(c7) over () c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+#
+# test of multiple columns
+#
+SELECT  c5, c8, c1, ratio_to_report(c5) over (partition by c1) c1,ratio_to_report(c8) over (partition by c1) c2 from test_type;
+c5	c8	c1	c1	c2
+-5553	-888.8880000000	-112	1	1.00000000000000
+-1555	-8881.3333300000	-111	0.2293	0.09090112207427
+-5525	88800.2220000000	-111	0.8147	-0.90887702559010
+-5255	-88800.1099900000	-111	0.7748	0.90887587915923
+5553	-88822.0097000000	-111	-0.8188	0.90910002435659
+-5552	-888986.2340000000	0	1	1.00000000000000
+555	888.1100000000	111	0.0913	0.00990097685342
+5525	88811.1200000000	111	0.9087	0.99009902314658
+NULL	NULL	111	NULL	NULL
+SELECT  c5, c8, c1, ratio_to_report(c5) over () c1,ratio_to_report(c8) over () c2 from test_type;
+c5	c8	c1	c1	c2
+555	888.1100000000	111	-0.047	-0.00098911977930
+5525	88811.1200000000	111	-0.4679	-0.09891211157832
+NULL	NULL	111	NULL	NULL
+-1555	-8881.3333300000	-111	0.1317	0.00989145766095
+-5525	88800.2220000000	-111	0.4679	-0.09889997408707
+-5255	-88800.1099900000	-111	0.4451	0.09889984933754
+5553	-88822.0097000000	-111	-0.4703	0.09892423982557
+-5553	-888.8880000000	-112	0.4703	0.00098998626565
+-5552	-888986.2340000000	0	0.4702	0.99009567235499
+#
+# test of real type
+#
+SELECT  c8, c1, ratio_to_report(c8) over (partition by c1) c from test_type;
+c8	c1	c
+-888.8880000000	-112	1.00000000000000
+-8881.3333300000	-111	0.09090112207427
+88800.2220000000	-111	-0.90887702559010
+-88800.1099900000	-111	0.90887587915923
+-88822.0097000000	-111	0.90910002435659
+-888986.2340000000	0	1.00000000000000
+888.1100000000	111	0.00990097685342
+88811.1200000000	111	0.99009902314658
+NULL	111	NULL
+SELECT  c8, c1, ratio_to_report(c8) over () c from test_type;
+c8	c1	c
+888.1100000000	111	-0.00098911977930
+88811.1200000000	111	-0.09891211157832
+NULL	111	NULL
+-8881.3333300000	-111	0.00989145766095
+88800.2220000000	-111	-0.09889997408707
+-88800.1099900000	-111	0.09889984933754
+-88822.0097000000	-111	0.09892423982557
+-888.8880000000	-112	0.00098998626565
+-888986.2340000000	0	0.99009567235499
+#
+# test of double type
+#
+SELECT  c9, c1, ratio_to_report(c9) over (partition by c1) c from test_type;
+c9	c1	c
+-999098.9876000000	-112	1.00000000000000
+-999.0000200000	-111	0.00100807179384
+9999.1222000000	-111	-0.01008992277395
+-999.9876000000	-111	0.00100906834191
+-999000.9999000000	-111	1.00807278263820
+-999345.9870000000	0	1.00000000000000
+999.1222000000	111	0.09090899719056
+9991.2333300000	111	0.90909100280944
+NULL	111	NULL
+SELECT  c9, c1, ratio_to_report(c9) over () c from test_type;
+c9	c1	c
+999.1222000000	111	-0.00033544976758
+9991.2333300000	111	-0.00335450147983
+NULL	111	NULL
+-999.0000200000	-111	0.00033540874632
+9999.1222000000	-111	-0.00335715012442
+-999.9876000000	-111	0.00033574032086
+-999000.9999000000	-111	0.33540907531965
+-999098.9876000000	-112	0.33544197414944
+-999345.9870000000	0	0.33552490283556
+#
+# test of float type
+#
+SELECT  c10, c1, ratio_to_report(c10) over (partition by c1) c from test_type;
+c10	c1	c
+-101010984.0000000000	-112	1.00000000000000
+-101011.0000000000	-111	0.00099900977264
+10101100.0000000000	-111	-0.09990097726439
+-10101100.0000000000	-111	0.09990097726439
+-101010112.0000000000	-111	0.99900099022736
+-101010096.0000000000	0	1.00000000000000
+101010.1015625000	111	0.09090906661932
+1010101.3125000000	111	0.90909093338068
+NULL	111	NULL
+SELECT  c10, c1, ratio_to_report(c10) over () c from test_type;
+c10	c1	c
+101010.1015625000	111	-0.00033444717729
+1010101.3125000000	111	-0.00334447275585
+NULL	111	NULL
+-101011.0000000000	-111	0.00033445015204
+10101100.0000000000	-111	-0.03344501520393
+-10101100.0000000000	-111	0.03344501520393
+-101010112.0000000000	-111	0.33444721184732
+-101010984.0000000000	-112	0.33445009906289
+-101010096.0000000000	0	0.33444715887088
+#
+# test of decimal type
+#
+SELECT  c12, c1, ratio_to_report(c12) over (partition by c1) c from test_type;
+c12	c1	c
+-12121222.98765	-112	1
+-121212122.2222	-111	0.834028490767849429
+121212.98	-111	-0.000834034392909573
+-12121200.9876	-111	0.083402771774341993
+-12121200.9987	-111	0.083402771850718151
+-121212234.56432	0	1
+121212.111	111	0.499999771062585537
+121212.222	111	0.500000228937414463
+NULL	111	NULL
+SELECT  c12, c1, ratio_to_report(c12) over () c from test_type;
+c12	c1	c
+121212.111	111	-0.000435350260913944
+121212.222	111	-0.000435350659585979
+NULL	111	NULL
+-121212122.2222	-111	0.435350301220046336
+121212.98	-111	-0.000435353382049065
+-12121200.9876	-111	0.043534989771294561
+-12121200.9987	-111	0.043534989811161764
+-12121222.98765	-112	0.043535068787553156
+-121212234.56432	0	0.435350704712493173
+#
+# test of varchar type
+#
+SELECT  c14, c1, ratio_to_report(c14) over (partition by c1) c from test_type;
+ERROR 42000: Incorrect parameters in the call to native function 'ratio_to_report'
+SELECT  c14, c1, ratio_to_report(c14) over () c from test_type;
+ERROR 42000: Incorrect parameters in the call to native function 'ratio_to_report'
+#
+# test of date type
+#
+SELECT  c15, c1, ratio_to_report(c15) over (partition by c1) c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+SELECT  c15, c1, ratio_to_report(c15) over () c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+#
+# test of blob type
+#
+SELECT  c21, c1, ratio_to_report(c21) over (partition by c1) c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+SELECT  c21, c1, ratio_to_report(c21) over () c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+#
+# test of enum type
+#
+SELECT  c28, c1, ratio_to_report(c28) over (partition by c1) c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+SELECT  c28, c1, ratio_to_report(c28) over () c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+SELECT  c29, c1, ratio_to_report(c29) over (partition by c1) c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+SELECT  c29, c1, ratio_to_report(c29) over () c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+#
+# test of geometry type
+#
+SELECT  c35, c1, ratio_to_report(c35) over (partition by c1) c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+SELECT  c35, c1, ratio_to_report(c35) over () c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+#
+# test of json type
+#
+SELECT  json_value, c1, ratio_to_report(json_value) over (partition by c1) c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+SELECT  json_value, c1, ratio_to_report(json_value) over () c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+#
+# test of definate type
+#
+SELECT  name1, c1, ratio_to_report(name1) over (partition by c1) c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+SELECT  name1, c1, ratio_to_report(name1) over () c from test_type;
+ERROR HY000: Incorrect arguments to ratio_to_report
+#
+# test of engine=myIsam
+#
+alter table test_type engine=myIsam;
+SELECT  c5, c1, ratio_to_report(c5) over (partition by c1) c from test_type;
+c5	c1	c
+-5553	-112	1
+-1555	-111	0.2293
+-5525	-111	0.8147
+-5255	-111	0.7748
+5553	-111	-0.8188
+-5552	0	1
+555	111	0.0913
+5525	111	0.9087
+NULL	111	NULL
+SELECT  c5, c1, ratio_to_report(c5) over () c from test_type;
+c5	c1	c
+555	111	-0.047
+5525	111	-0.4679
+NULL	111	NULL
+-1555	-111	0.1317
+-5525	-111	0.4679
+-5255	-111	0.4451
+5553	-111	-0.4703
+-5553	-112	0.4703
+-5552	0	0.4702
+alter table test_type engine=innodb;
+#
+# test of error
+#
+SELECT  c5, c1, ratio_to_report(c5) over (order by c1) c from test_type;
+ERROR 42000: This version of MySQL doesn't yet support 'this usage with RATIO_TO_REPORT function'
+SELECT  c5, c1, ratio_to_report(c5) over (aa) c from test_type;
+ERROR 42000: This version of MySQL doesn't yet support 'this usage with RATIO_TO_REPORT function'
+SELECT  c5, c1, ratio_to_report(ratio_to_report(c5) over ()) over (partition by c1) c from test_type;
+ERROR HY000: You cannot use the window function 'ratio_to_report' in this context.'
+#
+# test of ratio_to_report after insert new value
+#
+INSERT INTO `test_type` VALUES ('111', '21', '331', '444', '555', '6626', '77', '888.11', '999.1222', '101010.101011', '111111.222', '121212.111', '131313', '141414', '2021-05-15', '16:16:16.000000', '2017', '2021-05-18 18:18:38', '2021-05-19 19:19:19.000000', 0x3230, 0x3231, 0x3232, 0x3233, '242424', '252525', '262626', '272727', '28c', '29a', 0x333000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 0x3331, ST_GeometryFromText('POINT(5 5)'), null, null, null, null, null, null, NULL,'{"deptName": "部门1", "deptId": "1", "deptLeaderId": "3"}',t_air(10,'aabb1'));
+SELECT  c5, c1, ratio_to_report(c5) over (partition by c1) c from test_type;
+c5	c1	c
+-5553	-112	1
+-1555	-111	0.2293
+-5525	-111	0.8147
+-5255	-111	0.7748
+5553	-111	-0.8188
+-5552	0	1
+555	111	0.0836
+5525	111	0.8327
+NULL	111	NULL
+555	111	0.0836
+SELECT  c5, c1, ratio_to_report(c5) over () c from test_type;
+c5	c1	c
+555	111	-0.0493
+5525	111	-0.491
+NULL	111	NULL
+-1555	-111	0.1382
+-5525	-111	0.491
+-5255	-111	0.467
+5553	-111	-0.4935
+-5553	-112	0.4935
+-5552	0	0.4934
+555	111	-0.0493
+#
+# test of GENERATED VIRTUAL column
+#
+CREATE TABLE `triangle1` (
+`sidea` INT DEFAULT NULL,
+`sideb` INT DEFAULT NULL,
+`sidec` decimal(50,10) GENERATED ALWAYS AS (SQRT(((`sidea` * `sidea`) + (`sideb` * `sideb`)))) VIRTUAL
+) ENGINE=INNODB DEFAULT CHARSET=utf8mb4;
+insert into triangle1(sidea,sideb) values(1,2),(10,20),(null,null),(-1,20),(10,-100),(10,-123);
+SELECT  sidec, sidea, ratio_to_report(sidec) over (partition by sidea) c from triangle1;
+sidec	sidea	c
+NULL	NULL	NULL
+20.0249843945	-1	1
+2.2360679775	1	1
+22.360679775	10	0.09079916029847
+100.4987562112	10	0.40809146979602
+123.405834546	10	0.50110936990551
+SELECT  sidec, sidea, ratio_to_report(sidec) over () c from triangle1;
+sidec	sidea	c
+2.2360679775	1	0.00832718354505
+22.360679775	10	0.08327183545048
+NULL	NULL	NULL
+20.0249843945	-1	0.07457363649836
+100.4987562112	10	0.37426035229721
+123.405834546	10	0.4595669922089
+SELECT  sideb, sidea, ratio_to_report(sideb) over (partition by sidea) c from triangle1;
+sideb	sidea	c
+NULL	NULL	NULL
+20	-1	1
+2	1	1
+20	10	-0.0985
+-100	10	0.4926
+-123	10	0.6059
+select @@div_precision_increment;
+@@div_precision_increment
+4
+set  @@div_precision_increment=8;
+SELECT  sideb, sidea, ratio_to_report(sideb) over (partition by sidea) c from triangle1;
+sideb	sidea	c
+NULL	NULL	NULL
+20	-1	1
+2	1	1
+20	10	-0.09852217
+-100	10	0.49261084
+-123	10	0.60591133
+set  @@div_precision_increment=4;
+SELECT  sideb, sidea, cast(ratio_to_report(sideb) over (partition by sidea) as varchar) c from triangle1;
+sideb	sidea	c
+NULL	NULL	NULL
+20	-1	1.0000
+2	1	1.0000
+20	10	-0.0985
+-100	10	0.4926
+-123	10	0.6059
+EXPLAIN SELECT  sidec, sidea, ratio_to_report(sidec) over (partition by sidea) c from triangle1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	triangle1	NULL	ALL	NULL	NULL	NULL	NULL	6	100.00	Using filesort
+#
+# test of ratio_to_report int data and prepare
+#
+SELECT  sideb, sidea, ratio_to_report(1) over (partition by sidea) c from triangle1;
+sideb	sidea	c
+NULL	NULL	1
+20	-1	1
+2	1	1
+20	10	0.3333
+-100	10	0.3333
+-123	10	0.3333
+SELECT  ratio_to_report(1) over () c from dual;
+c
+1
+PREPARE p FROM 'SELECT  sideb, sidea, ratio_to_report(sideb) over (partition by sidea) c from triangle1';
+EXECUTE p;
+sideb	sidea	c
+NULL	NULL	NULL
+20	-1	1
+2	1	1
+20	10	-0.0985
+-100	10	0.4926
+-123	10	0.6059
+EXECUTE p;
+sideb	sidea	c
+NULL	NULL	NULL
+20	-1	1
+2	1	1
+20	10	-0.0985
+-100	10	0.4926
+-123	10	0.6059
+DROP PREPARE p;
+#
+# test of ratio_to_report with other window function
+#
+SELECT  sidec, sidea, sideb, ratio_to_report(sidec) over (partition by sidea) c from triangle1 WHERE substr(sideb, 1, 1) in ('2','-') order by to_number(nvl(substr(sideb, 2), 0)),substr(sideb, 1, 1);
+sidec	sidea	sideb	c
+20.0249843945	-1	20	1
+2.2360679775	1	2	1
+22.360679775	10	20	0.09079916029847
+100.4987562112	10	-100	0.40809146979602
+123.405834546	10	-123	0.50110936990551
+SELECT sideb, sidea, ratio_to_report((SELECT triangle1.sideb FROM triangle1 limit 1)) OVER (partition by sidea) as c FROM triangle1;
+sideb	sidea	c
+NULL	NULL	1
+20	-1	1
+2	1	1
+20	10	0.3333
+-100	10	0.3333
+-123	10	0.3333
+SELECT  sidec, sidea, sideb, ratio_to_report(sidec) over (partition by sidea) c,first_value(sidec) over (partition by sidea) d from triangle1 WHERE substr(sideb, 1, 1) in ('2','-') order by to_number(nvl(substr(sideb, 2), 0)),substr(sideb, 1, 1);
+sidec	sidea	sideb	c	d
+20.0249843945	-1	20	1	20.0249843945
+2.2360679775	1	2	1	2.2360679775
+22.360679775	10	20	0.09079916029847	22.360679775
+100.4987562112	10	-100	0.40809146979602	22.360679775
+123.405834546	10	-123	0.50110936990551	22.360679775
+SELECT  sideb, sidea, sidea+ratio_to_report(sidec) over (partition by sidea) c from triangle1;
+sideb	sidea	c
+NULL	NULL	NULL
+20	-1	0
+2	1	2
+20	10	10.09079916029847
+-100	10	10.40809146979602
+-123	10	10.50110936990551
+SELECT  sideb, sidea, sidea+ratio_to_report(sidea+sidec) over (partition by sidea) c from triangle1;
+sideb	sidea	c
+NULL	NULL	NULL
+20	-1	0
+2	1	2
+20	10	10.11713625716566
+-100	10	10.39997338789032
+-123	10	10.48289035494402
+SELECT  sidec, sidea, ratio_to_report(sidec) over (partition by sidea) c from triangle1 GROUP BY sidea,sideb;
+sidec	sidea	c
+NULL	NULL	NULL
+20.0249843945	-1	1
+2.2360679775	1	1
+22.360679775	10	0.09079916029847
+100.4987562112	10	0.40809146979602
+123.405834546	10	0.50110936990551
+SELECT sideb,sidec, (SELECT ratio_to_report(upper.sideb) OVER (partition BY upper.sidea) FROM triangle1 LIMIT 1) as b, ratio_to_report(sidec) OVER (partition BY 0 + (SELECT ratio_to_report(upper.sideb) OVER (partition BY upper.sidea) FROM triangle1 LIMIT 1))
+as c FROM triangle1 AS upper;
+sideb	sidec	b	c
+NULL	NULL	NULL	NULL
+2	2.2360679775	0.1667	0.00832718354505
+20	22.360679775	0.1667	0.08327183545048
+20	20.0249843945	0.1667	0.07457363649836
+-100	100.4987562112	0.1667	0.37426035229721
+-123	123.405834546	0.1667	0.4595669922089
+#
+# test of select into
+#
+CREATE OR REPLACE PROCEDURE p1() As
+id int;
+BEGIN
+SELECT ratio_to_report(sidec) over (partition by sidea) INTO id FROM triangle1 where sidea=-1;
+select id;
+SELECT ratio_to_report(id) over (partition by id) from dual;
+select id;
+END;
+$$
+call p1;
+id
+1
+ratio_to_report(id) over (partition by id)
+1
+id
+1
+drop PROCEDURE p1;
+#
+# test of select bulk into
+#
+CREATE OR REPLACE PROCEDURE p1() As
+TYPE param_rec_type IS RECORD          
+(
+a int,
+b decimal(50,10)
+);
+TYPE array_param_type IS TABLE OF param_rec_type;
+dr_table array_param_type;
+BEGIN
+SELECT sidea,ratio_to_report(sidec) over (partition by sidea) bulk collect INTO dr_table FROM triangle1;
+for i in dr_table.first .. dr_table.last loop
+select dr_table(i);
+end loop;               
+END;
+$$
+call p1;
+dr_table(i)
+a:NULL | b:NULL
+dr_table(i)
+a:-1 | b:1.0000000000
+dr_table(i)
+a:1 | b:1.0000000000
+dr_table(i)
+a:10 | b:0.0907991603
+dr_table(i)
+a:10 | b:0.4080914698
+dr_table(i)
+a:10 | b:0.5011093699
+drop PROCEDURE p1;
+#
+# test of ratio_to_report with function
+#
+CREATE or replace  FUNCTION f1 (a VARCHAR(32),b VARCHAR(32)) RETURN VARCHAR(32) no sql
+is result VARCHAR(32);
+BEGIN
+result := concat(a,b);
+result := replace(result,'-','');
+RETURN(result);
+END;
+$$
+SELECT  f1(sideb, sidea), sidea, ratio_to_report(f1(sideb,sidea)) over (partition by sidea) c from triangle1;
+f1(sideb, sidea)	sidea	c
+NULL	NULL	NULL
+201	-1	1
+21	1	1
+2010	10	0.08261405672009864
+10010	10	0.4114262227702425
+12310	10	0.5059597205096589
+drop function f1;
+#
+# test of dml with ratio_to_report values
+#
+CREATE TABLE `triangle2` (
+`sidea` INT DEFAULT NULL,
+`sideb` INT DEFAULT NULL,
+`sidec` decimal(50,30) DEFAULT NULL
+) ENGINE=INNODB DEFAULT CHARSET=utf8mb4;
+insert into triangle2 select sidea,sideb,ratio_to_report(sidec) over (partition by sidea) from 
+triangle1;
+select * from triangle2;
+sidea	sideb	sidec
+NULL	NULL	NULL
+-1	20	1
+1	2	1
+10	20	0.09079916029847
+10	-100	0.40809146979602
+10	-123	0.50110936990551
+UPDATE triangle2 SET sidec=(select ratio_to_report(sidec) over (partition by sidea) from triangle1 where sideb=-100) WHERE sideb > (SELECT ratio_to_report(2) OVER () FROM DUAL);
+select * from triangle2;
+sidea	sideb	sidec
+NULL	NULL	NULL
+-1	20	1
+1	2	1
+10	20	1
+10	-100	0.40809146979602
+10	-123	0.50110936990551
+DELETE FROM triangle2 WHERE sidec <= ANY (SELECT ratio_to_report(sidec) OVER () FROM triangle1);
+select * from triangle2;
+sidea	sideb	sidec
+NULL	NULL	NULL
+-1	20	1
+1	2	1
+10	20	1
+10	-123	0.50110936990551
+drop table triangle2;
+#
+# test of view with ratio_to_report values
+#
+create view v1 as select sideb, sidea, ratio_to_report(sideb) over (partition by sidea) c from triangle1;
+select * from v1;
+sideb	sidea	c
+NULL	NULL	NULL
+20	-1	1
+2	1	1
+20	10	-0.0985
+-100	10	0.4926
+-123	10	0.6059
+drop view v1;
+#
+# test of global temp table with ratio_to_report values
+#
+CREATE GLOBAL TEMPORARY TABLE gt_t_t1 (
+`sidea` INT DEFAULT NULL,
+`sideb` INT DEFAULT NULL,
+`sidec` decimal(50,30) DEFAULT NULL
+) on commit preserve rows ENGINE=innodb AUTO_INCREMENT=10;
+insert into gt_t_t1 select sidea,sideb,ratio_to_report(sidec) over (partition by sidea) from triangle1;
+select * from gt_t_t1;
+sidea	sideb	sidec
+NULL	NULL	NULL
+-1	20	1
+1	2	1
+10	20	0.09079916029847
+10	-100	0.40809146979602
+10	-123	0.50110936990551
+drop TABLE gt_t_t1;
+drop table test_type;
+drop type t_air;
+drop table triangle1;
+#
+# test of bug7442
+#
+create table test_double(col1 double);
+insert into test_double values(1),('1.7976931348623157E+308');
+insert into test_double values(1),('1.7976931348623157E+308');
+select col1, ratio_to_report(col1) over() from test_double;
+ERROR 22003: DOUBLE value is out of range in 'ratio_to_report("test"."test_double"."col1") OVER () '
+drop table test_double;
+#
+# test of bug7708
+#
+CREATE TABLE dept (
+id varchar(11) NOT NULL,
+PRIMARY KEY (id)
+);
+insert into dept VALUES(1);
+insert into dept VALUES(2);
+insert into dept VALUES(3);
+select id, ratio_to_report(id) over() from dept;
+id	ratio_to_report(id) over()
+1	0.16666666666666666
+2	0.3333333333333333
+3	0.5
+insert into dept VALUES('a');
+insert into dept VALUES('b');
+select id, ratio_to_report(id) over() from dept;
+ERROR 42000: Incorrect parameters in the call to native function 'ratio_to_report'
+create table x1(c9 tinytext);
+insert into x1 values('');
+insert into x1 values(repeat('a',255));
+select ratio_to_report(c9) over() from x1;
+ERROR HY000: Incorrect arguments to ratio_to_report
+drop table dept;
+drop table x1;
+#
+# test of bug7719
+#
+create table x1(id int);
+insert into x1 values(1);
+select ratio_to_report(null) over() from x1;
+ratio_to_report(null) over()
+NULL
+select ratio_to_report(null) over() from dual;
+ratio_to_report(null) over()
+NULL
+select ratio_to_report(null) over() from dual connect by level<=5;
+ratio_to_report(null) over()
+NULL
+NULL
+NULL
+NULL
+NULL
+select ratio_to_report('') over() from x1;
+ratio_to_report('') over()
+NULL
+select ratio_to_report('') over() from dual;
+ratio_to_report('') over()
+NULL
+select ratio_to_report('') over() from dual connect by level<=5;
+ratio_to_report('') over()
+NULL
+NULL
+NULL
+NULL
+NULL
+drop table x1;
+CREATE TABLE dept (
+id varchar(11) NOT NULL,
+PRIMARY KEY (id)
+);
+insert into dept VALUES('1.2.3');
+select ratio_to_report(id) over() from dept;
+ERROR 42000: Incorrect parameters in the call to native function 'ratio_to_report'
+drop table dept;

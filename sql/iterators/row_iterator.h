@@ -223,6 +223,7 @@ class RowIterator {
    */
   virtual RowIterator *real_iterator() { return this; }
   virtual const RowIterator *real_iterator() const { return this; }
+  bool is_sub_queryp{false};
 
   /**
    * Ends the iterator

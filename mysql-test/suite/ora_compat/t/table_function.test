@@ -1,0 +1,355 @@
+--source include/have_debug.inc
+SET sql_mode=ORACLE;
+SET SESSION debug='+d,skip_dd_table_access_check';
+set @@udt_format_result='DBA';
+
+--echo #
+--echo # test of create type as table
+--echo #
+create or replace type t_air as object(id int,type varchar(20));
+SELECT name,type,options FROM mysql.routines where name='t_air';
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+--error ER_SP_DOES_NOT_EXIST
+CREATE OR REPLACE TYPE t_air_table AS table OF test.t_air11;
+SELECT name,type,options FROM mysql.routines where name='t_air' or name='t_air_table';
+show create type t_air_table;
+
+--echo #
+--echo # test of select type_table
+--echo #
+select t_air_table(t_air(1,'aa'),t_air(2,'bb'));
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+select t_air_table(t_air('b','aa'),t_air(2,'bb'));
+select t_air_table(null);
+--error ER_SP_DOES_NOT_EXIST
+select t_air_table(t_air1('b','aa'));
+
+--echo #
+--echo # test of table function
+--echo #
+select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb')));
+select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) a;
+select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) a union
+  select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) a;
+select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) union
+  select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb')));
+select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) a,table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) b;
+select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))),table(t_air_table(t_air(1,'aa'),t_air(2,'bb')));
+--error ER_NONUNIQ_TABLE
+select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) a,table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) a;
+select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) where id>1;
+select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) where type is not null;
+--error ER_UDT_NONTESTED_TABLE_ITEM
+select * from table(1);
+--error ER_UDT_NONTESTED_TABLE_ITEM
+select * from table(t_air(1,'aa'));
+
+--echo #
+--echo # test of create table as select table function
+--echo #
+create table ss_table as select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb')));
+select * from ss_table;
+insert into ss_table select * from table(t_air_table(t_air(3,'cc'),t_air(4,'dd')));
+select * from ss_table;
+drop table ss_table;
+
+--echo #
+--echo # test of create type as VARRAY
+--echo #
+SELECT name,type,options FROM mysql.routines where name='t_air';
+CREATE OR REPLACE TYPE t_air_varray AS VARRAY(1) OF t_air;
+--error ER_SP_DOES_NOT_EXIST
+CREATE OR REPLACE TYPE t_air_varray AS VARRAY(1) OF t_air11;
+show variables like 'tf_udt_table_max_rows';
+set GLOBAL tf_udt_table_max_rows=10485;
+show variables like 'tf_udt_table_max_rows';
+--error ER_UDT_TABLE_SIZE_LIMIT
+CREATE OR REPLACE TYPE t_air_varray AS VARRAY(10486) OF test.t_air;
+SELECT name,type,options FROM mysql.routines where name='t_air' or name='t_air_table';
+show create type t_air_varray;
+set GLOBAL tf_udt_table_max_rows=1048576;
+
+--echo #
+--echo # test of select type_array
+--echo #
+select t_air_varray(t_air(1,'aa'));
+--error ER_DA_OOM
+select t_air_varray(t_air(1,'aa'),t_air(2,'bb'));
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+select t_air_varray(t_air('b','aa'));
+select t_air_varray(null);
+--error ER_SP_DOES_NOT_EXIST
+select t_air_varray(t_air1('b','aa'));
+
+--echo #
+--echo # test of table function
+--echo #
+CREATE OR REPLACE TYPE t_air_varray AS VARRAY(10) OF t_air;
+select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb')));
+select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))) a;
+select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))) a union
+  select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))) a;
+select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))) union
+  select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb')));
+select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))) a,table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))) b;
+select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) a,table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))) b;
+select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))),table(t_air_varray(t_air(1,'aa'),t_air(2,'bb')));
+select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))),table(t_air_varray(t_air(11,'aa1'),t_air(21,'bb2'))),table(t_air_varray(t_air(10,'aa10'),t_air(20,'bb20')));
+--error ER_NONUNIQ_TABLE
+select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))) a,table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))) a;
+select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))) where id>1;
+select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb'))) where type is not null;
+
+--echo #
+--echo # test of create table as select table function
+--echo #
+create table ss_table as select * from table(t_air_varray(t_air(1,'aa'),t_air(2,'bb')));
+select * from ss_table;
+insert into ss_table select * from table(t_air_varray(t_air(3,'cc'),t_air(4,'dd')));
+select * from ss_table;
+--error ER_UDT_INCONS_DATATYPES
+insert into ss_table values(t_air_varray(t_air(3,'cc'),t_air(4,'dd')),'a');
+--error ER_NOT_SUPPORTED_YET
+select * from ss_table where type=t_air_varray(t_air(3,'cc'),t_air(4,'dd'));
+--error ER_NOT_SUPPORTED_YET
+select t_air_varray(t_air(3,'cc'),t_air(4,'dd'))+1 from dual;
+drop table ss_table;
+
+--echo #
+--echo # test of error with udt table
+--echo #
+--error ER_NOT_SUPPORTED_YET
+create table tt_of of t_air_table;
+--error ER_NOT_SUPPORTED_YET
+create table tabl1 (id int, u1 t_air_table);
+--error ER_NOT_SUPPORTED_YET
+CREATE OR REPLACE TYPE t_air_varray1 AS VARRAY(10) OF t_air_varray;
+create table table_of of t_air;
+--error ER_UDT_INCONS_DATATYPES
+insert into table_of select t_air_table(t_air(1,'aa'),t_air(2,'bb')),t_air_table(t_air(1,'aa'),t_air(2,'bb'));
+drop table table_of;
+
+--echo #
+--echo # test of conditions of with udt table
+--echo #
+select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) where t_air_table(t_air(1,'aa'),t_air(2,'bb'))=t_air_table(t_air(1,'aa'),t_air(2,'bb'));
+--error ER_WRONG_UDT_DATA_TYPE
+select * from table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) where t_air_table(t_air(1,'aa'),t_air(2,'bb'))=t_air_varray(t_air(1,'aa'));
+
+--echo #
+--echo # test of different db of udt table
+--echo #
+create database db2;
+use db2;
+create or replace type t_air as object(id int,type varchar(10));
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+use test;
+select * from table(db2.t_air_table(db2.t_air(1,'aa'),db2.t_air(2,'bb')));
+--error ER_WRONG_UDT_DATA_TYPE
+select * from table(db2.t_air_table(db2.t_air(1,'aa'),t_air(2,'bb')));
+drop database db2;
+
+--echo #
+--echo # test of table(a.udt_col)
+--echo #
+create table tt_air(id int,name t_air);
+insert into tt_air values(10,t_air(10,'aabb10'));
+insert into tt_air values(11,t_air(11,'aabb11'));
+select * from tt_air;
+select a.id,a.type from tt_air b,table(t_air_table(b.name)) a;
+select a.id,a.type from tt_air b,table(t_air_table(b.name,t_air(1,'aa'))) a;
+--error ER_UDT_NONTESTED_TABLE_ITEM
+select a.id,a.type from tt_air b,table(b.name) a;
+select t_air_table(a.name) from tt_air a;
+select t_air_table(a.name,t_air(2,'aaa')) from tt_air a;
+--error ER_TYPE_IN_ORDER_BY
+select * from tt_air a order by  t_air_table(a.name);
+--error ER_NOT_SUPPORTED_YET
+select name || t_air_table(name) from tt_air;
+--error ER_NOT_SUPPORTED_YET
+select t_air_table(name)-1 from tt_air;
+drop table tt_air;
+
+--echo #
+--echo # for cursor loop
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c_country IS SELECT * FROM table(t_air_table(t_air(1,'aa'),t_air(2,'bb')));
+  rec c_country%ROWTYPE;
+BEGIN
+  FOR rec IN c_country
+  loop
+    SELECT rec.id,rec.type;
+  END loop;
+END;
+$$
+DELIMITER ;$$
+CALL p1();
+DROP PROCEDURE p1;
+
+drop type t_air_table;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+drop type t_air_varray;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+drop type t_air;
+
+--echo #
+--echo # test of for loop
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1(n int) as
+BEGIN
+  for x IN reverse n-2 .. n LOOP
+    select x;
+  END LOOP;
+ end;
+$$
+DELIMITER ;$$
+call p1(5);
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of for loop
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1(n int) as
+BEGIN
+  for x IN n-2 .. n LOOP
+    select x;
+  END LOOP;
+ end;
+$$
+DELIMITER ;$$
+call p1(5);
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of for loop
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1(n int) as
+BEGIN
+  for x IN n .. abs(n) LOOP
+    select x;
+  END LOOP;
+ end;
+$$
+DELIMITER ;$$
+call p1(-1);
+drop PROCEDURE p1;
+
+--echo #
+--echo # for cursor loop
+--echo #
+
+CREATE TABLE t1 (id2 int, id int, en1 enum('aaa','a','b','c'));
+INSERT INTO t1 VALUES(1,1,'aaa'),(2,1,'a'),(3,3,'b'),(4,1,'c');
+DELIMITER $$;
+CREATE PROCEDURE p1() as
+  CURSOR c_country IS SELECT * FROM t1;
+  rec c_country%ROWTYPE;
+BEGIN
+  FOR rec IN c_country
+  loop
+    SELECT rec.en1;
+  END loop;
+END;
+$$
+DELIMITER ;$$
+CALL p1();
+DROP PROCEDURE p1;
+
+--echo #
+--echo # for cursor loop
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c_country(j int) IS SELECT * FROM t1 where id=j;
+  rec c_country%ROWTYPE;
+BEGIN
+  FOR rec IN c_country(1)
+  loop
+    SELECT rec.en1;
+  END loop;
+END;
+$$
+DELIMITER ;$$
+CALL p1();
+DROP PROCEDURE p1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # test of create type with bit column
+--echo #
+create or replace type type_bit as object(id int, bitcol bit(64), name varchar(20));
+select type_bit(1,b'1011111111111111','aaa');
+select type_bit(2,0xffa123,'aaa');
+
+create table tt_bit(id int,name type_bit);
+insert into tt_bit values(10,type_bit(1,b'1011111111111111','aaa'));
+insert into tt_bit values(11,type_bit(11,0xffa123,'bbb'));
+insert into tt_bit values(12,null);
+select * from tt_bit;
+
+create table bit_of as select * from tt_bit;
+select * from bit_of;
+
+drop table tt_bit;
+drop table bit_of;
+drop type type_bit;
+
+
+--echo # nulls first test
+create type t_air as object(id int, type varchar(10));
+create type t_air_table as table of t_air;
+create type t_air_varray as varray(10) of t_air;
+
+select a.id,a.type,b.id,b.type from
+  table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) a
+  full join table(t_air_varray(t_air(1,'cc'),t_air(4,'dd'))) b
+  on a.id=b.id
+  order by a.id nulls first;
+select a.id,a.type,b.id,b.type from
+  table(t_air_table(t_air(1,'aa'),t_air(2,'bb'))) a
+  full join table(t_air_varray(t_air(1,'cc'),t_air(4,'dd'))) b
+  on a.id=b.id
+  order by a.id nulls last;
+
+drop type t_air_varray;
+drop type t_air_table;
+drop type t_air;
+
+--echo #
+--echo # test of bug8845
+--echo #
+create or replace type var_test1 as object(col0 tinyint,col1 smallint,col2 mediumint, col3 int,col4 integer, col5 bigint,col6 decimal(10, 2),
+        col7 dec(10, 2),col8 numeric(10, 2),col9 float, col10 double,col11 real,col12 bool, col13 boolean,col14 DATE,col15 DATETIME,
+        col16 TIMESTAMP,col17 TIME,col18 YEAR,col19 CHAR(10),col20 VARCHAR(20), col21 BINARY(10),col22 VARBINARY(50), col31 bit,
+        col32 enum('春', '夏', '秋', '冬', 'unknow'),col33 SET('A', 'B', 'C'),col35 number,col36 VARCHAR2(100),col37 PLS_INTEGER);
+create or replace type var_test1_table as table of var_test1;
+select * from table( var_test1_table(var_test1(1,11,111,1111,1111,111111,1.23,1.45,1.67,1.89,1.91,1.43,1,1, '2003-01-02','2003-01-02 10:11:12','2003-01-02 10:11:12','10:11:12',2023,'aaa','bbbb','6161','626262',1,'春',  'B', 12.34,'cccddd', 20))) t1 join table( var_test1_table(var_test1(1,11,111,1111,1111,111111,1.23,1.45,1.67,1.89,1.91,1.43,1,1, '2003-01-02','2003-01-02 10:11:12','2003-01-02 10:11:12','10:11:12',2023,'aaa','bbbb','6161','626262',1,'春',  'B', 12.34,'cccddd', 20))) t2 using(col32);
+select * from table( var_test1_table(var_test1(1,11,111,1111,1111,111111,1.23,1.45,1.67,1.89,1.91,1.43,1,1, '2003-01-02','2003-01-02 10:11:12','2003-01-02 10:11:12','10:11:12',2023,'aaa','bbbb','6161','626262',1,'春',  'B', 12.34,'cccddd', 20))) t1 join table( var_test1_table(var_test1(1,11,111,1111,1111,111111,1.23,1.45,1.67,1.89,1.91,1.43,1,1, '2003-01-02','2003-01-02 10:11:12','2003-01-02 10:11:12','10:11:12',2023,'aaa','bbbb','6161','626262',1,'春',  'B', 12.34,'cccddd', 20))) t2 using(col32);
+select * from table( var_test1_table(var_test1(1,11,111,1111,1111,111111,1.23,1.45,1.67,1.89,1.91,1.43,1,1, '2003-01-02','2003-01-02 10:11:12','2003-01-02 10:11:12','10:11:12',2023,'aaa','bbbb','6161','626262',1,'春',  'B', 12.34,'cccddd', 20))) t1 join table( var_test1_table(var_test1(1,11,111,1111,1111,111111,1.23,1.45,1.67,1.89,1.91,1.43,1,1, '2003-01-02','2003-01-02 10:11:12','2003-01-02 10:11:12','10:11:12',2023,'aaa','bbbb','6161','626262',1,'春',  'B', 12.34,'cccddd', 20))) t2 using(col32);
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+begin
+for i in 1 .. 10 loop
+select * from table( var_test1_table(var_test1(1,11,111,1111,1111,111111,1.23,1.45,1.67,1.89,1.91,1.43,1,1, '2003-01-02','2003-01-02 10:11:12','2003-01-02 10:11:12','10:11:12',2023,'aaa','bbbb','6161','626262',1,'春',  'B', 12.34,'cccddd', 20))) t1 join table( var_test1_table(var_test1(1,11,111,1111,1111,111111,1.23,1.45,1.67,1.89,1.91,1.43,1,1, '2003-01-02','2003-01-02 10:11:12','2003-01-02 10:11:12','10:11:12',2023,'aaa','bbbb','6161','626262',1,'春',  'B', 12.34,'cccddd', 20))) t2 using(col32);
+end loop;
+end;$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+drop type var_test1_table;
+drop type var_test1;
+
+
+

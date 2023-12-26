@@ -724,7 +724,8 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
     True if an inversion optimization strategy is used. For common
     code paths.
   */
-  const bool optimizable = (row_optimizable || range_optimizable);
+  const bool optimizable = (row_optimizable || range_optimizable ||
+                            w.get_keep_dir() != KEEP_DIR_NONE);
 
   /**
     RANGE was specified as the bounds unit for the frame
@@ -983,6 +984,7 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
     // Compute and output current_row.
     int64 rowno;        ///< iterates over rows in a frame
     int64 skipped = 0;  ///< RANGE: # of visited rows seen before the frame
+    int64 prev_frame_row = 0;
 
     for (rowno = lower_limit; rowno <= upper; rowno++) {
       if (optimizable) optimizable_primed = true;
@@ -995,6 +997,9 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
       const int64 n = rowno - lower_limit + 1 - skipped;
 
       w.set_rowno_in_frame(n);
+      if (w.get_keep_dir() == KEEP_DIR_LAST) {
+        w.set_rowno_in_frame(n - prev_frame_row);
+      }
 
       const Window_retrieve_cached_row_reason reason =
           (n == 1 ? Window_retrieve_cached_row_reason::FIRST_IN_FRAME
@@ -1014,13 +1019,19 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
           continue;
         }
         if (w.after_frame()) {
-          w.set_last_rowno_in_range_frame(rowno - 1);
-
-          if (!first_row_in_range_frame_seen)
-            // empty frame, optimize starting point for next row
-            w.set_first_rowno_in_range_frame(rowno);
-          w.restore_pos(reason);
-          break;
+          if (w.get_keep_dir() == KEEP_DIR_LAST) {
+            w.reset_order_by_peer_set();
+            reset_framing_wf_states(param->items_to_copy);
+            w.set_rowno_in_frame(1);
+            prev_frame_row = n - 1;
+          } else {
+            w.set_last_rowno_in_range_frame(rowno - 1);
+            if (!first_row_in_range_frame_seen)
+              // empty frame, optimize starting point for next row
+              w.set_first_rowno_in_range_frame(rowno);
+            w.restore_pos(reason);
+            break;
+          }
         }  // else: row is within range, process
 
         if (!first_row_in_range_frame_seen) {
@@ -1399,7 +1410,8 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
         w.set_rowno_in_frame(rowno_in_frame)
             .set_is_last_row_in_frame(true);  // pessimistic assumption
 
-        if (copy_funcs(param, thd, CFT_WF_FRAMING)) return true;
+        if (w.get_keep_dir() == KEEP_DIR_NONE)
+          if (copy_funcs(param, thd, CFT_WF_FRAMING)) return true;
 
         w.set_is_last_row_in_frame(false);  // undo temporary states
         row_added = true;
@@ -1497,6 +1509,17 @@ bool process_buffered_windowing_record(THD *thd, Temp_table_param *param,
       return true;
   }
 
+  /* RATIO_TO_REPORT don't do add(). */
+  if (w.only_need_do_second_phase()) {
+    /*
+      It only needs to do div() without do add().
+    */
+    w.set_do_second_phase(true);
+    if (copy_funcs(param, thd, CFT_WF_ORA_ONLY_NEED_DO_SECOND_PHASE))
+      return true;
+    w.set_do_second_phase(false);
+  }
+
   if (w.is_last() && copy_funcs(param, thd, CFT_HAS_WF)) return true;
   *output_row_ready = true;
   w.set_last_row_output(current_row);
@@ -1587,6 +1610,13 @@ int BufferingWindowIterator::Read() {
   SwitchSlice(m_join, m_output_slice);
 
   if (m_eof) {
+    if (m_window->get_keep_dir() != KEEP_DIR_NONE &&
+        !m_window->has_keep_over_clause() &&
+        m_window->get_query_block()->group_list.elements > 0 &&
+        !is_sub_queryp) {
+      return -1;
+    }
+
     return ReadBufferedRow(/*new_partition_or_eof=*/true);
   }
 
@@ -1595,6 +1625,15 @@ int BufferingWindowIterator::Read() {
   // to be output.
   if (m_possibly_buffered_rows) {
     int err = ReadBufferedRow(m_last_input_row_started_new_partition);
+    if (m_window->get_keep_dir() != KEEP_DIR_NONE &&
+        !m_window->has_keep_over_clause() &&
+        m_window->get_query_block()->group_list.elements > 0 &&
+        !is_sub_queryp) {
+      while (err != -1) {
+        err = ReadBufferedRow(m_last_input_row_started_new_partition);
+      }
+    }
+
     if (err != -1) {
       return err;
     }
@@ -1656,6 +1695,15 @@ int BufferingWindowIterator::Read() {
       {
         Switch_ref_item_slice slice_switch(m_join, m_input_slice);
         if (copy_funcs(m_temp_table_param, thd(), CFT_HAS_NO_WF)) return 1;
+      }
+
+      Item_func_rownum *rn = m_join->query_block->rownum_func;
+      if (rn) {
+        rn->reset_read_flag();
+      }
+
+      if (m_join->query_block->has_sequence) {
+        m_join->query_block->reset_sequence_read_flag();
       }
 
       bool new_partition = false;

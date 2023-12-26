@@ -50,7 +50,7 @@ using dd::tables::Parameters;
 namespace dd {
 
 static const std::set<String_type> default_valid_option_keys = {
-    "geom_type", "default_value"};
+    "geom_type", "default_value", "sys_refcursor", "udt_name", "udt_db_name"};
 
 ///////////////////////////////////////////////////////////////////////////
 // Parameter_impl implementation.

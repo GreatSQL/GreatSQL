@@ -97,6 +97,7 @@ struct Channel_creation_info {
   int channel_mts_parallel_workers;
   int channel_mta_checkpoint_group;
   int replicate_same_server_id;
+  int replicate_server_id_mode;
   int thd_tx_priority;  // The applier thread priority
   int sql_delay;
   int connect_retry;         // How many seconds to wait between retries.
@@ -441,6 +442,17 @@ bool is_partial_transaction_on_channel_relay_log(const char *channel);
   @retval          false              none of the the channels are running.
 */
 bool is_any_slave_channel_running(int thread_mask);
+
+/**
+  Checks if any slave threads of any channel configured with
+  SOURCE_CONNECTION_AUTO_FAILOVER is connected successed.
+
+  @param[in]        thread_mask       type of slave thread- IO/SQL or any
+
+  @retval          true               at least one channel threads are running.
+  @retval          false              none of the the channels are running.
+*/
+bool is_any_slave_channel_connecting_with_failover_enabled(int thread_mask);
 
 /**
   Checks if any slave threads of any channel configured with

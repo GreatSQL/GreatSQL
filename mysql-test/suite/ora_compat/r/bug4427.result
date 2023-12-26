@@ -1,0 +1,99 @@
+[Prepare sequences]
+create sequence seq cache 5;
+create sequence seq_min__10000 cache 3 increment by 7;
+create sequence seq_front;
+show full sequences;
+Sequences_in_test	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+seq	1	1	9999999999999999999999999999	1	0	5	0
+seq_front	1	1	9999999999999999999999999999	1	0	20	0
+seq_min__10000	1	1	9999999999999999999999999999	7	0	3	0
+[Simple sequences show in variant sessions]
+show full sequences;
+Sequences_in_test	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+seq	1	1	9999999999999999999999999999	1	0	5	0
+seq_front	1	1	9999999999999999999999999999	1	0	20	0
+seq_min__10000	1	1	9999999999999999999999999999	7	0	3	0
+select seq.nextval;
+nextval
+1
+select seq_front.nextval;
+nextval
+1
+select seq_min__10000.nextval;
+nextval
+1
+show full sequences;
+Sequences_in_test	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+seq	2	1	9999999999999999999999999999	1	0	5	0
+seq_front	2	1	9999999999999999999999999999	1	0	20	0
+seq_min__10000	8	1	9999999999999999999999999999	7	0	3	0
+select seq.nextval;
+nextval
+2
+select seq_front.nextval;
+nextval
+2
+select seq_min__10000.nextval;
+nextval
+8
+show full sequences;
+Sequences_in_test	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+seq	3	1	9999999999999999999999999999	1	0	5	0
+seq_front	3	1	9999999999999999999999999999	1	0	20	0
+seq_min__10000	15	1	9999999999999999999999999999	7	0	3	0
+show full sequences;
+Sequences_in_test	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+seq	3	1	9999999999999999999999999999	1	0	5	0
+seq_front	3	1	9999999999999999999999999999	1	0	20	0
+seq_min__10000	15	1	9999999999999999999999999999	7	0	3	0
+select seq.nextval;
+nextval
+3
+select seq_front.nextval;
+nextval
+3
+select seq_min__10000.nextval;
+nextval
+15
+show full sequences;
+Sequences_in_test	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+seq	4	1	9999999999999999999999999999	1	0	5	0
+seq_front	4	1	9999999999999999999999999999	1	0	20	0
+seq_min__10000	22	1	9999999999999999999999999999	7	0	3	0
+show full sequences;
+Sequences_in_test	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+seq	4	1	9999999999999999999999999999	1	0	5	0
+seq_front	4	1	9999999999999999999999999999	1	0	20	0
+seq_min__10000	22	1	9999999999999999999999999999	7	0	3	0
+select seq.nextval;
+nextval
+4
+select seq_front.nextval;
+nextval
+4
+select seq_min__10000.nextval;
+nextval
+22
+show full sequences;
+Sequences_in_test	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+seq	5	1	9999999999999999999999999999	1	0	5	0
+seq_front	5	1	9999999999999999999999999999	1	0	20	0
+seq_min__10000	29	1	9999999999999999999999999999	7	0	3	0
+select seq.nextval;
+nextval
+5
+select seq_front.nextval;
+nextval
+5
+select seq_min__10000.nextval;
+nextval
+29
+show full sequences;
+Sequences_in_test	Start_with	Minvalue	Maxvalue	Increment_by	Cycle	Cache	Order
+seq	6	1	9999999999999999999999999999	1	0	5	0
+seq_front	6	1	9999999999999999999999999999	1	0	20	0
+seq_min__10000	36	1	9999999999999999999999999999	7	0	3	0
+[finalize]
+drop sequence seq;
+drop sequence seq_min__10000;
+drop sequence seq_front;

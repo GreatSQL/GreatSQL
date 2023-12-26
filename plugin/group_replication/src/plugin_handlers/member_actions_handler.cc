@@ -1,4 +1,5 @@
 /* Copyright (c) 2021, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -389,7 +390,14 @@ int Member_actions_handler::run_internal_action(
 
   if (action.name() == "mysql_start_failover_channels_if_primary") {
     if (im_the_primary) {
-      return start_failover_channels();
+      error = start_failover_channels();
+      if (!error && is_set_read_only_for_slave_primary() &&
+          is_any_slave_channel_connecting_with_failover_enabled(
+              CHANNEL_RECEIVER_THREAD) &&
+          is_any_slave_channel_connecting_with_failover_enabled(
+              CHANNEL_APPLIER_THREAD)) {
+        enable_server_read_mode();
+      }
     }
   }
 

@@ -1380,3 +1380,13 @@ i8
 5
 DEALLOCATE PREPARE ps;
 DROP TABLE t1;
+bug: 3897 in subqurey with partition table
+create table t2(id int , c1 varchar(20), c2 varchar(20)) partition by hash(id) partitions 7  ;
+insert into t2 values(1, 'c11', 'c12') ;
+select * from t2 where (c1, c2 ) in ( ('test','test' ), (select c1,c2 from t2) ) ;
+id	c1	c2
+1	c11	c12
+insert into t2 values (2, 'c21', 'c22'),(3, 'c31', 'c32'),(4, 'c41', 'c42') ;
+select * from t2 where (c1, c2 ) in ( ('test','test' ), (select c1,c2 from t2) ) ;
+ERROR 21000: Subquery returns more than 1 row
+drop table t2;

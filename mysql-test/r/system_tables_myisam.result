@@ -6,6 +6,7 @@ CALL mtr.add_suppression("Column count of");
 CALL mtr.add_suppression("Incorrect definition of table");
 CALL mtr.add_suppression("Cannot load from");
 CALL mtr.add_suppression("Storage engine 'MyISAM' does not");
+CALL mtr.add_suppression("System table 'greatdb_sequences' is expected to be transactional");
 #-----------------------------------------------------------------------
 # Test cases to verify system table's behavior with storage engines
 # InnoDB and MyISAM.
@@ -75,6 +76,10 @@ Storage engine 'MyISAM' does not support system tables. [mysql.func]
 mysql.global_grants
 ERROR
 Storage engine 'MyISAM' does not support system tables. [mysql.global_grants]
+@table_name
+mysql.greatdb_sequences
+@table_name
+mysql.greatdb_sequences_persist
 @table_name
 mysql.gtid_executed
 ERROR
@@ -322,26 +327,6 @@ DROP TABLE system_tables;
 #-----------------------------------------------------------------------
 CREATE USER 'user1'@'%';
 CREATE TABLE t1 (f1 INT);
-CREATE FUNCTION sequence RETURNS INTEGER SONAME "UDF_EXAMPLE_LIB";
-RENAME TABLE mysql.func TO mysql.func_bkp;
-CREATE TABLE mysql.func ENGINE='MyISAM' AS SELECT * FROM mysql.func_bkp;
-Warnings:
-Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.func]
-# Without the fix, following statement results in the assert
-# condition failure.
-CREATE FUNCTION udf_func RETURNS STRING SONAME 'udf_func.so';
-ERROR HY000: Storage engine 'MyISAM' does not support system tables. [mysql.func]
-DROP FUNCTION sequence;
-ERROR HY000: Storage engine 'MyISAM' does not support system tables. [mysql.func]
-ALTER TABLE mysql.func ENGINE='InnoDB',
-DROP COLUMN ret;
-CREATE FUNCTION udf_func RETURNS STRING SONAME 'udf_func.so';
-ERROR HY000: Column count of mysql.func is wrong. Expected 4, found 3. The table is probably corrupted
-DROP FUNCTION sequence;
-ERROR HY000: Column count of mysql.func is wrong. Expected 4, found 3. The table is probably corrupted
-DROP TABLE mysql.func;
-RENAME TABLE mysql.func_bkp TO mysql.func;
-DROP FUNCTION sequence;
 RENAME TABLE mysql.plugin TO mysql.plugin_bkp;
 CREATE TABLE mysql.plugin ENGINE='MyISAM' AS SELECT * FROM mysql.plugin_bkp;
 Warnings:
@@ -581,6 +566,8 @@ mysql	columns_priv	MyISAM
 mysql	db	MyISAM
 mysql	event	MyISAM
 mysql	func	MyISAM
+mysql	greatdb_sequences	MyISAM
+mysql	greatdb_sequences_persist	MyISAM
 mysql	ndb_binlog_index	MyISAM
 mysql	proc	MyISAM
 mysql	procs_priv	MyISAM
@@ -593,4 +580,6 @@ WHERE table_schema='mysql'
                                               AND engine='MyISAM';
 TABLE_SCHEMA	TABLE_NAME	ENGINE
 mysql	event	MyISAM
+mysql	greatdb_sequences	MyISAM
+mysql	greatdb_sequences_persist	MyISAM
 mysql	proc	MyISAM

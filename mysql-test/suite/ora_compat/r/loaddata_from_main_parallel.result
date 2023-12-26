@@ -5,15 +5,13 @@ select @@auto_increment_increment into @old_increment_increment;
 select @@auto_increment_offset into @old_increment_offset;
 set @@auto_increment_increment=1;
 set @@auto_increment_offset=1;
-create table t1 (a date, b date, c date not null, d date) engine=InnoDB;
-load data infile '../../std_data/loaddata1.dat'
-ignore into table t1 fields terminated by ',';
+create table t1 (a date, b date, c date not null, d date);
+load data infile '../../std_data/loaddata1.dat' ignore into table t1 fields terminated by ',';
 Warnings:
 Warning	1265	Data truncated for column 'a' at row 1
 Warning	1265	Data truncated for column 'c' at row 1
 Warning	1265	Data truncated for column 'd' at row 1
-load data infile '../../std_data/loaddata1.dat'
-into table t1 fields terminated by ',' IGNORE 2 LINES;
+load data infile '../../std_data/loaddata1.dat' into table t1 fields terminated by ',' IGNORE 2 LINES;
 Warnings:
 Warning	4096	Delimiter ' ' in position 0 in datetime value ' 20030303' at row 1 is superfluous and is deprecated. Please remove.
 SELECT * from t1;
@@ -23,8 +21,7 @@ a	b	c	d
 2003-03-03	2003-03-03	2003-03-03	NULL
 2003-03-03	2003-03-03	2003-03-03	NULL
 truncate table t1;
-load data infile '../../std_data/loaddata1.dat'
-ignore into table t1 fields terminated by ',' LINES STARTING BY ',' (b,c,d);
+load data infile '../../std_data/loaddata1.dat' ignore into table t1 fields terminated by ',' LINES STARTING BY ',' (b,c,d);
 Warnings:
 Warning	1265	Data truncated for column 'c' at row 1
 Warning	1265	Data truncated for column 'd' at row 1
@@ -34,9 +31,8 @@ NULL	NULL	0000-00-00	0000-00-00
 NULL	0000-00-00	0000-00-00	0000-00-00
 NULL	2003-03-03	2003-03-03	NULL
 drop table t1;
-create table t1 (a text, b text) engine=InnoDB;
-load data infile '../../std_data/loaddata2.dat'
-ignore into table t1 fields terminated by ',' enclosed by '''';
+create table t1 (a text, b text);
+load data infile '../../std_data/loaddata2.dat' ignore into table t1 fields terminated by ',' enclosed by '''';
 select concat('|',a,'|'), concat('|',b,'|') from t1;
 concat('|',a,'|')	concat('|',b,'|')
 |Field A|	|Field B|
@@ -45,9 +41,8 @@ Field 3,'Field 4|
 |Field 5' ,'Field 6|	NULL
 |Field 6|	| 'Field 7'|
 drop table t1;
-create table t1 (a int, b char(10)) engine=InnoDB charset latin1;
-load data infile '../../std_data/loaddata3.dat'
-ignore into table t1 fields terminated by '' enclosed by '' ignore 1 lines;
+create table t1 (a int, b char(10)) charset latin1;
+load data infile '../../std_data/loaddata3.dat' ignore into table t1 fields terminated by '' enclosed by '' ignore 1 lines;
 Warnings:
 Warning	1366	Incorrect integer value: 'error      ' for column 'a' at row 3
 Warning	1262	Row 3 was truncated; it contained more data than there were input columns
@@ -61,8 +56,7 @@ a	b
 3	row 3
 0	1234567890
 truncate table t1;
-load data infile '../../std_data/loaddata4.dat'
-ignore into table t1 fields terminated by '' enclosed by '' lines terminated by '' ignore 1 lines;
+load data infile '../../std_data/loaddata4.dat' ignore into table t1 fields terminated by '' enclosed by '' lines terminated by '' ignore 1 lines;
 Warnings:
 Warning	1366	Incorrect integer value: '
 ' for column 'a' at row 4
@@ -75,7 +69,7 @@ a	b
 0	
 drop table t1;
 SET @OLD_SQL_MODE=@@SQL_MODE, @@SQL_MODE=NO_AUTO_VALUE_ON_ZERO;
-create table t1(id integer not null auto_increment primary key) engine=InnoDB;
+create table t1(id integer not null auto_increment primary key);
 insert into t1 values(0);
 select * from t1;
 id
@@ -85,7 +79,7 @@ id
 0
 SET @@SQL_MODE=@OLD_SQL_MODE;
 drop table t1;
-create table t1 (a varchar(20), b varchar(20)) engine=InnoDB;
+create table t1 (a varchar(20), b varchar(20));
 load data infile '../../std_data/loaddata_dq.dat' into table t1 fields terminated by ',' enclosed by '"' escaped by '"' (a,b);
 select * from t1;
 a	b
@@ -96,11 +90,11 @@ drop table t1;
 CREATE TABLE t1 (
 id INT AUTO_INCREMENT PRIMARY KEY,
 c1 VARCHAR(255)
-) engine=InnoDB;
+);
 CREATE TABLE t2 (
 id INT,
 c2 VARCHAR(255)
-) engine=InnoDB;
+);
 INSERT INTO t1 (c1) VALUES
 ('r'),   ('rr'),   ('rrr'),   ('rrrr'),
 ('.r'),  ('.rr'),  ('.rrr'),  ('.rrrr'),
@@ -147,7 +141,7 @@ id	c1	c2
 SELECT t1.id, c1, c2 FROM t1 RIGHT JOIN t2 ON t1.id=t2.id WHERE c1 != c2;
 id	c1	c2
 DROP TABLE t1,t2;
-create table t1 (a int default 100, b int, c varchar(60)) engine=InnoDB;
+create table t1 (a int default 100, b int, c varchar(60));
 load data infile '../../std_data/rpl_loaddata.dat' into table t1 (a, @b) set b=@b+10, c=concat("b=",@b);
 select * from t1;
 a	b	c
@@ -201,7 +195,7 @@ a	b	c
 5	6	5+6+123+6+NIL
 load data infile '../../std_data/loaddata5.dat' into table t1 fields terminated by '' enclosed by '' (a, @b);
 ERROR HY000: Can't load value from file with fixed size rows to variable
-create table t2 (num int primary key, str varchar(10)) engine=InnoDB;
+create table t2 (num int primary key, str varchar(10));
 insert into t2 values (10,'Ten'), (15,'Fifteen');
 truncate table t1;
 load data infile '../../std_data/rpl_loaddata.dat' into table t1 (@dummy,@n) set a= @n, c= (select str from t2 where num=@n);
@@ -210,17 +204,17 @@ a	b	c
 10	NULL	Ten
 15	NULL	Fifteen
 drop table t1, t2;
-create table t1(f1 int) engine=InnoDB;
+create table t1(f1 int);
 insert into t1 values(1),(null);
-create table t2(f2 int auto_increment primary key) engine=InnoDB;
+create table t2(f2 int auto_increment primary key);
 select * from t2;
 f2
 1
 2
 SET @@SQL_MODE=@OLD_SQL_MODE;
 drop table t1,t2;
-create table t1(f1 int, f2 timestamp not null default current_timestamp) engine=InnoDB;
-create table t2(f1 int) engine=InnoDB;
+create table t1(f1 int, f2 timestamp not null default current_timestamp);
+create table t2(f1 int);
 insert into t2 values(1),(2);
 Warnings:
 Warning	1261	Row 1 doesn't contain data for all columns
@@ -240,7 +234,7 @@ f1
 2
 SET sql_mode = @previous_sql_mode;
 drop table t1,t2;
-CREATE TABLE t1 (c1 INT, c2 TIMESTAMP, c3 REAL, c4 DOUBLE) engine=InnoDB;
+CREATE TABLE t1 (c1 INT, c2 TIMESTAMP, c3 REAL, c4 DOUBLE);
 INSERT INTO t1 (c1, c2, c3, c4) VALUES (10, '1970-02-01 01:02:03', 1.1E-100, 1.1E+100);
 SELECT * FROM t1;
 c1	c2	c3	c4
@@ -264,7 +258,7 @@ DROP VIEW IF EXISTS v1;
 DROP VIEW IF EXISTS v2;
 DROP VIEW IF EXISTS v3;
 
-CREATE TABLE t1(c1 INT, c2 VARCHAR(255)) engine=InnoDB;
+CREATE TABLE t1(c1 INT, c2 VARCHAR(255));
 
 CREATE VIEW v1 AS SELECT * FROM t1;
 CREATE VIEW v2 AS SELECT 1 + 2 AS c0, c1, c2 FROM t1;
@@ -338,11 +332,11 @@ SET @OLD_SQL_MODE=@@SESSION.SQL_MODE;
 test LOAD DATA INFILE
 SET sql_mode = '';
 SELECT '1 \\aa\n' INTO DUMPFILE 'MYSQLTEST_VARDIR/tmp/bug37114.txt';
-CREATE TABLE t1 (id INT, val1 CHAR(3)) engine=InnoDB;
+CREATE TABLE t1 (id INT, val1 CHAR(3));
 SET sql_mode = 'NO_BACKSLASH_ESCAPES';
 LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bug37114.txt' REPLACE INTO TABLE t1 FIELDS TERMINATED BY ' ';
 Warnings:
-Warning	8020	parallel load data failed, cause unsupport handle duplicates replace, use normal load data
+Warning	8590	parallel load data failed, cause unsupport handle duplicates replace, use normal load data
 SELECT * FROM t1;
 id	val1
 1	\aa
@@ -373,7 +367,7 @@ select load_file(0x0A9FB76C661B409C4BEC88098C5DD71B1072F9691F2E827D7EC8F092B2998
 load_file(0x0A9FB76C661B409C4BEC88098C5DD71B1072F9691F2E827D7EC8F092B299868A3CE196C04F0FB18CAB4E1557EB72331D812379DE7A75CA21C32E7C722C59E5CC33EF262EF04187B0F0EE756FA984DF2EAD37B1E4ADB064C3C5038F2E3B2D661B1C1150AAEB5425512E14D7506166D92D4533872E662F4B2D142
 NULL
 End of 5.0 tests
-CREATE TABLE t1 (a int) engine=InnoDB;
+CREATE TABLE t1 (a int);
 INSERT INTO t1 VALUES (1);
 SET NAMES latin1;
 SET character_set_filesystem=binary;
@@ -404,7 +398,7 @@ binary
 # Bug #51850: crash/memory overlap when using load data infile and set 
 #  col equal to itself!
 #
-CREATE TABLE t1(col0 LONGBLOB) engine=InnoDB;
+CREATE TABLE t1(col0 LONGBLOB);
 SELECT 'test' INTO OUTFILE 't1.txt';
 LOAD DATA INFILE 't1.txt' IGNORE INTO TABLE t1 SET col0=col0;
 SELECT * FROM t1;

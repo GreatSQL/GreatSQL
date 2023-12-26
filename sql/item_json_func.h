@@ -181,7 +181,7 @@ class Item_json_func : public Item_func {
       : Item_func(std::forward<Args>(parent_args)...),
         m_path_cache(thd, arg_count) {
     set_data_type_json();
-    current_thd->lex->has_notsupported_func = true;
+    set_has_notsupported_func_true();
   }
 
   bool resolve_type(THD *) override {
@@ -316,7 +316,7 @@ class Item_func_json_valid final : public Item_int_func {
 
  public:
   Item_func_json_valid(const POS &pos, Item *a) : Item_int_func(pos, a) {
-    current_thd->lex->has_notsupported_func = true;
+    set_has_notsupported_func_true();
   }
 
   const char *func_name() const override { return "json_valid"; }
@@ -444,7 +444,7 @@ class Item_func_json_contains_path final : public Item_int_func {
       : Item_int_func(pos, a),
         m_cached_ooa(ooa_uninitialized),
         m_path_cache(thd, arg_count) {
-    current_thd->lex->has_notsupported_func = true;
+    set_has_notsupported_func_true();
   }
 
   const char *func_name() const override { return "json_contains_path"; }
@@ -476,7 +476,7 @@ class Item_func_json_type : public Item_str_func {
 
  public:
   Item_func_json_type(const POS &pos, Item *a) : Item_str_func(pos, a) {
-    current_thd->lex->has_notsupported_func = true;
+    set_has_notsupported_func_true();
   }
 
   const char *func_name() const override { return "json_type"; }
@@ -915,7 +915,7 @@ class Item_func_json_unquote : public Item_str_func {
  public:
   Item_func_json_unquote(const POS &pos, PT_item_list *a)
       : Item_str_func(pos, a) {
-    current_thd->lex->has_notsupported_func = true;
+    set_has_notsupported_func_true();
   }
 
   Item_func_json_unquote(const POS &pos, Item *a) : Item_str_func(pos, a) {}

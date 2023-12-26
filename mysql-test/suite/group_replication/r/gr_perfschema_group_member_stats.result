@@ -31,12 +31,16 @@ SET @@GLOBAL.DEBUG='+d,block_applier_updates';
 server2
 SET SESSION sql_log_bin= 0;
 call mtr.add_suppression("The requested GTID 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1' was already used, the transaction will rollback");
+call mtr.add_suppression("The requested GTID 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:2' was already used, the transaction will rollback");
 SET SESSION sql_log_bin= 1;
 include/start_group_replication.inc
 # Apply some transactions on the first member so that the queue of the second member is not empty.
 server1
 SET GTID_NEXT= 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1';
 INSERT INTO t1 VALUES (5);
+SET GTID_NEXT= 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:2';
+INSERT INTO t1 VALUES (6);
+SET GTID_NEXT= 'AUTOMATIC';
 # Check for the transaction in the applier queue and then unblock the recovery.
 server2
 server1

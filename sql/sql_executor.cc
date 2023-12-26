@@ -261,7 +261,7 @@ bool JOIN::create_intermediate_table(
     }
 
     if (alloc_group_fields(this, group_list.order)) goto err;
-    if (make_sum_func_list(*fields, true)) goto err;
+    if (make_sum_func_list(tmp_table_fields, true)) goto err;
     const bool need_distinct =
         !(tab->range_scan() &&
           tab->range_scan()->type == AccessPath::GROUP_INDEX_SKIP_SCAN);
@@ -269,7 +269,7 @@ bool JOIN::create_intermediate_table(
     if (setup_sum_funcs(thd, sum_funcs)) goto err;
     group_list.clean();
   } else {
-    if (make_sum_func_list(*fields, false)) goto err;
+    if (make_sum_func_list(tmp_table_fields, false)) goto err;
     const bool need_distinct =
         !(tab->range_scan() &&
           tab->range_scan()->type == AccessPath::GROUP_INDEX_SKIP_SCAN);
@@ -560,6 +560,11 @@ void setup_tmptable_write_func(QEP_TAB *tab, Opt_trace_object *trace) {
       tmp_tbl->items_to_copy->push_back(
           Func_ptr(*func_ptr, (*func_ptr)->get_result_field()));
     }
+  } else if (tab->connect_by) {
+    description = "continuously_connect_by_row";
+    DBUG_PRINT("info", ("Using continuously_connect_by_row"));
+    tab->op_type = QEP_TAB::OT_CONNECT_BY;
+
   } else {
     description = "write_all_rows";
     tab->op_type = (phase >= REF_SLICE_WIN_1 ? QEP_TAB::OT_WINDOWING_FUNCTION
@@ -1204,9 +1209,12 @@ void SplitConditions(Item *condition, QEP_TAB *current_table,
                                   left_tables, semi_join_table_idx);
         }
       } else {
-        // All other conditions (both join condition and filters) will be looked
-        // at while creating the iterator for this table.
-        predicates_below_join->push_back(item);
+        if (!current_table->is_foj())
+          // All other conditions (both join condition and filters) will be
+          // looked at while creating the iterator for this table.
+          predicates_below_join->push_back(item);
+        else
+          predicates_above_join->push_back(PendingCondition{item, -1});
       }
     }
   }
@@ -1302,7 +1310,13 @@ static AccessPath *NewWeedoutAccessPathForTables(
   return CreateWeedoutOrLimitAccessPath(thd, path, sjtbl);
 }
 
-enum class Substructure { NONE, OUTER_JOIN, SEMIJOIN, WEEDOUT };
+enum class Substructure {
+  NONE,
+  OUTER_JOIN,
+  SEMIJOIN,
+  WEEDOUT,
+  FULL_OUTER_JOIN
+};
 
 /**
   Given a range of tables (where we assume that we've already handled
@@ -1330,6 +1344,9 @@ static Substructure FindSubstructure(
   QEP_TAB *qep_tab = &qep_tabs[this_idx];
   bool is_outer_join =
       qep_tab->last_inner() != NO_PLAN_IDX && qep_tab->last_inner() < last_idx;
+  bool is_foj = qep_tab->last_foj_inner() != NO_PLAN_IDX &&
+                qep_tab->last_foj_inner() < last_idx;
+
   plan_idx outer_join_end =
       qep_tab->last_inner() + 1;  // Only valid if is_outer_join.
 
@@ -1479,9 +1496,8 @@ static Substructure FindSubstructure(
   }
   if (is_outer_join) {
     *substructure_end = outer_join_end;
-    return Substructure::OUTER_JOIN;
-  }
-  if (is_weedout) {
+    return is_foj ? Substructure::FULL_OUTER_JOIN : Substructure::OUTER_JOIN;
+  } else if (is_weedout) {
     *substructure_end = weedout_end;
     return Substructure::WEEDOUT;
   }
@@ -1548,6 +1564,18 @@ static void RecalculateTablePathCost(AccessPath *path,
     case AccessPath::MATERIALIZE:
       EstimateMaterializeCost(current_thd, path);
       break;
+
+    case AccessPath::ROWNUM_FILTER: {
+      const AccessPath &child = *path->rownum_filter().child;
+      path->set_num_output_rows(child.num_output_rows());
+      path->init_cost = child.init_cost;
+
+      const FilterCost filterCost = EstimateFilterCost(
+          current_thd, path->num_output_rows(), path->rownum_filter().condition,
+          &outer_query_block);
+
+      path->cost = child.cost + filterCost.cost_if_not_materialized;
+    } break;
 
     default:
       assert(false);
@@ -1635,6 +1663,9 @@ AccessPath *MoveCompositeIteratorsFromTablePath(
         bottom_of_table_path->materialize()
             .param->query_blocks[0]
             .subquery_path = path;
+        break;
+      case AccessPath::ROWNUM_FILTER:
+        bottom_of_table_path->rownum_filter().child = path;
         break;
       default:
         assert(false);
@@ -2096,10 +2127,18 @@ static AccessPath *CreateHashJoinAccessPath(
     // as far down as we should), but it should give reasonable speedups for
     // many common cases.
     vector<Item *> build_conditions;
+    bool build_path_is_join =
+        false || build_path->type == AccessPath::HASH_JOIN ||
+        build_path->type == AccessPath::NESTED_LOOP_JOIN ||
+        build_path->type == AccessPath::BKA_JOIN ||
+        build_path->type ==
+            AccessPath::NESTED_LOOP_SEMIJOIN_WITH_DUPLICATE_REMOVAL;
+
     for (auto cond_it = hash_join_extra_conditions.begin();
          cond_it != hash_join_extra_conditions.end();) {
       Item *cond = *cond_it;
-      if ((cond->used_tables() & (left_table_map | RAND_TABLE_BIT)) == 0) {
+      if ((join_type != JoinType::FULL_OUTER || build_path_is_join) &&
+          (cond->used_tables() & (left_table_map | RAND_TABLE_BIT)) == 0) {
         build_conditions.push_back(cond);
         cond_it = hash_join_extra_conditions.erase(cond_it);
       } else {
@@ -2207,6 +2246,7 @@ static AccessPath *CreateHashJoinAccessPath(
   path->hash_join().inner = build_path;
   path->hash_join().join_predicate = pred;
   path->hash_join().allow_spill_to_disk = allow_spill_to_disk;
+  path->hash_join().is_foj = (join_type == JoinType::FULL_OUTER);
   // Will be set later if we get a weedout access path as parent.
   path->hash_join().store_rowids = false;
   path->hash_join().rewrite_semi_to_inner = false;
@@ -2415,6 +2455,9 @@ AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,
   assert(last_idx > first_idx);
   AccessPath *path = nullptr;
 
+  bool is_top_level_and_with_foj =
+      calling_context == TOP_LEVEL &&
+      qep_tabs[first_idx].join()->query_block->has_foj();
   // A special case: If we are at the top but the first table is an outer
   // join, we implicitly have one or more const tables to the left side
   // of said join.
@@ -2422,10 +2465,15 @@ AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,
       calling_context == TOP_LEVEL &&
       qep_tabs[first_idx].last_inner() != NO_PLAN_IDX;
 
+  // if a query block should not contain top_level_outer_join and full join
+  // at the same time
+  assert(!is_top_level_and_with_foj || !is_top_level_outer_join);
+
   vector<PendingCondition> top_level_pending_conditions;
   vector<PendingCondition> top_level_pending_join_conditions;
-  if (is_top_level_outer_join) {
-    path = NewFakeSingleRowAccessPath(thd, /*count_examined_rows=*/false);
+  if (is_top_level_outer_join || is_top_level_and_with_foj) {
+    if (is_top_level_outer_join)
+      path = NewFakeSingleRowAccessPath(thd, /*count_examined_rows=*/false);
     pending_conditions = &top_level_pending_conditions;
     pending_join_conditions = &top_level_pending_join_conditions;
   }
@@ -2462,6 +2510,7 @@ AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,
           top_level_pending_conditions, conditions_depend_on_outer_tables);
 
       is_top_level_outer_join = false;
+      is_top_level_and_with_foj = false;
       pending_conditions = nullptr;
       pending_join_conditions = nullptr;
     }
@@ -2483,6 +2532,7 @@ AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,
 
     QEP_TAB *qep_tab = &qep_tabs[i];
     if (substructure == Substructure::OUTER_JOIN ||
+        substructure == Substructure::FULL_OUTER_JOIN ||
         substructure == Substructure::SEMIJOIN) {
       qep_tab_map left_tables = TablesBetween(first_idx, i);
       qep_tab_map right_tables = TablesBetween(i, substructure_end);
@@ -2653,7 +2703,8 @@ AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,
           // join (and any associated filtering), which is the safe option --
           // and in this case, it's no slower, since we'll be having a LIMIT 1
           // inserted anyway.
-          assert(substructure == Substructure::OUTER_JOIN);
+          assert(substructure == Substructure::OUTER_JOIN ||
+                 substructure == Substructure::FULL_OUTER_JOIN);
           remove_duplicates_loose_scan = true;
 
           path = CreateNestedLoopAccessPath(thd, path, subtree_path, join_type,
@@ -2664,9 +2715,10 @@ AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,
       } else if (path == nullptr) {
         assert(substructure == Substructure::SEMIJOIN);
         path = subtree_path;
-      } else if (((UseHashJoin(qep_tab) && !right_side_depends_on_outer) ||
-                  UseBKA(qep_tab)) &&
-                 !QueryMixesOuterBKAAndBNL(qep_tab->join())) {
+      } else if (substructure == Substructure::FULL_OUTER_JOIN ||
+                 (((UseHashJoin(qep_tab) && !right_side_depends_on_outer) ||
+                   UseBKA(qep_tab)) &&
+                  !QueryMixesOuterBKAAndBNL(qep_tab->join()))) {
         // Join conditions that were inside the substructure are placed in the
         // vector 'subtree_pending_join_conditions'. Find out which of these
         // conditions that should be attached to this table, and attach them
@@ -2681,9 +2733,36 @@ AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,
                                      qep_tab->table(), qep_tab->table_ref,
                                      &qep_tab->ref(), join_type);
         } else {
+          if (substructure == Substructure::FULL_OUTER_JOIN)
+            join_type = JoinType::FULL_OUTER;
           path = CreateHashJoinAccessPath(
               thd, qep_tab, subtree_path, right_tables, path, left_tables,
               join_type, &join_conditions, conditions_depend_on_outer_tables);
+
+          plan_idx outer_sub_end;
+          Substructure upper_left_structure = Substructure::NONE;
+          Substructure upper_right_structure = Substructure::NONE;
+          //  For join combinations like `t1 full join (t2 left join t3)`,
+          //  mark nested_join `t2 left join t3` as left full joined.
+          if (upper_first_idx != NO_PLAN_IDX && i == qep_tab->last_foj_inner())
+            upper_left_structure = FindSubstructure(
+                qep_tabs, upper_first_idx, first_idx, last_idx, calling_context,
+                &add_limit_1, &outer_sub_end, unhandled_duplicates);
+
+          //  For join combinations like `(t1 left join t2) full join t3)`,
+          //  mark nested_join `t1 left join t2` as right full joined.
+          if (i < last_idx - 1 && i == qep_tab->last_foj_inner())
+            upper_right_structure = FindSubstructure(
+                qep_tabs, first_idx, i + 1, last_idx, calling_context,
+                &add_limit_1, &outer_sub_end, unhandled_duplicates);
+
+          bool upper_foj =
+              upper_right_structure == Substructure::FULL_OUTER_JOIN ||
+              upper_left_structure == Substructure::FULL_OUTER_JOIN;
+          if (pending_conditions && qep_tab->join()->query_block->has_foj() &&
+              !upper_foj)
+            path = PossiblyAttachFilter(path, *pending_conditions, thd,
+                                        conditions_depend_on_outer_tables);
         }
 
         path = PossiblyAttachFilter(path, join_conditions, thd,
@@ -2779,7 +2858,8 @@ AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,
     // hash join, so we don't bother checking any further that we actually can
     // replace the BNL with a hash join.
     const bool replace_with_hash_join =
-        UseHashJoin(qep_tab) && !QueryMixesOuterBKAAndBNL(qep_tab->join());
+        qep_tab->is_foj() ||
+        (UseHashJoin(qep_tab) && !QueryMixesOuterBKAAndBNL(qep_tab->join()));
 
     vector<Item *> predicates_below_join;
     vector<Item *> join_conditions;
@@ -2949,10 +3029,10 @@ AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,
     }
   }
   if (is_top_level_outer_join) {
-    assert(last_idx == qep_tabs[first_idx].last_inner() + 1);
-    path = FinishPendingOperations(
-        thd, path, /*remove_duplicates_loose_scan_qep_tab=*/nullptr,
-        top_level_pending_conditions, conditions_depend_on_outer_tables);
+    if (last_idx == qep_tabs[first_idx].last_inner() + 1)
+      path = FinishPendingOperations(
+          thd, path, /*remove_duplicates_loose_scan_qep_tab=*/nullptr,
+          top_level_pending_conditions, conditions_depend_on_outer_tables);
   }
   return path;
 }
@@ -3125,7 +3205,8 @@ AccessPath *JOIN::create_root_access_path_for_join() {
     if (qep_tab->op_type != QEP_TAB::OT_MATERIALIZE &&
         qep_tab->op_type != QEP_TAB::OT_AGGREGATE_THEN_MATERIALIZE &&
         qep_tab->op_type != QEP_TAB::OT_AGGREGATE_INTO_TMP_TABLE &&
-        qep_tab->op_type != QEP_TAB::OT_WINDOWING_FUNCTION) {
+        qep_tab->op_type != QEP_TAB::OT_WINDOWING_FUNCTION &&
+        qep_tab->op_type != QEP_TAB::OT_CONNECT_BY) {
       continue;
     }
     if (qep_tab->op_type == QEP_TAB::OT_AGGREGATE_THEN_MATERIALIZE) {
@@ -3287,6 +3368,17 @@ AccessPath *JOIN::create_root_access_path_for_join() {
           qep_tab->ref_item_slice);
       if (qep_tab->having != nullptr) {
         path = NewFilterAccessPath(thd, path, qep_tab->having);
+      }
+    } else if (qep_tab->op_type == QEP_TAB::OT_CONNECT_BY) {
+      qep_tab->table()->alias = "<connect_by_temp>";
+      path = NewConnectByAccessPath(
+          thd, path, qep_tab->tmp_table_param, qep_tab->table(), table_path,
+          qep_tab->connect_by, qep_tab->ref_item_slice);
+      EstimateConnectByCost(thd, path);
+      if (after_connect_by_cond) {
+        qep_tab_map conditions_depend_on_outer_tables = 0;
+        path = PossiblyAttachFilter(path, vector<Item *>{after_connect_by_cond},
+                                    thd, &conditions_depend_on_outer_tables);
       }
     } else {
       assert(qep_tab->op_type == QEP_TAB::OT_MATERIALIZE ||
@@ -4539,7 +4631,6 @@ bool replace_contents_of_rollup_wrappers_with_tmp_fields(THD *thd,
   @param [out] res_fields            new list of items of select item list
   @param added_non_hidden_fields     number of visible fields added by subquery
                                      to derived transformation
-
   @returns false if success, true if error
 */
 
@@ -4709,6 +4800,94 @@ bool change_to_use_tmp_fields_except_sums(mem_root_deque<Item *> *fields,
 }
 
 /**
+ * is the same as change_to_use_tmp_fields_except_sums
+ * but this is
+ * @param [in] except_opt  save connect_by func and  rand(rownum/sysdate/uuid)
+ * column
+ */
+bool change_to_use_tmp_fields_except_sums_or_connect_by(
+    mem_root_deque<Item *> *fields, THD *thd, Query_block *select,
+    Ref_item_array ref_item_array, mem_root_deque<Item *> *res_fields,
+    size_t added_non_hidden_fields, longlong except_opt) {
+  DBUG_TRACE;
+  res_fields->clear();
+
+  const auto num_hidden_items = CountHiddenFields(*fields);
+  auto it = fields->begin();
+
+  for (size_t i = 0; it != fields->end(); ++i, ++it) {
+    Item *item = *it;
+    Item *new_item;
+    if (is_rollup_group_wrapper(item)) {
+      Item_rollup_group_item *rollup_item =
+          down_cast<Item_rollup_group_item *>(item);
+
+      rollup_item->inner_item()->set_result_field(item->get_result_field());
+      new_item = rollup_item->inner_item()->get_tmp_table_item(thd);
+
+      ORDER *order =
+          select->find_in_group_list(rollup_item->inner_item(), nullptr);
+      order->rollup_item->inner_item()->set_result_field(
+          item->get_result_field());
+
+      new_item =
+          new Item_rollup_group_item(rollup_item->min_rollup_level(), new_item);
+      if (new_item == nullptr ||
+          select->join->rollup_group_items.push_back(
+              down_cast<Item_rollup_group_item *>(new_item))) {
+        return true;
+      }
+      new_item->quick_fix_field();
+      Item *unwrapped_item = unwrap_rollup_group(item);
+      unwrapped_item->hidden = item->hidden;
+      thd->change_item_tree(&*it, unwrapped_item);
+
+    } else if ((select->is_implicitly_grouped() &&
+                ((item->used_tables() & ~(RAND_TABLE_BIT | INNER_TABLE_BIT)) ==
+                 0)) ||                    // (1)
+               item->has_rollup_expr()) {  // (2)
+      new_item = item->copy_or_same(thd);
+      if (new_item == nullptr) return true;
+    } else if ((except_opt & EXCEPT_CONNECT_BY_FUNC) &&
+               item->has_connect_by_func()) {
+      new_item = item->copy_or_same(thd);
+      if (new_item == nullptr) return true;
+    } else if ((except_opt & EXCEPT_CONNECT_BY_VALUE) &&
+               item->has_connect_by_value()) {
+      new_item = item->copy_or_same(thd);
+      if (new_item == nullptr) return true;
+    } else if ((except_opt & EXCEPT_RAND_FUNC) &&
+               (item->used_tables() & RAND_TABLE_BIT)) {
+      new_item = item->copy_or_same(thd);
+      if (new_item == nullptr) return true;
+    } else {
+      new_item = item->get_tmp_table_item(thd);
+      if (new_item == nullptr) return true;
+    }
+
+    new_item->update_used_tables();
+
+    assert_consistent_hidden_flags(*res_fields, new_item, item->hidden);
+    new_item->hidden = item->hidden;
+    res_fields->push_back(new_item);
+    const size_t idx =
+        compute_ria_idx(*fields, i, added_non_hidden_fields, num_hidden_items);
+    ref_item_array[idx] = new_item;
+  }
+
+  for (Item *item : *fields) {
+    if (!is_rollup_group_wrapper(item) && item->has_rollup_expr()) {
+      if (replace_contents_of_rollup_wrappers_with_tmp_fields(thd, select,
+                                                              item)) {
+        return true;
+      }
+    }
+  }
+  assert(!thd->is_error());
+  return false;
+}
+
+/**
   Set all column values from all input tables to NULL.
 
   This is used when no rows are found during grouping: for FROM clause, a
@@ -4734,7 +4913,7 @@ bool JOIN::clear_fields(table_map *save_nullinfo) {
   for (uint tableno = 0; tableno < primary_tables; tableno++) {
     QEP_TAB *const tab = qep_tab + tableno;
     TABLE *const table = tab->table_ref->table;
-    if (!table->has_null_row()) {
+    if (table && !table->has_null_row()) {
       *save_nullinfo |= tab->table_ref->map();
       if (table->const_table) table->save_null_flags();
       table->set_null_row();  // All fields are NULL
@@ -4785,6 +4964,15 @@ bool QEP_TAB::pfs_batch_update(const JOIN *join) const {
 /**
   @} (end of group Query_Executor)
 */
+
+static inline pair<uchar *, key_part_map> FindKeyBufferAndMap(
+    const Index_lookup *ref) {
+  if (ref->keypart_hash != nullptr) {
+    return make_pair(pointer_cast<uchar *>(ref->keypart_hash), key_part_map{1});
+  } else {
+    return make_pair(ref->key_buff, make_prev_keypart_map(ref->key_parts));
+  }
+}
 
 bool MaterializeIsDoingDeduplication(TABLE *table) {
   if (table->hash_field != nullptr) {

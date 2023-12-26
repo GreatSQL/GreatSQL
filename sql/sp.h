@@ -193,18 +193,34 @@ bool sp_get_ora_type_reclength(THD *thd, const LEX_CSTRING db,
                                const LEX_STRING fn_name, bool use_explicit_name,
                                ulong *reclength, LEX_CSTRING *nested_table_udt);
 
+/**
+   Get options about udt object.
+
+   @param  thd[in]     Thread handler
+   @param  routine[in]  dd:Routine object
+   @param  nested_table_udt[in/out]  nested_table_udt name
+   @param  table_type[in/out]  table object or not
+   @param  varray_limit[in/out] length of varray
+ */
+void get_udt_info_from_dd_routine(THD *thd, const dd::Routine *routine,
+                                  LEX_CSTRING *nested_table_udt,
+                                  enum_udt_table_of_type *table_type,
+                                  ulonglong *varray_limit);
+
 sp_head *sp_find_routine(THD *thd, enum_sp_type type, sp_name *name,
-                         sp_cache **cp, bool cache_only, sp_name *pkgname);
+                         sp_cache **cp, bool cache_only, sp_name *pkgname,
+                         sp_signature *sig);
 
 sp_head *sp_setup_routine(THD *thd, enum_sp_type type, sp_name *name,
-                          sp_cache **cp, sp_name *pkgname);
+                          sp_cache **cp, sp_name *pkgname, sp_signature *sig);
 
 enum_sp_return_code sp_cache_routine(THD *thd, Sroutine_hash_entry *rt,
                                      bool lookup_only, sp_head **sp);
 
 enum_sp_return_code sp_cache_routine(THD *thd, enum_sp_type type,
                                      const sp_name *name, bool lookup_only,
-                                     sp_head **sp, const sp_name *pkgname);
+                                     sp_head **sp, const sp_name *pkgname,
+                                     sp_signature *sig);
 
 bool sp_exist_routines(THD *thd, Table_ref *procs, enum_sp_type sp_type);
 
@@ -216,7 +232,10 @@ enum_sp_return_code db_load_routine(
     sql_mode_t sql_mode, const char *params, const char *returns,
     const char *body, st_sp_chistics *chistics, const char *definer_user,
     const char *definer_host, longlong created, longlong modified,
-    Stored_program_creation_ctx *creation_ctx, bool fake_synonym);
+    Stored_program_creation_ctx *creation_ctx, bool fake_synonym,
+    LEX_CSTRING nested_table_udt = NULL_CSTR,
+    enum_udt_table_of_type type_udt = enum_udt_table_of_type::TYPE_INVALID,
+    ulonglong varray_limit = 0);
 
 bool sp_create_routine(THD *thd, sp_head *sp, const LEX_USER *definer,
                        bool if_not_exists, bool &sp_already_exists);
@@ -309,8 +328,9 @@ class Sroutine_hash_entry {
                                 : (char *)m_key + 1 + m_db_length + 1;
   }
   size_t name_length() const {
-    return use_normalized_key() ? m_object_name.length
-                                : m_key_length - 1U - m_db_length - 1U - 1U;
+    return use_normalized_key()
+               ? m_object_name.length
+               : m_key_length - 1U - m_db_length - 1U - 1U - m_key_add_length;
   }
   bool use_normalized_key() const {
     return (type() == FUNCTION || type() == PROCEDURE || type() == TRIGGER ||
@@ -323,7 +343,7 @@ class Sroutine_hash_entry {
   }
   size_t part_mdl_key_length() {
     assert(!use_normalized_key());
-    return m_key_length - 1U;
+    return m_key_length - 1U - m_key_add_length;
   }
 
   /**
@@ -355,6 +375,8 @@ class Sroutine_hash_entry {
     the routin name may contain period also.
   */
   LEX_STRING m_pkg_name{nullptr, 0};
+  uint m_key_add_length{0};
+  sp_signature *m_sig{nullptr};
 };
 
 /*
@@ -379,7 +401,8 @@ bool sp_add_used_routine(Query_tables_list *prelocking_ctx, Query_arena *arena,
                          Sp_name_normalize_type name_normalize_type,
                          bool own_routine, Table_ref *belong_to_view,
                          const char *pkg_name = nullptr,
-                         size_t pkg_name_length = 0);
+                         size_t pkg_name_length = 0,
+                         sp_signature *sig = nullptr);
 
 /**
   Convenience wrapper around sp_add_used_routine() for most common case -
@@ -391,7 +414,8 @@ inline bool sp_add_own_used_routine(Query_tables_list *prelocking_ctx,
                                     Sroutine_hash_entry::entry_type type,
                                     sp_name *sp_name,
                                     const char *pkg_name = nullptr,
-                                    size_t pkg_name_length = 0) {
+                                    size_t pkg_name_length = 0,
+                                    sp_signature *sig = nullptr) {
   assert(type == Sroutine_hash_entry::FUNCTION ||
          type == Sroutine_hash_entry::PROCEDURE ||
          type == Sroutine_hash_entry::PACKAGE_SPEC ||
@@ -402,7 +426,7 @@ inline bool sp_add_own_used_routine(Query_tables_list *prelocking_ctx,
       prelocking_ctx, arena, type, sp_name->m_db.str, sp_name->m_db.length,
       sp_name->m_name.str, sp_name->m_name.length, false,
       Sp_name_normalize_type::UNACCENT_AND_LOWERCASE_NAME, true, nullptr,
-      pkg_name, pkg_name_length);
+      pkg_name, pkg_name_length, sig);
 }
 
 void sp_remove_not_own_routines(Query_tables_list *prelocking_ctx);
@@ -464,7 +488,8 @@ sp_ora_type *sp_start_type_parsing(THD *thd, enum_sp_type sp_type,
                                    sp_name *sp_name);
 bool sp_eq_routine_name(const LEX_STRING &name1, const LEX_STRING &name2);
 bool sp_resolve_package_routine(THD *thd, enum_sp_type type, sp_head *caller,
-                                sp_name *name, sp_name *pkgname);
+                                sp_name *name, sp_name *pkgname,
+                                sp_signature *sig);
 bool sp_resolve_type_routine(THD *thd, enum_sp_type type, sp_name *name);
 ///////////////////////////////////////////////////////////////////////////
 

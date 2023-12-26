@@ -57,7 +57,8 @@ Recovery_state_transfer::Recovery_state_transfer(
       recovery_ssl_verify_server_cert(false),
       recovery_tls_ciphersuites_null(true),
       max_connection_attempts_to_donors(0),
-      donor_reconnect_interval(0) {
+      donor_reconnect_interval(0),
+      donor_threshold(0) {
   // set the recovery SSL options to 0
   (void)strncpy(recovery_ssl_ca, "", 1);
   (void)strncpy(recovery_ssl_capath, "", 1);
@@ -327,7 +328,13 @@ void Recovery_state_transfer::build_donor_list(string *selected_donor_uuid) {
   DBUG_TRACE;
 
   suitable_donors.clear();
+  LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                  "build_donor_list is called");
 
+  int error = 0;
+  Sid_map group_sid_map(nullptr);
+  Gtid_set group_set(&group_sid_map, nullptr);
+  std::vector<Group_member_info *> candidate_suitable_donors;
   Group_member_info_list_iterator member_it = group_members->begin();
 
   while (member_it != group_members->end()) {
@@ -343,18 +350,75 @@ void Recovery_state_transfer::build_donor_list(string *selected_donor_uuid) {
         member->get_role() != Group_member_info::MEMBER_ROLE_ARBITRATOR) {
       if (member->get_member_version() <=
           local_member_info->get_member_version()) {
-        suitable_donors.push_back(member);
         valid_donor = true;
       } else if (get_allow_local_lower_version_join()) {
-        suitable_donors.push_back(member);
         valid_donor = true;
       }
+    }
+
+    if (valid_donor) {
+      candidate_suitable_donors.push_back(member);
+      std::string member_exec_set_str = member->get_gtid_executed();
+      if (group_set.add_gtid_text(member_exec_set_str.c_str()) !=
+          RETURN_STATUS_OK) {
+        LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_LOCAL_GTID_SETS_PROCESS_ERROR);
+        error = 1;
+        break;
+      }
+    }
+
+    ++member_it;
+  }
+
+  std::vector<Group_member_info *>::iterator candidate_member_it =
+      candidate_suitable_donors.begin();
+
+  while (candidate_member_it != candidate_suitable_donors.end()) {
+    Group_member_info *member = *candidate_member_it;
+
+    string m_uuid(member->get_uuid());
+    Sid_map remote_sid_map(nullptr);
+    Gtid_set remote_member_set(&remote_sid_map, nullptr);
+    std::string remote_executed_gtid = member->get_gtid_executed();
+
+    if (remote_member_set.add_gtid_text(remote_executed_gtid.c_str()) !=
+        RETURN_STATUS_OK) {
+      LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_LOCAL_GTID_SETS_PROCESS_ERROR);
+      error = 1;
+    }
+
+    if (!error) {
+      group_set.remove_gtid_set(&remote_member_set);
+      bool activation_threshold_breach =
+          group_set.is_size_greater_than_or_equal(donor_threshold);
+      if (!activation_threshold_breach) {
+        suitable_donors.push_back(member);
+        std::string host = member->get_hostname();
+        LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                        "host:%s, port:%d is suitable for donor, gtid:%s",
+                        host.c_str(), member->get_port(),
+                        remote_executed_gtid.c_str());
+      } else {
+        std::string host = member->get_hostname();
+        LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                        "host:%s, port:%d is not suitable for donor, gtid:%s",
+                        host.c_str(), member->get_port(),
+                        remote_executed_gtid.c_str());
+      }
+      group_set.add_gtid_set(&remote_member_set);
+    } else {
+      suitable_donors.push_back(member);
+      std::string host = member->get_hostname();
+      LogPluginErrMsg(
+          INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+          "error happened, host:%s, port:%d is suitable for donor, gtid:%s",
+          host.c_str(), member->get_port(), remote_executed_gtid.c_str());
     }
 
     // if requested, and if the donor is still in the group, update its
     // reference
     if (selected_donor_uuid != nullptr &&
-        !m_uuid.compare(*selected_donor_uuid) && valid_donor) {
+        !m_uuid.compare(*selected_donor_uuid)) {
       if (selected_donor != nullptr) {
         selected_donor->update(*member);
       } else {
@@ -362,12 +426,40 @@ void Recovery_state_transfer::build_donor_list(string *selected_donor_uuid) {
       }
     }
 
-    ++member_it;
+    ++candidate_member_it;
+  }
+
+  if (suitable_donors.size() == 0 && candidate_suitable_donors.size() > 0) {
+    LogPluginErrMsg(
+        INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+        "suitable_donors is empty and revert to official donor selection");
+
+    candidate_member_it = candidate_suitable_donors.begin();
+    while (candidate_member_it != candidate_suitable_donors.end()) {
+      Group_member_info *member = *candidate_member_it;
+      string m_uuid(member->get_uuid());
+
+      suitable_donors.push_back(member);
+      if (selected_donor_uuid != nullptr &&
+          !m_uuid.compare(*selected_donor_uuid)) {
+        if (selected_donor != nullptr) {
+          selected_donor->update(*member);
+        } else {
+          selected_donor = new Group_member_info(*member);
+        }
+      }
+
+      ++candidate_member_it;
+    }
   }
 
   if (suitable_donors.size() > 1) {
     vector_random_shuffle(&suitable_donors);
   }
+
+  LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                  "build_donor_list is called over, size:%lu",
+                  suitable_donors.size());
 
   // no need for errors if no donors exist, we thrown it in the connection
   // method.

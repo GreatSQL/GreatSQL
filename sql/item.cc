@@ -54,8 +54,10 @@
 #include "sql/auth/auth_common.h"  // get_column_grant
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/current_thd.h"
+#include "sql/dd/impl/utils.h"
 #include "sql/derror.h"         // ER_THD
 #include "sql/error_handler.h"  // Internal_error_handler
+#include "sql/gdb_sequence.h"
 #include "sql/gis/srid.h"
 #include "sql/item_cmpfunc.h"    // COND_EQUAL
 #include "sql/item_create.h"     // create_temporal_literal
@@ -89,6 +91,7 @@
 #include "sql/sql_view.h"       // VIEW_ANY_ACL
 #include "sql/system_variables.h"
 #include "sql/table_function.h"
+#include "sql/table_trigger_dispatcher.h"  // table_trigger_dispatcher
 #include "sql/thd_raii.h"
 #include "sql/tztime.h"  // my_tz_UTC
 #include "template_utils.h"
@@ -183,6 +186,7 @@ Item::Item(THD *thd, const Item *item)
       null_value(item->null_value),
       unsigned_flag(item->unsigned_flag),
       m_is_window_function(item->m_is_window_function),
+      m_is_pivot_ref(item->m_is_pivot_ref),
       m_accum_properties(item->m_accum_properties) {
 #ifndef NDEBUG
   /*
@@ -1904,6 +1908,70 @@ bool Item_splocal::set_value(THD *thd, sp_rcontext *ctx, Item **it) {
   return get_rcontext(ctx)->set_variable(thd, get_var_idx(), it);
 }
 
+bool Item_field_refcursor::row_create_items(THD *thd,
+                                            List<Create_field> *list) {
+  return get_refcursor_field()->m_return_table->make_return_table(thd, list);
+}
+
+type_conversion_status Item_field_refcursor::save_in_field_inner(Field *to,
+                                                                 bool) {
+  type_conversion_status ret = TYPE_OK;
+  Field_refcursor *field_refcursor_to = dynamic_cast<Field_refcursor *>(to);
+  Field_refcursor *field_refcursor_from =
+      dynamic_cast<Field_refcursor *>(field);
+  if (field_refcursor_to) {
+    return field_refcursor_to->set_refcursor(field_refcursor_from);
+  } else if (!field_refcursor_to) {
+    my_error(ER_UDT_INCONS_DATATYPES, myf(0));
+    return TYPE_ERR_BAD_VALUE;
+  }
+  return ret;
+}
+
+bool Item_field_refcursor::set_cursor_rowtype_table(THD *thd, Item *item_to,
+                                                    bool has_return_type,
+                                                    uint spv_offset) {
+  Item_field_refcursor *item_cursor =
+      dynamic_cast<Item_field_refcursor *>(item_to);
+  Item_field_row *item_row = dynamic_cast<Item_field_row *>(item_to);
+  /*e.g:
+    TYPE ref_rs2 IS REF CURSOR RETURN c%rowtype;
+    c ref_rs2;*/
+  if (item_cursor) {
+    if (field->virtual_tmp_table_addr()[0]) {
+      item_cursor->get_refcursor_field()->m_return_table =
+          get_refcursor_field()->m_return_table;
+      return false;
+    }
+    if (has_return_type) {
+      return item_cursor->get_refcursor_field()
+          ->set_cursor_return_type_from_other_refcursor(spv_offset);
+    } else {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "non structure variable used in %rowtype");
+      return true;
+    }
+  } else if (item_row && get_refcursor_field()->get_return_table()) {
+    /*e.g: a1 cursor%rowtype;*/
+    Query_arena old_arena;
+    thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
+    List<Create_field> defs;
+    bool ret = false;
+    if (!get_refcursor_field()->get_return_table()->export_structure(thd,
+                                                                     &defs)) {
+      if (item_row->row_create_items(thd, &defs)) ret = true;
+    } else
+      ret = true;
+    thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+    return ret;
+  } else {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "non structure variable used in %rowtype");
+    return true;
+  }
+  return false;
+}
+
 /**
   Allocate memory for arguments using tmp_args or thd->alloc().
   @retval false  - success
@@ -1917,6 +1985,25 @@ bool Item_field_row::alloc_arguments(THD *thd, uint count) {
   if ((args = (Item **)thd->alloc(sizeof(Item *) * count)) == NULL) {
     arg_count = 0;
     return true;
+  }
+  return false;
+}
+
+bool Item_field_row::find_duplicate_def_name(uint arg_count, Create_field *def,
+                                             List<Create_field> *list) {
+  List_iterator_fast<Create_field> it(*list);
+  Create_field *def_tmp;
+  for (uint i = 0; i < arg_count; i++) {
+    def_tmp = it++;
+    if (def == def_tmp) continue;
+    if (!my_strnncoll(system_charset_info, (const uchar *)def->field_name,
+                      strlen(def->field_name),
+                      (const uchar *)def_tmp->field_name,
+                      strlen(def_tmp->field_name))) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "table with same column name in cursor");
+      return true;
+    }
   }
   return false;
 }
@@ -1936,33 +2023,45 @@ bool Item_field_row::row_create_items(THD *thd, List<Create_field> *list) {
   // init_var_items
   if (alloc_arguments(thd, list->elements)) return true;
 
+  bool rec = row_create_items_from_cdf_list(
+      thd, list, m_var_field_table[0], &arg_count,
+      const_cast<char *>(field->field_name));
+  field->set_arg_count(arg_count);
+  return rec;
+}
+
+bool Item_field_row::row_create_items_from_cdf_list(THD *thd,
+                                                    List<Create_field> *list,
+                                                    TABLE *table,
+                                                    uint *arg_count_out,
+                                                    char *row_table_name) {
   List_iterator_fast<Create_field> it(*list);
   Create_field *def;
-  for (arg_count = 0; (def = it++); arg_count++) {
-    if (def->is_row()) {
+  bool rec = false;
+  for (uint i = 0; (def = it++); i++) {
+    if (find_duplicate_def_name(arg_count, def, list)) return true;
+    if (def->ora_record.is_row()) {
       if (def->udt_name.str) {
-        m_var_field_table[0]->field[arg_count]->set_udt_name(
-            to_lex_cstring(def->udt_name.str));
+        table->field[i]->set_udt_name(to_lex_cstring(def->udt_name.str));
       }
-      if (def->udt_db_name) {
-        m_var_field_table[0]->field[arg_count]->set_udt_db_name(
-            const_cast<char *>(def->udt_db_name));
+      if (def->udt_db_name.str) {
+        table->field[i]->set_udt_db_name(
+            thd->strmake(def->udt_db_name.str, def->udt_db_name.length));
       }
-      args[arg_count] = new (thd->mem_root)
-          Item_field_row(m_var_field_table[0]->field[arg_count]);
-      List<Create_field> *sd =
-          dynamic_cast<List<Create_field> *>(def->row_field_definitions());
-      Item_field_row *item_row =
-          dynamic_cast<Item_field_row *>(args[arg_count]);
-      item_row->row_create_items(thd, sd);
-    } else if (def->is_row_table()) {
-      Field_row_table *row_field = dynamic_cast<Field_row_table *>(
-          m_var_field_table[0]->field[arg_count]);
+      args[i] = new (thd->mem_root) Item_field_row(table->field[i]);
+      Item_field_row *item_row = dynamic_cast<Item_field_row *>(args[i]);
+      rec = item_row->row_create_items(thd,
+                                       def->ora_record.row_field_definitions());
+      item_row->field->table->alias = def->field_name;
+    } else if (def->ora_record.is_row_table()) {
+      Field_row_table *row_field =
+          dynamic_cast<Field_row_table *>(table->field[i]);
       if (def->udt_name.str) {
         row_field->set_udt_name(to_lex_cstring(def->udt_name.str));
       }
-      if (def->udt_db_name) {
-        row_field->set_udt_db_name(const_cast<char *>(def->udt_db_name));
+      if (def->udt_db_name.str) {
+        row_field->set_udt_db_name(
+            thd->strmake(def->udt_db_name.str, def->udt_db_name.length));
       }
       if (def->nested_table_udt.str) {
         row_field->set_nested_table_udt(def->nested_table_udt);
@@ -1970,28 +2069,58 @@ bool Item_field_row::row_create_items(THD *thd, List<Create_field> *list) {
       row_field->m_nested_table_udt = def->nested_table_udt;
       row_field->m_varray_size_limit =
           def->table_type == 0 /*VARRAY*/ ? def->varray_limit : -1;
-      args[arg_count] = new (thd->mem_root)
-          Item_field_row_table(m_var_field_table[0]->field[arg_count]);
+      row_field->m_is_index_by = def->ora_record.is_index_by;
+      row_field->m_is_record_table_type_define =
+          def->ora_record.is_record_table_type_define;
+      args[i] = new (thd->mem_root) Item_field_row_table(table->field[i]);
       Item_field_row_table *item_row_table =
-          dynamic_cast<Item_field_row_table *>(args[arg_count]);
+          dynamic_cast<Item_field_row_table *>(args[i]);
       item_row_table->set_item_table_name(def->field_name);
-      item_row_table->row_create_items(thd, def->row_field_table_definitions());
+      rec = item_row_table->row_table_create_items(
+          thd, def->ora_record.row_field_table_definitions());
+      item_row_table->field->table->alias = def->field_name;
     } else {
-      args[arg_count] = new (thd->mem_root)
-          Item_field(m_var_field_table[0]->field[arg_count]);
+      args[i] = new (thd->mem_root) Item_field(table->field[i]);
+      Item_field *item_field = dynamic_cast<Item_field *>(args[i]);
+      item_field->table_name = row_table_name;
+      item_field->field->table->alias = def->field_name;
     }
+    if (rec) return rec;
+    *arg_count_out = i + 1;
   }
-  field->set_arg_count(arg_count);
+  return rec;
+}
+
+bool Item_field_row::row_create_items_for_tmp_field(
+    THD *thd, uint args_count_in, Item **args_in, LEX_CSTRING nested_table_udt,
+    TABLE *table) {
+  if (alloc_arguments(thd, args_count_in)) return true;
+  for (uint i = 0; i < args_count_in; i++) {
+    args[i] = args_in[i];
+  }
+  Field_row *field_row = dynamic_cast<Field_row *>(field);
+  arg_count = args_count_in;
+  field->set_arg_count(args_count_in);
+  field_row->set_nested_table_udt(NULL_CSTR);
+  field->set_udt_value_initialized(true);
+  field->set_udt_name(nested_table_udt);
+  m_udt_name = to_lex_string(nested_table_udt);
+  field->virtual_tmp_table_addr()[0] = table;
+  m_is_refer_from_field_table = true;
+  set_ora_type();
+  reset_ora_table();
   return false;
 }
 
 type_conversion_status Item_field_row::save_in_field_inner(
     Field *to, bool no_conversions) {
   type_conversion_status ret = TYPE_OK;
+
   Field_row *field_row = dynamic_cast<Field_row *>(to);
   Field_udt_type *udt = dynamic_cast<Field_udt_type *>(to);
-  if (!field_row && !udt) {
-    my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), to->field_name);
+  Field_row_table *field_table = dynamic_cast<Field_row_table *>(to);
+  if (field_table || (!field_row && !udt)) {
+    my_error(ER_UDT_INCONS_DATATYPES, myf(0));
     return TYPE_ERR_BAD_VALUE;
   }
   if (my_strcasecmp(system_charset_info, field->get_udt_db_name(),
@@ -2004,25 +2133,28 @@ type_conversion_status Item_field_row::save_in_field_inner(
     return TYPE_ERR_BAD_VALUE;
   }
 
-  if (!field->udt_value_initialized()) {
-    my_error(ER_UDT_REF_UNINIT_COMPOSITE, MYF(0));
-    return TYPE_ERR_BAD_VALUE;
-  }
   if (is_null()) {
     null_value = true;
-    if (field_row) field_row->set_udt_value_initialized();
-    return set_field_to_null_with_conversions(field, no_conversions);
+    if (field_row) field_row->set_udt_value_initialized(true);
+    return set_field_to_null_with_conversions(to, no_conversions);
   }
   to->set_notnull();
   if (field_row) {
-    if (arg_count != to->virtual_tmp_table_addr()[0]->s->fields ||
-        field->get_arg_table_count() != to->get_arg_table_count()) {
+    if (arg_count - 1 ==
+        to->virtual_tmp_table_addr()[0]->visible_field_count()) {
+      if (index_item_save_in_field_no_index(to)) {
+        return TYPE_ERR_BAD_VALUE;
+      }
+      return TYPE_OK;
+    }
+    if (arg_count != to->virtual_tmp_table_addr()[0]->s->fields) {
       my_error(ER_WRONG_USAGE, MYF(0), item_name.ptr(), to->field_name);
       return TYPE_ERR_BAD_VALUE;
     }
     for (uint i = 0; i < arg_count; i++) {
       sp_variable *spv = current_thd->sp_runtime_ctx->search_udt_variable(
-          args[i]->get_udt_name().str, args[i]->get_udt_name().length);
+          args[i]->get_udt_name().str, args[i]->get_udt_name().length,
+          args[i]->get_udt_db_name().str, args[i]->get_udt_db_name().length);
       Item_field *item_arg = dynamic_cast<Item_field *>(args[i]);
       /*
         type stu_record is record(
@@ -2055,43 +2187,97 @@ type_conversion_status Item_field_row::save_in_field_inner(
       ret = to->store(pointer_cast<const char *>(field->data_ptr()),
                       field->data_length(), &my_charset_bin);
     } else {
+      TABLE *table_to = to->virtual_tmp_table_addr()[0];
+      if (arg_count - 1 == table_to->visible_field_count()) {
+        if (index_item_save_in_field_no_index(to)) {
+          return TYPE_ERR_BAD_VALUE;
+        }
+        ret = to->store((const char *)table_to->record[0],
+                        table_to->s->reclength, &my_charset_bin);
+        return ret;
+      }
       TABLE *table = field->virtual_tmp_table_addr()[0];
       ret = to->store((const char *)table->record[0], table->s->reclength,
                       &my_charset_bin);
     }
   }
-  to->set_udt_value_initialized();
+  to->set_udt_value_initialized(true);
   return ret;
+}
+
+// stu_record_val1 :=  stu_record_val(2);
+bool Item_field_row::index_item_save_in_field_no_index(Field *to) {
+  if (my_strcasecmp(system_charset_info, field->get_udt_db_name(),
+                    to->get_udt_db_name()) != 0 ||
+      my_strcasecmp(system_charset_info, field->udt_name().str,
+                    to->udt_name().str) != 0) {
+    my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), to->get_udt_db_name(),
+             to->udt_name().str, field->get_udt_db_name(),
+             field->udt_name().str);
+    return true;
+  }
+
+  for (uint i = 1; i < arg_count; i++) {
+    if (sp_eval_expr(current_thd, to->virtual_tmp_table_addr()[0]->field[i - 1],
+                     &args[i]))
+      return true;
+  }
+  to->set_notnull();
+  to->set_udt_value_initialized(true);
+  return false;
 }
 
 void Item_field_row::cleanup() { Item_field::cleanup(); }
 
-Item *Item_field_row_table::element_row_index(uint row_count, uint i) {
-  if (field->get_arg_table_count() == -1) return nullptr;
-  if (row_count > (uint)field->get_arg_table_count() || i > arg_count)
-    return nullptr;
+bool Item_field_row::udt_table_store_to_table(TABLE *table_to) {
+  memcpy(table_to->record[0],
+         const_cast<uchar *>(field->virtual_tmp_table_addr()[0]->record[0]),
+         field->virtual_tmp_table_addr()[0]->s->reclength);
+  return false;
+}
+
+Item *Item_field_row_table::element_row_index(Item *item_index, uint i) {
   Field_row_table *field_table = dynamic_cast<Field_row_table *>(field);
+  if (i > arg_count) return nullptr;
+
   Item *result = nullptr;
   Item_field *item_arg = dynamic_cast<Item_field *>(args[i]);
   Field_udt_type *field_udt = dynamic_cast<Field_udt_type *>(item_arg->field);
   if (args[i]->result_type() == ROW_RESULT && !field_udt) {
-    result = field_table->get_table_element(row_count, i);
+    result = field_table->get_table_element(item_index, i);
   } else if (!(result =
                    field_table->table_record->select_result_table_one_row_col(
-                       row_count, i)))
+                       item_index, i)))
     return nullptr;
+  return result;
+}
+
+Item *Item_field_row_table::element_table_index(Item *item_index) {
+  Field_row_table *field_table = dynamic_cast<Field_row_table *>(field);
+  if (field_table->m_is_record_table_type_define)
+    return element_row_index(item_index, 1);
+
+  Item *result = nullptr;
+  if (m_nested_table_udt.length == 0) {
+    // collection of single type return Item_field
+    // 0 is for index column, 1 is actual data column
+    result = field_table->table_record->select_result_table_one_row_col(
+        item_index, 1);
+  } else {
+    // collection of object type return hold Item_field_row include column index
+    result = field_table->table_record->select_result_table_one_row_col(
+        item_index, -1);
+  }
   return result;
 }
 
 void Item_field_row_table::clear_args_table() {
   Field_row_table *field_table = dynamic_cast<Field_row_table *>(field);
-  if (field_table) field_table->table_record->empty_table();
-  field->set_arg_table_count(-1);
-  field->set_offset_table_fixed(false);
+  field_table->clear_table();
 }
 
-bool Item_field_row_table::row_create_items(THD *thd,
-                                            Row_definition_table_list *list) {
+bool Item_field_row_table::row_table_create_items(
+    THD *thd, Row_definition_table_list *list) {
   assert(list);
   Field_row_table *field_table = dynamic_cast<Field_row_table *>(field);
 
@@ -2104,64 +2290,42 @@ bool Item_field_row_table::row_create_items(THD *thd,
   for (uint offset = 0; (def_list = it_table++); offset++) {
     List<Create_field> *sd_list = dynamic_cast<List<Create_field> *>(def_list);
     arg_count = sd_list->elements;
-    field_table->table_record =
-        new (thd->mem_root) Table_function_record(row_table_name, *sd_list, 0);
+    field_table->table_record = new (thd->mem_root) Table_function_record(
+        row_table_name, *sd_list, 0, 0,
+        field_table->get_index_length() > 0 ? true : false);
     assert(field_table->table_record);
     // is_virtual=false for it needs handler
     if (field_table->table_record->create_result_table(thd, 0, row_table_name))
       return true;
-    if (instantiate_tmp_table(thd, field_table->table_record->table))
-      return true;
     TABLE *table = field_table->table_record->table;
+    if (instantiate_tmp_table(thd, table)) {
+      field->clear_table_all_field();
+      return true;
+    }
 
     if (alloc_arguments(thd, sd->elements * arg_count)) {
+      field->clear_table_all_field();
       return true;
     }
 
-    List_iterator_fast<Create_field> it(*sd_list);
-    Create_field *def;
-    uint i;
-    for (i = 0; (def = it++); i++) {
-      if (def->is_row()) {
-        if (def->udt_name.str) {
-          table->field[i]->set_udt_name(to_lex_cstring(def->udt_name.str));
-        }
-        if (def->udt_db_name) {
-          table->field[i]->set_udt_db_name(
-              const_cast<char *>(def->udt_db_name));
-        }
-        args[i] = new (thd->mem_root) Item_field_row(table->field[i]);
-        Item_field_row *item_row = dynamic_cast<Item_field_row *>(args[i]);
-        item_row->row_create_items(thd, def->row_field_definitions());
-      } else if (def->is_row_table()) {
-        Field_row_table *row_field =
-            dynamic_cast<Field_row_table *>(table->field[i]);
-        if (def->udt_name.str) {
-          row_field->set_udt_name(to_lex_cstring(def->udt_name.str));
-        }
-        if (def->udt_db_name) {
-          row_field->set_udt_db_name(const_cast<char *>(def->udt_db_name));
-        }
-        if (def->nested_table_udt.str) {
-          row_field->set_nested_table_udt(def->nested_table_udt);
-        }
-        row_field->m_nested_table_udt = def->nested_table_udt;
-        row_field->m_varray_size_limit =
-            def->table_type == 0 /*VARRAY*/ ? def->varray_limit : -1;
-        args[i] = new (thd->mem_root) Item_field_row_table(table->field[i]);
-        Item_field_row_table *item_row_table =
-            dynamic_cast<Item_field_row_table *>(args[i]);
-        item_row_table->set_item_table_name(def->field_name);
-        item_row_table->row_create_items(thd,
-                                         def->row_field_table_definitions());
-      } else {
-        args[i] = new (thd->mem_root) Item_field(table->field[i]);
-        Item_field *item_field = dynamic_cast<Item_field *>(args[i]);
-        item_field->table_name = row_table_name;
-      }
+    if (row_create_items_from_cdf_list(thd, sd_list, table, &arg_count,
+                                       row_table_name)) {
+      field->clear_table_all_field();
+      return true;
     }
-    // it's only one row now.
-    arg_count = i;
+    // It's for dr_table(i).
+    Field_row *field_row = dynamic_cast<Field_row *>(field);
+    Field_row *field_table_tmp = new (thd->mem_root) Field_row(*field_row);
+    field_table->table_record->m_item_field_row =
+        new (thd->mem_root) Item_field_row(field_table_tmp);
+    Item_field_row *item_row_tmp = dynamic_cast<Item_field_row *>(
+        field_table->table_record->m_item_field_row);
+    if (item_row_tmp->row_create_items_for_tmp_field(
+            thd, arg_count, args, m_nested_table_udt,
+            field_table->table_record->table)) {
+      field->clear_table_all_field();
+      return true;
+    }
   }
   field->set_arg_count(arg_count);
   return false;
@@ -2169,13 +2333,13 @@ bool Item_field_row_table::row_create_items(THD *thd,
 
 bool Item_field_row_table::
     create_item_for_store_default_value_and_insert_into_table(
-        THD *thd, sp_rcontext *rtx) {
+        THD *thd, sp_rcontext *rtx, Item *index_item) {
   Field_row_table *this_field = dynamic_cast<Field_row_table *>(field);
 
   sp_variable *spv_this =
       rtx->search_variable(get_udt_name().str, get_udt_name().length);
   List<Row_definition_list> *sd = dynamic_cast<List<Row_definition_list> *>(
-      spv_this->field_def.row_field_table_definitions());
+      spv_this->field_def.ora_record.row_field_table_definitions());
   if (!sd) return true;
 
   List_iterator_fast<Row_definition_list> it_table(*sd);
@@ -2192,30 +2356,33 @@ bool Item_field_row_table::
     return true;
   }
   for (i = 0; (def = it++); i++) {
-    if (def->is_row()) {
-      Field_row *field_table_tmp = new (thd->mem_root)
-          Field_row(nullptr, element_index(i)->item_name.ptr());
+    if (def->ora_record.is_row()) {
+      Field_row *field_table_tmp =
+          new (thd->mem_root) Field_row(nullptr, args[i]->item_name.ptr());
       if (def->udt_name.str) {
         field_table_tmp->set_udt_name(to_lex_cstring(def->udt_name.str));
       }
-      if (def->udt_db_name) {
-        field_table_tmp->set_udt_db_name(const_cast<char *>(def->udt_db_name));
+      if (def->udt_db_name.str) {
+        field_table_tmp->set_udt_db_name(
+            thd->strmake(def->udt_db_name.str, def->udt_db_name.length));
       }
       field_table_tmp->table_name = this_field->table_name;
       field_table_tmp->table = this_field->table_record->table;
       Item_field_row *item_row_tmp =
           new (thd->mem_root) Item_field_row(field_table_tmp);
       field_table_tmp->is_tmp_field = true;
-      item_row_tmp->row_create_items(thd, def->row_field_definitions());
-      if (def->record_default_value) {
-        Item *item_default = def->record_default_value;
+      item_row_tmp->row_create_items(thd,
+                                     def->ora_record.row_field_definitions());
+      if (def->ora_record.record_default_value) {
+        Item *item_default = def->ora_record.record_default_value;
         rec = sp_eval_expr(thd, field_table_tmp,
                            item_default->this_item_addr(thd, &item_default));
       } else {
         spv = rtx->search_variable(def->udt_name.str, def->udt_name.length);
         if (!spv) {
-          spv =
-              rtx->search_udt_variable(def->udt_name.str, def->udt_name.length);
+          spv = rtx->search_udt_variable(
+              def->udt_name.str, def->udt_name.length, def->udt_db_name.str,
+              def->udt_db_name.length);
           if (!spv) {
             my_error(ER_SP_UNDECLARED_VAR, MYF(0), def->udt_name.str);
             thd->swap_query_arena(backup_arena,
@@ -2227,37 +2394,41 @@ bool Item_field_row_table::
                              rtx->get_item_addr(spv->offset));
       }
       this_field->set_cdf_default_list(i, item_row_tmp);
-    } else if (def->is_row_table()) {
+    } else if (def->ora_record.is_row_table()) {
       Field_row_table *field_table_tmp = new (thd->mem_root) Field_row_table(
-          thd->mem_root, nullptr, element_index(i)->item_name.ptr());
+          nullptr, args[i]->item_name.ptr(), def->ora_record.index_length);
       if (def->udt_name.str) {
         field_table_tmp->set_udt_name(to_lex_cstring(def->udt_name.str));
       }
-      if (def->udt_db_name) {
-        field_table_tmp->set_udt_db_name(const_cast<char *>(def->udt_db_name));
+      if (def->udt_db_name.str) {
+        field_table_tmp->set_udt_db_name(
+            thd->strmake(def->udt_db_name.str, def->udt_db_name.length));
       }
       if (def->nested_table_udt.str) {
         field_table_tmp->set_nested_table_udt(def->nested_table_udt);
       }
+      field_table_tmp->m_is_index_by = def->ora_record.is_index_by;
       field_table_tmp->table_name = this_field->table_name;
       field_table_tmp->table = this_field->table_record->table;
       Item_field_row_table *item_table_tmp =
           new (thd->mem_root) Item_field_row_table(field_table_tmp);
       field_table_tmp->is_tmp_field = true;
       item_table_tmp->set_item_table_name(def->field_name);
-      item_table_tmp->row_create_items(thd, def->row_field_table_definitions());
+      item_table_tmp->row_table_create_items(
+          thd, def->ora_record.row_field_table_definitions());
       field_table_tmp->m_varray_size_limit =
           def->table_type == 0 /*VARRAY*/ ? def->varray_limit : -1;
-      if (def->record_default_value) {
-        Item *item_default = def->record_default_value;
+      if (def->ora_record.record_default_value) {
+        Item *item_default = def->ora_record.record_default_value;
         rec = sp_eval_expr(thd, field_table_tmp,
                            item_default->this_item_addr(thd, &item_default));
       } else {
         spv = rtx->search_variable(def->nested_table_udt.str,
                                    def->nested_table_udt.length);
         if (!spv) {
-          spv = rtx->search_udt_variable(def->nested_table_udt.str,
-                                         def->nested_table_udt.length);
+          spv = rtx->search_udt_variable(
+              def->nested_table_udt.str, def->nested_table_udt.length,
+              def->udt_db_name.str, def->udt_db_name.length);
           if (!spv) {
             my_error(ER_SP_UNDECLARED_VAR, MYF(0), def->udt_name.str);
             thd->swap_query_arena(backup_arena,
@@ -2270,28 +2441,40 @@ bool Item_field_row_table::
       }
       this_field->set_cdf_default_list(i, item_table_tmp);
     } else {
-      Item *item_default = def->record_default_value;
+      Item *item_default = def->ora_record.record_default_value;
       if (!item_default) {
-        spv = def->udt_name.str ? rtx->search_udt_variable(def->udt_name.str,
-                                                           def->udt_name.length)
-                                : nullptr;
+        spv = def->udt_name.str
+                  ? rtx->search_udt_variable(
+                        def->udt_name.str, def->udt_name.length,
+                        def->udt_db_name.str, def->udt_db_name.length)
+                  : nullptr;
         if (!spv) {
           item_default =
               new (thd->mem_root) Item_null(to_lex_cstring(def->field_name));
         } else {
-          Field_row *field_table_tmp = new (thd->mem_root)
-              Field_row(nullptr, element_index(i)->item_name.ptr());
-          field_table_tmp->set_udt_name(to_lex_cstring(def->udt_name.str));
-          field_table_tmp->set_udt_db_name(
-              const_cast<char *>(def->udt_db_name));
-          field_table_tmp->table_name = this_field->table_name;
-          field_table_tmp->table = this_field->table_record->table;
-          Item_field_row *item_row_tmp =
-              new (thd->mem_root) Item_field_row(field_table_tmp);
-          field_table_tmp->is_tmp_field = true;
-          item_row_tmp->row_create_items(
-              thd, spv->field_def.row_field_definitions());
-          item_default = item_row_tmp;
+          Item_field *item_field = dynamic_cast<Item_field *>(args[i]);
+          Field_udt_type *field_udt = nullptr;
+          if (item_field &&
+              (field_udt = dynamic_cast<Field_udt_type *>(item_field->field))) {
+            // It's Field_udt_type.
+            item_default =
+                new (thd->mem_root) Item_null(to_lex_cstring(def->field_name));
+          } else {
+            Field_row *field_table_tmp = new (thd->mem_root)
+                Field_row(nullptr, args[i]->item_name.ptr());
+            field_table_tmp->set_udt_name(to_lex_cstring(def->udt_name.str));
+            field_table_tmp->set_udt_db_name(
+                thd->strmake(def->udt_db_name.str, def->udt_db_name.length));
+            field_table_tmp->table_name = this_field->table_name;
+            field_table_tmp->table = this_field->table_record->table;
+            Item_field_row *item_row_tmp =
+                new (thd->mem_root) Item_field_row(field_table_tmp);
+            field_table_tmp->is_tmp_field = true;
+            item_row_tmp->row_create_items(
+                thd, spv->field_def.ora_record.row_field_definitions());
+            item_row_tmp->field->table = item_row_tmp->get_udt_table();
+            item_default = item_row_tmp;
+          }
         }
       }
       this_field->set_cdf_default_list(i, item_default);
@@ -2301,14 +2484,15 @@ bool Item_field_row_table::
       return true;
     }
   }
-  if (insert_into_table_default_value(thd)) {
+  if (insert_into_table_default_value(thd, index_item)) {
     rec = true;
   }
   thd->swap_query_arena(backup_arena, thd->sp_runtime_ctx->callers_arena);
   return rec;
 }
 
-bool Item_field_row_table::insert_into_table_default_value(THD *thd) {
+bool Item_field_row_table::insert_into_table_default_value(THD *thd,
+                                                           Item *index_item) {
   // if there is no default values in the list,no need to do this function.
   Strict_error_handler strict_handler(
       Strict_error_handler::ENABLE_SET_SELECT_STRICT_ERROR_HANDLER);
@@ -2321,11 +2505,11 @@ bool Item_field_row_table::insert_into_table_default_value(THD *thd) {
   });
   Field_row_table *field_table = dynamic_cast<Field_row_table *>(field);
   thd->lex->set_exec_started();
-  return field_table->fill_result_table_all_default_col();
+  return field_table->fill_result_table_all_default_col(index_item);
 }
 
 bool Item_field_row_table::insert_into_table_all_value(
-    THD *thd, const mem_root_deque<Item *> &items) {
+    THD *thd, const mem_root_deque<Item *> &items, Item *item_index) {
   // if there is no default values in the list,no need to do this function.
   Strict_error_handler strict_handler(
       Strict_error_handler::ENABLE_SET_SELECT_STRICT_ERROR_HANDLER);
@@ -2339,12 +2523,30 @@ bool Item_field_row_table::insert_into_table_all_value(
   Field_row_table *field_table = dynamic_cast<Field_row_table *>(field);
   thd->lex->set_exec_started();
   field_table->set_notnull();
-  field_table->set_udt_value_initialized();
-  return field_table->table_record->fill_result_table_all_col(thd, items);
+  field_table->set_udt_value_initialized(true);
+  // Check udt names are same or not.
+  auto item_iter = VisibleFields(items).begin();
+  Item *item = (*item_iter++)->this_item();
+  if (CountVisibleFields(items) == 1 &&
+      (item->type() == ORACLE_ROWTYPE_ITEM || item->type() == FUNC_ITEM)) {
+    if (m_nested_table_udt.length != 0) {
+      if (my_strcasecmp(system_charset_info, get_udt_db_name().str,
+                        item->get_udt_db_name().str) != 0 ||
+          my_strcasecmp(system_charset_info, m_nested_table_udt.str,
+                        item->get_udt_name().str) != 0) {
+        my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), item->get_udt_db_name().str,
+                 item->get_udt_name().str, get_udt_db_name().str,
+                 m_nested_table_udt.str);
+        return true;
+      }
+    }
+  }
+  return field_table->table_record->fill_result_table_all_col(thd, items,
+                                                              item_index);
 }
 
 bool Item_field_row_table::update_table_value(THD *thd, Item **value,
-                                              uint field_idx, int offset,
+                                              int field_idx, Item *item_index,
                                               Field *field_udt) {
   Strict_error_handler strict_handler(
       Strict_error_handler::ENABLE_SET_SELECT_STRICT_ERROR_HANDLER);
@@ -2360,30 +2562,71 @@ bool Item_field_row_table::update_table_value(THD *thd, Item **value,
   bool ret = false;
   if (field_udt) {
     ret = field_table->table_record->update_result_table_one_col(
-        nullptr, field_idx, offset, field_udt);
+        nullptr, field_idx, item_index, field_udt);
     if (!ret) thd->lex->set_exec_started();
     return false;
   }
+  /*e.g:
+    stu_record_val(1) := stu_record_val1;
+    stu_record_val(1) := stu_record(20,'bb20',0.32);
+    Update the record table one row all cols.
+  */
+  Item *item = (*value)->this_item();
+  // field_idx == -1 when it must update all cols.
+  if (field_idx == -1) {
+    if (item->type() == Item::FUNC_ITEM ||
+        item->type() == Item::ORACLE_ROWTYPE_ITEM) {
+      if (m_nested_table_udt.length != 0) {
+        if (my_strcasecmp(system_charset_info, get_udt_db_name().str,
+                          item->get_udt_db_name().str) != 0 ||
+            my_strcasecmp(system_charset_info, m_nested_table_udt.str,
+                          item->get_udt_name().str) != 0) {
+          my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), item->get_udt_db_name().str,
+                   item->get_udt_name().str, get_udt_db_name().str,
+                   m_nested_table_udt.str);
+          return true;
+        }
+      }
+      ret = field_table->table_record->update_result_table_all_cols(value,
+                                                                    item_index);
+    } else if (item->type() == Item::NULL_ITEM) {
+      ret = field_table->table_record->update_result_table_all_cols(value,
+                                                                    item_index);
+    } else
+      ret = field_table->table_record->update_result_table_one_col(value, 1,
+                                                                   item_index);
+    if (!ret) thd->lex->set_exec_started();
+    return false;
+  }
+
   // it's first time to insert value.
   Item_field *item_field =
-      dynamic_cast<Item_field *>(element_row_index(offset, field_idx));
+      dynamic_cast<Item_field *>(element_row_index(item_index, field_idx));
   Field_row *row = dynamic_cast<Field_row *>(item_field->field);
   if (row) {
     ret = sp_eval_expr(current_thd, row, value);
   } else
     ret = field_table->table_record->update_result_table_one_col(
-        value, field_idx, offset);
+        value, field_idx, item_index);
   if (!ret) thd->lex->set_exec_started();
   return false;
 }
 
 type_conversion_status Item_field_row_table::save_in_field_inner(
     Field *to, bool no_conversions) {
+  type_conversion_status res = TYPE_OK;
   Field_row_table *field_row = dynamic_cast<Field_row_table *>(to);
+  Field_row_table *field_from = dynamic_cast<Field_row_table *>(field);
   if (!field_row) {
-    my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0), to->field_name);
+    my_error(ER_UDT_INCONS_DATATYPES, myf(0));
     return TYPE_ERR_BAD_VALUE;
   }
+  if (field_from->m_is_record_table_type_define) {
+    my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0), field->field_name);
+    return TYPE_ERR_BAD_VALUE;
+  }
+  LEX_CSTRING saved_nested_table_udt = to_lex_cstring(field->udt_name());
+
   if (my_strcasecmp(system_charset_info, field->get_udt_db_name(),
                     to->get_udt_db_name()) != 0 ||
       my_strcasecmp(system_charset_info, field->udt_name().str,
@@ -2391,39 +2634,41 @@ type_conversion_status Item_field_row_table::save_in_field_inner(
     my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), to->get_udt_db_name(),
              to->udt_name().str, field->get_udt_db_name(),
              field->udt_name().str);
-    return TYPE_ERR_BAD_VALUE;
-  }
-  if (!field->udt_value_initialized()) {
-    my_error(ER_UDT_REF_UNINIT_COMPOSITE, MYF(0));
-    return TYPE_ERR_BAD_VALUE;
+    res = TYPE_ERR_BAD_VALUE;
+    goto error;
   }
   if (is_null()) {
     null_value = true;
-    to->set_udt_value_initialized();
+    to->set_udt_value_initialized(true);
+    field->set_udt_name(saved_nested_table_udt);
     return set_field_to_null_with_conversions(field, no_conversions);
   }
   to->set_notnull();
   if (arg_count != to->virtual_tmp_table_addr()[0]->s->fields) {
     my_error(ER_WRONG_USAGE, MYF(0), item_name.ptr(), to->field_name);
-    return TYPE_ERR_BAD_VALUE;
+    res = TYPE_ERR_BAD_VALUE;
+    goto error;
   }
-  if (field_row->insert_into_table_udt_table_values(current_thd, this))
-    return TYPE_ERR_BAD_VALUE;
-  field_row->set_udt_value_initialized();
-  return TYPE_OK;
+  if (field_row->insert_into_table_udt_table_values(current_thd, this)) {
+    res = TYPE_ERR_BAD_VALUE;
+    goto error;
+  }
+
+  if (res == TYPE_OK) to->set_udt_value_initialized(true);
+
+error:
+  field_from->set_udt_name(saved_nested_table_udt);
+  return res;
 }
 
-bool Item_splocal_row_field::fix_fields(THD *thd, Item **) {
+bool Item_splocal_row_field::fix_fields(THD *thd, Item **ref) {
   Item *item =
       thd->sp_runtime_ctx->get_item(m_var_idx)->element_index(m_field_idx);
 
   assert(item->fixed);
 
-  max_length = item->max_length;
-  decimals = item->decimals;
-  unsigned_flag = item->unsigned_flag;
-  collation.set(item->collation);
-  set_data_type(item->data_type());
+  fix_fields_from_item(thd, ref, item);
+  set_result_type(item->result_type());
 
   fixed = true;
 
@@ -2436,7 +2681,7 @@ Item *Item_splocal_row_field::this_item() {
       current_thd->sp_runtime_ctx->get_item(m_var_idx));
   Field_udt_type *udt = dynamic_cast<Field_udt_type *>(item->field);
   if (udt) {
-    udt->copy_data_ptr_to_table();
+    udt->copy_data_to_table();
   }
   return current_thd->sp_runtime_ctx->get_item(m_var_idx)->element_index(
       m_field_idx);
@@ -2448,7 +2693,7 @@ const Item *Item_splocal_row_field::this_item() const {
       current_thd->sp_runtime_ctx->get_item(m_var_idx));
   Field_udt_type *udt = dynamic_cast<Field_udt_type *>(item->field);
   if (udt) {
-    udt->copy_data_ptr_to_table();
+    udt->copy_data_to_table();
   }
   return current_thd->sp_runtime_ctx->get_item(m_var_idx)->element_index(
       m_field_idx);
@@ -2460,8 +2705,10 @@ Item **Item_splocal_row_field::this_item_addr(THD *thd, Item **) {
       current_thd->sp_runtime_ctx->get_item(m_var_idx));
   Field_udt_type *udt = dynamic_cast<Field_udt_type *>(item->field);
   if (udt) {
-    udt->copy_data_ptr_to_table();
+    udt->copy_data_to_table();
   }
+  Item *item_result = nullptr;
+  if (fix_fields(current_thd, &item_result)) return nullptr;
   return thd->sp_runtime_ctx->get_item(m_var_idx)->addr(m_field_idx);
 }
 
@@ -2519,8 +2766,7 @@ Item *Item_splocal_row_field_table_by_name::make_item(
   sp_variable *spv;
   Item *item_first = current_thd->sp_runtime_ctx->get_item(m_var_idx);
   Item *item = nullptr;
-  int row_number;
-  int offset_table;
+  String tmp_str;
   Item_field_row_table *item_field;
   Create_field *cdf_before;
   /*type rec_cjr is record
@@ -2544,11 +2790,11 @@ Item *Item_splocal_row_field_table_by_name::make_item(
         return nullptr;
       }
       if (def_last->number == nullptr) {  // a.b
-        if (!spv->field_def.row_field_definitions() &&
-            spv->field_def.is_cursor_rowtype_ref()) {
+        if (!spv->field_def.ora_record.row_field_definitions() &&
+            spv->field_def.ora_record.is_cursor_rowtype_ref()) {
           Item_field *item_cursor = dynamic_cast<Item_field *>(
               current_thd->sp_runtime_ctx->get_item(spv->offset));
-          TABLE *table_cursor = item_cursor->field->virtual_tmp_table_addr()[0];
+          TABLE *table_cursor = item_cursor->get_udt_table();
           if (!table_cursor) {
             my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0),
                      def_name_before->str, def->ident.str);
@@ -2559,10 +2805,9 @@ Item *Item_splocal_row_field_table_by_name::make_item(
                   to_lex_cstring(def->ident)))
             return nullptr;
           *def_name_before = table_cursor->field[1]->udt_name();
-        } else if (spv->field_def.row_field_definitions()) {
-          cdf_before =
-              spv->field_def.row_field_definitions()->find_row_field_by_name(
-                  to_lex_cstring(def->ident.str), &m_field_idx);
+        } else if (spv->field_def.ora_record.row_field_definitions()) {
+          cdf_before = spv->field_def.ora_record.row_field_definitions()
+                           ->find_row_field_by_name(def->ident, &m_field_idx);
           if (!cdf_before) {
             my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0),
                      def_name_before->str, def->ident.str);
@@ -2582,14 +2827,13 @@ Item *Item_splocal_row_field_table_by_name::make_item(
         }
         item = item->element_index(m_field_idx);
       } else {  // a(1).b
-        if (!spv->field_def.row_field_table_definitions()) {
+        if (!spv->field_def.ora_record.row_field_table_definitions()) {
           my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0),
                    def_last->ident.str);
           return nullptr;
         }
-        cdf_before = spv->field_def.row_field_table_definitions()
-                         ->find_row_field_by_name(
-                             to_lex_cstring(def->ident.str), &m_field_idx);
+        cdf_before = spv->field_def.ora_record.row_field_table_definitions()
+                         ->find_row_field_by_name(def->ident, &m_field_idx);
         if (!cdf_before) {
           my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0),
                    def_name_before->str, def->ident.str);
@@ -2608,23 +2852,20 @@ Item *Item_splocal_row_field_table_by_name::make_item(
             return nullptr;
           }
         }
-        if (!def_last->number->this_item()->is_null() &&
-            def_last->number->this_item()->result_type() != ROW_RESULT &&
-            def_last->number->this_item()->result_type() != STRING_RESULT) {
-          row_number = def_last->number->val_int();
-        } else {
+        item_field = dynamic_cast<Item_field_row_table *>(item);
+        if (def_last->number->this_item()->is_null() ||
+            def_last->number->this_item()->result_type() == ROW_RESULT) {
           my_error(ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE, MYF(0),
                    def_last->number->this_item()->item_name.ptr());
           return nullptr;
         }
-        item_field = dynamic_cast<Item_field_row_table *>(item);
-        offset_table = item_field->field->virtual_record_count_map(row_number);
-        if (offset_table < 0) {
+        if (item_field->get_row_table_field()->check_if_row_not_exist(
+                def_last->number)) {
           my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0),
                    def_name_before->str);
           return nullptr;
         }
-        item = item->element_row_index(offset_table, m_field_idx);
+        item = item_field->element_row_index(def_last->number, m_field_idx);
       }
     }
     *def_last = *def;
@@ -2632,29 +2873,33 @@ Item *Item_splocal_row_field_table_by_name::make_item(
   return item;
 }
 
-bool Item_splocal_row_field_table_by_name::fix_fields(THD *, Item **) {
+bool Item_splocal_row_field_table_by_name::pre_fix_fields(THD *thd,
+                                                          Item **result) {
   ora_simple_ident_def def_last(NULL_STR, nullptr);
   LEX_STRING def_name_before = NULL_STR;
   Create_field *cdf;
   Item *item = make_item(&def_last, &def_name_before);
+  *result = item;
   if (!item) return true;
   sp_variable *spv =
       m_pctx->find_variable(def_name_before.str, def_name_before.length, false);
   if (!spv) {
-    spv = current_thd->sp_runtime_ctx->search_udt_variable(
-        def_name_before.str, def_name_before.length);
+    spv = thd->sp_runtime_ctx->search_udt_variable(
+        def_name_before.str, def_name_before.length, nullptr, 0);
     if (!spv) {
       my_error(ER_SP_UNDECLARED_VAR, MYF(0), def_name_before.str);
       return true;
     }
   }
   if (def_last.number == nullptr) {
-    if (!spv->field_def.row_field_definitions()) {
+    if (!spv->field_def.ora_record.row_field_definitions()) {
       my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), def_last.ident.str);
       return true;
     }
-    cdf = spv->field_def.row_field_definitions()->find_row_field_by_name(
-        to_lex_cstring(m_field_name.ptr()), &m_field_idx);
+    cdf = spv->field_def.ora_record.row_field_definitions()
+              ->find_row_field_by_name(
+                  to_lex_string(to_lex_cstring(m_field_name.ptr())),
+                  &m_field_idx);
     if (!cdf) {
       my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0), def_last.ident.str,
                m_field_name.ptr());
@@ -2662,41 +2907,47 @@ bool Item_splocal_row_field_table_by_name::fix_fields(THD *, Item **) {
     }
     item = item->element_index(m_field_idx);
   } else {
-    if (!spv->field_def.row_field_table_definitions()) {
+    if (!spv->field_def.ora_record.row_field_table_definitions()) {
       my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0), def_last.ident.str);
       return true;
     }
-    cdf = spv->field_def.row_field_table_definitions()->find_row_field_by_name(
-        to_lex_cstring(m_field_name.ptr()), &m_field_idx);
+    cdf = spv->field_def.ora_record.row_field_table_definitions()
+              ->find_row_field_by_name(
+                  to_lex_string(to_lex_cstring(m_field_name.ptr())),
+                  &m_field_idx);
     if (!cdf) {
       my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0), def_last.ident.str,
                m_field_name.ptr());
       return true;
     }
-    int row_number;
+    String tmp_str;
     if (!def_last.number->fixed) {
-      if (def_last.number->fix_fields(current_thd, &def_last.number)) {
+      if (def_last.number->fix_fields(thd, &def_last.number)) {
         return true;
       }
     }
-    if (!def_last.number->this_item()->is_null() &&
-        def_last.number->this_item()->result_type() != ROW_RESULT &&
-        def_last.number->this_item()->result_type() != STRING_RESULT) {
-      row_number = def_last.number->val_int();
-    } else {
+    Item_field_row_table *item_field =
+        dynamic_cast<Item_field_row_table *>(item);
+    if (def_last.number->this_item()->is_null() ||
+        def_last.number->this_item()->result_type() == ROW_RESULT) {
       my_error(ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE, MYF(0),
                def_last.number->this_item()->item_name.ptr());
       return true;
     }
-    Item_field_row_table *item_field =
-        dynamic_cast<Item_field_row_table *>(item);
-    int offset_table = item_field->field->virtual_record_count_map(row_number);
-    if (offset_table < 0) {
+    item = item_field->element_row_index(def_last.number, m_field_idx);
+    if (!item) {
       my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0), def_last.ident.str);
       return true;
     }
-    item = item->element_row_index(offset_table, m_field_idx);
   }
+  *result = item;
+  return false;
+}
+
+bool Item_splocal_row_field_table_by_name::fix_fields(THD *thd, Item **) {
+  Item *item = nullptr;
+  bool rc = pre_fix_fields(thd, &item);
+  if (rc) return true;
 
   max_length = item->max_length;
   decimals = item->decimals;
@@ -2710,74 +2961,8 @@ bool Item_splocal_row_field_table_by_name::fix_fields(THD *, Item **) {
 }
 
 Item *Item_splocal_row_field_table_by_name::this_item() {
-  assert(m_sp == current_thd->sp_runtime_ctx->sp);
-  ora_simple_ident_def def_last(NULL_STR, nullptr);
-  LEX_STRING def_name_before = NULL_STR;
-  Create_field *cdf;
-  Item *item = make_item(&def_last, &def_name_before);
-  if (!item) return current_thd->sp_runtime_ctx->get_item(m_var_idx);
-  sp_variable *spv =
-      m_pctx->find_variable(def_name_before.str, def_name_before.length, false);
-  if (!spv) {
-    spv = current_thd->sp_runtime_ctx->search_udt_variable(
-        def_name_before.str, def_name_before.length);
-    if (!spv) {
-      my_error(ER_SP_UNDECLARED_VAR, MYF(0), def_name_before.str);
-      return item;
-    }
-  }
-  if (def_last.number == nullptr) {
-    if (!spv->field_def.row_field_definitions()) {
-      my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), def_last.ident.str);
-      return item;
-    }
-    cdf = spv->field_def.row_field_definitions()->find_row_field_by_name(
-        to_lex_cstring(m_field_name.ptr()), &m_field_idx);
-    if (!cdf) {
-      my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0), def_last.ident.str,
-               m_field_name.ptr());
-      return item;
-    }
-    Item_field *item_udt = dynamic_cast<Item_field *>(item);
-    Field_udt_type *udt = dynamic_cast<Field_udt_type *>(item_udt->field);
-    if (udt) udt->copy_data_ptr_to_table();
-    item = item->element_index(m_field_idx);
-  } else {
-    if (!spv->field_def.row_field_table_definitions()) {
-      my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0), def_last.ident.str);
-      return item;
-    }
-    cdf = spv->field_def.row_field_table_definitions()->find_row_field_by_name(
-        to_lex_cstring(m_field_name.ptr()), &m_field_idx);
-    if (!cdf) {
-      my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0), def_last.ident.str,
-               m_field_name.ptr());
-      return item;
-    }
-    int row_number;
-    if (!def_last.number->fixed) {
-      if (def_last.number->fix_fields(current_thd, &def_last.number)) {
-        return item;
-      }
-    }
-    if (!def_last.number->this_item()->is_null() &&
-        def_last.number->this_item()->result_type() != ROW_RESULT &&
-        def_last.number->this_item()->result_type() != STRING_RESULT) {
-      row_number = def_last.number->val_int();
-    } else {
-      my_error(ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE, MYF(0),
-               def_last.number->this_item()->item_name.ptr());
-      return item;
-    }
-    Item_field_row_table *item_field =
-        dynamic_cast<Item_field_row_table *>(item);
-    int offset_table = item_field->field->virtual_record_count_map(row_number);
-    if (offset_table < 0) {
-      my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0), def_name_before.str);
-      return item;
-    }
-    item = item->element_row_index(offset_table, m_field_idx);
-  }
+  Item *item = nullptr;
+  pre_fix_fields(current_thd, &item);
   return item;
 }
 
@@ -2796,7 +2981,7 @@ void Item_splocal_row_field_table_by_name::print(const THD *, String *str,
   str->append(m_name);
   if (m_number) {
     str->append('(');
-    str->append(m_number->item_name.ptr());
+    str->append(m_number->item_name.ptr(), m_number->item_name.length());
     str->append(')');
   }
   str->append('.');
@@ -2808,7 +2993,8 @@ void Item_splocal_row_field_table_by_name::print(const THD *, String *str,
     if (def->number != nullptr) {
       str->reserve(def->number->item_name.length() + 2);
       str->append('(');
-      str->append(def->number->item_name.ptr());
+      str->append(def->number->item_name.ptr(),
+                  def->number->item_name.length());
       str->append(')');
     }
     str->append('.');
@@ -2826,9 +3012,11 @@ bool Item_splocal_row_field_table_by_name::set_value(THD *thd, sp_rcontext *ctx,
 /*****************************************************************************
   Item_splocal_row_field_table_by_ident methods
 *****************************************************************************/
-bool Item_splocal_row_field_table_by_ident::fix_fields(THD *thd, Item **) {
+bool Item_splocal_row_field_table_by_ident::pre_fix_fields(THD *thd,
+                                                           Item **result) {
   Item *item_first = thd->sp_runtime_ctx->get_item(m_var_idx);
   Item *item_number = thd->sp_runtime_ctx->get_item(m_number_idx);
+  *result = item_first;
   if (!item_first || !item_number) return true;
   sp_variable *spv =
       m_pctx->find_variable(m_name.ptr(), m_name.length(), false);
@@ -2836,29 +3024,37 @@ bool Item_splocal_row_field_table_by_ident::fix_fields(THD *thd, Item **) {
     my_error(ER_SP_UNDECLARED_VAR, MYF(0), m_name.ptr());
     return true;
   }
-  if (!spv->field_def.row_field_table_definitions()) {
+  if (!spv->field_def.ora_record.row_field_table_definitions()) {
     my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0), m_name.ptr());
     return true;
   }
   Create_field *cdf =
-      spv->field_def.row_field_table_definitions()->find_row_field_by_name(
-          to_lex_cstring(m_field_name.ptr()), &m_field_idx);
+      spv->field_def.ora_record.row_field_table_definitions()
+          ->find_row_field_by_name(
+              to_lex_string(to_lex_cstring(m_field_name.ptr())), &m_field_idx);
   if (!cdf) {
     my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0),
              item_first->item_name.ptr(), m_field_name.ptr());
     return true;
   }
-  int row_number = item_number->val_int();
-
+  String tmp_str;
   Item_field_row_table *item_field =
       dynamic_cast<Item_field_row_table *>(item_first);
-  int offset_table = item_field->field->virtual_record_count_map(row_number);
-  if (offset_table < 0) {
+
+  Item *item = item_field->element_row_index(item_number, m_field_idx);
+  if (!item) {
     my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0),
              item_first->item_name.ptr());
     return true;
   }
-  Item *item = item_first->element_row_index(offset_table, m_field_idx);
+  *result = item;
+  return item;
+}
+
+bool Item_splocal_row_field_table_by_ident::fix_fields(THD *thd, Item **) {
+  Item *item = nullptr;
+  bool rc = pre_fix_fields(thd, &item);
+  if (rc) return true;
 
   max_length = item->max_length;
   decimals = item->decimals;
@@ -2872,38 +3068,8 @@ bool Item_splocal_row_field_table_by_ident::fix_fields(THD *thd, Item **) {
 }
 
 Item *Item_splocal_row_field_table_by_ident::this_item() {
-  assert(m_sp == current_thd->sp_runtime_ctx->sp);
-  Item *item_first = current_thd->sp_runtime_ctx->get_item(m_var_idx);
-  Item *item_number = current_thd->sp_runtime_ctx->get_item(m_number_idx);
-  sp_variable *spv =
-      m_pctx->find_variable(m_name.ptr(), m_name.length(), false);
-  if (!spv) {
-    my_error(ER_SP_UNDECLARED_VAR, MYF(0), m_name.ptr());
-    return item_first;
-  }
-  if (!spv->field_def.row_field_table_definitions()) {
-    my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0), m_name.ptr());
-    return item_first;
-  }
-  Create_field *cdf =
-      spv->field_def.row_field_table_definitions()->find_row_field_by_name(
-          to_lex_cstring(m_field_name.ptr()), &m_field_idx);
-  if (!cdf) {
-    my_error(ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD, MYF(0),
-             item_first->item_name.ptr(), m_field_name.ptr());
-    return item_first;
-  }
-  int row_number = item_number->val_int();
-
-  Item_field_row_table *item_field =
-      dynamic_cast<Item_field_row_table *>(item_first);
-  int offset_table = item_field->field->virtual_record_count_map(row_number);
-  if (offset_table < 0) {
-    my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0),
-             item_first->item_name.ptr());
-    return item_first;
-  }
-  Item *item = item_first->element_row_index(offset_table, m_field_idx);
+  Item *item = nullptr;
+  pre_fix_fields(current_thd, &item);
   return item;
 }
 
@@ -2918,6 +3084,84 @@ void Item_splocal_row_field_table_by_ident::print(const THD *, String *str,
   str->append(')');
   str->append('.');
   str->append(m_field_name);
+}
+
+/*****************************************************************************
+  Item_splocal_row_field_table_by_index methods
+*****************************************************************************/
+bool Item_splocal_row_field_table_by_index::itemize(Parse_context *pc,
+                                                    Item **res) {
+  if (Item_splocal::itemize(pc, res)) return true;
+  return m_index->itemize(pc, &m_index);
+}
+
+bool Item_splocal_row_field_table_by_index::fix_fields(THD *thd, Item **) {
+  Item *item_first = thd->sp_runtime_ctx->get_item(m_var_idx);
+  if (!item_first) return true;
+  if (!m_index->fixed && m_index->fix_fields(thd, &m_index)) return true;
+  Item_field_row_table *item_field =
+      dynamic_cast<Item_field_row_table *>(item_first);
+  Field_row_table *field_table =
+      dynamic_cast<Field_row_table *>(item_field->field);
+
+  if (field_table->check_if_row_not_exist(m_index)) {
+    my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0),
+             item_first->item_name.ptr());
+    return true;
+  }
+  Item *item = item_field->element_table_index(m_index);
+
+  max_length = item->max_length;
+  decimals = item->decimals;
+  unsigned_flag = item->unsigned_flag;
+  collation.set(item->collation);
+  set_data_type(item->data_type());
+
+  fixed = true;
+  return false;
+}
+
+Item *Item_splocal_row_field_table_by_index::this_item() {
+  assert(m_sp == current_thd->sp_runtime_ctx->sp);
+  Item *item_first = current_thd->sp_runtime_ctx->get_item(m_var_idx);
+  Item_field_row_table *item_field =
+      dynamic_cast<Item_field_row_table *>(item_first);
+  Field_row_table *field_table =
+      dynamic_cast<Field_row_table *>(item_field->field);
+
+  if (field_table->check_if_row_not_exist(m_index)) {
+    my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0),
+             item_first->item_name.ptr());
+    return item_first;
+  }
+  Item *item = item_field->element_table_index(m_index);
+  return item;
+}
+
+const Item *Item_splocal_row_field_table_by_index::this_item() const {
+  assert(m_sp == current_thd->sp_runtime_ctx->sp);
+  Item *item_first = current_thd->sp_runtime_ctx->get_item(m_var_idx);
+  Item_field_row_table *item_field =
+      dynamic_cast<Item_field_row_table *>(item_first);
+  Field_row_table *field_table =
+      dynamic_cast<Field_row_table *>(item_field->field);
+  if (field_table->check_if_row_not_exist(m_index)) {
+    my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0),
+             item_first->item_name.ptr());
+    return item_first;
+  }
+  Item *item = item_field->element_table_index(m_index);
+  return item;
+}
+
+void Item_splocal_row_field_table_by_index::print(const THD *, String *str,
+                                                  enum_query_type) const {
+  LEX_CSTRING number_cstr = to_lex_cstring(m_index->item_name.ptr());
+  str->reserve(m_name.length() + number_cstr.length + 3);
+  str->append(m_name);
+  str->append('(');
+  str->append(number_cstr.str, number_cstr.length);
+  str->append(')');
 }
 
 /*****************************************************************************
@@ -3800,6 +4044,7 @@ bool Item_field::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
   if (super::itemize(pc, res)) return true;
   Query_block *const select = pc->select;
+  parsing_place = select->parsing_place;
   if (select->parsing_place != CTX_HAVING) select->select_n_where_fields++;
   return false;
 }
@@ -3828,7 +4073,6 @@ Item_field::Item_field(THD *thd, Item_field *item)
   else
     m_orig_table_name = nullptr;
   set_base_item_field(item);
-  m_is_ora_type = item->is_ora_type();
 }
 
 /**
@@ -3906,6 +4150,11 @@ inline static uint32 adjust_max_effective_column_length(Field *field_par,
 }
 
 void Item_field::set_field(Field *field_par) {
+  if (is_sequence) {
+    assert(fixed);
+    return;
+  }
+
   table_ref = field_par->table->pos_in_table_list;
   assert(table_ref == nullptr || table_ref->table == field_par->table);
   assert(field_par->field_index() != NO_FIELD_INDEX);
@@ -3957,10 +4206,10 @@ void Item_field::set_field(Field *field_par) {
   if (!can_use_prefix_key)
     field->table->covering_keys.subtract(field->part_of_prefixkey);
 
-  m_is_ora_type =
-      field_par->udt_name().str && !field_par->get_nested_table_udt().str
-          ? true
-          : false;
+  if (field_par->udt_name().str && !field_par->get_nested_table_udt().str)
+    set_ora_type();
+  if (field_par->udt_name().str && field_par->get_nested_table_udt().str)
+    set_ora_table();
   fixed = true;
 }
 
@@ -4028,7 +4277,14 @@ void Item_ident::print(const THD *thd, String *str, enum_query_type query_type,
     const char *nm = (f_name != nullptr && f_name[0])
                          ? f_name
                          : item_name.is_set() ? item_name.ptr() : "tmp_field";
-    append_identifier(thd, str, nm, strlen(nm));
+    if (thd->lex->create_force_view_table_not_found && *nm == '*')
+      /*
+          support expand '*' for create force view,example:
+          create force view t1_view as select * from t1
+       */
+      str->append(STRING_WITH_LEN(" * "));
+    else
+      append_identifier(thd, str, nm, strlen(nm));
     return;
   }
 
@@ -4049,6 +4305,7 @@ void Item_ident::print(const THD *thd, String *str, enum_query_type query_type,
 }
 
 TYPELIB *Item_field::get_typelib() const {
+  if (is_sequence) return nullptr;
   return down_cast<Field_enum *>(field)->typelib;
 }
 
@@ -4075,6 +4332,7 @@ double Item_field::val_real() {
 
 longlong Item_field::val_int() {
   assert(fixed == 1);
+  assert(!is_sequence);
   if ((null_value = field->is_null())) return 0;
   return field->val_int();
 }
@@ -4185,6 +4443,7 @@ table_map Item_field::used_tables() const {
 }
 
 bool Item_field::used_tables_for_level(uchar *arg) {
+  if (is_sequence) return true;
   const Table_ref *tr = field->table->pos_in_table_list;
   // Used by resolver only, so can never reach a "const" table.
   assert(!tr->table->const_table);
@@ -4692,6 +4951,15 @@ Item *Item_null::safe_charset_converter(THD *, const CHARSET_INFO *tocs) {
   return this;
 }
 
+bool Item_null::udt_table_store_to_table(TABLE *table_to) {
+  for (uint i = 0; i < table_to->s->fields; i++) {
+    type_conversion_status ret =
+        set_field_to_null_with_conversions(table_to->field[i], false);
+    if (ret != TYPE_OK) return true;
+  }
+  return false;
+}
+
 /*********************** Item_param related ******************************/
 
 Item_param::Item_param(const POS &pos, MEM_ROOT *root, uint pos_in_query_arg)
@@ -5070,6 +5338,81 @@ bool Item_param::set_longdata(const char *str, ulong length) {
     They will be set to proper values by Prepared_statement::insert_params().
   */
   m_param_state = LONG_DATA_VALUE;
+
+  return false;
+}
+
+/**
+  Set parameter value from expr item
+
+  @param thd   Current thread
+  @param entry Item * (NULL means use NULL value)
+
+  @returns false if success, true if error
+*/
+
+bool Item_param::set_from_expr_item(THD *thd, Item *expr) {
+  DBUG_TRACE;
+  if (expr) {
+    if (expr->is_splocal()) {
+      expr = expr->this_item();
+    }
+
+    // Pinning of data types only implemented for integers
+    assert(!is_type_pinned() || result_type() == INT_RESULT);
+    if (is_type_pinned() && expr->result_type() != INT_RESULT) {
+      my_error(ER_WRONG_ARGUMENTS, MYF(0), "EXECUTE");
+      return true;
+    }
+    max_length = expr->max_length;
+    decimals = expr->decimals;
+    collation.set(expr->collation);
+    unsigned_flag = expr->unsigned_flag;
+    switch (expr->result_type()) {
+      case REAL_RESULT: {
+        set_double(expr->val_real());
+      } break;
+      case INT_RESULT: {
+        set_int(expr->val_int());
+      } break;
+      case STRING_RESULT: {
+        String tmp;
+        auto str = expr->val_str(&tmp);
+        if (str && !expr->null_value) {
+          str_value.copy(*str);
+
+          m_data_type_actual = MYSQL_TYPE_VARCHAR;
+          set_collation_actual(str->charset());
+          m_param_state = STRING_VALUE;
+          if (!collation_source()) {
+            m_collation_source = str->charset();
+          }
+        }
+      } break;
+      case DECIMAL_RESULT: {
+        my_decimal decimal1;
+        auto expr_val = expr->val_decimal(&decimal1);
+        if (expr_val && !expr->null_value) {
+          my_decimal2decimal(expr_val, &decimal_value);
+          m_data_type_actual = MYSQL_TYPE_NEWDECIMAL;
+          m_param_state = DECIMAL_VALUE;
+        }
+      } break;
+      default:
+        // ROW_RESULT
+        my_error(ER_WRONG_ARGUMENTS, MYF(0), "EXECUTE ROW RESULT");
+        return true;
+    }
+    if (expr->null_value) {
+      set_null();
+    }
+
+  } else {
+    set_null();
+  }
+  if (thd->is_error() || thd->killed) {
+    return true;
+  }
 
   return false;
 }
@@ -6440,9 +6783,10 @@ int Item_field::fix_outer_field(THD *thd, Field **from_field,
               (*from_field)->table->pos_in_table_list->map());
           set_field(*from_field);
 
-          if (!last_checked_context->query_block->having_fix_field &&
-              select->group_list.elements &&
-              (place == CTX_SELECT_LIST || place == CTX_HAVING)) {
+          if ((!last_checked_context->query_block->having_fix_field &&
+               select->group_list.elements &&
+               (place == CTX_SELECT_LIST || place == CTX_HAVING)) ||
+              select->has_connect_by) {
             Item_outer_ref *rf;
             /*
               If an outer field is resolved in a grouping select then it
@@ -6486,7 +6830,8 @@ int Item_field::fix_outer_field(THD *thd, Field **from_field,
                      pointer_cast<uchar *>(&ut));
           cur_query_expression->accumulate_used_tables(ut.used_tables);
 
-          if (select->group_list.elements && place == CTX_HAVING) {
+          if ((select->group_list.elements && place == CTX_HAVING) ||
+              select->has_connect_by) {
             /*
               If an outer field is resolved in a grouping query block then it
               is replaced with an Item_outer_ref object. Otherwise an
@@ -6555,10 +6900,26 @@ int Item_field::fix_outer_field(THD *thd, Field **from_field,
   assert(ref != nullptr);
   if (!*from_field) return -1;
   if (ref == not_found_item && *from_field == not_found_field) {
+    if (try_fix_sequence_field(thd)) {
+      return -1;
+    }
     if (upward_lookup) {
-      // We can't say exactly what absent table or field
-      my_error(ER_BAD_FIELD_ERROR, MYF(0), full_name(), thd->where);
+      if (is_sequence) {
+        std::string seq_full_name;
+        if (db_name != nullptr && strlen(db_name) > 0) {
+          seq_full_name = db_name;
+          seq_full_name += ".";
+        }
+        seq_full_name += table_name;
+        my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), seq_full_name.c_str());
+      } else
+        // We can't say exactly what absent table or field
+        my_error(ER_BAD_FIELD_ERROR, MYF(0), full_name(), thd->where);
     } else {
+      if (is_sequence) {
+        assert(fixed);
+        return 0;
+      }
       /* Call find_field_in_tables only to report the error */
       find_field_in_tables(thd, this, context->first_name_resolution_table,
                            context->last_name_resolution_table, reference,
@@ -6765,6 +7126,7 @@ bool is_null_on_empty_table(THD *thd, Item_field *i) {
 
 bool Item_field::fix_fields(THD *thd, Item **reference) {
   assert(fixed == 0);
+
   Field *from_field = not_found_field;
   bool outer_fixed = false;
 
@@ -6809,7 +7171,11 @@ bool Item_field::fix_fields(THD *thd, Item **reference) {
         Item **res = find_item_in_list(
             thd, this, &thd->lex->current_query_block()->fields, &counter,
             REPORT_EXCEPT_NOT_FOUND, &resolution);
-        if (!res) return true;
+        if (!res) {
+          /* TODO: report ER_GDB_SEQUENCE_POSITION if this is a sequence field.
+             currently, already call my_error in "find_item_in_list()" */
+          return true;
+        }
         if (resolution == RESOLVED_AGAINST_ALIAS) set_alias_of_expr();
         if (res != not_found_item) {
           if ((*res)->type() == Item::FIELD_ITEM) {
@@ -6930,7 +7296,7 @@ bool Item_field::fix_fields(THD *thd, Item **reference) {
       return false;
     }
 
-    if (from_field->is_hidden_by_system()) {
+    if (!is_sequence && from_field->is_hidden_by_system()) {
       /*
         This field is either hidden by the storage engine or SQL layer. In
         either case, report column "not found" error.
@@ -6952,10 +7318,11 @@ bool Item_field::fix_fields(THD *thd, Item **reference) {
       current_bitmap = table->write_set;
       other_bitmap = table->read_set;
     }
-    if (!bitmap_test_and_set(current_bitmap, field->field_index()))
+    if (!is_sequence &&
+        !bitmap_test_and_set(current_bitmap, field->field_index()))
       assert(bitmap_is_set(other_bitmap, field->field_index()));
   }
-  if (any_privileges) {
+  if (!is_sequence && any_privileges) {
     const char *db, *tab;
     db = cached_table->get_db_name();
     tab = cached_table->get_table_name();
@@ -6970,7 +7337,7 @@ bool Item_field::fix_fields(THD *thd, Item **reference) {
     }
   }
   fixed = true;
-  if (is_null_on_empty_table(thd, this)) {
+  if (!is_sequence && is_null_on_empty_table(thd, this)) {
     set_nullable(true);
 
     // The Item is now nullable, but the underlying field still isn't,
@@ -6986,7 +7353,56 @@ error:
   return true;
 }
 
+bool Item_field::try_fix_sequence_field(THD *thd) {
+  DBUG_TRACE;
+  if (!native_strcasecmp(field_name, "nextval"))
+    seq_need_get_next = true;
+  else if (!native_strcasecmp(field_name, "currval"))
+    seq_need_get_next = false;
+  else
+    return false;  // not match nextval/nextval
+  /* check empty db name */
+  const char *real_db_name = db_name;
+  if (db_name == nullptr || strlen(db_name) == 0) {
+    LEX_STRING db_lex;
+    if (thd->copy_db_to_no_throw(&db_lex.str, &db_lex.length)) {
+      my_error(ER_NO_DB_ERROR, MYF(0));
+      return true;  // not set db_name, treat as undefined field
+    }
+    real_db_name = db_lex.str;
+  }
+
+  // seq_version ==0 means not have such sequence def
+  auto seq_version = has_sequence_def(thd, real_db_name, table_name);
+  if (seq_version == 0) return false;
+
+  if (!(parsing_place == CTX_SELECT_LIST || parsing_place == CTX_UPDATE_VALUE ||
+        parsing_place == CTX_INSERT_VALUES)) {
+    my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), "");
+    return true;
+  }
+
+  // emulate resolve_type()
+  db_name = real_db_name;
+  field_name = item_name.ptr();
+  set_nullable(false);
+  collation.set(&my_charset_numeric, DERIVATION_NUMERIC);
+  set_data_type(MYSQL_TYPE_NEWDECIMAL);
+  decimals = 0;
+  unsigned_flag = false;
+  max_length = ORA_SEQUENCE_MAX_DIGITS;
+  is_sequence = true;
+  sequences_metadata_version = seq_version;
+  thd->lex->current_query_block()->has_sequence = true;
+  fixed = true;
+  return false;
+}
+
 void Item_field::bind_fields() {
+  if (is_sequence) {
+    return;
+  }
+
   if (!fixed) return;
   assert(field_index != NO_FIELD_INDEX);
   /*
@@ -7044,7 +7460,8 @@ void Item_field::cleanup() {
     When table_ref is NULL, table_name must be reassigned together with
     table pointer.
   */
-  if (table_ref == nullptr) table_name = nullptr;
+  /* mod for GreatDB sequence: should keep table_name(sequence name) */
+  if (table_ref == nullptr && !is_sequence) table_name = nullptr;
 
   // Reset field before next optimization (multiple equality analysis)
   item_equal = nullptr;
@@ -7246,6 +7663,24 @@ Item *Item_field::replace_item_field(uchar *arg) {
   return this;
 }
 
+Item *Item_field::replace_sequence_field(uchar *arg) {
+  if (!is_sequence) {
+    return this;
+  }
+  auto *info = pointer_cast<Item::Item_sequence_field_replacement *>(arg);
+  THD *const thd = current_thd;
+  Item_func_sequence *seq_func = new (thd->mem_root) Item_func_sequence(
+      POS(), db_name, table_name, field_name, sequences_metadata_version);
+  if (seq_func) {
+    Item *item = dynamic_cast<Item *>(seq_func);
+    seq_func->fix_fields(thd, &item);  // do resole_type and set used tables.
+    seq_func->read_next = seq_need_get_next;
+    info->m_sequences->push_back(seq_func);
+    return seq_func;
+  }
+  return nullptr;
+}
+
 /**
   Replace an Item_field for an equal Item_field that evaluated earlier
   (if any).
@@ -7438,10 +7873,20 @@ Field *Item::make_string_field(TABLE *table, MEM_ROOT *root) const {
         max_length, m_nullable, item_name.ptr(), collation.collation, true);
   /* Item_type_holder holds the exact type, do not change it */
   else if (max_length > 0 &&
-           (type() != Item::TYPE_HOLDER || data_type() != MYSQL_TYPE_STRING))
-    field = new (*THR_MALLOC) Field_varstring(
-        max_length, m_nullable, item_name.ptr(), table->s, collation.collation);
-  else
+           (type() != Item::TYPE_HOLDER || data_type() != MYSQL_TYPE_STRING)) {
+    if (is_ora_table()) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "nested table as a column");
+      return nullptr;
+    }
+    if (is_ora_type())
+      field = new (*THR_MALLOC) Field_udt_type(
+          max_length, is_nullable(), item_name.ptr(), table->s, &my_charset_bin,
+          to_lex_cstring(get_udt_name()), *THR_MALLOC, get_udt_db_name());
+    else
+      field = new (*THR_MALLOC)
+          Field_varstring(max_length, m_nullable, item_name.ptr(), table->s,
+                          collation.collation);
+  } else
     field = new (*THR_MALLOC) Field_string(
         max_length, m_nullable, item_name.ptr(), collation.collation);
   if (field) field->init(table);
@@ -7572,6 +8017,26 @@ Field *Item::tmp_table_field_from_field_type(TABLE *table, bool fixed_length,
 
 /* ARGSUSED */
 void Item_field::make_field(Send_field *tmp_field) {
+  if (is_sequence) {
+    tmp_field->db_name = db_name;
+    tmp_field->table_name = table_name;
+    tmp_field->org_table_name = "";
+    tmp_field->col_name = field_name;
+    tmp_field->org_col_name = "";
+    tmp_field->length = ORA_SEQUENCE_MAX_DIGITS;
+    tmp_field->charsetnr = my_charset_numeric.number;
+    tmp_field->flags = NUM_FLAG | NOT_NULL_FLAG | UNSIGNED_FLAG;
+    tmp_field->decimals = 0;
+    tmp_field->type = MYSQL_TYPE_NEWDECIMAL;
+    /*
+      true <=> source item is an Item_field. Needed to workaround lack of
+      architecture in legacy Protocol_text implementation. Needed only for
+      Protocol_classic and descendants.
+    */
+    tmp_field->field = true;
+    return;
+  }
+
   field->make_send_field(tmp_field);
   assert(tmp_field->table_name != nullptr);
   assert(item_name.is_set());
@@ -7622,6 +8087,7 @@ static inline type_conversion_status field_conv_with_cache(
 */
 
 void Item_field::save_org_in_field(Field *to) {
+  assert(!is_sequence);
   if (field == to) {
     assert(null_value == field->is_null());
     return;
@@ -7639,6 +8105,7 @@ void Item_field::save_org_in_field(Field *to) {
 type_conversion_status Item_field::save_in_field_inner(Field *to,
                                                        bool no_conversions) {
   DBUG_TRACE;
+  assert(!is_sequence);
   if (field->is_null()) {
     null_value = true;
     const type_conversion_status status =
@@ -7695,19 +8162,44 @@ type_conversion_status Item::save_in_field(Field *field, bool no_conversions) {
   /* Only Item->is_ora_type() can save value to Field_udt_type and Field_row.
    */
   Field_udt_type *field_udt = dynamic_cast<Field_udt_type *>(field);
-  Field_row *row = dynamic_cast<Field_row *>(field);
-  Field_row_table *field_row_table = dynamic_cast<Field_row_table *>(field);
+  Field_row *field_row = dynamic_cast<Field_row *>(field);
+  Field_refcursor *field_refcursor = dynamic_cast<Field_refcursor *>(field);
   if (type() == NULL_ITEM && field->udt_name().str) {
     null_value = true;
-    field->set_udt_value_initialized();
+    field->set_udt_value_initialized(true);
     return set_field_to_null_with_conversions(field, no_conversions);
   }
   bool is_sp_row = false;
-  if ((field_udt || row) && !field_row_table) is_sp_row = true;
-  if ((is_sp_row && !this_item()->is_ora_type()) ||
-      (this_item()->is_ora_type() && !is_sp_row)) {
+  if ((field_udt || field_row) && !field_refcursor) is_sp_row = true;
+  if ((is_sp_row && !this_item()->is_ora_type() &&
+       !this_item()->is_ora_table()) ||
+      (this_item()->is_ora_type() && this_item()->is_ora_table() &&
+       !is_sp_row)) {
     my_error(ER_UDT_INCONS_DATATYPES, myf(0));
     return TYPE_ERR_BAD_VALUE;
+  }
+
+  /* e.g:
+      cSendCursor sys_refcursor;
+      c1 sys_refcursor;
+      i int;
+      i := cSendCursor; it's unallowed.
+      c1 := 1; it's unallowed.
+      c1 := c; it's allowed.
+      c1 := cSendCursor; it's allowed.
+      call p1(out sys_refcursor) it's allowed.
+  */
+  if (field_refcursor) {
+    switch (type()) {
+      case FUNC_ITEM:
+      case ORACLE_ROWTYPE_ITEM:
+      case NULL_ITEM:
+        break;
+      default:
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                 "cursor stores to a non cursor variable");
+        return TYPE_ERR_BAD_VALUE;
+    }
   }
 
   const type_conversion_status ret = save_in_field_inner(field, no_conversions);
@@ -7755,9 +8247,11 @@ type_conversion_status Item::save_in_field_inner(Field *field,
   if (is_ora_type() || is_ora_table()) {
     /*
       'this' can be Item_cache_str.
-      field should be a udt type which is checked early.
     */
-    assert(field->get_udt_db_name() && field->udt_name().str);
+    if (!field->get_udt_db_name() || !field->udt_name().str) {
+      my_error(ER_UDT_INCONS_DATATYPES, myf(0));
+      return TYPE_ERR_BAD_VALUE;
+    }
     if (my_strcasecmp(system_charset_info, get_udt_db_name().str,
                       field->get_udt_db_name()) != 0 ||
         my_strcasecmp(system_charset_info, get_udt_name().str,
@@ -7881,6 +8375,33 @@ type_conversion_status Item::save_in_field_inner(Field *field,
       return set_field_to_null_with_conversions(field, no_conversions);
     field->set_notnull();
     return field->store_decimal(value);
+  }
+  /*c sys_refcursor;
+    c := returnacursor();
+    returnacursor() is Item_func_sp whose result_type() == ROW_RESULT.
+  */
+  if (result_type() == ROW_RESULT) {
+    Item_func_sp *item_sp = dynamic_cast<Item_func_sp *>(this);
+    if (item_sp) {
+      Field_refcursor *field_refcursor =
+          dynamic_cast<Field_refcursor *>(item_sp->get_sp_result_field());
+      Field_refcursor *field_to = dynamic_cast<Field_refcursor *>(field);
+      /* e.g:
+        cSendCursor return sys_refcursor;
+        i int;
+        i := cSendCursor(); it's unallowed.
+      */
+      if (!field_to) {
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                 "cursor stores to a non cursor variable");
+        return TYPE_ERR_BAD_VALUE;
+      }
+      String tmp;
+      val_str(&tmp);
+      if (current_thd->is_error() || field_to->move_refcursor(field_refcursor))
+        return TYPE_ERR_BAD_VALUE;
+      return TYPE_OK;
+    }
   }
 
   longlong nr = val_int();
@@ -8983,6 +9504,7 @@ Item *Item_field::update_value_transformer(uchar *select_arg) {
   return this;
 }
 
+
 void Item_field::print(const THD *thd, String *str,
                        enum_query_type query_type) const {
   if (field && field->is_field_for_functional_index()) {
@@ -9066,8 +9588,6 @@ Item_ref::Item_ref(Name_resolution_context *context_arg, Item **item,
       set_properties();
     }
   }
-
-  m_is_ora_type = item && (*item) ? (*item)->is_ora_type() : false;
 }
 
 Item_ref::Item_ref(Name_resolution_context *context_arg, Item **item,
@@ -9076,7 +9596,6 @@ Item_ref::Item_ref(Name_resolution_context *context_arg, Item **item,
   assert(m_ref_item != nullptr && ref_item() != nullptr);
   ref_item()->increment_ref_count();
   if (ref_item()->fixed) set_properties();
-  m_is_ora_type = item && (*item) ? (*item)->is_ora_type() : false;
 }
 
 bool Item_ref::clean_up_after_removal(uchar *arg) {
@@ -9219,7 +9738,7 @@ bool Item_ref::fix_fields(THD *thd, Item **reference) {
           goto loop;
 
         /* Search in the SELECT and GROUP lists of the outer select. */
-        if (select_alias_referencable(place) &&
+        if ((select_alias_referencable(place)) &&
             outer_context->resolve_in_select_list) {
           m_ref_item = resolve_ref_in_select_and_group(thd, this, select);
           if (m_ref_item == nullptr) {
@@ -9635,6 +10154,26 @@ bool Item_ref::collect_item_field_or_ref_processor(uchar *arg) {
   if (info->is_stopped(this)) return false;
   if (real_item()->type() == Item::FIELD_ITEM) info->m_items->push_back(this);
   info->stop_at(this);
+  return false;
+}
+
+bool Item_ref::collect_connect_by_leaf_cycle_or_ref_processor(uchar *arg) {
+  if (real_item()->type() == Item::CONNECT_BY_FUNC_ITEM) {
+    auto cit = dynamic_cast<Item_connect_by_func *>(real_item());
+    if (!cit) return false;
+    auto info = pointer_cast<Collect_leaf_cycle_info *>(arg);
+    if (!info) return true;
+    switch (cit->ConnectBy_func()) {
+      case Item_connect_by_func::ISLEAF_FUNC:
+        info->func_leaf_list.push_back(this);
+        break;
+      case Item_connect_by_func::ISCYCLE_FUNC:
+        info->func_cycle_list.push_back(this);
+        break;
+      default:
+        break;
+    }
+  }
   return false;
 }
 
@@ -10270,6 +10809,17 @@ bool Item_trigger_field::eq(const Item *item, bool) const {
 bool Item_trigger_field::set_value(THD *thd, sp_rcontext * /*ctx*/, Item **it) {
   Item *item = sp_prepare_func_item(thd, it);
   if (item == nullptr) return true;
+  /*
+    Oracle mode delete event does not allow modification of
+    NEW.<variable_name>= <Invalid value>
+  */
+  if ((thd->variables.sql_mode & MODE_ORACLE) &&
+      ((((Table_trigger_dispatcher *)(triggers))->in_event ==
+        (enum_trigger_event_type::TRG_EVENT_DELETE)) &&
+       (trigger_var_type == enum_trigger_variable_type::TRG_NEW_ROW))) {
+    my_error(ER_TRG_NO_SUCH_ROW_IN_TRG, MYF(0), "NEW", "on DELETE");
+    return true;
+  }
 
   if (!fixed) {
     Prepared_stmt_arena_holder ps_arena_holder(thd);
@@ -10322,6 +10872,18 @@ bool Item_trigger_field::fix_fields(THD *thd, Item **) {
     field = triggers->get_trigger_variable_field(trigger_var_type, field_idx);
 
     set_field(field);
+
+    /*
+      There is no NEW row in DELETE trigger and no OLD row in insert
+    */
+    if (((((Table_trigger_dispatcher *)(triggers))->in_event ==
+          (enum_trigger_event_type::TRG_EVENT_INSERT)) &&
+         (trigger_var_type == enum_trigger_variable_type::TRG_OLD_ROW)) ||
+        ((((Table_trigger_dispatcher *)(triggers))->in_event ==
+          (enum_trigger_event_type::TRG_EVENT_DELETE)) &&
+         (trigger_var_type == enum_trigger_variable_type::TRG_NEW_ROW)))
+      set_field_to_null(field);
+
     return false;
   }
 
@@ -10349,6 +10911,17 @@ void Item_trigger_field::bind_fields() {
   field = triggers->get_trigger_variable_field(trigger_var_type, field_idx);
 
   set_field(field);
+
+  /*
+    There is no NEW row in DELETE trigger and no OLD row in insert
+  */
+  if (((((Table_trigger_dispatcher *)(triggers))->in_event ==
+        (enum_trigger_event_type::TRG_EVENT_INSERT)) &&
+       (trigger_var_type == enum_trigger_variable_type::TRG_OLD_ROW)) ||
+      ((((Table_trigger_dispatcher *)(triggers))->in_event ==
+        (enum_trigger_event_type::TRG_EVENT_DELETE)) &&
+       (trigger_var_type == enum_trigger_variable_type::TRG_NEW_ROW)))
+    set_field_to_null(field);
 }
 
 bool Item_trigger_field::check_column_privileges(uchar *arg) {
@@ -10617,7 +11190,7 @@ int stored_field_cmp_to_item(THD *thd, Field *field, Item *item) {
 }
 
 Item_cache *Item_cache::get_cache(const Item *item) {
-  return get_cache(item, item->result_type());
+  return get_cache(item, item->this_item()->result_type());
 }
 
 /**
@@ -10652,9 +11225,9 @@ Item_cache *Item_cache::get_cache(const Item *item, const Item_result type) {
       if (item->data_type() == MYSQL_TYPE_JSON) return new Item_cache_json();
       return new Item_cache_str(item);
     case ROW_RESULT:
-      if (item_tmp->is_ora_type()) {
+      if (item_tmp->this_item()->is_ora_type() ||
+          item_tmp->this_item()->is_ora_table()) {
         Item_cache *cache = new Item_cache_str(item);
-        cache->m_is_ora_type = true;
         return cache;
       }
       return new Item_cache_row();
@@ -11247,6 +11820,65 @@ type_conversion_status Item_cache_str::save_in_field_inner(
     Field *field, bool no_conversions) {
   if (!value_cached && !cache_value())
     return TYPE_ERR_BAD_VALUE;  // Fatal: couldn't cache the value
+  if (m_udt_name.length != 0) {
+    if (!field->get_udt_db_name() || !field->udt_name().str) {
+      my_error(ER_UDT_INCONS_DATATYPES, myf(0));
+      return TYPE_ERR_BAD_VALUE;
+    }
+    if (my_strcasecmp(system_charset_info, get_udt_db_name().str,
+                      field->get_udt_db_name()) != 0 ||
+        my_strcasecmp(system_charset_info, get_udt_name().str,
+                      field->udt_name().str) != 0) {
+      my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), field->get_udt_db_name(),
+               field->udt_name().str, get_udt_db_name().str,
+               get_udt_name().str);
+      return TYPE_ERR_BAD_VALUE;
+    }
+    if (is_ora_type()) {
+      Item_field *item_field = dynamic_cast<Item_field *>(example);
+      if (item_field) {
+        if (null_value) {
+          type_conversion_status ret =
+              set_field_to_null_with_conversions(field, no_conversions);
+          if (ret == TYPE_OK) field->set_udt_value_initialized(true);
+          return ret;
+        }
+
+        Field_udt_type *field_udt_type =
+            dynamic_cast<Field_udt_type *>(item_field->field);
+        /*
+        case: select udt_column from table where id = 1;
+        Field_udt_type->ptr may be different from this->value
+        but Field_udt_type->table->record[0] sanme as this->value
+        so we use Field_udt_type->table->record[0] save in field
+        */
+        if (field_udt_type) {
+          field->set_notnull();
+          Field_row *field_row = dynamic_cast<Field_row *>(field);
+          if (field_row) {
+            TABLE *table = field_udt_type->virtual_tmp_table_addr()[0];
+            for (uint i = 0; i < table->s->fields; i++) {
+              Item *item_filed =
+                  new (current_thd->mem_root) Item_field(table->field[i]);
+              if (sp_eval_expr(current_thd,
+                               field->virtual_tmp_table_addr()[0]->field[i],
+                               &item_filed))
+                return TYPE_ERR_BAD_VALUE;
+            }
+            field->set_udt_value_initialized(true);
+            return TYPE_OK;
+
+          } else {  // udt
+            type_conversion_status ret =
+                field->store(value->c_ptr(), value->length(), value->charset());
+            if (ret == TYPE_OK) field->set_udt_value_initialized(true);
+            return ret;
+          }
+        }
+      }
+    }
+    return example->save_in_field(field, no_conversions);
+  }
   if (null_value)
     return set_field_to_null_with_conversions(field, no_conversions);
   const type_conversion_status res =
@@ -11380,6 +12012,9 @@ static enum_field_types real_data_type(Item *item) {
 
   switch (item->type()) {
     case Item::FIELD_ITEM: {
+      if (item->is_sequence_field()) {
+        return MYSQL_TYPE_NEWDECIMAL;
+      }
       /*
         Item_fields::field_type ask Field_type() but sometimes field return
         a different type, like for enum/set, so we need to ask real type.
@@ -11452,7 +12087,7 @@ bool Item_aggregate_type::join_types(THD *thd, Item *item) {
               decimals, (item_name.is_set() ? item_name.ptr() : "<NULL>")));
   DBUG_PRINT("info:", ("in type %d len %d, dec %d", real_data_type(item),
                        item->max_length, item->decimals));
-  if (item->is_ora_type()) {
+  if (item->this_item()->is_ora_udt_type()) {
     my_error(ER_NOT_SUPPORTED_YET, MYF(0), "udt value in join sql");
     return true;
   }
@@ -11977,7 +12612,7 @@ bool Item_field::strip_db_table_name_processor(uchar *) {
 }
 
 bool Item_field::udt_table_store_to_table(TABLE *table_to) {
-  if (m_is_ora_type) {
+  if (is_ora_type()) {
     return field->field_udt_table_store_to_table(table_to);
   }
   return false;
@@ -12277,6 +12912,7 @@ bool check_for_routine_default_parameters(THD *thd, Item *item,
     case MYSQL_TYPE_BIT:
     case MYSQL_TYPE_VAR_STRING:
     case MYSQL_TYPE_VARCHAR:
+    case MYSQL_TYPE_BLOB:
       if (item->type() == Item::FUNC_ITEM) {
         my_error(ER_SP_INVALID_VALUE_DEFAULT_PARAM, MYF(0), name);
 

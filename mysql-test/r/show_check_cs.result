@@ -789,7 +789,7 @@ def	information_schema	TABLES	TABLES	TABLE_CATALOG	TABLE_CATALOG	253	192	3	N	#	0
 def	information_schema	TABLES	TABLES	TABLE_COLLATION	TABLE_COLLATION	253	192	18	Y	20484	0	33
 def	information_schema	TABLES	TABLES	TABLE_NAME	TABLE_NAME	253	192	2	N	#	0	33
 def	information_schema	TABLES	TABLES	TABLE_SCHEMA	TABLE_SCHEMA	253	192	4	N	#	0	33
-def	information_schema	TABLES	TABLES	TABLE_TYPE	TABLE_TYPE	254	33	10	N	20873	0	33
+def	information_schema	TABLES	TABLES	TABLE_TYPE	TABLE_TYPE	254	51	10	N	20873	0	33
 def	test	t1	BASE TABLE	InnoDB	Dynamic	utf8mb4_0900_ai_ci		
 ----------------------------------------------------------------
 SELECT
@@ -847,7 +847,7 @@ c	int	NO	PRI	NULL
 SHOW TRIGGERS LIKE 't1';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
 def		triggers	TRIGGERS	Trigger	Trigger	253	192	5	N	4097	0	33
-def		triggers	TRIGGERS	Event	Event	254	18	6	N	4481	0	33
+def		triggers	TRIGGERS	Event	Event	254	78	6	N	4481	0	33
 def		tables	TRIGGERS	Table	Table	253	192	2	N	4225	0	33
 def		triggers	TRIGGERS	Statement	Statement	252	4294967295	10	N	4241	0	33
 def		triggers	TRIGGERS	Timing	Timing	254	18	6	N	4481	0	33
@@ -857,8 +857,9 @@ def		triggers	TRIGGERS	Definer	Definer	253	864	14	N	4225	0	33
 def		character_sets	TRIGGERS	character_set_client	character_set_client	253	192	6	N	4097	0	33
 def		collations	TRIGGERS	collation_connection	collation_connection	253	192	6	N	4097	0	33
 def		collations	TRIGGERS	Database Collation	Database Collation	253	192	18	N	4097	0	33
-Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
-t1_bi	INSERT	t1	SET @a = 1	BEFORE	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	binary	binary	utf8mb4_0900_ai_ci
+def			TRIGGERS	Status	Status	253	24	7	N	1	0	33
+Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation	Status
+t1_bi	INSERT	t1	SET @a = 1	BEFORE	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	binary	binary	utf8mb4_0900_ai_ci	ENABLED
 ----------------------------------------------------------------
 SELECT
 TRIGGER_CATALOG,
@@ -884,7 +885,7 @@ Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is
 def	information_schema	TRIGGERS	TRIGGERS	TRIGGER_CATALOG	TRIGGER_CATALOG	253	192	3	N	20613	0	33
 def	information_schema	TRIGGERS	TRIGGERS	TRIGGER_SCHEMA	TRIGGER_SCHEMA	253	192	4	N	20609	0	33
 def	information_schema	TRIGGERS	TRIGGERS	TRIGGER_NAME	TRIGGER_NAME	253	192	5	N	20481	0	33
-def	information_schema	TRIGGERS	TRIGGERS	EVENT_MANIPULATION	EVENT_MANIPULATION	254	18	6	N	20865	0	33
+def	information_schema	TRIGGERS	TRIGGERS	EVENT_MANIPULATION	EVENT_MANIPULATION	254	78	6	N	20865	0	33
 def	information_schema	TRIGGERS	TRIGGERS	EVENT_OBJECT_CATALOG	EVENT_OBJECT_CATALOG	253	192	3	N	20613	0	33
 def	information_schema	TRIGGERS	TRIGGERS	EVENT_OBJECT_SCHEMA	EVENT_OBJECT_SCHEMA	253	192	4	N	20609	0	33
 def	information_schema	TRIGGERS	TRIGGERS	EVENT_OBJECT_TABLE	EVENT_OBJECT_TABLE	253	192	2	N	20609	0	33
@@ -1140,70 +1141,70 @@ DROP PROCEDURE IF EXISTS p1;
 CREATE TABLE t1(c1 INT);
 CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW SET @a = 1;
 SHOW CREATE TRIGGER t1_bi;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 CREATE PROCEDURE p1() SHOW CREATE TRIGGER t1_bi;
 CALL p1();
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 CALL p1();
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 CALL p1();
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 CALL p1();
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 CALL p1();
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 CALL p1();
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 CALL p1();
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 CALL p1();
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 CALL p1();
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 CALL p1();
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 PREPARE stmt1 FROM 'SHOW CREATE TRIGGER t1_bi';
 EXECUTE stmt1;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 EXECUTE stmt1;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 EXECUTE stmt1;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 EXECUTE stmt1;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 EXECUTE stmt1;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 EXECUTE stmt1;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 EXECUTE stmt1;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 EXECUTE stmt1;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 EXECUTE stmt1;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 EXECUTE stmt1;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET @a = 1	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 DROP TABLE t1;
 DROP PROCEDURE p1;
 DEALLOCATE PREPARE stmt1;
@@ -1236,8 +1237,8 @@ Function	sql_mode	Create Function	character_set_client	collation_connection	Data
 f1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `f1`() RETURNS char(10) CHARSET utf8mb4
 RETURN 'тест'	koi8r	koi8r_general_ci	utf8mb4_0900_ai_ci
 SHOW CREATE TRIGGER t1_bi;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET NEW.c1 = 'тест'	koi8r	koi8r_general_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET NEW.c1 = 'тест'	koi8r	koi8r_general_ci	utf8mb4_0900_ai_ci	#	ENABLED
 SHOW CREATE EVENT ev1;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
 ev1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `ev1` ON SCHEDULE AT '2030-01-01 00:00:00' ON COMPLETION NOT PRESERVE ENABLE DO SELECT 'тест' AS test	koi8r	koi8r_general_ci	utf8mb4_0900_ai_ci
@@ -1310,16 +1311,16 @@ CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW SET new.a = 1;
 LOCK TABLE t1 WRITE;
 # Connection default
 SHOW CREATE TRIGGER t1_bi;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET new.a = 1	utf8mb3	utf8mb3_general_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET new.a = 1	utf8mb3	utf8mb3_general_ci	utf8mb4_0900_ai_ci	#	ENABLED
 # Connection con1
 UNLOCK TABLES;
 # Test 2: ALTER TABLE with SHOW CREATE TRIGGER in transaction
 # Connection default
 START TRANSACTION;
 SHOW CREATE TRIGGER t1_bi;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET new.a = 1	utf8mb3	utf8mb3_general_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW SET new.a = 1	utf8mb3	utf8mb3_general_ci	utf8mb4_0900_ai_ci	#	ENABLED
 # Connection con1
 ALTER TABLE t1 CHARACTER SET = utf8;
 Warnings:
@@ -1364,12 +1365,12 @@ DROP TABLE IF EXISTS t1;
 CREATE TABLE t1 (a INT);
 CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW BEGIN END;
 SHOW CREATE TRIGGER t1_bi;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW BEGIN END	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW BEGIN END	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 CREATE TEMPORARY TABLE t1 (b INT);
 SHOW CREATE TRIGGER t1_bi;
-Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
-t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW BEGIN END	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+t1_bi	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `t1_bi` BEFORE INSERT ON `t1` FOR EACH ROW BEGIN END	latin1	latin1_swedish_ci	utf8mb4_0900_ai_ci	#	ENABLED
 DROP TEMPORARY TABLE t1;
 DROP TABLE t1;
 #

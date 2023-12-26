@@ -1970,7 +1970,8 @@ bool Optimize_table_order::choose_table_order() {
   join->query_block->reset_nj_counters();
 
   const bool straight_join =
-      join->query_block->active_options() & SELECT_STRAIGHT_JOIN;
+      (join->query_block->has_foj() && join->query_block->sj_nests.empty()) ||
+      (join->query_block->active_options() & SELECT_STRAIGHT_JOIN);
   table_map join_tables;  ///< The tables involved in order selection
 
   if (emb_sjm_nest) {

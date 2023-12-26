@@ -29,6 +29,8 @@
 #include <new>
 
 #include "sql/sql_class.h" /* Query_arena */
+#include "sql/sql_lex.h"
+#include "sql/table.h"
 
 class Query_result;
 struct MEM_ROOT;
@@ -86,6 +88,10 @@ class Server_side_cursor {
     assert(0);
     return true;
   }
+  virtual void set_result(Query_result *) {}
+  virtual ulong get_fetch_count() { return 0; }
+  virtual bool is_cursor_fetched() { return false; }
+  virtual uint get_field_count() { return 0; }
 };
 
 Query_result *new_cursor_result(MEM_ROOT *mem_root, Query_result *result);

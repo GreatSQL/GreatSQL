@@ -248,14 +248,35 @@ select name from test1 where name = '';
 select * from test1 where c5 is null;
 select * from test1 where c5 is not null;
 
+--echo test not null field c5 in update insert op
+
+set sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,ORACLE,STRICT_ALL_TABLES';
+DROP PROCEDURE IF EXISTS test_oracle_cursor_loop;
+DELIMITER //;
+CREATE PROCEDURE test_oracle_cursor_loop() as
+    cursor c is select id,c5 from test1 ; 
+BEGIN
+    for rec in  c loop
+     update test1 set c5=rec.c5 where id=rec.id;
+     select rec.id,rec.c5;
+    END LOOP;
+  END//
+ DELIMITER ;//
+call test_oracle_cursor_loop;
 set sql_mode=default;
 update test1 set c5='' where id=4;
 INSERT INTO `test1` VALUES (11, '', NULL, NULL, '', NULL, NULL, NULL);
 
 --echo test oracmp function
+
+select add_months('2021-2-28',name) from test1;
+select trunc(name) from test1;
+select chr(name) from test1;
 select name,decode(name, '',1,2),decode(name,null,1,2) from test1;
 select name,c5,decode(name, c5, 'one', 2, 'two', 'other') from test1;
+select name,dump(name) from test1;
 select name,instr(name,'1') from test1;
+select name,instrb(name,'1') from test1;
 select name,length(name) from test1;
 select name,lengthb(name) from test1;
 explain select name,decode(name, '', 1, 2) from test1;
@@ -263,6 +284,18 @@ show warnings;
 explain select group_concat(name order by id ASC) gc,name from test1 group by name;
 show  warnings;
 select group_concat(name order by id ASC) gc,name from test1 group by name;
+explain  select listagg(name,';') within group (order by id ASC  ) AS TOAL,name from test1 group by name ;
+show  warnings;
+select listagg(name,';') within group (order by id ASC  ) AS TOAL,name from test1 group by name ;
+select name,rpad_oracle(name,'1'),lpad_oracle(name,'1') from test1;
+select name,rpad_oracle(name,5,'a'),lpad_oracle(name,0,'a') from test1;
+select REGEXP_COUNT(name,'1',1,'c') from test1 ;
+select REGEXP_COUNT(id, name,1,'c') from test1 ;
+select trim(name) from test1;
+select ltrim(name) from test1;
+select rtrim(name) from test1;
+select substr(name, -90, 7) from test1;
+select substrb(name, -90, 7) from test1;
 select to_char(name) from test1;
 select to_date(name,'yyyy') from test1;
 select to_number(name,'9999') from test1;
@@ -271,7 +304,12 @@ select to_number(name) from test1;
 select to_timestamp(name,'yy') from test1;
 select translate(name,'','null') from test1;
 select translate(name,'1','=1') from test1;
+select trunc(name) from test1;
+select vsize(name) from test1;
 select group_concat(name) from test1;
+explain select wm_concat(name) from test1;
+show  warnings;
+select wm_concat(name) from test1;
 
 --echo  test group by 
 select name from test1 group by name ;
@@ -299,6 +337,14 @@ select i1,c2,descr "off, t1.c2=" from t1 where i1 > -99 and c2='';
 select i1,c2,descr 'off, t2.c2=' from t2 where i1 > -99 and c2='';
 select i1,c2,descr 'off, t1.c2 is null' from t1 where i1 > -99 and c2 is null;
 select i1,c2,descr 'off, t2.c2 is null' from t2 where i1 > -99 and c2 is null;
+
+--echo # test lob
+select *,'esn=off' from lob1;
+select listagg(c2,','),group_concat(c2) ,'esn=off' from lob1;
+
+--echo # test enum/set
+select *,s3+0,null+0,'esn=off' from es1;
+select listagg(s3,','),group_concat(s3),'esn=off' from es1;
 
 --echo test emptystring_equal_null change between prepare/execute.
 set sql_mode=@default_mode;
@@ -494,6 +540,24 @@ select name from test1 where name = '';
 select * from test1 where c5 is null;
 select * from test1 where c5 is not null;
 
+--echo test not null field c5 in update insert op
+
+set sql_mode=@oracle_mode_emptystring_equal_null;
+DROP PROCEDURE IF EXISTS test_oracle_cursor_loop;
+DELIMITER //;
+CREATE PROCEDURE test_oracle_cursor_loop() as
+    cursor c is select id,c5 from test1 ; 
+BEGIN
+    for rec in  c loop
+     update test1 set c5=rec.c5 where id=rec.id;
+     select rec.id,rec.c5;
+    END LOOP;
+  END//
+ DELIMITER ;//
+--error 1048
+call test_oracle_cursor_loop;
+set sql_mode=@default_mode_emptystring_equal_null;
+
 --error 1048
 update test1 set c5='' where id=4;
 
@@ -502,15 +566,33 @@ INSERT INTO `test1` VALUES (11, '', NULL, NULL, '', NULL, NULL, NULL);
 
 --echo test oracmp function
 
+select add_months('2021-2-28',name) from test1;
+select trunc(name) from test1;
+select chr(name) from test1;
 select name,decode(name, '',1,2),decode(name,null,1,2) from test1;
 select name,c5,decode(name, c5, 'one', 2, 'two', 'other') from test1;
+select name,dump(name) from test1;
 select name,instr(name,'1') from test1;
+select name,instrb(name,'1') from test1;
+select name,length(name) from test1;
+select name,lengthb(name) from test1;
 explain select name,decode(name, '', 1, 2) from test1;
 show warnings;
 explain select group_concat(name order by id ASC) gc,name from test1 group by name;
 show  warnings;
 select group_concat(name order by id ASC) gc,name from test1 group by name;
+explain  select listagg(name,';') within group (order by id ASC  ) AS TOAL,name from test1 group by name ;
+show  warnings;
+select listagg(name,';') within group (order by id ASC  ) AS TOAL,name from test1 group by name ;
+select name,rpad_oracle(name,'1'),lpad_oracle(name,'1') from test1;
+select name,rpad_oracle(name,5,'a'),lpad_oracle(name,0,'a') from test1;
+select REGEXP_COUNT(name,'1',1,'c') from test1 ;
+select REGEXP_COUNT(id, name,1,'c') from test1 ;
+select trim(name) from test1;
+select ltrim(name) from test1;
+select rtrim(name) from test1;
 select substr(name, -90, 7) from test1;
+select substrb(name, -90, 7) from test1;
 select to_char(name) from test1;
 select to_date(name,'yyyy') from test1;
 select to_number(name,'9999') from test1;
@@ -519,7 +601,12 @@ select to_number(name) from test1;
 select to_timestamp(name,'yy') from test1;
 select translate(name,'','null') from test1;
 select translate(name,'1','=1') from test1;
+select trunc(name) from test1;
+select vsize(name) from test1;
 select group_concat(name) from test1;
+explain select wm_concat(name) from test1;
+show  warnings;
+select wm_concat(name) from test1;
 
 --echo  test group by 
 select name from test1 group by name ;
@@ -703,6 +790,22 @@ select name from test1 where name = '';
 select * from test1 where c5 is null;
 select * from test1 where c5 is not null;
 
+--echo test not null field c5 in update insert op
+
+DROP PROCEDURE IF EXISTS test_oracle_cursor_loop;
+DELIMITER //;
+CREATE PROCEDURE test_oracle_cursor_loop() as
+    cursor c is select id,c5 from test1 ; 
+BEGIN
+    for rec in  c loop
+     update test1 set c5=rec.c5 where id=rec.id;
+     select rec.id,rec.c5;
+    END LOOP;
+  END//
+ DELIMITER ;//
+--error 1048
+call test_oracle_cursor_loop;
+
 --error 1048
 update test1 set c5='' where id=4;
 
@@ -711,16 +814,30 @@ INSERT INTO `test1` VALUES (11, '', NULL, NULL, '', NULL, NULL, NULL);
 
 --echo test oracmp function
 
-
+select add_months('2021-2-28',name) from test1;
+select trunc(name) from test1;
+select chr(name) from test1;
 select name,c5,decode(name, c5, 'one', 2, 'two', 'other') from test1;
-
+select name,dump(name) from test1;
 select name,instr(name,'1') from test1;
+select name,instrb(name,'1') from test1;
 select name,length(name) from test1;
 select name,lengthb(name) from test1;
 explain select group_concat(name order by id ASC) gc,name from test1 group by name;
 show  warnings;
 select group_concat(name order by id ASC) gc,name from test1 group by name;
+explain  select listagg(name,';') within group (order by id ASC  ) AS TOAL,name from test1 group by name ;
+show  warnings;
+select listagg(name,';') within group (order by id ASC  ) AS TOAL,name from test1 group by name ;
+select name,rpad_oracle(name,'1'),lpad_oracle(name,'1') from test1;
+select name,rpad_oracle(name,5,'a'),lpad_oracle(name,0,'a') from test1;
+select REGEXP_COUNT(name,'1',1,'c') from test1 ;
+select REGEXP_COUNT(id, name,1,'c') from test1 ;
+select trim(name) from test1;
+select ltrim(name) from test1;
+select rtrim(name) from test1;
 select substr(name, -90, 7) from test1;
+select substrb(name, -90, 7) from test1;
 select to_char(name) from test1;
 select to_date(name,'yyyy') from test1;
 select to_number(name,'9999') from test1;
@@ -729,7 +846,12 @@ select to_number(name) from test1;
 select to_timestamp(name,'yy') from test1;
 select translate(name,'','null') from test1;
 select translate(name,'1','=1') from test1;
+select trunc(name) from test1;
+select vsize(name) from test1;
 select group_concat(name) from test1;
+explain select wm_concat(name) from test1;
+show  warnings;
+select wm_concat(name) from test1;
 
 --echo  test group by 
 select name from test1 group by name ;
@@ -757,6 +879,14 @@ select i1,c2,descr 'on, t2.c2=' from t2 where i1 > -99 and c2='';
 select i1,c2,descr 'on, t1.c2 is null' from t1 where i1 > -99 and c2 is null;
 select i1,c2,descr 'on, t2.c2 is null' from t2 where i1 > -99 and c2 is null;
 
+--echo # test lob
+select *,'esn=on' from lob1;
+select listagg(c2,','),group_concat(c2) ,'esn=on' from lob1;
+
+--echo # test enum/set
+select *,s3+0,null+0,'esn=on' from es1;
+select listagg(s3,','),group_concat(s3),'esn=on' from es1;
+
 set sql_mode=default;
 
 --echo current behavior
@@ -780,8 +910,98 @@ drop table t3;
 create table t3 as select * from t1;
 select *,'on,create as select' from t3;
 
+--echo analytic function
+select id,name,group_concat(name) over (partition by id) from test2;
+explain select id,name,group_concat(name) over (partition by id) from test2;
+show warnings;
+select id,name,wm_concat(name) over (partition by id) from test2;
+explain select id,name,wm_concat(name) over (partition by id) from test2;
+show warnings;
+select id,name,listagg(name) over (partition by id) from test2;
+explain select id,name,listagg(name) over (partition by id) from test2;
+show warnings;
+select id,name,group_concat(name order by name) over (partition by id) from test2;
+explain select id,name,group_concat(name order by name) over (partition by id) from test2;
+show warnings;
+select id,name,wm_concat(name order by name) over (partition by id) from test2;
+explain select id,name,wm_concat(name order by name) over (partition by id) from test2;
+show warnings;
+select id,name,listagg(name) within group (order by name) over (partition by id) from test2;
+explain select id,name,listagg(name) within group (order by name) over (partition by id) from test2;
+show warnings;
+
 --enable_warnings
 
+--echo  procedure、function
+set sql_mode=@oracle_mode;
+DELIMITER //;
+create or replace procedure p2 as
+ib int :=10;
+begin
+  select c2,isnull(c2),'p-on,e-off' from t1 where c2 is null ;
+end //
+DELIMITER ;//
+set sql_mode=@oracle_mode_emptystring_equal_null;
+call p2();
+
+set sql_mode=@oracle_mode_emptystring_equal_null;
+DELIMITER //;
+create or replace procedure p2 as
+ib int :=10;
+begin
+  select c2,isnull(c2),'p-on,e-off' from t1 where c2 is null ;
+end//
+DELIMITER ;//
+set sql_mode=@default_mode;
+call p2();
+
+set sql_mode=@oracle_mode;
+DELIMITER //;
+create or replace function f1() return int deterministic is  
+f_var int;  
+begin  
+select '' is null into f_var;
+return f_var;  
+end//
+DELIMITER ;//
+set sql_mode=@oracle_mode_emptystring_equal_null;
+select f1();
+
+set sql_mode=@oracle_mode_emptystring_equal_null;
+DELIMITER //;
+create or replace function f1() return int deterministic is  
+f_var int;  
+begin  
+select '' is null into f_var;
+return f_var;  
+end//
+DELIMITER ;//
+set sql_mode=@default_mode;
+select f1();
+
+set sql_mode=default;
+CREATE TABLE t_bug9197 (
+  i1 int,
+  c2 varchar(16) default '',
+  c3 blob,
+  c4 char(16) default '',
+  descr VARCHAR(16),
+  key(c2),
+  key(c3(16)),
+  key(c4));
+INSERT INTO t_bug9197 VALUES (1, '', '', '', 'empty string');
+INSERT INTO t_bug9197 VALUES (-1, NULL, NULL, NULL, 'null');
+INSERT INTO t_bug9197 VALUES (2, '', '', '', 'empty string 2');
+INSERT INTO t_bug9197 VALUES (-2, NULL, NULL, NULL, 'null 2');
+set sql_mode=emptystring_equal_null;
+select * from t_bug9197 where c2 is null;
+select * from t_bug9197 where c3 is null;
+select /*+ no_index(a) */ * from t_bug9197 a where c3 is null; 
+select * from t_bug9197 where c4 is null;
+
+drop procedure if exists test_oracle_cursor_loop;
+drop procedure if exists p2;
+drop function  if exists f1;
 drop table es1;
 drop table lob1;
 drop table test2;
@@ -790,3 +1010,4 @@ drop view  test_view;
 drop table t1;
 drop table t2;
 drop table t3;
+drop table t_bug9197;

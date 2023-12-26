@@ -1,0 +1,238 @@
+# ----------------------------------------------------------------------------
+# Test for default parameters in procedure and function under sql_mode = oracle
+# ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# normal case
+# ----------------------------------------------------------------------------
+#----------------------------------------
+# type:YEAR normal case
+#----------------------------------------
+#
+# type:YEAR with default: DATE '2021-03-17'
+#------------------------------------
+SET sql_mode=ORACLE;
+
+CREATE TABLE t1(c1 YEAR DEFAULT (DATE '2021-03-17'));
+INSERT INTO t1 VALUES();
+SELECT HEX(c1), c1 FROM t1;
+
+DELIMITER |;
+CREATE PROCEDURE p1(a YEAR DEFAULT DATE '2021-03-17')
+AS
+BEGIN
+  SELECT a;
+END|
+
+CREATE FUNCTION f1(a YEAR DEFAULT DATE '2021-03-17') RETURN YEAR
+AS
+BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+
+CALL p1(DATE '2021-03-17');
+CALL p1();
+SELECT f1(DATE '2021-03-17');
+SELECT f1();
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+DROP TABLE t1;
+#
+# type:YEAR with default: TIMESTAMP '2021-10-23 01:02:03'
+#------------------------------------
+SET sql_mode=ORACLE;
+
+CREATE TABLE t1(c1 YEAR DEFAULT (TIMESTAMP '2021-10-23 01:02:03'));
+INSERT INTO t1 VALUES();
+SELECT HEX(c1), c1 FROM t1;
+
+DELIMITER |;
+CREATE PROCEDURE p1(a YEAR DEFAULT TIMESTAMP '2021-10-23 01:02:03')
+AS
+BEGIN
+  SELECT a;
+END|
+
+CREATE FUNCTION f1(a YEAR DEFAULT TIMESTAMP '2021-10-23 01:02:03') RETURN YEAR
+AS
+BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+
+CALL p1(TIMESTAMP '2021-10-23 01:02:03');
+CALL p1();
+SELECT f1(TIMESTAMP '2021-10-23 01:02:03');
+SELECT f1();
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+DROP TABLE t1;
+#
+# type:YEAR with default: DATE '20210317'
+#------------------------------------
+SET sql_mode=ORACLE;
+
+CREATE TABLE t1(c1 YEAR DEFAULT (DATE '20210317'));
+INSERT INTO t1 VALUES();
+SELECT HEX(c1), c1 FROM t1;
+
+DELIMITER |;
+CREATE PROCEDURE p1(a YEAR DEFAULT DATE '20210317')
+AS
+BEGIN
+  SELECT a;
+END|
+
+CREATE FUNCTION f1(a YEAR DEFAULT DATE '20210317') RETURN YEAR
+AS
+BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+
+CALL p1(DATE '20210317');
+CALL p1();
+SELECT f1(DATE '20210317');
+SELECT f1();
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+DROP TABLE t1;
+#----------------------------------------
+# type:TIME normal case
+#----------------------------------------
+#
+# type:TIME with default: TIME '08:10:23'
+#------------------------------------
+SET sql_mode=ORACLE;
+
+CREATE TABLE t1(c1 TIME DEFAULT (TIME '08:10:23'));
+INSERT INTO t1 VALUES();
+SELECT HEX(c1), c1 FROM t1;
+
+DELIMITER |;
+CREATE PROCEDURE p1(a TIME DEFAULT TIME '08:10:23')
+AS
+BEGIN
+  SELECT a;
+END|
+
+CREATE FUNCTION f1(a TIME DEFAULT TIME '08:10:23') RETURN TIME
+AS
+BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+
+CALL p1(TIME '08:10:23');
+CALL p1();
+SELECT f1(TIME '08:10:23');
+SELECT f1();
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+DROP TABLE t1;
+#
+# type:TIME with default: TIMESTAMP '2021-10-23 01:02:03'
+#------------------------------------
+SET sql_mode=ORACLE;
+
+CREATE TABLE t1(c1 TIME DEFAULT (TIMESTAMP '2021-10-23 01:02:03'));
+INSERT INTO t1 VALUES();
+SELECT HEX(c1), c1 FROM t1;
+
+DELIMITER |;
+CREATE PROCEDURE p1(a TIME DEFAULT TIMESTAMP '2021-10-23 01:02:03')
+AS
+BEGIN
+  SELECT a;
+END|
+
+CREATE FUNCTION f1(a TIME DEFAULT TIMESTAMP '2021-10-23 01:02:03') RETURN TIME
+AS
+BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+
+CALL p1(TIMESTAMP '2021-10-23 01:02:03');
+CALL p1();
+SELECT f1(TIMESTAMP '2021-10-23 01:02:03');
+SELECT f1();
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+DROP TABLE t1;
+#----------------------------------------
+# type:DATETIME normal case
+#----------------------------------------
+#
+# type:DATETIME with default: TIMESTAMP '2021-10-23 01:02:03'
+#------------------------------------
+SET sql_mode=ORACLE;
+
+CREATE TABLE t1(c1 DATETIME DEFAULT (TIMESTAMP '2021-10-23 01:02:03'));
+INSERT INTO t1 VALUES();
+SELECT HEX(c1), c1 FROM t1;
+
+DELIMITER |;
+CREATE PROCEDURE p1(a DATETIME DEFAULT TIMESTAMP '2021-10-23 01:02:03')
+AS
+BEGIN
+  SELECT a;
+END|
+
+CREATE FUNCTION f1(a DATETIME DEFAULT TIMESTAMP '2021-10-23 01:02:03') RETURN DATETIME
+AS
+BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+
+CALL p1(TIMESTAMP '2021-10-23 01:02:03');
+CALL p1();
+SELECT f1(TIMESTAMP '2021-10-23 01:02:03');
+SELECT f1();
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+DROP TABLE t1;
+#----------------------------------------
+# type:TIMESTAMP normal case
+#----------------------------------------
+#
+# type:TIMESTAMP with default: TIMESTAMP '2021-10-23 01:02:03'
+#------------------------------------
+SET sql_mode=ORACLE;
+
+CREATE TABLE t1(c1 TIMESTAMP DEFAULT (TIMESTAMP '2021-10-23 01:02:03'));
+INSERT INTO t1 VALUES();
+SELECT HEX(c1), c1 FROM t1;
+
+DELIMITER |;
+CREATE PROCEDURE p1(a TIMESTAMP DEFAULT TIMESTAMP '2021-10-23 01:02:03')
+AS
+BEGIN
+  SELECT a;
+END|
+
+CREATE FUNCTION f1(a TIMESTAMP DEFAULT TIMESTAMP '2021-10-23 01:02:03') RETURN TIMESTAMP
+AS
+BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+
+CALL p1(TIMESTAMP '2021-10-23 01:02:03');
+CALL p1();
+SELECT f1(TIMESTAMP '2021-10-23 01:02:03');
+SELECT f1();
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+DROP TABLE t1;
+#----------------------------------------
+# cleanup
+#----------------------------------------

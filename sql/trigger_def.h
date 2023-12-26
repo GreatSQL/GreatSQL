@@ -43,6 +43,10 @@ enum enum_trigger_event_type {
   TRG_EVENT_INSERT = 0,
   TRG_EVENT_UPDATE = 1,
   TRG_EVENT_DELETE = 2,
+  TRG_EVENT_INSERT_UPDATE = 3,
+  TRG_EVENT_INSERT_DELETE = 4,
+  TRG_EVENT_UPDATE_DELETE = 5,
+  TRG_EVENT_INSERT_UPDATE_DELETE = 6,
   TRG_EVENT_MAX
 };
 
@@ -71,5 +75,14 @@ enum enum_trigger_order_type {
   Enum constants to designate NEW and OLD trigger pseudo-variables.
 */
 enum enum_trigger_variable_type { TRG_OLD_ROW, TRG_NEW_ROW };
+
+/**
+  Enum trigger status
+*/
+enum enum_trigger_event_status {
+  TRG_STATUS_ENABLED = 1,
+  TRG_STATUS_DISABLED,
+  TRG_STATUS_MAX
+};
 
 #endif  // TRIGGER_DEF_H_INCLUDED

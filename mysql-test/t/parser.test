@@ -2656,8 +2656,6 @@ SELECT * from `full` AS `full`;
 SELECT * from full;
 SELECT * from full as full;
 SELECT * from `full` full;
---error ER_PARSE_ERROR
-SELECT * from full outer;
 
 SET @save_sql_mode=@@sql_mode;
 SET SQL_MODE = 'ANSI_QUOTES';

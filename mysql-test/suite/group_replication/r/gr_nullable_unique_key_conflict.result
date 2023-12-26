@@ -52,7 +52,6 @@ COMMIT;
 #    transaction.
 [connection server_1]
 SET DEBUG_SYNC='now SIGNAL waiting';
-SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG= @debug_save;
 
 ############################################################
@@ -69,6 +68,7 @@ include/sync_slave_sql_with_master.inc
 [connection server1]
 ERROR 40000: Plugin instructed the server to rollback the current transaction.
 [connection server1]
+SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG=@debug_save;
 ############################################################
 # 8. Sync everything
@@ -133,7 +133,6 @@ COMMIT;
 #    transaction.
 [connection server_1]
 SET DEBUG_SYNC='now SIGNAL waiting';
-SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG= @debug_save;
 
 ############################################################
@@ -149,6 +148,7 @@ include/sync_slave_sql_with_master.inc
 #    is positive scenario, no error will be seen here.
 [connection server1]
 [connection server1]
+SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG=@debug_save;
 ############################################################
 # 8. Sync everything
@@ -221,7 +221,6 @@ COMMIT;
 #    transaction.
 [connection server_1]
 SET DEBUG_SYNC='now SIGNAL waiting';
-SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG= @debug_save;
 
 ############################################################
@@ -237,6 +236,7 @@ include/sync_slave_sql_with_master.inc
 #    is positive scenario, no error will be seen here.
 [connection server1]
 [connection server1]
+SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG=@debug_save;
 ############################################################
 # 8. Sync everything
@@ -314,7 +314,6 @@ COMMIT;
 #    transaction.
 [connection server_1]
 SET DEBUG_SYNC='now SIGNAL waiting';
-SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG= @debug_save;
 
 ############################################################
@@ -330,6 +329,7 @@ include/sync_slave_sql_with_master.inc
 #    is positive scenario, no error will be seen here.
 [connection server1]
 [connection server1]
+SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG=@debug_save;
 ############################################################
 # 8. Sync everything
@@ -396,7 +396,6 @@ COMMIT;
 #    transaction.
 [connection server_1]
 SET DEBUG_SYNC='now SIGNAL waiting';
-SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG= @debug_save;
 
 ############################################################
@@ -412,6 +411,7 @@ include/sync_slave_sql_with_master.inc
 #    is positive scenario, no error will be seen here.
 [connection server1]
 [connection server1]
+SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG=@debug_save;
 ############################################################
 # 8. Sync everything
@@ -492,7 +492,6 @@ COMMIT;
 #    transaction.
 [connection server_1]
 SET DEBUG_SYNC='now SIGNAL waiting';
-SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG= @debug_save;
 
 ############################################################
@@ -508,6 +507,7 @@ include/sync_slave_sql_with_master.inc
 #    is positive scenario, no error will be seen here.
 [connection server1]
 [connection server1]
+SET DEBUG_SYNC='RESET';
 SET @@GLOBAL.DEBUG=@debug_save;
 ############################################################
 # 8. Sync everything

@@ -51,6 +51,7 @@
 #include "sql/sql_const.h"
 #include "sql/sql_list.h"
 #include "sql/table.h"
+#include "sql/table_trigger_dispatcher.h"  //table_trigger_dispatcher
 #include "sql_string.h"
 #include "template_utils.h"  // down_cast
 
@@ -68,6 +69,7 @@ class THD;
 struct CHARSET_INFO;
 struct MY_BITMAP;
 struct Parse_context;
+class sp_variable;
 
 Item *make_condition(Parse_context *pc, Item *item);
 
@@ -349,8 +351,8 @@ class Item_bool_func : public Item_int_func {
 
 class Item_func_cursor_bool : public Item_bool_func, public Cursor_ref {
  public:
-  Item_func_cursor_bool(LEX_CSTRING name, uint offset)
-      : Item_bool_func(), Cursor_ref(name, offset) {}
+  Item_func_cursor_bool(LEX_CSTRING name, uint offset, sp_variable *cursor_spv)
+      : Item_bool_func(), Cursor_ref(name, offset, cursor_spv) {}
   void print(const THD *, String *str, enum_query_type) const override {
     Cursor_ref::print_func(str, func_name());
   }
@@ -358,8 +360,8 @@ class Item_func_cursor_bool : public Item_bool_func, public Cursor_ref {
 
 class Item_func_cursor_found : public Item_func_cursor_bool {
  public:
-  Item_func_cursor_found(LEX_CSTRING name, uint offset)
-      : Item_func_cursor_bool(name, offset) {}
+  Item_func_cursor_found(LEX_CSTRING name, uint offset, sp_variable *cursor_spv)
+      : Item_func_cursor_bool(name, offset, cursor_spv) {}
   const char *func_name() const override { return "%FOUND"; }
   bool val_bool() override;
   longlong val_int() override;
@@ -367,39 +369,22 @@ class Item_func_cursor_found : public Item_func_cursor_bool {
 
 class Item_func_cursor_isopen : public Item_func_cursor_bool {
  public:
-  Item_func_cursor_isopen(LEX_CSTRING name, uint offset)
-      : Item_func_cursor_bool(name, offset) {}
+  Item_func_cursor_isopen(LEX_CSTRING name, uint offset,
+                          sp_variable *cursor_spv)
+      : Item_func_cursor_bool(name, offset, cursor_spv) {}
   const char *func_name() const override { return "%ISOPEN"; }
   bool val_bool() override;
   longlong val_int() override;
 };
 class Item_func_cursor_notfound : public Item_func_cursor_bool {
  public:
-  Item_func_cursor_notfound(LEX_CSTRING name, uint offset)
-      : Item_func_cursor_bool(name, offset) {}
+  Item_func_cursor_notfound(LEX_CSTRING name, uint offset,
+                            sp_variable *cursor_spv)
+      : Item_func_cursor_bool(name, offset, cursor_spv) {}
   const char *func_name() const override { return "%NOTFOUND"; }
   bool val_bool() override;
   longlong val_int() override;
 };
-
-class Item_func_record_table_found_bool : public Item_bool_func {
-  Item *m_item;
-  LEX_STRING m_ident_name;
-  int m_offset;
-
- public:
-  Item_func_record_table_found_bool(Item *item_i, LEX_STRING ident_name,
-                                    int offset)
-      : Item_bool_func(),
-        m_item(item_i),
-        m_ident_name(ident_name),
-        m_offset(offset) {}
-  void print(const THD *, String *str, enum_query_type) const override;
-  const char *func_name() const override { return " GREAT THAN "; }
-  bool val_bool() override;
-  longlong val_int() override;
-};
-
 class Item_func_record_table_forall_bool : public Item_bool_func {
   Item *m_item;
   LEX_STRING m_ident_name;
@@ -416,6 +401,26 @@ class Item_func_record_table_forall_bool : public Item_bool_func {
   const char *func_name() const override { return " FORALL GREAT THAN "; }
   bool val_bool() override;
   longlong val_int() override;
+};
+
+/**
+  trigger predicate function inserting、 updating['column_name']、 deleting
+*/
+class Item_func_trigger_event_is : public Item_bool_func {
+  typedef Item_bool_func super;
+
+ public:
+  Item_func_trigger_event_is(const POS &pos, Item *a, Item *b)
+      : Item_bool_func(pos, a, b) {}
+  const char *func_name() const override { return "trigger_event_is"; }
+  bool val_bool() override;
+  longlong val_int() override;
+  bool resolve_type(THD *thd) override {
+    null_value = false;
+    if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_INT24)) return true;
+    if (param_type_is_default(thd, 1, 2)) return true;
+    return false;
+  }
 };
 
 /**
@@ -1497,6 +1502,14 @@ class Item_func_strcmp : public Item_bool_func2 {
   Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
+class Item_func_strcmp_strict : public Item_func_strcmp {
+ public:
+  Item_func_strcmp_strict(const POS &pos, Item *a, Item *b)
+      : Item_func_strcmp(pos, a, b) {}
+  longlong val_int() override;
+  const char *func_name() const override { return "strcmp_strict"; }
+};
+
 struct interval_range {
   Item_result type;
   double dbl;
@@ -1611,6 +1624,26 @@ class Item_func_ifnull final : public Item_func_coalesce {
   Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
+class Item_func_ora_nvl2 final : public Item_func_coalesce {
+ protected:
+  bool field_type_defined;
+
+ public:
+  Item_func_ora_nvl2(const POS &pos, PT_item_list *list)
+      : Item_func_coalesce(pos, list) {}
+  bool resolve_type(THD *thd) override;
+  bool resolve_type_inner(THD *thd) override;
+  double real_op() override;
+  longlong int_op() override;
+  String *str_op(String *str) override;
+  bool date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
+  bool time_op(MYSQL_TIME *ltime) override;
+  my_decimal *decimal_op(my_decimal *) override;
+  bool val_json(Json_wrapper *result) override;
+  const char *func_name() const override { return "nvl2"; }
+  Field *tmp_table_field(TABLE *table) override;
+  uint decimal_precision() const override;
+};
 /**
    ANY_VALUE(expr) is like expr except that it is not checked by
    aggregate_check logic. It serves as a solution for users who want to
@@ -2215,11 +2248,13 @@ class Item_func_in final : public Item_func_opt_neg {
   /// Set to true when values in const array are populated
   bool m_populated{false};
 
+  /// Set to true if const array must be repopulated per execution.
+  bool m_need_populate{false};
+
  private:
   /// Set to true if all values in IN-list are const
   bool m_values_are_const{true};
-  /// Set to true if const array must be repopulated per execution.
-  bool m_need_populate{false};
+
   /**
     Set to true by resolve_type() if the IN list contains a
     dependent subquery, in which case condition filtering will not be

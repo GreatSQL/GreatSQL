@@ -1,0 +1,666 @@
+SET SQL_MODE=oracle;
+# oracle-style variables declarations
+# Testing AS/IS on top-level
+CREATE PROCEDURE p1() AS BEGIN END;
+DROP PROCEDURE p1;
+CREATE PROCEDURE p1() IS BEGIN END;
+DROP PROCEDURE p1;
+CREATE FUNCTION f1() RETURN INT AS BEGIN RETURN 1; END/
+DROP FUNCTION f1/
+CREATE FUNCTION f1() RETURN INT IS BEGIN RETURN 1; END/
+DROP FUNCTION f1/
+# Testing top-level declarations
+CREATE PROCEDURE p1 (p1 OUT VARCHAR2(10))
+AS
+p2 VARCHAR(10);
+BEGIN
+SET p2:='p1new';
+SET p1:=p2;
+END;
+/
+SET @p1='p1';
+CALL p1(@p1);
+SELECT @p1;
+@p1
+p1new
+DROP PROCEDURE p1;
+CREATE FUNCTION f1 (p1 VARCHAR2(10)) RETURN VARCHAR(20)
+AS
+p2 VARCHAR(10);
+BEGIN
+SET p2:='new';
+RETURN CONCAT(p1, p2);
+END;
+/
+SET @p1='p1';
+SELECT f1(@p1);
+f1(@p1)
+p1new
+DROP FUNCTION f1;
+# Testing non-top declarations
+CREATE PROCEDURE p1 (p1 OUT VARCHAR2(10))
+AS
+BEGIN
+DECLARE
+p2 VARCHAR(10);
+BEGIN
+SET p2:='p1new';
+SET p1:=p2;
+END;
+DECLARE
+t1 VARCHAR(10);
+t2 VARCHAR(10);
+BEGIN
+END;
+END;
+/
+SET @p1='p1';
+CALL p1(@p1);
+SELECT @p1;
+@p1
+p1new
+DROP PROCEDURE p1;
+CREATE FUNCTION f1 (p1 VARCHAR2(10)) RETURN VARCHAR(20)
+AS
+BEGIN
+DECLARE
+p2 VARCHAR(10);
+BEGIN
+SET p2:='new';
+RETURN CONCAT(p1, p2);
+END;
+DECLARE
+t1 VARCHAR(10);
+t2 VARCHAR(10);
+BEGIN
+END;
+END;
+/
+SET @p1='p1';
+SELECT f1(@p1);
+f1(@p1)
+p1new
+DROP FUNCTION f1;
+CREATE TABLE t1 (
+id   CHAR(16) NOT NULL DEFAULT '',
+data INT NOT NULL
+) ENGINE=MYISAM;
+CREATE TABLE t2 (
+s   CHAR(16),
+i   INT,
+d   DOUBLE
+) ENGINE=MYISAM;
+# CONDITIONs and HANDLERs
+DROP PROCEDURE IF EXISTS hndlr1/
+CREATE PROCEDURE hndlr1(val int)
+AS
+x INT DEFAULT 0;
+foo CONDITION FOR 1136;
+bar CONDITION FOR SQLSTATE '42S98';  # Just for testing syntax
+zip CONDITION FOR SQLSTATE VALUE '42S99';  # Just for testing syntax
+CONTINUE handler FOR foo SET x = 1;
+BEGIN
+INSERT INTO test.t1 VALUES ('hndlr1', val, 2);  # Too many values
+IF (x) THEN
+INSERT INTO test.t1 VALUES ('hndlr1', val);   # This instead then
+END IF;
+END/
+CALL hndlr1(42)/
+SELECT * FROM t1/
+id	data
+hndlr1	42
+DELETE FROM t1/
+DROP PROCEDURE HNDLR1/
+DROP PROCEDURE IF EXISTS hndlr2/
+CREATE PROCEDURE hndlr2(VAL INT)
+AS
+x INT DEFAULT 0;
+BEGIN
+DECLARE
+EXIT HANDLER FOR SQLSTATE '21S01' SET x = 1;
+BEGIN
+INSERT INTO test.t1 VALUES ('hndlr2', val, 2); # Too many values
+END;
+INSERT INTO test.t1 VALUES ('hndlr2', x);
+END/
+CALL hndlr2(42)/
+SELECT * FROM t1/
+id	data
+hndlr2	1
+DELETE FROM t1/
+DROP PROCEDURE hndlr2/
+DROP PROCEDURE IF EXISTS hndlr3/
+CREATE PROCEDURE hndlr3(val INT)
+AS
+x INT DEFAULT 0;
+CONTINUE HANDLER FOR sqlexception
+DECLARE
+z INT;
+BEGIN
+SET z = 2 * val;
+SET x = 1;
+END;
+BEGIN
+IF val < 10 THEN
+DECLARE
+y INT;
+BEGIN
+SET y = val + 10;
+INSERT INTO test.t1 VALUES ('hndlr3', y, 2);  # Too many values
+IF x THEN
+INSERT INTO test.t1 VALUES ('hndlr3', y);
+END IF;
+END;
+END IF;
+END/
+CALL hndlr3(3)/
+SELECT * FROM t1/
+id	data
+hndlr3	13
+DELETE FROM t1/
+DROP PROCEDURE hndlr3/
+CREATE TABLE t3 ( id CHAR(16), data INT )/
+DROP PROCEDURE IF EXISTS hndlr4/
+CREATE PROCEDURE hndlr4()
+AS
+x INT DEFAULT 0;
+val INT;                               # No default
+CONTINUE HANDLER FOR SQLSTATE '02000' SET x=1;
+BEGIN
+SELECT data INTO val FROM test.t3 WHERE id='z' LIMIT 1;  # No hits
+INSERT INTO test.t3 VALUES ('z', val);
+END/
+CALL hndlr4()/
+SELECT * FROM t3/
+id	data
+z	NULL
+DROP TABLE t3/
+DROP PROCEDURE hndlr4/
+INSERT INTO t2 VALUES ('foo', 42, -1.9), ('bar', 3, 12.1), ('zap', 666, -3.14)/
+SELECT * FROM t1/
+id	data
+CREATE TABLE t3 ( s CHAR(16), i INT )/
+SELECT * FROM t3 ORDER BY i,s/
+s	i
+DELETE FROM t1/
+DELETE FROM t2/
+DROP TABLE t3/
+DROP TABLE t1;
+DROP TABLE t2;
+# Testing that (some) ident_keywords_unambiguous are allowed in Oracle-style assignments
+CREATE PROCEDURE p1 (action INT) AS BEGIN action:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (backup INT) AS BEGIN backup:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (binlog INT) AS BEGIN binlog:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (bool INT) AS BEGIN bool:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (close INT) AS BEGIN close:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (day INT) AS BEGIN day:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (error INT) AS BEGIN error:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (name INT) AS BEGIN name:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (password INT) AS BEGIN password:=10; END;/
+DROP PROCEDURE p1/
+# Testing ident_keywords_ambiguous_2_labels
+CREATE PROCEDURE p1 (ascii INT) AS BEGIN ascii:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (byte INT) AS BEGIN byte:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (charset INT) AS BEGIN charset:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (compression_dictionary INT) AS BEGIN compression_dictionary:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (contains INT) AS BEGIN contains:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (language INT) AS BEGIN language:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (no INT) AS BEGIN no:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (signed INT) AS BEGIN signed:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (slave INT) AS BEGIN slave:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (unicode INT) AS BEGIN unicode:=10; END;/
+DROP PROCEDURE p1/
+# Testing ident_keywords_ambiguous_3_roles
+CREATE PROCEDURE p1 (event INT) AS BEGIN event:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (file INT) AS BEGIN file:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (none INT) AS BEGIN none:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (process INT) AS BEGIN process:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (proxy INT) AS BEGIN proxy:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (reload INT) AS BEGIN reload:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (replication INT) AS BEGIN replication:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (resource INT) AS BEGIN resource:=10; END;/
+DROP PROCEDURE p1/
+CREATE PROCEDURE p1 (super INT) AS BEGIN super:=10; END;/
+DROP PROCEDURE p1/
+# Testing that keywords that do not work in :=
+CREATE PROCEDURE p1 (execute INT) AS BEGIN execute:=10; END;/
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ':=10; END' at line 1
+CREATE PROCEDURE p1 (restart INT) AS BEGIN restart:=10; END;/
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ':=10; END' at line 1
+CREATE PROCEDURE p1 (shutdown INT) AS BEGIN shutdown:=10; END;/
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ':=10; END' at line 1
+CREATE PROCEDURE p1 (global INT) AS BEGIN global:=10; END;/
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'global:=10; END' at line 1
+CREATE PROCEDURE p1 (local INT) AS BEGIN local:=10; END;/
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'local:=10; END' at line 1
+CREATE PROCEDURE p1 (persist INT) AS BEGIN persist:=10; END;/
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'persist:=10; END' at line 1
+CREATE PROCEDURE p1 (persist_only INT) AS BEGIN persist_only:=10; END;/
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'persist_only:=10; END' at line 1
+CREATE PROCEDURE p1 (session INT) AS BEGIN session:=10; END;/
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'session:=10; END' at line 1
+#
+# Tests for common usages of create or replace stored programs
+#
+SET SQL_MODE=default;
+CREATE OR REPLACE PROCEDURE p1() SELECT 1 FROM dual;$$
+CALL p1();$$
+1
+1
+CREATE PROCEDURE p1() SELECT 2 FROM dual;$$
+ERROR 42000: PROCEDURE p1 already exists
+CALL p1();$$
+1
+1
+CREATE OR REPLACE PROCEDURE p1() select 2 FROM dual;$$
+CALL p1();$$
+2
+2
+CREATE OR REPLACE PROCEDURE P1() select 3 from dual;$$
+CALL p1();$$
+3
+3
+DROP PROCEDURE p1;$$
+CREATE OR REPLACE PROCEDURE p1() SELECT 4 FROM dual;$$
+CALL p1();$$
+4
+4
+DROP PROCEDURE p1;$$
+#
+# Tests for checking permission denied on CREATE OR REPLACE if DROP
+# access is revoked
+#
+SELECT CURRENT_USER;
+CURRENT_USER
+root@localhost
+CREATE USER mysqluser1@localhost;
+CREATE OR REPLACE PROCEDURE proc1(cnt INT) BEGIN END$$
+CREATE FUNCTION func1() RETURNS VARCHAR(30)
+BEGIN
+DECLARE tmp varchar(30);
+SELECT 1 FROM dual into tmp;
+RETURN '1';
+END$$
+SELECT CURRENT_USER;
+CURRENT_USER
+mysqluser1@localhost
+CREATE OR REPLACE PROCEDURE proc1(cnt INT) BEGIN END$$
+ERROR 42000: Access denied; you need (at least one of) the SYSTEM_USER privilege(s) for this operation
+CREATE OR REPLACE FUNCTION func1() RETURNS VARCHAR(30)
+BEGIN
+DECLARE tmp varchar(30);
+SELECT 1 FROM dual into tmp;
+RETURN '1';
+END$$
+ERROR 42000: Access denied; you need (at least one of) the SYSTEM_USER privilege(s) for this operation
+SELECT CURRENT_USER;
+CURRENT_USER
+root@localhost
+DROP PROCEDURE proc1;
+DROP FUNCTION func1;
+DROP USER mysqluser1@localhost;
+# Tests for CREATE with definers
+CREATE TABLE t1 (
+int_field INTEGER UNSIGNED NOT NULL,
+char_field CHAR(10),
+INDEX(`int_field`)
+);
+CREATE USER usr1@localhost;
+CREATE DEFINER=usr1@localhost PROCEDURE p1()
+SELECT * FROM test1.t1; /
+CREATE OR REPLACE DEFINER=usr1@localhost PROCEDURE p1()
+SELECT * FROM test1.t1; /
+CREATE DEFINER = usr1@localhost FUNCTION f1() RETURNS INT
+RETURN (SELECT COUNT(*) FROM test1.t1); /
+CREATE OR REPLACE DEFINER = usr1@localhost FUNCTION f1() RETURNS INT
+RETURN (SELECT COUNT(*) FROM test1.t1); /
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+DROP TABLE t1;
+DROP USER usr1@localhost;
+# Testing routines with no parameters
+SET SQL_MODE=oracle;
+CREATE PROCEDURE p1 AS BEGIN END;
+CALL p1;
+DROP PROCEDURE p1;
+CREATE FUNCTION f1 RETURN INT AS BEGIN RETURN 1; END/
+SELECT f1()/
+f1()
+1
+DROP FUNCTION f1/
+CREATE FUNCTION f1 RETURN INT IS BEGIN RETURN 1; END/
+SELECT f1()/
+f1()
+1
+DROP FUNCTION f1/
+CREATE FUNCTION f1 RETURN INT
+AS
+BEGIN
+RETURN 10;
+END;
+/
+SHOW CREATE FUNCTION f1/
+Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
+f1	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="root"@"localhost" FUNCTION "f1"() RETURN int
+AS
+BEGIN
+RETURN 10;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SELECT f1()/
+f1()
+10
+DROP FUNCTION f1/
+CREATE PROCEDURE p1
+AS
+BEGIN
+SET @a=10;
+END;
+/
+SHOW CREATE PROCEDURE p1/
+Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
+p1	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="root"@"localhost" PROCEDURE "p1"()
+AS
+BEGIN
+SET @a=10;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SET @a=0/
+CALL p1()/
+SELECT @a/
+@a
+10
+DROP PROCEDURE p1/
+SET @@global.max_sp_recursion_depth = 5 /
+SET @@session.max_sp_recursion_depth = 5 /
+CREATE OR REPLACE FUNCTION recur() RETURN INT AS
+BEGIN RETURN recur(); END; /
+SELECT recur() /
+ERROR HY000: Recursive stored functions and triggers are not allowed.
+CREATE OR REPLACE FUNCTION recur() RETURN VARCHAR(10) AS
+BEGIN RETURN recur(); END; /
+SELECT recur() /
+ERROR HY000: Recursive stored functions and triggers are not allowed.
+CREATE OR REPLACE FUNCTION recur() RETURN DECIMAL AS
+BEGIN RETURN recur(); END; /
+SELECT recur() /
+ERROR HY000: Recursive stored functions and triggers are not allowed.
+SET SQL_MODE=DEFAULT;
+CREATE OR REPLACE FUNCTION recur() RETURNS INT DETERMINISTIC RETURN recur() /
+SELECT recur() /
+ERROR HY000: Recursive stored functions and triggers are not allowed.
+CREATE OR REPLACE FUNCTION recur() RETURNS VARCHAR(10) DETERMINISTIC RETURN recur() /
+SELECT recur() /
+ERROR HY000: Recursive stored functions and triggers are not allowed.
+CREATE OR REPLACE FUNCTION recur() RETURNS DECIMAL(5) DETERMINISTIC RETURN recur() /
+SELECT recur() /
+ERROR HY000: Recursive stored functions and triggers are not allowed.
+DROP FUNCTION recur /
+SET @@global.max_sp_recursion_depth = 0 /
+SET @@session.max_sp_recursion_depth = 0 /
+#
+# type: VARCHAR、NVARCHAR、VARBINARY without indicate length
+# 
+SET sql_mode=DEFAULT|
+CREATE PROCEDURE p1(str VARCHAR(16383)) BEGIN DECLARE x VARCHAR(16383); SET x = str; SELECT x; END;|
+CREATE PROCEDURE p2(str VARCHAR) BEGIN DECLARE x VARCHAR(16383); SET x = str; SELECT x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ') BEGIN DECLARE x VARCHAR(16383); SET x = str; SELECT x; END' at line 1
+CREATE PROCEDURE p3(str VARCHAR(16383)) BEGIN DECLARE x VARCHAR; SET x = str; SELECT x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '; SET x = str; SELECT x; END' at line 1
+CALL p1('hello world')|
+x
+hello world
+DROP PROCEDURE p1|
+CREATE PROCEDURE p1(str NVARCHAR(21845)) BEGIN DECLARE x NVARCHAR(21845); SET x = str; SELECT x; END;|
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+CREATE PROCEDURE p2(str NVARCHAR) BEGIN DECLARE x NVARCHAR(21845); SET x = str; SELECT x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ') BEGIN DECLARE x NVARCHAR(21845); SET x = str; SELECT x; END' at line 1
+CREATE PROCEDURE p3(str NVARCHAR(21845)) BEGIN DECLARE x NVARCHAR; SET x = str; SELECT x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '; SET x = str; SELECT x; END' at line 1
+CALL p1('hello world')|
+x
+hello world
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+DROP PROCEDURE p1|
+CREATE PROCEDURE p1(str VARBINARY(65535)) BEGIN DECLARE x VARBINARY(65535); SET x = str; SELECT x; END;|
+CREATE PROCEDURE p2(str VARCHAR) BEGIN DECLARE x VARBINARY(65535); SET x = str; SELECT x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ') BEGIN DECLARE x VARBINARY(65535); SET x = str; SELECT x; END' at line 1
+CREATE PROCEDURE p3(str VARBINARY(65535)) BEGIN DECLARE x VARCHAR; SET x = str; SELECT x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '; SET x = str; SELECT x; END' at line 1
+CALL p1('hello world')|
+x
+hello world
+DROP PROCEDURE p1|
+SET sql_mode=ORACLE|
+CREATE PROCEDURE p1(str VARCHAR(16383)) AS x VARCHAR(16383); BEGIN x := str; SELECT x; END;|
+CREATE PROCEDURE p2(str VARCHAR) AS x VARCHAR(16383); BEGIN x := str; SELECT x; END;|
+CREATE PROCEDURE p3(str VARCHAR(16383)) AS x VARCHAR; BEGIN x := str; SELECT x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+CALL p1('hello world')|
+x
+hello world
+CALL p2('hello world')|
+x
+hello world
+DROP PROCEDURE p1|
+DROP PROCEDURE p2|
+CREATE PROCEDURE p1(str NVARCHAR(21845)) AS x NVARCHAR(21845); BEGIN SET x = str; SELECT x; END;|
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+CREATE PROCEDURE p2(str NVARCHAR) AS x NVARCHAR(21845); BEGIN SET x = str; SELECT x; END;|
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+CREATE PROCEDURE p3(str NVARCHAR(21845)) AS x NVARCHAR; BEGIN SET x = str; SELECT x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+CALL p1('hello world')|
+x
+hello world
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+CALL p2('hello world')|
+x
+hello world
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+DROP PROCEDURE p1|
+DROP PROCEDURE p2|
+CREATE PROCEDURE p1(str VARBINARY(65535)) AS x VARBINARY(65535); BEGIN SET x = str; SELECT x; END;|
+CREATE PROCEDURE p2(str VARCHAR) AS x VARBINARY(65535); BEGIN SET x = str; SELECT x; END;|
+CREATE PROCEDURE p3(str VARBINARY(65535)) AS x VARCHAR; BEGIN SET x = str; SELECT x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+CALL p1('hello world')|
+x
+hello world
+CALL p2('hello world')|
+x
+hello world
+DROP PROCEDURE p1|
+DROP PROCEDURE p2|
+SET sql_mode=DEFAULT|
+CREATE FUNCTION f1(str VARCHAR(16383)) RETURNS VARCHAR(16383) BEGIN DECLARE x VARCHAR(16383); SET x = str; RETURN x; END;|
+CREATE FUNCTION f2(str VARCHAR) RETURNS VARCHAR(16383) BEGIN DECLARE x VARCHAR(16383); SET x = str; RETURN x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ') RETURNS VARCHAR(16383) BEGIN DECLARE x VARCHAR(16383); SET x = str; RETURN x; ' at line 1
+CREATE FUNCTION f3(str VARCHAR(16383)) RETURNS VARCHAR BEGIN DECLARE x VARCHAR(16383); SET x = str; RETURN x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BEGIN DECLARE x VARCHAR(16383); SET x = str; RETURN x; END' at line 1
+CREATE FUNCTION f4(str VARCHAR(16383)) RETURNS VARCHAR(16383) BEGIN DECLARE x VARCHAR; SET x = str; RETURN x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '; SET x = str; RETURN x; END' at line 1
+SELECT f1('hello world')|
+f1('hello world')
+hello world
+DROP FUNCTION f1|
+CREATE FUNCTION f1(str NVARCHAR(21845)) RETURNS NVARCHAR(21845) BEGIN DECLARE x NVARCHAR(21845); SET x = str; RETURN x; END;|
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+CREATE FUNCTION f2(str NVARCHAR) RETURNS NVARCHAR(21845) BEGIN DECLARE x NVARCHAR(21845); SET x = str; RETURN x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ') RETURNS NVARCHAR(21845) BEGIN DECLARE x NVARCHAR(21845); SET x = str; RETURN x' at line 1
+CREATE FUNCTION f3(str NVARCHAR(21845)) RETURNS NVARCHAR BEGIN DECLARE x NVARCHAR(21845); SET x = str; RETURN x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BEGIN DECLARE x NVARCHAR(21845); SET x = str; RETURN x; END' at line 1
+CREATE FUNCTION f4(str NVARCHAR(21845)) RETURNS NVARCHAR(21845) BEGIN DECLARE x NVARCHAR; SET x = str; RETURN x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '; SET x = str; RETURN x; END' at line 1
+SELECT f1('hello world')|
+f1('hello world')
+hello world
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+DROP FUNCTION f1|
+CREATE FUNCTION f1(str VARBINARY(65535)) RETURNS VARBINARY(65535) BEGIN DECLARE x VARBINARY(65535); SET x = str; RETURN x; END;|
+CREATE FUNCTION f2(str VARBINARY) RETURNS VARBINARY(65535) BEGIN DECLARE x VARBINARY(65535); SET x = str; RETURN x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ') RETURNS VARBINARY(65535) BEGIN DECLARE x VARBINARY(65535); SET x = str; RETURN' at line 1
+CREATE FUNCTION f3(str VARBINARY(65535)) RETURNS VARBINARY BEGIN DECLARE x VARBINARY(65535); SET x = str; RETURN x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BEGIN DECLARE x VARBINARY(65535); SET x = str; RETURN x; END' at line 1
+CREATE FUNCTION f4(str VARBINARY(65535)) RETURNS VARBINARY(65535) BEGIN DECLARE x VARBINARY; SET x = str; RETURN x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '; SET x = str; RETURN x; END' at line 1
+SELECT f1('hello world')|
+f1('hello world')
+hello world
+DROP FUNCTION f1|
+SET sql_mode=ORACLE|
+CREATE FUNCTION f1(str VARCHAR(16383)) RETURN VARCHAR(16383) AS x VARCHAR(16383); BEGIN x := str; RETURN x; END;|
+CREATE FUNCTION f2(str VARCHAR) RETURN VARCHAR(16383) AS x VARCHAR(16383); BEGIN x := str; RETURN x; END;|
+CREATE FUNCTION f3(str VARCHAR(16383)) RETURN VARCHAR AS x VARCHAR(16383); BEGIN x := str; RETURN x; END;|
+CREATE FUNCTION f4(str VARCHAR(16383)) RETURN VARCHAR(16383) AS x VARCHAR; BEGIN x := str; RETURN x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+CREATE FUNCTION f5(str VARCHAR) RETURN VARCHAR AS x VARCHAR(16383); BEGIN x := str; RETURN x; END;|
+SELECT f1('hello world')|
+f1('hello world')
+hello world
+SELECT f2('hello world')|
+f2('hello world')
+hello world
+SELECT f3('hello world')|
+f3('hello world')
+hello world
+SELECT f5('hello world')|
+f5('hello world')
+hello world
+DROP FUNCTION f1|
+DROP FUNCTION f2|
+DROP FUNCTION f3|
+DROP FUNCTION f5|
+CREATE FUNCTION f1(str NVARCHAR(21845)) RETURN NVARCHAR(21845) AS x NVARCHAR(21845); BEGIN x := str; RETURN x; END;|
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+CREATE FUNCTION f2(str NVARCHAR) RETURN NVARCHAR(21845) AS x NVARCHAR(21845); BEGIN x := str; RETURN x; END;|
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+CREATE FUNCTION f3(str NVARCHAR(21845)) RETURN NVARCHAR AS x NVARCHAR(21845); BEGIN x := str; RETURN x; END;|
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+CREATE FUNCTION f4(str NVARCHAR(21845)) RETURN NVARCHAR(21845) AS x NVARCHAR; BEGIN x := str; RETURN x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+CREATE FUNCTION f5(str NVARCHAR) RETURN NVARCHAR AS x NVARCHAR(21845); BEGIN x := str; RETURN x; END;|
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+SELECT f1('hello world')|
+f1('hello world')
+hello world
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+SELECT f2('hello world')|
+f2('hello world')
+hello world
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+SELECT f3('hello world')|
+f3('hello world')
+hello world
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+SELECT f5('hello world')|
+f5('hello world')
+hello world
+Warnings:
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+DROP FUNCTION f1|
+DROP FUNCTION f2|
+DROP FUNCTION f3|
+DROP FUNCTION f5|
+CREATE FUNCTION f1(str VARBINARY(65535)) RETURN VARBINARY(65535) AS x VARBINARY(65535); BEGIN x := str; RETURN x; END;|
+CREATE FUNCTION f2(str VARBINARY) RETURN VARBINARY(65535) AS x VARBINARY(65535); BEGIN x := str; RETURN x; END;|
+CREATE FUNCTION f3(str VARBINARY(65535)) RETURN VARBINARY AS x VARBINARY(65535); BEGIN x := str; RETURN x; END;|
+CREATE FUNCTION f4(str VARBINARY(65535)) RETURN VARBINARY(65535) AS x VARBINARY; BEGIN x := str; RETURN x; END;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+CREATE FUNCTION f5(str VARBINARY) RETURN VARBINARY AS x VARBINARY(65535); BEGIN x := str; RETURN x; END;|
+SELECT f1('hello world')|
+f1('hello world')
+hello world
+SELECT f2('hello world')|
+f2('hello world')
+hello world
+SELECT f3('hello world')|
+f3('hello world')
+hello world
+SELECT f5('hello world')|
+f5('hello world')
+hello world
+DROP FUNCTION f1|
+DROP FUNCTION f2|
+DROP FUNCTION f3|
+DROP FUNCTION f5|
+SET sql_mode=DEFAULT|
+CREATE PROCEDURE p1(str VARCHAR(16383)) BEGIN DECLARE x VARCHAR(16383); SET x = str; SELECT x; END p1;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'p1' at line 1
+CREATE FUNCTION f1(str VARCHAR(16383)) RETURNS VARCHAR(16383) BEGIN DECLARE x VARCHAR(16383); SET x = str; RETURN x; END f1;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'f1' at line 1
+SET sql_mode=ORACLE|
+CREATE PROCEDURE p1(str VARBINARY(65535)) AS x VARBINARY(65535); BEGIN SET x = str; SELECT x; END p1;|
+CALL p1('hello world')|
+x
+hello world
+CALL p1('hello world')|
+x
+hello world
+DROP PROCEDURE p1|
+CREATE PROCEDURE p1(str VARBINARY(65535)) AS x VARBINARY(65535); BEGIN SET x = str; SELECT x; END p2;|
+ERROR HY000: END identifier 'p2' does not match 'p1'
+CREATE PROCEDURE p1(str VARBINARY(65535)) AS x VARBINARY(65535); BEGIN SET x = str; SELECT x; END test.p1;|
+ERROR HY000: END identifier 'test' does not match 'p1'
+CREATE FUNCTION f1(str VARBINARY(65535)) RETURN VARBINARY(65535) AS x VARBINARY(65535); BEGIN x := str; RETURN x; END f1;|
+SELECT f1('hello world')|
+f1('hello world')
+hello world
+SELECT f1('hello world')|
+f1('hello world')
+hello world
+DROP FUNCTION f1|
+CREATE FUNCTION f1(str VARBINARY(65535)) RETURN VARBINARY(65535) AS x VARBINARY(65535); BEGIN x := str; RETURN x; END f2;|
+ERROR HY000: END identifier 'f2' does not match 'f1'
+CREATE FUNCTION f1(str VARBINARY(65535)) RETURN VARBINARY(65535) AS x VARBINARY(65535); BEGIN x := str; RETURN x; END test.f1;|
+ERROR HY000: END identifier 'test' does not match 'f1'

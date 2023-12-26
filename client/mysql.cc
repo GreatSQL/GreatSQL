@@ -1156,6 +1156,7 @@ static COMMANDS commands[] = {
     {"X", 0, nullptr, false, ""},
     {"Y", 0, nullptr, false, ""},
     {"YEARWEEK", 0, nullptr, false, ""},
+    {"EXEC", 0, nullptr, false, "support sqlplus exec"},
     /* end sentinel */
     {(char *)nullptr, 0, nullptr, false, ""}};
 
@@ -1217,6 +1218,22 @@ inline bool is_delimiter_command(char *name, ulong len) {
           !my_strnncoll(
               charset_info, pointer_cast<uchar *>(name), DELIMITER_NAME_LEN,
               pointer_cast<const uchar *>(DELIMITER_NAME), DELIMITER_NAME_LEN));
+}
+
+const char EXEC_NAME[] = "exec";
+const uint EXEC_NAME_LEN = sizeof(EXEC_NAME) - 1;
+inline bool is_exec_command(char *name, ulong len) {
+  if (len < EXEC_NAME_LEN) return false;
+  if (my_strnncoll(charset_info, pointer_cast<uchar *>(name), EXEC_NAME_LEN,
+                   pointer_cast<const uchar *>(EXEC_NAME), EXEC_NAME_LEN)) {
+    return false;
+  }
+  if (len == EXEC_NAME_LEN) return true;
+  return !my_isalpha(charset_info, name[EXEC_NAME_LEN]);
+}
+
+inline bool is_default_delimter() {
+  return strcmp(DEFAULT_DELIMITER, delimiter) == 0;
 }
 
 /**
@@ -2559,6 +2576,19 @@ static bool add_line(String &buffer, char *line, size_t line_length,
       }
 
       pos--;
+      if (is_exec_command(buffer.c_ptr(), buffer.length())) {
+        if (is_default_delimter()) {
+          bool is_continue = false;
+          for (char *c = pos + 1; c < end_of_line; c++) {
+            if (!my_isspace(charset_info, (uchar)*c)) {
+              is_continue = true;
+              break;
+            }
+          }
+          buffer.append(DEFAULT_DELIMITER, 1);
+          if (is_continue) continue;
+        }
+      }
 
       if ((com = find_command(buffer.c_ptr()))) {
         if ((*com->func)(&buffer, buffer.c_ptr()) > 0) return true;  // Quit
@@ -3316,6 +3346,27 @@ static int com_go(String *buffer, char *line [[maybe_unused]]) {
     buffer->length(0);              // Remove query on error
     return opt_reconnect ? -1 : 1;  // Fatal error
   }
+  bool is_exec_cmd = is_exec_command(buffer->ptr(), buffer->length());
+  String origin_buffer;
+  if (is_exec_cmd) {
+    if ((*buffer)[buffer->length() - 1] !=
+        ';') {  //-e or delimiter not end with;
+      buffer->append(DEFAULT_DELIMITER, 1);
+    }
+    origin_buffer.copy(*buffer);
+    bool cmd_empty = true;
+    for (size_t i = EXEC_NAME_LEN; i < origin_buffer.length() - 1; i++) {
+      if (!my_isspace(charset_info, origin_buffer[i])) {
+        cmd_empty = false;
+        break;
+      }
+    }
+    if (cmd_empty) {
+      return put_info("Usage: EXEC statement", INFO_ERROR);
+    }
+    buffer->replace(0, EXEC_NAME_LEN, "begin", strlen("begin"));
+    buffer->append(" end");
+  }
   if (verbose) (void)com_print(buffer, nullptr);
 
   if (skip_updates && (buffer->length() < 4 ||
@@ -3328,6 +3379,8 @@ static int com_go(String *buffer, char *line [[maybe_unused]]) {
   timer = start_timer();
   executing_query = true;
   error = mysql_real_query_for_lazy(buffer->ptr(), buffer->length(), true);
+
+  if (is_exec_cmd) buffer->copy(origin_buffer);
 
   if (status.add_to_history) {
     buffer->append(vertical ? "\\G" : delimiter);

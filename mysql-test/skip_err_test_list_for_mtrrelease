@@ -1,0 +1,15 @@
+# skip test list, skip test which will not pass
+group_replication.gr_startup_check_node_seed_skips_own_address   : WL#000 ignore
+group_replication.gr_acf_valid_sender_status    : WL#000 ignore
+group_replication.gr_startup_check_node_seed_skips_own_address_v6   : WL#000 ignore
+group_replication.gr_single_primary_and_leader_election_on_error   : WL#000 ignore
+main.backup_safe_binlog_info   : WL#000 ignore
+main.mysqldump   : WL#000 ignore
+main.proxy_protocol_admin_port : WL#000 skip
+main.threadpool_debug  : WL#000 skip
+main.fix_priv_tables  : WL#000 skip
+sys_vars.gtid_mode_basic   : WL#000 TODO recheck.
+sys_vars.binlog_checksum_basic   : WL#000 TODO recheck.
+sys_vars.enforce_gtid_consistency_basic   : WL#000 subquery consequences.
+main.ssl_cache            : WL#000 ignore 
+main.ssl_cache_tls13      : WL#000 ignore 

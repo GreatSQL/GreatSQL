@@ -1,4 +1,5 @@
 /* Copyright (c) 2006, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -223,7 +224,8 @@ constexpr const uint64_t OPTIMIZER_SWITCH_HYPERGRAPH_OPTIMIZER{1ULL << 24};
 constexpr const uint64_t OPTIMIZER_SWITCH_DERIVED_CONDITION_PUSHDOWN{1ULL
                                                                      << 25};
 constexpr const uint64_t OPTIMIZER_SWITCH_FAVOR_RANGE_SCAN{1ULL << 26};
-constexpr const uint64_t OPTIMIZER_SWITCH_LAST{1ULL << 27};
+constexpr const uint64_t OPTIMIZER_SWITCH_REMOVE_USELESS_OUTERJOIN{1ULL << 27};
+constexpr const uint64_t OPTIMIZER_SWITCH_LAST{1ULL << 28};
 
 enum SHOW_COMP_OPTION { SHOW_OPTION_YES, SHOW_OPTION_NO, SHOW_OPTION_DISABLED };
 

@@ -430,6 +430,7 @@ fi
 
     mkdir $INSTALLDIR/usr/local/minimal
     cp -r "$INSTALLDIR/usr/local/$PRODUCT_FULL" "$INSTALLDIR/usr/local/minimal/$PRODUCT_FULL-minimal"
+    sed -i "s/$PRODUCT_FULL/$PRODUCT_FULL-minimal/g" "$INSTALLDIR/usr/local/minimal/$PRODUCT_FULL-minimal/bin/mysqld_pre_systemd"
 
     # NORMAL TARBALL
     cd "$INSTALLDIR/usr/local/$PRODUCT_FULL"

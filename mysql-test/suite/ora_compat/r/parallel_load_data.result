@@ -24,6 +24,7 @@ SELECT * INTO OUTFILE 'tmp_dir/parallel_load_outfile.txt' FROM t1;
 TRUNCATE TABLE t1;
 SET @@gdb_parallel_load = on;
 SELECT @@gdb_parallel_load_chunk_size INTO @old_chunk_size;
+SELECT @@gdb_parallel_load_workers INTO @old_workers;
 SET @@gdb_parallel_load_chunk_size = 65536;
 LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt' INTO TABLE t1;
 affected rows: 256
@@ -61,7 +62,7 @@ INTO TABLE t1 PARTITION(s0);
 ERROR HY000: parallel load data failed, cause worker execute error[Found a row not matching the given partition set]
 LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
 INTO TABLE t1 PARTITION(s1);
-ERROR HY000: Found a row not matching the given partition set
+ERROR HY000: parallel load data failed, cause worker execute error[Found a row not matching the given partition set]
 LOAD DATA INFILE 'tmp_dir/parallel_load_outfile.txt'
 INTO TABLE t1 PARTITION(s0,s1);
 affected rows: 2
@@ -234,8 +235,138 @@ affected rows: 1
 [only support hints about parallel load]
 LOAD /*+ SET_VAR(auto_increment_increment=2) */DATA INFILE '$MYSQLTEST_VARDIR/parallel_load_outfile.txt' INTO TABLE t1;
 ERROR HY000: parallel load data failed, cause only support hints: set_var(gdb_parallel_load[_xxx]=xx)
+
+[# bug8211: http://zbox.greatdb.com/zentao/task-view-14712.html]
+[# refactor logic of split lines for parallel load]
 DROP TABLE t1;
+create table t1(c1 int primary key, c2 varchar(8), c3 varchar(8));
+insert into t1 values (1, 'aaa', '\\bc'), (2, 'bac', NULL), (3, 'bac', ''), (4, 'b\\adc', 'd');
+select * from t1;
+c1	c2	c3
+1	aaa	\bc
+2	bac	NULL
+3	bac	
+4	b\adc	d
+SELECT * INTO OUTFILE 'tmp_dir/bug8211.txt' FROM t1;
+affected rows: 4
+truncate table t1;
+LOAD /*+ SET_VAR(gdb_parallel_load=ON) */DATA INFILE 'tmp_dir/bug8211.txt' INTO TABLE t1;
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+select * from t1;
+c1	c2	c3
+1	aaa	\bc
+2	bac	NULL
+3	bac	
+4	b\adc	d
+[#test no enough field]
+DROP TABLE t1;
+create table t1(c1 int primary key, c2 varchar(8), c3 varchar(8), c4 varchar(8));
+LOAD /*+ SET_VAR(gdb_parallel_load=OFF) */DATA INFILE 'tmp_dir/bug8211.txt' INTO TABLE t1;
+ERROR 01000: Row 1 doesn't contain data for all columns
+select * from t1;
+c1	c2	c3	c4
+truncate table t1;
+LOAD /*+ SET_VAR(gdb_parallel_load=ON) */DATA INFILE 'tmp_dir/bug8211.txt' INTO TABLE t1;
+ERROR 01000: Row 1 doesn't contain data for all columns
+select * from t1;
+c1	c2	c3	c4
+LOAD /*+ SET_VAR(gdb_parallel_load=OFF) */DATA INFILE 'tmp_dir/bug8211.txt' ignore INTO TABLE t1;
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 4
+Warnings:
+Warning	1261	Row 1 doesn't contain data for all columns
+Warning	1261	Row 2 doesn't contain data for all columns
+Warning	1261	Row 3 doesn't contain data for all columns
+Warning	1261	Row 4 doesn't contain data for all columns
+select * from t1;
+c1	c2	c3	c4
+1	aaa	\bc	NULL
+2	bac	NULL	NULL
+3	bac		NULL
+4	b\adc	d	NULL
+truncate table t1;
+LOAD /*+ SET_VAR(gdb_parallel_load=ON) */DATA INFILE 'tmp_dir/bug8211.txt' ignore INTO TABLE t1;
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 1
+Warnings:
+Warning	1261	Row 1 doesn't contain data for all columns
+select * from t1;
+c1	c2	c3	c4
+1	aaa	\bc	NULL
+2	bac	NULL	NULL
+3	bac		NULL
+4	b\adc	d	NULL
+[#test extra field]
+DROP TABLE t1;
+create table t1(c1 int primary key, c2 varchar(8));
+LOAD /*+ SET_VAR(gdb_parallel_load=OFF) */DATA INFILE 'tmp_dir/bug8211.txt' INTO TABLE t1;
+ERROR 01000: Row 1 was truncated; it contained more data than there were input columns
+select * from t1;
+c1	c2
+truncate table t1;
+LOAD /*+ SET_VAR(gdb_parallel_load=ON) */DATA INFILE 'tmp_dir/bug8211.txt' INTO TABLE t1;
+ERROR HY000: parallel load data failed, cause worker execute error[Row 1 was truncated; it contained more data than there were input columns]
+select * from t1;
+c1	c2
+LOAD /*+ SET_VAR(gdb_parallel_load=OFF) */DATA INFILE 'tmp_dir/bug8211.txt' ignore INTO TABLE t1;
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 3
+Warnings:
+Warning	1262	Row 1 was truncated; it contained more data than there were input columns
+Warning	1262	Row 2 was truncated; it contained more data than there were input columns
+Warning	1262	Row 4 was truncated; it contained more data than there were input columns
+select * from t1;
+c1	c2
+1	aaa
+2	bac
+3	bac
+4	b\adc
+truncate table t1;
+LOAD /*+ SET_VAR(gdb_parallel_load=ON) */DATA INFILE 'tmp_dir/bug8211.txt' ignore INTO TABLE t1;
+affected rows: 4
+info: Records: 4  Deleted: 0  Skipped: 0  Warnings: 0
+select * from t1;
+c1	c2
+1	aaa
+2	bac
+3	bac
+4	b\adc
+DROP TABLE t1;
+
+[#bug8762: crash if load local infile and worker failed]
+create sequence seq cache 10000;
+create table t1 (c1 int primary key, c2 varchar(128) default (repeat('a',128)) );
+insert into t1(c1) values (seq.nextval);
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+insert into t1(c1) select seq.nextval from t1;
+drop sequence seq;
+select * into outfile 'tmp_dir/bug8762.txt' from t1;
+affected rows: 2048
+truncate table t1;
+begin;
+select * from t1 for update;
+c1	c2
+set @@gdb_parallel_load=on;
+set @@gdb_parallel_load_workers=2;
+set @@gdb_parallel_load_chunk_size=65536;
+select @@local_infile into @old_local_infile;
+set global local_infile=1;
+load data local infile 'tmp_dir/bug8762.txt' into table t1;
+ERROR HY000: parallel load data failed, cause worker execute error[Lock wait timeout exceeded; try restarting transaction]
+set global local_infile = @old_local_infile;
+drop table t1;
 SET @@auto_increment_increment = @old_increment;
 SET @@auto_increment_offset = @old_offset;
 SET @@gdb_parallel_load = off;
 SET @@gdb_parallel_load_chunk_size = @old_chunk_size;
+SET @@gdb_parallel_load_workers = @old_workers;

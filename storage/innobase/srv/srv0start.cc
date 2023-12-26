@@ -3,6 +3,7 @@
 Copyright (c) 1996, 2022, Oracle and/or its affiliates.
 Copyright (c) 2008, Google Inc.
 Copyright (c) 2009, Percona Inc.
+Copyright (c) 2023, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -118,6 +119,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0row.h"
 #include "row0sel.h"
 #include "row0upd.h"
+#include "srv0file_purge.h"
 #include "srv0tmp.h"
 #include "trx0purge.h"
 #include "trx0roll.h"
@@ -1408,7 +1410,10 @@ static const Thread_to_stop threads_to_stop[]{
      []() { os_event_set(srv_buf_resize_event); }, SRV_SHUTDOWN_CLEANUP},
 
     {"master", srv_threads.m_master, srv_wake_master_thread,
-     SRV_SHUTDOWN_MASTER_STOP}};
+     SRV_SHUTDOWN_MASTER_STOP},
+
+    {"file_async_purge", srv_threads.m_file_async_purge,
+     []() { os_event_set(file_async_purge_event); }, SRV_SHUTDOWN_CLEANUP}};
 
 void srv_shutdown_exit_threads() {
   srv_shutdown_state.store(SRV_SHUTDOWN_EXIT_THREADS);
@@ -2542,6 +2547,11 @@ dberr_t srv_start(bool create_new_db) {
       srv_threads.m_monitor.start();
       srv_monitor_thread_created = true;
     }
+
+    /* Create file purge thread */
+    srv_threads.m_file_async_purge = os_thread_create(
+        srv_file_async_purge_thread_key, 0, srv_file_async_purge_thread);
+    srv_threads.m_file_async_purge.start();
   }
 
   /* wake main loop of page cleaner up */

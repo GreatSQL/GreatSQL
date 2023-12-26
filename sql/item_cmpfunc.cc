@@ -76,6 +76,8 @@
 #include "sql/parse_tree_helpers.h"    // PT_item_list
 #include "sql/parse_tree_node_base.h"  // Parse_context
 #include "sql/query_options.h"
+#include "sql/sp_head.h"  // sp_head
+#include "sql/sp_pcontext.h"
 #include "sql/sp_rcontext.h"  // sp_rcontext
 #include "sql/sql_array.h"
 #include "sql/sql_base.h"
@@ -123,6 +125,35 @@ static Item **cache_converted_constant(THD *thd, Item **value,
 static bool row_types_are_compatible(Item *item1, Item *item2) {
   uint n = item1->cols();
   if (item2->check_cols(n)) return false;
+  /*Used for select/delete/update from table where udt_columns/udt_type in
+  (udt(),udt() ..).
+  */
+  if ((item1->is_ora_type() && !item2->is_ora_type()) ||
+      (!item1->is_ora_type() && item2->is_ora_type()) ||
+      (item1->is_ora_table() && !item2->is_ora_table()) ||
+      (item1->is_ora_table() && !item2->is_ora_table())) {
+    my_error(ER_UDT_INCONS_DATATYPES, myf(0));
+    return false;
+  }
+  if ((item1->is_ora_type() && item2->is_ora_type()) ||
+      (item1->is_ora_table() && item2->is_ora_table())) {
+    Item *real_left = item1->element_index(0)->real_item();
+    Item *real_right = item2->element_index(0)->real_item();
+    if (!real_left->get_udt_name().str || !real_right->get_udt_name().str) {
+      my_error(ER_UDT_INCONS_DATATYPES, myf(0));
+      return true;
+    }
+    if (my_strcasecmp(system_charset_info, real_left->get_udt_db_name().str,
+                      real_right->get_udt_db_name().str) != 0 ||
+        my_strcasecmp(system_charset_info, real_left->get_udt_name().str,
+                      real_right->get_udt_name().str) != 0) {
+      my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), real_left->get_udt_db_name().str,
+               real_left->get_udt_name().str, real_right->get_udt_db_name().str,
+               real_right->get_udt_name().str);
+      return false;
+    }
+    return true;
+  }
   for (uint i = 0; i < n; i++) {
     if (item2->element_index(i)->check_cols(item1->element_index(i)->cols()) ||
         (item1->element_index(i)->result_type() == ROW_RESULT &&
@@ -355,6 +386,9 @@ longlong Item_func_not::val_int() {
   assert(fixed == 1);
   bool value = args[0]->val_bool();
   null_value = args[0]->null_value;
+  if (Item_func_lnnvl_advisor::is_lnnvl_expr(args[0])) {
+    null_value = false;
+  }
   /*
     If NULL, return 0 because some higher layers like
     evaluate_join_record() just test for !=0 to implement IS TRUE.
@@ -610,7 +644,13 @@ static bool convert_constant_item(THD *thd, Item_field *field_item, Item **item,
 bool Item_bool_func2::convert_constant_arg(THD *thd, Item *field, Item **item,
                                            bool *converted) {
   *converted = false;
-  if (field->real_item()->type() != FIELD_ITEM) return false;
+  if (thd->sp_runtime_ctx && (field->this_item()->is_ora_udt_type() ||
+                              (*item)->this_item()->is_ora_udt_type())) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "compare with user define type");
+    return true;
+  }
+  if (field->real_item()->type() != FIELD_ITEM || field->is_sequence_field())
+    return false;
 
   Item_field *field_item = (Item_field *)(field->real_item());
   if (field_item->field->can_be_compared_as_longlong() &&
@@ -1242,24 +1282,53 @@ bool Arg_comparator::set_cmp_func(Item_result_field *owner_arg, Item **left_arg,
      Do comparison as decimal rather than float, in order not to lose precision.
     */
     type = DECIMAL_RESULT;
-  } else if (type == ROW_RESULT && (*left)->is_ora_type() &&
-             (*right)->is_ora_type()) {
+  } else if (type == ROW_RESULT) {
     /* for udt in Item_func_udt_constructor() or
-      select * from t1 a where a.f1 in (select b.f1 from t1 b)*/
-    type = STRING_RESULT;
-  } else if (type == ROW_RESULT &&
-             ((*left)->is_ora_table() || (*right)->is_ora_table())) {
-    /* for udt in Item_func_udt_table() */
-    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "compare with udt table");
-    return true;
-  } else if (type == ROW_RESULT &&
-             (*left)->is_ora_type() != (*right)->is_ora_type()) {
-    /* for udt in other type */
-    String buf;
-    my_error(ER_WRONG_VALUE, MYF(0), "udt",
-             (*left)->is_ora_type() ? (*right)->item_name.ptr()
-                                    : (*left)->item_name.ptr());
-    return true;
+    select * from t1 a where a.f1 in (select b.f1 from t1 b).
+    Item_row::cols() > 1,so it cannot go into the if condition.*/
+    if ((*left)->cols() == 1 && (*right)->cols() == 1) {
+      Item *real_left = (*left)->element_index(0)->real_item();
+      Item *real_right = (*right)->element_index(0)->real_item();
+      if ((real_left->is_ora_type() && real_right->is_ora_type()) ||
+          (real_left->is_ora_table() && real_right->is_ora_table())) {
+        /* If it's derived table,it may doesn't have db name,so must set default
+         * db to it.*/
+        LEX_STRING left_db = real_left->get_udt_db_name().length == 0
+                                 ? to_lex_string(current_thd->db())
+                                 : real_left->get_udt_db_name();
+        LEX_STRING right_db = real_right->get_udt_db_name().length == 0
+                                  ? to_lex_string(current_thd->db())
+                                  : real_right->get_udt_db_name();
+        // e.g:udt=udt=udt
+        if (!real_left->get_udt_name().str || !real_right->get_udt_name().str) {
+          my_error(ER_UDT_INCONS_DATATYPES, myf(0));
+          return true;
+        }
+        if (my_strcasecmp(system_charset_info, left_db.str, right_db.str) !=
+                0 ||
+            my_strcasecmp(system_charset_info, real_left->get_udt_name().str,
+                          real_right->get_udt_name().str) != 0) {
+          my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), right_db.str,
+                   real_right->get_udt_name().str, left_db.str,
+                   real_left->get_udt_name().str);
+          return true;
+        }
+        type = STRING_RESULT;
+      } else if (real_left->is_ora_table() != real_right->is_ora_table()) {
+        /* for udt in Item_func_udt_table() */
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0), "compare with udt table");
+        return true;
+      } else if (real_left->is_ora_type() != real_right->is_ora_type()) {
+        /* for udt in other type */
+        my_error(ER_UDT_INCONS_DATATYPES, MYF(0));
+        return true;
+      } else if (real_left->is_ora_refcursor() ||
+                 real_right->is_ora_refcursor()) {
+        /* for i in refcursor() */
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0), "compare with ref cursor");
+        return true;
+      }
+    }
   }
 
   THD *thd = current_thd;
@@ -1774,6 +1843,9 @@ int Arg_comparator::compare_string() {
 
 int Arg_comparator::compare_binary_string() {
   String *res1, *res2;
+  ulong udt_format_result = current_thd->variables.udt_format_result;
+  if ((*left)->is_ora_type() || (*right)->is_ora_type())
+    current_thd->variables.udt_format_result = UDT_FORMAT_RESULT_BINARY;
   if ((res1 = (*left)->val_str(&value1))) {
     if ((res2 = (*right)->val_str(&value2))) {
       if (set_null) owner->null_value = false;
@@ -1783,9 +1855,19 @@ int Arg_comparator::compare_binary_string() {
       int cmp =
           min_length == 0 ? 0 : memcmp(res1->ptr(), res2->ptr(), min_length);
       auto rc = cmp ? cmp : (int)(len1 - len2);
+      if ((*left)->is_ora_type() || (*right)->is_ora_type())
+        current_thd->variables.udt_format_result = udt_format_result;
       return rc;
     }
+  } else if (current_thd->variables.sql_mode & MODE_EMPTYSTRING_EQUAL_NULL) {
+    // Add blob is null and empty string comparison
+    if ((res2 = (*right)->val_str(&value2)) && res2->is_empty()) {
+      return 0;
+    }
   }
+  if ((*left)->is_ora_type() || (*right)->is_ora_type())
+    current_thd->variables.udt_format_result = udt_format_result;
+
   if (set_null) owner->null_value = true;
   return -1;
 }
@@ -2759,6 +2841,19 @@ longlong Item_func_strcmp::val_int() {
   int value = sortcmp(a, b, cs);
   null_value = false;
   return value == 0 ? 0 : value < 0 ? -1 : 1;
+}
+
+longlong Item_func_strcmp_strict::val_int() {
+  assert(fixed == 1);
+  String *a = args[0]->val_str(&cmp.value1);
+  String *b = args[1]->val_str(&cmp.value2);
+  if (!a || !b) {
+    null_value = true;
+    return 0;
+  }
+  int value = stringcmp(a, b);
+  null_value = false;
+  return !value ? 0 : (value < 0 ? (longlong)-1 : (longlong)1);
 }
 
 bool Item_func_opt_neg::eq(const Item *item, bool binary_cmp) const {
@@ -4280,6 +4375,172 @@ TYPELIB *Item_func_coalesce::get_typelib() const {
 }
 
 /****************************************************************************
+ Classes and function for the NVL2 operator
+****************************************************************************/
+
+String *Item_func_ora_nvl2::str_op(String *str) {
+  assert(fixed == 1);
+  null_value = false;
+  String *res = args[0]->val_str(str);
+  if (!res || (0 == res->length())) {
+    res = args[2]->val_str(str);
+  } else {
+    res = args[1]->val_str(str);
+  }
+  if (!res || (0 == res->length())) {
+    null_value = true;
+    return nullptr;
+  } else {
+    res->set_charset(collation.collation);
+    return res;
+  }
+}
+
+bool Item_func_ora_nvl2::val_json(Json_wrapper *wr) {
+  assert(fixed == 1);
+  null_value = false;
+  bool has_value;
+  Item *arg;
+  String value_tmp;
+  String *res_tmp = args[0]->val_str(&value_tmp);
+  if (!res_tmp || (0 == res_tmp->length())) {
+    arg = args[2];
+  } else {
+    arg = args[1];
+  }
+  if (current_thd->is_error()) return error_json();
+  bool ok = json_value(arg, wr, &has_value);
+  assert(has_value);
+  null_value = arg->null_value;
+  return ok;
+}
+
+longlong Item_func_ora_nvl2::int_op() {
+  assert(fixed == 1);
+  null_value = false;
+  longlong res;
+  String value_tmp;
+  String *res_tmp = args[0]->val_str(&value_tmp);
+  if (!res_tmp || (0 == res_tmp->length())) {
+    res = args[2]->val_int();
+    if ((null_value = args[2]->null_value)) {
+      return 0;
+    }
+  } else {
+    res = args[1]->val_int();
+    if ((null_value = args[1]->null_value)) {
+      return 0;
+    }
+  }
+  return res;
+}
+
+double Item_func_ora_nvl2::real_op() {
+  assert(fixed == 1);
+  null_value = false;
+  double res;
+  String value_tmp;
+  String *res_tmp = args[0]->val_str(&value_tmp);
+  if (!res_tmp || (0 == res_tmp->length())) {
+    res = args[2]->val_real();
+    if ((null_value = args[2]->null_value)) {
+      return 0.0;
+    }
+  } else {
+    res = args[1]->val_real();
+    if ((null_value = args[1]->null_value)) {
+      return 0.0;
+    }
+  }
+  return res;
+}
+
+my_decimal *Item_func_ora_nvl2::decimal_op(my_decimal *decimal_value) {
+  assert(fixed == 1);
+  null_value = false;
+  my_decimal *res;
+  String value_tmp;
+  String *res_tmp = args[0]->val_str(&value_tmp);
+  if (!res_tmp || (0 == res_tmp->length())) {
+    res = args[2]->val_decimal(decimal_value);
+    if ((null_value = args[2]->null_value)) {
+      return nullptr;
+    }
+  } else {
+    res = args[1]->val_decimal(decimal_value);
+    if ((null_value = args[1]->null_value)) {
+      return nullptr;
+    }
+  }
+  return res;
+}
+
+bool Item_func_ora_nvl2::date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
+  assert(fixed == 1);
+  Item *arg;
+  String value_tmp;
+  String *res_tmp = args[0]->val_str(&value_tmp);
+  if (!res_tmp || (0 == res_tmp->length())) {
+    arg = args[2];
+  } else {
+    arg = args[1];
+  }
+  return (null_value = arg->get_date(ltime, fuzzydate));
+}
+
+bool Item_func_ora_nvl2::time_op(MYSQL_TIME *ltime) {
+  assert(fixed == 1);
+  Item *arg;
+  String value_tmp;
+  String *res_tmp = args[0]->val_str(&value_tmp);
+  if (!res_tmp || (0 == res_tmp->length())) {
+    arg = args[2];
+  } else {
+    arg = args[1];
+  }
+  return (null_value = arg->get_time(ltime));
+}
+
+bool Item_func_ora_nvl2::resolve_type(THD *thd) {
+  // just support three arguments
+  if (param_type_is_default(thd, 0, 1)) return true;
+  if (args[1]->data_type() == MYSQL_TYPE_INVALID &&
+      args[2]->data_type() == MYSQL_TYPE_INVALID)
+    return false;
+
+  return resolve_type_inner(thd);
+}
+
+bool Item_func_ora_nvl2::resolve_type_inner(THD *thd) {
+  args++;
+  arg_count--;
+  if (param_type_uses_non_param(thd)) return true;
+  args--;
+  arg_count++;
+
+  set_nullable(true);
+  aggregate_type(make_array(args + 1, 2));
+  hybrid_type = Field::result_merge_type(data_type());
+
+  if (hybrid_type == STRING_RESULT) {
+    if (aggregate_string_properties(func_name(), args + 1, 2)) return true;
+  } else {
+    aggregate_num_type(hybrid_type, args + 1, 2);
+  }
+  return false;
+}
+Field *Item_func_ora_nvl2::tmp_table_field(TABLE *table) {
+  return tmp_table_field_from_field_type(table, false);
+}
+
+uint Item_func_ora_nvl2::decimal_precision() const {
+  int arg1_prec = args[1]->decimal_int_part();
+  int arg2_prec = args[2]->decimal_int_part();
+  int precision = max(arg1_prec, arg2_prec) + decimals;
+  return min<uint>(precision, DECIMAL_MAX_PRECISION);
+}
+
+/****************************************************************************
  Classes and function for the IN operator
 ****************************************************************************/
 
@@ -4626,10 +4887,16 @@ cmp_item *cmp_item::new_comparator(THD *thd, Item_result result_type,
       return new (*THR_MALLOC) cmp_item_real;
     case ROW_RESULT: {
       Item_field *item_field = dynamic_cast<Item_field *>(item);
-      Field_udt_type *udt =
-          item_field ? dynamic_cast<Field_udt_type *>(item_field->field)
-                     : nullptr;
-      if (udt) return new (*THR_MALLOC) cmp_item_string(cs);
+      /*for next cases:
+      1.udt_column/udt in (udt_column)
+      2.udt_column/udt in (udt() ..)
+      3.udt_column/udt in (null)
+      */
+      if ((item_field && dynamic_cast<Field_udt_type *>(item_field->field)) ||
+          (dynamic_cast<Item_func_udt_constructor *>(item)) ||
+          (item->type() == Item::NULL_ITEM)) {
+        return new (*THR_MALLOC) cmp_item_string(cs);
+      }
       return new (*THR_MALLOC) cmp_item_row(thd, item);
     }
     case DECIMAL_RESULT:
@@ -6074,7 +6341,8 @@ longlong Item_cond_or::val_int() {
 }
 
 void Item_func_isnull::update_used_tables() {
-  if (!args[0]->is_nullable()) {
+  bool has_foj = current_thd->lex->current_query_block()->has_foj();
+  if (!has_foj && !args[0]->is_nullable()) {
     used_tables_cache = 0;
   } else {
     args[0]->update_used_tables();
@@ -6208,7 +6476,7 @@ bool Item_func_isnull::fix_fields(THD *thd, Item **ref) {
         thd->variables.sql_mode & MODE_EMPTYSTRING_EQUAL_NULL &&
         is_string_type(field->type())) {
       Prepared_stmt_arena_holder ps_arena_holder(thd);
-      Item *item0 = new Item_string("", 1, args[0]->collation.collation);
+      Item *item0 = new Item_string("", 0, args[0]->collation.collation);
       if (item0 == nullptr) return true;
       Item *new_cond = new Item_func_eq(args[0], item0);
       if (new_cond == nullptr) return true;
@@ -8077,21 +8345,33 @@ void Item_func_eq::ensure_multi_equality_fields_are_available(
 
 bool Item_func_cursor_found::val_bool() {
   sp_cursor *c = get_open_cursor_or_error();
+  if (!c || !c->is_defined()) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), m_cursor_name.str);
+  }
   return c && c->fetch_count() != 0 && c->found();
 }
 
 longlong Item_func_cursor_found::val_int() {
   sp_cursor *c = get_open_cursor_or_error();
+  if (!c || !c->is_defined()) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), m_cursor_name.str);
+  }
   return !(null_value = (!c || c->fetch_count() == 0)) && c->found();
 }
 
 bool Item_func_cursor_notfound::val_bool() {
   sp_cursor *c = get_open_cursor_or_error();
-  return c && !c->found();
+  if (!c || !c->is_defined()) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), m_cursor_name.str);
+  }
+  return c && c->is_cursor_fetched() && !c->found();
 }
 
 longlong Item_func_cursor_notfound::val_int() {
   sp_cursor *c = get_open_cursor_or_error();
+  if (!c || !c->is_defined()) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), m_cursor_name.str);
+  }
   return !(null_value = (!c || c->fetch_count() == 0)) && !c->found();
 }
 
@@ -8102,51 +8382,26 @@ void Cursor_ref::print_func(String *str, const char *func_name) const {
 
 sp_cursor *Cursor_ref::get_open_cursor_or_error() {
   THD *thd = current_thd;
-  sp_cursor *c = thd->sp_runtime_ctx->get_cursor(m_cursor_offset);
-  assert(c);
-  if (!c /*safety*/ || !c->is_open()) {
-    my_message(ER_SP_CURSOR_NOT_OPEN, ER_THD(thd, ER_SP_CURSOR_NOT_OPEN),
-               MYF(0));
-    return nullptr;
-  }
+  sp_cursor *c = nullptr;
+  if (m_cursor_spv) {
+    Item_field_refcursor *item = dynamic_cast<Item_field_refcursor *>(
+        thd->sp_runtime_ctx->get_item(m_cursor_spv->offset));
+    Field_refcursor *field = item->get_refcursor_field();
+    c = field->m_cursor.get();
+  } else
+    c = thd->sp_runtime_ctx->get_cursor(m_cursor_offset);
   return c;
 }
 
 bool Item_func_cursor_isopen::val_bool() {
   sp_cursor *c = get_open_cursor_or_error();
-  if (!c) return false;
   return c ? c->is_open() : false;
 }
 
 longlong Item_func_cursor_isopen::val_int() {
   sp_cursor *c = get_open_cursor_or_error();
-  if (!c) return 0;
   return c ? c->is_open() : 0;
 }
-
-void Item_func_record_table_found_bool::print(const THD *, String *str,
-                                              enum_query_type) const {
-  Item_splocal *item_sp = dynamic_cast<Item_splocal *>(m_item);
-  str->append(item_sp->m_name.ptr());
-  str->append(func_name());
-  str->append(m_ident_name.str);
-}
-
-bool Item_func_record_table_found_bool::val_bool() {
-  THD *thd = current_thd;
-  Item *item = thd->sp_runtime_ctx->get_item(m_offset);
-  Item_field_row_table *item_table = dynamic_cast<Item_field_row_table *>(item);
-  int32 table_row_count = item_table->field->get_arg_table_count() + 1;
-  if (!m_item->fixed) {
-    if (m_item->fix_fields(thd, &m_item)) {
-      assert(m_item->fixed == true);
-      return false;
-    }
-  }
-  return m_item->val_int() <= table_row_count ? true : false;
-}
-
-longlong Item_func_record_table_found_bool::val_int() { return val_bool(); }
 
 void Item_func_record_table_forall_bool::print(const THD *, String *str,
                                                enum_query_type) const {
@@ -8158,9 +8413,7 @@ void Item_func_record_table_forall_bool::print(const THD *, String *str,
 
 bool Item_func_record_table_forall_bool::val_bool() {
   THD *thd = current_thd;
-  // Item *item = thd->sp_runtime_ctx->get_item(m_offset);
-  // Item_field_row_table *item_table = dynamic_cast<Item_field_row_table
-  // *>(item);
+
   int32 table_row_count = 1;
   if (!m_item->fixed) {
     if (m_item->fix_fields(thd, &m_item)) {
@@ -8172,3 +8425,40 @@ bool Item_func_record_table_forall_bool::val_bool() {
 }
 
 longlong Item_func_record_table_forall_bool::val_int() { return val_bool(); }
+
+bool Item_func_trigger_event_is::val_bool() {
+  bool res = (current_thd->sp_runtime_ctx->sp->m_trg_list->in_event ==
+              (enum enum_trigger_event_type)(args[0]->val_int()));
+  if (res && (current_thd->sp_runtime_ctx->sp->m_trg_list->in_event ==
+                  TRG_EVENT_UPDATE &&
+              (res = !args[1]->null_value))) {
+    StringBuffer<STRING_BUFFER_USUAL_SIZE> original;
+    String *field_name = args[1]->val_str(&original);
+    if (field_name != nullptr &&
+        current_thd->sp_runtime_ctx->sp->save_current_query_block != nullptr) {
+      const char *in_db_name = current_thd->sp_runtime_ctx->sp->m_db.str;
+      const char *in_table_name =
+          current_thd->sp_runtime_ctx->sp->m_trg_list->get_trigger_table()
+              ->s->table_name.str;
+      const char *in_field_name = field_name->ptr();
+      for (Item *fld : VisibleFields(current_thd->sp_runtime_ctx->sp
+                                         ->save_current_query_block->fields)) {
+        if (fld->type() == Item::FIELD_ITEM) {
+          Item_field *const item_field = down_cast<Item_field *>(fld);
+          if (!my_strcasecmp(system_charset_info, item_field->field_name,
+                             in_field_name) &&
+              !my_strcasecmp(system_charset_info,
+                             item_field->field->table->s->table_name.str,
+                             in_table_name) &&
+              !my_strcasecmp(system_charset_info,
+                             item_field->field->table->s->db.str, in_db_name))
+            return res;
+        }
+      }
+    }
+    res = false;
+  }
+  return res;
+}
+
+longlong Item_func_trigger_event_is::val_int() { return val_bool() ? 1 : 0; }

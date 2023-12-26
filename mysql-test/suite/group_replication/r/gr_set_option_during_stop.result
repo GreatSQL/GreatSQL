@@ -45,6 +45,7 @@ WHERE VARIABLE_NAME LIKE 'group_replication_%'
  AND VARIABLE_NAME != 'group_replication_request_time_threshold'
  AND VARIABLE_NAME != 'group_replication_applier_batch_size_threshold'
  AND VARIABLE_NAME != 'group_replication_auto_evict_timeout'
+ AND VARIABLE_NAME != 'group_replication_async_auto_failover_channel_read_only_mode'
  ORDER BY VARIABLE_NAME;
 SET SESSION sql_log_bin = 1;
 SET @value= @@GLOBAL.group_replication_advertise_recovery_endpoints;
@@ -76,6 +77,9 @@ SET @@GLOBAL.group_replication_components_stop_timeout= @value;
 Got one of the listed errors
 SET @value= @@GLOBAL.group_replication_compression_threshold;
 SET @@GLOBAL.group_replication_compression_threshold= @value;
+Got one of the listed errors
+SET @value= @@GLOBAL.group_replication_donor_threshold;
+SET @@GLOBAL.group_replication_donor_threshold= @value;
 Got one of the listed errors
 SET @value= @@GLOBAL.group_replication_enforce_update_everywhere_checks;
 SET @@GLOBAL.group_replication_enforce_update_everywhere_checks= @value;
@@ -204,6 +208,8 @@ SET @value= @@GLOBAL.group_replication_allow_local_lower_version_join;
 SET @@GLOBAL.group_replication_allow_local_lower_version_join= @value;
 SET @value= @@GLOBAL.group_replication_applier_batch_size_threshold;
 SET @@GLOBAL.group_replication_applier_batch_size_threshold= @value;
+SET @value= @@GLOBAL.group_replication_async_auto_failover_channel_read_only_mode;
+SET @@GLOBAL.group_replication_async_auto_failover_channel_read_only_mode= @value;
 SET @value= @@GLOBAL.group_replication_auto_evict_timeout;
 SET @@GLOBAL.group_replication_auto_evict_timeout= @value;
 SET @value= @@GLOBAL.group_replication_bootstrap_group;

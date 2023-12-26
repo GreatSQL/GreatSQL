@@ -182,6 +182,70 @@ bool PTI_comp_op_all::itemize(Parse_context *pc, Item **res) {
   return *res == nullptr;
 }
 
+bool PTI_comp_op_all_any::itemize(Parse_context *pc, Item **res) {
+  if (super::itemize(pc, res) || left->itemize(pc, &left) ||
+      item_list->contextualize(pc))
+    return true;
+
+  auto cmp_func = comp_op(false);
+  if (is_all) {
+    if (cmp_func->eqne_op()) {
+      // <> ALL <=> NOT IN
+      if (comp_op == &comp_ne_creator) {
+        if (item_list->push_front(left)) return true;
+        *res = new (pc->mem_root) Item_func_in(POS(), item_list, true);
+      } else {
+        // = ALL =   xx and xx
+        auto and_list = new (pc->mem_root) Item_cond_and();
+        if (!and_list) return true;
+
+        for (auto i : item_list->value) {
+          auto it = cmp_func->create(left, i);
+          if (!it) return true;
+          and_list->add(it);
+        }
+        *res = and_list;
+      }
+    } else if (cmp_func->l_op()) {
+      // < ALL = < least
+      auto it = new (pc->mem_root) Item_func_min(POS(), item_list);
+      *res = cmp_func->create(left, it);
+    } else {
+      // > ALL = > greatest
+      auto it = new (pc->mem_root) Item_func_max(POS(), item_list);
+      *res = cmp_func->create(left, it);
+    }
+  } else {
+    if (cmp_func->eqne_op()) {
+      //  = ANY <=> IN
+      if (comp_op == &comp_eq_creator) {
+        if (item_list->push_front(left)) return true;
+        *res = new (pc->mem_root) Item_func_in(POS(), item_list, false);
+      } else {
+        // = ANY =   xx or xx
+        auto or_list = new (pc->mem_root) Item_cond_or();
+        if (!or_list) return true;
+
+        for (auto i : item_list->value) {
+          auto it = cmp_func->create(left, i);
+          if (!it) return true;
+          or_list->add(it);
+        }
+        *res = or_list;
+      }
+    } else if (cmp_func->l_op()) {
+      // < ANY = < greatest
+      auto it = new (pc->mem_root) Item_func_max(POS(), item_list);
+      *res = cmp_func->create(left, it);
+    } else {
+      // > ANY = > least
+      auto it = new (pc->mem_root) Item_func_min(POS(), item_list);
+      *res = cmp_func->create(left, it);
+    }
+  }
+  return *res == nullptr;
+}
+
 bool PTI_function_call_nonkeyword_sysdate::itemize(Parse_context *pc,
                                                    Item **res) {
   if (super::itemize(pc, res)) return true;
@@ -204,6 +268,19 @@ bool PTI_function_call_nonkeyword_sysdate::itemize(Parse_context *pc,
     *res = new (pc->mem_root) Item_func_now_local(dec);
   if (*res == nullptr) return true;
   lex->safe_to_cache_query = false;
+
+  return false;
+}
+
+bool PTI_function_call_nonkeyword_trigger_event_is::itemize(Parse_context *pc,
+                                                            Item **res) {
+  if (!m_column) m_column = new (pc->mem_root) Item_null();
+  if (super::itemize(pc, res) || m_column->itemize(pc, &m_column)) return true;
+
+  *res = new (pc->mem_root)
+      Item_func_trigger_event_is(POS(), m_event_type, m_column);
+
+  if (*res == nullptr) return true;
 
   return false;
 }
@@ -410,13 +487,23 @@ bool PTI_simple_ident_ident::itemize(Parse_context *pc, Item **res) {
   } else {
     if ((pc->select->parsing_place != CTX_HAVING) ||
         (pc->select->get_in_sum_expr() > 0)) {
-      *res = new (pc->mem_root) Item_field(POS(), NullS, NullS, ident.str);
+      if (pc->select->has_connect_by && ident.length == 5 &&
+          strncasecmp(ident.str, "level", 5) == 0) {
+        *res = new (pc->mem_root) Item_connect_by_func_level(POS());
+      } else
+        *res = new (pc->mem_root) Item_field(POS(), NullS, NullS, ident.str);
     } else {
       *res = new (pc->mem_root) Item_ref(POS(), NullS, NullS, ident.str);
     }
     if (*res == nullptr || (*res)->itemize(pc, res)) return true;
   }
   if (this->outer_joined) {
+    if (pc->select->parsing_place == CTX_CONNECT_BY) {
+      my_error(ER_OUTER_JOIN_INVALID, MYF(0),
+               "outer join operator (+) not allowed in operand of connect by");
+      return true;
+    }
+
     (*res)->outer_joined = true;
     pc->select->has_joined_item = true;
   }
@@ -448,14 +535,28 @@ bool PTI_simple_ident_q_3d::itemize(Parse_context *pc, Item **res) {
     }
     if (*res == nullptr) return true;
     if (this->outer_joined) {
+      if (pc->select->parsing_place == CTX_CONNECT_BY) {
+        my_error(
+            ER_OUTER_JOIN_INVALID, MYF(0),
+            "outer join operator (+) not allowed in operand of connect by");
+        return true;
+      }
       (*res)->outer_joined = true;
       pc->select->has_joined_item = true;
     }
   } else {
+    /* We're compiling a stored procedure and found a variable */
+    if (!thd->lex->parsing_options.allows_variable) {
+      my_error(ER_VIEW_SELECT_VARIABLE, MYF(0));
+      return true;
+    }
     // for record type
-    if (spv->field_def.is_row_table() || spv->field_def.is_row() ||
+    if (spv->field_def.ora_record.is_row_table() ||
+        spv->field_def.ora_record.is_row() ||
         // FOR rec IN c_country(10),rec.name.id is allowed.
-        spv->field_def.m_cursor_rowtype_ref) {
+        spv->field_def.ora_record.m_cursor_rowtype_ref ||
+        spv->field_def.ora_record.is_column_type_ref() ||
+        spv->field_def.ora_record.is_table_rowtype_ref()) {
       List<ora_simple_ident_def> *def_list =
           new (thd->mem_root) List<ora_simple_ident_def>;
       ora_simple_ident_def *def = new (thd->mem_root)
@@ -507,8 +608,13 @@ bool PTI_simple_ident_q_2d::itemize(Parse_context *pc, Item **res) {
       return true;
     }
 
-    assert(!new_row || (sp->m_trg_chistics.event == TRG_EVENT_INSERT ||
-                        sp->m_trg_chistics.event == TRG_EVENT_UPDATE));
+    assert(!new_row ||
+           (sp->m_trg_chistics.event == TRG_EVENT_INSERT ||
+            sp->m_trg_chistics.event == TRG_EVENT_UPDATE ||
+            sp->m_trg_chistics.event == TRG_EVENT_INSERT_UPDATE ||
+            sp->m_trg_chistics.event == TRG_EVENT_INSERT_DELETE ||
+            sp->m_trg_chistics.event == TRG_EVENT_UPDATE_DELETE ||
+            sp->m_trg_chistics.event == TRG_EVENT_INSERT_UPDATE_DELETE));
     const bool read_only =
         !(new_row && sp->m_trg_chistics.action_time == TRG_ACTION_BEFORE);
     Item_trigger_field *trg_fld = new (pc->mem_root)
@@ -528,12 +634,30 @@ bool PTI_simple_ident_q_2d::itemize(Parse_context *pc, Item **res) {
     *res = trg_fld;
   } else if ((spv = lex->find_variable(table, table_length, &rh)) &&
              (thd->variables.sql_mode & MODE_ORACLE)) {
-    if (spv->field_def.is_cursor_rowtype_ref() ||
-        spv->field_def.is_table_rowtype_ref() || spv->field_def.is_row()) {
-      if (spv->field_def.is_record_define) {
-        my_error(ER_SP_MISMATCH_USE_OF_RECORD_VAR, MYF(0), spv->name.str);
+    if (spv->field_def.ora_record.is_record_define) {
+      my_error(ER_SP_MISMATCH_USE_OF_RECORD_VAR, MYF(0), spv->name.str);
+      return true;
+    }
+    /* We're compiling a stored procedure and found a variable */
+    if (!lex->parsing_options.allows_variable) {
+      my_error(ER_VIEW_SELECT_VARIABLE, MYF(0));
+      return true;
+    }
+    if (spv->field_def.ora_record.is_row_table()) {
+      if (my_strcasecmp(system_charset_info, field, "count") == 0) {
+        *res = new (thd->mem_root) Item_func_table_count(POS(), spv->offset);
+      } else if (my_strcasecmp(system_charset_info, field, "first") == 0) {
+        *res = new (thd->mem_root) Item_func_table_first(POS(), spv->offset);
+      } else if (my_strcasecmp(system_charset_info, field, "last") == 0) {
+        *res = new (thd->mem_root) Item_func_table_last(POS(), spv->offset);
+      } else {
+        my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), spv->name.str);
         return true;
       }
+    } else if (spv->field_def.ora_record.is_cursor_rowtype_ref() ||
+               spv->field_def.ora_record.is_table_rowtype_ref() ||
+               spv->field_def.ora_record.is_row() ||
+               spv->field_def.ora_record.is_column_type_ref()) {
       *res = create_item_for_sp_var_row_field(
           thd, to_lex_cstring(table), field, rh, spv,
           sp->m_parser_data.get_current_stmt_start_ptr(), raw.start, raw.end);
@@ -561,19 +685,28 @@ bool PTI_simple_ident_q_nd::itemize(Parse_context *pc, Item **res) {
   if (!def_first) return true;
   if ((spv = thd->lex->find_variable(def_first->ident.str,
                                      def_first->ident.length, &pctx, &rh))) {
-    if (!spv->field_def.is_row_table() && !spv->field_def.is_row()) {
+    if (!spv->field_def.ora_record.is_row_table() &&
+        !spv->field_def.ora_record.is_row()) {
       // bugfix:rec int;select rec(0).s1;
       my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), def_first->ident.str);
       return true;
     }
-    if (spv->field_def.is_record_define ||
-        spv->field_def.is_record_table_define) {
+    if (spv->field_def.ora_record.is_record_define ||
+        spv->field_def.ora_record.is_record_table_define) {
       my_error(ER_SP_MISMATCH_USE_OF_RECORD_VAR, MYF(0), def_first->ident.str);
+      return true;
+    }
+    /* We're compiling a stored procedure and found a variable */
+    if (!lex->parsing_options.allows_variable) {
+      my_error(ER_VIEW_SELECT_VARIABLE, MYF(0));
       return true;
     }
     *res = create_item_for_sp_var_row_field_table(
         thd, field, rh, list_arg, spv, def_first->number, pctx,
         sp->m_parser_data.get_current_stmt_start_ptr(), raw.start, raw.end);
+  } else {
+    my_error(ER_SP_UNDECLARED_VAR, MYF(0), def_first->ident.str);
+    return true;
   }
 
   return false;
@@ -589,7 +722,8 @@ bool PTI_simple_ident_q_for_loop::itemize(Parse_context *pc, Item **res) {
   // for i in var.first .. var.last loop,it's var(i).col
   if ((spv = thd->lex->find_variable(m_sp_ident->name.str,
                                      m_sp_ident->name.length, &pctx, &rh))) {
-    if (!spv->field_def.is_row_table() && !spv->field_def.is_row()) {
+    if (!spv->field_def.ora_record.is_row_table() &&
+        !spv->field_def.ora_record.is_row()) {
       // bugfix:rec int;select rec(0).s1;
       my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), m_sp_ident->name.str);
       return true;
@@ -841,6 +975,22 @@ bool PTI_context::itemize(Parse_context *pc, Item **res) {
   pc->select->parsing_place = CTX_NONE;
   assert(expr != nullptr);
   expr->apply_is_true();
+
+  *res = expr;
+  return false;
+}
+
+bool PTI_start_with::itemize(Parse_context *pc, Item **res) {
+  if (super::itemize(pc, res)) return true;
+
+  pc->select->parsing_place = CTX_START_WITH;
+
+  if (expr->itemize(pc, &expr)) return true;
+
+  // Ensure we're resetting parsing place of the right select
+  assert(pc->select->parsing_place == CTX_START_WITH);
+  pc->select->parsing_place = CTX_NONE;
+  assert(expr != nullptr);
 
   *res = expr;
   return false;

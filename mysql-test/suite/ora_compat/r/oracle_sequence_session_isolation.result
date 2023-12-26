@@ -1,0 +1,55 @@
+[session_isolation: connection conn1_1]
+create sequence seq;
+select seq.currval;
+ERROR HY000: read sequence value failed, cause currval is not yet defined in this session
+select seq.nextval;
+nextval
+1
+select seq.nextval;
+nextval
+2
+select seq.currval;
+currval
+2
+[session_isolation: connection conn1_2]
+select seq.currval;
+ERROR HY000: read sequence value failed, cause currval is not yet defined in this session
+select seq.nextval;
+nextval
+3
+select seq.currval;
+currval
+3
+[drop_and_recreate: connection conn1_1]
+drop sequence seq;
+create sequence seq;
+[drop_and_recreate: connection conn1_2]
+select seq.currval;
+ERROR HY000: read sequence value failed, cause currval is not yet defined in this session
+select seq.nextval;
+nextval
+1
+[alter: connection conn1_1]
+select seq.nextval;
+nextval
+2
+alter sequence seq increment by 5;
+select seq.currval;
+currval
+2
+select seq.nextval;
+nextval
+25
+[alter: connection conn1_2]
+select seq.currval;
+currval
+1
+select seq.nextval;
+nextval
+30
+select seq.currval;
+currval
+30
+[cleanup seq: connection conn1_]
+drop sequence seq;
+[finalize]

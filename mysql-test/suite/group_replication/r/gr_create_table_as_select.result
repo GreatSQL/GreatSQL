@@ -51,4 +51,42 @@ DROP TABLE t2;
 DROP TABLE t3;
 DROP TABLE t4;
 DROP TABLE t5;
+
+############################################################
+# add for case: before_dml do not constraint read-only table
+set sql_log_bin = off;
+create table t1 (c1 int primary key, c2 int) engine=myisam;
+insert into t1 values (1,1);
+create table t2 (c1 int, c2 int) engine=innodb;
+insert into t2 values (2,2);
+set sql_log_bin = on;
+create table t3 (c1 int primary key, c2 int) select * from t1;
+create table t4 select * from t2;
+ERROR HY000: The table does not comply with the requirements by an external plugin.
+create table t4 (c1 int primary key, c2 int);
+insert into t4 select * from t1;
+insert into t4 select * from t2;
+select * from t4;
+c1	c2
+1	1
+2	2
+delete from t4 where t4.c1 = (select c1 from t1);
+delete from t4 where t4.c1 = (select c1 from t2);
+select * from t4;
+c1	c2
+create table t5 (c1 int primary key, c2 int);
+insert into t5 values (1, 5);
+update t1,t5 set t5.c2 = t5.c2+1 where t1.c1 = t5.c1;
+update t2,t5 set t5.c2 = t5.c2+1 where t2.c1 = t5.c1 + 1;
+select * from t5;
+c1	c2
+1	7
+
+set sql_log_bin = off;
+drop table t1;
+drop table t2;
+set sql_log_bin = on;
+drop table t3;
+drop table t4;
+drop table t5;
 include/group_replication_end.inc

@@ -1,0 +1,1606 @@
+SET sql_mode=ORACLE;
+show variables like '%udt_format_result%';
+Variable_name	Value
+udt_format_result	BINARY
+set @@udt_format_result='DBA';
+#
+# test of create type
+#
+create or replace type t_air as object(id int,type varchar(20));
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+create table tt_air(id int,name1 t_air);
+insert into tt_air values(1,t_air(10,'aabb'));
+insert into tt_air values(2,t_air(20,'qwed'));
+#
+# test of type is table of type
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist;
+id int := 1;
+begin
+stu_record_val(id) := 1;
+stu_record_val(3) := 1;
+select stu_record_val(id), stu_record_val(3);
+SELECT stu_record_val.count;
+end;
+$$
+call p1;
+ERROR HY000: Reference to uninitialized composite
+drop PROCEDURE p1;
+#
+# test of type is table of type
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist := tklist();
+id int := 1;
+begin
+stu_record_val(id) := 1;
+stu_record_val(3) := 1;
+select stu_record_val(id), stu_record_val(3);
+SELECT stu_record_val.count;
+end;
+$$
+call p1;
+ERROR HY000: Subscript outside of limit/count
+drop PROCEDURE p1;
+#
+# test of type is table of type
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist := tklist(1=>'aa');
+id int := 1;
+begin
+end;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'the sp variable used like the style e.g: var(a,b..),1=>var()..'
+#
+# test of type is table of type
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist := tklist('aa');
+id int := 1;
+begin
+select stu_record_val(id);
+stu_record_val(id) := 1;
+select stu_record_val(id);
+stu_record_val(3) := 1;
+end;
+$$
+call p1;
+stu_record_val(id)
+aa
+stu_record_val(id)
+1
+ERROR HY000: Subscript outside of limit/count
+drop PROCEDURE p1;
+#
+# test of type is table of type
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist := tklist('aa','bb','cc');
+id int := 1;
+begin
+select stu_record_val(id);
+stu_record_val(id) := 1;
+select stu_record_val(id);
+stu_record_val(3) := 1;
+select stu_record_val(id), stu_record_val(3);
+SELECT stu_record_val.count;
+end;
+$$
+show procedure code p1;
+Pos	Instruction
+0	set stu_record_val@1 tklist('aa','bb','cc')
+1	set id@2 1
+2	stmt "select stu_record_val(id)"
+3	set_record_table stu_record_val(id) 1
+4	stmt "select stu_record_val(id)"
+5	set_record_table stu_record_val(3) 1
+6	stmt "select stu_record_val(id), stu_record..."
+7	stmt "SELECT stu_record_val.count"
+call p1;
+stu_record_val(id)
+aa
+stu_record_val(id)
+1
+stu_record_val(id)	stu_record_val(3)
+1	1
+stu_record_val.count
+3
+drop PROCEDURE p1;
+#
+# test of type is table of type without index and bulk into
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist;
+id int := 1;
+begin
+select * bulk collect into stu_record_val from sequence_table(5) a;
+for i in stu_record_val.first .. stu_record_val.last loop
+select stu_record_val(i);
+end loop;
+stu_record_val(2) := 12;
+select stu_record_val(2);
+end;
+$$
+call p1;
+stu_record_val(i)
+0
+stu_record_val(i)
+1
+stu_record_val(i)
+2
+stu_record_val(i)
+3
+stu_record_val(i)
+4
+stu_record_val(2)
+12
+drop PROCEDURE p1;
+#
+# test of type is table of type index by BINARY_INTEGER
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by BINARY_INTEGER;
+stu_record_val tklist;
+id int := 1;
+begin
+stu_record_val(id) := 1;
+stu_record_val(3) := 1;
+select stu_record_val(id), stu_record_val(3);
+SELECT stu_record_val.count;
+end;
+$$
+call p1;
+stu_record_val(id)	stu_record_val(3)
+1	1
+stu_record_val.count
+2
+drop PROCEDURE p1;
+#
+# test of type is table of type index by BINARY_INTEGER
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by BINARY_INTEGER;
+stu_record_val tklist;
+id VARCHAR(3) := 'aaa';
+begin
+stu_record_val(id) := 1;
+select stu_record_val(id);
+end;
+$$
+call p1;
+ERROR HY000: Incorrect parameter 'aaa' to type table variable.
+drop PROCEDURE p1;
+#
+# test of type is table of type index by VARCHAR_SYM
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by VARCHAR(32768);
+stu_record_val tklist;
+begin
+stu_record_val(34000) := 1;
+select stu_record_val(34000);
+end;
+$$
+ERROR 42000: Column length too big for column '[index_column]' (max = 16383); use BLOB or TEXT instead
+#
+# test of type is table of type index by VARCHAR_SYM
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by VARCHAR(2);
+stu_record_val tklist;
+id VARCHAR(3) := 'aaa';
+begin
+stu_record_val(id) := 1;
+select stu_record_val(id);
+SELECT stu_record_val.count;
+end;
+$$
+call p1;
+ERROR HY000: Incorrect parameter 'aaa' to type table variable.
+drop PROCEDURE p1;
+#
+# test of type is table of type index by VARCHAR_SYM
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by VARCHAR(20);
+stu_record_val tklist;
+id VARCHAR(3) := 'aaa';
+begin
+stu_record_val(id) := 10;
+stu_record_val(1) := 1;
+select stu_record_val(id), stu_record_val(1);
+SELECT stu_record_val.count,stu_record_val.count+1;
+end;
+$$
+call p1;
+stu_record_val(id)	stu_record_val(1)
+10	1
+stu_record_val.count	stu_record_val.count+1
+2	3
+drop PROCEDURE p1;
+#
+# test of type is table of type index by VARCHAR_SYM
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by VARCHAR(20);
+stu_record_val tklist;
+id VARCHAR(3) := 'aaa';
+begin
+stu_record_val(id) := 10;
+select stu_record_val(id);
+stu_record_val(id) := 20;
+select stu_record_val(id);
+end;
+$$
+call p1;
+stu_record_val(id)
+10
+stu_record_val(id)
+20
+drop PROCEDURE p1;
+#
+# test of error ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by VARCHAR(20);
+stu_record_val tklist;
+id VARCHAR(3) := 'aaa';
+begin
+stu_record_val(id) := 10;
+select stu_record_val(id);
+select stu_record_val(id).col;
+end;
+$$
+call p1;
+stu_record_val(id)
+10
+ERROR HY000: Row variable 'stu_record_val' does not have a field 'col'
+drop PROCEDURE p1;
+#
+# test of select into
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by VARCHAR(20);
+stu_record_val tklist;
+id varchar(30);
+begin
+stu_record_val(1) := 'aa';
+stu_record_val(3) := 'bb';
+select stu_record_val(3) into id;
+select id;
+stu_record_val(2) := stu_record_val(1);
+select stu_record_val(2);
+end;
+$$
+call p1;
+id
+bb
+stu_record_val(2)
+aa
+drop PROCEDURE p1;
+#
+# test of table(i) := table(i)
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by VARCHAR(20);
+stu_record_val tklist;
+begin
+stu_record_val(2) := stu_record_val(2);
+select stu_record_val(2);
+end;
+$$
+call p1;
+ERROR HY000: The data of record table variable: stu_record_val does not exist.
+drop PROCEDURE p1;
+#
+# test of table(i) || table(i)
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by VARCHAR(20);
+stu_record_val tklist;
+id varchar(30);
+begin
+stu_record_val(1) := 'aa';
+stu_record_val(2) := 'bb';
+id := stu_record_val(1) || stu_record_val(2) || stu_record_val(1);
+select id;
+end;
+$$
+call p1;
+id
+aabbaa
+drop PROCEDURE p1;
+#
+# test of type is table of without index
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record;
+stu_record_val tklist;
+stu_record_val1 stu_record;
+begin
+stu_record_val(1).id := 10;
+stu_record_val(2).id := 20;
+end;
+$$
+call p1;
+ERROR HY000: Reference to uninitialized composite
+drop PROCEDURE p1;
+#
+# test of type is table of without index
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record;
+stu_record_val tklist := tklist(stu_record(11,'aa',1.1));
+stu_record_val1 stu_record;
+begin
+stu_record_val(1).id := 10;
+select stu_record_val(1);
+stu_record_val(2).id := 20;
+end;
+$$
+call p1;
+stu_record_val(1)
+id:10 | name_d:aa | score:1.1
+ERROR HY000: Subscript outside of limit/count
+drop PROCEDURE p1;
+#
+# test of type is table of with index
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record index by PLS_INTEGER;
+stu_record_val tklist := tklist(stu_record(11,'aa',1.1));
+stu_record_val1 stu_record;
+begin
+stu_record_val(1).id := 10;
+select stu_record_val(1);
+stu_record_val(2).id := 20;
+select stu_record_val(2);
+end;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'the sp variable used like the style e.g: var(a,b..),1=>var()..'
+#
+# test of type is table of with index
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record index by PLS_INTEGER;
+stu_record_val tklist := tklist(2=>stu_record(11,'aa',1.1));
+stu_record_val1 stu_record;
+begin
+stu_record_val(1).id := 10;
+select stu_record_val(1),stu_record_val(2);
+stu_record_val(2).id := 20;
+select stu_record_val(2);
+end;
+$$
+call p1;
+stu_record_val(1)	stu_record_val(2)
+id:10 | name_d:a | score:0	id:11 | name_d:aa | score:1.1
+stu_record_val(2)
+id:20 | name_d:aa | score:1.1
+drop PROCEDURE p1;
+#
+# test of type is table of without index
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record;
+stu_record_val tklist := tklist(stu_record(11,'aa',1.1),null);
+stu_record_val1 stu_record;
+begin
+stu_record_val(1).id := 10;
+stu_record_val(2).id := 20;
+stu_record_val1 := stu_record_val(2);
+select stu_record_val(1),stu_record_val1;
+SELECT stu_record_val.count ;
+stu_record_val(2).id := 30;
+select stu_record_val(2),stu_record_val(1);
+end;
+$$
+call p1;
+stu_record_val(1)	stu_record_val1
+id:10 | name_d:aa | score:1.1	id:20 | name_d:NULL | score:NULL
+stu_record_val.count
+2
+stu_record_val(2)	stu_record_val(1)
+id:30 | name_d:NULL | score:NULL	id:10 | name_d:aa | score:1.1
+drop PROCEDURE p1;
+#
+# test of type is table of without index ans bulk into
+#
+create table stu_record_table (id int,name_d  varchar(20),score float);
+insert into stu_record_table values(1,'aa',1.1),(2,'bb',2.2);
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record;
+stu_record_val tklist;
+begin
+select * bulk collect into stu_record_val from stu_record_table;
+for i in stu_record_val.first .. stu_record_val.last loop
+select stu_record_val(i);
+end loop;
+stu_record_val(3).id := 1;
+end;
+$$
+call p1;
+stu_record_val(i)
+id:1 | name_d:aa | score:1.1
+stu_record_val(i)
+id:2 | name_d:bb | score:2.2
+ERROR HY000: Subscript outside of limit/count
+drop PROCEDURE p1;
+#
+# test of type is table of table%rowtype without index
+#
+CREATE or replace PROCEDURE p1() as
+TYPE tklist IS TABLE OF tt_air%ROWTYPE; 
+stu_record_val tklist := tklist();
+begin
+stu_record_val(1).id := 10;
+stu_record_val(2).id := 20;
+end;
+$$
+call p1;
+ERROR HY000: Subscript outside of limit/count
+drop PROCEDURE p1;
+#
+# test of type is table of table%rowtype without index
+#
+CREATE or replace PROCEDURE p1() as
+TYPE tklist IS TABLE OF tt_air%ROWTYPE; 
+stu_record_val tklist := tklist(null);
+begin
+stu_record_val(1).id := 10;
+select stu_record_val(1);
+stu_record_val(2).id := 20;
+end;
+$$
+call p1;
+stu_record_val(1)
+id:10 | name1:NULL
+ERROR HY000: Subscript outside of limit/count
+drop PROCEDURE p1;
+#
+# test of type is table of table%rowtype without index
+#
+CREATE or replace PROCEDURE p1() as
+TYPE tklist IS TABLE OF tt_air%ROWTYPE; 
+stu_record_val tklist;
+begin
+stu_record_val(1).id := 10;
+end;
+$$
+call p1;
+ERROR HY000: Reference to uninitialized composite
+drop PROCEDURE p1;
+#
+# test of type is table of table%rowtype without index
+#
+CREATE or replace PROCEDURE p1() as
+TYPE tklist IS TABLE OF stu_record_table%ROWTYPE; 
+stu_record_val tklist;
+begin
+select * bulk collect into stu_record_val from stu_record_table;
+for i in stu_record_val.first .. stu_record_val.last loop
+select stu_record_val(i);
+end loop;
+stu_record_val(3).id := 1;
+end;
+$$
+call p1;
+stu_record_val(i)
+id:1 | name_d:aa | score:1.1
+stu_record_val(i)
+id:2 | name_d:bb | score:2.2
+ERROR HY000: Subscript outside of limit/count
+drop PROCEDURE p1;
+drop table stu_record_table;
+#
+# test of record := record_table(row)
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+stu_record_val1 stu_record;
+begin
+stu_record_val(1).id := 10;
+stu_record_val(2).id := 20;
+stu_record_val1 := stu_record_val(2);
+select stu_record_val(1),stu_record_val1;
+SELECT stu_record_val.count ;
+stu_record_val(2).id := 30;
+select stu_record_val(2),stu_record_val(1);
+end;
+$$
+call p1;
+stu_record_val(1)	stu_record_val1
+id:10 | name_d:a | score:0	id:20 | name_d:a | score:0
+stu_record_val.count
+2
+stu_record_val(2)	stu_record_val(1)
+id:30 | name_d:a | score:0	id:10 | name_d:a | score:0
+drop PROCEDURE p1;
+#
+# test of record := record_table(row)
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+type stu_record1 is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+stu_record_val1 stu_record1;
+begin
+stu_record_val(1).id := 10;
+stu_record_val(2).id := 20;
+stu_record_val1 := stu_record_val(2);
+end;
+$$
+call p1;
+ERROR HY000: inconsistent datatypes: expected 'test'.'stu_record1' got 'test'.'stu_record'
+drop PROCEDURE p1;
+#
+# test of record_table(row) := record
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+stu_record_val1 stu_record;
+begin
+stu_record_val1 := stu_record(10,'bb',0.2);
+stu_record_val(1) := stu_record_val1;
+select stu_record_val(1);
+end;
+$$
+show procedure code p1;
+Pos	Instruction
+0	set stu_record.id@0[0] 1
+1	set stu_record.name_d@0[1] 'a'
+2	set stu_record.score@0[2] 0
+3	set stu_record_val@2 tklist@1
+4	set stu_record_val1@3 stu_record@0
+5	set stu_record_val1@3 stu_record(10,'bb',0.2)
+6	set_record_table stu_record_val(1) stu_record_val1@3
+7	stmt "select stu_record_val(1)"
+call p1;
+stu_record_val(1)
+id:10 | name_d:bb | score:0.2
+drop PROCEDURE p1;
+#
+# test of record_table(row) := record
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+type stu_record1 is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+stu_record_val1 stu_record1;
+begin
+stu_record_val1 := stu_record1(10,'bb',0.2);
+stu_record_val(1) := stu_record_val1;
+select stu_record_val(1);
+end;
+$$
+call p1;
+ERROR HY000: inconsistent datatypes: expected 'test'.'stu_record1' got 'test'.'stu_record'
+drop PROCEDURE p1;
+#
+# test of record_table(row) := record()
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+stu_record_val1 stu_record;
+begin
+stu_record_val1 := stu_record(10,'bb',0.2);
+stu_record_val(1) := stu_record_val1;
+select stu_record_val(1);
+stu_record_val(1) := stu_record(20,'bb20',0.32);
+select stu_record_val(1);
+end;
+$$
+call p1;
+stu_record_val(1)
+id:10 | name_d:bb | score:0.2
+stu_record_val(1)
+id:20 | name_d:bb20 | score:0.32
+drop PROCEDURE p1;
+#
+# test of record_table(row) := record()
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+stu_record_val1 stu_record;
+type stu_record1 is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+begin
+stu_record_val(1) := stu_record1(20,'bb20',0.32);
+select stu_record_val(1);
+end;
+$$
+call p1;
+ERROR HY000: inconsistent datatypes: expected 'test'.'stu_record1' got 'test'.'stu_record'
+drop PROCEDURE p1;
+#
+# test of record_table(row) := record()
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) INDEX BY VARCHAR2(30);
+arg_array tklist;
+type stu_record is record(
+param_name varchar(20) := 'id',
+param_value  varchar(20) := 'aa'
+);
+type tklist1 is table of stu_record INDEX BY pls_integer;
+param_array tklist1;
+name varchar(10) := 'a';
+begin
+param_array(1) := stu_record(name,'aa10');
+param_array(2) := stu_record('b','bb20');
+FOR i IN 1 .. param_array.COUNT LOOP
+arg_array(param_array(i).param_name) := param_array(i).param_value;
+select arg_array(param_array(i).param_name);
+end loop;
+end;
+$$
+call p1;
+arg_array(param_array(i).param_name)
+aa10
+arg_array(param_array(i).param_name)
+bb20
+drop PROCEDURE p1;
+#
+# test of record_table(row) := record_table(row)
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+stu_record_val1 tklist;
+begin
+stu_record_val(1).id := 10;
+select stu_record_val;
+stu_record_val(2).id := 20;
+stu_record_val(3).name_d := 'b3';
+stu_record_val(4) := stu_record_val(2);
+select stu_record_val(1),stu_record_val(2),stu_record_val(3),stu_record_val(4),stu_record_val;
+SELECT stu_record_val.count ;
+stu_record_val1(2) := stu_record_val(2);
+select stu_record_val1(2);
+select stu_record_val(1).id,stu_record_val(2).id,stu_record_val(3).id,stu_record_val(4).id,stu_record_val;
+end;
+$$
+call p1;
+stu_record_val
+tklist(stu_record(10,a,0))
+stu_record_val(1)	stu_record_val(2)	stu_record_val(3)	stu_record_val(4)	stu_record_val
+id:10 | name_d:a | score:0	id:20 | name_d:a | score:0	id:1 | name_d:b3 | score:0	id:20 | name_d:a | score:0	tklist(stu_record(10,a,0),stu_record(20,a,0),stu_record(1,b3,0),stu_record(20,a,0))
+stu_record_val.count
+4
+stu_record_val1(2)
+id:20 | name_d:a | score:0
+stu_record_val(1).id	stu_record_val(2).id	stu_record_val(3).id	stu_record_val(4).id	stu_record_val
+10	20	1	20	tklist(stu_record(10,a,0),stu_record(20,a,0),stu_record(1,b3,0),stu_record(20,a,0))
+drop PROCEDURE p1;
+#
+# test of record_table(row) := record_table(row)
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+stu_record_val(2) := stu_record_val(2);
+select stu_record_val(2);
+end;
+$$
+call p1;
+ERROR HY000: The data of record table variable: stu_record_val does not exist.
+drop PROCEDURE p1;
+#
+# test of record_table(row) := record_table
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+stu_record_val(2) := stu_record_val;
+select stu_record_val(2);
+end;
+$$
+call p1;
+ERROR 42000: This version of MySQL doesn't yet support 'table object saves to non-table object.'
+drop PROCEDURE p1;
+#
+# test of record_table(row) := null
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+stu_record_val(1).id := 10;
+stu_record_val(2).id := 20;
+stu_record_val(3) := null;
+stu_record_val(4) := stu_record(40,'bb',3.1);
+select stu_record_val(1),stu_record_val(2),stu_record_val(3),stu_record_val(4);
+stu_record_val(3).id := 30;
+select stu_record_val(1),stu_record_val(2),stu_record_val(3),stu_record_val(4);
+end;
+$$
+call p1;
+stu_record_val(1)	stu_record_val(2)	stu_record_val(3)	stu_record_val(4)
+id:10 | name_d:a | score:0	id:20 | name_d:a | score:0	id:NULL | name_d:NULL | score:NULL	id:40 | name_d:bb | score:3.1
+stu_record_val(1)	stu_record_val(2)	stu_record_val(3)	stu_record_val(4)
+id:10 | name_d:a | score:0	id:20 | name_d:a | score:0	id:30 | name_d:NULL | score:NULL	id:40 | name_d:bb | score:3.1
+drop PROCEDURE p1;
+#
+# test of record_table(row) := null
+#
+CREATE or replace PROCEDURE p1() as
+stu_record_val t_air_table := t_air_table(1=>t_air(1,'bb'));
+begin
+select stu_record_val(1),stu_record_val(1).id,stu_record_val(1).type;
+stu_record_val(1) := null;
+select stu_record_val(1),stu_record_val(1).id,stu_record_val(1).type;
+end;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'the params of udt table like the style e.g: 1=>variable'
+#
+# test of record_table(row) := null
+#
+CREATE or replace PROCEDURE p1() as
+stu_record_val t_air_table := t_air_table(t_air(1,'bb'));
+begin
+select stu_record_val(1),stu_record_val(1).id,stu_record_val(1).type;
+stu_record_val(1) := null;
+select stu_record_val(1),stu_record_val(1).id,stu_record_val(1).type;
+end;
+$$
+call p1;
+stu_record_val(1)	stu_record_val(1).id	stu_record_val(1).type
+id:1 | type:bb	1	bb
+stu_record_val(1)	stu_record_val(1).id	stu_record_val(1).type
+id:NULL | type:NULL	NULL	NULL
+drop PROCEDURE p1;
+#
+# test of record_table(row) := null
+#
+CREATE or replace PROCEDURE p1() as
+stu_record_val t_air_table := t_air_table(t_air(1,'bb'));
+begin
+select stu_record_val(1),stu_record_val(1).id,stu_record_val(1).type;
+stu_record_val(1) := null;
+stu_record_val(2) := null;
+end;
+$$
+call p1;
+stu_record_val(1)	stu_record_val(1).id	stu_record_val(1).type
+id:1 | type:bb	1	bb
+ERROR HY000: Reference to uninitialized composite
+drop PROCEDURE p1;
+#
+# test of select record_table(row) into record
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+stu_record_val1 stu_record;
+begin
+stu_record_val(2) := stu_record(10,'bb',2.0);
+select stu_record_val(2) into stu_record_val1;
+select stu_record_val1;
+end;
+$$
+call p1;
+stu_record_val1
+id:10 | name_d:bb | score:2
+drop PROCEDURE p1;
+#
+# test of BULK COLLECT into
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by VARCHAR2(30);
+dr_table dr_type;
+begin
+select * BULK COLLECT into dr_table from tt_air;
+for i IN 1 .. dr_table.count loop
+select dr_table(i).id,dr_table(i).name1;
+end loop;
+end;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'bulk SQL with associative arrays with VARCHAR2 key'
+#
+# test of BULK COLLECT into
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by PLS_INTEGER;
+dr_table dr_type;
+begin
+select * BULK COLLECT into dr_table from tt_air;
+for i IN 1 .. dr_table.count loop
+select dr_table(i).id,dr_table(i).name1;
+end loop;
+end;
+$$
+call p1;
+dr_table(i).id	dr_table(i).name1
+1	id:10 | type:aabb
+dr_table(i).id	dr_table(i).name1
+2	id:20 | type:qwed
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of table%rowtype
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by VARCHAR2(30);
+dr_table dr_type;
+begin
+dr_table('id').id := 1;
+dr_table('id').name1 := t_air(1,'aa');
+dr_table('id1').id := 2;
+dr_table('id2').name1 := t_air(2,'bb');
+select dr_table('id'),dr_table('id1'),dr_table('id2');
+end;
+$$
+call p1;
+dr_table('id')	dr_table('id1')	dr_table('id2')
+id:1 | name1:id:1 | type:aa	id:2 | name1:NULL	id:NULL | name1:id:2 | type:bb
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of table%rowtype
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by VARCHAR2(30);
+dr_table dr_type;
+begin
+dr_table('id').id := 1;
+dr_table('id').name1 := t_air(1,'aa');
+dr_table('id1').id := 2;
+dr_table('id2').name1 := t_air(2,'bb');
+select dr_table.first , dr_table.last ;
+for i IN dr_table.first .. dr_table.last loop
+select dr_table(i).id,dr_table(i).name1;
+end loop;
+end;
+$$
+call p1;
+dr_table.first	dr_table.last
+id	id2
+ERROR 22007: Truncated incorrect DOUBLE value: 'id'
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of table%rowtype
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by PLS_INTEGER;
+dr_table dr_type;
+begin
+dr_table(1).id := 1;
+dr_table(1).name1 := t_air(1,'aa');
+dr_table(2).id := 2;
+dr_table(3).name1 := t_air(2,'bb');
+for i IN dr_table.first .. dr_table.last loop
+select dr_table(i).id,dr_table(i).name1;
+end loop;
+end;
+$$
+call p1;
+dr_table(i).id	dr_table(i).name1
+1	id:1 | type:aa
+dr_table(i).id	dr_table(i).name1
+2	NULL
+dr_table(i).id	dr_table(i).name1
+NULL	id:2 | type:bb
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of table%rowtype with default value
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by PLS_INTEGER;
+dr_table dr_type := dr_type();
+begin
+dr_table(1).id := 1;
+dr_table(1).name1 := t_air(1,'aa');
+dr_table(2).id := 2;
+dr_table(3).name1 := t_air(2,'bb');
+for i IN dr_table.first .. dr_table.last loop
+select dr_table(i).id,dr_table(i).name1;
+end loop;
+end;
+$$
+call p1;
+dr_table(i).id	dr_table(i).name1
+1	id:1 | type:aa
+dr_table(i).id	dr_table(i).name1
+2	NULL
+dr_table(i).id	dr_table(i).name1
+NULL	id:2 | type:bb
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of table%rowtype with default value
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by PLS_INTEGER;
+dr_table dr_type := dr_type(-1=>null);
+begin
+select dr_table(-1).id,dr_table(-1).name1;
+dr_table(0).id := 0;
+dr_table(1).id := 1;
+dr_table(1).name1 := t_air(1,'aa');
+dr_table(2).id := 2;
+dr_table(3).name1 := t_air(2,'bb');
+for i IN dr_table.first .. dr_table.last loop
+select i,dr_table(i).id,dr_table(i).name1;
+end loop;
+end;
+$$
+call p1;
+dr_table(-1).id	dr_table(-1).name1
+NULL	NULL
+i	dr_table(i).id	dr_table(i).name1
+-1	NULL	NULL
+i	dr_table(i).id	dr_table(i).name1
+0	0	NULL
+i	dr_table(i).id	dr_table(i).name1
+1	1	id:1 | type:aa
+i	dr_table(i).id	dr_table(i).name1
+2	2	NULL
+i	dr_table(i).id	dr_table(i).name1
+3	NULL	id:2 | type:bb
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of record table
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name1  varchar(20) ,
+score float := 0
+);
+type dr_type is table of stu_record index by VARCHAR2(30);
+dr_table dr_type;
+begin
+dr_table('%%').id := 10;
+dr_table('&&').name1 := 'aaa';
+select dr_table('%%'),dr_table('&&');
+end;
+$$
+call p1;
+dr_table('%%')	dr_table('&&')
+id:10 | name1:NULL | score:0	id:1 | name1:aaa | score:0
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of record table
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name1  varchar(20) ,
+score float := 0
+);
+type dr_type is table of stu_record index by VARCHAR2(30);
+dr_table dr_type := dr_type('aa'=>stu_record(10,'qwe',2.1));
+begin
+select dr_table('aa');
+dr_table('%%').id := 10;
+dr_table('&&').name1 := 'aaa';
+select dr_table('%%'),dr_table('&&');
+end;
+$$
+call p1;
+dr_table('aa')
+id:10 | name1:qwe | score:2.1
+dr_table('%%')	dr_table('&&')
+id:10 | name1:NULL | score:0	id:1 | name1:aaa | score:0
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of record table
+#
+CREATE or replace PROCEDURE p1() as
+TYPE rec1 IS RECORD (
+col1  varchar(30) := 'col1',
+col2   varchar(30) := 'col2',
+col3   varchar(30) := 'col3'
+  ); 
+TYPE rec2 IS RECORD (
+v_t_rec1  rec1,  
+col4 varchar(30) := 'col4'
+  );
+type rec3 is table of rec2 index by VARCHAR2(30);
+rec rec3;
+type dr_type is table of rec1 index by VARCHAR2(30);
+dr_table dr_type;
+begin
+rec(1).col4 := 'col5';
+select rec(1),rec(1).v_t_rec1;
+dr_table(1) := rec(1).v_t_rec1;
+select dr_table(1);
+end;
+$$
+call p1;
+rec(1)	rec(1).v_t_rec1
+v_t_rec1:NULL | col4:col5	col1:col1 | col2:col2 | col3:col3
+dr_table(1)
+col1:col1 | col2:col2 | col3:col3
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of record table
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name1  varchar(20) ,
+score float := 0
+);
+type dr_type is table of stu_record index by VARCHAR2(3);
+dr_table dr_type := dr_type('aaaa'=>stu_record(10,'qwe',2.1));
+begin
+end;
+$$
+call p1;
+ERROR HY000: Incorrect parameter 'aaaa' to type table variable.
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of record table
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name1  varchar(20) ,
+score float := 0
+);
+type dr_type is table of stu_record index by PLS_INTEGER;
+dr_table dr_type := dr_type('-10'=>stu_record(10,'qwe',2.1),'10'=>stu_record(20,'qwe12',20.1));
+begin
+select dr_table('-10'),dr_table('10');
+end;
+$$
+call p1;
+dr_table('-10')	dr_table('10')
+id:10 | name1:qwe | score:2.1	id:20 | name1:qwe12 | score:20.1
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of record table
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by PLS_INTEGER;
+dr_table dr_type;
+begin
+for i IN dr_table.first .. dr_table.last loop
+select i,dr_table(i).id,dr_table(i).name1;
+end loop;
+end;
+$$
+call p1;
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of record table
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by varchar(20);
+dr_table dr_type;
+begin
+dr_table('aa').id := 10;
+for i IN dr_table.first .. dr_table.last loop
+select i,dr_table(i).id,dr_table(i).name1;
+end loop;
+end;
+$$
+call p1;
+ERROR 22007: Truncated incorrect DOUBLE value: 'aa'
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of record table
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by PLS_INTEGER;
+dr_table dr_type := dr_type(-1=>null);
+begin
+dr_table(1).id := 1;
+dr_table(1).name1 := t_air(1,'aa');
+for i IN dr_table.first .. dr_table.last loop
+select i,dr_table(i).id,dr_table(i).name1;
+end loop;
+end;
+$$
+call p1;
+i	dr_table(i).id	dr_table(i).name1
+-1	NULL	NULL
+ERROR HY000: The data of record table variable: dr_table does not exist.
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of record table with same index
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by PLS_INTEGER;
+dr_table dr_type := dr_type(-1=>null,-1=>null);
+begin
+end;
+$$
+call p1;
+ERROR 42000: This version of MySQL doesn't yet support 'the record table's index is same with previous index'
+drop PROCEDURE p1;
+#
+# test of type dr_type is table of record table with same index
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by PLS_INTEGER;
+dr_table dr_type := dr_type(-1=>null);
+begin
+select 1dr_table(i).name1.id;
+end;
+$$
+ERROR 42000: Undeclared variable: 1dr_table
+#
+# test of udt type in sp and table.first && table.last
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+dr_table dr_type:=dr_type(-1=>null,2=>null);
+begin
+select dr_table.first , dr_table.last;
+end;
+$$
+call p1();
+dr_table.first	dr_table.last
+-1	2
+drop PROCEDURE p1;
+#
+# test of udt type in sp and table.first && table.last
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+dr_table dr_type:=dr_type(1=>null,-1=>null);
+begin
+dr_table(0).id := 10;
+dr_table(1).id := 20;
+for i IN reverse dr_table.first .. 1 loop
+select i, dr_table.first , dr_table.last,dr_table(i);
+end loop;
+end;
+$$
+call p1();
+i	dr_table.first	dr_table.last	dr_table(i)
+1	-1	1	id:20 | name1:NULL
+i	dr_table.first	dr_table.last	dr_table(i)
+0	-1	1	id:10 | name1:NULL
+i	dr_table.first	dr_table.last	dr_table(i)
+-1	-1	1	id:NULL | name1:NULL
+drop PROCEDURE p1;
+#
+# test of udt type in sp and table.first && table.last
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by binary_integer;
+dr_table dr_type:=dr_type(1=>null,-1=>null);
+begin
+dr_table(0).id := 10;
+dr_table(1).id := 20;
+for i IN reverse dr_table.first .. dr_table.last loop
+select i, dr_table.first , dr_table.last,dr_table(i);
+end loop;
+end;
+$$
+call p1();
+i	dr_table.first	dr_table.last	dr_table(i)
+1	-1	1	id:20 | name1:NULL
+i	dr_table.first	dr_table.last	dr_table(i)
+0	-1	1	id:10 | name1:NULL
+i	dr_table.first	dr_table.last	dr_table(i)
+-1	-1	1	id:NULL | name1:NULL
+drop PROCEDURE p1;
+#
+# test of udt type in sp and FORALL
+#
+create table tt_air1(id int,name t_air);
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by varchar(10);
+dr_table dr_type;
+begin
+dr_table(100).id := 100;
+dr_table(100).name := t_air(2,'eert');
+FORALL i IN dr_table.first .. dr_table.last
+insert into tt_air1 values dr_table (i);
+select * from tt_air1;
+end;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'forall SQL with associative arrays with VARCHAR2 key'
+#
+# test of udt type in sp and FORALL
+#
+CREATE or replace PROCEDURE p1() as
+type dr_type is table of tt_air%ROWTYPE index by varchar(10);
+dr_table dr_type;
+begin
+dr_table(100).id := 100;
+dr_table(100).name := t_air(2,'eert');
+FORALL i IN dr_table.first .. 101
+insert into tt_air1 values dr_table (i);
+select * from tt_air1;
+end;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'forall SQL with associative arrays with VARCHAR2 key'
+drop table tt_air1;
+#
+# test of udt type in sp and FORALL
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by VARCHAR(20);
+stu_record_val tklist;
+begin
+stu_record_val('01') := 10;
+stu_record_val('-1') := 20;
+select stu_record_val.first,stu_record_val.last;
+stu_record_val('1') := 20;
+select stu_record_val.first,stu_record_val.last;
+end;
+$$
+call p1();
+stu_record_val.first	stu_record_val.last
+-1	01
+stu_record_val.first	stu_record_val.last
+-1	1
+drop PROCEDURE p1;
+#
+# test of udt type table used in hybrid_type function
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist := tklist();
+id int := 1;
+begin
+select stu_record_val+1;
+end;
+$$
+call p1();
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+drop PROCEDURE p1;
+#
+# test of udt type table used in hybrid_type function
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist := tklist();
+id int := 1;
+begin
+id := stu_record_val+1;
+end;
+$$
+call p1();
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+drop PROCEDURE p1;
+#
+# test of udt type table used in hybrid_type function
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+stu_record_val(2) := stu_record(1,'a',1);
+select stu_record_val+1;
+end;
+$$
+call p1();
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+drop PROCEDURE p1;
+#
+# test of udt type table set by same table
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+stu_record_val(1) := stu_record(1,'a',1);
+stu_record_val(2) := stu_record_val(1);
+select stu_record_val(2);
+end;
+$$
+call p1();
+stu_record_val(2)
+id:1 | name_d:a | score:1
+drop PROCEDURE p1;
+#
+# test of udt type table set by same table
+#
+CREATE or replace PROCEDURE p1() as
+TYPE rec1 IS RECORD (
+col1  varchar(30) := 'col1',
+col2   varchar(30) := 'col2',
+col3   varchar(30) := 'col3'
+  );
+TYPE rec2 IS RECORD (
+v_t_rec1  rec1,  
+col4 varchar(30) := 'col4'
+  );
+type rec3 is table of rec2 index by VARCHAR2(30);
+rec rec3;
+rec4 rec3;
+begin
+rec(1).v_t_rec1.col1 := 'col10';
+select rec(1).v_t_rec1;
+rec4 := rec;
+select rec4(1).v_t_rec1;
+rec(1).v_t_rec1.col1 := 'col110';
+select rec(1).v_t_rec1,rec4(1).v_t_rec1;
+rec4(1).v_t_rec1.col1 := 'col1110';
+select rec(1).v_t_rec1,rec4(1).v_t_rec1;
+end;
+$$
+call p1();
+rec(1).v_t_rec1
+col1:col10 | col2:col2 | col3:col3
+rec4(1).v_t_rec1
+col1:col10 | col2:col2 | col3:col3
+rec(1).v_t_rec1	rec4(1).v_t_rec1
+col1:col110 | col2:col2 | col3:col3	col1:col10 | col2:col2 | col3:col3
+rec(1).v_t_rec1	rec4(1).v_t_rec1
+col1:col110 | col2:col2 | col3:col3	col1:col1110 | col2:col2 | col3:col3
+drop PROCEDURE p1;
+#
+# test of udt type table set by same table
+#
+CREATE or replace PROCEDURE p1() as
+TYPE rec1 IS RECORD (
+col1  varchar(30) := 'col1',
+col2   varchar(30) := 'col2',
+col3   varchar(30) := 'col3'
+  );
+type rec11 is table of rec1 index by VARCHAR2(30);
+TYPE rec2 IS RECORD (
+v_t_rec1  rec11,  
+col4 varchar(30) := 'col4'
+  );
+type rec3 is table of rec2 index by VARCHAR2(30);
+rec rec3;
+rec4 rec3;
+begin
+rec(1).v_t_rec1(0).col1 := 'col10';
+select rec(1).v_t_rec1(0).col1;
+rec4 := rec;
+select rec4(1).v_t_rec1(0).col1;
+rec(1).v_t_rec1(0).col1 := 'col110';
+select rec(1).v_t_rec1(0).col1,rec4(1).v_t_rec1(0).col1;
+rec4(1).v_t_rec1(0).col1 := 'col1110';
+select rec(1).v_t_rec1(0).col1,rec4(1).v_t_rec1(0).col1;
+end;
+$$
+call p1();
+rec(1).v_t_rec1(0).col1
+col10
+rec4(1).v_t_rec1(0).col1
+col10
+rec(1).v_t_rec1(0).col1	rec4(1).v_t_rec1(0).col1
+col110	col10
+rec(1).v_t_rec1(0).col1	rec4(1).v_t_rec1(0).col1
+col110	col1110
+drop PROCEDURE p1;
+#
+# test of create table as select udt()
+#
+create table zgh1 as SELECT t_air(1,'aa') FROM dual;
+drop table zgh1;
+create table zgh1 as SELECT t_air(1,'aa') a FROM dual;
+show create table zgh1;
+Table	Create Table
+zgh1	CREATE TABLE "zgh1" (
+  "a" t_air DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from zgh1;
+a
+id:1 | type:aa
+drop table zgh1;
+create table zgh1 as SELECT t_air_table(t_air(1,'aa'),t_air(1,'aa')) FROM dual;
+ERROR 42000: This version of MySQL doesn't yet support 'create table as select udt_table()'
+create or replace type my_integer is varray(10) of integer;
+create table zgh1 as select my_integer(1, 2) from dual;
+ERROR 42000: This version of MySQL doesn't yet support 'create table as select udt_table()'
+drop type my_integer;
+create table zgh1 as SELECT t_air(1,'aa') a,t_air(10,'aa1') b FROM dual;
+select * from zgh1;
+a	b
+id:1 | type:aa	id:10 | type:aa1
+drop table zgh1;
+#
+# bugfix7335
+#
+create table t1(f_type1 t_air,f_type2 t_air,i int);
+alter table t1 modify f_type1 int,modify f_type2 int;
+ERROR 42000: This version of MySQL doesn't yet support 'alter to or from udt type column'
+ALTER TABLE t1 CHANGE COLUMN f_type1 mobile char(11),CHANGE COLUMN i j varchar(20);
+ERROR 42000: This version of MySQL doesn't yet support 'alter to or from udt type column'
+drop table t1;
+#
+# bugfix7367
+#
+create or replace type type1 as object(id int,type varchar(20));
+create or replace type type2 is object(id2 int,name2 varchar(20));
+create table t1(id int AUTO_INCREMENT,f1 type1 default null,primary key (id));
+ALTER TABLE  t1 ADD f2 type2;
+insert into t1 select 6,type1(NULL,'NULL'),type2(null,'fffff');
+insert into t1 select 7,type1(1,'NULL'),type2(22,'fffff');
+SELECT id,f1,f2 FROM t1 WHERE f1 < f2;
+ERROR HY000: Incorrect arguments to <
+select * from t1 where (select f1 from t1 limit 1)=f1;
+id	f1	f2
+6	id:NULL | type:NULL	id2:NULL | name2:fffff
+select * from t1 where (select f1 from t1 where id=7)=f1;
+id	f1	f2
+7	id:1 | type:NULL	id2:22 | name2:fffff
+select * from t1 where (select f1 from t1 where id=7)=id;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+select * from t1 where (select f1 from t1 where id=7)=type1(1,'NULL');
+id	f1	f2
+6	id:NULL | type:NULL	id2:NULL | name2:fffff
+7	id:1 | type:NULL	id2:22 | name2:fffff
+select * from t1 where (select f1 from t1 where id=7)=t_air_table(t_air(1,'NULL'));
+ERROR 42000: This version of MySQL doesn't yet support 'compare with udt table'
+select * from t1 where (select f1 from t1 where id=7)=(select f1 from t1 where id=7);
+id	f1	f2
+6	id:NULL | type:NULL	id2:NULL | name2:fffff
+7	id:1 | type:NULL	id2:22 | name2:fffff
+select * from t1 where (select f1 from t1 where id=7)=(select id from t1 where id=7);
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+select * from t1 where (select f1 from t1 where id=7)=(select a.f1 from t1 a join t1 b on a.id=7 limit 1);
+id	f1	f2
+6	id:NULL | type:NULL	id2:NULL | name2:fffff
+7	id:1 | type:NULL	id2:22 | name2:fffff
+select * from t1 where (select id from t1 where id=7)=(select id from t1 where id=7);
+id	f1	f2
+6	id:NULL | type:NULL	id2:NULL | name2:fffff
+7	id:1 | type:NULL	id2:22 | name2:fffff
+select * from t1 where (select id from t1 where id=7 limit 1)=(select id from t1 where id=7 limit 1);
+id	f1	f2
+6	id:NULL | type:NULL	id2:NULL | name2:fffff
+7	id:1 | type:NULL	id2:22 | name2:fffff
+select (select * from t1 limit 1)=(select 1,2,3);
+(select * from t1 limit 1)=(select 1,2,3)
+0
+select (select * from t1 limit 1)=(select 6,type1(NULL,'NULL'),type2(null,'fffff'));
+(select * from t1 limit 1)=(select 6,type1(NULL,'NULL'),type2(null,'fffff'))
+1
+drop table t1;
+drop type type1;
+drop type type2;
+drop table tt_air;
+drop TYPE t_air_table;
+drop type t_air;
+#
+# bugfix7591
+#
+CREATE TABLE t1 (
+id int NOT NULL,
+c1 varchar(200) DEFAULT NULL,
+c2 varchar(200) DEFAULT NULL,
+PRIMARY KEY (id)
+);
+CREATE OR REPLACE PROCEDURE p1() as
+TYPE table_type IS TABLE OF t1%ROWTYPE index by VARCHAR(3070); 
+v_table_type table_type;
+BEGIN
+v_table_type('abc').c1:= 'John';
+select v_table_type('abc').c1;
+END;
+$$
+call p1();
+ERROR 42000: Specified key was too long; max key length is 3072 bytes
+drop PROCEDURE p1;
+CREATE OR REPLACE PROCEDURE p1() as
+TYPE table_type IS TABLE OF t1%ROWTYPE index by VARCHAR(500); 
+v_table_type table_type;
+BEGIN
+v_table_type('abc').c1:= 'John';
+select v_table_type('abc').c1;
+END;
+$$
+call p1();
+v_table_type('abc').c1
+John
+drop PROCEDURE p1;
+drop table t1;

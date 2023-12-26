@@ -58,9 +58,11 @@ Triggers::Triggers() {
   m_target_def.add_field(FIELD_NAME, "FIELD_NAME",
                          "name VARCHAR(64) NOT NULL COLLATE " +
                              String_type(name_collation()->m_coll_name));
-  m_target_def.add_field(FIELD_EVENT_TYPE, "FIELD_EVENT_TYPE",
-                         "event_type ENUM('INSERT', 'UPDATE', 'DELETE') "
-                         "NOT NULL");
+  m_target_def.add_field(
+      FIELD_EVENT_TYPE, "FIELD_EVENT_TYPE",
+      "event_type ENUM('INSERT', 'UPDATE', 'DELETE', 'INSERT OR UPDATE', "
+      "'INSERT OR DELETE', 'UPDATE OR DELETE', 'INSERT OR UPDATE OR DELETE') "
+      "NOT NULL");
   m_target_def.add_field(FIELD_TABLE_ID, "FIELD_TABLE_ID",
                          "table_id BIGINT UNSIGNED NOT NULL");
   m_target_def.add_field(FIELD_ACTION_TIMING, "FIELD_ACTION_TIMING",

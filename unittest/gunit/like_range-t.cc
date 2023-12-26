@@ -1,4 +1,5 @@
 /* Copyright (c) 2010, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -57,25 +58,38 @@ static void test_like_range_for_charset(CHARSET_INFO *cs, const char *src,
 }
 
 static const char *charset_list[] = {
-    "big5_chinese_ci",    "big5_bin",
+    "big5_chinese_ci",
+    "big5_bin",
 
-    "euckr_korean_ci",    "euckr_bin",
+    "euckr_korean_ci",
+    "euckr_bin",
 
-    "gb2312_chinese_ci",  "gb2312_bin",
+    "gb2312_chinese_ci",
+    "gb2312_bin",
 
-    "gbk_chinese_ci",     "gbk_bin",
+    "gbk_chinese_ci",
+    "gbk_bin",
 
-    "gb18030_chinese_ci", "gb18030_bin",
+    "gb18030_chinese_ci",
+    "gb18030_bin",
 
-    "latin1_swedish_ci",  "latin1_bin",
+    "gb18030_2022_chinese_ci",
+    "gb18030_2022_bin",
 
-    "sjis_japanese_ci",   "sjis_bin",
+    "latin1_swedish_ci",
+    "latin1_bin",
 
-    "tis620_thai_ci",     "tis620_bin",
+    "sjis_japanese_ci",
+    "sjis_bin",
 
-    "ujis_japanese_ci",   "ujis_bin",
+    "tis620_thai_ci",
+    "tis620_bin",
 
-    "utf8mb3_general_ci", "utf8mb3_unicode_ci",
+    "ujis_japanese_ci",
+    "ujis_bin",
+
+    "utf8mb3_general_ci",
+    "utf8mb3_unicode_ci",
     "utf8mb3_bin",
 };
 

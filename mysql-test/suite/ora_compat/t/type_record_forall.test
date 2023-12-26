@@ -1,0 +1,1867 @@
+set sql_mode="oracle";
+
+--echo #
+--echo # error ER_SP_MISMATCH_RECORD_VAR
+--echo #
+
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+CREATE or replace PROCEDURE p1() as
+  aa int;
+  type dr_type is table of aa index by binary_integer;
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # error ER_SP_MISMATCH_USE_OF_RECORD_VAR
+--echo #
+
+DELIMITER $$;
+--error ER_SP_MISMATCH_USE_OF_RECORD_VAR
+CREATE or replace PROCEDURE p1() as
+  type stu_record is record(
+    id int := 1,
+    name_d  varchar(20) := 'aaa',
+    score float := 0.1
+  );
+begin
+  select stu_record.id;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # error ER_SP_NOT_EXIST_OF_RECORD_TABLE
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type stu_record is record(
+    id int := 1,
+    name_d  varchar(20) := 'aaa',
+    score float := 0.1
+  );
+  type dr_type is table of stu_record index by binary_integer;
+  dr_type_t dr_type;
+begin
+  select dr_type_t(0).id;
+end;
+$$
+DELIMITER ;$$
+--error ER_SP_NOT_EXIST_OF_RECORD_TABLE
+call p1();
+DROP PROCEDURE p1;
+
+--echo #
+--echo # record type select/set
+--echo #
+
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'aaa',
+  score float := 0.1
+);
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 stu_record
+);
+type stu_record2 is record(
+  jj int := 1,
+  stu_record_val2 stu_record1
+);
+stu_record_val stu_record2;
+id float := 10;
+begin
+  select stu_record_val.stu_record_val2.stu_record_val1.id,stu_record_val.stu_record_val2.stu_record_val1.name_d,stu_record_val.stu_record_val2.stu_record_val1.score;
+  stu_record_val.stu_record_val2.stu_record_val1.id := 2;
+  stu_record_val.stu_record_val2.stu_record_val1.name_d := 'bbb';
+  select stu_record_val.stu_record_val2.stu_record_val1.id,stu_record_val.stu_record_val2.stu_record_val1.name_d;
+  stu_record_val.jj := 100;
+  stu_record_val.stu_record_val2.ii := 200;
+  id := stu_record_val.stu_record_val2.stu_record_val1.id + stu_record_val.stu_record_val2.stu_record_val1.score;
+  select id,stu_record_val.jj,stu_record_val.stu_record_val2.ii;
+end;
+$$
+DELIMITER ;$$
+CALL p1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # record type select/set
+--echo #
+
+DELIMITER $$;
+--error ER_SP_MISMATCH_USE_OF_RECORD_VAR
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) ,
+  score float := 0
+);
+stu_record_val stu_record;
+begin
+  select stu_record.id,stu_record.name_d,stu_record.score;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # record type select/set
+--echo #
+
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) ,
+  score float := 0
+);
+stu_record_val stu_record;
+begin
+  select stu_record_val.id,stu_record_val.name_d,stu_record_val.score;
+  stu_record_val.id := 100;
+  stu_record_val.name_d := 'aaa';
+  stu_record_val.score := 3.22;
+  select stu_record_val.id,stu_record_val.name_d,stu_record_val.score;
+end;
+$$
+DELIMITER ;$$
+CALL p1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # record type table select/set
+--echo #
+
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) ,
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+begin
+  select stu_record_val.stu_record_val1(1).id;
+  stu_record_val.stu_record_val1(1).id := 1;
+  stu_record_val.stu_record_val1(2).name_d := 'aaa';
+  stu_record_val.stu_record_val1(0).id := 2;
+  stu_record_val.stu_record_val1(3).score := 3.22;
+  select stu_record_val.stu_record_val1(1).id,stu_record_val.stu_record_val1(1).name_d,stu_record_val.stu_record_val1(0).id,stu_record_val.stu_record_val1(3).score;
+  select stu_record_val.ii;
+end;
+$$
+DELIMITER ;$$
+--error ER_SP_NOT_EXIST_OF_RECORD_TABLE
+CALL p1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # record type table select/set
+--echo #
+
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) ,
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+id int;
+begin
+  stu_record_val.stu_record_val1(1).id := 1;
+  stu_record_val.stu_record_val1(2).name_d := 'aaa';
+  stu_record_val.stu_record_val1(0).id := 2;
+  stu_record_val.stu_record_val1(3).score := 3.22;
+  select stu_record_val.stu_record_val1(1).id,stu_record_val.stu_record_val1(2).name_d,stu_record_val.stu_record_val1(0).id,stu_record_val.stu_record_val1(3).score;
+  id := stu_record_val.stu_record_val1(1).id+stu_record_val.stu_record_val1(3).score;
+  select id,stu_record_val.ii;
+end;
+$$
+DELIMITER ;$$
+CALL p1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # Parameters in SELECT list + stored function
+--echo #
+
+DELIMITER $$;
+CREATE FUNCTION f1 (a VARCHAR(32)) RETURN VARCHAR(32) no sql
+is result VARCHAR(32);
+BEGIN
+  result := CONCAT(a,'y');
+  RETURN(result);
+END;
+$$
+CREATE PROCEDURE p1(a_a VARCHAR(32)) as
+  type stu_record is record(
+    id VARCHAR(32),
+    name_d  varchar(32)
+  );
+  type tklist is table of stu_record index by binary_integer;
+  stu_record_val tklist;
+  CURSOR c(p_sel_a VARCHAR(32),p_sel_b VARCHAR(32)) is
+    SELECT p_sel_a,p_sel_b FROM DUAL;
+BEGIN
+  OPEN c(f1(a_a),f1(a_a));
+  fetch c bulk collect into stu_record_val limit 3;
+  select stu_record_val(1).id,stu_record_val(1).name_d;
+  CLOSE c;
+END;
+$$
+DELIMITER ;$$
+CALL p1('x');
+# A complex expression
+CALL p1(f1(COALESCE(NULL, f1('x'))));
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+
+
+--echo #
+--echo # fetch bulk collect into/forall
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+CREATE TABLE t2 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+INSERT INTO t1 VALUES (1,'12');
+INSERT INTO t1 VALUES (2,'21');
+INSERT INTO t1 VALUES (2,'22');
+INSERT INTO t1 VALUES (3,'31');
+INSERT INTO t1 VALUES (3,'32');
+DELIMITER $$;
+CREATE PROCEDURE p1(a_a INT) as
+  type stu_record is record(
+    id int := 1,
+    name_d  varchar(20)
+  );
+  type tklist is table of stu_record index by binary_integer;
+  stu_record_val tklist;
+  CURSOR c(p_a INT) is SELECT a,b FROM t1 WHERE a=p_a;
+BEGIN
+  stu_record_val(1).id := 100;
+  select stu_record_val(1).id;
+  OPEN c(a_a);
+  fetch c bulk collect into stu_record_val limit 3;
+  forall i in stu_record_val.first .. stu_record_val.last 
+    insert into t2 values stu_record_val(i);
+  select stu_record_val(1).id;
+  CLOSE c;
+END;
+$$
+DELIMITER ;$$
+CALL p1(1);
+SELECT * FROM t2;
+CALL p1(2);
+SELECT * FROM t2;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # fetch bulk collect into/forall in function
+--echo #
+DELIMITER $$;
+CREATE or replace FUNCTION f1() RETURN varchar(20) deterministic is
+  type stu_record is record(
+    id int := 1,
+    name_d  varchar(20)
+  );
+  type tklist is table of stu_record index by binary_integer;
+  stu_record_val tklist;
+  CURSOR c(p_a INT) is SELECT a,b FROM t1 WHERE a=p_a;
+BEGIN
+  stu_record_val(1).id := 100;
+  OPEN c(1);
+  fetch c bulk collect into stu_record_val limit 3;
+  forall i in stu_record_val.first .. stu_record_val.last 
+    insert into t2 values stu_record_val(i);
+  CLOSE c;
+  return 1;
+END;
+$$
+DELIMITER ;$$
+delete from t2;
+select f1();
+SELECT * FROM t2;
+
+DROP TABLE t1;
+DROP TABLE t2;
+DROP function f1;
+
+--echo #
+--echo # select bulk collect into/forall
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+CREATE TABLE t2 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+INSERT INTO t1 VALUES (1,'12');
+INSERT INTO t1 VALUES (2,'21');
+INSERT INTO t1 VALUES (2,'22');
+INSERT INTO t1 VALUES (3,'31');
+INSERT INTO t1 VALUES (3,'32');
+DELIMITER $$;
+CREATE PROCEDURE p1(a_a INT) as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  dr_table(100).a := 100;
+  select dr_table(100).a;
+  select * BULK COLLECT into dr_table from t1;
+  FORALL i IN dr_table.first .. dr_table.last
+    insert into t2 values dr_table (i);
+end;
+$$
+DELIMITER ;$$
+CALL p1(1);
+SELECT * FROM t2;
+CALL p1(2);
+SELECT * FROM t2;
+DROP TABLE t1;
+DROP TABLE t2;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # select bulk collect into/forall
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+CREATE TABLE t2 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+DELIMITER $$;
+CREATE PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  dr_table(100).a := 100;
+  dr_table(100).b := 'aaa';
+  select dr_table(100).a,dr_table(100).b;
+  FORALL i IN dr_table.first .. dr_table.last
+    insert into t2 values dr_table (i);
+end;
+$$
+DELIMITER ;$$
+CALL p1();
+SELECT * FROM t2;
+truncate table t2;
+CALL p1();
+SELECT * FROM t2;
+CALL p1();
+SELECT * FROM t2;
+DROP TABLE t2;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # duplicate var
+--echo #
+DELIMITER $$;
+CREATE PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  i varchar(10) := 'aaa';
+begin
+  dr_table(1).a := 100;
+  dr_table(1).b := 'aaa';
+  FORALL i IN dr_table.first .. dr_table.last
+    insert into t1 values dr_table (i);
+  select i;
+end;
+$$
+DELIMITER ;$$
+CALL p1();
+select * from t1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # duplicate var with error ER_BAD_FIELD_ERROR
+--echo #
+DELIMITER $$;
+CREATE PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  dr_table(1).a := 100;
+  dr_table(1).b := 'aaa';
+  FORALL i IN dr_table.first .. dr_table.last
+    insert into t1 values dr_table (i);
+  select i;
+end;
+$$
+DELIMITER ;$$
+--error ER_BAD_FIELD_ERROR
+CALL p1();
+DROP PROCEDURE p1;
+DROP TABLE t1;
+
+--echo #
+--echo # error ER_UNKNOWN_TABLE
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+DELIMITER $$;
+CREATE PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  dr_table(100).a := 100;
+  dr_table(100).b := 'aaa';
+  select dr_table(100).a,dr_table(100).b;
+  FORALL i IN dr_table.first .. dr_table1.last
+    insert into t2 values dr_table (i);
+end;
+$$
+DELIMITER ;$$
+--error ER_UNKNOWN_TABLE
+CALL p1();
+DROP PROCEDURE p1;
+DROP TABLE t1;
+
+--echo #
+--echo # select bulk collect into/for loop select
+--echo #
+
+CREATE TABLE t1 (col1 INT, col2 VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  select * BULK COLLECT into dr_table from t1;
+  for i IN dr_table.first .. dr_table.last loop
+    select dr_table(i).col1,dr_table(i).col2;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+CALL p1();
+DROP TABLE t1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # select bulk collect into/for loop update
+--echo #
+
+CREATE TABLE t1 (col1 INT, col2 VARCHAR(10));
+INSERT INTO t1 VALUES (1,'aaa'),(2,'bbb'),(3,'ccc'),(4,'ddd');
+CREATE TABLE t2 (col1 INT, col2 VARCHAR(10));
+INSERT INTO t2 VALUES (1,null),(2,null),(3,null),(4,null),(5,null);
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  select * BULK COLLECT into dr_table from t1;
+  for i IN dr_table.first .. dr_table.last loop
+    select dr_table(i).col1,dr_table(i).col2;
+    update t2 set col2=dr_table(i).col2 where col1=dr_table(i).col1;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+CALL p1();
+select * from t2;
+DROP TABLE t1;
+DROP TABLE t2;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # select bulk collect into/for loop set
+--echo #
+
+CREATE TABLE t1 (col1 INT, col2 VARCHAR(10));
+INSERT INTO t1 VALUES (1,'aaa'),(2,'bbb'),(3,'ccc'),(4,'ddd');
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  result int := 10;
+begin
+  select * BULK COLLECT into dr_table from t1;
+  for i IN dr_table.first .. dr_table.last loop
+    result := result+dr_table(i).col1;
+    select dr_table(i).col1,dr_table(i).col2,result;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+CALL p1();
+DROP TABLE t1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # select bulk collect into/for loop delete
+--echo #
+
+CREATE TABLE t1 (col1 INT, col2 VARCHAR(10));
+INSERT INTO t1 VALUES (1,'aaa'),(2,'bbb'),(3,'ccc'),(4,'ddd');
+CREATE TABLE t2 (col1 INT, col2 VARCHAR(10));
+INSERT INTO t2 VALUES (1,null),(2,null),(3,null),(4,null),(5,null);
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  result int := 10;
+begin
+  select * BULK COLLECT into dr_table from t1;
+  for i IN dr_table.first .. dr_table.last loop
+    delete from t2 where col1=dr_table(i).col1;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+CALL p1();
+select * from t2;
+DROP TABLE t1;
+DROP TABLE t2;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # error ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE
+--echo #
+
+DELIMITER $$;
+CREATE PROCEDURE p1() as
+  type stu_record is record(
+    id VARCHAR(32) := 0,
+    name_d  varchar(32)
+  );
+  type tklist is table of stu_record index by binary_integer;
+  stu_record_val tklist;
+BEGIN
+  select stu_record_val(1+1).id,stu_record_val(1).name_d;
+END;
+$$
+DELIMITER ;$$
+--error ER_SP_NOT_EXIST_OF_RECORD_TABLE
+CALL p1();
+DROP PROCEDURE p1;
+
+--echo #
+--echo # error ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD
+--echo #
+
+CREATE TABLE t1 (col1 INT, col2 VARCHAR(10));
+INSERT INTO t1 VALUES (1,'aaa'),(2,'bbb'),(3,'ccc'),(4,'ddd');
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  dr_table(0).a := 1;
+end;
+$$
+DELIMITER ;$$
+--error ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD
+CALL p1();
+DROP TABLE t1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # fetch bulk
+--echo #
+
+CREATE TABLE t1 (col1 INT, col2 VARCHAR(10));
+INSERT INTO t1 VALUES (1,'aaa'),(2,'bbb'),(3,'ccc'),(4,'ddd'),(5,'eee'),(6,'fff'),(7,'ggg'),(8,'hhh'),(9,'iii');
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c1 IS SELECT * FROM t1 where col1<=10;
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  ii int := 0;
+begin
+  open c1;
+  loop
+    fetch c1 bulk collect into dr_table limit 5;
+    EXIT WHEN ii>1;
+    for i in dr_table.first .. dr_table.last loop
+      select dr_table(i).col1,dr_table(i).col2;
+    end loop;
+    ii:=ii+1;
+  end loop;
+  close c1;
+end;
+$$
+DELIMITER ;$$
+CALL p1();
+DROP TABLE t1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # fetch bulk error ER_WRONG_BATCH_FOR_BULK_INTO
+--echo #
+show variables like 'select_bulk_into_batch';
+set @@select_bulk_into_batch=5;
+show variables like 'select_bulk_into_batch';
+CREATE TABLE t1 (col1 INT, col2 VARCHAR(10));
+INSERT INTO t1 VALUES (1,'aaa'),(2,'bbb'),(3,'ccc'),(4,'ddd'),(5,'eee'),(6,'fff'),(7,'ggg'),(8,'hhh'),(9,'iii');
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c1 IS SELECT * FROM t1 where col1<=10;
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  ii int := 0;
+begin
+  open c1;
+  loop
+    fetch c1 bulk collect into dr_table limit 6;
+    EXIT WHEN ii>1;
+    for i in dr_table.first .. dr_table.last loop
+      select dr_table(i).col1,dr_table(i).col2;
+    end loop;
+    ii:=ii+1;
+  end loop;
+  close c1;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_BATCH_FOR_BULK_INTO
+CALL p1();
+DROP TABLE t1;
+DROP PROCEDURE p1;
+set @@select_bulk_into_batch=10000;
+show variables like 'select_bulk_into_batch';
+
+--echo #
+--echo # error ER_SP_BAD_USE_PROC
+--echo #
+--error ER_SP_BAD_USE_PROC
+select xx(1).xx from t1;
+--error ER_SP_BAD_USE_PROC
+select xx.xx.xx.xx from t;
+
+--echo #
+--echo # forall in different table
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+CREATE TABLE t2 (a INT, b VARCHAR(10));
+DELIMITER $$;
+CREATE PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  dr_table1 dr_type;
+begin
+  dr_table(100).a := 100;
+  dr_table(100).b := 'aaa';
+  select dr_table(100).a,dr_table(100).b;
+  FORALL i IN dr_table1.last .. dr_table.first
+    insert into t2 values dr_table (i);
+  select * from t2;
+end;
+$$
+DELIMITER ;$$
+CALL p1();
+DROP PROCEDURE p1;
+DROP TABLE t1;
+DROP TABLE t2;
+
+--echo #
+--echo # error ER_SP_MISMATCH_RECORD_VAR
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+CREATE PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  dr_table1 dr_type;
+begin
+  dr_table(100).a := 100;
+  dr_table(100).b := 'aaa';
+  select dr_table(100).a,dr_table(100).b;
+  FORALL i IN dr_table.first .. dr_table1.last1
+    insert into t2 values dr_table (i);
+end;
+$$
+DELIMITER ;$$
+DROP TABLE t1;
+
+--echo #
+--echo # error ER_WRONG_PARAMCOUNT_TO_BULK
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+DELIMITER $$;
+--error ER_WRONG_PARAMCOUNT_TO_BULK
+declare
+  type tt is record( id int );
+  v tt;
+  c int;
+begin
+ select * bulk collect into v,c from t1;
+end;
+$$
+DELIMITER ;$$
+DROP TABLE t1;
+
+--echo #
+--echo # error ER_SP_MISMATCH_RECORD_VAR
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+declare
+  rec t1.a%type;
+BEGIN
+  rec := 1;
+  SELECT rec.id;
+END;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # %type
+--echo #
+DELIMITER $$;
+declare
+  rec t1.a%type;
+BEGIN
+  rec := 1;
+  SELECT rec;
+END;
+$$
+DELIMITER ;$$
+DROP TABLE t1;
+
+--echo #
+--echo # error ER_SP_MISMATCH_RECORD_VAR
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+declare
+  rec t1.a%type;
+BEGIN
+  rec := 1;
+  SELECT rec.id.id;
+END;
+$$
+DELIMITER ;$$
+DROP TABLE t1;
+
+--echo #
+--echo # error ER_SP_MISMATCH_RECORD_VAR
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+create or replace procedure p1 as
+type stu_record is record(
+  id t1.a%type,
+  name_d  varchar(20) ,
+  score float := 0
+);
+stu_record_val stu_record;
+begin
+  select stu_record_val.id,stu_record_val.name_d,stu_record_val.score;
+  stu_record_val.id := 100;
+  stu_record_val.name_d := 'aaa';
+  stu_record_val.score := 3.22;
+  select stu_record_val.id,stu_record_val.name_d,stu_record_val.score;
+end;
+$$
+DELIMITER ;$$
+DROP TABLE t1;
+
+--echo #
+--echo # error ER_TRUNCATED_WRONG_VALUE
+--echo #
+
+CREATE TABLE t1 (id TIMESTAMP);
+DELIMITER $$;
+create or replace procedure p1 as
+  rec1 t1.id%TYPE;
+begin
+  rec1 :='哈哈';
+  select rec1;
+end;
+$$
+DELIMITER ;$$
+--error ER_TRUNCATED_WRONG_VALUE
+call p1;
+drop PROCEDURE p1;
+DROP TABLE t1;
+
+
+--echo #
+--echo # error ER_DATA_TOO_LONG
+--echo #
+
+CREATE TABLE t1 (id varchar(10));
+DELIMITER $$;
+create or replace procedure p1 as
+  rec1 t1.id%TYPE;
+begin
+  rec1 :='1111111111111111111111111111111111';
+  select rec1;
+end;
+$$
+DELIMITER ;$$
+--error ER_DATA_TOO_LONG
+call p1;
+drop PROCEDURE p1;
+DROP TABLE t1;
+
+--echo #
+--echo # error ER_TRUNCATED_WRONG_VALUE
+--echo #
+
+CREATE TABLE t1(id int(10),name varchar(10));
+CREATE TABLE t2(id decimal(10,6),name TIMESTAMP);
+insert into t1 values(1,'t1_name');
+insert into t2 values(1.0001,to_date('03-01-02 8:11:2', 'YY-MM-DD HH24:MI:SS'));
+DELIMITER $$;
+create or replace procedure p1 as
+  CURSOR cur1 IS SELECT name FROM t1;
+  CURSOR cur2 IS SELECT name FROM t2;
+  rec1 cur2%ROWTYPE;
+BEGIN
+  OPEN cur1;
+  LOOP
+    fetch cur1 INTO rec1;
+    EXIT WHEN cur1%NOTFOUND;
+    select rec1.name;
+  END LOOP;
+  close cur1;
+end;
+$$
+DELIMITER ;$$
+--error ER_TRUNCATED_WRONG_VALUE
+call p1;
+drop PROCEDURE p1;
+DROP TABLE t1;
+DROP TABLE t2;
+
+--echo #
+--echo # %TYPE error ER_NOT_SUPPORTED_YET
+--echo #
+
+CREATE TEMPORARY TABLE t1(id int(10),name varchar(10));
+DELIMITER $$;
+create or replace procedure p1 as
+  rec1 t1.id%TYPE;
+  rec2 t1.name%TYPE;
+begin
+  insert into t1 values(1,'t10_name');
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # error ER_NOT_SUPPORTED_YET
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+  rec1 t1%rowtype;
+  rec2 t1.name%TYPE;
+begin
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1;
+drop PROCEDURE p1;
+drop table t1;
+
+--echo #
+--echo # error ER_TRUNCATED_WRONG_VALUE
+--echo #
+
+CREATE TABLE t1(id int(10),name varchar(10));
+CREATE TABLE t2(id decimal(10,6),name TIMESTAMP);
+insert into t1 values(1,'t1_name');
+insert into t2 values(1.0001,to_date('03-01-02 8:11:2', 'YY-MM-DD HH24:MI:SS'));
+DELIMITER $$;
+create or replace procedure p1 as
+  type dr_type is table of t2%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+BEGIN
+  select * from t1 bulk collect into dr_table;
+end;
+$$
+DELIMITER ;$$
+--error ER_TRUNCATED_WRONG_VALUE
+call p1;
+drop PROCEDURE p1;
+DROP TABLE t1;
+DROP TABLE t2;
+
+--echo #
+--echo # error ER_TYPE_CANT_OPEN_TABLE
+--echo #
+
+CREATE TABLE t1(id decimal(10,6),name TIMESTAMP);
+CREATE VIEW test_view as select * from t1 ;
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  rec2 test_view.id%TYPE;
+begin
+  select rec2;
+end;
+$$
+DELIMITER ;$$
+--error ER_TYPE_CANT_OPEN_TABLE
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # error ER_TYPE_CANT_OPEN_TABLE
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  rec2 test_view%rowtype;
+begin
+  select rec2.id;
+end;
+$$
+DELIMITER ;$$
+--error ER_TYPE_CANT_OPEN_TABLE
+call p1;
+drop PROCEDURE p1;
+DROP TABLE t1;
+DROP VIEW test_view;
+
+--echo #
+--echo # error ER_NOT_SUPPORTED_YET
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+CREATE TABLE t2 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+INSERT INTO t1 VALUES (1,'12');
+INSERT INTO t1 VALUES (2,'21');
+INSERT INTO t1 VALUES (2,'22');
+INSERT INTO t1 VALUES (3,'31');
+INSERT INTO t1 VALUES (3,'32');
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE PROCEDURE p1(a_a INT) as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  dr_table(100).a := 100;
+  select dr_table(100).a;
+  select * BULK COLLECT into dr_table from t1;
+  FORALL i IN dr_table.first .. dr_table.last
+    insert into t2 values (dr_table,i);
+end;
+$$
+DELIMITER ;$$
+drop table t1;
+drop table t2;
+
+--echo #
+--echo #
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+CREATE TABLE t2 (a INT, b VARCHAR(10));
+DELIMITER $$;
+CREATE PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  dr_table(100).a := 100;
+  select dr_table(100).a;
+  select * BULK COLLECT into dr_table from t1;
+  FORALL i IN dr_table.first .. dr_table.last
+    insert into t2 values dr_table(i);
+end;
+$$
+DELIMITER ;$$
+call p1();
+select * from t2;
+INSERT INTO t1 VALUES (null,null);
+call p1();
+select * from t2;
+alter table t1 add i int;
+--error ER_WRONG_VALUE_COUNT_ON_ROW
+call p1();
+select * from t2;
+alter table t2 add i int;
+call p1();
+select * from t2;
+alter table t1 drop i;
+--error ER_WRONG_VALUE_COUNT_ON_ROW
+call p1();
+select * from t2;
+alter table t2 drop i;
+call p1();
+select * from t2;
+drop PROCEDURE p1;
+drop table t1;
+drop table t2;
+
+--echo #
+--echo #
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+DELIMITER $$;
+CREATE PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  dr_table(100).a := 100;
+  select dr_table(100).a;
+end;
+$$
+DELIMITER ;$$
+call p1();
+truncate table t1;
+call p1();
+drop PROCEDURE p1;
+drop table t1;
+
+--echo #
+--echo # test of value
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+CREATE TABLE t2 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+INSERT INTO t1 VALUES (1,'12');
+INSERT INTO t1 VALUES (2,'21');
+INSERT INTO t1 VALUES (2,'22');
+INSERT INTO t1 VALUES (3,'31');
+INSERT INTO t1 VALUES (3,'32');
+DELIMITER $$;
+CREATE PROCEDURE p1(a_a INT) as
+  type stu_record is record(
+    id int := 1,
+    value1  varchar(20)
+  );
+  type tklist is table of stu_record index by binary_integer;
+  value tklist;
+  CURSOR c(p_a INT) is SELECT a,b FROM t1 WHERE a=p_a;
+BEGIN
+  value(1).id := 100;
+  OPEN c(a_a);
+  fetch c bulk collect into value limit 3;
+  forall i in value.first .. value.last 
+    insert into t2 values value(i);
+  CLOSE c;
+END;
+$$
+DELIMITER ;$$
+CALL p1(1);
+SELECT * FROM t2;
+CALL p1(2);
+SELECT * FROM t2;
+DROP TABLE t1;
+DROP TABLE t2;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # test of value
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE value() as
+  value int;
+begin
+  value := 1;
+  select value;
+end;
+$$
+DELIMITER ;$$
+call value;
+drop PROCEDURE value;
+
+--echo #
+--echo # test of text
+--echo #
+
+DELIMITER $$;
+--error ER_BAD_FIELD_ERROR
+declare
+  type stu_record is record(
+  my_a text:=nullptr
+ );
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of clob
+--echo #
+
+DELIMITER $$;
+declare
+  type stu_record is record(
+  my_a clob:=null
+ );
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of blob
+--echo #
+
+DELIMITER $$;
+declare
+  type stu_record is record(
+  my_a blob:=''
+ );
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of default value
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type stu_record is record(
+    id int := 1,
+    value1  varchar(20) :='aaa',
+    value2 varchar(20) :='bbb'
+  );
+  type tklist is table of stu_record index by binary_integer;
+  value1 tklist;
+BEGIN
+  value1(1).id := 100;
+  select value1(1).id , value1(1).value1,value1(1).value2;
+  value1(2).value2 := 'after';
+  select value1(2).id , value1(2).value1,value1(2).value2;
+  value1(3).value1 := 'after1';
+  select value1(3).id , value1(3).value1,value1(3).value2;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of default value
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type stu_record is record(
+    num int := 1,
+    name1  varchar(20) :='aaa'
+  );
+  type stu_record1 is record(
+    id int := 2,
+    value1  stu_record
+  );
+ value2 stu_record1;
+ value3 stu_record1;
+BEGIN
+ select value2.id , value2.value1.num,value2.value1.name1;
+ select value3.id , value3.value1.num,value3.value1.name1;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of table().table()
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE rec1 IS RECORD (
+    col1  varchar(30) := 'col1',
+    col2   varchar(30) := 'col2',
+    col3   varchar(30) := 'col3'
+  ); 
+  TYPE t_rec1 IS TABLE OF rec1 index by binary_integer; 
+  
+  TYPE rec2 IS RECORD (
+    v_t_rec1  t_rec1,  
+    col4 varchar(30) := 'col4'
+  );
+  TYPE t_rec2 IS TABLE OF rec2 index by binary_integer; 
+
+  TYPE rec3 IS RECORD (
+    v_t_rec2  t_rec2,  
+    col5 varchar(30) := 'col5'
+  );
+  TYPE t_rec3 IS TABLE OF rec3 index by binary_integer; 
+     
+  v_t_rec3 rec3;
+  
+BEGIN
+  v_t_rec3.col5 := 'abc';
+  v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1 :='abc';
+  select v_t_rec3.v_t_rec2(0).col4,v_t_rec3.col5;
+  v_t_rec3.v_t_rec2(0).v_t_rec1(1).col2 :='123qwe';
+  v_t_rec3.v_t_rec2(1).v_t_rec1(0).col2 :='qqqq';
+  select v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1,v_t_rec3.v_t_rec2(0).v_t_rec1(0).col2,
+  v_t_rec3.v_t_rec2(0).v_t_rec1(0).col3 ;
+  select v_t_rec3.v_t_rec2(1).v_t_rec1(0).col1,v_t_rec3.v_t_rec2(1).v_t_rec1(0).col2,
+  v_t_rec3.v_t_rec2(1).v_t_rec1(0).col3 ;
+  select v_t_rec3.v_t_rec2(0).v_t_rec1(1).col1,v_t_rec3.v_t_rec2(0).v_t_rec1(1).col2,
+  v_t_rec3.v_t_rec2(0).v_t_rec1(1).col3 ;
+END;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of table().table.col
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE rec1 IS RECORD (
+    col1  varchar(30) := 'col1',
+    col2   varchar(30) := 'col2',
+    col3   varchar(30) := 'col3'
+  ); 
+  TYPE rec2 IS RECORD (
+    v_t_rec1  rec1,  
+    col4 varchar(30) := 'col4'
+  );
+  TYPE t_rec2 IS TABLE OF rec1 index by binary_integer; 
+
+  TYPE rec3 IS RECORD (
+    v_t_rec2  t_rec2,  
+    col5 varchar(30) := 'col5'
+  );
+  v_t_rec3 rec3;
+  
+BEGIN
+  v_t_rec3.col5 := 'abc';
+ select v_t_rec3.col5;
+  v_t_rec3.v_t_rec2(0).col1 :='abc';
+  select v_t_rec3.v_t_rec2(0).col1,v_t_rec3.v_t_rec2(0).col2,
+  v_t_rec3.v_t_rec2(0).col3 ;
+  v_t_rec3.v_t_rec2(1).col2 :='qqqq';
+  select v_t_rec3.v_t_rec2(1).col1,v_t_rec3.v_t_rec2(1).col2,
+  v_t_rec3.v_t_rec2(1).col3 ;
+  select v_t_rec3.v_t_rec2(0).col1,v_t_rec3.v_t_rec2(0).col2,
+  v_t_rec3.v_t_rec2(0).col3 ;
+END;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of %rowtype and record
+--echo #
+CREATE TABLE employees (EMPLOYEE_ID NUMBER(6,0), FIRST_NAME VARCHAR2(20), LAST_NAME VARCHAR2(25), EMAIL VARCHAR2(25), PHONE_NUMBER VARCHAR2(20), HIRE_DATE DATE, JOB_ID VARCHAR2(10), SALARY NUMBER(8,2), COMMISSION_PCT NUMBER(2,2), MANAGER_ID NUMBER(6,0), DEPARTMENT_ID NUMBER(4,0));
+
+Insert into employees (EMPLOYEE_ID,FIRST_NAME,LAST_NAME,EMAIL,PHONE_NUMBER,HIRE_DATE,JOB_ID,SALARY,COMMISSION_PCT,MANAGER_ID,DEPARTMENT_ID) values (145,'John','Russell','JRUSSEL','011.44.1344.429268','2020-3-1','SA_MAN',14000,0.4,100,80);
+Insert into employees (EMPLOYEE_ID,FIRST_NAME,LAST_NAME,EMAIL,PHONE_NUMBER,HIRE_DATE,JOB_ID,SALARY,COMMISSION_PCT,MANAGER_ID,DEPARTMENT_ID) values (146,'Karen','Partners','KPARTNER','011.44.1344.467268','2020-3-1','SA_MAN',13500,0.3,100,80);
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type table_type is table of employees%ROWTYPE index by binary_integer;
+  TYPE contact IS RECORD (
+    v_contact table_type,
+    phone varchar(30) := '088.88.1888.888888'
+  );
+  friend contact;
+BEGIN
+  friend.v_contact(0).first_name := 'John';
+  friend.v_contact(100).last_name := 'Smith';
+  friend.phone := '1-650-555-1234';
+  SELECT friend.v_contact(0).first_name;
+  select friend.v_contact(100).last_name;
+  select friend.phone as a;
+END;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+drop table employees;
+
+--echo #
+--echo # test of default value
+--echo #
+
+DELIMITER $$;
+create or replace procedure p1 as
+name0  varchar(20) := '00000';
+type stu_record is record(
+  name1  varchar(20) :='10000',
+  name2  varchar(20) :=name0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+f blob;
+begin
+  stu_record_val.stu_record_val1(1).name1 := '33333';
+  select stu_record_val.stu_record_val1(1).name1,stu_record_val.stu_record_val1(1).name2;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of error ER_SP_NOT_EXIST_OF_RECORD_TABLE
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+INSERT INTO t1 VALUES (1,'12');
+INSERT INTO t1 VALUES (2,'21');
+INSERT INTO t1 VALUES (2,'22');
+INSERT INTO t1 VALUES (3,'31');
+INSERT INTO t1 VALUES (3,'32');
+DELIMITER $$;
+CREATE PROCEDURE p1() as
+type dr_type is table of t1%ROWTYPE index by binary_integer;
+dr_table dr_type;
+begin
+select * BULK COLLECT into dr_table from t1;
+for i IN 1 .. 10 loop
+select dr_table(i).a,dr_table(i).b;
+end loop;
+END;
+$$
+DELIMITER ;$$
+--error ER_SP_NOT_EXIST_OF_RECORD_TABLE
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of error ER_SP_MISMATCH_RECORD_TABLE_VAR
+--echo #
+
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_TABLE_VAR
+CREATE PROCEDURE p1(a_a INT) as
+  type stu_record is record(
+    id int := 1,
+    name_d  varchar(20)
+  );
+  stu_record_val stu_record;
+  CURSOR c(p_a INT) is SELECT a,b FROM t1 WHERE a=p_a;
+BEGIN
+  OPEN c(a_a);
+  fetch c bulk collect into stu_record_val limit 3;
+  CLOSE c;
+END;
+$$
+DELIMITER ;$$
+DROP TABLE t1;
+
+--echo #
+--echo # test of a.b.c(+)
+--echo #
+--error ER_UNKNOWN_TABLE
+select a.b.c(+);
+
+--echo #
+--echo # test of %type
+--echo #
+
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+create or replace procedure p1 as
+name0  varchar(20) := '00000';
+type stu_record is record(
+  name1  varchar(20) :='10000',
+  name2  name0%type := 'asdf'
+);
+stu_record_val stu_record;
+begin
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of default value of function
+--echo #
+
+DELIMITER $$;
+create or replace procedure p1 as
+  col int :=10;
+  TYPE rec2 IS RECORD (
+    v_t_rec1  int := col=3
+  );
+ rec rec2;
+BEGIN
+  select rec.v_t_rec1;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop procedure p1;
+
+--echo #
+--echo # test of record used in function
+--echo #
+set global log_bin_trust_function_creators=1;
+DELIMITER $$;
+CREATE or replace FUNCTION f1() RETURN varchar(20) deterministic is
+ name0  varchar(20) := '00000';
+type stu_record is record(
+  name1  varchar(20) :='10000',
+  name2  varchar(20) :=name0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+BEGIN
+stu_record_val.stu_record_val1(1).name1 := '33333';
+return stu_record_val.stu_record_val1(1).name1;
+end;
+$$
+DELIMITER ;$$
+select f1();
+drop function f1;
+
+--echo #
+--echo # test of error ER_SP_MISMATCH_RECORD_TABLE_VAR
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  type stu_record is record(
+    name1  varchar(20) :='10000',
+    b int :=dr_table
+  );
+  type tklist is table of stu_record index by binary_integer;
+  type stu_record1 is record(
+    ii int := 1,
+    stu_record_val1 tklist
+  );
+  stu_record_val stu_record1;
+begin
+end;
+$$
+DELIMITER ;$$
+--error ER_UDT_INCONS_DATATYPES
+call p1;
+drop procedure p1;
+
+--echo #
+--echo # test of error ER_SP_MISMATCH_RECORD_TABLE_VAR
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type stu_record1 is record(
+    ii int := 1,
+    str varchar(10)
+  );
+  type stu_record is record(
+    name1  varchar(20) :='10000',
+    b int :=stu_record1
+  );
+  stu_record_table stu_record;
+begin
+end;
+$$
+DELIMITER ;$$
+--error ER_UDT_INCONS_DATATYPES
+call p1;
+drop procedure p1;
+DROP TABLE t1;
+
+--echo #
+--echo # test of ER_NO_SUCH_TABLE
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type stu_record1 is record(
+    ii int := 1,
+    str varchar(10)
+  );
+  type stu_record is record(
+    name1  varchar(20) :='10000',
+    b int :=1
+  );
+  stu_record_table stu_record%rowtype;
+begin
+end;
+$$
+DELIMITER ;$$
+--error ER_NO_SUCH_TABLE
+call p1;
+drop procedure p1;
+
+--echo #
+--echo # test of error ER_SP_MISMATCH_RECORD_VAR
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type stu_record is record(
+    name1  varchar(10) :='10000',
+    b int :=11
+  );
+  type tklist is table of stu_record index by binary_integer;
+  type stu_record1 is record(
+    ii int := 1,
+    stu_record_val1 tklist
+  );
+  stu_record_val stu_record1;
+  result int := 1;
+begin
+  stu_record_val.stu_record_val1 := result;
+end;
+$$
+DELIMITER ;$$
+--error ER_SP_MISMATCH_RECORD_VAR
+call p1;
+drop procedure p1;
+
+--echo #
+--echo # test of error ER_SP_MISMATCH_RECORD_VAR
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type stu_record is record(
+    name1  varchar(10) :='10000',
+    b int :=11
+  );
+  type tklist is table of stu_record index by binary_integer;
+  type stu_record1 is record(
+    ii int := 1,
+    stu_record_val1 stu_record
+  );
+  stu_record_val stu_record1;
+  result int := 1;
+begin
+  stu_record_val.stu_record_val1 := result;
+end;
+$$
+DELIMITER ;$$
+--error ER_SP_MISMATCH_RECORD_VAR
+call p1;
+drop procedure p1;
+
+--echo #
+--echo # test of set record table
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type stu_record is record(
+    name1  varchar(10) :='10000',
+    b int :=11
+  );
+  type tklist is table of stu_record index by binary_integer;
+  type stu_record1 is record(
+    stu_record_val1 tklist,
+    stu_record_val2 tklist
+  );
+  stu_record_val stu_record1;
+begin
+  stu_record_val.stu_record_val1(0).name1 := 'aaa1';
+  stu_record_val.stu_record_val1(1).name1 := 'aaa2';
+  stu_record_val.stu_record_val2(0).name1 := 'bbb1';
+  stu_record_val.stu_record_val2(1).name1 := 'bbb2';
+  select stu_record_val.stu_record_val2(0).name1,stu_record_val.stu_record_val2(1).name1;
+  stu_record_val.stu_record_val2 := stu_record_val.stu_record_val1;
+  select stu_record_val.stu_record_val2(0).name1,stu_record_val.stu_record_val2(1).name1;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop procedure p1;
+
+--echo #
+--echo # test of set record
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type stu_record is record(
+    name1  varchar(10) :='10000',
+    b int :=11
+  );
+  type tklist is table of stu_record index by binary_integer;
+  type stu_record1 is record(
+    stu_record_val1 tklist,
+    stu_record_val2 tklist
+  );
+  stu_record_val stu_record1;
+  stu_record_val1 stu_record1;
+begin
+  stu_record_val.stu_record_val1(0).name1 := 'aaa1';
+  stu_record_val.stu_record_val1(1).name1 := 'aaa2';
+  stu_record_val.stu_record_val2(0).name1 := 'bbb1';
+  stu_record_val.stu_record_val2(1).name1 := 'bbb2';
+  stu_record_val1.stu_record_val1(0).name1 := 'ccc1';
+  stu_record_val1.stu_record_val1(1).name1 := 'ccc2';
+  stu_record_val1.stu_record_val2(0).name1 := 'ddd1';
+  stu_record_val1.stu_record_val2(1).name1 := 'ddd2';
+  select stu_record_val.stu_record_val1(0).name1,stu_record_val.stu_record_val1(1).name1,
+ stu_record_val.stu_record_val2(0).name1,stu_record_val.stu_record_val2(1).name1;
+  stu_record_val := stu_record_val1;
+  select stu_record_val.stu_record_val1(0).name1,stu_record_val.stu_record_val1(1).name1,
+ stu_record_val.stu_record_val2(0).name1,stu_record_val.stu_record_val2(1).name1;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop procedure p1;
+
+--echo #
+--echo # test of set record
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type stu_record is record(
+    name1  varchar(10) :='10000',
+    b int :=11
+  );
+ stu_record_def stu_record;
+  type tklist is table of stu_record index by binary_integer;
+  type stu_record1 is record(
+    stu_record_val1 tklist,
+    stu_record_val2 tklist
+  );
+  stu_record_val stu_record1;
+  stu_record_val1 stu_record1;
+begin
+  stu_record_val.stu_record_val1(0).name1 := 'aaa1';
+  stu_record_val.stu_record_val1(1).name1 := 'aaa2';
+  stu_record_val.stu_record_val2(0).name1 := 'bbb1';
+  stu_record_val.stu_record_val2(1).name1 := 'bbb2';
+  stu_record_val1.stu_record_val1(0).name1 := 'ccc1';
+  stu_record_val1.stu_record_val1(1).name1 := 'ccc2';
+  stu_record_val1.stu_record_val2(0).name1 := 'ddd1';
+  stu_record_val1.stu_record_val2(1).name1 := 'ddd2';
+  select stu_record_val.stu_record_val1(0).name1,stu_record_val.stu_record_val1(1).name1,
+ stu_record_val.stu_record_val2(0).name1,stu_record_val.stu_record_val2(1).name1;
+  stu_record_val.stu_record_val1 := stu_record_def;
+end;
+$$
+DELIMITER ;$$
+--error ER_UDT_INCONS_DATATYPES
+call p1;
+drop procedure p1;
+
+--echo #
+--echo # test of exception NO_DATA_FOUND
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+ type record1 is record(
+    id int := 1
+  );
+  TYPE table_type1 IS TABLE OF record1  index by binary_integer;  
+  value1 table_type1;
+  id int;
+begin
+  select value1(2).id INTO id from dual;
+exception
+  WHEN NO_DATA_FOUND THEN
+  select 'the data does not exist' as result;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop procedure p1;
+
+--echo #
+--echo # test of empty parameter or more than one parameter with table type 
+--echo #
+
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE or replace PROCEDURE p1() as
+ type record1 is record(
+    id int := 1
+  );
+  TYPE table_type1 IS TABLE OF record1  index by binary_integer;  
+  value1 table_type1;
+begin
+  select value1().id;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of empty parameter or more than one parameter with table type 
+--echo #
+
+DELIMITER $$;
+--error ER_NOT_SUPPORTED_YET
+CREATE or replace PROCEDURE p1() as
+ type record1 is record(
+    id int := 1
+  );
+  TYPE table_type1 IS TABLE OF record1  index by binary_integer;  
+  value1 table_type1;
+begin
+  select value1(1,2).id;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of select error ER_SP_UNDECLARED_VAR
+--echo #
+
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  namea varchar(10) := 'namea'
+);
+type tklist is table of stu_record index by binary_integer;
+value1 tklist;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+f blob;
+begin
+  stu_record_val.stu_record_val1(1).id := 1;
+  select stu_record_val.stu_record_val1(1).namea.id;
+end ;
+$$
+DELIMITER ;$$
+--error ER_SP_UNDECLARED_VAR
+call p1;
+drop procedure p1;
+
+
+--echo #
+--echo # test of set error ER_SP_UNDECLARED_VAR
+--echo #
+
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  namea varchar(10) := 'namea'
+);
+type tklist is table of stu_record index by binary_integer;
+value1 tklist;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+f blob;
+begin
+  stu_record_val.stu_record_val1(1).namea.id := 1;
+  select stu_record_val.stu_record_val1(1).namea.id;
+end ;
+$$
+DELIMITER ;$$
+--error ER_SP_UNDECLARED_VAR
+call p1;
+drop procedure p1;
+
+--echo #
+--echo # bugfix#6226: fetch bulk collect into without limit
+--echo #
+
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+INSERT INTO t1 VALUES (1,'12');
+INSERT INTO t1 VALUES (2,'21');
+INSERT INTO t1 VALUES (2,'22');
+INSERT INTO t1 VALUES (3,'31');
+INSERT INTO t1 VALUES (3,'32');
+set @@select_bulk_into_batch=5;
+show variables like 'select_bulk_into_batch';
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c1 IS SELECT * FROM t1;
+  type dr_type is table of t1%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+  ii int := 0;
+begin
+  open c1;
+  loop
+    select ii;
+    EXIT WHEN ii % @@select_bulk_into_batch > 1;
+    fetch c1 bulk collect into dr_table;
+    for i in dr_table.first .. dr_table.last loop
+      select dr_table(i).a,dr_table(i).b;
+    end loop;
+    ii:=ii+1;
+  end loop;
+  close c1;
+end;
+$$
+DELIMITER ;$$
+CALL p1();
+CALL p1();
+set @@select_bulk_into_batch=3;
+show variables like 'select_bulk_into_batch';
+CALL p1();
+
+--echo #
+--echo # test of bug8761
+--echo #
+--error 1064
+insert into t1 values a(b);
+
+DROP TABLE t1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # test of duplicat var
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+ i varchar(10) := 'aa';
+ j int:=10;
+BEGIN
+  FOR i IN 1 .. 3 LOOP
+     j := i+j;
+    select i,j;
+  END LOOP;
+  select i;
+END;
+$$
+DELIMITER ;$$
+call p1;
+drop procedure p1;
+

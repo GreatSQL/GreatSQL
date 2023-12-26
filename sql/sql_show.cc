@@ -53,6 +53,7 @@
 #include "my_dbug.h"
 #include "my_default.h"
 #include "my_hostname.h"
+#include "my_inttypes.h"
 #include "my_io.h"
 #include "my_loglevel.h"
 #include "my_macros.h"
@@ -92,6 +93,7 @@
 #include "sql/error_handler.h"  // Internal_error_handler
 #include "sql/events.h"         // Events
 #include "sql/field.h"          // Field
+#include "sql/gdb_sequence.h"
 #include "sql/handler.h"
 #include "sql/item.h"  // Item_empty_string
 #include "sql/key.h"
@@ -141,6 +143,10 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_lock.h"
+
+#define SEQUENCE_MAX_DIGITS 28
+/** two vals encoded: (dec*100)+len */
+#define SEQUENCE_MAX_DISPLAY_LENGTH (SEQUENCE_MAX_DIGITS * 100)
 
 /* @see dynamic_privileges_table.cc */
 bool iterate_all_dynamic_privileges(THD *thd,
@@ -357,6 +363,65 @@ bool Sql_cmd_show_create_type::execute_inner(THD *thd) {
   return sp_show_create_routine(thd, enum_sp_type::TYPE, lex->spname);
 }
 
+// add for GreatDB: show create sequence
+bool Sql_cmd_show_create_sequence::check_privileges(THD *) {
+  // NOTE: not implement ACL on sequence yet
+  return false;
+}
+bool Sql_cmd_show_create_sequence::execute_inner(THD *thd) {
+  DBUG_TRACE;
+  // Prepare a local LEX object for expansion of sequence
+  LEX *old_lex = thd->lex;
+  LEX local_lex;
+
+  Pushed_lex_guard lex_guard(thd, &local_lex);
+  LEX *lex = thd->lex;
+
+  lex->sql_command = old_lex->sql_command;
+
+  // Disable constant subquery evaluation as we won't be locking tables.
+  lex->context_analysis_only = CONTEXT_ANALYSIS_ONLY_VIEW;
+
+  /* check empty db name */
+  const char *real_db_name = m_table_ident->db.str;
+  const char *seq_name = m_table_ident->table.str;
+  if (real_db_name == nullptr || strlen(real_db_name) == 0) {
+    LEX_STRING db_lex;
+    if (thd->copy_db_to(&db_lex.str, &db_lex.length))
+      return true;  // not set db_name, treat as undefined field
+    real_db_name = db_lex.str;
+  }
+
+  /* acquire MDL lock */
+  if (lock_sequence(thd, real_db_name, seq_name, false /*shared lock*/)) {
+    return true;
+  }
+
+  char buff[384];
+  String buffer(buff, sizeof(buff), system_charset_info);
+  buffer.length(0);
+  if (build_sequence_create_str(buffer, real_db_name, seq_name)) {
+    return true;
+  }
+
+  mem_root_deque<Item *> field_list(thd->mem_root);
+  field_list.push_back(new Item_empty_string("Sequence", NAME_CHAR_LEN));
+  // 1024 is for not to confuse old clients
+  field_list.push_back(new Item_empty_string(
+      "Create Sequence", max<size_t>(buffer.length(), 1024U)));
+  if (thd->send_result_metadata(field_list,
+                                Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
+    return true;
+  Protocol *protocol = thd->get_protocol();
+  protocol->start_row();
+  protocol->store(seq_name, system_charset_info);
+  protocol->store_string(buffer.ptr(), buffer.length(), buffer.charset());
+  if (protocol->end_row()) return true;
+
+  my_eof(thd);
+  return false;
+}
+
 bool Sql_cmd_show_create_table::check_privileges(THD *) {
   // Privilege check for this command is placed in execute_inner() function
   return false;
@@ -370,6 +435,8 @@ bool Sql_cmd_show_create_table::execute_inner(THD *thd) {
   Pushed_lex_guard lex_guard(thd, &local_lex);
 
   LEX *lex = thd->lex;
+
+  lex->set_is_materialized_view(old_lex->is_materialized_view());
 
   lex->only_view = m_is_view;
   lex->sql_command = old_lex->sql_command;
@@ -667,17 +734,36 @@ bool Sql_cmd_show_routine_code::execute_inner(THD *thd) {
   name.m_qname = m_routine_name->m_qname;
   name.m_pkg_db = m_routine_name->m_pkg_db;
   if (sp_resolve_package_routine(thd, sp_type, thd->lex->sphead, &name,
-                                 &pkgname))
+                                 &pkgname, nullptr))
     return true;
 
-  if (sp_cache_routine(thd, sp_type, &name, false, &sp, &pkgname)) {
+  if (sp_cache_routine(thd, sp_type, &name, false, &sp, &pkgname, nullptr)) {
     return true;
   }
-  if (sp == nullptr || sp->show_routine_code(thd)) {
+  if (sp == nullptr) {
+  no_sp:
     // Don't distinguish between errors for now */
     my_error(ER_SP_DOES_NOT_EXIST, MYF(0), sp_type_str(sp_type),
              m_routine_name->m_name.str);
     return true;
+  }
+
+  if (sp->m_sig.m_overload_index == 0) {
+    if (sp->show_routine_code(thd)) goto no_sp;
+  } else if (sp->m_parent != nullptr) {
+    // loop for all matched names.
+    auto routines = sp->m_parent->m_routine_implementations;
+    List_iterator<LEX> it(routines);
+    bool show_header = true;
+    for (LEX *lex; (lex = it++);) {
+      assert(lex->sphead);
+      if (lex->sphead->m_type == sp_type &&
+          sp_eq_routine_name(lex->sphead->m_name, sp->m_name)) {
+        if (lex->sphead->show_routine_code(thd, show_header, false)) goto no_sp;
+        show_header = false;
+      }
+    }
+    my_eof(thd);
   }
   return false;
 #else
@@ -1213,6 +1299,13 @@ bool mysqld_show_create(THD *thd, Table_ref *table_list) {
     if (open_error && (thd->killed || thd->is_error())) goto exit;
 
     /*
+      create force view ,referencing table error,mark flag
+    */
+    if (table_list->is_force_view && open_error) {
+      thd->lex->create_force_view_table_not_found = true;
+    }
+
+    /*
       Table_function::print() only works after the table function has been
       resolved. If resolving the view fails, and the view references an
       unresolved table function, raise an error instead of calling print() on
@@ -1231,10 +1324,15 @@ bool mysqld_show_create(THD *thd, Table_ref *table_list) {
   }
 
   /* TODO: add environment variables show when it become possible */
-  if (thd->lex->only_view && !table_list->is_view()) {
+  if ((thd->lex->only_view && !table_list->is_view()) ||
+      (table_list->table && thd->lex->is_materialized_view() &&
+       !table_list->table->s->is_materialized_view)) {
     my_error(ER_WRONG_OBJECT, MYF(0), table_list->db, table_list->table_name,
-             "VIEW");
+             thd->lex->only_view ? "VIEW" : "TABLE");
     goto exit;
+  }
+  if (table_list->table && table_list->table->s->is_materialized_view) {
+    thd->lex->set_is_materialized_view(true);
   }
 
   buffer.length(0);
@@ -1242,11 +1340,16 @@ bool mysqld_show_create(THD *thd, Table_ref *table_list) {
   if (table_list->is_view())
     buffer.set_charset(table_list->view_creation_ctx->get_client_cs());
 
-  if (table_list->is_view())
+  if (table_list->is_view()) {
     view_store_create_info(thd, table_list, &buffer);
-  else if (store_create_info(thd, table_list, &buffer, nullptr,
-                             false /* show_database */,
-                             true /* SHOW CREATE TABLE */))
+    /*
+     after show create force view ,flag set default
+     */
+    if (thd->lex->create_force_view_table_not_found)
+      thd->lex->create_force_view_table_not_found = false;
+  } else if (store_create_info(thd, table_list, &buffer, nullptr,
+                               false /* show_database */,
+                               true /* SHOW CREATE TABLE */))
     goto exit;
 
   if (table_list->is_view()) {
@@ -1257,6 +1360,14 @@ bool mysqld_show_create(THD *thd, Table_ref *table_list) {
         new Item_empty_string("character_set_client", MY_CS_NAME_SIZE));
     field_list.push_back(
         new Item_empty_string("collation_connection", MY_CS_NAME_SIZE));
+  } else if (thd->lex->is_materialized_view()) {
+    field_list.push_back(
+        new Item_empty_string("Materialized View", NAME_CHAR_LEN));
+    // 1024 is for not to confuse old clients
+    field_list.push_back(new Item_empty_string(
+        "Create Table", max<size_t>(buffer.length(), 1024U)));
+    field_list.push_back(new Item_empty_string(
+        "Materialized View", max<size_t>(buffer.length(), 1024U)));
   } else {
     field_list.push_back(new Item_empty_string("Table", NAME_CHAR_LEN));
     // 1024 is for not to confuse old clients
@@ -1291,6 +1402,34 @@ bool mysqld_show_create(THD *thd, Table_ref *table_list) {
         system_charset_info);
   } else
     protocol->store_string(buffer.ptr(), buffer.length(), buffer.charset());
+
+  /* Save the materialized view definition. */
+  if (thd->lex->is_materialized_view() && table_list->table &&
+      table_list->table->s->is_materialized_view) {
+    buffer.length(0);
+    buffer.append("CREATE MATERIALIZED VIEW ");
+    if (lower_case_table_names == 2)
+      buffer.append(table_list->table->alias);
+    else {
+      buffer.append(table_list->table->s->table_name.str,
+                    table_list->table->s->table_name.length);
+    }
+    buffer.append(" ");
+    if (table_list->table->s->definition_utf8.length) {
+      char *val;
+      String temp_buff;
+      temp_buff.append(table_list->table->s->definition_utf8.str);
+      char *p = strtok_r(temp_buff.ptr(), "&", &val);
+      while (p) {
+        buffer.append(p);
+        p = strtok_r(NULL, "&", &val);
+      }
+    }
+    buffer.append("AS ");
+    buffer.append(table_list->table->s->definition.str,
+                  table_list->table->s->definition.length);
+    protocol->store(buffer.ptr(), system_charset_info);
+  }
 
   if (protocol->end_row()) goto exit;
 
@@ -1735,6 +1874,11 @@ static bool print_default_clause(THD *thd, Field *field, String *def_value,
       def_value->append(STRING_WITH_LEN("CURRENT_TIMESTAMP"));
       if (field->decimals() > 0)
         def_value->append_parenthesized(field->decimals());
+      if (field->decimals() == 0 && thd->variables.sql_mode & MODE_ORACLE &&
+          field->auto_flags & Field::VARCHAR_DEFAULT_CURRENT_TIMESTAP &&
+          field->auto_flags & Field::CURRENT_TIMESTAMP_DEC_APPOINT) {
+        def_value->append_parenthesized(field->decimals());
+      }
       // Not null by default and not a BLOB
     } else if (!field->is_null() && field_type != FIELD_TYPE_BLOB) {
       char tmp[MAX_FIELD_WIDTH];
@@ -1954,8 +2098,17 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
 
   restore_record(table, s->default_values);  // Get empty record
 
-  if (share->tmp_table)
+  if (share->tmp_table &&
+      !(share->ora_tmp_table_options & HA_ORA_TMP_TABLE_PRIV))
     packet->append(STRING_WITH_LEN("CREATE TEMPORARY TABLE "));
+  else if ((share->ora_tmp_table_options &
+            (HA_ORA_TMP_TABLE | HA_ORA_TMP_TABLE_GLOBAL)) ==
+           (HA_ORA_TMP_TABLE | HA_ORA_TMP_TABLE_GLOBAL))
+    packet->append(STRING_WITH_LEN("CREATE GLOBAL TEMPORARY TABLE "));
+  else if (share->tmp_table && (share->ora_tmp_table_options &
+                                (HA_ORA_TMP_TABLE | HA_ORA_TMP_TABLE_PRIV)) ==
+                                   (HA_ORA_TMP_TABLE | HA_ORA_TMP_TABLE_PRIV))
+    packet->append(STRING_WITH_LEN("CREATE PRIVATE TEMPORARY TABLE "));
   else
     packet->append(STRING_WITH_LEN("CREATE TABLE "));
   if (create_info_arg &&
@@ -2222,6 +2375,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
   primary_key = share->primary_key;
 
   for (uint i = skip_gipk ? 1 : 0; i < share->keys; i++, key_info++) {
+    bool nulls_equal = false;
     KEY_PART_INFO *key_part = key_info->key_part;
     bool found_primary = false;
     packet->append(STRING_WITH_LEN(",\n  "));
@@ -2243,6 +2397,8 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
       packet->append(STRING_WITH_LEN("CLUSTERING KEY "));
     else
       packet->append(STRING_WITH_LEN("KEY "));
+
+    nulls_equal = nulls_equal || (key_info->flags & HA_NULL_ARE_EQUAL);
 
     if (!found_primary)
       append_identifier(thd, packet, key_info->name, strlen(key_info->name));
@@ -2281,6 +2437,9 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
         packet->append(STRING_WITH_LEN(" DESC"));
     }
     packet->append(')');
+    if (nulls_equal)
+      packet->append(STRING_WITH_LEN(
+          " /* nulls are equal in unique index as oracle does */"));
     store_key_options(thd, packet, table, key_info);
     if (key_info->parser) {
       LEX_CSTRING *parser_name = plugin_name(key_info->parser);
@@ -2318,6 +2477,22 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
   }
 
   packet->append(STRING_WITH_LEN("\n)"));
+  if (!share->tmp_table && (share->ora_tmp_table_options &
+                            (HA_ORA_TMP_TABLE | HA_ORA_TMP_TABLE_GLOBAL)) ==
+                               (HA_ORA_TMP_TABLE | HA_ORA_TMP_TABLE_GLOBAL)) {
+    if ((share->ora_tmp_table_options & HA_ORA_TMP_TABLE_SESS))
+      packet->append(STRING_WITH_LEN(" ON COMMIT PRESERVE ROWS"));
+    else if ((share->ora_tmp_table_options & HA_ORA_TMP_TABLE_TRANS))
+      packet->append(STRING_WITH_LEN(" ON COMMIT DELETE ROWS"));
+  } else if (share->tmp_table &&
+             (share->ora_tmp_table_options &
+              (HA_ORA_TMP_TABLE | HA_ORA_TMP_TABLE_PRIV)) ==
+                 (HA_ORA_TMP_TABLE | HA_ORA_TMP_TABLE_PRIV)) {
+    if ((share->ora_tmp_table_options & HA_ORA_TMP_TABLE_SESS))
+      packet->append(STRING_WITH_LEN(" ON COMMIT PRESERVE DEFINITION"));
+    else if ((share->ora_tmp_table_options & HA_ORA_TMP_TABLE_TRANS))
+      packet->append(STRING_WITH_LEN(" ON COMMIT DROP DEFINITION"));
+  }
 
   /**
     Append START TRANSACTION for CREATE SELECT on SE supporting atomic DDL.
@@ -2329,7 +2504,23 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
   }
 
   bool show_tablespace = false;
-  if (!foreign_db_mode) {
+  if (!foreign_db_mode && share != nullptr &&
+      (share->external_file_name.length != 0 &&
+       share->external_file_name.str != nullptr)) {
+    packet->append(STRING_WITH_LEN(" ORGANIZATION EXTERNAL ( LOCATION ( "));
+    size_t dirlen = dirname_length(share->external_file_name.str);
+
+    if (share->external_data_dir) {
+      append_unescaped(packet, share->external_file_name.str, dirlen - 1);
+      packet->append(STRING_WITH_LEN(" : "));
+    }
+
+    auto external_file = share->external_file_name.str;
+    external_file = external_file + dirlen;
+    append_unescaped(packet, external_file,
+                     share->external_file_name.length - dirlen);
+    packet->append(STRING_WITH_LEN("))"));
+  } else if (!foreign_db_mode) {
     show_table_options = true;
 
     // Show tablespace name only if it is explicitly provided by user.
@@ -2761,7 +2952,7 @@ static void store_key_options(THD *thd, String *packet, TABLE *table,
 }
 
 void view_store_options(const THD *thd, Table_ref *table, String *buff) {
-  append_algorithm(table, buff);
+  if (!table->is_force_view) append_algorithm(table, buff);
   append_definer(thd, buff, table->definer.user, table->definer.host);
   if (table->view_suid)
     buff->append(STRING_WITH_LEN("SQL SECURITY DEFINER "));
@@ -2826,6 +3017,8 @@ void view_store_create_info(const THD *thd, Table_ref *table, String *buff) {
       thd->db().str != nullptr && (!strcmp(thd->db().str, table->db));
 
   buff->append(STRING_WITH_LEN("CREATE "));
+  // Print create force view key
+  if (table->is_force_view) buff->append(STRING_WITH_LEN("FORCE "));
   if (!foreign_db_mode) {
     view_store_options(thd, table, buff);
   }
@@ -4112,6 +4305,60 @@ static int fill_schema_index_stats(THD *thd, Table_ref *tables,
     }
   }
   mysql_mutex_unlock(&LOCK_global_index_stats);
+  DBUG_RETURN(0);
+}
+
+static int fill_sequences(THD *thd, Table_ref *tables,
+                          Item *cond MY_ATTRIBUTE((unused))) {
+  TABLE *const table = tables->table;
+  DBUG_ENTER("fill_sequences");
+
+  Gdb_sequences_lock_guard seqs_guard(/* readonly */ true);
+
+  for (auto &seq_cache_entity : *global_sequences_cache()) {
+    uint cur_col = 0;
+    bool invalid_start_with = false;
+    Gdb_sequence_entity &seq_entity = *seq_cache_entity.second;
+    // TODO: do update only if gdb engine is availabel.
+    bool res_update = seq_entity.refresh_start_with();
+    if (res_update) {
+      invalid_start_with = true;
+    }
+    Sequence_option seq_opt = seq_entity.get_options();
+
+    table->use_all_columns();
+    // DB
+    table->field[cur_col++]->store(seq_entity.db().c_str(),
+                                   seq_entity.db().size(), system_charset_info);
+    // NAME
+    table->field[cur_col++]->store(seq_entity.name().c_str(),
+                                   seq_entity.name().size(),
+                                   system_charset_info);
+    // START_WITH
+    if (!invalid_start_with) {
+      table->field[cur_col]->set_notnull();
+      table->field[cur_col++]->store_decimal(&seq_opt.start_with);
+    } else {
+      table->field[cur_col++]->set_null();
+    }
+    // MINVALUE
+    table->field[cur_col++]->store_decimal(&seq_opt.min_value);
+    // MAXVALUE
+    table->field[cur_col++]->store_decimal(&seq_opt.max_value);
+    // INCREMENT
+    table->field[cur_col++]->store_decimal(&seq_opt.increment);
+    // CYCLE_FLAG
+    table->field[cur_col++]->store(seq_opt.cycle_flag, /* unsigned */ true);
+    // CACHE_NUM
+    table->field[cur_col++]->store(seq_opt.cache_num, /* unsigned */ true);
+    // ORDER_FLAG
+    table->field[cur_col]->store(seq_opt.order_flag, /* unsigned */ true);
+
+    if (schema_table_store_record(thd, table)) {
+      DBUG_RETURN(1);
+    }
+  }
+
   DBUG_RETURN(0);
 }
 
@@ -5947,6 +6194,22 @@ ST_FIELD_INFO tmp_table_columns_fields_info[] = {
      MYSQL_TYPE_STRING, 0, 0, "Generation expression", 0},
     {nullptr, 0, MYSQL_TYPE_STRING, 0, 0, nullptr, 0}};
 
+ST_FIELD_INFO sequences_field_info[] = {
+    {"DB", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"NAME", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"START_WITH", SEQUENCE_MAX_DISPLAY_LENGTH, MYSQL_TYPE_NEWDECIMAL, 0,
+     MY_I_S_MAYBE_NULL, nullptr, 0},
+    {"MINVALUE", SEQUENCE_MAX_DISPLAY_LENGTH, MYSQL_TYPE_NEWDECIMAL, 0, 0,
+     nullptr, 0},
+    {"MAXVALUE", SEQUENCE_MAX_DISPLAY_LENGTH, MYSQL_TYPE_NEWDECIMAL, 0, 0,
+     nullptr, 0},
+    {"INCREMENT", SEQUENCE_MAX_DISPLAY_LENGTH, MYSQL_TYPE_NEWDECIMAL, 0, 0,
+     nullptr, 0},
+    {"CYCLE_FLAG", 0, MYSQL_TYPE_LONGLONG, 0, 0, nullptr, 0},
+    {"CACHE_NUM", 0, MYSQL_TYPE_LONGLONG, 0, 0, nullptr, 0},
+    {"ORDER_FLAG", 0, MYSQL_TYPE_LONGLONG, 0, 0, nullptr, 0},
+    {nullptr, NAME_LEN, MYSQL_TYPE_STRING, 0, 0, nullptr, 0}};
+
 /** For creating fields of information_schema.OPTIMIZER_TRACE */
 extern ST_FIELD_INFO optimizer_trace_info[];
 
@@ -6000,6 +6263,8 @@ ST_SCHEMA_TABLE schema_tables[] = {
      make_old_format, nullptr, false},
     {"USER_STATISTICS", user_stats_fields_info, fill_schema_user_stats,
      make_old_format, nullptr, false},
+    {"SEQUENCES", sequences_field_info, fill_sequences, nullptr, nullptr,
+     false},
     {nullptr, nullptr, nullptr, nullptr, nullptr, false}};
 
 int initialize_schema_table(st_plugin_int *plugin) {
@@ -6104,6 +6369,7 @@ static bool show_create_trigger_impl(THD *thd, Trigger *trigger) {
   fields.push_back(
       new Item_temporal(MYSQL_TYPE_TIMESTAMP,
                         Name_string("Created", sizeof("created") - 1), 0, 0));
+  fields.push_back(new Item_empty_string("Status", NAME_LEN));
   if (thd->send_result_metadata(fields,
                                 Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
     return true;
@@ -6142,6 +6408,15 @@ static bool show_create_trigger_impl(THD *thd, Trigger *trigger) {
     rc = p->store_datetime(timestamp, 2);
   } else
     rc = p->store_null();
+
+  if (!rc) {
+    if (trigger->get_event_status() ==
+        enum_trigger_event_status::TRG_STATUS_ENABLED) {
+      if (p->store_string("ENABLED", 7, system_charset_info)) return true;
+    } else {
+      if (p->store_string("DISABLED", 8, system_charset_info)) return true;
+    }
+  }
 
   if (rc || p->end_row()) return true;
 
@@ -6264,8 +6539,7 @@ static bool acquire_mdl_for_table(THD *thd, const char *db_name,
           name was found.
 */
 
-static Trigger *find_trigger_in_share(TABLE_SHARE *share,
-                                      const LEX_STRING &name) {
+Trigger *find_trigger_in_share(TABLE_SHARE *share, const LEX_STRING &name) {
   Trigger *t;
   List_iterator_fast<Trigger> it(*(share->triggers));
 

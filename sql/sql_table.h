@@ -40,6 +40,7 @@
 #include "sql/dd/string_type.h"
 #include "sql/handler.h"
 #include "sql/mdl.h"
+#include "sql/mem_root_array.h"
 
 class Alter_info;
 class Alter_table_ctx;
@@ -54,6 +55,8 @@ struct TABLE;
 class Table_ref;
 struct handlerton;
 class Field_enum;
+class Key_spec;
+class KEY_PART_INFO;
 
 namespace dd {
 class Foreign_key;
@@ -650,5 +653,24 @@ bool prepare_check_constraints_for_create(THD *thd, const char *db_name,
                                           Alter_info *alter_info);
 
 bool check_unsupport_alter_with_udt_table(ulonglong check_flags);
+
+/**
+  Alter from udt type is unallowed.
+
+  @param   old_table        Table to be altered.
+  @param   create_fields    List of Create_field to be created.
+
+  @retval  false            Success.
+  @retval  true             Failure.
+*/
+bool check_unsupport_alter_with_udt_columns(TABLE *old_table,
+                                            List<Create_field> create_fields);
+
+bool tmp_table_prepare_key(
+    THD *thd, const char *error_schema_name, const char *error_table_name,
+    HA_CREATE_INFO *create_info, List<Create_field> *create_list,
+    const Key_spec *key, KEY **key_info_buffer, KEY *key_info,
+    KEY_PART_INFO **key_part_info, Mem_root_array<const KEY *> &keys_to_check,
+    uint key_number, const handler *file, int *auto_increment);
 
 #endif /* SQL_TABLE_INCLUDED */

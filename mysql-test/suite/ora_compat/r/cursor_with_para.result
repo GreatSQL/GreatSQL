@@ -1,0 +1,538 @@
+#
+# oracle Cursors with parameters
+#
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'old'),(2,'old'),(3,'old'),(4,'old'),(5,'old');
+set sql_mode="oracle";
+CREATE PROCEDURE p1(min INT,max INT) as
+done INT DEFAULT FALSE;
+CURSOR cur(pmin INT, pmax INT) is SELECT a FROM t1 WHERE a BETWEEN pmin AND pmax;
+va INT;
+BEGIN
+OPEN cur(min,max);
+LOOP
+FETCH cur INTO va;
+EXIT WHEN cur%NOTFOUND;
+INSERT INTO t1 VALUES (va,'new');
+END LOOP;
+CLOSE cur;
+END;
+$$
+CALL p1(2,4);
+SELECT * FROM t1 ORDER BY b DESC,a;
+a	b
+1	old
+2	old
+3	old
+4	old
+5	old
+2	new
+3	new
+4	new
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#
+# OPEN with a wrong parameters
+#
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+CREATE or replace PROCEDURE p1(a_a INT,a_b VARCHAR(32)) as
+v_a INT;
+v_b VARCHAR(10);
+CURSOR c(p_a INT) is SELECT * FROM t1 WHERE a=p_a;
+BEGIN
+OPEN c(aa);
+CLOSE c;
+END;
+$$
+CALL p1(2,4);
+ERROR 42S22: Unknown column 'aa' in 'field list'
+DROP TABLE t1;
+DROP PROCEDURE p1;
+#
+# OPEN with a wrong parameters
+#
+CREATE or replace PROCEDURE p1(a_a INT,a_b VARCHAR(32)) as
+v_a INT;
+v_b VARCHAR(10);
+CURSOR c(p_a INT) is SELECT * FROM t1 WHERE a=p_a;
+BEGIN
+OPEN c();
+CLOSE c;
+END;
+$$
+ERROR 42000: Incorrect parameter count to cursor 'c'
+#
+# OPEN with a wrong count of parameters
+#
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+CREATE or replace PROCEDURE p1(a_a INT,a_b VARCHAR(32)) as
+v_a INT;
+v_b VARCHAR(10);
+CURSOR c(p_a INT, p_b VARCHAR(32)) is SELECT * FROM t1 WHERE a=p_a;
+BEGIN
+OPEN c(1);
+CLOSE c;
+END;
+$$
+ERROR 42000: Incorrect parameter count to cursor 'c'
+DROP TABLE t1;
+#
+# Cursor parameters are not visible outside of the cursor
+#
+CREATE or replace PROCEDURE p1(a_a INT,a_b VARCHAR(32)) as
+v_a INT;
+v_b VARCHAR(10);
+CURSOR c(p_a INT, p_b VARCHAR(32)) is SELECT * FROM t1 WHERE a=p_a;
+BEGIN
+OPEN c(1,"old");
+set p_a := 1;
+END;
+$$
+ERROR HY000: Unknown system variable 'p_a'
+#
+# Cursor parameter shadowing a local variable
+#
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (1);
+CREATE or replace PROCEDURE p1(a INT) as
+v_a INT := NULL;
+p_a INT := NULL;
+CURSOR c(p_a VARCHAR(32)) is SELECT p_a FROM t1;
+begin
+OPEN c(a);
+LOOP
+FETCH c INTO v_a;
+EXIT WHEN c%NOTFOUND;
+SELECT v_a;
+END LOOP;
+CLOSE c;
+END;
+$$
+CALL p1(1);
+v_a
+1
+CALL p1(NULL);
+v_a
+NULL
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#
+# Parameters in SELECT list
+#
+CREATE or replace PROCEDURE p1(a_a INT, a_b VARCHAR(32)) as
+v_a INT;
+v_b VARCHAR(10);
+CURSOR c(p_a INT, p_b VARCHAR(32)) is SELECT p_a,p_b FROM DUAL;
+begin
+OPEN c(a_a + 0,a_b);
+FETCH c INTO v_a, v_b;
+SELECT v_a, v_b;
+CLOSE c;
+OPEN c(a_a + 1,a_b);
+FETCH c INTO v_a, v_b;
+SELECT v_a, v_b;
+CLOSE c;
+END;
+$$
+CALL p1(1,'aa');
+v_a	v_b
+1	aa
+v_a	v_b
+2	aa
+DROP PROCEDURE p1;
+#
+# Parameters in SELECT list + UNION
+#
+CREATE PROCEDURE p1(a_a INT, a_b VARCHAR(32)) as
+v_a INT;
+v_b VARCHAR(10);
+CURSOR c(p_a INT, p_b VARCHAR(32)) is
+SELECT p_a,p_b FROM DUAL
+UNION ALL
+SELECT p_a+1,CONCAT(p_b,'b') FROM DUAL;
+BEGIN
+OPEN c(a_a,a_b);
+FETCH c INTO v_a, v_b;
+SELECT v_a, v_b;
+FETCH c INTO v_a, v_b;
+SELECT v_a, v_b;
+CLOSE c;
+END;
+$$
+CALL p1(1,'aa');
+v_a	v_b
+1	aa
+v_a	v_b
+2	aab
+DROP PROCEDURE p1;
+#
+# Parameters in SELECT list + type conversion + warnings
+#
+CREATE PROCEDURE p1(a_a VARCHAR(32)) as
+v_a VARCHAR(32);
+CURSOR c(p_a VARCHAR(32)) is SELECT p_a FROM DUAL;
+BEGIN
+OPEN c(a_a);
+FETCH c INTO v_a;
+SELECT v_a;
+CLOSE c;
+END;
+$$
+CALL p1('1b');
+v_a
+1b
+CALL p1('b1');
+v_a
+b1
+DROP PROCEDURE p1;
+#
+# Parameters in SELECT list + stored function
+#
+CREATE FUNCTION f1 (a VARCHAR(32)) RETURN VARCHAR(32) no sql
+is result VARCHAR(32);
+BEGIN
+result := CONCAT(a,'y');
+RETURN(result);
+END;
+$$
+CREATE PROCEDURE p1(a_a VARCHAR(32)) as
+done INT DEFAULT 0;
+v_a VARCHAR(10);
+v_b VARCHAR(10);
+CURSOR c(p_sel_a VARCHAR(32),p_sel_b VARCHAR(32)) is
+SELECT p_sel_a,p_sel_b FROM DUAL;
+BEGIN
+OPEN c(f1(a_a),f1(a_a));
+LOOP
+FETCH c INTO v_a, v_b;
+EXIT WHEN c%NOTFOUND;
+SELECT v_a, v_b;
+END LOOP;
+CLOSE c;
+END;
+$$
+CALL p1('x');
+v_a	v_b
+xy	xy
+CALL p1(f1(COALESCE(NULL, f1('x'))));
+v_a	v_b
+xyyy	xyyy
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+#
+# One parameter in WHERE clause
+#
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+CREATE TABLE t2 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+INSERT INTO t1 VALUES (1,'12');
+INSERT INTO t1 VALUES (2,'21');
+INSERT INTO t1 VALUES (2,'22');
+INSERT INTO t1 VALUES (3,'31');
+INSERT INTO t1 VALUES (3,'32');
+CREATE PROCEDURE p1(a_a INT) as
+done INT DEFAULT 0;
+v_a INT;
+v_b VARCHAR(10);
+CURSOR c(p_a INT) is SELECT a,b FROM t1 WHERE a=p_a;
+BEGIN
+OPEN c(a_a);
+LOOP
+FETCH c INTO v_a, v_b;
+EXIT WHEN c%NOTFOUND;
+INSERT INTO t2 VALUES (v_a,v_b);
+END LOOP;
+CLOSE c;
+END;
+$$
+CALL p1(1);
+SELECT * FROM t2;
+a	b
+1	11
+1	12
+DROP TABLE t1;
+DROP TABLE t2;
+DROP PROCEDURE p1;
+#
+# Two parameters in WHERE clause
+#
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+CREATE TABLE t2 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+INSERT INTO t1 VALUES (1,'12');
+INSERT INTO t1 VALUES (2,'21');
+INSERT INTO t1 VALUES (2,'22');
+INSERT INTO t1 VALUES (3,'31');
+INSERT INTO t1 VALUES (3,'32');
+CREATE PROCEDURE p1(a_a INT, a_b VARCHAR(32)) as
+v_a INT;
+v_b VARCHAR(10);
+CURSOR c(p_a INT, p_b VARCHAR(32)) is SELECT a,b FROM t1 WHERE a=p_a AND b=p_b;
+BEGIN
+OPEN c(a_a, a_b);
+LOOP
+FETCH c INTO v_a, v_b;
+EXIT WHEN c%NOTFOUND;
+INSERT INTO t2 VALUES (v_a,v_b);
+END LOOP;
+CLOSE c;
+END;
+$$
+CALL p1(1,'11');
+SELECT * FROM t2;
+a	b
+1	11
+DROP TABLE t1;
+DROP TABLE t2;
+DROP PROCEDURE p1;
+#
+# Parameters in WHERE and HAVING clauses
+#
+CREATE TABLE t1 (name VARCHAR(10), value1 INT);
+INSERT INTO t1 VALUES ('but',1);
+INSERT INTO t1 VALUES ('but',1);
+INSERT INTO t1 VALUES ('but',1);
+INSERT INTO t1 VALUES ('bin',1);
+INSERT INTO t1 VALUES ('bin',1);
+INSERT INTO t1 VALUES ('bot',1);
+CREATE PROCEDURE p1 (arg_name_limit VARCHAR(32), arg_total_limit INT) as
+i INT DEFAULT 0;
+v_name VARCHAR(10);
+v_total INT;
+CURSOR c(p_v INT) is
+SELECT name, SUM(value1 + p_v) + 0 AS total FROM t1
+WHERE name LIKE arg_name_limit
+GROUP BY name HAVING total>=arg_total_limit;
+BEGIN
+WHILE i < 2 loop
+BEGIN
+OPEN c(i);
+LOOP
+FETCH c INTO v_name, v_total;
+EXIT WHEN c%NOTFOUND;
+SELECT v_name, v_total;
+END LOOP;
+CLOSE c;
+SET i= i + 1;
+END;
+END loop;
+END;
+$$
+CALL p1('%', 2);
+v_name	v_total
+but	3
+v_name	v_total
+bin	2
+v_name	v_total
+but	6
+v_name	v_total
+bin	4
+v_name	v_total
+bot	2
+CALL p1('b_t', 0);
+v_name	v_total
+but	3
+v_name	v_total
+bot	1
+v_name	v_total
+but	6
+v_name	v_total
+bot	2
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#
+# One parameter in LIMIT clause
+#
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'b1');
+INSERT INTO t1 VALUES (2,'b2');
+INSERT INTO t1 VALUES (3,'b3');
+INSERT INTO t1 VALUES (4,'b4');
+INSERT INTO t1 VALUES (5,'b5');
+INSERT INTO t1 VALUES (6,'b6');
+CREATE PROCEDURE p1(a_a INT) as
+v_a INT;
+v_b VARCHAR(10);
+CURSOR c(p_a INT) is SELECT a,b FROM t1 ORDER BY a LIMIT p_a;
+BEGIN
+CREATE TABLE t2 (a INT, b VARCHAR(10));
+OPEN c(a_a);
+LOOP
+FETCH c INTO v_a, v_b;
+EXIT WHEN c%NOTFOUND;
+INSERT INTO t2 VALUES (v_a,v_b);
+END LOOP;
+CLOSE c;
+SELECT * FROM t2;
+DROP TABLE t2;
+END;
+$$
+CALL p1(1);
+a	b
+1	b1
+CALL p1(3);
+a	b
+1	b1
+2	b2
+3	b3
+CALL p1(6);
+a	b
+1	b1
+2	b2
+3	b3
+4	b4
+5	b5
+6	b6
+DROP TABLE t1;
+DROP PROCEDURE p1;
+#
+# for loop
+#
+CREATE TABLE t1 (id2 int, id int, en1 enum('aaa','a','b','c'));
+INSERT INTO t1 VALUES(1,1,'aaa'),(2,1,'a'),(3,3,'b'),(4,1,'c');
+CREATE PROCEDURE p1() as
+CURSOR c_country (id int) IS SELECT * FROM t1 WHERE id =id;
+BEGIN
+FOR rec IN c_country(1)
+loop
+SELECT rec.en1;
+END loop;
+END;
+$$
+CALL p1();
+rec.en1
+aaa
+rec.en1
+a
+rec.en1
+b
+rec.en1
+c
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#
+# for loop
+#
+CREATE TABLE t1 (id2 int, id int, en1 enum('aaa','a','b','c'));
+INSERT INTO t1 VALUES(1,1,'aaa'),(2,1,'a'),(3,3,'b'),(4,1,'c');
+CREATE PROCEDURE p1() as
+CURSOR c_country (id int) IS SELECT * FROM t1 WHERE id =id;
+rec c_country%ROWTYPE;
+BEGIN
+FOR rec IN c_country(1)
+loop
+SELECT rec.en1;
+END loop;
+END;
+$$
+CALL p1();
+rec.en1
+aaa
+rec.en1
+a
+rec.en1
+b
+rec.en1
+c
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#
+# %TYPE
+#
+CREATE TABLE t1 (id2 int, id int, en1 enum('aaa','a','b','c'));
+INSERT INTO t1 VALUES(1,1,'aaa'),(2,1,'a'),(3,3,'b'),(4,1,'c');
+CREATE PROCEDURE p1() as
+CURSOR c_country (id int) IS SELECT * FROM t1 WHERE id =id;
+rec c_country%ROWTYPE;
+rec2 rec%TYPE;
+BEGIN
+FOR rec2 IN c_country(1)
+loop
+SELECT rec2.en1;
+END loop;
+END;
+$$
+CALL p1();
+rec2.en1
+aaa
+rec2.en1
+a
+rec2.en1
+b
+rec2.en1
+c
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#
+# %TYPE
+#
+CREATE TABLE t1 (id2 int, id int, en1 enum('aaa','a','b','c'));
+INSERT INTO t1 VALUES(1,1,'aaa'),(2,1,'a'),(3,3,'b'),(4,1,'c');
+CREATE PROCEDURE p1() as
+rec2 t1.id%TYPE;
+aa varchar(100) := 'aaa';
+rec3 aa%TYPE;
+rec4 rec3%TYPE;
+BEGIN
+rec2 := 1;
+rec3 := 'bbb';
+rec4 := 'bbb4';
+SELECT rec2,rec3,rec4;
+END;
+$$
+CALL p1();
+rec2	rec3	rec4
+1	bbb	bbb4
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#
+# %TYPE ER_ROW_VARIABLE_DOES_NOT_HAVE_FIELD
+#
+CREATE TABLE t1 (id2 int, id int, en1 enum('aaa','a','b','c'));
+INSERT INTO t1 VALUES(1,1,'aaa'),(2,1,'a'),(3,3,'b'),(4,1,'c');
+CREATE PROCEDURE p1() as
+rec2 t1%ROWTYPE;
+BEGIN
+SELECT rec2.id1;
+END;
+$$
+call p1();
+ERROR HY000: Row variable 'rec2' does not have a field 'id1'
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#
+# %TYPE
+#
+CREATE TABLE t1 (id2 int, id int, en1 enum('aaa','a','b','c'));
+INSERT INTO t1 VALUES(1,1,'aaa'),(2,1,'a'),(3,3,'b'),(4,1,'c');
+CREATE PROCEDURE p1() as
+rec2 t1.id%TYPE;
+aa varchar(100) := 'aaa';
+rec3,rec4,rec5 aa%TYPE;
+rec6,rec7,rec8 rec3%TYPE;
+BEGIN
+rec2 := 1;
+rec3 := 'bbb';
+rec4 := 'bbb4';
+rec5 := 'bbb5';
+rec6 := 'bbb6';
+rec7 := 'bbb7';
+rec8 := 'bbb8';
+SELECT rec2,rec3,rec4,rec5,rec6,rec7,rec8;
+END;
+$$
+CALL p1();
+rec2	rec3	rec4	rec5	rec6	rec7	rec8
+1	bbb	bbb4	bbb5	bbb6	bbb7	bbb8
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#
+# error ER_NOT_SUPPORTED_YET
+#
+declare 
+x x%type;
+begin
+select x;
+END;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'the same of variable and define of variable%type'

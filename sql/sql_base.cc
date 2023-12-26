@@ -88,6 +88,7 @@
 #include "sql/dd/dd_table.h"       // dd::table_exists
 #include "sql/dd/dd_tablespace.h"  // dd::fill_table_and_parts_tablespace_name
 #include "sql/dd/dictionary.h"
+#include "sql/dd/impl/utils.h"
 #include "sql/dd/string_type.h"
 #include "sql/dd/types/abstract_table.h"
 #include "sql/dd/types/column.h"
@@ -106,6 +107,7 @@
 #include "sql/derror.h"          // ER_THD
 #include "sql/error_handler.h"   // Internal_error_handler
 #include "sql/field.h"
+#include "sql/gdb_sequence.h"
 #include "sql/handler.h"
 #include "sql/histograms/histogram.h"
 #include "sql/item.h"
@@ -420,6 +422,13 @@ static std::string create_table_def_key_secondary(const char *db_name,
   return {key, key_length};
 }
 
+std::string create_table_def_key_string(const char *db_name,
+                                        const char *table_name) {
+  char key[MAX_DBKEY_LENGTH];
+  size_t key_length = create_table_def_key(db_name, table_name, key);
+  return {key, key_length};
+}
+
 /**
   Get table cache key for a table list element.
 
@@ -488,6 +497,10 @@ bool table_def_init(void) {
   }
 
   table_def_cache = new Table_definition_cache(key_memory_table_share);
+
+  Global_temp_table_cache::init_psi_keys();
+  global_temp_table_cache.init();
+
   return false;
 }
 
@@ -498,6 +511,7 @@ bool table_def_init(void) {
 */
 
 void table_def_start_shutdown(void) {
+  global_temp_table_cache.destroy();
   if (table_def_cache != nullptr) {
     table_cache_manager.lock_all_and_tdc();
     /*
@@ -807,6 +821,12 @@ TABLE_SHARE *get_table_share(THD *thd, const char *db, const char *table_name,
           TABLE_SHARE member view_object.
         */
         share->is_view = true;
+
+        const dd::Properties *view_options_test = &abstract_table->options();
+        if (view_options_test->exists("is_force_view")) {
+          view_options_test->get("is_force_view", &share->is_force_view);
+        }
+
         const dd::View *tmp_view =
             dynamic_cast<const dd::View *>(abstract_table);
         share->view_object = tmp_view->clone();
@@ -1687,7 +1707,7 @@ void close_thread_tables(THD *thd) {
 
     /* Fallthrough */
   }
-
+  if (thd->use_in_dbms_sql) return;
   if (thd->lock) {
     /*
       For RBR we flush the pending event just before we unlock all the
@@ -1744,10 +1764,19 @@ void close_thread_table(THD *thd, TABLE **table_ptr) {
   /*
     The metadata lock must be released after giving back
     the table to the table cache.
+
+    in dbms_pkg will release mdl before in trans,
+    table cache will in last thd->mdl not in current mdl,
+    and this table mdl has already free
+    just destory this table
   */
-  assert(thd->mdl_context.owns_equal_or_stronger_lock(
-      MDL_key::TABLE, table->s->db.str, table->s->table_name.str, MDL_SHARED));
-  table->mdl_ticket = nullptr;
+  if (table->mdl_ticket) {
+    assert(thd->mdl_context.owns_equal_or_stronger_lock(
+        MDL_key::TABLE, table->s->db.str, table->s->table_name.str,
+        MDL_SHARED));
+    table->mdl_ticket = nullptr;
+  }
+
   table->pos_in_table_list = nullptr;
 
   mysql_mutex_lock(&thd->LOCK_thd_data);
@@ -1793,6 +1822,9 @@ static inline uint tmpkeyval(TABLE *table) {
   Close all temporary tables created by 'CREATE TEMPORARY TABLE' for thread
   creates one DROP TEMPORARY TABLE binlog event for each pseudo-thread.
 
+  @param thd  Thread handler
+  @param mode 0: for all temp tables, 1: for transaction ora temp table
+              2: for temp tables with end-of-statement mark.
   TODO: In future, we should have temporary_table= 0 and
         replica_open_temp_tables.fetch_add() at one place instead of repeating
         it all across the function. An alternative would be to use
@@ -1801,10 +1833,10 @@ static inline uint tmpkeyval(TABLE *table) {
         and zero replica_open_temp_tables already.
 */
 
-bool close_temporary_tables(THD *thd) {
+bool close_temporary_tables(THD *thd, int mode) {
   DBUG_TRACE;
   TABLE *table;
-  TABLE *next = nullptr;
+  TABLE **next;
   TABLE *prev_table;
   /* Assume thd->variables.option_bits has OPTION_QUOTE_SHOW_CREATE */
   bool was_quote_show = true;
@@ -1816,17 +1848,38 @@ bool close_temporary_tables(THD *thd) {
   assert(!thd->slave_thread ||
          thd->system_thread != SYSTEM_THREAD_SLAVE_WORKER);
 
+  if (mode) {
+    int count = 0;
+    for (TABLE *t = thd->temporary_tables; t; t = t->next) {
+      if (t->m_is_ora_tmp) {
+        if (mode == 1 && t->m_trans_tmp)
+          count++;
+        else if (mode == 2 && t->m_delete_on_eos)
+          count++;
+      }
+    }
+    if (count == 0) return false;
+  }
+
   /*
     Ensure we don't have open HANDLERs for tables we are about to close.
     This is necessary when close_temporary_tables() is called as part
     of execution of BINLOG statement (e.g. for format description event).
   */
-  mysql_ha_rm_temporary_tables(thd);
+  if (mode == 0) mysql_ha_rm_temporary_tables(thd);
   if (!mysql_bin_log.is_open()) {
-    TABLE *tmp_next;
+    TABLE *t;
     mysql_mutex_lock(&thd->LOCK_temporary_tables);
-    for (TABLE *t = thd->temporary_tables; t; t = tmp_next) {
-      tmp_next = t->next;
+    for (next = &thd->temporary_tables; *next;) {
+      t = *next;
+      if ((mode == 1 && !(t->m_is_ora_tmp && t->m_trans_tmp)) ||
+          (mode == 2 && !(t->m_is_ora_tmp && t->m_delete_on_eos))) {
+        next = &t->next;
+        continue;
+      }
+      /* unlink t from the double-linked list, thd->temporary_tables. */
+      if (t->next) t->next->prev = t->prev;
+      *next = t->next;
       mysql_lock_remove(thd, thd->lock, t);
       /*
         We should not meet temporary tables created by ALTER TABLE here.
@@ -1838,7 +1891,7 @@ bool close_temporary_tables(THD *thd) {
       slave_closed_temp_tables++;
     }
 
-    thd->temporary_tables = nullptr;
+    assert(mode || thd->temporary_tables == nullptr);
     mysql_mutex_unlock(&thd->LOCK_temporary_tables);
     if (thd->slave_thread) {
       atomic_replica_open_temp_tables -= slave_closed_temp_tables;
@@ -1933,7 +1986,12 @@ bool close_temporary_tables(THD *thd) {
   lex->drop_temporary = true;
 
   /* scan sorted tmps to generate sequence of DROP */
-  for (table = thd->temporary_tables; table; table = next) {
+  for (next = &thd->temporary_tables, table = *next; *next; table = *next) {
+    if ((mode == 1 && !(table->m_is_ora_tmp && table->m_trans_tmp)) ||
+        (mode == 2 && !(table->m_is_ora_tmp && table->m_delete_on_eos))) {
+      next = &table->next;
+      continue;
+    }
     if (is_user_table(table) && table->should_binlog_drop_if_temp()) {
       bool save_thread_specific_used = thd->thread_specific_used;
       my_thread_id save_pseudo_thread_id = thd->variables.pseudo_thread_id;
@@ -1951,7 +2009,13 @@ bool close_temporary_tables(THD *thd) {
            tmpkeyval(table) == thd->variables.pseudo_thread_id &&
            table->s->db.length == db.length() &&
            strcmp(table->s->db.str, db.ptr()) == 0;
-           table = next) {
+           table = *next) {
+        if ((mode == 1 && !(table->m_is_ora_tmp && table->m_trans_tmp)) ||
+            (mode == 2 && !(table->m_is_ora_tmp && table->m_delete_on_eos))) {
+          next = &table->next;
+          continue;
+        }
+
         /* Separate transactional from non-transactional temp tables */
         if (table->should_binlog_drop_if_temp()) {
           /* Separate transactional from non-transactional temp tables */
@@ -1975,8 +2039,9 @@ bool close_temporary_tables(THD *thd) {
             s_query_non_trans.append(',');
           }
         }
-
-        next = table->next;
+        /* unlink table from the double-linked list, thd->temporary_tables. */
+        if (table->next) table->next->prev = table->prev;
+        *next = table->next;
         mysql_lock_remove(thd, thd->lock, table);
         close_temporary(thd, table, true, true);
         slave_closed_temp_tables++;
@@ -2045,7 +2110,9 @@ bool close_temporary_tables(THD *thd) {
       thd->variables.pseudo_thread_id = save_pseudo_thread_id;
       thd->thread_specific_used = save_thread_specific_used;
     } else {
-      next = table->next;
+      /* unlink table from the double-linked list, thd->temporary_tables. */
+      if (table->next) table->next->prev = table->prev;
+      *next = table->next;
       /*
         This is for those cases when we have acquired lock but drop temporary
         table will not be logged.
@@ -2055,7 +2122,7 @@ bool close_temporary_tables(THD *thd) {
       slave_closed_temp_tables++;
     }
   }
-  thd->temporary_tables = nullptr;
+  assert(mode || thd->temporary_tables == nullptr);
   mysql_mutex_unlock(&thd->LOCK_temporary_tables);
   lex->drop_temporary = sav_drop_temp;
   lex->sql_command = sav_sql_command;
@@ -2424,6 +2491,16 @@ void close_temporary(THD *thd, TABLE *table, bool free_share,
   DBUG_PRINT("tmptable", ("closing table: '%s'.'%s'", table->s->db.str,
                           table->s->table_name.str));
 
+  /*
+    For global temp table instance, the Global_temp_table_cache is used
+    to keep the reference count to block the modification of the
+    global temp table in another session.
+    The reference count is decreased by one here.
+  */
+  if (table->m_global_tmp) {
+    global_temp_table_cache.release_table(table);
+  }
+
   if (unlikely(opt_userstat)) {
     table->file->update_global_table_stats();
     table->file->update_global_index_stats();
@@ -2542,6 +2619,12 @@ static bool check_if_table_exists(THD *thd, Table_ref *table, bool *exists) {
                     MYF(0), table->table_name);
     return true;
   }
+
+  if (has_sequence_def(thd, table->db, table->table_name)) {
+    my_error(ER_GDB_DUPLICATE_SEQ_NAME, MYF(0), table->table_name);
+    return true;
+  }
+
 end:
   return false;
 }
@@ -2801,6 +2884,97 @@ bool add_view_place_holder(THD *thd, Table_ref *table_list) {
   return false;
 }
 
+static bool is_ora_global_temporary(THD *thd, Table_ref *tl, TABLE_SHARE *share,
+                                    bool try_global_temp) {
+  /*
+    If a table is referred in a view, tl->updating is not set and
+    tl->belong_to_view is set. In such case, tl->belong_to_view->updating
+    should be checked.
+  */
+  if (!try_global_temp ||
+      !(share->ora_tmp_table_options & HA_ORA_TMP_TABLE_GLOBAL))
+    return false;
+  if (tl->belong_to_view == nullptr) {
+    if (!tl->updating) return false;
+  } else if (!tl->belong_to_view->updating)
+    return false;
+
+  /*
+    Only create temporary table instance for selected SQLCOM_s.
+    In ora_create_and_open_temporary(), set flag, m_check_inserted_rows in
+    TABLE so that if no row is inserted, this temporary table instance is
+    removed.
+  */
+  if (thd->lex->sql_command == SQLCOM_INSERT ||
+      thd->lex->sql_command == SQLCOM_INSERT_SELECT ||
+      thd->lex->sql_command == SQLCOM_INSERT_ALL_SELECT ||
+      thd->lex->sql_command == SQLCOM_REPLACE ||
+      thd->lex->sql_command == SQLCOM_REPLACE_SELECT)
+    return true;
+
+  if (thd->lex->sql_command == SQLCOM_UPDATE_MULTI) {
+    Sql_cmd_update *sql_cmd_update =
+        (dynamic_cast<Sql_cmd_update *>(thd->lex->m_sql_cmd));
+    if (sql_cmd_update != nullptr && sql_cmd_update->merge_into_stmt &&
+        sql_cmd_update->merge_when_insert)
+      return true;
+  }
+
+  return false;
+}
+
+static bool ora_create_and_open_temporary(THD *thd, Table_ref *tl) {
+  /*
+    A global temporary table instance may be created in open_tables().
+    It may happen in SQLCOM_INSERT_ALL_SELECT which multiple into-statement
+    may reference the same target table.
+  */
+  TABLE *table = find_temporary_table(thd, tl);
+  if (table) {
+    my_error(ER_CANT_REOPEN_TABLE, MYF(0), table->alias);
+    return true;
+  }
+  /* make sure the temp table exist */
+  /* formulate the 'create temporary table' statement'. */
+  String temp_stmt;
+  temp_stmt.append("CREATE TEMPORARY TABLE ");
+  append_identifier(thd, &temp_stmt, tl->db, strlen(tl->db));
+  temp_stmt.append(".");
+  append_identifier(thd, &temp_stmt, tl->table_name, strlen(tl->table_name));
+  temp_stmt.append(" LIKE ");
+  append_identifier(thd, &temp_stmt, tl->db, strlen(tl->db));
+  temp_stmt.append(".");
+  append_identifier(thd, &temp_stmt, tl->table_name, strlen(tl->table_name));
+
+  dd::String_type crt_table(temp_stmt.c_ptr(), temp_stmt.length());
+  unsigned int stmt_unsafe_rollback_flags =
+      thd->get_transaction()->get_unsafe_rollback_flags(Transaction_ctx::STMT);
+  thd->m_ora_create_global_temp_instance = true;
+  /*
+    ref.  sp_head::execute().
+    When inside a substatement (a stored function or trigger
+    statement), clear the metadata observer in THD, if any.
+  */
+  thd->push_reprepare_observer(nullptr);
+  auto rc = dd::execute_query(thd, crt_table);
+  thd->pop_reprepare_observer();
+  thd->m_ora_create_global_temp_instance = false;
+  if (rc) return true;
+  thd->get_transaction()->set_unsafe_rollback_flags(Transaction_ctx::STMT,
+                                                    stmt_unsafe_rollback_flags);
+
+  /*
+    For updatable view, the open_type of the referred table is OT_BASE_ONLY
+    which is not allowed in open_temporary_table().
+  */
+  enum enum_open_type ot = tl->open_type;
+  if (tl->belong_to_view) tl->open_type = OT_TEMPORARY_OR_BASE;
+  rc = open_temporary_table(thd, tl);
+  tl->open_type = ot;
+  assert(tl->table);
+  return rc;
+}
+
 /**
   Open a base table.
 
@@ -2831,7 +3005,8 @@ bool add_view_place_holder(THD *thd, Table_ref *table_list) {
                 Table_ref::view is set for views).
 */
 
-bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx) {
+bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx,
+                bool try_global_temp) {
   TABLE *table = nullptr;
   TABLE_SHARE *share = nullptr;
   const char *key;
@@ -2841,6 +3016,18 @@ bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx) {
   MDL_ticket *mdl_ticket = nullptr;
   int error = 0;
   bool backup_protection_acquired = false;
+  /*
+    For Oracle global temporary table, an instance may be used/created
+    (do_rollback is true), and the MDL lock for the original table should
+    be released if the MDL lock is acquired in this function (new_ticket is
+    true).
+  */
+  MDL_savepoint mdl_savepoint = thd->mdl_context.mdl_savepoint();
+  bool new_ticket = false;
+  bool do_rollback = false;
+  auto rb = create_scope_guard([&]() {
+    if (do_rollback) thd->mdl_context.rollback_to_savepoint(mdl_savepoint);
+  });
 
   DBUG_TRACE;
 
@@ -2949,6 +3136,11 @@ bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx) {
             table->query_id != thd->query_id && /* skip tables already used */
             (thd->locked_tables_mode == LTM_LOCK_TABLES ||
              table->query_id == 0)) {
+          /* check for global temporary table to create an instance */
+          if (is_ora_global_temporary(thd, table_list, table->s,
+                                      try_global_temp)) {
+            return ora_create_and_open_temporary(thd, table_list);
+          }
           int distance = ((int)table->reginfo.lock_type -
                           (int)table_list->lock_descriptor().type);
 
@@ -3121,6 +3313,7 @@ bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx) {
       return true;
     }
     DEBUG_SYNC(thd, "after_open_table_mdl_shared");
+    new_ticket = true;
   } else {
     /*
       Grab reference to the MDL lock ticket that was acquired
@@ -3226,6 +3419,20 @@ retry_share : {
     table->file->ha_extra(HA_EXTRA_RESET_STATE);
 
     thd->status_var.table_open_cache_hits++;
+
+    /* check for global temporary table to create an instance */
+    if (is_ora_global_temporary(thd, table_list, table->s, try_global_temp)) {
+      /*
+        tc->get_table() moves table from el->free_tables into el->used_tables.
+        tc->release_table() will undo this.
+      */
+      tc->lock();
+      tc->release_table(thd, table);
+      tc->unlock();
+      table->file->unbind_psi();
+      if (new_ticket) do_rollback = true;
+      return ora_create_and_open_temporary(thd, table_list);
+    }
     goto table_found;
   } else if (share) {
     /*
@@ -3278,6 +3485,7 @@ retry_share : {
   */
   if (table_list->is_view() || share->is_view) {
     bool view_open_result = true;
+    table_list->is_force_view = share->is_force_view;
     /*
       If parent_l of the table_list is non null then a merge table
       has this view as child table, which is not supported.
@@ -3390,6 +3598,15 @@ share_found:
                                            nullptr);
       return true;
     }
+  }
+
+  /* check for global temporary table to create an instance */
+  if (is_ora_global_temporary(thd, table_list, share, try_global_temp)) {
+    release_table_share(share);
+    mysql_mutex_unlock(&LOCK_open);
+
+    if (new_ticket) do_rollback = true;
+    return ora_create_and_open_temporary(thd, table_list);
   }
 
   mysql_mutex_unlock(&LOCK_open);
@@ -5160,8 +5377,18 @@ static bool open_and_process_table(THD *thd, LEX *lex, Table_ref *const tables,
       error = open_temporary_table(thd, tables);
     }
 
+    if (!error && !tables->table && tables->belong_to_view != nullptr) {
+      TABLE *t = find_temporary_table(thd, tables);
+      if (t != nullptr &&
+          (t->s->ora_tmp_table_options & HA_ORA_TMP_TABLE_GLOBAL)) {
+        enum enum_open_type ot = tables->open_type;
+        tables->open_type = OT_TEMPORARY_OR_BASE;
+        error = open_temporary_table(thd, tables);
+        tables->open_type = ot;
+      }
+    }
     if (!error && (tables->is_view() || tables->table == nullptr))
-      error = open_table(thd, tables, ot_ctx);
+      error = open_table(thd, tables, ot_ctx, true /* try_global_temp */);
   }
 
   if (error) {
@@ -6981,6 +7208,23 @@ bool open_tables_for_query(THD *thd, Table_ref *tables, uint flags) {
 
   return false;
 end:
+  if (thd->lex->create_force_view_mode) {
+    auto cur_err = thd->get_stmt_da()->mysql_errno();
+    if (cur_err == ER_BAD_DB_ERROR || cur_err == ER_NO_SUCH_TABLE) {
+      /*
+        mysql_create_view() uses open_tables_for_query() to resolve the tables.
+        If this function fails, keeps all MDL locks including lock for view
+        and continue the view creation for create-force-view view.
+        btw, the error/condition should be cleared/reset for such case.
+      */
+      thd->lex->create_force_view_table_not_found = true;
+      thd->clear_error();
+      // thd->get_stmt_da()->reset_condition_info(thd);
+      push_warning(thd, Sql_condition::SL_WARNING, WARN_VIEW_COMPILATION_ERROR,
+                   ER_THD(thd, WARN_VIEW_COMPILATION_ERROR));
+      return false;
+    }
+  }
   /*
     No need to commit/rollback the statement transaction: it's
     either not started or we're filling in an INFORMATION_SCHEMA
@@ -9251,6 +9495,54 @@ bool resolve_var_assignments(THD *thd, LEX *lex) {
 /****************************************************************************
 ** Check that all given fields exists and fill struct with current data
 ****************************************************************************/
+static bool setup_update_fields(THD *thd, Item *item, ulong want_privilege) {
+  Item_field *const field = item->field_for_view_update();
+  if (field == nullptr) {
+    my_error(ER_NONUPDATEABLE_COLUMN, MYF(0), item->item_name.ptr());
+    return true;
+  }
+  if (item->type() == Item::TRIGGER_FIELD_ITEM) {
+    char buff[NAME_LEN * 2];
+    String str(buff, sizeof(buff), &my_charset_bin);
+    str.length(0);
+    item->print(thd, &str, QT_ORDINARY);
+    my_error(ER_INVALID_ASSIGNMENT_TARGET, MYF(0), str.c_ptr());
+    return true;
+  }
+  Table_ref *tr = field->table_ref;
+  if ((want_privilege & UPDATE_ACL) && !tr->is_updatable()) {
+    /*
+      The base table of the column may have beeen referenced through a view
+      or derived table. If so, print the name of the upper-most view
+      referring to this table in order to print the error message with the
+      alias of the view as written in the original query instead of the
+      alias of the base table.
+    */
+    my_error(ER_NON_UPDATABLE_TABLE, MYF(0), tr->top_table()->alias, "UPDATE");
+    return true;
+  }
+  if ((want_privilege & INSERT_ACL) && !tr->is_insertable()) {
+    /* purecov: begin inspected */
+    /*
+      Generally unused as long as INSERT only can be applied against
+      one base table, for which the INSERT privileges are checked in
+      Sql_cmd_insert_base::prepare_inner()
+    */
+    my_error(ER_NON_INSERTABLE_TABLE, MYF(0), tr->top_table()->alias, "INSERT");
+    return true;
+    /* purecov: end */
+  }
+  if (want_privilege & (INSERT_ACL | UPDATE_ACL)) {
+    Column_privilege_tracker column_privilege_tr(thd, want_privilege);
+    if (item->walk(&Item::check_column_privileges, enum_walk::PREFIX,
+                   pointer_cast<uchar *>(thd)))
+      return true;
+  }
+  Mark_field mf(MARK_COLUMNS_WRITE);
+  item->walk(&Item::mark_field_in_map, enum_walk::POSTFIX,
+             pointer_cast<uchar *>(&mf));
+  return false;
+}
 
 /**
   Resolve a list of expressions and setup appropriate data
@@ -9338,9 +9630,10 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
     typed_it = typed_items->begin();
   }
   int cols_expected = 1;
-  if (is_ora_update_set) {
-    assert(typed_items && fields->size() == 1);
-    cols_expected = typed_items->size();
+  if (is_ora_update_set && fields->size() == 1) {
+    // it's item_row
+    Item *item_row = typed_items ? typed_items->at(0) : fields->at(0);
+    if (dynamic_cast<Item_row *>(item_row)) cols_expected = item_row->cols();
   }
   for (auto it = fields->begin(); it != fields->end(); ++it) {
     const size_t old_size = fields->size();
@@ -9357,9 +9650,24 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
     // Check that we don't have a field that is hidden system field. This should
     // be caught in Item_field::fix_fields.
     assert(
-        item->type() != Item::FIELD_ITEM ||
+        item->type() != Item::FIELD_ITEM || item->is_sequence_field() ||
         !static_cast<const Item_field *>(item)->field->is_hidden_by_system());
 
+    /* select returnacursor() from t1 --unallowed.
+    select returnacursor() into c1 from t1 --unallowed.
+    select returnacursor() into c1 from dual --allowed.
+    */
+    Item_func_sp *item_sp = dynamic_cast<Item_func_sp *>(item);
+    if (item_sp &&
+        dynamic_cast<Field_refcursor *>(item_sp->get_sp_result_field()) &&
+        (!dynamic_cast<Query_dumpvar *>(thd->lex->result) ||
+         (dynamic_cast<Query_dumpvar *>(thd->lex->result) &&
+          thd->lex->query_tables &&
+          // It's not function()'s table,but from table.
+          !(*thd->lex->query_tables_own_last)))) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "ref cursor used in table");
+      return true;
+    }
     if (!ref.is_null()) {
       ref[0] = item;
       ref.pop_front();
@@ -9371,53 +9679,16 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
     }
 
     if (column_update) {
-      Item_field *const field = item->field_for_view_update();
-      if (field == nullptr) {
-        my_error(ER_NONUPDATEABLE_COLUMN, MYF(0), item->item_name.ptr());
-        return true;
+      Item_row *item_row = dynamic_cast<Item_row *>(item);
+      if (item_row) {
+        for (uint i = 0; i < item_row->cols(); i++) {
+          if (setup_update_fields(thd, item_row->element_index(i),
+                                  want_privilege))
+            return true;
+        }
+      } else {
+        if (setup_update_fields(thd, item, want_privilege)) return true;
       }
-      if (item->type() == Item::TRIGGER_FIELD_ITEM) {
-        char buff[NAME_LEN * 2];
-        String str(buff, sizeof(buff), &my_charset_bin);
-        str.length(0);
-        item->print(thd, &str, QT_ORDINARY);
-        my_error(ER_INVALID_ASSIGNMENT_TARGET, MYF(0), str.c_ptr());
-        return true;
-      }
-      Table_ref *tr = field->table_ref;
-      if ((want_privilege & UPDATE_ACL) && !tr->is_updatable()) {
-        /*
-          The base table of the column may have beeen referenced through a view
-          or derived table. If so, print the name of the upper-most view
-          referring to this table in order to print the error message with the
-          alias of the view as written in the original query instead of the
-          alias of the base table.
-        */
-        my_error(ER_NON_UPDATABLE_TABLE, MYF(0), tr->top_table()->alias,
-                 "UPDATE");
-        return true;
-      }
-      if ((want_privilege & INSERT_ACL) && !tr->is_insertable()) {
-        /* purecov: begin inspected */
-        /*
-          Generally unused as long as INSERT only can be applied against
-          one base table, for which the INSERT privileges are checked in
-          Sql_cmd_insert_base::prepare_inner()
-        */
-        my_error(ER_NON_INSERTABLE_TABLE, MYF(0), tr->top_table()->alias,
-                 "INSERT");
-        return true;
-        /* purecov: end */
-      }
-      if (want_privilege & (INSERT_ACL | UPDATE_ACL)) {
-        Column_privilege_tracker column_privilege_tr(thd, want_privilege);
-        if (item->walk(&Item::check_column_privileges, enum_walk::PREFIX,
-                       pointer_cast<uchar *>(thd)))
-          return true;
-      }
-      Mark_field mf(MARK_COLUMNS_WRITE);
-      item->walk(&Item::mark_field_in_map, enum_walk::POSTFIX,
-                 pointer_cast<uchar *>(&mf));
     } else if (item->data_type() == MYSQL_TYPE_INVALID) {
       if (typed_item != nullptr) {
         if (item->propagate_type(thd, Type_properties(*typed_item)))
@@ -9442,8 +9713,14 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
       */
       if ((item->has_aggregation() && !(item->type() == Item::SUM_FUNC_ITEM &&
                                         !item->m_is_window_function)) ||  //(1)
-          item->has_wf())                                                 // (2)
+          item->has_wf()) {                                               // (2)
+        if (item->this_item()->is_ora_udt_type()) {
+          my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                   "udt value in aggregate function");
+          return true;
+        }
         item->split_sum_func(thd, ref_item_array, fields);
+      }
     }
 
     select->select_list_tables |= item->used_tables();
@@ -9786,6 +10063,49 @@ bool insert_fields(THD *thd, Query_block *query_block, const char *db_name,
 ** Fill a record with data (for INSERT or UPDATE)
 ** Returns : 1 if some field has wrong type
 ******************************************************************************/
+static bool bitmap_set_bit_and_save_field(
+    Item *fld, Item *value, TABLE *table, MY_BITMAP *bitmap,
+    MY_BITMAP *insert_into_fields_bitmap,
+    bool raise_autoinc_has_expl_non_null_val) {
+  Item_field *const field = fld->field_for_view_update();
+  assert(field != nullptr && field->table_ref->table == table);
+
+  Field *const rfield = field->field;
+  /* If bitmap over wanted fields are set, skip non marked fields. */
+  if (bitmap && !bitmap_is_set(bitmap, rfield->field_index())) return false;
+
+  bitmap_set_bit(table->fields_set_during_insert, rfield->field_index());
+  if (insert_into_fields_bitmap)
+    bitmap_set_bit(insert_into_fields_bitmap, rfield->field_index());
+
+  /* Generated columns will be filled after all base columns are done. */
+  if (rfield->is_gcol()) return false;
+
+  if (raise_autoinc_has_expl_non_null_val && rfield == table->next_number_field)
+    table->autoinc_field_has_explicit_non_null_value = true;
+  /*
+    We handle errors from save_in_field() by first checking the return
+    value and then testing thd->is_error(). thd->is_error() can be set
+    even when save_in_field() does not return a negative value.
+    @todo save_in_field returns an enum which should never be a negative
+    value. We should change this test to check for correct enum value.
+
+    The below call can reset TABLE::autoinc_field_has_explicit_non_null_value
+    flag depending on value provided (for details please see
+    set_field_to_null_with_conversions()). So evaluation of this flag can't
+    be moved outside of fill_record(), to be done once per statement.
+  */
+  // e.g:update tabl1 set (u1)=(select name1 from tt_air where id=10)
+  if (dynamic_cast<Item_singlerow_subselect *>(value) &&
+      value->result_type() == ROW_RESULT && value->cols() == 1) {
+    value = value->element_index(0);
+  }
+  if (value && value->save_in_field(rfield, false) < 0) {
+    my_error(ER_UNKNOWN_ERROR, MYF(0));
+    return true;
+  }
+  return false;
+}
 
 /**
   Fill fields with given items.
@@ -9823,10 +10143,9 @@ bool insert_fields(THD *thd, Query_block *query_block, const char *db_name,
 bool fill_record(THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
                  const mem_root_deque<Item *> &values, MY_BITMAP *bitmap,
                  MY_BITMAP *insert_into_fields_bitmap,
-                 bool raise_autoinc_has_expl_non_null_val,
-                 bool is_ora_update_set) {
+                 bool raise_autoinc_has_expl_non_null_val) {
   DBUG_TRACE;
-  assert(table->s->udt_name.str || is_ora_update_set ||
+  assert(table->s->udt_name.str ||
          CountVisibleFields(fields) == CountVisibleFields(values));
 
   /*
@@ -9846,26 +10165,11 @@ bool fill_record(THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
 
   auto value_it = VisibleFields(values).begin();
 
-  /* for is_ora_update_set = false:
-     update t1 set id=t_air(10,'') ==> is_ora_update_set = false
-     update t1 set id=(select name from tt_air) ==> is_ora_update_set = true
-     update t1 set (u1)=(select name from tt_air) ==> is_ora_update_set = true
-     update t1 set (u1)=t_air(10,'') ==> is_ora_update_set = false
-  */
-  if (thd->lex->sql_command == SQLCOM_UPDATE && fields.size() == 1 &&
-      values.size() == 1 &&
-      values.at(0)->type() == Item::Type::SUBSELECT_ITEM &&
-      values.at(0)->element_index(0)->is_ora_type()) {
-    is_ora_update_set = true;
-  }
-  if (is_ora_update_set) {
-    values.at(0)->val_int();
-  }
   bool is_udt_insert = false;
   if (table->s->udt_name.str && thd->lex->sql_command != SQLCOM_UPDATE &&
       thd->lex->sql_command != SQLCOM_UPDATE_MULTI) {
     if ((fields.size() > 1 || (table->s->fields == 1 && fields.size() == 1)) &&
-        values.size() == 1 && values.at(0)->is_ora_type()) {
+        values.size() == 1 && values.at(0)->this_item()->is_ora_type()) {
       is_udt_insert = true;
       if (values.at(0)->udt_table_store_to_table(table)) return true;
       if (table->has_gcol() && update_generated_write_fields(
@@ -9880,52 +10184,37 @@ bool fill_record(THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
   }
   int i = 0;
   for (Item *fld : VisibleFields(fields)) {
-    Item_field *const field = fld->field_for_view_update();
-    assert(field != nullptr && field->table_ref->table == table);
-
-    Field *const rfield = field->field;
-    Item *value = nullptr;
-    if (!is_ora_update_set) {
-      value = *value_it++;
-    } else {
-      value = values.at(0)->element_index(i);
-    }
-    // e.g:rec udt; insert into tt_air values(12,rec);
+    Item *value = *value_it++;
     value = value->this_item();
-    /* If bitmap over wanted fields are set, skip non marked fields. */
-    if (bitmap && !bitmap_is_set(bitmap, rfield->field_index())) continue;
-
-    bitmap_set_bit(table->fields_set_during_insert, rfield->field_index());
-    if (insert_into_fields_bitmap)
-      bitmap_set_bit(insert_into_fields_bitmap, rfield->field_index());
-
-    /* Generated columns will be filled after all base columns are done. */
-    if (rfield->is_gcol()) continue;
-
-    if (raise_autoinc_has_expl_non_null_val &&
-        rfield == table->next_number_field)
-      table->autoinc_field_has_explicit_non_null_value = true;
-    /*
-      We handle errors from save_in_field() by first checking the return
-      value and then testing thd->is_error(). thd->is_error() can be set
-      even when save_in_field() does not return a negative value.
-      @todo save_in_field returns an enum which should never be a negative
-      value. We should change this test to check for correct enum value.
-
-      The below call can reset TABLE::autoinc_field_has_explicit_non_null_value
-      flag depending on value provided (for details please see
-      set_field_to_null_with_conversions()). So evaluation of this flag can't
-      be moved outside of fill_record(), to be done once per statement.
-    */
-    // value->null_value will be false in save_in_field() when after
-    // Item_cache_int::cache_value(),so it must set_to_null here.
-    if (is_ora_update_set && value->null_value) {
-      set_field_to_null_with_conversions(rfield, false);
-    } else {
-      if (value->save_in_field(rfield, false) < 0) {
-        my_error(ER_UNKNOWN_ERROR, MYF(0));
-        return true;
+    Item_row *item_row = dynamic_cast<Item_row *>(fld);
+    bool rc = false;
+    if (item_row) {
+      if (item_row->check_cols(value->cols())) return true;
+      String tmp;
+      value->val_str(&tmp);
+      Item_subselect *item_subselect = dynamic_cast<Item_subselect *>(value);
+      for (uint ii = 0; ii < item_row->cols(); ii++) {
+        if (item_subselect && !item_subselect->assigned()) {
+          Item_field *field_tmp =
+              dynamic_cast<Item_field *>(item_row->element_index(ii));
+          if (!field_tmp) {
+            my_error(ER_UNKNOWN_ERROR, MYF(0));
+            return true;
+          }
+          set_field_to_null_with_conversions(field_tmp->field, false);
+        } else {
+          rc = bitmap_set_bit_and_save_field(
+              item_row->element_index(ii), value->element_index(ii), table,
+              bitmap, insert_into_fields_bitmap,
+              raise_autoinc_has_expl_non_null_val);
+          if (rc) return true;
+        }
       }
+    } else {
+      rc = bitmap_set_bit_and_save_field(fld, value, table, bitmap,
+                                         insert_into_fields_bitmap,
+                                         raise_autoinc_has_expl_non_null_val);
+      if (rc) return true;
     }
     if (thd->is_error()) return true;
     i++;
@@ -9942,6 +10231,18 @@ bool fill_record(THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
   assert(table->autoinc_field_has_explicit_non_null_value == false ||
          raise_autoinc_has_expl_non_null_val);
 
+  // add for GreatDB: reset sequence flag.
+  thd->lex->query_block->reset_sequence_read_flag();
+
+  return thd->is_error();
+}
+
+static bool check_record_field(THD *thd, Item *fld) {
+  Item_field *field = fld->field_for_view_update();
+  if (field && field->field->check_constraints(ER_BAD_NULL_ERROR) != TYPE_OK) {
+    my_error(ER_UNKNOWN_ERROR, MYF(0));
+    return true;
+  }
   return thd->is_error();
 }
 
@@ -9955,11 +10256,13 @@ bool fill_record(THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
 */
 static bool check_record(THD *thd, const mem_root_deque<Item *> &fields) {
   for (Item *fld : VisibleFields(fields)) {
-    Item_field *field = fld->field_for_view_update();
-    if (field &&
-        field->field->check_constraints(ER_BAD_NULL_ERROR) != TYPE_OK) {
-      my_error(ER_UNKNOWN_ERROR, MYF(0));
-      return true;
+    Item_row *item_row = dynamic_cast<Item_row *>(fld);
+    if (item_row) {
+      for (uint i = 0; i < item_row->cols(); i++) {
+        if (check_record_field(thd, item_row->element_index(i))) return true;
+      }
+    } else {
+      if (check_record_field(thd, fld)) return true;
     }
   }
   return thd->is_error();
@@ -10153,8 +10456,7 @@ bool fill_record_n_invoke_before_triggers(
     THD *thd, COPY_INFO *optype_info, const mem_root_deque<Item *> &fields,
     const mem_root_deque<Item *> &values, TABLE *table,
     enum enum_trigger_event_type event, int num_fields,
-    bool raise_autoinc_has_expl_non_null_val, bool *is_row_changed,
-    bool is_ora_update_set) {
+    bool raise_autoinc_has_expl_non_null_val, bool *is_row_changed) {
   // is_row_changed is used by UPDATE operation to set compare_record() result.
   assert(is_row_changed == nullptr ||
          optype_info->get_operation_type() == COPY_INFO::UPDATE_OPERATION);
@@ -10209,9 +10511,9 @@ bool fill_record_n_invoke_before_triggers(
       rc = fill_function_defaults();
 
       if (!rc)
-        rc = fill_record(
-            thd, table, fields, values, nullptr, &insert_into_fields_bitmap,
-            raise_autoinc_has_expl_non_null_val, is_ora_update_set);
+        rc = fill_record(thd, table, fields, values, nullptr,
+                         &insert_into_fields_bitmap,
+                         raise_autoinc_has_expl_non_null_val);
 
       if (!rc)
         rc = call_before_insert_triggers(thd, table, event,
@@ -10220,7 +10522,7 @@ bool fill_record_n_invoke_before_triggers(
       bitmap_free(&insert_into_fields_bitmap);
     } else {
       rc = fill_record(thd, table, fields, values, nullptr, nullptr,
-                       raise_autoinc_has_expl_non_null_val, is_ora_update_set);
+                       raise_autoinc_has_expl_non_null_val);
 
       if (!rc) {
         rc = fill_function_defaults();
@@ -10253,7 +10555,7 @@ bool fill_record_n_invoke_before_triggers(
     return rc || check_inserting_record(thd, table->field);
   } else {
     if (fill_record(thd, table, fields, values, nullptr, nullptr,
-                    raise_autoinc_has_expl_non_null_val, is_ora_update_set))
+                    raise_autoinc_has_expl_non_null_val))
       return true;
     if (fill_function_defaults()) return true;
     return check_record(thd, fields);
@@ -10309,11 +10611,33 @@ bool fill_record(THD *thd, TABLE *table, Field **ptr,
 
   Field *field;
   auto value_it = VisibleFields(values).begin();
+  // for update set (left value)=(right value),the left value's fields > right
+  // value.
+  uint field_count = 0;
+  bool is_ora_update = false;
+  Item *value_subselect = nullptr;
+  bool null_value = false;
+  if (CountVisibleFields(values) == 1 &&
+      values.at(0)->type() == Item::SUBSELECT_ITEM &&
+      values.at(0)->cols() > 1) {
+    value_subselect = *value_it++;
+    String tmp;
+    value_subselect->val_str(&tmp);
+    Item_subselect *item_subselect =
+        dynamic_cast<Item_subselect *>(value_subselect);
+    null_value = !item_subselect->assigned();
+    is_ora_update = true;
+  }
   while ((field = *ptr++) && !thd->is_error()) {
     // Skip hidden system field.
     if (field->is_hidden_by_system()) continue;
 
-    Item *value = *value_it++;
+    Item *value = nullptr;
+    if (!is_ora_update)
+      value = *value_it++;
+    else
+      value = value_subselect->element_index(field_count);
+
     assert(field->table == table);
 
     /* If bitmap over wanted fields are set, skip non marked fields. */
@@ -10344,10 +10668,12 @@ bool fill_record(THD *thd, TABLE *table, Field **ptr,
       set_field_to_null_with_conversions()). So evaluation of this flag can't
       be moved outside of fill_record(), to be done once per statement.
     */
-    if (value->save_in_field(field, false) ==
-            TYPE_ERR_NULL_CONSTRAINT_VIOLATION ||
+    if (null_value) set_field_to_null_with_conversions(field, false);
+    if ((!null_value && value->save_in_field(field, false) ==
+                            TYPE_ERR_NULL_CONSTRAINT_VIOLATION) ||
         thd->is_error())
       return true;
+    field_count++;
   }
 
   if (table->has_gcol() &&
@@ -10364,7 +10690,10 @@ bool fill_record(THD *thd, TABLE *table, Field **ptr,
   assert(table->autoinc_field_has_explicit_non_null_value == false ||
          raise_autoinc_has_expl_non_null_val);
 
+  // add for GreatDB: reset sequence flag.
+  thd->lex->query_block->reset_sequence_read_flag();
   thd->lex->query_block->reset_rownum_read_flag();
+
   return thd->is_error();
 }
 

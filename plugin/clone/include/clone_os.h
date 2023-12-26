@@ -37,12 +37,6 @@ Clone Plugin: OS specific routines for IO and network
 #include "sql/encrypt.h"
 #include "sql/handler.h"
 
-#define MAX_ENCRYPT_KEY_SIZE 256
-#define DUMP_ENCRYPT_MODE_SIZE 32
-#define ENCRYPT_BATCH_SIZE (512)
-#define REMAIN_BLOCK_SIZE (2 * MY_AES_BLOCK_SIZE)
-#define ENCRYPT_BUFFER_SIZE (ENCRYPT_BATCH_SIZE + REMAIN_BLOCK_SIZE)
-
 /** Alignment required for direct IO  */
 const int CLONE_OS_ALIGN = 4 * 1024;
 

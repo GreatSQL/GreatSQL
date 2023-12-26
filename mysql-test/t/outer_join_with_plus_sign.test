@@ -518,3 +518,50 @@ order by a.oper_date desc,a.CUST_GROUP_ID;
 select a.CUST_GROUP_NAME, a.CUST_GROUP_DESC, a.CUST_GROUP_ID, a.cust_num, a.region_code  from mk_custgroup_info a ,mk_regioncode_dict b where a.region_code = b.region_code(+) AND NOT EXISTS (SELECT 1  FROM mk_importcustlimit_rel c where c.cust_group_id=b.group_id and c.limit_type='0'        and c.cust_group_id not in (select DETAIL_NAME from mk_collectiondetail_info where COLLECTION_ID = 'MBQKJXQX' and DETAIL_VALUE='aa0010111')) order by a.oper_date desc,a.CUST_GROUP_ID;
 
 drop table mk_custgroup_info, mk_regioncode_dict, mk_collectiondetail_info, mk_importcustlimit_rel;
+
+##bug7831
+create table t1(c1 int, c2 varchar(10)) PARTITION BY HASH (c1) PARTITIONS 8;
+create table t2(c1 int, c2 varchar(10)) PARTITION BY HASH (c1) PARTITIONS 8;
+
+insert into t1 values(1, 'abc');
+insert into t1 values(2, 'cde');
+insert into t1 values(4, 'egf');
+insert into t1 values(5, 'xyz');
+insert into t1 values(6, 'aaa');
+insert into t1 values(7, 'bbb');
+insert into t1 values(8, 'ccc');
+insert into t1 values(9, 'ddd');
+insert into t1 values(10, 'eee');
+insert into t1 values(11, 'fff');
+insert into t1 values(23, null);
+insert into t1 values(null, null);
+insert into t1 values(null, 'xinei');
+insert into t1 values(24, '');
+
+insert into t2 values(1, 'fgh');
+insert into t2 values(3, 'ijk');
+insert into t2 values(3, 'ijk');
+insert into t2 values(4, 'lmn');
+insert into t2 values(5, 'opq');
+insert into t2 values(7, 'rst');
+insert into t2 values(9, 'uvw');
+insert into t2 values(11, 'xyz');
+insert into t2 values(null, 'xinei');
+insert into t2 values(null, null);
+insert into t2 values(23, '');
+insert into t2 values(23, null);
+insert into t2 values(24, '');
+insert into t2 values(25, '');
+select * from t1,t2 where t1.c1=t2.c1(+) and t2.c1 is null order by 1;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select * from t1,t2 where t1.c1=t2.c1(+) and t2.c1 is null order by 1;
+select * from t1,t2 where t1.c1=t2.c1(+) and t2.c1 is not null order by 1;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select * from t1,t2 where t1.c1=t2.c1(+) and t2.c1 is not null order by 1;
+select * from t1,t2 where t1.c1=t2.c1(+) and t1.c1 is not null order by 1;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select * from t1,t2 where t1.c1=t2.c1(+) and t1.c1 is not null order by 1;
+select * from t1,t2 where t1.c1=t2.c1(+) and t1.c2 = t2.c2 order by 1;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select * from t1,t2 where t1.c1=t2.c1(+) and t1.c2 = t2.c2 order by 1;
+drop table t1, t2;

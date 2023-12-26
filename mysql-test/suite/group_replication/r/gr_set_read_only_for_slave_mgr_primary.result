@@ -1,0 +1,79 @@
+include/group_replication.inc [rpl_server_count=3]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+
+############################################################
+# 1. Deploy two groups which have 3 members in single primary mode.
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+[connection server2]
+include/start_group_replication.inc
+[connection server3]
+include/start_group_replication.inc
+include/rpl_gr_wait_for_number_of_members.inc
+[connection server4]
+include/start_and_bootstrap_group_replication.inc
+[connection server5]
+include/start_group_replication.inc
+[connection server6]
+include/start_group_replication.inc
+include/rpl_gr_wait_for_number_of_members.inc
+
+############################################################
+# 2. Create and start a failover channel from mgr group2 to group1
+[connection server4]
+CHANGE REPLICATION SOURCE TO SOURCE_USER='root', SOURCE_PASSWORD='', SOURCE_HOST='127.0.0.1', SOURCE_PORT=SERVER_1_PORT, SOURCE_RETRY_COUNT=2, SOURCE_AUTO_POSITION=1 FOR CHANNEL 'ch1';;
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	1760	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server5]
+CHANGE REPLICATION SOURCE TO SOURCE_USER='root', SOURCE_PASSWORD='', SOURCE_HOST='127.0.0.1', SOURCE_PORT=SERVER_1_PORT, SOURCE_RETRY_COUNT=2, SOURCE_AUTO_POSITION=1 FOR CHANNEL 'ch1';;
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	1760	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server6]
+CHANGE REPLICATION SOURCE TO SOURCE_USER='root', SOURCE_PASSWORD='', SOURCE_HOST='127.0.0.1', SOURCE_PORT=SERVER_1_PORT, SOURCE_RETRY_COUNT=2, SOURCE_AUTO_POSITION=1 FOR CHANNEL 'ch1';;
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	1760	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server4]
+CHANGE REPLICATION SOURCE TO SOURCE_CONNECTION_AUTO_FAILOVER=1 FOR CHANNEL 'ch1';
+SELECT asynchronous_connection_failover_add_managed('ch1', 'GroupReplication', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '127.0.0.1', SERVER_1_PORT, '', 80, 60);;
+asynchronous_connection_failover_add_managed('ch1', 'GroupReplication', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '127.0.0.1', SERVER_1_PORT, '', 80, 60)
+The UDF asynchronous_connection_failover_add_managed() executed successfully.
+START REPLICA;
+
+############################################################
+# 3. let server5 be group2's primary, check server5's read_only value
+[connection server4]
+include/stop_slave.inc [FOR CHANNEL 'ch1']
+include/rpl_reset_slave.inc
+include/stop_group_replication.inc
+[connection server5]
+include/rpl_gr_wait_for_number_of_members.inc
+show variables like "%read_only%";
+Variable_name	Value
+group_replication_async_auto_failover_channel_read_only_mode	ON
+innodb_read_only	OFF
+read_only	ON
+super_read_only	ON
+transaction_read_only	OFF
+
+############################################################
+# 4. clean up
+[connection server6]
+include/rpl_reset_slave.inc
+include/stop_group_replication.inc
+[connection server5]
+include/stop_slave.inc [FOR CHANNEL 'ch1']
+include/rpl_reset_slave.inc
+include/stop_group_replication.inc
+[connection server3]
+include/stop_group_replication.inc
+[connection server2]
+include/stop_group_replication.inc
+[connection server1]
+include/stop_group_replication.inc
+include/group_replication_end.inc

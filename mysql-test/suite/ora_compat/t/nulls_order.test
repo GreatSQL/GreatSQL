@@ -38,6 +38,12 @@ select name,c5,'my nl' from test1 order by name nulls last;
 select name,c5,'my desc nf' from test1 order by name desc nulls first;
 select name,c5,'my desc nl' from test1 order by name desc nulls last;
 
+select name,'my' from test1 group by name order by name;
+select name,'my desc' from test1 group by name order by name desc;
+select name,'my nf' from test1 group by name order by name nulls first;
+select name,'my nl' from test1 group by name order by name nulls last;
+select name,'my desc nf' from test1 group by name order by name desc nulls first;
+
 set sql_mode=oracle;
 select name,c5,'ora' from test1 order by name;
 select name,c5,'ora desc' from test1 order by name desc;
@@ -45,6 +51,13 @@ select name,c5,'ora nf' from test1 order by name nulls first;
 select name,c5,'ora nl' from test1 order by name nulls last;
 select name,c5,'ora desc nf' from test1 order by name desc nulls first;
 select name,c5,'ora desc nl' from test1 order by name desc nulls last;
+
+select name,'ora' from test1 group by name order by name;
+select name,'ora desc' from test1 group by name order by name desc;
+select name,'ora nf' from test1 group by name order by name nulls first;
+select name,'ora nl' from test1 group by name order by name nulls last;
+select name,'ora desc nf' from test1 group by name order by name desc nulls first;
+select name,'ora desc nl' from test1 group by name order by name desc nulls last;
 
 set sql_mode=default;
 select name,c5,'my' from test1 order by name,c5;
@@ -54,6 +67,13 @@ select name,c5,'my nl' from test1 order by name nulls last,c5 nulls last;
 select name,c5,'my desc nf' from test1 order by name desc nulls first,c5 desc nulls first;
 select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls last;
 
+select name,c5,'my' from test1 group by name,c5 order by name,c5;
+select name,c5,'my desc' from test1 group by name,c5 order by name,c5 desc;
+select name,c5,'my nf' from test1 group by name,c5 order by name nulls first,c5 nulls first;
+select name,c5,'my nl' from test1 group by name,c5 order by name nulls last,c5 nulls last;
+select name,c5,'my desc nf' from test1 group by name,c5 order by name desc nulls first,c5 desc nulls first;
+select name,c5,'my desc nl' from test1 group by name,c5 order by name desc nulls last,c5 desc nulls last;
+
 set sql_mode=oracle;
 select name,c5,'ora' from test1 order by name;
 select name,c5,'ora desc' from test1 order by name,c5 desc;
@@ -62,8 +82,30 @@ select name,c5,'ora nl' from test1 order by name nulls last,c5 nulls last;
 select name,c5,'ora desc nf' from test1 order by name nulls first,c5 desc nulls first;
 select name,c5,'ora desc nl' from test1 order by name nulls last,c5 desc nulls last;
 
+select name,c5,'ora' from test1 group by name,c5 order by name;
+select name,c5,'ora desc' from test1 group by name,c5 order by name,c5 desc;
+select name,c5,'ora nf' from test1 group by name,c5 order by name nulls first,c5 nulls first;
+select name,c5,'ora nl' from test1 group by name,c5 order by name nulls last,c5 nulls last;
+select name,c5,'ora desc nf' from test1 group by name,c5 order by name nulls first,c5 desc nulls first;
+select name,c5,'ora desc nl' from test1 group by name,c5 order by name nulls last,c5 desc nulls last;
+
 set sql_mode=default;
 set sql_mode=concat(@@sql_mode, ',EMPTYSTRING_EQUAL_NULL');
+select nation,city,listagg(city,',') within group (order by city) over (partition by nation) my_la_oc from p;
+select nation,city,listagg(city,',') within group (order by city desc) over (partition by nation) my_la_oc_d from p;
+select nation,city,listagg(city,',') within group (order by city nulls first) over (partition by nation) my_la_oc_nf from p;
+select nation,city,listagg(city,',') within group (order by city nulls last) over (partition by nation) my_la_oc_nl from p;
+select nation,city,listagg(city,',') within group (order by city desc nulls first) over (partition by nation) my_la_oc_d_nf from p;
+select nation,city,listagg(city,',') within group (order by city desc nulls last) over (partition by nation) my_la_oc_d_nl from p;
+
+set sql_mode=oracle;
+set sql_mode=concat(@@sql_mode, ',EMPTYSTRING_EQUAL_NULL');
+select nation,city,listagg(city,',') within group (order by city) over (partition by nation) ora_la_oc from p;
+select nation,city,listagg(city,',') within group (order by city desc) over (partition by nation) ora_la_oc_d from p;
+select nation,city,listagg(city,',') within group (order by city nulls first) over (partition by nation) ora_la_oc_nf from p;
+select nation,city,listagg(city,',') within group (order by city nulls last) over (partition by nation) ora_la_oc_nl from p;
+select nation,city,listagg(city,',') within group (order by city desc nulls first) over (partition by nation) ora_la_oc_d_nf from p;
+select nation,city,listagg(city,',') within group (order by city desc nulls last) over (partition by nation) ora_la_oc_d_nl from p;
 
 --enable_warnings
 echo # explain
@@ -80,6 +122,12 @@ explain select name,c5,'my nf' from test1 order by name nulls first,c5 nulls las
 explain select name,c5,'my nl' from test1 order by name nulls last,c5 nulls first;
 explain select name,c5,'my desc nf' from test1 order by name desc nulls first,c5 desc nulls last;
 explain select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls first;
+explain select nation,city,listagg(city,',') within group (order by city) over (partition by nation) ora_la_oc from p;
+explain select nation,city,listagg(city,',') within group (order by city desc) over (partition by nation) ora_la_oc_d from p;
+explain select nation,city,listagg(city,',') within group (order by city nulls first) over (partition by nation) ora_la_oc_nf from p;
+explain select nation,city,listagg(city,',') within group (order by city nulls last) over (partition by nation) ora_la_oc_nl from p;
+explain select nation,city,listagg(city,',') within group (order by city desc nulls first) over (partition by nation) ora_la_oc_d_nf from p;
+explain select nation,city,listagg(city,',') within group (order by city desc nulls last) over (partition by nation) ora_la_oc_d_nl from p;
 
 --echo # index scan check
 create index i1 on test1 (name,c5);
@@ -120,6 +168,24 @@ explain format=tree select name,c5,'my desc nf' from test1 order by name desc nu
 select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls first;
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls first;
+select nation,city,listagg(city,',') within group (order by city) over (partition by nation) ora_la_oc from p;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select nation,city,listagg(city,',') within group (order by city) over (partition by nation) ora_la_oc from p;
+select nation,city,listagg(city,',') within group (order by city desc) over (partition by nation) ora_la_oc_d from p;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select nation,city,listagg(city,',') within group (order by city desc) over (partition by nation) ora_la_oc_d from p;
+select nation,city,listagg(city,',') within group (order by city nulls first) over (partition by nation) ora_la_oc_nf from p;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select nation,city,listagg(city,',') within group (order by city nulls first) over (partition by nation) ora_la_oc_nf from p;
+select nation,city,listagg(city,',') within group (order by city nulls last) over (partition by nation) ora_la_oc_nl from p;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select nation,city,listagg(city,',') within group (order by city nulls last) over (partition by nation) ora_la_oc_nl from p;
+select nation,city,listagg(city,',') within group (order by city desc nulls first) over (partition by nation) ora_la_oc_d_nf from p;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select nation,city,listagg(city,',') within group (order by city desc nulls first) over (partition by nation) ora_la_oc_d_nf from p;
+select nation,city,listagg(city,',') within group (order by city desc nulls last) over (partition by nation) ora_la_oc_d_nl from p;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select nation,city,listagg(city,',') within group (order by city desc nulls last) over (partition by nation) ora_la_oc_d_nl from p;
 
 drop table test1;
 drop table p;

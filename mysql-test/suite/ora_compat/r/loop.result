@@ -1,0 +1,670 @@
+DROP TABLE IF EXISTS t;
+DROP TABLE IF EXISTS t1;
+DROP PROCEDURE IF EXISTS p1;
+DROP TABLE IF EXISTS tab;
+DROP TABLE IF EXISTS loop_test;
+CREATE TABLE t (number_type number(65),decimal_type decimal(65,0),s1 INT, varchar_type varchar(2000),timestamp_type timestamp  DEFAULT CURRENT_TIMESTAMP on update current_timestamp,datetime_type datetime,double_type double(65,0),float_type float(65,0),char_type char(255),bit_type bit(64),s2 varchar(100),PRIMARY KEY (s1));
+INSERT INTO t values(1.1,1.1,1,'aaa','2021/5/10 16:44:00.123456','2021-03-25',1,1,'aaa',b'10111','aaa');
+INSERT INTO t values(1.1,2.2,2,'bbb','2021/5/10 16:44:00.123456','2021-07-25',2,2,'bbb',b'101111','bbb');
+INSERT INTO t values(1.1,3.3,3,'ccc','2021/5/10 16:44:00.123456','2021-09-25',3,3,'ccc',b'101111','ccc');
+CREATE TABLE t1 (number_type number(60,4),decimal_type decimal(60,4),s1 INT, varchar_type varchar(2000),
+timestamp_type timestamp(6),datetime_type datetime(6),double_type double(60,4),
+float_type float(60,4),char_type char(255),bit_type bit(64),s2 varchar(100),PRIMARY KEY (s1));
+INSERT INTO t1 values(1.1,1.1,1,'aaa','2021/5/10 16:44:00.123456','2021-03-25 16:44:00.123456',1.1,1.1,'aaa',b'1011','aaa');
+INSERT INTO t1 values(2.2,2.2,2,'bbb','2021/5/10 16:44:00.123456','2021-07-25 16:44:00.123456',2.2,2.2,'bbb',b'1011','bbb');
+INSERT INTO t1 values(3.3,3.3,3,'ccc','2021/5/10 16:44:00.123456','2021-09-25 16:44:00.123456',3.3,3.3,'ccc',b'1011','ccc');
+CREATE TABLE tab (col1 INT, col2 char(50),PRIMARY KEY (col1));
+INSERT INTO tab values(1,'aaa');
+INSERT INTO tab values(2,'bbb');
+INSERT INTO tab values(3,'ccc');
+set sql_mode="oracle";
+CREATE PROCEDURE p1() as
+x int default 1;
+BEGIN
+Loop
+select x;
+SET x = x + 1;
+exit when x=4;
+end loop;
+select 'after exit';
+END//
+CALL p1();
+x
+1
+x
+2
+x
+3
+after exit
+after exit
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+BEGIN
+DECLARE CURSOR stuCursor is SELECT s1,s2 FROM t;
+begin
+for rec in  stuCursor loop
+select rec.s1,rec.s2;
+exit when rec.s1=2;
+END LOOP;
+end;
+select 'after loop';
+END//
+CALL p1();
+rec.s1	rec.s2
+1	aaa
+rec.s1	rec.s2
+2	bbb
+after loop
+after loop
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+cursor stuCursor is select s1,s2 from t;
+BEGIN
+<<for_loop>>
+for rec in  stuCursor loop
+select rec.s1,rec.s2;
+exit for_loop when stuCursor%FOUND;
+END LOOP for_loop;
+select 'after loop';
+END//
+CALL p1();
+rec.s1	rec.s2
+1	aaa
+after loop
+after loop
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+BEGIN
+<<for_loop>>
+for x  IN reverse 3 ..1 LOOP
+select x;
+exit for_loop;
+END LOOP for_loop;
+END//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+cursor stuCursor is select s1,s2 from t;
+BEGIN
+<<for_loop>>
+for rec in  stuCursor loop
+select rec.s1,rec.s2;
+if stuCursor%ISOPEN then exit for_loop;end if;
+END LOOP for_loop;
+select 'after exit';
+END//
+CALL p1();
+rec.s1	rec.s2
+1	aaa
+after exit
+after exit
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+cursor stuCursor is select s1,s2 from t;
+BEGIN
+<<for_loop>>
+for rec in  stuCursor loop
+select rec.s1,rec.s2;
+if stuCursor%ISOPEN then exit;end if;
+END LOOP for_loop;
+select 'after exit';
+END//
+CALL p1();
+rec.s1	rec.s2
+1	aaa
+after exit
+after exit
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+cursor stuCursor is select s1,s2 from t;
+BEGIN
+<<for_loop>>
+for rec in  stuCursor loop
+select rec.s1,rec.s2;
+<<for_loop1>>
+for x in 1 .. 4 loop
+select x;
+exit when x=3;
+END LOOP for_loop1;
+END LOOP for_loop;
+select 'after exit';
+END//
+CALL p1();
+rec.s1	rec.s2
+1	aaa
+x
+1
+x
+2
+x
+3
+rec.s1	rec.s2
+2	bbb
+x
+1
+x
+2
+x
+3
+rec.s1	rec.s2
+3	ccc
+x
+1
+x
+2
+x
+3
+after exit
+after exit
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+num int default 1;
+BEGIN
+loop
+set num=num+1;
+select -1 as a,num as exeuted;
+if num>=1 then
+exit when num=2;
+select num;
+end if;
+end loop;
+END//
+CALL p1();
+a	exeuted
+-1	2
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+x int default 1;
+y int default 1;
+BEGIN
+<<label>>
+Loop
+select x;
+SET x = x + 1;
+if x=4 then exit when y=1;end if;
+end loop label;
+select 'after exit';
+END//
+CALL p1();
+x
+1
+x
+2
+x
+3
+after exit
+after exit
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+x int default 1;
+y int default 1;
+BEGIN
+<<label>>
+Loop
+select x;
+SET x = x + 1;
+if x=4 then exit label when y=1;end if;
+end loop;
+select 'after exit';
+END//
+CALL p1();
+x
+1
+x
+2
+x
+3
+after exit
+after exit
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+x int default 1;
+no_result EXCEPTION;
+BEGIN
+for i in 2 .. 4 loop
+select i;
+SET x = x + 1;
+if x=4 then RAISE no_result;end if;
+end loop ;
+EXCEPTION
+WHEN no_result THEN
+select '你的数据更新语句失败了!';
+WHEN OTHERS THEN
+select SQLCODE;
+END//
+CALL p1();
+i
+2
+i
+3
+i
+4
+你的数据更新语句失败了!
+你的数据更新语句失败了!
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+str1 int;
+cursor stuCursor1 is select s1,s2 from t;
+cursor stuCursor2 is select col1,col2 from tab where col1>1;
+BEGIN
+<<for_loop>>
+for rec in  stuCursor1 loop
+select rec.s1,rec.s2;
+<<for_loop1>>
+for rec1 in stuCursor2 loop
+select rec1.col1,rec1.col2;
+str1:=rec1.col1+1;
+exit when rec1.col1=3;
+END LOOP for_loop1;
+END LOOP for_loop;
+select str1;
+END//
+CALL p1();
+rec.s1	rec.s2
+1	aaa
+rec1.col1	rec1.col2
+2	bbb
+rec1.col1	rec1.col2
+3	ccc
+rec.s1	rec.s2
+2	bbb
+rec1.col1	rec1.col2
+2	bbb
+rec1.col1	rec1.col2
+3	ccc
+rec.s1	rec.s2
+3	ccc
+rec1.col1	rec1.col2
+2	bbb
+rec1.col1	rec1.col2
+3	ccc
+str1
+4
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+cursor stuCursor1 is select s1,s2 from t;
+cursor stuCursor2 is select s1,s2 from t where s1>1;
+BEGIN
+<<for_loop>>
+for rec in  stuCursor1 loop
+select rec.s1,rec.s2;
+<<for_loop1>>
+for rec1 in stuCursor2 loop
+select rec1.s1,rec1.s2;
+exit when rec1.s1=3;
+END LOOP for_loop1;
+END LOOP for_loop;
+select 'after exit';
+END//
+CALL p1();
+rec.s1	rec.s2
+1	aaa
+rec1.s1	rec1.s2
+2	bbb
+rec1.s1	rec1.s2
+3	ccc
+rec.s1	rec.s2
+2	bbb
+rec1.s1	rec1.s2
+2	bbb
+rec1.s1	rec1.s2
+3	ccc
+rec.s1	rec.s2
+3	ccc
+rec1.s1	rec1.s2
+2	bbb
+rec1.s1	rec1.s2
+3	ccc
+after exit
+after exit
+DROP PROCEDURE IF EXISTS p1;
+CREATE TABLE loop_test (s1 INT,PRIMARY KEY (s1));
+CREATE PROCEDURE p1() as
+cursor stuCursor1 is select s1,s2 from t;
+cursor stuCursor2 is select s1 from loop_test;
+BEGIN
+<<for_loop>>
+for rec in  stuCursor1 loop
+select rec.s1,rec.s2;
+Insert INTO loop_test VALUES (rec.s1);
+END LOOP for_loop;
+for rec1 in  stuCursor2 loop
+select rec1.s1;
+END LOOP;
+END//
+CALL p1();
+rec.s1	rec.s2
+1	aaa
+rec.s1	rec.s2
+2	bbb
+rec.s1	rec.s2
+3	ccc
+rec1.s1
+1
+rec1.s1
+2
+rec1.s1
+3
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+BEGIN
+<<for_loop>>
+for x  IN reverse 3 .. -1 LOOP
+select x;
+exit for_loop;
+END LOOP for_loop;
+END//
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+cursor stuCursor is select s1,s2 from t where s1=1;
+BEGIN
+<<for_loop>>
+for rec in  stuCursor loop
+select rec.s1,rec.s2;
+select stuCursor%ISOPEN;
+END LOOP for_loop;
+select 'after exit';
+END//
+CALL p1();
+rec.s1	rec.s2
+1	aaa
+stuCursor%ISOPEN
+1
+after exit
+after exit
+CALL p1();
+rec.s1	rec.s2
+1	aaa
+stuCursor%ISOPEN
+1
+after exit
+after exit
+CALL p1();
+rec.s1	rec.s2
+1	aaa
+stuCursor%ISOPEN
+1
+after exit
+after exit
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1(par1 OUT varchar(20)) as
+cursor stuCursor is select s1,s2 from t where s1=1;
+BEGIN
+<<for_loop>>
+for rec in  stuCursor loop
+par1 := rec.s2;
+END LOOP for_loop;
+select 'after exit';
+END//
+call p1(@num);
+after exit
+after exit
+select @num;
+@num
+aaa
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1(par1 IN float) as
+cursor stuCursor is select * from t;
+par float;
+par2 varchar(100);
+dt timestamp;
+dt1 datetime;
+BEGIN
+<<for_loop>>
+for rec in  stuCursor loop
+par := rec.s1+par1;
+par2 := rec.s2;
+dt := rec.timestamp_type;
+dt1 := rec.datetime_type;
+select par,par2,dt,dt1;
+END LOOP for_loop;
+select 'after exit';
+END//
+set @num=1;
+call p1(@num);
+par	par2	dt	dt1
+2	aaa	2021-05-10 16:44:00	2021-03-25 00:00:00
+par	par2	dt	dt1
+3	bbb	2021-05-10 16:44:00	2021-07-25 00:00:00
+par	par2	dt	dt1
+4	ccc	2021-05-10 16:44:00	2021-09-25 00:00:00
+after exit
+after exit
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+cursor stuCursor is select * from t;
+par decimal(65);
+BEGIN
+<<for_loop>>
+for rec in  stuCursor loop
+par := rec.decimal_type;
+select par,rec.number_type,rec.decimal_type,rec.s1,rec.varchar_type,rec.timestamp_type,rec.datetime_type,rec.double_type,rec.float_type,rec.char_type,hex(rec.bit_type);
+END LOOP for_loop;
+select 'after exit';
+END//
+call p1();
+par	rec.number_type	rec.decimal_type	rec.s1	rec.varchar_type	rec.timestamp_type	rec.datetime_type	rec.double_type	rec.float_type	rec.char_type	hex(rec.bit_type)
+1	1	1	1	aaa	2021-05-10 16:44:00	2021-03-25 00:00:00	1	1	aaa	17
+par	rec.number_type	rec.decimal_type	rec.s1	rec.varchar_type	rec.timestamp_type	rec.datetime_type	rec.double_type	rec.float_type	rec.char_type	hex(rec.bit_type)
+2	1	2	2	bbb	2021-05-10 16:44:00	2021-07-25 00:00:00	2	2	bbb	2F
+par	rec.number_type	rec.decimal_type	rec.s1	rec.varchar_type	rec.timestamp_type	rec.datetime_type	rec.double_type	rec.float_type	rec.char_type	hex(rec.bit_type)
+3	1	3	3	ccc	2021-05-10 16:44:00	2021-09-25 00:00:00	3	3	ccc	2F
+after exit
+after exit
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p1() as
+cursor stuCursor is select * from t1;
+par decimal(60,4);
+BEGIN
+<<for_loop>>
+for rec in  stuCursor loop
+par := rec.double_type+rec.float_type+rec.decimal_type;
+select par,rec.number_type,rec.decimal_type,rec.s1,rec.varchar_type,rec.timestamp_type,rec.datetime_type,rec.double_type,rec.float_type,rec.char_type,hex(rec.bit_type);
+END LOOP for_loop;
+select 'after exit';
+END//
+call p1();
+par	rec.number_type	rec.decimal_type	rec.s1	rec.varchar_type	rec.timestamp_type	rec.datetime_type	rec.double_type	rec.float_type	rec.char_type	hex(rec.bit_type)
+3.3	1.1	1.1	1	aaa	2021-05-10 16:44:00.123456	2021-03-25 16:44:00.123456	1.1000	1.1000	aaa	B
+par	rec.number_type	rec.decimal_type	rec.s1	rec.varchar_type	rec.timestamp_type	rec.datetime_type	rec.double_type	rec.float_type	rec.char_type	hex(rec.bit_type)
+6.6	2.2	2.2	2	bbb	2021-05-10 16:44:00.123456	2021-07-25 16:44:00.123456	2.2000	2.2000	bbb	B
+par	rec.number_type	rec.decimal_type	rec.s1	rec.varchar_type	rec.timestamp_type	rec.datetime_type	rec.double_type	rec.float_type	rec.char_type	hex(rec.bit_type)
+9.9	3.3	3.3	3	ccc	2021-05-10 16:44:00.123456	2021-09-25 16:44:00.123456	3.3000	3.3000	ccc	B
+after exit
+after exit
+DROP PROCEDURE IF EXISTS p1;
+drop table t;
+drop table t1;
+drop table tab;
+DROP TABLE loop_test;
+#
+# test of for .. loop
+#
+CREATE or replace PROCEDURE p1(i float,j float) as
+BEGIN
+for x  IN i ..j LOOP
+select x;
+END LOOP;
+END//
+CALL p1(1.5,3.4);
+x
+2
+x
+3
+CALL p1(1.4,3.5);
+x
+1
+x
+2
+x
+3
+x
+4
+CALL p1(1.5,3.4);
+x
+2
+x
+3
+DROP PROCEDURE IF EXISTS p1;
+#
+# test of for reverse .. loop
+#
+CREATE or replace PROCEDURE p1(i float,j float) as
+BEGIN
+for x  IN reverse i ..j LOOP
+select x;
+END LOOP;
+END//
+CALL p1(1.5,3.4);
+x
+3
+x
+2
+CALL p1(1.4,3.5);
+x
+4
+x
+3
+x
+2
+x
+1
+CALL p1(1.5,3.4);
+x
+3
+x
+2
+DROP PROCEDURE IF EXISTS p1;
+#
+# test of for .. loop
+#
+CREATE or replace PROCEDURE p1(i float,j float) as
+val float := 1.2; 
+BEGIN
+for x  IN i ..j LOOP
+val := val+x;
+select val;
+END LOOP;
+END//
+CALL p1(1.5,3.4);
+val
+3.2
+val
+6.2
+CALL p1(1.4,3.5);
+val
+2.2
+val
+4.2
+val
+7.2
+val
+11.2
+CALL p1(1.5,3.4);
+val
+3.2
+val
+6.2
+DROP PROCEDURE IF EXISTS p1;
+#
+# test of for .. loop
+#
+CREATE or replace PROCEDURE p1(i float,j float) as
+val float := 1.2; 
+BEGIN
+<<lable>>
+for x  IN i ..j LOOP
+val := val+x;
+select val;
+exit lable;
+END LOOP lable;
+END//
+CALL p1(1.5,3.4);
+val
+3.2
+DROP PROCEDURE IF EXISTS p1;
+#
+# test of for .. loop
+#
+CREATE or replace PROCEDURE p1(i float,j float) as
+val float := 1.2; 
+BEGIN
+for x  IN i ..j LOOP
+val := val+x;
+select val;
+exit when val>7;
+END LOOP;
+END//
+CALL p1(1.4,3.5);
+val
+2.2
+val
+4.2
+val
+7.2
+DROP PROCEDURE IF EXISTS p1;
+#
+# test of for .. loop
+#
+CREATE or replace PROCEDURE p1(i float,j float) as
+BEGIN
+for x IN reverse i ..j LOOP
+select x;
+exit when x<3;
+END LOOP;
+END//
+CALL p1(1.4,3.5);
+x
+4
+x
+3
+x
+2
+DROP PROCEDURE IF EXISTS p1;
+#
+# test of for cursor() loop
+#
+CREATE TABLE test_cursor_rowcount(id int, salary int);
+CREATE or replace PROCEDURE p1() as
+salary INT;
+CURSOR cselect IS SELECT * FROM test_cursor_rowcount;
+BEGIN
+FOR rec in cselect() LOOP
+SELECT rec.salary;
+END LOOP;
+SELECT cselect();
+END//
+CALL p1();
+ERROR 42000: This version of MySQL doesn't yet support 'use static cursor as a variable'
+DROP PROCEDURE IF EXISTS p1;
+drop table test_cursor_rowcount;
+#
+# test of %number
+#
+select 11%3;
+11%3
+2
+#
+# test of create table default mod
+#
+CREATE TABLE tt1(c1 INT DEFAULT (MOD(11, 3)));
+CREATE TABLE tt2(c1 INT DEFAULT (11%3));
+drop table tt1;
+drop table tt2;
+set SQL_MODE=default;
+select 11%3;
+11%3
+2
+#
+# test bug7443
+#
+set SQL_MODE=oracle;
+BEGIN
+for rec in c() loop
+end loop;
+ERROR 42000: Undefined CURSOR: c
+BEGIN
+for rec in to_char('1') loop
+end loop;
+ERROR 42000: This version of MySQL doesn't yet support 'for loop use the expression, only support cursor sql'

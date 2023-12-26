@@ -89,6 +89,7 @@ struct RelationalExpression {
   enum Type {
     INNER_JOIN = static_cast<int>(JoinType::INNER),
     LEFT_JOIN = static_cast<int>(JoinType::OUTER),
+    FULL_JOIN = static_cast<int>(JoinType::FULL_OUTER),
     SEMIJOIN = static_cast<int>(JoinType::SEMI),
     ANTIJOIN = static_cast<int>(JoinType::ANTI),
 

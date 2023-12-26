@@ -78,6 +78,7 @@
 #include "sql/parser_yystype.h"
 #include "sql/query_options.h"  // OPTION_NO_CONST_TABLES
 #include "sql/query_term.h"
+#include "sql/sequence_option.h"
 #include "sql/set_var.h"
 #include "sql/sql_array.h"
 #include "sql/sql_connect.h"  // USER_RESOURCES
@@ -316,6 +317,7 @@ struct ora_simple_ident_def {
 #define TL_OPTION_UPDATING 0x01
 #define TL_OPTION_IGNORE_LEAVES 0x02
 #define TL_OPTION_ALIAS 0x04
+#define TL_OPTION_FOR_TMP 0x08
 
 /* Structure for db & table in sql_yacc */
 class Table_function;
@@ -381,7 +383,7 @@ class Qualified_column_ident : public Table_ident {
                          const LEX_CSTRING &table_arg,
                          const LEX_CSTRING &column)
       : Table_ident(db_arg, table_arg), m_column(column) {}
-  bool resolve_type_ref(THD *thd, Create_field *def);
+  bool resolve_type_ref(THD *thd, Create_field *def, bool resolve_action);
 };
 
 using List_item = mem_root_deque<Item *>;
@@ -1096,6 +1098,8 @@ class Query_expression {
   bool set_limit(THD *thd, Query_block *provider);
   bool has_any_limit() const;
 
+  bool has_any_connect_by() const;
+
   inline bool is_union() const;
   inline bool is_set_operation() const;
 
@@ -1235,9 +1239,19 @@ class Query_block : public Query_term {
   Item *where_cond() const { return m_where_cond; }
   Item **where_cond_ref() { return &m_where_cond; }
   void set_where_cond(Item *cond) { m_where_cond = cond; }
+  void set_update_of_cond(Item *cond) { m_update_of_cond_dq.push_back(cond); }
   Item *having_cond() const { return m_having_cond; }
   Item **having_cond_ref() { return &m_having_cond; }
   void set_having_cond(Item *cond) { m_having_cond = cond; }
+
+  Item *connect_by_cond() const { return m_connect_by_cond; }
+  Item **connect_by_cond_ref() { return &m_connect_by_cond; }
+  void set_connect_by_cond(Item *cond) { m_connect_by_cond = cond; }
+
+  Item *start_with_cond() const { return m_start_with_cond; }
+  Item **start_with_cond_ref() { return &m_start_with_cond; }
+  void set_start_with_cond(Item *cond) { m_start_with_cond = cond; }
+
   void set_query_result(Query_result *result) { m_query_result = result; }
   Query_result *query_result() const { return m_query_result; }
   bool change_query_result(THD *thd, Query_result_interceptor *new_result,
@@ -1733,6 +1747,16 @@ class Query_block : public Query_term {
                         enum_query_type query_type);
 
   /**
+    Print list of conditions in START WITH CONNECT BY clause.
+
+    @param      thd          Thread handle
+    @param[out] str          String of output
+    @param      query_type   Options to print out string output
+  */
+  void print_connect_by_cond(const THD *thd, String *str,
+                             enum_query_type query_type);
+
+  /**
     Print list of items in GROUP BY clause.
 
     @param      thd          Thread handle
@@ -1833,6 +1857,8 @@ class Query_block : public Query_term {
   bool right_joins() const { return m_right_joins; }
   void set_right_joins() { m_right_joins = true; }
 
+  bool has_foj() const { return m_has_foj; }
+  void set_has_foj(bool val) { m_has_foj = val; }
   /// Lookup for Query_block type
   enum_explain_type type() const;
 
@@ -1881,7 +1907,8 @@ class Query_block : public Query_term {
 
   bool get_optimizable_conditions(THD *thd, Item **new_where,
                                   Item **new_having);
-
+  bool get_optimizable_connect_by(THD *thd, Item **start_with,
+                                  Item **connect_by, Item **new_where);
   bool validate_outermost_option(LEX *lex, const char *wrong_option) const;
   bool validate_base_options(LEX *lex, ulonglong options) const;
 
@@ -1894,6 +1921,7 @@ class Query_block : public Query_term {
   bool resolve_rollup_wfs(THD *thd);
 
   bool setup_conds(THD *thd);
+  bool setup_update_of_conds(THD *thd);
   bool prepare(THD *thd, mem_root_deque<Item *> *insert_field_list);
   bool optimize(THD *thd, bool finalize_access_paths);
   void reset_nj_counters(mem_root_deque<Table_ref *> *join_list = nullptr);
@@ -2042,6 +2070,8 @@ class Query_block : public Query_term {
   JOIN *join{nullptr};
   /// join list of the top level
   mem_root_deque<Table_ref *> top_join_list;
+  // select for update of columns
+  mem_root_deque<Item *> m_update_of_cond_dq;
   /// list for the currently parsed join
   mem_root_deque<Table_ref *> *join_list;
   /// Set of table references contained in outer-most join nest
@@ -2098,6 +2128,10 @@ class Query_block : public Query_term {
   Item::cond_result cond_value{Item::COND_UNDEF};
   Item::cond_result having_value{Item::COND_UNDEF};
 
+  Item::cond_result connect_by_value{Item::COND_UNDEF};
+  Item::cond_result start_with_value{Item::COND_UNDEF};
+  Item::cond_result after_connect_by_value{Item::COND_UNDEF};
+
   /// Parse context: indicates where the current expression is being parsed
   enum_parsing_context parsing_place{CTX_NONE};
   /// Parse context: is inside a set function if this is positive
@@ -2112,6 +2146,7 @@ class Query_block : public Query_term {
     RESOLVE_JOIN_NEST,
     RESOLVE_CONDITION,
     RESOLVE_HAVING,
+    RESOLVE_CONNECT_BY,
     RESOLVE_SELECT_LIST
   };
   Resolve_place resolve_place{
@@ -2146,6 +2181,7 @@ class Query_block : public Query_term {
   /// Number of Item_sum-derived objects in children and descendant SELECTs
   uint n_child_sum_items{0};
 
+  uint n_connect_by_items{0};
   /// Keep track for allocation of base_ref_items: scalar subqueries may be
   /// replaced by a field during scalar_to_derived transformation
   uint n_scalar_subqueries{0};
@@ -2263,8 +2299,18 @@ class Query_block : public Query_term {
   bool has_rownum{false};
   bool has_rownum_in_select{false};
   bool has_rownum_in_cond{false};
+  // check lnnvl function exists in queryblock
+  bool has_lnnvl_func{false};
+
+  // connect by is cycle check
+  bool connect_by_nocycle{false};
+  bool has_connect_by{false};
+  bool has_connect_by_level{false};
 
   Table_ref *merge_target{nullptr};
+  Pivot *m_pivot{nullptr};
+
+  bool need_to_remap{false};
 
  private:
   friend class Query_expression;
@@ -2316,6 +2362,9 @@ class Query_block : public Query_term {
  public:
   bool setup_order_final(THD *thd);
   bool setup_group(THD *thd);
+  bool setup_connect_by(THD *thd);
+
+ private:
   void fix_after_pullout(Query_block *parent_query_block,
                          Query_block *removed_query_block);
   void remove_redundant_subquery_clauses(THD *thd,
@@ -2355,6 +2404,40 @@ class Query_block : public Query_term {
     @returns       true on error
   */
   bool transform_scalar_subqueries_to_join_with_derived(THD *thd);
+
+  /**
+    @brief transform_filter_with_connect_by
+
+    1. A join, if present, is evaluated first,
+      whether the join is specified in the FROM clause or
+      with WHERE clause predicates.
+    2. The CONNECT BY condition is evaluated.
+    3. Any remaining WHERE clause predicates are evaluated.
+
+    1) select * from t1,t2 where t1.id=t2.id and t2.val > 3
+
+      connect by proir t1.id = t2.id
+          1 - filter(t2.val > 3)  --> connect_by filter
+          2 - access(proir t1.id = t2.id) -->connect by
+          3 - access(t1.id=t2.id) --> where_cond
+
+    2) not need transform if cond in join_condtion,
+      select * from t1 join t2 on t1.id=t2.id and t2.val > 3
+      connect by proir t1.id = t2.id
+
+      1 - access(proir t1.id = t2.id)
+      2 - filter(t1.id=t2.id and t2.val > 3 )
+
+    transform need before apply_local_transforms
+      1. spilt condition type is COND_ITEM
+      2. check a join condition if used_table() != for_each(table_list)->map()
+
+     *
+     * @param thd
+     * @return true on error
+     */
+  bool transform_filter_with_connect_by(THD *thd);
+
   bool supported_correlated_scalar_subquery(THD *thd, Item::Css_info *subquery,
                                             Item **lifted_where);
   bool transform_grouped_to_derived(THD *thd, bool *break_off);
@@ -2461,6 +2544,12 @@ class Query_block : public Query_term {
   /// Condition to be evaluated on grouped rows after grouping.
   Item *m_having_cond;
 
+  /// connect by Condition
+  Item *m_start_with_cond{nullptr};
+  Item *m_connect_by_cond{nullptr};
+  Item *m_after_connect_by_where{nullptr};
+
+ public:
   /// Number of GROUP BY expressions added to all_fields
   int hidden_group_field_count;
 
@@ -2473,6 +2562,7 @@ class Query_block : public Query_term {
   bool has_sj_nests{false};
   bool has_aj_nests{false};   ///< @see has_sj_nests; counts antijoin nests.
   bool m_right_joins{false};  ///< True if query block has right joins
+  bool m_has_foj{false};
 
   /// Allow merge of immediate unnamed derived tables
   bool allow_merge_derived{true};
@@ -2490,18 +2580,23 @@ class Query_block : public Query_term {
       *type_str[static_cast<int>(enum_explain_type::EXPLAIN_total)];
 
  public:
+  bool setup_sequence_func(THD *thd, mem_root_deque<Item *> *input);
+  void reset_sequence_read_flag();
+
+ public:
   /**
    * Oracle (+) syntax. set true when parsing ident with (+) sign.
    * it don't need to transform (+) to outer join in sql resolver phase.
    */
   bool has_joined_item{false};
+  mem_root_deque<Item_func *> sequence_funcs;
+  bool has_sequence{false};
   bool need_to_reset_flag{true};
 
   Item_func_rownum *rownum_func{nullptr};
   void reset_rownum_read_flag();
   bool rewrite_all_rownum(THD *thd);
-  bool rewrite_rownum_ref(Item *&cond,
-                          Item::Item_rownum_func_replacement &info);
+  bool rewrite_rownum_ref(Item *&cond, Item_func_rownum **rownum_ref);
 };
 
 inline bool Query_expression::is_union() const {
@@ -2601,6 +2696,10 @@ struct st_trg_chistics {
     statement.
   */
   LEX_CSTRING anchor_trigger_name;
+  /*
+    current is when expr
+  */
+  bool trigger_when_expr{false};
 };
 
 class Sroutine_hash_entry;
@@ -2630,6 +2729,12 @@ class Query_tables_list {
     the tables.
   */
   enum_sql_command sql_command;
+  /**
+    There is an SQL command for this statement, but it is only used in stored
+    routines, e.g. oracle-compatible variable assignments in stored procedures:
+    `var := value`
+  */
+  bool sql_command_only_in_sp{false};
   /* Global list of all tables used by this statement */
   Table_ref *query_tables;
   /* Pointer to next_global member of last element in the previous list. */
@@ -3905,6 +4010,7 @@ struct LEX : public Query_tables_list {
    */
   bool using_hypergraph_optimizer = false;
   bool m_end_of_rownum = false;
+  List<Item_func_rownum> m_cmd_rownums;
   LEX_STRING name;
   char *help_arg;
   char *to_log; /* For PURGE MASTER LOGS TO */
@@ -3937,6 +4043,9 @@ struct LEX : public Query_tables_list {
 
   /** SELECT of CREATE VIEW statement */
   LEX_STRING create_view_query_block;
+
+  /** SELECT of CREATE Materialized VIEW info */
+  LEX_STRING create_materialized_view_info;
 
   /* Partition info structure filled in by PARTITION BY parse part */
   partition_info *part_info;
@@ -3973,7 +4082,10 @@ struct LEX : public Query_tables_list {
     in a re-parsed CTE definition.
   */
   List<Item_param> param_list;
+  // used in 'for update wait n'
+  Sys_var_hint *lock_wait_var;
 
+  bool has_into_clause{false};
   bool has_sp{false};  // Item_func_sp, create function with no nosame option.
   bool has_notsupported_func{false};  // true: not support pq,false: support pq
 
@@ -4002,6 +4114,15 @@ struct LEX : public Query_tables_list {
   }
   std::map<Item_field *, Field *>::iterator end_values_map() {
     return insert_update_values_map->end();
+  }
+
+  void reset_rownum_func() {
+    List_iterator<Item_func_rownum> li(m_cmd_rownums);
+    Item_func_rownum *item;
+    while ((item = li++)) {
+      item->reset_read_flag();
+      item->reset_value();
+    }
   }
 
  private:
@@ -4037,6 +4158,7 @@ struct LEX : public Query_tables_list {
   LEX_MASTER_INFO mi;  // used by CHANGE MASTER
   LEX_SLAVE_CONNECTION slave_connection;
   Server_options server_options;
+  Sequence_option seq_option;
   USER_RESOURCES mqh;
   LEX_RESET_SLAVE reset_slave_info;
   ulong type;
@@ -4097,6 +4219,9 @@ struct LEX : public Query_tables_list {
   enum enum_var_type option_type;
   enum_view_create_mode create_view_mode;
   enum_sp_create_mode create_sp_mode{enum_sp_create_mode::SP_CREATE_NEW};
+  /*create force view*/
+  bool create_force_view_mode{false};
+  bool create_force_view_table_not_found{false};
 
   /// QUERY ID for SHOW PROFILE
   my_thread_id show_profile_query_id;
@@ -4151,6 +4276,7 @@ struct LEX : public Query_tables_list {
   /// True if statement references UDF functions
   bool m_has_udf{false};
   bool ignore;
+  bool m_materialized_view{false};
 
  public:
   bool is_ignore() const { return ignore; }
@@ -4178,6 +4304,10 @@ struct LEX : public Query_tables_list {
   bool contains_plaintext_password;
   enum_keep_diagnostics keep_diagnostics;
   uint32 next_binlog_file_nr;
+  bool is_materialized_view() const { return m_materialized_view; }
+  void set_is_materialized_view(bool materialized_param) {
+    m_materialized_view = materialized_param;
+  }
 
  private:
   bool m_broken;  ///< see mark_broken()
@@ -4643,8 +4773,10 @@ struct LEX : public Query_tables_list {
   bool sp_variable_declarations_rowtype_finalize(THD *thd, int nvars,
                                                  Qualified_column_ident *ref);
 
-  bool sp_variable_declarations_cursor_rowtype_finalize(THD *thd, int nvars,
-                                                        uint offset);
+  bool sp_variable_declarations_cursor_rowtype_finalize(
+      THD *thd, int nvars, int offset, Table_ident *table_ref,
+      Row_definition_list *rdl);
+
   bool sp_variable_declarations_table_rowtype_finalize(
       THD *thd, int nvars, const LEX_CSTRING &db, const LEX_CSTRING &table);
 
@@ -4655,10 +4787,19 @@ struct LEX : public Query_tables_list {
                                                  const LEX_CSTRING &name);
 
   bool sp_for_loop_bounds_set_cursor(THD *thd, const LEX_STRING name,
-                                     PT_item_list *parameters, uint *offset);
+                                     PT_item_list *parameters, uint *offset,
+                                     LEX *lex_expr, Item **args = nullptr,
+                                     uint arg_count = 0);
+
+  bool sp_for_cursor_in_loop(THD *thd, Item *item_uuid, const char *loc_start,
+                             const char *loc_end, uint *cursor_offset,
+                             LEX_STRING *cursor_ident);
 
   bool sp_open_cursor(THD *thd, const LEX_STRING name,
                       PT_item_list *parameters);
+
+  bool sp_open_cursor_for(THD *thd, LEX_STRING sql_ident,
+                          LEX_STRING cursor_ident, const char *loc);
 
   bool sp_variable_declarations_row_finalize(THD *thd, LEX_STRING ident,
                                              Row_definition_list *row);
@@ -4688,22 +4829,69 @@ struct LEX : public Query_tables_list {
       THD *thd, int nvars, LEX_STRING record, Item *default_value);
 
   bool sp_variable_declarations_type_table_finalize(THD *thd, LEX_STRING ident,
-                                                    LEX_STRING table);
+                                                    LEX_STRING table,
+                                                    const char *length,
+                                                    bool is_index_by);
+
+  bool sp_variable_declarations_type_table_type_finalize(THD *thd,
+                                                         LEX_STRING ident,
+                                                         PT_type *table_type,
+                                                         const char *length,
+                                                         bool is_index_by);
+
+  bool sp_variable_declarations_type_refcursor_finalize(
+      THD *thd, LEX_STRING ident, Sp_decl_cursor_return *return_type);
+
+  bool sp_variable_declarations_define_cursor_return_type(
+      THD *thd, Sp_decl_cursor_return *return_type, Table_ident **table_ref,
+      Row_definition_list **rdl, int *offset);
+
+  bool set_static_cursor_with_return_type(THD *thd,
+                                          Sp_decl_cursor_return *return_type,
+                                          uint off, LEX_STRING ident);
+
+  int check_percent_rowtype(THD *thd, Qualified_column_ident *ref,
+                            Table_ident **table_ref, Row_definition_list **rdl,
+                            int *offset);
+
+  bool check_cursor_type(THD *thd, Qualified_column_ident *ref,
+                         Row_definition_list **rdl);
+
+  bool sp_variable_declarations_define_ref_cursor_finalize(
+      THD *thd, int nvars, Item *default_value, sp_variable *spvar_record);
+
+  bool sp_variable_declarations_table_rowtype_make_field_def(
+      THD *thd, sp_variable *spvar, LEX_CSTRING db, LEX_CSTRING table,
+      Row_definition_list **rdl);
 
   bool sp_variable_declarations_type_table_rowtype_finalize(
-      THD *thd, LEX_STRING ident, Qualified_column_ident *table);
+      THD *thd, LEX_STRING ident, Qualified_column_ident *table,
+      const char *length, bool is_index_by);
 
-  bool resolve_rowtype_udt_field(THD *thd, Create_field *def);
-
-  bool ora_sp_forall_loop_insert_value(THD *thd, LEX_STRING ident,
-                                       LEX_CSTRING query, LEX_STRING ident_i,
-                                       const char *start, const char *end,
-                                       POS &pos);
+  bool ora_sp_forall_loop_insert_value(THD *thd, LEX_CSTRING query,
+                                       LEX_STRING ident_i, const char *start,
+                                       const char *end, POS &pos);
 
   bool ora_sp_for_loop_index_and_bounds(
       THD *thd, LEX_STRING ident, Oracle_sp_for_loop_bounds *sp_for_loop_bounds,
       uint *var_offset, const char *start, const char *end,
-      Item *dflt_value_item_bulk, Item_splocal **cursor_var_item);
+      Item_splocal **cursor_var_item);
+
+  bool make_temp_upper_bound_variable_and_set(THD *thd, Item *item_uuid,
+                                              int m_direction,
+                                              sp_assignment_lex *lex_from,
+                                              sp_assignment_lex *lex_to,
+                                              Item **item_out);
+
+  bool sp_goto_statement(THD *thd, LEX_CSTRING label_name);
+
+  bool sp_push_goto_label(THD *thd, LEX_CSTRING label_name);
+
+  bool sp_if_sp_block_init(THD *thd);
+
+  void sp_if_sp_block_finalize(THD *thd);
+
+  bool close_ref_cursor(THD *thd, uint cursor_offset);
   /**oracle sp end **/
   PT_set *dbmsotpt_set_serveroutput(THD *thd, bool enabled, YYLTYPE pos_set,
                                     YYLTYPE pos_val);
@@ -4976,6 +5164,50 @@ class sp_lex_local : public st_lex_local {
   }
 };
 
+/**
+  An assignment specific LEX, which additionally has an Item (an expression)
+  and an associated with the Item free_list, which is usually freed
+  after the expression is calculated.
+
+  Note, consider changing some of sp_lex_local to sp_assignment_lex,
+  as the latter allows to use a simpler grammar in sql_yacc.yy (IMO).
+
+  If the expression is simple (e.g. does not have function calls),
+  then m_item and m_free_list point to the same Item.
+
+  If the expressions is complex (e.g. have function calls),
+  then m_item points to the leftmost Item, while m_free_list points
+  to the rightmost item.
+  For example:
+      f1(COALESCE(f2(10), f2(20)))
+  - m_item points to Item_func_sp for f1 (the leftmost Item)
+  - m_free_list points to Item_int for 20 (the rightmost Item)
+
+  Note, we could avoid storing m_item at all, as we can always reach
+  the leftmost item from the rightmost item by iterating through m_free_list.
+  But with a separate m_item the code should be faster.
+*/
+class sp_assignment_lex : public sp_lex_local {
+  Item *m_item;  // The expression
+  LEX_CSTRING value_query;
+
+ public:
+  sp_assignment_lex(THD *thd_assign, LEX *oldlex)
+      : sp_lex_local(thd_assign, oldlex),
+        m_item(nullptr),
+        value_query(NULL_CSTR) {}
+  void set_item(Item *item) { m_item = item; }
+  Item *get_item() const { return m_item; }
+  LEX_CSTRING get_value_query() const { return value_query; }
+  void set_value_query(const char *start, const char *end) {
+    size_t length = end - start;
+    char *buffer = (char *)thd->alloc(length + 8);
+    char *ptr = thd->strmake(start, length);
+    sprintf(buffer, "round(%s)", ptr);
+    value_query = LEX_CSTRING{buffer, strlen(buffer)};
+  }
+};
+
 extern bool lex_init(void);
 extern void lex_free(void);
 extern bool lex_start(THD *thd);
@@ -5083,4 +5315,5 @@ bool accept_for_join(mem_root_deque<Table_ref *> *tables,
 Table_ref *nest_join(THD *thd, Query_block *select, Table_ref *embedding,
                      mem_root_deque<Table_ref *> *jlist, size_t table_cnt,
                      const char *legend);
+#define ORA_TYPE_RECORD_INDEX_COLUMN_NAME "[index_column]"
 #endif /* SQL_LEX_INCLUDED */

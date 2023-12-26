@@ -67,6 +67,9 @@ INSERT INTO t1 VALUES (1);
 --let $rpl_connection_name= server_1
 --source include/rpl_connection.inc
 
+--disable_query_log
+SET DEBUG_SYNC='now wait_for signal.group_replication_before_message_broadcast_reached';
+--enable_query_log
 --let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE State = 'debug sync point: now'
 --source include/wait_condition.inc
 

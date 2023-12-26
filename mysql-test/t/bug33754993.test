@@ -1,0 +1,55 @@
+--echo [#test offical fix of bug33754993]
+--echo
+--echo commit aed590bce0786cec44eb0fd5587aadb4a91e6503
+--echo Author: Roy Lyseng <roy.lyseng@oracle.com>
+--echo    Date:   Fri May 6 08:22:39 2022 +0200
+--echo
+--echo Bug#33754993: crash in Item_ref::check_cols after function execution
+--echo
+
+create database test2 CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+use test2;
+CREATE TABLE t1 (
+    T006 varchar(12) DEFAULT NULL,
+    T007 varchar(12) DEFAULT NULL
+)CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+delimiter $$;
+CREATE  PROCEDURE p1()
+BEGIN
+declare scType varchar(12);
+set scType='012001';
+create temporary  table if not exists temp1 
+select * from t1 b  where b.T006="001001" and b.T007=scType ;
+END$$
+delimiter ;$$
+
+--error ER_CANT_AGGREGATE_2COLLATIONS
+call p1;
+--error ER_CANT_AGGREGATE_2COLLATIONS
+call p1;
+drop procedure p1;
+drop table t1;
+drop database test2;
+
+--echo
+--echo [#test introduced bug by above fix]
+use test;
+create table t1(c1 int);
+
+delimiter $$;
+create procedure p1 ()
+begin
+set @mxt=(select max(c1) from t1); 
+end$$
+delimiter ;$$
+
+call p1;
+drop table t1;
+--error ER_NO_SUCH_TABLE
+call p1;
+create table t1(c1 int);
+call p1;
+
+drop procedure p1;
+drop table t1;

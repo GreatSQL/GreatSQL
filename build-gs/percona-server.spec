@@ -1,4 +1,5 @@
 # Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2023, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -221,7 +222,7 @@ BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 %if 0%{?rhel} > 6
 # For rpm => 4.9 only: https://fedoraproject.org/wiki/Packaging:AutoProvidesAndRequiresFiltering
-%global __requires_exclude ^perl\\((GD|hostnames|lib::mtr|lib::v1|mtr_|My::)
+%global __requires_exclude ^perl\\((GD|hostnames|lib::mtr|lib::v1|mtr_|My::|Lmo|Lmo::Meta|Lmo::Object|Lmo::Types|Lmo::Utils|Percona::Toolkit|Quoter|Transformers)
 %global __provides_exclude_from ^(/usr/share/(mysql|mysql-test)/.*|%{_libdir}/mysql/plugin/.*\\.so)$
 %else
 # https://fedoraproject.org/wiki/EPEL:Packaging#Generic_Filtering_on_EPEL6
@@ -626,13 +627,13 @@ make DESTDIR=%{buildroot} install
 #install -D -m 0644 packaging/rpm-common/mysql.logrotate %{buildroot}%{_sysconfdir}/logrotate.d/mysql
 #investigate this logrotate
 install -D -m 0644 $MBD/release/support-files/mysql-log-rotate %{buildroot}%{_sysconfdir}/logrotate.d/mysql
-install -D -m 0644 $MBD/%{src_dir}/build-ps/rpm/mysqld.cnf %{buildroot}%{_sysconfdir}/my.cnf
+install -D -m 0644 $MBD/%{src_dir}/build-gs/rpm/mysqld.cnf %{buildroot}%{_sysconfdir}/my.cnf
 install -d %{buildroot}%{_sysconfdir}/my.cnf.d
 
 #%if 0%{?systemd}
 #%else
 %if 0%{?rhel} < 7
-  install -D -m 0755 $MBD/%{src_dir}/build-ps/rpm/mysql.init %{buildroot}%{_sysconfdir}/init.d/mysql
+  install -D -m 0755 $MBD/%{src_dir}/build-gs/rpm/mysql.init %{buildroot}%{_sysconfdir}/init.d/mysql
 %endif
 
 # Add libdir to linker

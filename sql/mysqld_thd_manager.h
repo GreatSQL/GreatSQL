@@ -28,6 +28,7 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include <atomic>
+#include <unordered_set>
 
 #include "my_inttypes.h"
 #include "my_thread_local.h"  // my_thread_id
@@ -90,6 +91,13 @@ class Find_thd_with_id : public Find_THD_Impl {
 
  private:
   const bool m_daemon_allowed;
+};
+
+class Dbms_alert_get_all_thd : public Do_THD_Impl {
+ public:
+  std::unordered_set<std::string> m_all_sids;
+  Dbms_alert_get_all_thd() { m_all_sids.clear(); }
+  void operator()(THD *thd) override;
 };
 
 /**

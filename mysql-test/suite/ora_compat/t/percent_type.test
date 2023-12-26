@@ -1,0 +1,169 @@
+set sql_mode="oracle";
+
+CREATE TABLE t1 (a INT, b VARCHAR(3));
+
+--echo #
+--echo # test of table.col%type
+--echo #
+set global log_bin_trust_function_creators=1;
+DELIMITER $$;
+CREATE OR REPLACE FUNCTION f1(v_a varchar(10)) RETURN VARCHAR(10) 
+IS
+  name  t1.b%TYPE;
+BEGIN
+  name := v_a;
+  RETURN name;
+END;
+$$
+DELIMITER ;$$
+--error 1265 # WARN_DATA_TRUNCATED
+SELECT f1('Jones');
+ALTER TABLE t1 MODIFY COLUMN b VARCHAR(10)  ;
+SELECT f1('Jones');
+ALTER TABLE t1 MODIFY COLUMN b VARCHAR(3)  ;
+--error 1265 # WARN_DATA_TRUNCATED
+SELECT f1('Jones');
+drop function f1;
+
+--echo #
+--echo # test of table.col%type,drop col
+--echo #
+
+DELIMITER $$;
+CREATE OR REPLACE FUNCTION f1(v_a varchar(10)) RETURN VARCHAR(10) 
+IS
+  name  t1.b%TYPE;
+BEGIN
+  name := v_a;
+  RETURN name;
+END;
+$$
+DELIMITER ;$$
+SELECT f1('Jon');
+ALTER TABLE t1 drop b;
+--error ER_BAD_FIELD_ERROR
+SELECT f1('Jones');
+ALTER TABLE t1 add b VARCHAR(3)  ;
+SELECT f1('Jon');
+drop function f1;
+
+--echo #
+--echo # test of record%type
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1(a VARCHAR(10)) AS 
+  col t1.b%TYPE;
+  TYPE rec2 IS RECORD (
+    id  VARCHAR(10) := col
+  );
+ rec rec2;
+ rec3 rec%type;
+BEGIN
+  col := a; 
+  rec3.id := col;
+  select rec3.id;
+END;
+$$
+DELIMITER ;$$
+call p1('asd');
+--error 1265 # WARN_DATA_TRUNCATED
+call p1('asdd');
+ALTER TABLE t1 MODIFY COLUMN b VARCHAR(10)  ;
+call p1('asdd');
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of table%type
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1(a VARCHAR(10)) AS 
+  col t1.b%TYPE;
+  TYPE rec2 IS RECORD (
+    id  VARCHAR(10) := col
+  );
+  TYPE t_rec2 IS TABLE OF rec2 index by binary_integer; 
+ rec t_rec2;
+ rec3 rec%type;
+BEGIN
+  col := a; 
+  rec3(0).id := col;
+  select rec3(0).id;
+END;
+$$
+DELIMITER ;$$
+call p1('asd');
+ALTER TABLE t1 MODIFY COLUMN b VARCHAR(10)  ;
+call p1('asdd');
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of table%type
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1(a VARCHAR(10)) AS 
+ type t_rec1 is table of t1%ROWTYPE index by binary_integer;
+ rec t_rec1;
+ rec3 rec%type;
+BEGIN
+  rec3(0).b := a;
+  select rec3(0).b;
+END;
+$$
+DELIMITER ;$$
+call p1('asdd');
+ALTER TABLE t1 MODIFY COLUMN b VARCHAR(3)  ;
+call p1('asd');
+drop PROCEDURE p1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # test of bug7780 : table%rowtype with no table
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() AS 
+ type t_rec1 is table of t1%ROWTYPE index by binary_integer;
+ rec t_rec1;
+BEGIN
+END;
+$$
+DELIMITER ;$$
+--error ER_NO_SUCH_TABLE
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of bug7780 : table%rowtype with no table
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() AS 
+ rr t1%ROWTYPE;
+BEGIN
+END;
+$$
+DELIMITER ;$$
+--error ER_NO_SUCH_TABLE
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of bug7780 : table%type with no table
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() AS 
+ rr t1.a%TYPE;
+BEGIN
+END;
+$$
+DELIMITER ;$$
+--error ER_NO_SUCH_TABLE
+call p1();
+drop PROCEDURE p1;
+
+
+
+
+

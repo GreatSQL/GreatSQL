@@ -103,6 +103,8 @@ bool is_update_query(enum enum_sql_command command);
 bool is_explainable_query(enum enum_sql_command command);
 bool is_log_table_write_query(enum enum_sql_command command);
 bool alloc_query(THD *thd, const char *packet, size_t packet_length);
+Item *string_to_expr(THD *thd, const char *expr_str, size_t length);
+bool sp_process_definer(THD *thd);
 void dispatch_sql_command(THD *thd, Parser_state *parser_state,
                           bool update_userstat);
 void mysql_reset_thd_for_next_command(THD *thd);
@@ -114,6 +116,8 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
 bool prepare_index_and_data_dir_path(THD *thd, const char **data_file_name,
                                      const char **index_file_name,
                                      const char *table_name);
+bool append_dir_to_file(THD *thd, const char *data_file_name,
+                        const char **file_name);
 int append_file_to_dir(THD *thd, const char **filename_ptr,
                        const char *table_name);
 void execute_init_command(THD *thd, LEX_STRING *init_command,

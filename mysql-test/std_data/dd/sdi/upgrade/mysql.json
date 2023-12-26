@@ -20276,7 +20276,7 @@
                 "is_virtual": false,
                 "hidden": 1,
                 "ordinal_position": 4,
-                "char_length": 33,
+                "char_length": 51,
                 "numeric_precision": 0,
                 "numeric_scale": 0,
                 "numeric_scale_null": true,
@@ -20294,12 +20294,12 @@
                 "comment": "",
                 "generation_expression": "",
                 "generation_expression_utf8": "",
-                "options": "interval_count=3;",
+                "options": "interval_count=4;",
                 "se_private_data": "table_id=X",
                 "engine_attribute": "",
                 "secondary_engine_attribute": "",
                 "column_key": 4,
-                "column_type_utf8": "enum('BASE TABLE','VIEW','SYSTEM VIEW')",
+                "column_type_utf8": "enum('BASE TABLE','VIEW','SYSTEM VIEW','MATERIALIZED VIEW')",
                 "elements": [
                     {
                         "name": "QkFTRSBUQUJMRQ==", "decoded-name": "BASE TABLE",
@@ -20312,6 +20312,10 @@
                     {
                         "name": "U1lTVEVNIFZJRVc=", "decoded-name": "SYSTEM VIEW",
                         "index": 3
+                    },
+                    {
+                        "name": "TUFURVJJQUxJWkVEIFZJRVc=", "decoded-name": "MATERIALIZED VIEW",
+                        "index": 4
                     }
                 ],
                 "collation_id": X,
@@ -23599,7 +23603,7 @@
                 "is_virtual": false,
                 "hidden": 1,
                 "ordinal_position": 4,
-                "char_length": 18,
+                "char_length": 78,
                 "numeric_precision": 0,
                 "numeric_scale": 0,
                 "numeric_scale_null": true,
@@ -23617,12 +23621,12 @@
                 "comment": "",
                 "generation_expression": "",
                 "generation_expression_utf8": "",
-                "options": "interval_count=3;",
+                "options": "interval_count=7;",
                 "se_private_data": "table_id=X",
                 "engine_attribute": "",
                 "secondary_engine_attribute": "",
                 "column_key": 1,
-                "column_type_utf8": "enum('INSERT','UPDATE','DELETE')",
+                "column_type_utf8": "enum('INSERT','UPDATE','DELETE','INSERT OR UPDATE','INSERT OR DELETE','UPDATE OR DELETE','INSERT OR UPDATE OR DELETE')",
                 "elements": [
                     {
                         "name": "SU5TRVJU", "decoded-name": "INSERT",
@@ -23635,6 +23639,22 @@
                     {
                         "name": "REVMRVRF", "decoded-name": "DELETE",
                         "index": 3
+                    },
+                    {
+                        "name": "SU5TRVJUIE9SIFVQREFURQ==", "decoded-name": "INSERT OR UPDATE",
+                        "index": 4
+                    },
+                    {
+                        "name": "SU5TRVJUIE9SIERFTEVURQ==", "decoded-name": "INSERT OR DELETE",
+                        "index": 5
+                    },
+                    {
+                        "name": "VVBEQVRFIE9SIERFTEVURQ==", "decoded-name": "UPDATE OR DELETE",
+                        "index": 6
+                    },
+                    {
+                        "name": "SU5TRVJUIE9SIFVQREFURSBPUiBERUxFVEU=", "decoded-name": "INSERT OR UPDATE OR DELETE",
+                        "index": 7
                     }
                 ],
                 "collation_id": X,

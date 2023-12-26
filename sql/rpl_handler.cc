@@ -675,6 +675,15 @@ void prepare_table_info(THD *thd, Trans_table_info *&table_info_list,
     return;
   }
 
+  /* refer lock_external */
+  auto judge_lock_type = [&](int &lock_type) {
+    lock_type = F_WRLCK;
+    if (open_tables->db_stat & HA_READ_ONLY ||
+        (open_tables->reginfo.lock_type >= TL_READ &&
+         open_tables->reginfo.lock_type <= TL_READ_NO_INSERT))
+      lock_type = F_RDLCK;
+  };
+
   // Gather table information
   std::vector<Trans_table_info> table_info_holder;
   for (; open_tables != nullptr; open_tables = open_tables->next) {
@@ -707,7 +716,10 @@ void prepare_table_info(THD *thd, Trans_table_info *&table_info_list,
     */
     table_info.has_cascade_foreign_key = has_cascade_foreign_key(open_tables);
 
-    table_info_holder.push_back(table_info);
+    int lock_type = 0;
+    judge_lock_type(lock_type);
+
+    if (lock_type == F_WRLCK) table_info_holder.push_back(table_info);
   }
 
   // Now that one has all the information, one should build the

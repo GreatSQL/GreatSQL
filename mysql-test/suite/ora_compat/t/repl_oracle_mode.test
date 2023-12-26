@@ -1,0 +1,22 @@
+--source include/master-slave.inc
+--sync_slave_with_master
+
+connection master;
+use test;
+create table t1(id int);
+
+set sql_mode=oracle;
+
+insert into t1 values(1);
+--echo "on master"
+select * from t1;
+--sync_slave_with_master
+
+--echo "on slave"
+connection slave;
+
+select * from t1;
+
+connection master;
+drop table t1;
+--source include/rpl_end.inc

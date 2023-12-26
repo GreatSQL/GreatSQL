@@ -128,5 +128,19 @@ bool update_event(THD *thd, Event *event, const dd::Schema &schema,
 bool update_event_time_and_status(THD *thd, Event *event,
                                   my_time_t last_executed, ulonglong status);
 
+/**
+ * @brief Get the interval str object
+ *  common format:
+ *   xxx=interval_str; common
+ *   get interval_str
+ *
+ * @param [in]common string
+ * @param [out]interval_str
+ *
+ * @return true find interval_str
+ * @return false
+ */
+bool get_interval_str(const String_type &common, String_type &interval_str);
+
 }  // namespace dd
 #endif  // DD_EVENT_INCLUDED

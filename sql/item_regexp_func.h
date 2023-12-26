@@ -156,8 +156,9 @@ class Item_func_regexp : public Item_func {
       String *s = args[the_index]->val_str(&buf);
       if (s != nullptr)
         return to_string(*s);
-      else
+      else if (!(current_thd->variables.sql_mode & MODE_ORACLE)) {
         return {};
+      }
     }
     return std::string{};
   }
@@ -279,6 +280,56 @@ class Item_func_regexp_instr : public Item_func_regexp {
   /// The position in the argument list of `occurrence`.
   int retopt_arg_pos() const { return 4; }
   int match_arg_pos() const override { return 5; }
+
+ private:
+  bool resolve_type(THD *) final;
+};
+
+class item_func_regexp_count : public Item_func_regexp {
+  String value;
+  String tmp_value1;
+
+ public:
+  item_func_regexp_count(const POS &pos, PT_item_list *opt_list)
+      : Item_func_regexp(pos, opt_list) {
+    set_data_type_longlong();
+  }
+
+  Item_result result_type() const override { return INT_RESULT; }
+
+  bool fix_fields(THD *thd, Item **arguments) override;
+
+  String *val_str(String *str) override { return convert_int_to_str(str); }
+
+  double val_real() override { return convert_int_to_real(); }
+
+  longlong val_int() override;
+
+  const char *func_name() const override { return "regexp_count"; }
+
+  /// The value of the `return_option` argument, or its default if absent.
+  std::optional<int> return_option() const { return 1; }
+
+  /**
+    @{
+
+    Copy-pasted from Item_int_func. Usually, an SQL function returning INTEGER
+    just inherits Item_int_func and thus the implementation, but these classes
+    need to have Item_func_regexp as base class because of fix_fields().
+  */
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
+    return get_date_from_int(ltime, fuzzydate);
+  }
+
+  bool get_time(MYSQL_TIME *t) override { return get_time_from_int(t); }
+  /// @}
+
+ protected:
+  int pos_arg_pos() const override { return 2; }
+  int match_arg_pos() const override { return 3; }
+  /// The position in the argument list of `occurrence`.
+  int occ_arg_pos() const override { return 4; }
+  int retopt_arg_pos() const { return 5; }
 
  private:
   bool resolve_type(THD *) final;

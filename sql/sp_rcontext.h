@@ -90,7 +90,6 @@ class sp_rcontext {
                              Field *return_value_fld);
 
   ~sp_rcontext();
-  int has_been_destroyed = 0;
 
  private:
   sp_rcontext(const sp_pcontext *root_parsing_ctx, Field *return_value_fld,
@@ -167,6 +166,8 @@ class sp_rcontext {
   // checking if correct runtime context is used for variable handling,
   // and to access the pacakge run-time context
   sp_head *sp;
+  // the parent node of current sp runtime context
+  sp_rcontext *parent_ctx;
 
   /////////////////////////////////////////////////////////////////////////
   // SP-variables.
@@ -175,16 +176,14 @@ class sp_rcontext {
   bool set_variable(THD *thd, uint var_idx, Item **value) {
     return set_variable(thd, m_var_table->field[var_idx], value);
   }
-
   bool find_row_field_by_name_or_error(uint *field_idx, uint var_idx,
                                        const Name_string &field_name);
-  void record_field_expand_table(THD *thd, Field *field, int row_number,
-                                 Item *item);
+  bool record_field_expand_table(THD *thd, Field *field, Item *row_index);
   bool set_variable_row(THD *thd, uint var_idx,
                         const mem_root_deque<Item *> &items);
   bool set_variable_row_table(THD *thd, uint var_idx,
                               const mem_root_deque<Item *> &items,
-                              ha_rows row_count);
+                              ha_rows row_count, bool is_bulk_into = false);
   bool set_variable_row_field(THD *thd, uint var_idx, uint field_idx,
                               Item **value);
   bool set_variable_row_field_by_name(THD *thd, uint var_idx,
@@ -195,10 +194,11 @@ class sp_rcontext {
                                       const Name_string &field_name,
                                       List<ora_simple_ident_def> *arg_list,
                                       Item **value);
+  bool set_variable_row_table_by_index(THD *thd, uint var_idx, Item *index,
+                                       Item **value);
   Item *insert_into_table_default_and_set_default(THD *thd, Item *item,
-                                                  int offset_table,
-                                                  uint m_field_idx);
-  TABLE **virtual_tmp_table_for_row_table(uint var_idx);
+                                                  uint m_field_idx,
+                                                  Item *index_item);
 
   void cleanup_record_variable_row_table(uint var_idx);
 
@@ -236,7 +236,8 @@ class sp_rcontext {
   /// call stack.
   ///
   /// @param current_scope  The current BEGIN..END block.
-  void pop_handlers(sp_pcontext *current_scope);
+  /// @param count  The count of handlers should be pop.
+  void pop_handlers(sp_pcontext *current_scope, uint count = 0);
 
   /// Get the Handler_call_frame representing the currently active handler.
   Handler_call_frame *current_handler_frame() const {
@@ -288,11 +289,12 @@ class sp_rcontext {
   /// Create a new sp_cursor instance and push it to the cursor stack.
   ///
   /// @param i          Cursor-push instruction.
+  /// @param cursor_offset  offset of cursor definition.
   ///
   /// @return error flag.
   /// @retval false on success.
   /// @retval true on error.
-  bool push_cursor(sp_instr_cpush *i);
+  bool push_cursor(sp_instr_cpush *i, uint cursor_offset);
 
   /// Pop and delete given number of sp_cursor instance from the cursor stack.
   ///
@@ -301,7 +303,7 @@ class sp_rcontext {
 
   void pop_all_cursors() { pop_cursors(m_ccount); }
 
-  sp_cursor *get_cursor(uint i) const { return m_cstack[i]; }
+  sp_cursor *get_cursor(uint i) const;
 
   /////////////////////////////////////////////////////////////////////////
   // CASE expressions.
@@ -385,7 +387,6 @@ class sp_rcontext {
   /// Pop the Handler_call_frame on top of the stack of active handlers.
   /// Also pop the matching Diagnostics Area and transfer conditions.
   void pop_handler_frame(THD *thd);
-  void destroy_record_table();
 
  private:
   /// Top-level (root) parsing context for this runtime context.
@@ -428,16 +429,17 @@ class sp_rcontext {
 
   List<sp_variable> m_udt_vars_list;
 
-  bool is_udt_resolved;
-
  public:
   List<sp_variable> *get_sp_variable_list() { return &m_vars_list; }
 
-  sp_variable *search_udt_variable(const char *name, size_t name_len);
+  sp_variable *search_udt_variable(const char *name, size_t name_len,
+                                   const char *db_name, size_t db_name_len);
 
   sp_variable *search_variable(const char *name, size_t name_len);
 
   bool add_udt_to_sp_var_list(THD *thd, List<Create_field> field_def_lst);
+
+  void reset_refcursor(const Field_refcursor *field_from);
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -447,7 +449,7 @@ class sp_rcontext {
 /* A mediator between stored procedures and server side cursors */
 
 class sp_cursor {
- private:
+ protected:
   /**
     An interceptor of cursor result set used to implement
     FETCH @<cname@> INTO @<varlist@>.
@@ -460,23 +462,39 @@ class sp_cursor {
 
    public:
     Query_fetch_into_spvars()
-        : Query_result_interceptor(), fetch_bulk_count(0), m_row_batch(1) {}
+        : Query_result_interceptor(),
+          fetch_bulk_count(0),
+          m_row_batch(1),
+          m_return_table(std::make_shared<Cursor_return_table>()) {}
     uint get_field_count() { return field_count; }
+    void set_field_count(uint count) { field_count = count; }
+    ha_rows get_fetch_bulk_count() const { return fetch_bulk_count; }
     void set_spvar_list(List<sp_variable> *vars) { spvar_list = vars; }
     void set_row_batch(ha_rows rows) { m_row_batch = rows; }
+    ha_rows get_row_batch() { return m_row_batch; }
     bool send_eof(THD *) override { return false; }
     bool send_data(THD *thd, const mem_root_deque<Item *> &items) override;
     bool prepare(THD *thd, const mem_root_deque<Item *> &list,
                  Query_expression *u) override;
+    uint get_return_table_count() {
+      if (!m_return_table && !m_return_table->get_table()) return 0;
+      return m_return_table->get_table()->visible_field_count();
+    }
+    TABLE *get_return_table() { return m_return_table->get_table(); }
+
+   public:
+    std::shared_ptr<Cursor_return_table> m_return_table;
+
+   private:
+    bool send_data_after_check(THD *thd, const mem_root_deque<Item *> &items);
   };
 
  public:
-  explicit sp_cursor(sp_instr_cpush *i)
-      : m_result(),
-        m_server_side_cursor(nullptr),
+  explicit sp_cursor(sp_instr_cpush *i, uint cursor_offset)
+      : m_server_side_cursor(nullptr),
         m_push_instr(i),
-        m_found(false),
-        m_row_count(0) {}
+        m_result(),
+        m_cursor_offset(cursor_offset) {}
 
   virtual ~sp_cursor() { destroy(); }
 
@@ -491,22 +509,63 @@ class sp_cursor {
   bool fetch_bulk(List<sp_variable> *vars, ha_rows row_count);
 
   sp_instr_cpush *get_push_instr() { return m_push_instr; }
-  bool found() { return m_found; }
+
+  bool found();
 
   bool export_structure(THD *thd, List<Create_field> *list);
 
-  ulonglong fetch_count() const { return m_row_count; }
+  ulonglong fetch_count() const;
 
- private:
-  Query_fetch_into_spvars m_result;
+  bool is_cursor_fetched();
+
+  virtual bool is_defined() { return true; }
+
+  bool make_return_table(THD *thd, List<Create_field> *list);
+
+  void set_return_table_from_cursor(sp_cursor *from_cursor);
+
+  bool set_return_table_from_pcursor(THD *thd, LEX_CSTRING *from_cursor);
+
+  bool check_cursor_return_type_count();
 
   Server_side_cursor *m_server_side_cursor;
+
   sp_instr_cpush *m_push_instr;
-  bool m_found;
-  ulonglong m_row_count;
+
+  Query_fetch_into_spvars m_result;
+
+  uint m_cursor_offset;
 
  private:
   void destroy();
 };  // class sp_cursor
+
+class sp_refcursor : public sp_cursor {
+ public:
+  explicit sp_refcursor()
+      : sp_cursor(nullptr, 0),
+        m_arena(&m_mem_root, Query_arena::STMT_EXECUTED),
+        m_mem_root(),
+        m_query_result(nullptr),
+        stmt(nullptr) {}
+
+  virtual ~sp_refcursor() override { destroy(); }
+
+  bool open_for_sql(THD *thd);
+
+  bool open_for_ident(THD *thd, uint m_sql_spv_idx);
+
+  bool is_defined() override { return m_query_result != nullptr; }
+
+  void destroy();
+
+  /// Memory allocation arena, for sp_refcursor allocations to statement.
+  Query_arena m_arena;
+
+ private:
+  MEM_ROOT m_mem_root;
+  Query_result *m_query_result;
+  Prepared_statement *stmt;
+};  // class sp_refcursor
 
 #endif /* _SP_RCONTEXT_H_ */

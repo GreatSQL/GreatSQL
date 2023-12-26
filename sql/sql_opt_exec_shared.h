@@ -251,6 +251,8 @@ class QEP_shared {
         m_first_inner(NO_PLAN_IDX),
         m_last_inner(NO_PLAN_IDX),
         m_first_upper(NO_PLAN_IDX),
+        m_foj(false),
+        m_last_foj_inner(NO_PLAN_IDX),
         m_orign_ref(),
         m_ref(&m_orign_ref),
         m_index(0),
@@ -291,6 +293,10 @@ class QEP_shared {
   plan_idx first_sj_inner() { return m_first_sj_inner; }
   plan_idx last_sj_inner() { return m_last_sj_inner; }
   plan_idx first_inner() { return m_first_inner; }
+  plan_idx last_foj_inner() { return m_last_foj_inner; }
+  bool is_foj() { return m_foj; }
+  void set_foj(bool val) { m_foj = val; }
+  void set_last_foj_inner(plan_idx i) { m_last_foj_inner = i; }
   void set_first_inner(plan_idx i) { m_first_inner = i; }
   void set_last_inner(plan_idx i) { m_last_inner = i; }
   void set_first_sj_inner(plan_idx i) { m_first_sj_inner = i; }
@@ -419,6 +425,8 @@ class QEP_shared {
   plan_idx m_last_inner;   ///< last table table for embedding outer join
   plan_idx m_first_upper;  ///< first inner table for embedding outer join
 
+  bool m_foj;  ///< true is the table_ref is inside a full join relation.
+  plan_idx m_last_foj_inner;
   /**
      Used to do index-based look up based on a key value.
      Used when we read constant tables, in misc optimization (like
@@ -540,6 +548,10 @@ class QEP_shared_owner {
   plan_idx first_inner() const { return m_qs->first_inner(); }
   plan_idx last_inner() const { return m_qs->last_inner(); }
   plan_idx first_upper() const { return m_qs->first_upper(); }
+  plan_idx last_foj_inner() const { return m_qs->last_foj_inner(); }
+  bool is_foj() const { return m_qs->is_foj(); }
+  void set_foj(bool val) { return m_qs->set_foj(val); }
+  void set_last_foj_inner(plan_idx i) { return m_qs->set_last_foj_inner(i); }
   void set_first_inner(plan_idx i) { return m_qs->set_first_inner(i); }
   void set_last_inner(plan_idx i) { return m_qs->set_last_inner(i); }
   void set_first_sj_inner(plan_idx i) { return m_qs->set_first_sj_inner(i); }
@@ -666,6 +678,10 @@ enum {
    * Use to store PQ worker query result
    */
   REF_SLICE_PQ_TMP,
+  /**
+   * Use to store connect by result
+   */
+  REF_SLICE_CONNECT_BY_RES,
   /**
      The slice with pointers to columns of table(s), ie., the actual Items.
      Only used for queries involving temporary tables or the likes; for simple

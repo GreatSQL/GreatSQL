@@ -1,4 +1,5 @@
 # Copyright (c) 2006, 2022, Oracle and/or its affiliates.
+# Copyright (c) 2023, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -121,6 +122,7 @@ SET(INNOBASE_SOURCES
   eval/eval0eval.cc
   eval/eval0proc.cc
   fil/fil0fil.cc
+  fil/fil0purge.cc
   fsp/fsp0fsp.cc
   fsp/fsp0file.cc
   fsp/fsp0space.cc
@@ -146,6 +148,7 @@ SET(INNOBASE_SOURCES
   handler/ha_innopart.cc
   handler/handler0alter.cc
   handler/i_s.cc
+  handler/i_s_file_purge.cc
   handler/p_s.cc
   handler/xtradb_i_s.cc
   ibuf/ibuf0ibuf.cc
@@ -227,6 +230,7 @@ SET(INNOBASE_SOURCES
   row/row0quiesce.cc
   row/row0vers.cc
   srv/srv0conc.cc
+  srv/srv0file_purge.cc
   srv/srv0mon.cc
   srv/srv0srv.cc
   srv/srv0start.cc

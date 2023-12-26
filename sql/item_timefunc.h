@@ -1158,6 +1158,16 @@ class Item_func_now : public Item_datetime_func {
                                              bool no_conversions) override;
 
  public:
+  /*
+    convert time to oracle current_timestamp format
+    dd-mm-yy hh:mm:ss[.dec] am|pm timezone
+    param: ltime in, tz in, dec in, str out
+  */
+  static void convert_to_ora_current_timestamp(MYSQL_TIME *ltime, Time_zone *tz,
+                                               uint8 decimals, String *str);
+  bool is_current_timestmap{false};
+  bool is_dec_appoint{false};
+  bool is_ora_current_timestmap{false};
   /**
     Constructor for Item_func_now.
     @param dec_arg  Number of fractional digits.
@@ -1183,6 +1193,10 @@ class Item_func_now : public Item_datetime_func {
     func_arg->banned_function_name = func_name();
     return ((func_arg->source == VGS_GENERATED_COLUMN) ||
             (func_arg->source == VGS_CHECK_CONSTRAINT));
+  }
+  const CHARSET_INFO *charset_for_protocol() override {
+    if (is_ora_current_timestmap) return default_charset();
+    return &my_charset_bin;
   }
 };
 
@@ -1846,7 +1860,7 @@ class Item_func_to_date final : public Item_temporal_hybrid_func {
       : Item_temporal_hybrid_func(pos, a, b),
         cached_timestamp_type(MYSQL_TIMESTAMP_NONE),
         locale(nullptr) {
-    current_thd->lex->has_notsupported_func = true;
+    set_has_notsupported_func_true();
   }
   const char *func_name() const override { return "to_date"; }
   bool resolve_type(THD *) override;
@@ -1867,7 +1881,7 @@ class Item_func_to_timestamp final : public Item_temporal_hybrid_func {
       : Item_temporal_hybrid_func(pos, a, b),
         cached_timestamp_type(MYSQL_TIMESTAMP_NONE),
         locale(nullptr) {
-    current_thd->lex->has_notsupported_func = true;
+    set_has_notsupported_func_true();
   }
   const char *func_name() const override { return "to_timestamp"; }
   bool resolve_type(THD *) override;
@@ -1906,7 +1920,7 @@ class Item_func_trunc final : public Item_func_round {
   Item_func_trunc(const POS &pos, Item *a, Item *b, bool def_arg)
       : super(pos, a, b, 1), default_arg(def_arg) {
     set_nullable(true);
-    current_thd->lex->has_notsupported_func = true;
+    set_has_notsupported_func_true();
   }
 
   const char *func_name() const override { return "trunc"; }
@@ -1939,6 +1953,7 @@ class Item_func_trunc final : public Item_func_round {
   }
 
   void check_trunc_number_params();
+  longlong get_decimal_place();
 };
 
 class Item_func_add_months final : public Item_temporal_hybrid_func {
@@ -1950,21 +1965,18 @@ class Item_func_add_months final : public Item_temporal_hybrid_func {
 
  public:
   Item_func_add_months(const POS &pos, Item *a, Item *b)
-      : Item_temporal_hybrid_func(pos, a, b) {
-    current_thd->lex->has_notsupported_func = true;
-  }
+      : Item_temporal_hybrid_func(pos, a, b) {}
   /**
      POS-less ctor for post-parse construction with implicit addition to THD's
      free_list (see Item::Item() no-argument ctor).
   */
-  Item_func_add_months(Item *a, Item *b) : Item_temporal_hybrid_func(a, b) {
-    current_thd->lex->has_notsupported_func = true;
-  }
+  Item_func_add_months(Item *a, Item *b) : Item_temporal_hybrid_func(a, b) {}
 
   const char *func_name() const override { return "add_months"; }
   bool resolve_type(THD *) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /* Function prototypes */

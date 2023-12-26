@@ -1,4 +1,5 @@
 /* Copyright (c) 2014, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2023, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2654,6 +2655,8 @@ TEST(StrmxfrmHashTest, HashStability) {
       {"utf8mb4_vi_0900_as_cs", {{0xcfb3e3073c9f5a19LL, 0x00000001LL}}},
       {"utf8mb4_vietnamese_ci", {{0x3acdfaa93364f55cLL, 0x0000055fLL}}},
       {"utf8mb4_zh_0900_as_cs", {{0x23c370d9ac589d1fLL, 0x00000001LL}}},
+      {"gb18030_2022_bin", {{0xb6240d9a0a0f7efcLL, 0x000002b0LL}}},
+      {"gb18030_2022_chinese_ci", {{0xb7b6676124243e73LL, 0x00000abdLL}}},
   };
 
   string test_str =

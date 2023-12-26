@@ -554,6 +554,33 @@ static bool fill_dd_view_definition(THD *thd, View *view_obj, Table_ref *view) {
   view_options->set("timestamp",
                     String_type(view->timestamp.str, view->timestamp.length));
   view_options->set("view_valid", true);
+  if (thd->lex->create_force_view_mode) {
+    view->is_force_view = true;
+    view_options->set("is_force_view", true);
+    if (thd->lex->create_force_view_table_not_found)
+      view_options->set("view_valid", false);
+  } else {
+    /*1.alter view, create or replace view,is_force_view flage mark false
+      2. create table ,Reference view, is_force_view flag，Keep the original
+      value,(open_views_and_update_metadata set sql_command SQLCOM_SHOW_FIELDS
+      )
+    */
+    if (view_options->exists("is_force_view") &&
+        thd->lex->sql_command != SQLCOM_SHOW_FIELDS)
+      view_options->set("is_force_view", false);
+  }
+  /*
+  update_referencing_views_metadata(), maybe reference create_force_view ，When
+  a view column is inconsistent with a subquery column, do not need to update
+  the column dictionary
+  */
+  bool create_force_views_update_columns_flag = true;
+  if (view->is_force_view && view->derived_column_names()) {
+    if (thd->lex->query_block->num_visible_fields() !=
+        view->derived_column_names()->size()) {
+      create_force_views_update_columns_flag = false;
+    }
+  }
 
   /*
     Fill view columns information in View object.
@@ -563,7 +590,9 @@ static bool fill_dd_view_definition(THD *thd, View *view_obj, Table_ref *view) {
     metadata stored with column information. Fill view columns only when view
     metadata is stored with column information.
   */
-  if (!thd->lex->query_block->field_list_is_empty() &&
+  if (!thd->lex->create_force_view_table_not_found &&
+      create_force_views_update_columns_flag &&
+      !thd->lex->query_block->field_list_is_empty() &&
       fill_dd_view_columns(thd, view_obj, view))
     return true;
 

@@ -46,6 +46,7 @@ using dd::tables::Triggers;
 namespace dd {
 
 class Table;
+static const std::set<String_type> default_valid_option_keys = {"status"};
 
 ///////////////////////////////////////////////////////////////////////////
 // Trigger_impl implementation.
@@ -108,6 +109,14 @@ bool Trigger_impl::restore_attributes(const Raw_record &r) {
       r.read_int(Triggers::FIELD_ACTION_TIMING));
   m_sql_mode = r.read_int(Triggers::FIELD_SQL_MODE);
 
+  // Read trigger status difault enable
+  set_options(r.read_str(Triggers::FIELD_OPTIONS));
+  if (!(options().exists("status")))
+    m_event_status = enum_trigger_status::ES_ENABLED;
+  else {
+    options().get("status", &m_event_status);
+  }
+
   // Read numerics
   m_action_order = r.read_uint(Triggers::FIELD_ACTION_ORDER);
 
@@ -169,7 +178,8 @@ bool Trigger_impl::store_attributes(Raw_record *r) {
                   m_connection_collation_id) ||
          r->store(Triggers::FIELD_SCHEMA_COLLATION_ID, m_schema_collation_id) ||
          r->store_timestamp(Triggers::FIELD_CREATED, m_created) ||
-         r->store_timestamp(Triggers::FIELD_LAST_ALTERED, m_last_altered);
+         r->store_timestamp(Triggers::FIELD_LAST_ALTERED, m_last_altered) ||
+         r->store(Triggers::FIELD_OPTIONS, m_options);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -193,7 +203,9 @@ void Trigger_impl::debug_print(String_type &outb) const {
      << "m_definer_host: " << m_definer_host << "; "
      << "m_client_collation_id: " << m_client_collation_id << "; "
      << "m_connection_collation_id: " << m_connection_collation_id << "; "
-     << "m_schema_collation_id: " << m_schema_collation_id << "; }";
+     << "m_schema_collation_id: " << m_schema_collation_id << "; "
+     << "m_event_status: "
+     << ((uint)m_event_status == 1 ? "ENABLED" : "DISABLED") << "; }";
 
   outb = ss.str();
 }
@@ -217,7 +229,8 @@ Trigger_impl::Trigger_impl(const Trigger_impl &src, Table_impl *parent)
       m_table(parent),
       m_client_collation_id(src.m_client_collation_id),
       m_connection_collation_id(src.m_connection_collation_id),
-      m_schema_collation_id(src.m_schema_collation_id) {}
+      m_schema_collation_id(src.m_schema_collation_id),
+      m_options(src.m_options) {}
 
 ///////////////////////////////////////////////////////////////////////////
 

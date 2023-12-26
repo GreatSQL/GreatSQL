@@ -192,3 +192,25 @@ select * from (select substrb('1234567890', 1, 0));
 drop table tab001;
 
 
+set @a = substrb(to_char('GreatSQL Database'), 2, 5);
+select substrb(to_char('GreatSQL Database'), 2, 5) from dual;
+select substrb(to_char('GreatSQL Database'), 2, 5)=@a from dual;
+select substrb(to_char('GreatSQL Database'), 2.1, 5)=@a from dual;
+select substrb(to_char('GreatSQL Database'), 2.5, 5)=@a from dual;
+select substrb(to_char('GreatSQL Database'), 2.1, 5.1)=@a from dual;
+select substrb(to_char('GreatSQL Database'), 2.1, 5.5)=@a from dual;
+select substrb(to_char('GreatSQL Database'), 2.5, 5.1)=@a from dual;
+select substrb(to_char('GreatSQL Database'), 2.5, 5.5)=@a from dual;
+
+create table t1 (i int, n number(10,5), d binary_double);
+insert into t1 values (2.4, 2.4, 3.4);
+insert into t1 values (-2.4, -2.4, -3.4);
+insert into t1 values (4.5, 4.5, 6.5);
+insert into t1 values (-4.5, -4.5, -6.5);
+select i,n,d,
+	substrb('GreatSQL Database', i, 5),
+	substrb('GreatSQL Database', n, 5),
+	substrb('GreatSQL Database', d, 5) from t1;
+drop table t1;
+
+select substrb('GreatSQL Database', 1.999999999999999,5) from dual;
