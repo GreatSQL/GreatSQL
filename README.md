@@ -150,7 +150,7 @@ $ systemctl status mysqld
 - [Changes in GreatSQL 8.0.25-16 (2022-5-16)](https://greatsql.cn/docs/8032-25/user-manual/1-docs-intro/relnotes/changes-greatsql-8-0-25-16-20220516.md)
 - [Changes in GreatSQL 8.0.25-15 (2021-8-26)](https://greatsql.cn/docs/8032-25/user-manual/1-docs-intro/relnotes/changes-greatsql-8-0-25-20210820.md)
 
-### GreatSQL 5.7
+## GreatSQL 5.7
 - [Changes in GreatSQL 5.7.36-39 (2022-4-7)](https://greatsql.cn/docs/8032-25/user-manual/1-docs-intro/relnotes/changes-greatsql-5-7-36-20220407.md)
 
 
@@ -284,21 +284,6 @@ $ systemctl status mysqld
 此外，GreatSQL 8.0.32-25基于Percona Server for MySQL 8.0.32版本，它在MySQL 8.0.32基础上做了大量的改进和提升以及众多新特性，详情请见：[**Percona Server for MySQL feature comparison**](https://docs.percona.com/percona-server/8.0/feature-comparison.html)，这其中包括线程池、审计、数据脱敏等MySQL企业版才有的特性，以及performance_schema提升、information_schema提升、性能和可扩展性提升、用户统计增强、PROCESSLIST增强、Slow log增强等大量改进和提升，这里不一一重复列出。
 
 GreatSQL同时也是gitee（码云）平台上的GVP项目，详见：[https://gitee.com/gvp/database-related](https://gitee.com/gvp/database-related) **数据库相关**类目。
-
-
-# 版本历史
----
-
-## GreatSQL 8.0
-- [Changes in GreatSQL 8.0.32-25 (2023-12-28)](https://greatsql.cn/docs/8032-25/user-manual/1-docs-intro/relnotes/changes-greatsql-8-0-32-25-20231228.html)
-- [Changes in GreatSQL 8.0.32-24 (2023-6-5)](https://greatsql.cn/docs/8032-25/user-manual/1-docs-intro/relnotes/changes-greatsql-8-0-32-24-20230605.html)
-- [Changes in GreatSQL 8.0.25-17 (2023-3-13)](https://greatsql.cn/docs/8032-25/user-manual/1-docs-intro/relnotes/changes-greatsql-8-0-25-17-20230313.html)
-- [Changes in GreatSQL 8.0.25-16 (2022-5-16)](https://greatsql.cn/docs/8032-25/user-manual/1-docs-intro/relnotes/changes-greatsql-8-0-25-16-20220516.html)
-- [Changes in GreatSQL 8.0.25-15 (2021-8-26)](https://greatsql.cn/docs/8032-25/user-manual/1-docs-intro/relnotes/changes-greatsql-8-0-25-20210820.html)
-
-### GreatSQL 5.7
-- [Changes in GreatSQL 5.7.36-39 (2022-4-7)](https://greatsql.cn/docs/8032-25/user-manual/1-docs-intro/relnotes/changes-greatsql-5-7-36-20220407.html)
-
 
 # 问题反馈
 ---
