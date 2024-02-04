@@ -58,7 +58,6 @@
 #include "sql/sql_bitmap.h"
 #include "sql/sql_const.h"
 #include "sql/sql_error.h"  // Sql_condition
-#include "sql/sql_prepare.h"
 #include "sql/table.h"
 #include "sql_string.h"  // String
 #include "template_utils.h"
