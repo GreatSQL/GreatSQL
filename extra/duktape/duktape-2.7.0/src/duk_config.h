@@ -42,6 +42,7 @@
  *      - SPARC 64-bit
  *      - RISC-V 32-bit
  *      - RISC-V 64-bit
+ *      - loongarch 64-bit
  *      - SuperH
  *      - Motorola 68k
  *      - Emscripten
@@ -302,6 +303,11 @@
 #error __riscv defined without __riscv_xlen
 #endif
 #endif  /* __riscv */
+
+/* loongarch64 */
+#if defined(__loongarch64)
+#define DUK_F_LOONGARCH64
+#endif
 
 /* SuperH */
 #if defined(__sh__) || \
@@ -988,6 +994,12 @@
 #elif defined(DUK_F_RISCV64)
 /* --- RISC-V 64-bit --- */
 #define DUK_USE_ARCH_STRING "riscv64"
+#define DUK_USE_BYTEORDER 1
+#undef DUK_USE_PACKED_TVAL
+#define DUK_F_PACKED_TVAL_PROVIDED
+#elif defined(DUK_F_LOONGARCH64)
+/* --- loongarch 64-bit --- */
+#define DUK_USE_ARCH_STRING "loongarch64"
 #define DUK_USE_BYTEORDER 1
 #undef DUK_USE_PACKED_TVAL
 #define DUK_F_PACKED_TVAL_PROVIDED

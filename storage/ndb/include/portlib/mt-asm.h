@@ -157,6 +157,31 @@ xcng(volatile unsigned * addr, int val)
 
 #define cpu_pause()  __asm__ __volatile__ ("yield")
 
+#elif defined(__loongarch64)
+
+#define NDB_HAVE_MB
+#define NDB_HAVE_RMB
+#define NDB_HAVE_WMB
+//#define NDB_HAVE_XCNG
+
+// details frome kernel-6.9 arch/loongarch/include/asm/barrier.h
+
+#define DBAR(hint) __asm__ __volatile__("dbar %0 " : : "I"(hint) : "memory")
+
+#define crwrw       0b00000
+#define cr_r_       0b00101
+#define c_w_w       0b01010
+
+#define c_sync()    DBAR(crwrw)
+#define c_rsync()   DBAR(cr_r_)
+#define c_wsync()   DBAR(c_w_w)
+
+#define mb()        c_sync()
+#define rmb()       c_rsync()
+#define wmb()       c_wsync()
+
+#define cpu_pause()  __asm__ __volatile__ ("nop")
+
 #else
 #define NDB_NO_ASM "Unsupported architecture (gcc)"
 #endif
