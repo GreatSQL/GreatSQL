@@ -311,6 +311,7 @@ mysql
 partial_revokes_db_2
 performance_schema
 sys
+sys_mac
 test
 SET ROLE r3;
 SHOW DATABASES;
@@ -322,6 +323,7 @@ partial_revokes_db
 partial_revokes_db_2
 performance_schema
 sys
+sys_mac
 test
 GRANT INSERT ON `partial_revokes_db`.* TO baz@localhost;
 SHOW GRANTS;
@@ -338,6 +340,7 @@ partial_revokes_db
 partial_revokes_db_2
 performance_schema
 sys
+sys_mac
 test
 SET ROLE r3;
 SHOW DATABASES;
@@ -349,6 +352,7 @@ partial_revokes_db
 partial_revokes_db_2
 performance_schema
 sys
+sys_mac
 test
 GRANT SELECT ON `partial_revokes_db`.* TO baz@localhost;
 SHOW GRANTS;
@@ -364,6 +368,7 @@ partial_revokes_db
 partial_revokes_db_2
 performance_schema
 sys
+sys_mac
 test
 SET ROLE r3;
 SHOW DATABASES;
@@ -375,6 +380,7 @@ partial_revokes_db
 partial_revokes_db_2
 performance_schema
 sys
+sys_mac
 test
 # -----------------------------------------------------------------------
 DROP USER baz@localhost;

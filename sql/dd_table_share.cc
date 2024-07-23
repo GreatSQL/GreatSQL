@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1129,7 +1129,7 @@ static bool fill_column_from_dd(THD *thd, TABLE_SHARE *share,
         thd, &share->mem_root, db, ident, &m_type_table, s.c_str());
     if (length_table == 0) return true;
     Field_udt_type *field_udt = dynamic_cast<Field_udt_type *>(reg_field);
-    field_udt->set_udt_table(m_type_table);
+    field_udt->m_udt_table = m_type_table;
   }
 
   // Handle generated columns
@@ -1490,10 +1490,21 @@ static bool fill_index_from_dd(THD *thd, TABLE_SHARE *share,
   if (has_clustering) {
     keyinfo->flags |= HA_CLUSTERING;
   }
+  /*
+    Retain compatibility with legacy markup methods
+  */
   if (index_options.exists("nulls_equal")) {
     bool nulls_equal;
     index_options.get("nulls_equal", &nulls_equal);
-    if (nulls_equal) keyinfo->flags |= HA_NULL_ARE_EQUAL;
+    if (nulls_equal) keyinfo->flags |= HA_NULL_ARE_EQUAL | HA_FROM_ORA_MODE;
+  }
+  /*
+    The ora_mode tag will be used uniformly in the future.
+  */
+  if (index_options.exists("ora_mode")) {
+    bool ora_mode;
+    index_options.get("ora_mode", &ora_mode);
+    if (ora_mode) keyinfo->flags |= HA_NULL_ARE_EQUAL | HA_FROM_ORA_MODE;
   }
 
   if (idx_obj->is_generated()) keyinfo->flags |= HA_GENERATED_KEY;
@@ -1517,12 +1528,6 @@ static bool fill_index_from_dd(THD *thd, TABLE_SHARE *share,
   //
 
   const dd::Properties &idx_options = idx_obj->options();
-
-  if (idx_options.exists("nulls_equal")) {
-    bool nulls_equal;
-    idx_options.get("nulls_equal", &nulls_equal);
-    if (nulls_equal) keyinfo->flags |= HA_NULL_ARE_EQUAL;
-  }
 
   /*
     Restore flags indicating that key packing optimization was suggested to SE.

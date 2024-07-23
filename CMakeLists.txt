@@ -1,5 +1,5 @@
 # Copyright (c) 2006, 2022, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2023, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -718,8 +718,10 @@ SET(KNOWN_64BIT_ARCHITECTURES
   aarch64
   ppc64
   ppc64le
+  loongarch64
   s390x
   x86_64
+  sw_64
 )
 
 # Include the platform-specific file. To allow exceptions, this code
@@ -1388,6 +1390,11 @@ IF(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
     STRING_APPEND(CMAKE_C_FLAGS   " -moutline-atomics")
     STRING_APPEND(CMAKE_CXX_FLAGS " -moutline-atomics")
   ENDIF()
+ENDIF()
+
+IF(CMAKE_SYSTEM_PROCESSOR STREQUAL "sw_64")
+  STRING_APPEND(CMAKE_C_FLAGS   " -DSW_64")
+  STRING_APPEND(CMAKE_CXX_FLAGS " -DSW_64")
 ENDIF()
 
 IF(LINUX)

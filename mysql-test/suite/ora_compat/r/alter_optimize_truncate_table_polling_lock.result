@@ -13,16 +13,14 @@ insert into t1 values (1),(2),(3);
 begin;
 insert into t1 values (4);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 alter table t1 rename column  id to id1, ALGORITHM=INPLACE, LOCK=NONE;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 rename column  id to id1, ALGORITHM=INPLACE, LOCK=NONE
 select * from t1;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 rename column  id to id1, ALGORITHM=INPLACE, LOCK=NONE
@@ -32,10 +30,9 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select * from t1
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect addconroot2]
@@ -54,12 +51,11 @@ insert into t1 values (1),(2),(3);
 begin;
 insert into t1 values (4);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 alter table t1 rename column  id to id1, ALGORITHM=INPLACE, LOCK=NONE;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 rename column  id to id1, ALGORITHM=INPLACE, LOCK=NONE
@@ -69,7 +65,6 @@ id
 2
 3
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 rename column  id to id1, ALGORITHM=INPLACE, LOCK=NONE
@@ -78,10 +73,9 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
+sql_text
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ########################################################################################
@@ -93,17 +87,15 @@ insert into t1 values (1),(2),(3);
 begin;
 insert into t1 values (4);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 alter table t1 rename to t11;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 rename to t11
 select * from t1;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 rename to t11
@@ -113,10 +105,9 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select * from t1
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect addconroot2]
@@ -135,12 +126,11 @@ insert into t1 values (1),(2),(3);
 begin;
 insert into t1 values (4);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 alter table t1 rename to t11;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 rename to t11
@@ -150,7 +140,6 @@ id
 2
 3
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 rename to t11
@@ -159,10 +148,9 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
+sql_text
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ########################################################################################
@@ -174,17 +162,15 @@ insert into t1 values (1),(2),(3);
 begin;
 insert into t1 values (4);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 alter table t1 add column name varchar(100);;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 add column name varchar(100)
 select * from t1;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 add column name varchar(100)
@@ -194,10 +180,9 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select * from t1
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect addconroot2]
@@ -216,12 +201,11 @@ insert into t1 values (1),(2),(3);
 begin;
 insert into t1 values (4);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 alter table t1 add column name varchar(100);;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 add column name varchar(100)
@@ -231,7 +215,6 @@ id
 2
 3
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 add column name varchar(100)
@@ -240,10 +223,9 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
+sql_text
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ########################################################################################
@@ -255,17 +237,16 @@ insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
 begin;
 insert into t1 values (4,'name4');
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 alter table t1 drop column name;;
 ----[connect addconroot2]
-do sleep(3);
+----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 drop column name
 select * from t1;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 drop column name
@@ -276,10 +257,9 @@ t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL,
   `name` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select * from t1
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect addconroot2]
@@ -298,12 +278,11 @@ insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
 begin;
 insert into t1 values (4,'name4');
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 alter table t1 drop column name;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 drop column name
@@ -313,7 +292,6 @@ id	name
 2	name2
 3	name3
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 drop column name
@@ -323,10 +301,9 @@ t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL,
   `name` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
+sql_text
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ########################################################################################
@@ -338,17 +315,15 @@ insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
 begin;
 insert into t1 values (4,'name4');
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 ALTER TABLE t1 ADD PRIMARY KEY (id);;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	ALTER TABLE t1 ADD PRIMARY KEY (id)
 select * from t1;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	ALTER TABLE t1 ADD PRIMARY KEY (id)
@@ -359,10 +334,9 @@ t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL,
   `name` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select * from t1
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect addconroot2]
@@ -381,12 +355,11 @@ insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
 begin;
 insert into t1 values (4,'name4');
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 ALTER TABLE t1 ADD PRIMARY KEY (id);;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	ALTER TABLE t1 ADD PRIMARY KEY (id)
@@ -396,7 +369,6 @@ id	name
 2	name2
 3	name3
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	ALTER TABLE t1 ADD PRIMARY KEY (id)
@@ -406,10 +378,9 @@ t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL,
   `name` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
+sql_text
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ########################################################################################
@@ -421,17 +392,15 @@ insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
 begin;
 insert into t1 values (4,'name4');
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 alter table t1 add index index_name(name);;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 add index index_name(name)
 select * from t1;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 add index index_name(name)
@@ -442,10 +411,9 @@ t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL,
   `name` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select * from t1
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect addconroot2]
@@ -464,12 +432,11 @@ insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
 begin;
 insert into t1 values (4,'name4');
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 alter table t1 add index index_name(name);;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 add index index_name(name)
@@ -479,7 +446,6 @@ id	name
 2	name2
 3	name3
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 add index index_name(name)
@@ -489,10 +455,9 @@ t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL,
   `name` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
+sql_text
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ########################################################################################
@@ -504,17 +469,15 @@ insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
 begin;
 insert into t1 values (4,'name4');
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 create index index_name on t1(name);;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	create index index_name on t1(name)
 select * from t1;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	create index index_name on t1(name)
@@ -525,10 +488,9 @@ t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL,
   `name` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select * from t1
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect addconroot2]
@@ -547,12 +509,11 @@ insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
 begin;
 insert into t1 values (4,'name4');
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 create index index_name on t1(name);;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	create index index_name on t1(name)
@@ -562,7 +523,6 @@ id	name
 2	name2
 3	name3
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	create index index_name on t1(name)
@@ -572,10 +532,9 @@ t1	CREATE TABLE `t1` (
   `id` int DEFAULT NULL,
   `name` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
+sql_text
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ########################################################################################
@@ -587,17 +546,15 @@ insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
 begin;
 insert into t1 values (4,'name4');
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 alter table t1 drop index index_name;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 drop index index_name
 select * from t1;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 drop index index_name
@@ -609,10 +566,9 @@ t1	CREATE TABLE `t1` (
   `name` varchar(100) DEFAULT NULL,
   KEY `index_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select * from t1
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect addconroot2]
@@ -631,12 +587,11 @@ insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
 begin;
 insert into t1 values (4,'name4');
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 alter table t1 drop index index_name;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 drop index index_name
@@ -646,7 +601,6 @@ id	name
 2	name2
 3	name3
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	alter table t1 drop index index_name
@@ -657,10 +611,9 @@ t1	CREATE TABLE `t1` (
   `name` varchar(100) DEFAULT NULL,
   KEY `index_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
+sql_text
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ########################################################################################
@@ -672,17 +625,15 @@ insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
 begin;
 insert into t1 values (4,'name4');
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 drop index index_name on t1;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	drop index index_name on t1
 select * from t1;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	drop index index_name on t1
@@ -694,10 +645,9 @@ t1	CREATE TABLE `t1` (
   `name` varchar(100) DEFAULT NULL,
   KEY `index_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select * from t1
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect addconroot2]
@@ -716,12 +666,11 @@ insert into t1 values (1,'name1'),(2,'name2'),(3,'name3');
 begin;
 insert into t1 values (4,'name4');
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 drop index index_name on t1;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	drop index index_name on t1
@@ -731,7 +680,6 @@ id	name
 2	name2
 3	name3
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	drop index index_name on t1
@@ -742,10 +690,9 @@ t1	CREATE TABLE `t1` (
   `name` varchar(100) DEFAULT NULL,
   KEY `index_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
+sql_text
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ########################################################################################
@@ -767,17 +714,15 @@ insert into t1 values (1,'name1',sysdate);
 begin;
 insert into t1 values (2,'name3',sysdate);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 ALTER TABLE t1 ADD PARTITION (PARTITION p5 VALUES LESS THAN (2100));;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	ALTER TABLE t1 ADD PARTITION (PARTITION p5 VALUES LESS THAN (2100))
 select id from t1;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	ALTER TABLE t1 ADD PARTITION (PARTITION p5 VALUES LESS THAN (2100))
@@ -794,10 +739,9 @@ t1	CREATE TABLE `t1` (
  PARTITION p1 VALUES LESS THAN (2021) ENGINE = InnoDB,
  PARTITION p2 VALUES LESS THAN (2022) ENGINE = InnoDB,
  PARTITION p3 VALUES LESS THAN (2099) ENGINE = InnoDB) */
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select id from t1
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect addconroot2]
@@ -824,12 +768,11 @@ insert into t1 values (1,'name1',sysdate);
 begin;
 insert into t1 values (2,'name3',sysdate);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 ALTER TABLE t1 ADD PARTITION (PARTITION p5 VALUES LESS THAN (2100));;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	ALTER TABLE t1 ADD PARTITION (PARTITION p5 VALUES LESS THAN (2100))
@@ -837,7 +780,6 @@ select id from t1;
 id
 1
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	ALTER TABLE t1 ADD PARTITION (PARTITION p5 VALUES LESS THAN (2100))
@@ -853,10 +795,9 @@ t1	CREATE TABLE `t1` (
  PARTITION p1 VALUES LESS THAN (2021) ENGINE = InnoDB,
  PARTITION p2 VALUES LESS THAN (2022) ENGINE = InnoDB,
  PARTITION p3 VALUES LESS THAN (2099) ENGINE = InnoDB) */
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select id from t1';
+sql_text
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ########################################################################################
@@ -878,17 +819,15 @@ insert into t1 values (1,'name1',sysdate);
 begin;
 insert into t1 values (2,'name3',sysdate);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 ALTER TABLE t1 DROP PARTITION p0;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	ALTER TABLE t1 DROP PARTITION p0
 select id from t1;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	ALTER TABLE t1 DROP PARTITION p0
@@ -905,10 +844,9 @@ t1	CREATE TABLE `t1` (
  PARTITION p1 VALUES LESS THAN (2021) ENGINE = InnoDB,
  PARTITION p2 VALUES LESS THAN (2022) ENGINE = InnoDB,
  PARTITION p3 VALUES LESS THAN (2099) ENGINE = InnoDB) */
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select id from t1
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect addconroot2]
@@ -935,12 +873,11 @@ insert into t1 values (1,'name1',sysdate);
 begin;
 insert into t1 values (2,'name3',sysdate);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 ALTER TABLE t1 DROP PARTITION p0;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	ALTER TABLE t1 DROP PARTITION p0
@@ -948,7 +885,6 @@ select id from t1;
 id
 1
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	ALTER TABLE t1 DROP PARTITION p0
@@ -964,10 +900,9 @@ t1	CREATE TABLE `t1` (
  PARTITION p1 VALUES LESS THAN (2021) ENGINE = InnoDB,
  PARTITION p2 VALUES LESS THAN (2022) ENGINE = InnoDB,
  PARTITION p3 VALUES LESS THAN (2099) ENGINE = InnoDB) */
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select id from t1';
+sql_text
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ########################################################################################
@@ -979,17 +914,15 @@ insert into t2 values (1),(2),(3);
 begin;
 insert into t2 values (4);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 OPTIMIZE TABLE t2;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	OPTIMIZE TABLE t2
 select * from t2;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	OPTIMIZE TABLE t2
@@ -999,10 +932,9 @@ Table	Create Table
 t2	CREATE TABLE `t2` (
   `id` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t2' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t2' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select * from t2
 ----[connect addconroot]
 Table	Op	Msg_type	Msg_text
 test.t2	optimize	Error	Lock wait timeout exceeded; try restarting transaction
@@ -1023,12 +955,11 @@ insert into t2 values (1),(2),(3);
 begin;
 insert into t2 values (4);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 OPTIMIZE TABLE t2;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	OPTIMIZE TABLE t2
@@ -1038,19 +969,24 @@ id
 2
 3
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	OPTIMIZE TABLE t2
-show create table t2;
+show create table t1;
 Table	Create Table
-t2	CREATE TABLE `t2` (
-  `id` int DEFAULT NULL
+t1	CREATE TABLE `t1` (
+  `id` int DEFAULT NULL,
+  `name` varchar(50) DEFAULT NULL,
+  `sale_date` date DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t2' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+/*!50100 PARTITION BY RANGE (year(`sale_date`))
+(PARTITION p0 VALUES LESS THAN (2020) ENGINE = InnoDB,
+ PARTITION p1 VALUES LESS THAN (2021) ENGINE = InnoDB,
+ PARTITION p2 VALUES LESS THAN (2022) ENGINE = InnoDB,
+ PARTITION p3 VALUES LESS THAN (2099) ENGINE = InnoDB) */
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t2';
+sql_text
 ----[connect addconroot]
 Table	Op	Msg_type	Msg_text
 test.t2	optimize	Error	Lock wait timeout exceeded; try restarting transaction
@@ -1064,17 +1000,15 @@ insert into t3 values (1),(2),(3);
 begin;
 insert into t3 values (4);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 TRUNCATE TABLE t3;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	TRUNCATE TABLE t3
 select * from t3;;
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	TRUNCATE TABLE t3
@@ -1084,10 +1018,9 @@ Table	Create Table
 t3	CREATE TABLE `t3` (
   `id` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t3' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-1
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t3' and TIME_TO_SEC(query_time) >= 2;
+sql_text
+select * from t3
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect addconroot2]
@@ -1106,12 +1039,11 @@ insert into t3 values (1),(2),(3);
 begin;
 insert into t3 values (4);
 ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 TRUNCATE TABLE t3;;
 ----[connect addconroot2]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	TRUNCATE TABLE t3
@@ -1121,7 +1053,6 @@ id
 2
 3
 ----[connect default]
-do sleep(2);
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 STATE	INFO
 Waiting for table metadata lock	TRUNCATE TABLE t3
@@ -1130,10 +1061,9 @@ Table	Create Table
 t3	CREATE TABLE `t3` (
   `id` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t3' and TIME_TO_SEC(query_time) >= 5;
-count(*)
-0
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t3';
+sql_text
 ----[connect addconroot]
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ----[connect default]

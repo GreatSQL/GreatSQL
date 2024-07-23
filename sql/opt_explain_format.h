@@ -1,5 +1,5 @@
 /* Copyright (c) 2011, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -93,6 +93,7 @@ enum Extra_tag {
   ET_SKIP_RECORDS_IN_RANGE,
   ET_USING_SECONDARY_ENGINE,
   ET_REMATERIALIZE,
+  ET_CONNECT_BY,
   ET_PARALLEL_EXE,
   //------------------------------------
   ET_total

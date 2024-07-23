@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -255,6 +256,14 @@ int Clone_Snapshot::init_page_copy(Snapshot_State new_state, byte *page_buffer,
     return err; /* purecov: inspected */
   }
 
+  if (m_enable_page_track) {
+    Page_Arch_Client_Ctx *ctx = arch_page_sys->get_sys_client();
+    err = ctx->start(false, &m_page_track_lsn);
+    if (err != 0) assert(0);
+    ib::info(ER_IB_CLONE_OPERATION)
+        << "SYSTEM Start PAGE ARCH : start LSN : " << m_page_track_lsn;
+  }
+
   m_monitor.init_state(srv_stage_clone_page_copy.m_key, m_enable_pfs);
 
   if (m_snapshot_type == HA_CLONE_HYBRID) {
@@ -262,8 +271,9 @@ int Clone_Snapshot::init_page_copy(Snapshot_State new_state, byte *page_buffer,
     err = init_redo_archiving();
 
   } else if (m_snapshot_type == HA_CLONE_PAGE) {
-    /* Start COW for all modified pages - Not implemented. */
-    ut_d(ut_error);
+    /* Start Redo Archiving */
+    err = init_redo_archiving();
+
   } else {
     ut_d(ut_error);
   }
@@ -275,8 +285,13 @@ int Clone_Snapshot::init_page_copy(Snapshot_State new_state, byte *page_buffer,
     /* purecov: end */
   }
 
-  /* Stop modified page archiving. */
-  err = m_page_ctx.stop(nullptr);
+  if (m_snapshot_type == HA_CLONE_PAGE) {
+    uint64_t stop_id = 0;
+    err = m_page_ctx.set_start_end_pos(m_start_id, stop_id);
+  } else {
+    /* Stop modified page archiving. */
+    err = m_page_ctx.stop(nullptr);
+  }
 
   DEBUG_SYNC_C("clone_stop_page_archiving_without_releasing");
 
@@ -285,6 +300,12 @@ int Clone_Snapshot::init_page_copy(Snapshot_State new_state, byte *page_buffer,
     m_page_ctx.release();
     return err;
     /* purecov: end */
+  }
+
+  if (m_file_compress_mode && m_snapshot_type == HA_CLONE_HYBRID) {
+    m_snapshot_type = HA_CLONE_PAGE;
+    m_data_file_map.clear();
+    m_data_file_vector.clear();
   }
 
   /* Iterate all tablespace files and add new data files created. */
@@ -322,7 +343,9 @@ int Clone_Snapshot::init_page_copy(Snapshot_State new_state, byte *page_buffer,
       << " chunks, "
       << " chunk size : " << (chunk_size() * UNIV_PAGE_SIZE) / (1024 * 1024)
       << " M";
-  m_page_ctx.release();
+  if (m_snapshot_type != HA_CLONE_PAGE) {
+    m_page_ctx.release();
+  }
 
   m_monitor.change_phase();
   return err;
@@ -520,6 +543,9 @@ int Clone_Snapshot::init_redo_copy(Snapshot_State new_state,
   auto redo_error = m_redo_ctx.stop(m_redo_trailer, m_redo_trailer_size,
                                     m_redo_trailer_offset);
 
+  /* get the end lsn for table clone_history*/
+  m_end_id = m_redo_ctx.end_lsn();
+
   if (binlog_error != 0) {
     return binlog_error; /* purecov: inspected */
   }
@@ -544,13 +570,14 @@ int Clone_Snapshot::init_redo_copy(Snapshot_State new_state,
     return ER_INTERNAL_ERROR; /* purecov: inspected */
   }
 
+  /* Add another chunk for the redo log header. */
+  ++m_num_redo_chunks;
+
+  m_num_current_chunks = m_num_redo_chunks;
   /* Collect archived redo log files from Log Archiver. */
   auto context = static_cast<void *>(this);
 
   redo_error = m_redo_ctx.get_files(add_redo_file_callback, context);
-
-  /* Add another chunk for the redo log header. */
-  ++m_num_redo_chunks;
 
   m_monitor.add_estimate(m_redo_header_size);
 
@@ -1105,14 +1132,18 @@ int Clone_Handle::send_state_metadata(Clone_Task *task, Ha_clone_cbk *callback,
 int Clone_Handle::send_all_file_metadata(Clone_Task *task,
                                          Ha_clone_cbk *callback) {
   ut_ad(m_clone_handle_type == CLONE_HDL_COPY);
-
+  auto snapshot = m_clone_task_manager.get_snapshot();
   if (!task->m_is_master) {
+    if (snapshot->file_compress_mode() &&
+        snapshot->get_state() == CLONE_SNAPSHOT_PAGE_COPY) {
+      // wait master task finish send delta file metadata
+      m_clone_task_manager.wait_finish_send_file();
+    }
     return 0;
   }
 
   DEBUG_SYNC_C("clone_before_init_meta");
 
-  auto snapshot = m_clone_task_manager.get_snapshot();
   bool is_redo = (snapshot->get_state() == CLONE_SNAPSHOT_REDO_COPY);
 
   /* Send all file metadata for data/redo files */
@@ -1126,6 +1157,12 @@ int Clone_Handle::send_all_file_metadata(Clone_Task *task,
     auto err_file = send_file_metadata(task, &local_meta, is_redo, callback);
     return err_file;
   });
+
+  if (snapshot->file_compress_mode() &&
+      snapshot->get_state() == CLONE_SNAPSHOT_PAGE_COPY) {
+    // wait master task finish send delta file metadata
+    m_clone_task_manager.finish_send_file();
+  }
 
   return err;
 }
@@ -1152,7 +1189,9 @@ int Clone_Handle::send_file_metadata(Clone_Task *task,
 
   } else if (file_meta->m_space_id == dict_sys_t::s_invalid_space_id) {
     /* Server buffer dump file ib_buffer_pool. */
-    ut_ad(file_desc.m_state == CLONE_SNAPSHOT_FILE_COPY);
+    ut_ad(file_desc.m_state == CLONE_SNAPSHOT_FILE_COPY ||
+          (file_desc.m_state == CLONE_SNAPSHOT_PAGE_COPY &&
+           get_snapshot()->file_compress_mode()));
     ut_ad(file_meta->m_file_index == 0);
 
     file_desc.m_file_meta.m_file_name = SRV_BUF_DUMP_FILENAME_DEFAULT;
@@ -1777,6 +1816,11 @@ int Clone_Handle::send_all_ddl_metadata(Clone_Task *task,
   /* Send DDL metadata added during 'file copy' and 'page copy' in the
   beginning of next stage. */
   if (state != CLONE_SNAPSHOT_PAGE_COPY && state != CLONE_SNAPSHOT_REDO_COPY) {
+    return 0;
+  }
+
+  if ((m_clone_task_manager.get_snapshot())->is_clone_page_type() &&
+      m_clone_task_manager.get_ack_state() == CLONE_SNAPSHOT_INIT) {
     return 0;
   }
 

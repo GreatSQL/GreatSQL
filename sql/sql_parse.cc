@@ -1,6 +1,6 @@
 /* Copyright (c) 1999, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -188,6 +188,8 @@
 #include "template_utils.h"
 #include "thr_lock.h"
 #include "violite.h"
+
+#include "sql/secondary_engine_inc_load_task.h"
 
 #ifdef WITH_LOCK_ORDER
 #include "sql/debug_lock_order.h"
@@ -2686,7 +2688,7 @@ done:
     The factor 5 is pretty much arbitrary, but ends up allowing three
     allocations (1 + 1.5 + 1.5²) under the current allocation policy.
   */
-  constexpr size_t kPreallocSz = 40960;
+  const size_t kPreallocSz = thd->variables.query_prealloc_reuse_size;
   if (thd->mem_root->allocated_size() < kPreallocSz)
     thd->mem_root->ClearForReuse();
   else
@@ -2743,6 +2745,8 @@ bool shutdown(THD *thd, enum mysql_enum_shutdown_level level) {
      when close cmd_service's session, current THD must exists, so mv
      the "sequences_close()" function here. */
   sequences_close();
+
+  secondary_engine_task_shutdown();
 
   kill_mysql();
   res = true;
@@ -3045,7 +3049,7 @@ err:
   trans_rollback(thd);
   /* Close tables and release metadata locks. */
   close_thread_tables(thd);
-  close_temporary_tables_for_trans(thd);
+  if (!thd->slave_thread) close_temporary_tables_for_trans(thd);
   assert(!thd->locked_tables_mode);
   thd->mdl_context.release_transactional_locks();
   return true;
@@ -4657,7 +4661,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
           (lex->tx_release == TVL_YES ||
            (thd->variables.completion_type == 2 && lex->tx_release != TVL_NO));
       if (trans_commit(thd)) goto error;
-      close_temporary_tables_for_trans(thd);
+      if (!thd->slave_thread) close_temporary_tables_for_trans(thd);
       thd->mdl_context.release_transactional_locks();
       /* Begin transaction with the same isolation level. */
       if (tx_chain) {
@@ -4682,7 +4686,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
           (lex->tx_release == TVL_YES ||
            (thd->variables.completion_type == 2 && lex->tx_release != TVL_NO));
       if (trans_rollback(thd)) goto error;
-      close_temporary_tables_for_trans(thd);
+      if (!thd->slave_thread) close_temporary_tables_for_trans(thd);
       thd->mdl_context.release_transactional_locks();
       /* Begin transaction with the same isolation level. */
       if (tx_chain) {
@@ -5370,14 +5374,15 @@ finish:
 
   lex->cleanup(true);
 
-  if (ora_close_trans_temp) {
+  if (ora_close_trans_temp && !thd->slave_thread) {
     /* if not in_sub_stmt and autocommit=on, always close trans tmp tables */
     close_temporary_tables_for_trans(thd);
   }
 
   /* Free tables */
   THD_STAGE_INFO(thd, stage_closing_tables);
-  if (!ora_create_gt_instance) close_temporary_tables_for_eos(thd);
+  if (!ora_create_gt_instance && !thd->slave_thread)
+    close_temporary_tables_for_eos(thd);
   close_thread_tables(thd);
 
   // Rollback any item transformations made during optimization and execution
@@ -6482,6 +6487,11 @@ Table_ref *Query_block::add_table_to_list(
     ptr->derived_key_list.clear();
   }
 
+  /* Record dblink name */
+  if (table_name->dblink.str) {
+    ptr->dblink_name = table_name->dblink.str;
+  }
+
   if (table_name->db.str) {
     ptr->is_fqtn = true;
     ptr->db = table_name->db.str;
@@ -6505,6 +6515,16 @@ Table_ref *Query_block::add_table_to_list(
   ptr->updating = table_options & TL_OPTION_UPDATING;
   ptr->ignore_leaves = table_options & TL_OPTION_IGNORE_LEAVES;
   ptr->set_derived_query_expression(table_name->sel);
+
+  if (is_audit_log(ptr->db, ptr->db_length, ptr->table_name,
+                   ptr->table_name_length) &&
+      (thd->variables.option_bits & OPTION_BIN_LOG) &&
+      lex->sql_command != SQLCOM_SELECT &&
+      lex->sql_command != SQLCOM_SHOW_CREATE &&
+      lex->sql_command != SQLCOM_SHOW_FIELDS) {
+    my_error(ER_AUDIT_UPDATE_DENIED_ERROR, MYF(0));
+    return nullptr;
+  }
 
   if (!ptr->is_derived() && !ptr->is_table_function() &&
       is_infoschema_db(ptr->db, ptr->db_length)) {
@@ -7221,19 +7241,25 @@ Comp_creator *comp_ne_creator(bool invert) {
 */
 Item *all_any_subquery_creator(Item *left_expr,
                                chooser_compare_func_creator cmp, bool all,
-                               Query_block *query_block) {
-  if ((cmp == &comp_eq_creator) && !all)  //  = ANY <=> IN
-    return new Item_in_subselect(left_expr, query_block);
+                               Query_block *query_block,
+                               PT_subquery *subselect) {
+  if ((cmp == &comp_eq_creator) && !all) {  //  = ANY <=> IN
+    Item_in_subselect *res = new Item_in_subselect(left_expr, query_block);
+    res->set_subselect(subselect);
+    return res;
+  }
   if ((cmp == &comp_ne_creator) && all)  // <> ALL <=> NOT IN
   {
     Item *i = new Item_in_subselect(left_expr, query_block);
     if (i == nullptr) return nullptr;
+    down_cast<Item_in_subselect *>(i)->set_subselect(subselect);
     Item *neg_i = i->truth_transformer(nullptr, Item::BOOL_NEGATED);
     if (neg_i != nullptr) return neg_i;
     return new Item_func_not(i);
   }
   Item_allany_subselect *it =
       new Item_allany_subselect(left_expr, cmp, query_block, all);
+  it->set_subselect(subselect);
   if (all) return it->upper_item = new Item_func_not_all(it); /* ALL */
 
   return it->upper_item = new Item_func_nop_all(it); /* ANY/SOME */

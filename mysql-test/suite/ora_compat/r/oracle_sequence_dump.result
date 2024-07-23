@@ -75,7 +75,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 test1
 use test1;

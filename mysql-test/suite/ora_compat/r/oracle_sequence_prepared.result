@@ -13,6 +13,7 @@ select seq.nextval;
 end$$
 prepare prep_seq1 from 'select seq.nextval from t1';
 prepare prep_seq2 from 'select seq.nextval';
+
 [# test sequence works well]
 call sp_seq1();
 nextval
@@ -50,6 +51,7 @@ nextval
 execute prep_seq2;
 nextval
 12
+
 [# test drop sequence in other session]
 [connect conn1_2]
 drop sequence seq;
@@ -62,6 +64,7 @@ execute prep_seq1;
 ERROR 42S22: Unknown column 'seq.nextval' in 'field list'
 execute prep_seq2;
 ERROR 42S02: Unknown table 'seq' in field list
+
 [# test re-create sequence in other session]
 [connect conn1_2]
 create sequence seq cache 2 start with 1000 increment by 10;
@@ -78,6 +81,7 @@ nextval
 execute prep_seq2;
 nextval
 1030
+
 [# test alter sequence in other session]
 [connect conn1_2]
 alter sequence seq increment by 100;
@@ -119,10 +123,105 @@ execute prep_seq2;
 nextval
 2230
 
-[# clean up]
+[# clean up for above]
 drop procedure sp_seq1;
 drop procedure sp_seq2;
 drop prepare prep_seq1;
 drop prepare prep_seq2;
 drop sequence seq;
 drop table t1;
+
+[# bug9793: test sequence re-prepare for sp_instr_set]
+[connect conn1]
+set sql_mode=oracle;
+CREATE SEQUENCE id_seq START WITH 1 INCREMENT BY 1 NOCACHE;
+CREATE OR REPLACE PROCEDURE p1
+IS
+v_id int;
+BEGIN
+v_id:=1+id_seq.NEXTVAL;
+select v_id;
+END;$$
+CREATE OR REPLACE PROCEDURE p2
+IS
+v_id int;
+BEGIN
+v_id:=1+id_seq.CURRVAL;
+select v_id;
+END;$$
+call p1();
+v_id
+2
+call p1();
+v_id
+3
+call p2();
+v_id
+3
+select id_seq.currval;
+currval
+2
+call p2();
+v_id
+3
+[connect conn1_2]
+drop sequence id_seq;
+[connect conn1]
+call p1();
+ERROR HY000: read sequence value failed, cause sequence not found!
+call p2();
+ERROR HY000: read sequence value failed, cause sequence not found!
+[connect conn1_2]
+CREATE SEQUENCE id_seq START WITH 100 INCREMENT BY 2 NOCACHE;
+[connect conn1]
+call p1();
+v_id
+101
+call p1();
+v_id
+103
+call p2();
+v_id
+103
+select id_seq.currval;
+currval
+102
+call p2();
+v_id
+103
+[connect conn1_2]
+alter sequence id_seq cycle;
+[connect conn1]
+select id_seq.currval;
+currval
+102
+call p2();
+v_id
+103
+call p1();
+v_id
+105
+call p1();
+v_id
+107
+call p2();
+v_id
+107
+[# testcase from wuyy]
+CREATE or replace PROCEDURE p3() as
+count int;
+begin
+for i in 1 .. 4 loop
+count:=id_seq.NEXTVAL;
+drop SEQUENCE id_seq;
+end loop;
+end;$$
+call p3();
+ERROR HY000: read sequence value failed, cause sequence not found!
+CREATE SEQUENCE id_seq START WITH 1 INCREMENT BY 1 NOCACHE;
+call p3();
+ERROR HY000: read sequence value failed, cause sequence not found!
+drop procedure p1;
+drop procedure p2;
+drop procedure p3;
+set sql_mode=default;

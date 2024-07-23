@@ -16,6 +16,7 @@
 --disable_query_log
 CALL mtr.add_suppression("Sending passwords in plain text without SSL/TLS is extremely insecure");
 CALL mtr.add_suppression("kill all connections after primary changed");
+CALL mtr.add_suppression("Error:greatdb_ha_mgr_vip_ip is in the wrong format, please correct it");
 --enable_query_log
 
 --source include/big_test.inc

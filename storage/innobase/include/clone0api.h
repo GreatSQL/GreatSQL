@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -48,10 +49,14 @@ void innodb_clone_get_capability(Ha_clone_flagset &flags);
 @param[out]     task_id task identifier
 @param[in]      type    clone type
 @param[in]      mode    mode for starting clone
+@param[in]	start_id		start lsn for increment clone (Clone
+Type: HA_CLONE_PAGE)
+@param[in]	enable_page_track	enable page track when clone end
 @return error code */
 int innodb_clone_begin(handlerton *hton, THD *thd, const byte *&loc,
                        uint &loc_len, uint &task_id, Ha_clone_type type,
-                       Ha_clone_mode mode);
+                       Ha_clone_mode mode, bool enable_page_track,
+                       uint64_t start_id, file_compress_mode_t comp_mode);
 
 /** Copy data from source database in chunks via callback
 @param[in]      hton    handlerton for SE
@@ -95,10 +100,17 @@ int innodb_clone_end(handlerton *hton, THD *thd, const byte *loc, uint loc_len,
 @param[out]     task_id         task identifier
 @param[in]      mode            mode for starting clone
 @param[in]      data_dir        target data directory
+@param[in]      max_concurrency Maximum number of concurrent threads for current
+operation
+@param[in]	    start_id		    start lsn for increment clone (Clone
+Type: HA_CLONE_PAGE)
+@param[in]	    enable_page_track	enable page track when clone end
 @return error code */
 int innodb_clone_apply_begin(handlerton *hton, THD *thd, const byte *&loc,
                              uint &loc_len, uint &task_id, Ha_clone_mode mode,
-                             const char *data_dir);
+                             const char *data_dir, uint32_t max_concurrency,
+                             bool enable_page_track, uint64_t start_id,
+                             file_compress_mode_t comp_mode);
 
 /** Apply data to destination database in chunks via callback
 @param[in]      hton    handlerton for SE

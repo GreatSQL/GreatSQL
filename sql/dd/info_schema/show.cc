@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1320,7 +1320,14 @@ Query_block *build_show_procedures_query(const POS &pos, THD *thd, String *wild,
   if (where_cond && top_query.add_condition(where_cond)) return nullptr;
 
   // ... ORDER BY 'Db, Name' ...
-  if (top_query.add_order_by(alias_db) || top_query.add_order_by(alias_name))
+  if (top_query.add_order_by(alias_db) ||
+      (thd->lex->sql_command != SQLCOM_SHOW_STATUS_TYPE &&
+       top_query.add_order_by(alias_name)))
+    return nullptr;
+
+  // ... ORDER BY CREATED
+  if (thd->lex->sql_command == SQLCOM_SHOW_STATUS_TYPE &&
+      top_query.add_order_by(alias_comment))
     return nullptr;
 
   Query_block *sl = top_query.prepare_query_block();

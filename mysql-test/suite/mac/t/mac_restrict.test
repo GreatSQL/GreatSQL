@@ -1,0 +1,59 @@
+# test mac on db
+--source ../include/mac_row_policy_create.inc
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+call sys_mac.mac_apply_user_policy('root','localhost','P1','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+call sys_mac.mac_apply_user_policy('root','localhost','P2','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+
+
+connect (master,localhost,root,,);
+--connection master
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+create database db;
+use db;
+create table t1(c1 int primary key, c2 int);
+insert into t1 values(1, 1),(2, 2),(3, 3),(4, 4);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3,C4:G1', 1);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 0);
+
+show create table t1;
+
+select * from t1;
+
+--error ER_MAC_CROSS_ERROR
+alter table t1 drop column _gdb_mac_policy_1;
+
+--error ER_MAC_CROSS_ERROR
+alter table t1 change column _gdb_mac_policy_1 c3 int;
+
+--error ER_MAC_CROSS_ERROR
+alter table t1 modify column _gdb_mac_policy_1 long;
+
+--error ER_MAC_CROSS_ERROR
+alter table t1 drop column _gdb_mac_policy_2;
+
+--error ER_MAC_CROSS_ERROR
+alter table t1 change column _gdb_mac_policy_2 c3 int;
+
+--error ER_MAC_CROSS_ERROR
+alter table t1 modify column _gdb_mac_policy_2 long;
+
+call sys_mac.mac_drop_row_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_row_policy('db', 't1', 'P2');
+
+show create table t1;
+
+select * from t1;
+
+drop database db;
+
+--source ../include/mac_destory.inc
+disconnect master;
+

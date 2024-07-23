@@ -2,7 +2,7 @@
 #define ITEM_SUBSELECT_INCLUDED
 
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -90,6 +90,8 @@ class Item_subselect : public Item_result_field {
   */
   bool traced_before;
 
+  PT_subquery *m_subselect{nullptr};
+
  public:
   /*
     Used inside Item_subselect::fix_fields() according to this scenario:
@@ -124,6 +126,8 @@ class Item_subselect : public Item_result_field {
 
   void create_iterators(THD *thd);
   virtual AccessPath *root_access_path() const { return nullptr; }
+  void set_subselect(PT_subquery *subselect) { m_subselect = subselect; }
+  virtual PT_subquery *get_subselect() { return m_subselect; }
 
  protected:
   /*
@@ -297,6 +301,7 @@ class Item_singlerow_subselect : public Item_subselect {
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
   bool get_time(MYSQL_TIME *ltime) override;
   bool val_bool() override;
+  TABLE *val_udt() override;
   enum Item_result result_type() const override;
   bool resolve_type(THD *) override;
 
@@ -327,8 +332,8 @@ class Item_singlerow_subselect : public Item_subselect {
   virtual bool is_maxmin() const { return false; }
   LEX_STRING get_udt_name() const override;
   LEX_STRING get_udt_db_name() const override;
-  type_conversion_status save_in_field_inner(Field *field,
-                                             bool no_conversions) override;
+  List<Create_field> *get_field_create_field_list() override;
+  TABLE *get_udt_table() override { return value->get_udt_table(); }
 
   /**
     Argument for walk method replace_scalar_subquery
@@ -611,7 +616,7 @@ class Item_in_subselect : public Item_exists_subselect {
   Item_func_not_all *upper_item;  // point on NOT/NOP before ALL/SOME subquery
 
  private:
-  PT_subquery *pt_subselect;
+  PT_subquery *pt_subselect{nullptr};
 
  public:
   bool in2exists_added_to_where() const {
@@ -698,6 +703,9 @@ class Item_in_subselect : public Item_exists_subselect {
   AccessPath *root_access_path() const override;
   std::optional<ContainedSubquery> get_contained_subquery(
       const Query_block *outer_query_block) override;
+  PT_subquery *get_subselect() override {
+    return pt_subselect ? pt_subselect : super::get_subselect();
+  }
 
   friend class Item_ref_null_helper;
   friend class Item_is_not_null_test;
@@ -856,7 +864,7 @@ class subselect_indexsubquery_engine {
  */
 Item *all_any_subquery_creator(Item *left_expr,
                                chooser_compare_func_creator cmp, bool all,
-                               Query_block *select);
+                               Query_block *select, PT_subquery *subselect);
 
 /**
   Compute an IN predicate via a hash semi-join. The subquery is materialized

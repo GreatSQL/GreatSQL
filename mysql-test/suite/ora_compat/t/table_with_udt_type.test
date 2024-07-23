@@ -536,18 +536,18 @@ insert into s1 values(1,type1(777,'bbbbb')),(2,type1(888,'222aaa')),(3,type1(999
 WITH ali_s1 AS(SELECT id,f1 FROM s1 )   
 SELECT a.id,a.f1,b.id,b.f1 FROM ali_s1 a,s1 b WHERE a.f1=b.f1;
 
---error ER_WRONG_ARGUMENTS
+--error ER_NOT_SUPPORTED_YET
 SELECT MAX(f1),MIN(f1) FROM t1;
 
 --error ER_NOT_SUPPORTED_YET
 SELECT f1 , FIRST_VALUE(f1) over (order by i) a from t1;
---error ER_WRONG_ARGUMENTS
+--error ER_NOT_SUPPORTED_YET
 SELECT avg(f1) FROM t1;
---error ER_WRONG_ARGUMENTS
+--error ER_NOT_SUPPORTED_YET
 SELECT MAX(f1),MIN(f1) FROM t1;
 --error ER_NOT_SUPPORTED_YET
 SELECT f1 , nth_VALUE(f1,1) over (order by i) a from t1;
---error ER_WRONG_ARGUMENTS
+--error ER_NOT_SUPPORTED_YET
 select VAR_SAMP(f1) as a from t1;
 --error ER_NOT_SUPPORTED_YET
 SELECT DATE_SUB(f1,INTERVAL 1 MONTH) from t1;

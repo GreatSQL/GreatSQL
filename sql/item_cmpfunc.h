@@ -2,7 +2,7 @@
 #define ITEM_CMPFUNC_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -332,7 +332,7 @@ class Item_bool_func : public Item_int_func {
   }
   uint decimal_precision() const override { return 1; }
   bool created_by_in2exists() const override { return m_created_by_in2exists; }
-  void set_created_by_in2exists() { m_created_by_in2exists = true; }
+  void set_created_by_in2exists();
 
   static const char *bool_transform_names[10];
   /**
@@ -385,6 +385,22 @@ class Item_func_cursor_notfound : public Item_func_cursor_bool {
   bool val_bool() override;
   longlong val_int() override;
 };
+
+class Item_func_dbms_sql_is_open : public Item_bool_func {
+  typedef Item_bool_func super;
+
+ public:
+  Item_func_dbms_sql_is_open(const POS &pos, Item *a)
+      : Item_bool_func(pos, a) {}
+  const char *func_name() const override { return "dbms_sql_is_open"; }
+  bool val_bool() override;
+  longlong val_int() override;
+  bool resolve_type(THD *thd) override {
+    if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_LONGLONG)) return true;
+    return false;
+  }
+};
+
 class Item_func_record_table_forall_bool : public Item_bool_func {
   Item *m_item;
   LEX_STRING m_ident_name;
@@ -408,10 +424,11 @@ class Item_func_record_table_forall_bool : public Item_bool_func {
 */
 class Item_func_trigger_event_is : public Item_bool_func {
   typedef Item_bool_func super;
+  bool m_is_NULL = false;
 
  public:
-  Item_func_trigger_event_is(const POS &pos, Item *a, Item *b)
-      : Item_bool_func(pos, a, b) {}
+  Item_func_trigger_event_is(const POS &pos, Item *a, Item *b, bool is_NULL)
+      : Item_bool_func(pos, a, b), m_is_NULL(is_NULL) {}
   const char *func_name() const override { return "trigger_event_is"; }
   bool val_bool() override;
   longlong val_int() override;
@@ -2195,6 +2212,7 @@ class Item_func_case final : public Item_func {
   ~Item_func_case() override;
   int get_first_expr_num() const { return first_expr_num; }
   int get_else_expr_num() const { return else_expr_num; }
+  uint get_ncases() { return ncases; }
   double val_real() override;
   longlong val_int() override;
   String *val_str(String *) override;
@@ -2357,6 +2375,7 @@ class Item_func_in final : public Item_func_opt_neg {
                                         const MY_BITMAP *fields_to_ignore,
                                         double rows_in_table);
   void cleanup_arrays();  ///< Helper function for this common task
+  void cleanup_for_refcursor() override { cleanup_arrays(); }
 };
 
 class cmp_item_row : public cmp_item {
@@ -2573,6 +2592,9 @@ class Item_func_like final : public Item_bool_func2 {
   // clause.
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  void print_op_extra(const THD *thd, String *str,
+                      enum_query_type query_type) const override;
+
   /**
     @retval true non default escape char specified
                  using "expr LIKE pat ESCAPE 'escape_char'" syntax

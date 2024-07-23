@@ -3,7 +3,7 @@
 
 /*
    Copyright (c) 2004, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -191,6 +191,7 @@ class Sql_cmd_ddl_trigger_common : public Sql_cmd {
 
   void restore_original_mdl_state(THD *thd, MDL_ticket *mdl_ticket) const;
 
+  bool drop_trigger_before_create(THD *thd);
   Table_ref *m_trigger_table{nullptr};
 };
 

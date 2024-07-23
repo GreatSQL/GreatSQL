@@ -13,9 +13,9 @@ INSERT INTO t1 VALUES (null, 1);
 ERROR 23000: Duplicate entry 'NULL-1' for key 't1.t1_i1_i2'
 INSERT INTO t1 VALUES (null, null);
 INSERT INTO t1 VALUES (null, null);
-ERROR 23000: Duplicate entry 'NULL-NULL' for key 't1.t1_i1_i2'
 SELECT * FROM t1;
 i1	i2
+NULL	NULL
 NULL	NULL
 NULL	1
 1	NULL
@@ -45,11 +45,9 @@ c INT GENERATED ALWAYS AS (SQRT(((a * a ) + (b * b)))) VIRTUAL
 CREATE UNIQUE INDEX t1_a_b_c ON t1 (a,b,c);
 INSERT INTO t1 (a, b) VALUES (NULL, NULL);
 INSERT INTO t1 (a, b) VALUES (NULL, NULL);
-ERROR 23000: Duplicate entry 'NULL-NULL-NULL' for key 't1.t1_a_b_c'
 DROP INDEX t1_a_b_c ON t1;
 INSERT INTO t1 (a, b) VALUES (NULL, NULL);
 CREATE UNIQUE INDEX t1_a_b_c ON t1 (a,b,c);
-ERROR 23000: Duplicate entry 'NULL-NULL-NULL' for key 't1.t1_a_b_c'
 DROP TABLE t1;
 # drop column
 CREATE TABLE t1 (i1 INT, i2 INT, vc3 VARCHAR(10)) ENGINE=InnoDB;
@@ -57,11 +55,10 @@ CREATE UNIQUE INDEX t1_idx ON t1 (i1, i2, vc3);
 INSERT INTO t1 VALUES (null, 1, null);
 INSERT INTO t1 VALUES (null, 2, null);
 ALTER TABLE t1 DROP COLUMN i2;
-ERROR 23000: Duplicate entry 'NULL-NULL' for key 't1.t1_idx'
 SELECT * FROM t1;
-i1	i2	vc3
-NULL	1	NULL
-NULL	2	NULL
+i1	vc3
+NULL	NULL
+NULL	NULL
 DROP TABLE t1;
 # add column
 CREATE TABLE t1 (i1 INT, i2 INT, vc3 VARCHAR(10)) ENGINE=InnoDB;
@@ -69,7 +66,6 @@ INSERT INTO t1 VALUES (null, 1, null);
 INSERT INTO t1 VALUES (null, 2, null);
 ALTER TABLE t1 ADD COLUMN i4 INT ;
 CREATE UNIQUE INDEX t1_idx ON t1 (i1, vc3, i4);
-ERROR 23000: Duplicate entry 'NULL-NULL-NULL' for key 't1.t1_idx'
 SELECT * FROM t1;
 i1	i2	vc3	i4
 NULL	1	NULL	NULL
@@ -91,17 +87,13 @@ CREATE TABLE t1 (i1 INT auto_increment, i2 INT, vc3 VARCHAR(10), PRIMARY KEY(i1)
 CREATE UNIQUE INDEX t1_idx ON t1(i2, vc3);
 INSERT INTO t1 VALUES (null, null, null);
 INSERT INTO t1 VALUES (null, null, null);
-ERROR 23000: Duplicate entry 'NULL-NULL' for key 't1.t1_idx'
 DROP INDEX t1_idx ON t1;
 CREATE UNIQUE INDEX t1_idx ON t1(i2, vc3) INVISIBLE;
 INSERT INTO t1 VALUES (null, null, null);
-ERROR 23000: Duplicate entry 'NULL-NULL' for key 't1.t1_idx'
 ALTER TABLE t1 ALTER INDEX t1_idx VISIBLE;
 INSERT INTO t1 VALUES (null, null, null);
-ERROR 23000: Duplicate entry 'NULL-NULL' for key 't1.t1_idx'
 ALTER TABLE t1 RENAME INDEX t1_idx TO t1_idx_n;
 INSERT INTO t1 VALUES (null, null, null);
-ERROR 23000: Duplicate entry 'NULL-NULL' for key 't1.t1_idx_n'
 DROP TABLE t1;
 SET SQL_MODE=DEFAULT;
 CREATE TABLE t1 (i1 INT, i2 INT) ENGINE=InnoDB;
@@ -195,3 +187,171 @@ INSERT INTO t1 VALUES (null, null, null);
 ALTER TABLE t1 RENAME INDEX t1_idx TO t1_idx_n;
 INSERT INTO t1 VALUES (null, null, null);
 DROP TABLE t1;
+# create table xxx like xxx
+SET SQL_MODE=ORACLE;
+CREATE TABLE t1 (i1 INT auto_increment, i2 INT, vc3 VARCHAR(10), PRIMARY KEY(i1));
+CREATE UNIQUE INDEX t1_idx ON t1(i2, vc3);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE "t1" (
+  "i1" int NOT NULL AUTO_INCREMENT,
+  "i2" int DEFAULT NULL,
+  "vc3" varchar(10) DEFAULT NULL,
+  PRIMARY KEY ("i1"),
+  UNIQUE KEY "t1_idx" ("i2","vc3") /* nulls are equal in unique index as oracle does */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SET SQL_MODE=DEFAULT;
+CREATE UNIQUE INDEX t1_idx2 ON t1(i2, vc3);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `i1` int NOT NULL AUTO_INCREMENT,
+  `i2` int DEFAULT NULL,
+  `vc3` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`i1`),
+  UNIQUE KEY `t1_idx` (`i2`,`vc3`) /* nulls are equal in unique index as oracle does */,
+  UNIQUE KEY `t1_idx2` (`i2`,`vc3`) /* nulls are equal in unique index as oracle does */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+CREATE TABLE t11 LIKE t1;
+SHOW CREATE TABLE t11;
+Table	Create Table
+t11	CREATE TABLE `t11` (
+  `i1` int NOT NULL AUTO_INCREMENT,
+  `i2` int DEFAULT NULL,
+  `vc3` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`i1`),
+  UNIQUE KEY `t1_idx` (`i2`,`vc3`) /* nulls are equal in unique index as oracle does */,
+  UNIQUE KEY `t1_idx2` (`i2`,`vc3`) /* nulls are equal in unique index as oracle does */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t11 ADD COLUMN c3 INT;
+ALTER TABLE t11 ADD COLUMN c4 INT;
+ALTER TABLE t11 ADD COLUMN c5 INT;
+SHOW CREATE TABLE t11;
+Table	Create Table
+t11	CREATE TABLE `t11` (
+  `i1` int NOT NULL AUTO_INCREMENT,
+  `i2` int DEFAULT NULL,
+  `vc3` varchar(10) DEFAULT NULL,
+  `c3` int DEFAULT NULL,
+  `c4` int DEFAULT NULL,
+  `c5` int DEFAULT NULL,
+  PRIMARY KEY (`i1`),
+  UNIQUE KEY `t1_idx` (`i2`,`vc3`) /* nulls are equal in unique index as oracle does */,
+  UNIQUE KEY `t1_idx2` (`i2`,`vc3`) /* nulls are equal in unique index as oracle does */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t11 DROP COLUMN c3 ;
+SHOW CREATE TABLE t11;
+Table	Create Table
+t11	CREATE TABLE `t11` (
+  `i1` int NOT NULL AUTO_INCREMENT,
+  `i2` int DEFAULT NULL,
+  `vc3` varchar(10) DEFAULT NULL,
+  `c4` int DEFAULT NULL,
+  `c5` int DEFAULT NULL,
+  PRIMARY KEY (`i1`),
+  UNIQUE KEY `t1_idx` (`i2`,`vc3`) /* nulls are equal in unique index as oracle does */,
+  UNIQUE KEY `t1_idx2` (`i2`,`vc3`) /* nulls are equal in unique index as oracle does */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t11 DROP COLUMN i2 ;
+SHOW CREATE TABLE t11;
+Table	Create Table
+t11	CREATE TABLE `t11` (
+  `i1` int NOT NULL AUTO_INCREMENT,
+  `vc3` varchar(10) DEFAULT NULL,
+  `c4` int DEFAULT NULL,
+  `c5` int DEFAULT NULL,
+  PRIMARY KEY (`i1`),
+  UNIQUE KEY `t1_idx` (`vc3`) /* nulls are equal in unique index as oracle does */,
+  UNIQUE KEY `t1_idx2` (`vc3`) /* nulls are equal in unique index as oracle does */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t11 DROP COLUMN vc3 ;
+SHOW CREATE TABLE t11;
+Table	Create Table
+t11	CREATE TABLE `t11` (
+  `i1` int NOT NULL AUTO_INCREMENT,
+  `c4` int DEFAULT NULL,
+  `c5` int DEFAULT NULL,
+  PRIMARY KEY (`i1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+CREATE UNIQUE INDEX t1_idx ON t11(c4, c5) INVISIBLE;
+SHOW CREATE TABLE t11;
+Table	Create Table
+t11	CREATE TABLE `t11` (
+  `i1` int NOT NULL AUTO_INCREMENT,
+  `c4` int DEFAULT NULL,
+  `c5` int DEFAULT NULL,
+  PRIMARY KEY (`i1`),
+  UNIQUE KEY `t1_idx` (`c4`,`c5`) /*!80000 INVISIBLE */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP INDEX t1_idx ON t11;
+SHOW CREATE TABLE t11;
+Table	Create Table
+t11	CREATE TABLE `t11` (
+  `i1` int NOT NULL AUTO_INCREMENT,
+  `c4` int DEFAULT NULL,
+  `c5` int DEFAULT NULL,
+  PRIMARY KEY (`i1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+CREATE UNIQUE INDEX t1_idx ON t11(c4, c5);
+SHOW CREATE TABLE t11;
+Table	Create Table
+t11	CREATE TABLE `t11` (
+  `i1` int NOT NULL AUTO_INCREMENT,
+  `c4` int DEFAULT NULL,
+  `c5` int DEFAULT NULL,
+  PRIMARY KEY (`i1`),
+  UNIQUE KEY `t1_idx` (`c4`,`c5`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SET SQL_MODE=ORACLE;
+CREATE TABLE t12 LIKE t11;
+SHOW CREATE TABLE t12;
+Table	Create Table
+t12	CREATE TABLE "t12" (
+  "i1" int NOT NULL AUTO_INCREMENT,
+  "c4" int DEFAULT NULL,
+  "c5" int DEFAULT NULL,
+  PRIMARY KEY ("i1"),
+  UNIQUE KEY "t1_idx" ("c4","c5")
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+CREATE UNIQUE INDEX t1_idx2 ON t12(c4, c5);
+SHOW CREATE TABLE t12;
+Table	Create Table
+t12	CREATE TABLE "t12" (
+  "i1" int NOT NULL AUTO_INCREMENT,
+  "c4" int DEFAULT NULL,
+  "c5" int DEFAULT NULL,
+  PRIMARY KEY ("i1"),
+  UNIQUE KEY "t1_idx" ("c4","c5"),
+  UNIQUE KEY "t1_idx2" ("c4","c5")
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1,t11,t12;
+CREATE TABLE t1 (i1 INT auto_increment, i2 INT, vc3 VARCHAR(10), PRIMARY KEY(i1),UNIQUE KEY t1_idx (i2,vc3));
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE "t1" (
+  "i1" int NOT NULL AUTO_INCREMENT,
+  "i2" int DEFAULT NULL,
+  "vc3" varchar(10) DEFAULT NULL,
+  PRIMARY KEY ("i1"),
+  UNIQUE KEY "t1_idx" ("i2","vc3") /* nulls are equal in unique index as oracle does */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+CREATE UNIQUE INDEX t1_idx2 ON t1 (i2,vc3);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE "t1" (
+  "i1" int NOT NULL AUTO_INCREMENT,
+  "i2" int DEFAULT NULL,
+  "vc3" varchar(10) DEFAULT NULL,
+  PRIMARY KEY ("i1"),
+  UNIQUE KEY "t1_idx" ("i2","vc3") /* nulls are equal in unique index as oracle does */,
+  UNIQUE KEY "t1_idx2" ("i2","vc3") /* nulls are equal in unique index as oracle does */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+CREATE TABLE t1 (
+_hidden_pk_ BIGINT UNSIGNED AUTO_INCREMENT NOT NULL, 
+id int DEFAULT NULL, 
+c1 varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT CURRENT_TIMESTAMP, 
+UNIQUE KEY _hidden_pk_ (_hidden_pk_)
+) ENGINE=innodb;
+ALTER TABLE t1 ADD c2 VARCHAR(100) NOT NULL DEFAULT SYSTIMESTAMP, ALGORITHM=INSTANT;
+drop table t1;

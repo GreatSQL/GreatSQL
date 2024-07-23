@@ -454,6 +454,7 @@ struct mysql_event_connection {
   unsigned long connection_id;
   MYSQL_LEX_CSTRING user;
   MYSQL_LEX_CSTRING priv_user;
+  MYSQL_LEX_CSTRING priv_host;
   MYSQL_LEX_CSTRING external_user;
   MYSQL_LEX_CSTRING proxy_user;
   MYSQL_LEX_CSTRING host;

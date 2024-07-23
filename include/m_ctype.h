@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +32,7 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include <cstdint>
+#include <map>
 
 #include "my_compiler.h"
 #include "my_inttypes.h"
@@ -774,5 +776,7 @@ static inline uint my_ismbchar(const CHARSET_INFO *cs, const uchar *str,
 static inline bool is_supported_parser_charset(const CHARSET_INFO *cs) {
   return (cs->mbminlen == 1);
 }
+
+extern std::map<std::string, uint8_t> char_ent_ref_to_uni;
 
 #endif  // M_CTYPE_INCLUDED

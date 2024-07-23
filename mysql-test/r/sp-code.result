@@ -1124,7 +1124,7 @@ Pos	Instruction
 3	set x4@3 (select `*` from `test`.`t2`)
 4	set x5@4 (select `*` from `test`.`t3`)
 5	set x6@5 (select `f`())
-6	cpush c1@0:
+6	cpush c1@0: SELECT (1 + 2) FROM dual
 7	cpush c2@1: SELECT * FROM (SELECT 1 + 2) t1
 8	cpush c3@2: SELECT * FROM t1
 9	cpush c4@3: SELECT * FROM t2

@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,6 +28,7 @@ Clone Plugin: OS specific routines for IO and network
 */
 
 #include "plugin/clone/include/clone_os.h"
+#include "sql/clone_handler.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -190,14 +191,14 @@ int clone_os_copy_file_to_file(Ha_clone_file from_file, Ha_clone_file to_file,
                                const char *src_name, const char *dest_name,
                                struct encrypt_op_buffer *buffer_node,
                                char *cipher_buff, my_aes_opmode mode, char *key,
-                               char *iv) {
+                               char *iv, Compress_file *comp_file) {
   CLONE_OS_CHECK_FILE(from_file);
 
   CLONE_OS_CHECK_FILE(to_file);
-
 #ifdef __linux__
 
-  while (key == nullptr && s_zero_copy && (buffer == nullptr) && length > 0) {
+  while (key == nullptr && comp_file == nullptr && s_zero_copy &&
+         (buffer == nullptr) && length > 0) {
     auto ret_size =
         sendfile(to_file.file_desc, from_file.file_desc, nullptr, length);
 
@@ -257,11 +258,15 @@ int clone_os_copy_file_to_file(Ha_clone_file from_file, Ha_clone_file to_file,
 
     request_size = actual_size;
     if (key != nullptr) {
-      error = encrypt_and_write(buffer_node, cipher_buff, buffer, to_file,
-                                request_size, dest_name, mode, key, iv);
-    } else {
       error =
-          clone_os_copy_buf_to_file(buffer, to_file, request_size, dest_name);
+          encrypt_and_write(buffer_node, cipher_buff, buffer, to_file,
+                            request_size, dest_name, mode, key, iv, comp_file);
+    } else if (comp_file != nullptr) {
+      error = comp_file->compress_and_write((char *)buffer, to_file.file_desc,
+                                            request_size, dest_name);
+    } else {
+      error = clone_os_copy_buf_to_file(buffer, to_file.file_desc, request_size,
+                                        dest_name);
     }
 
     if (error != 0) {
@@ -272,47 +277,10 @@ int clone_os_copy_file_to_file(Ha_clone_file from_file, Ha_clone_file to_file,
   return (0);
 }
 
-int clone_os_copy_buf_to_file(uchar *from_buffer, Ha_clone_file to_file,
-                              uint length, const char *dest_name) {
-  CLONE_OS_CHECK_FILE(to_file);
-
-  while (length > 0) {
-    errno = 0;
-    auto ret_size = os_write(to_file, from_buffer, length);
-
-    if (errno == EINTR) {
-      DBUG_PRINT("debug", ("clone write() interrupted"));
-      continue;
-    }
-
-    if (ret_size == -1) {
-      char errbuf[MYSYS_STRERROR_SIZE];
-
-      my_error(ER_ERROR_ON_WRITE, MYF(0), dest_name, errno,
-               my_strerror(errbuf, sizeof(errbuf), errno));
-
-      DBUG_PRINT("debug", ("Error: clone write failed."
-                           " Length left = %u",
-                           length));
-
-      return (ER_ERROR_ON_WRITE);
-    }
-
-    auto actual_size = static_cast<uint>(ret_size);
-
-    assert(length >= actual_size);
-
-    length -= actual_size;
-    from_buffer += actual_size;
-  }
-
-  return (0);
-}
-
 int encrypt_and_write(struct encrypt_op_buffer *m_buffer_node,
                       char *m_cipher_buff, uchar *source, Ha_clone_file to_file,
                       size_t length, const char *dest_name, my_aes_opmode mode,
-                      char *key, char *iv) {
+                      char *key, char *iv, Compress_file *comp_file) {
   size_t cp_len = 0;
   int enc_len = 0;
   int ret = 0;
@@ -336,8 +304,17 @@ int encrypt_and_write(struct encrypt_op_buffer *m_buffer_node,
         break;
       }
 
-      if (clone_os_copy_buf_to_file(reinterpret_cast<uchar *>(cipher_buff),
-                                    to_file, ENCRYPT_BATCH_SIZE, dest_name)) {
+      if (comp_file) {
+        if (comp_file->compress_and_write(reinterpret_cast<char *>(cipher_buff),
+                                          to_file.file_desc, ENCRYPT_BATCH_SIZE,
+                                          dest_name)) {
+          ret = -1;
+          break;
+        }
+
+      } else if (clone_os_copy_buf_to_file(
+                     reinterpret_cast<uchar *>(cipher_buff), to_file.file_desc,
+                     ENCRYPT_BATCH_SIZE, dest_name)) {
         ret = -1;
         break;
       }
@@ -361,9 +338,17 @@ int encrypt_and_write(struct encrypt_op_buffer *m_buffer_node,
         ret = -1;
         break;
       }
+      if (comp_file) {
+        if (comp_file->compress_and_write(reinterpret_cast<char *>(cipher_buff),
+                                          to_file.file_desc, ENCRYPT_BATCH_SIZE,
+                                          dest_name)) {
+          ret = -1;
+          break;
+        }
 
-      if (clone_os_copy_buf_to_file(reinterpret_cast<uchar *>(cipher_buff),
-                                    to_file, enc_len, dest_name)) {
+      } else if (clone_os_copy_buf_to_file(
+                     reinterpret_cast<uchar *>(cipher_buff), to_file.file_desc,
+                     enc_len, dest_name)) {
         ret = -1;
         break;
       }

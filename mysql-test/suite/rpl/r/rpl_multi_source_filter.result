@@ -184,6 +184,7 @@ mtr
 mysql
 performance_schema
 sys
+sys_mac
 test
 #
 # 3. All matched tables (t1, t11) from db1 are replicated, but

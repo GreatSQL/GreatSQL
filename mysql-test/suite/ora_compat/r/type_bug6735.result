@@ -131,7 +131,39 @@ select stu_record_val(3).id from t1 a left join t1 b on stu_record_val(3)=1;
 end;
 $$
 call p1();
-ERROR 42000: This version of MySQL doesn't yet support 'compare with user define type'
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+drop PROCEDURE p1;
+#
+# test of udt type table used in left join
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+stu_record_val(3) := stu_record(10,'a',1);
+select stu_record_val(3).id from t1 a left join t1 b on stu_record_val=1;
+end;
+$$
+call p1();
+ERROR 42000: This version of MySQL doesn't yet support 'compare with udt table'
+drop PROCEDURE p1;
+#
+# test of udt type table used in left join
+#
+create or replace type t_air as object(id int,type varchar(20));
+CREATE or replace PROCEDURE p1() as
+begin
+select t_air(1,1)=t_air(1,1);
+end;
+$$
+call p1();
+t_air(1,1)=t_air(1,1)
+1
 drop PROCEDURE p1;
 #
 # test of udt type table used in if then
@@ -193,4 +225,189 @@ $$
 call p1();
 ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 drop PROCEDURE p1;
+#
+# test of udt type used in order
+#
+Create or replace function f11(p1 t_air) return int 
+as 
+begin
+return p1.id;
+End;
+$$
+select * from t1 order by f11(t_air(1,2));
+a	b
+1	aabb
+2	qwed
+drop function f11;
+drop type t_air;
+#
+# test of bug9480
+#
+CREATE OR REPLACE TYPE inttab IS varray(3) OF int;
+select (select inttab() from t1 limit 1)=(select inttab() from t1 limit 1);
+(select inttab() from t1 limit 1)=(select inttab() from t1 limit 1)
+1
+select (select inttab(5,6) from t1 limit 1)=(select inttab(5,61) from t1 limit 1);
+(select inttab(5,6) from t1 limit 1)=(select inttab(5,61) from t1 limit 1)
+0
+select (select inttab(5,6) from t1 limit 1)=(select inttab(5,6) from t1 limit 1);
+(select inttab(5,6) from t1 limit 1)=(select inttab(5,6) from t1 limit 1)
+1
+select (select inttab(5,6)) = (select inttab(5,6));
+(select inttab(5,6)) = (select inttab(5,6))
+1
+select (select inttab(5,6)) = (select inttab(5,67));
+(select inttab(5,6)) = (select inttab(5,67))
+0
+select (select inttab(5,6)) = (select inttab(5,6) from t1 limit 1);
+(select inttab(5,6)) = (select inttab(5,6) from t1 limit 1)
+1
+CREATE or replace PROCEDURE p1() as
+stu_record_val inttab:=inttab(5,6);
+begin
+select (select inttab(5,6)) = (select stu_record_val);
+end;
+$$
+call p1();
+(select inttab(5,6)) = (select stu_record_val)
+1
+call p1();
+(select inttab(5,6)) = (select stu_record_val)
+1
+drop PROCEDURE p1;
+#
+# test of bug9482
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by VARCHAR(32);
+stu_record_val1 tklist := tklist(3=>1,'a'=>2,0=>3);
+stu_record_val2 tklist := tklist(3=>1,'a'=>2,0=>null);
+stu_record_val3 tklist := tklist(3=>1,'b'=>2,0=>3);
+begin
+select stu_record_val1=stu_record_val1,stu_record_val1=stu_record_val2,stu_record_val1=stu_record_val3;
+select (select stu_record_val1 from t1 limit 1)=(select stu_record_val3 from t1 limit 1);
+select (select stu_record_val1)=(select stu_record_val1);
+end;
+$$
+call p1();
+stu_record_val1=stu_record_val1	stu_record_val1=stu_record_val2	stu_record_val1=stu_record_val3
+1	0	0
+(select stu_record_val1 from t1 limit 1)=(select stu_record_val3 from t1 limit 1)
+0
+(select stu_record_val1)=(select stu_record_val1)
+1
+call p1();
+stu_record_val1=stu_record_val1	stu_record_val1=stu_record_val2	stu_record_val1=stu_record_val3
+1	0	0
+(select stu_record_val1 from t1 limit 1)=(select stu_record_val3 from t1 limit 1)
+0
+(select stu_record_val1)=(select stu_record_val1)
+1
+drop PROCEDURE p1;
+CREATE or replace PROCEDURE p1() as
+type t_air is record(
+id int := 1,
+name_d  varchar(20) := 1
+);
+type tklist is table of t_air index by VARCHAR(32);
+stu_record_val1 tklist := tklist(3=>t_air(1,2),'a'=>t_air(2,3),0=>t_air(3,4));
+stu_record_val2 tklist := tklist(3=>t_air(1,2),'a'=>t_air(2,3),0=>null);
+stu_record_val3 tklist := tklist(3=>t_air(1,2),'b'=>t_air(2,3),0=>t_air(3,4));
+begin
+select stu_record_val1=stu_record_val1,stu_record_val1=stu_record_val2,stu_record_val1=stu_record_val3;
+select (select stu_record_val1 from t1 limit 1)=(select stu_record_val3 from t1 limit 1);
+select (select stu_record_val1 from t1 limit 1)=(select stu_record_val1 from t1 limit 1);
+end;
+$$
+call p1();
+stu_record_val1=stu_record_val1	stu_record_val1=stu_record_val2	stu_record_val1=stu_record_val3
+1	0	0
+(select stu_record_val1 from t1 limit 1)=(select stu_record_val3 from t1 limit 1)
+0
+(select stu_record_val1 from t1 limit 1)=(select stu_record_val1 from t1 limit 1)
+1
+call p1();
+stu_record_val1=stu_record_val1	stu_record_val1=stu_record_val2	stu_record_val1=stu_record_val3
+1	0	0
+(select stu_record_val1 from t1 limit 1)=(select stu_record_val3 from t1 limit 1)
+0
+(select stu_record_val1 from t1 limit 1)=(select stu_record_val1 from t1 limit 1)
+1
+drop PROCEDURE p1;
+#
+# test of bug9506
+#
+create or replace type t_air as object(id int,type varchar(20));
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+create table tt_air(id int,name1 t_air);
+insert into tt_air values(1,t_air(10,'aabb'));
+insert into tt_air values(2,t_air(20,'qwed'));
+select * from table(inttab(1,2)) connect by level<2;
+column_value
+1
+2
+select t_air_table(t_air(1,2))=t_air_table(t_air(1,2)) from tt_air connect by level<2;
+t_air_table(t_air(1,2))=t_air_table(t_air(1,2))
+1
+1
+select (select t_air_table(t_air(1,2))) from tt_air connect by level<2;
+(select t_air_table(t_air(1,2)))
+t_air_table(t_air(1,2))
+t_air_table(t_air(1,2))
+select t_air_table(name1) from tt_air connect by level<2;
+t_air_table(name1)
+t_air_table(t_air(10,aabb))
+t_air_table(t_air(20,qwed))
+select CONNECT_BY_ROOT t_air_table(name1) ,level from tt_air connect by prior id=1;
+ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by VARCHAR(32);
+stu_record_val1 tklist := tklist(3=>1,'a'=>2,0=>3);
+type t_air1 is record(
+id int := 1,
+name_d  varchar(20) := 1
+);
+type tklist1 is table of t_air1 index by VARCHAR(32);
+stu t_air1;
+stu_record_val2 tklist1 := tklist1(3=>t_air1(1,2),'a'=>t_air1(2,3),0=>t_air1(3,4));
+begin
+select * from table(stu_record_val1) connect by level<2;
+select * from table(stu_record_val2) connect by level<2;
+select stu connect by level<3;
+select stu_record_val2 connect by level<2;
+end;
+$$
+call p1();
+column_value
+1
+2
+3
+id	name_d
+1	2
+2	3
+3	4
+stu 
+id:1 | name_d:1
+id:1 | name_d:1
+stu_record_val2 
+tklist1(t_air1(1,2),t_air1(2,3),t_air1(3,4))
+call p1();
+column_value
+1
+2
+3
+id	name_d
+1	2
+2	3
+3	4
+stu 
+id:1 | name_d:1
+id:1 | name_d:1
+stu_record_val2 
+tklist1(t_air1(1,2),t_air1(2,3),t_air1(3,4))
+drop PROCEDURE p1;
+drop table tt_air;
+drop TYPE t_air_table;
+drop type t_air;
 drop table t1;
+drop type inttab;

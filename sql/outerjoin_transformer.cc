@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, GreatDB Software Co., Ltd.
+/* Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -166,8 +166,7 @@ bool Outerjoin_transformer::check_single_outer_join_cond(Item *item) {
     return true;
   }
   // rownum or where exists(subquery).
-  if (has_rownum_func(item, current_thd) ||
-      (item_fields_or_refs.elements == 0)) {
+  if (item_fields_or_refs.elements == 0) {
     m_outer_info.where_conds.push_back(item);
     return false;
   }

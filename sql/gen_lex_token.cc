@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2011, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -407,6 +407,7 @@ static void compute_tokens() {
   set_start_expr_token(EVERY_SYM);
   set_start_expr_token(AT_SYM);
   set_start_expr_token(STARTS_SYM);
+  set_start_expr_token(START_LSN_SYM);
   set_start_expr_token(ENDS_SYM);
   set_start_expr_token(DEFAULT_SYM);
   set_start_expr_token(RETURN_SYM);

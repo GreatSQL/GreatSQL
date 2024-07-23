@@ -1,0 +1,31 @@
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+
+create type inttab is table of int;
+create table t1(id int, c int);
+insert into t1 values(1,1);
+select * from table((select inttab(5,6,7) from t1 limit 1));
+
+--error ER_UDT_NONTESTED_TABLE_ITEM
+select * from table(inttab(null) = inttab(null));
+
+create type t_air as object(x int, y varchar2(64));
+create type t_air_table is table of t_air;
+
+delimiter //;
+CREATE or replace PROCEDURE p1() as
+stu_record_val t_air_table := t_air_table(t_air(1,'ssss'));
+BEGIN
+   select * from table((select stu_record_val));
+END;
+//
+
+delimiter ;//
+call p1();
+call p1();
+
+drop PROCEDURE p1;
+drop type t_air_table;
+drop type t_air;
+drop table t1;
+drop type inttab;

@@ -8,7 +8,7 @@ SET @@use_secondary_engine = INVALID;
 ERROR 42000: Variable 'use_secondary_engine' can't be set to the value of 'INVALID'
 SELECT @@use_secondary_engine;
 @@use_secondary_engine
-ON
+OFF
 # Test with integer arguments.
 SET @@use_secondary_engine = 0;
 SELECT @@use_secondary_engine;

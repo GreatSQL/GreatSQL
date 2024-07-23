@@ -53,7 +53,7 @@ eval SET @@null_audit_event_order_check = 'MYSQL_AUDIT_COMMAND_START;command_id=
                                           'MYSQL_AUDIT_PARSE_PREPARSE;;;'
                                           'MYSQL_AUDIT_PARSE_POSTPARSE;;;'
                                           'MYSQL_AUDIT_GENERAL_LOG;;;'
-                                          'MYSQL_AUDIT_QUERY_START;sql_command_id="134";;'
+                                          'MYSQL_AUDIT_QUERY_START;sql_command_id="135";;'
                                           'MYSQL_AUDIT_AUTHENTICATION_CREDENTIAL_CHANGE;;ABORT_RET';
 ALTER USER testuser@localhost IDENTIFIED BY 'NewPass';
 SELECT @@null_audit_event_order_check;
@@ -121,7 +121,7 @@ eval SET @@null_audit_event_order_check = 'MYSQL_AUDIT_COMMAND_START;command_id=
                                           'MYSQL_AUDIT_PARSE_PREPARSE;;;'
                                           'MYSQL_AUDIT_PARSE_POSTPARSE;;;'
                                           'MYSQL_AUDIT_GENERAL_LOG;;;'
-                                          'MYSQL_AUDIT_QUERY_START;sql_command_id="134";;'
+                                          'MYSQL_AUDIT_QUERY_START;sql_command_id="135";;'
                                           'MYSQL_AUDIT_AUTHENTICATION_CREDENTIAL_CHANGE;;ABORT_RET';
 ALTER USER testuser@localhost IDENTIFIED BY 'NewPass';
 SELECT @@null_audit_event_order_check;

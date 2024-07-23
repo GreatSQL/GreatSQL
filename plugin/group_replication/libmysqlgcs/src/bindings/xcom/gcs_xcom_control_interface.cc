@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -297,6 +297,7 @@ enum_gcs_error Gcs_xcom_control::do_join(bool retry) {
   }
 
   while (ret == GCS_NOK && !m_view_control->is_finalized()) {
+    MYSQL_GCS_LOG_INFO("retry_do_join is called");
     ret = retry_do_join();
 
     retry_join_count--;
@@ -484,7 +485,7 @@ enum_gcs_error Gcs_xcom_control::retry_do_join() {
 
     add_node_accepted = send_add_node_request(local_node_info_str_ips);
     if (!add_node_accepted) {
-      MYSQL_GCS_LOG_ERROR(
+      MYSQL_GCS_LOG_INFO(
           "Error connecting to all peers. Member join failed. Local port: "
           << local_port)
       goto err;
@@ -819,6 +820,7 @@ connection_descriptor *Gcs_xcom_control::get_connection_to_node(
 }
 
 void Gcs_xcom_control::do_remove_node_from_group() {
+  MYSQL_GCS_LOG_INFO("call do_remove_node_from_group started!");
   if (m_view_control->is_leaving() || !m_view_control->belongs_to_group())
     return;
 
@@ -1744,6 +1746,8 @@ void Gcs_xcom_control::process_control_message(
 
     delete new_view_id;
 
+    MYSQL_GCS_LOG_INFO("::process_control_message()::Install new view over")
+
     // Expel ourselves if we fail to recover the missing packets.
     if (!recovered_successfully) {
       incompatible_members.push_back(*m_local_node_info);
@@ -1856,6 +1860,16 @@ void Gcs_xcom_control::install_view(
   }
 
   m_view_control->end_view_exchange();
+
+  std::vector<Gcs_member_identifier>::const_iterator left_it;
+  for (left_it = left_members.begin(); left_it != left_members.end();
+       ++left_it) {
+    bool const success = m_xcom_proxy->notify_xcom_truly_remove(
+        left_it->get_member_id().c_str());
+    if (!success) {
+      MYSQL_GCS_LOG_INFO("notify_xcom_truly_remove failed");
+    }
+  }
 
   m_state_exchange->end();
 }

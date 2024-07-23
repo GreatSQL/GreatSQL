@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -49,6 +50,59 @@ static inline row_id_t dict_sys_get_new_row_id(void) {
 
   return (id);
 }
+
+/** Allocate a new interval of row ids and return a new row id.
+When size of current interval is zero, allocate a new interval of row ids and
+return min row id in the new interval;
+When size of current interval is greater than zero, return min row id in current
+interval.
+Calling this function in parallel loading case, can isolate row ids of different
+threads to decrease cost of modifying BTree.
+The format of interval is [left, right).
+@param[in, out]     size      size of interval
+@param[in, out]     left      min of interval
+@param[in, out]     right     max of interval
+@return the new id */
+static inline row_id_t dict_sys_get_new_row_id_with_interval(uint64 &size,
+                                                             uint64 &left,
+                                                             uint64 &right) {
+  ut_a(size > 0);
+  ut_a(size <= INTERVAL_OF_ROW_ID_MAX_SIZE);
+
+  if (left >= right) {
+    dict_sys_mutex_enter();
+
+    left = dict_sys->row_id;
+    right = left + size;
+
+    /*
+     * Check if need to write row_id.
+     * If the number of wrote points is more than zero, need to write the max
+     * point. Such as [100, 600), there are 2 wrote points '256' and '512' in
+     * this interval, need to write '512'.
+     */
+    uint64 multi_write_margin_left = left / DICT_HDR_ROW_ID_WRITE_MARGIN;
+    uint64 multi_write_margin_right = right / DICT_HDR_ROW_ID_WRITE_MARGIN;
+    if (multi_write_margin_right > multi_write_margin_left) {
+      /* Set wrote point. */
+      dict_sys->row_id =
+          multi_write_margin_right * DICT_HDR_ROW_ID_WRITE_MARGIN;
+      dict_hdr_flush_row_id();
+    }
+
+    /* Set row id. */
+    dict_sys->row_id = right;
+
+    dict_sys_mutex_exit();
+
+    /* Get size of next interval. */
+    size =
+        std::min((size << 1), static_cast<uint64>(INTERVAL_OF_ROW_ID_MAX_SIZE));
+  }
+
+  return (row_id_t)left++;
+}
+
 
 /** Reads a row id from a record or other 6-byte stored form.
  @return row id */

@@ -535,11 +535,12 @@ mkdir debug
            -DWITH_LIBEVENT=bundled \
            -DWITH_KEYRING_VAULT=ON \
            -DWITH_FIDO=bundled \
+           -DWITHOUT_RAPID_SECONDARY_STORAGE_ENGINE=1 \
            %{?ssl_option} \
            %{?mecab_option} \
            -DCOMPILATION_COMMENT="%{compilation_comment_debug}" %{TOKUDB_FLAGS} %{TOKUDB_DEBUG_OFF} %{ROCKSDB_FLAGS}
   echo BEGIN_DEBUG_CONFIG ; egrep '^#define' include/config.h ; echo END_DEBUG_CONFIG
-  make %{?_smp_mflags} VERBOSE=1
+  make %{?_smp_mflags}
 )
 # Build full release
 mkdir release
@@ -587,11 +588,12 @@ mkdir release
            -DWITH_ZSTD=bundled \
            -DWITH_KEYRING_VAULT=ON \
            -DWITH_FIDO=bundled \
+           -DWITHOUT_RAPID_SECONDARY_STORAGE_ENGINE=1 \
            %{?ssl_option} \
            %{?mecab_option} \
            -DCOMPILATION_COMMENT="%{compilation_comment_release}" %{TOKUDB_FLAGS} %{TOKUDB_DEBUG_OFF} %{ROCKSDB_FLAGS}
   echo BEGIN_NORMAL_CONFIG ; egrep '^#define' include/config.h ; echo END_NORMAL_CONFIG
-  make %{?_smp_mflags} VERBOSE=1
+  make %{?_smp_mflags}
 )
 
 %install
@@ -941,6 +943,8 @@ fi
 %attr(755, root, root) %{_bindir}/lz4_decompress
 %attr(755, root, root) %{_bindir}/zlib_decompress
 %attr(755, root, root) %{_bindir}/ps-admin
+%attr(755, root, root) %{_bindir}/zstd_decompress
+%attr(755, root, root) %{_bindir}/mysqldecompress
 %if 0%{?systemd}
 %attr(755, root, root) %{_bindir}/mysqld_pre_systemd
 %attr(755, root, root) %{_bindir}/mysqld_safe
@@ -1080,6 +1084,7 @@ fi
 %attr(755, root, root) /usr/lib/libcoredumper.a
 # Percona plugins
 %attr(755, root, root) %{_libdir}/mysql/plugin/audit_log.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/audit_login_messages.so
 #%attr(644, root, root) %{_datadir}/mysql-*/audit_log_filter_linux_install.sql
 #%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_pam.so
 #%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_sasl.so
@@ -1092,6 +1097,7 @@ fi
 #%attr(755, root, root) %{_libdir}/mysql/plugin/firewall.so
 #%attr(644, root, root) %{_datadir}/mysql-*/linux_install_firewall.sql
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/audit_log.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/audit_login_messages.so
 #%attr(755, root, root) %{_libdir}/mysql/plugin/scalability_metrics.so
 #%attr(755, root, root) %{_libdir}/mysql/plugin/debug/scalability_metrics.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/auth_pam.so
@@ -1122,6 +1128,9 @@ fi
 %attr(644, root, root) %{_datadir}/greatsql/innodb_memcached_config.sql
 %attr(644, root, root) %{_datadir}/greatsql/install_rewriter.sql
 %attr(644, root, root) %{_datadir}/greatsql/uninstall_rewriter.sql
+%attr(644, root, root) %{_datadir}/greatsql/install_audit_log.sql
+%attr(644, root, root) %{_datadir}/greatsql/sys_masking.sql
+%attr(644, root, root) %{_datadir}/greatsql/uninstall_audit_log.sql
 %if 0%{?systemd}
 %attr(644, root, root) %{_unitdir}/mysqld.service
 %attr(644, root, root) %{_unitdir}/mysqld@.service

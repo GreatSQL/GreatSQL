@@ -1,5 +1,5 @@
 /* Copyright (c) 2010, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2020,6 +2020,10 @@ Sql_cmd_clone::Sql_cmd_clone(LEX_USER *user_info, ulong port,
   m_host = user_info->host;
   m_user = user_info->user;
   m_passwd = user_info->first_factor_auth_info.auth;
+
+  m_based_lsn = 0;
+  m_enable_page_track = false;
+  m_base_dir = EMPTY_CSTR;
 }
 
 bool Sql_cmd_clone::execute(THD *thd) {
@@ -2065,7 +2069,8 @@ bool Sql_cmd_clone::execute(THD *thd) {
 
   if (is_local()) {
     assert(!is_replace);
-    auto err = m_clone->clone_local(thd, m_data_dir.str);
+    auto err = m_clone->clone_local(thd, m_data_dir.str, m_based_lsn,
+                                    m_enable_page_track, m_base_dir.str);
     clone_plugin_unlock(thd, m_plugin);
 
     if (err != 0) {
@@ -2091,7 +2096,8 @@ bool Sql_cmd_clone::execute(THD *thd) {
 
   auto err = m_clone->clone_remote_client(
       thd, m_host.str, static_cast<uint>(m_port), m_user.str, m_passwd.str,
-      m_data_dir.str, ssl_mode);
+      m_data_dir.str, ssl_mode, m_enable_page_track, m_based_lsn,
+      m_base_dir.str);
   clone_plugin_unlock(thd, m_plugin);
   m_clone = nullptr;
 
@@ -2376,7 +2382,6 @@ bool Sql_cmd_revoke_roles::execute(THD *thd) {
 
 bool Sql_cmd_alter_user_default_role::execute(THD *thd) {
   DBUG_TRACE;
-
   bool ret = mysql_alter_or_clear_default_roles(thd, role_type, users, roles);
   if (!ret) my_ok(thd);
 

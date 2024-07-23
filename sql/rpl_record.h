@@ -1,4 +1,5 @@
 /* Copyright (c) 2007, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,6 +31,7 @@
 
 class Relay_log_info;
 struct TABLE;
+class Field;
 
 struct MY_BITMAP;
 
@@ -39,6 +41,8 @@ class Bit_reader;
 enum class enum_row_image_type { WRITE_AI, UPDATE_BI, UPDATE_AI, DELETE_BI };
 
 #if defined(MYSQL_SERVER)
+bool unpack_field(const uchar **pack_ptr, Field *field, uint metadata,
+                  enum_row_image_type row_image_type, bool is_partial_column);
 size_t pack_row(TABLE *table, MY_BITMAP const *cols, uchar *row_data,
                 const uchar *data, enum_row_image_type row_image_type,
                 ulonglong value_options = 0);

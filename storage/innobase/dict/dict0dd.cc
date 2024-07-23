@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -2838,7 +2838,14 @@ template const dict_index_t *dd_find_index<dd::Partition_index>(
   if (options.exists("nulls_equal")) {
     options.get("nulls_equal", &nulls_equal);
   }
-  index->nulls_equal = nulls_equal;
+
+  bool ora_mode = false;
+  if (options.exists("ora_mode")) {
+    options.get("ora_mode", &ora_mode);
+  }
+
+  index->nulls_equal = index->ora_mode =
+      ((nulls_equal || ora_mode) ? true : false);
 
   const ulint max_len = DICT_MAX_FIELD_LEN_BY_FORMAT(table);
   DBUG_EXECUTE_IF("ib_create_table_fail_at_create_index",

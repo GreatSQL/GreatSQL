@@ -1,4 +1,5 @@
 /* Copyright (c) 2019, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -128,6 +129,7 @@ class Mock_gcs_xcom_proxy : public Gcs_xcom_proxy_base {
   }
   MOCK_METHOD0(xcom_input_try_pop, xcom_input_request_ptr());
   MOCK_METHOD1(xcom_client_set_flp_timeout, bool(uint64_t timeout));
+  MOCK_METHOD1(xcom_client_notify_truly_remove, bool(const char *address));
 };
 
 class Mock_gcs_xcom_view_change_control_interface

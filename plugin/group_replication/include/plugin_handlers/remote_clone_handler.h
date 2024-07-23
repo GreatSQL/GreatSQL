@@ -1,4 +1,5 @@
 /* Copyright (c) 2019, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -48,7 +49,8 @@ class Remote_clone_handler : public Group_event_observer {
     @param threshold                The threshold for clone activation
     @param components_stop_timeout  The stop timeout in error cases
   */
-  Remote_clone_handler(ulonglong threshold, ulong components_stop_timeout);
+  Remote_clone_handler(ulonglong threshold, ulong components_stop_timeout,
+                       ulonglong donor_threshold);
 
   /**
     The destructor
@@ -61,6 +63,10 @@ class Remote_clone_handler : public Group_event_observer {
   */
   void set_clone_threshold(ulonglong threshold) {
     m_clone_activation_threshold = threshold;
+  }
+
+  void set_donor_threshold(ulonglong threshold) {
+    m_clone_donor_threshold = threshold;
   }
 
   /*
@@ -310,6 +316,8 @@ class Remote_clone_handler : public Group_event_observer {
 
   /**The threshold after which the clone process is invoked*/
   ulonglong m_clone_activation_threshold;
+
+  ulonglong m_clone_donor_threshold;
 
   /** the mutex for donor list accesses. */
   mysql_mutex_t m_donor_list_lock;

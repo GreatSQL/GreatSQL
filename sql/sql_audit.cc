@@ -1,5 +1,5 @@
 /* Copyright (c) 2007, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -467,6 +467,8 @@ int mysql_audit_notify(THD *thd, mysql_event_connection_subclass_t subclass,
   event.user.length = thd->security_context()->user().length;
   event.priv_user.str = thd->security_context()->priv_user().str;
   event.priv_user.length = thd->security_context()->priv_user().length;
+  event.priv_host.str = thd->security_context()->priv_host().str;
+  event.priv_host.length = thd->security_context()->priv_host().length;
   event.external_user.str = thd->security_context()->external_user().str;
   event.external_user.length = thd->security_context()->external_user().length;
   event.proxy_user.str = thd->security_context()->proxy_user().str;

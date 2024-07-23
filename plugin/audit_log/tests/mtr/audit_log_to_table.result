@@ -1,0 +1,100 @@
+set global audit_log_to_table = 1;
+create user u1@localhost identified by 'aa';
+create user u2@localhost identified by 'aa';
+ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
+select * from sys_audit.audit_log;
+name	record	timestamp	command_class	connection_id	status	sqltext	user	host	priv_user	os_user	ip	db	server_version	os_version	server_id	timegmt
+Query	x_x_x-x-xTx:x:x	x-x-x x:x:x	set_option	x	x	set global audit_log_to_table = x	root[root] @ localhost []	localhost				test			x	x
+Query	x_x_x-x-xTx:x:x	x-x-x x:x:x	create_user	x	x	CREATE USER 'ux'@'localhost' IDENTIFIED BY <secret>	root[root] @ localhost []	localhost				test			x	x
+Query	x_x_x-x-xTx:x:x	x-x-x x:x:x	create_user	x	x	CREATE USER 'ux'@'localhost' IDENTIFIED BY <secret>	root[root] @ localhost []	localhost				test			x	x
+Connect	x_x_x-x-xTx:x:x	x-x-x x:x:x		x	x		ux	localhost	ux@localhost						x	x
+ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
+select audit_login_messages(x);
+audit_login_messages(x)
+| name | time | connection_id | status | user | host | ip | server_id |
+| Connect | x-x-x x:x:x | x | x | ux | localhost |  | x |
+| Connect | x-x-x x:x:x | x | x | ux | localhost |  | x |
+| Total x rows |
+select audit_login_messages(x);
+audit_login_messages(x)
+| name | time | connection_id | status | user | host | ip | server_id |
+| Connect | x-x-x x:x:x | x | x | ux | localhost |  | x |
+| Total x rows |
+ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
+ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
+select audit_login_messages(x);
+audit_login_messages(x)
+| name | time | connection_id | status | user | host | ip | server_id |
+| Connect | x-x-x x:x:x | x | x | ux | localhost |  | x |
+| Connect | x-x-x x:x:x | x | x | ux | localhost |  | x |
+| Connect | x-x-x x:x:x | x | x | ux | localhost |  | x |
+| Total x rows |
+select audit_login_messages(5);
+audit_login_messages(5)
+First login
+| Total 0 rows |
+ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
+ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
+ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
+select audit_login_messages(x);
+audit_login_messages(x)
+| name | time | connection_id | status | user | host | ip | server_id |
+| Connect | x-x-x x:x:x | x | x | ux | localhost |  | x |
+| Connect | x-x-x x:x:x | x | x | ux | localhost |  | x |
+| ...... |
+| Not showing all failed login attempts, plz check audit_log for detail. |
+| Total x rows |
+ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
+ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
+ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
+select audit_login_messages(x);
+audit_login_messages(x)
+| name | time | connection_id | status | user | host | ip | server_id |
+| Connect | x-x-x x:x:x | x | x | ux | localhost |  | x |
+| Connect | x-x-x x:x:x | x | x | ux | localhost |  | x |
+| Connect | x-x-x x:x:x | x | x | ux | localhost |  | x |
+| Connect | x-x-x x:x:x | x | x | ux | localhost |  | x |
+| Total x rows |
+select audit_login_messages();
+ERROR HY000: Can't initialize function 'audit_login_messages'; Function requires one argument for max rows
+select audit_login_messages(0);
+ERROR HY000: Can't initialize function 'audit_login_messages'; Argument max rows should be in [1, 10000].
+select audit_login_messages(10001);
+ERROR HY000: Can't initialize function 'audit_login_messages'; Argument max rows should be in [1, 10000].
+drop user u1@localhost;
+drop user u2@localhost;
+SET GLOBAL audit_log_to_table = 0;
+set sql_log_bin = on;
+delete from sys_audit.audit_log;
+ERROR HY000: Audit log update denied with sql_log_bin = on
+insert into sys_audit.audit_log select * from sys_audit.audit_log;
+ERROR HY000: Audit log update denied with sql_log_bin = on
+update sys_audit.audit_log set command_class='update';
+ERROR HY000: Audit log update denied with sql_log_bin = on
+drop table sys_audit.audit_log;
+ERROR HY000: Audit log update denied with sql_log_bin = on
+create procedure p1()
+begin
+declare v_name varchar(64);
+declare done boolean default false;
+declare cur1 cursor for
+select name from sys_audit.audit_log order by timestamp desc limit 2;
+DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = true;
+create temporary table sys_audit.t1(c1 varchar(64));
+open cur1;
+read_loop: loop
+fetch cur1 into v_name;
+if done then
+leave read_loop;
+end if;
+insert into sys_audit.t1 values(v_name);
+end loop read_loop;
+select * from sys_audit.t1;
+drop table sys_audit.t1;
+end$$
+call p1();
+c1
+Query
+Query
+drop procedure p1;
+set sql_log_bin = off;

@@ -248,8 +248,8 @@ group by id;
 EXPLAIN
 -> Group aggregate: count(student.id)
     -> Sort: student.id
-        -> Filter: (student.id > 1)  (cost=*** rows=***)
-            -> Table scan on <connect_by_temp>  (cost=*** rows=***)
+        -> Stream results  (cost=*** rows=***)
+            -> Filter: (student.id > 1)  (cost=*** rows=***)
                 -> connect by scan:(student.id = student.grade) start with: (student.grade < 3)  (cost=*** rows=***)
                     -> Table scan on student  (cost=*** rows=***)
 
@@ -257,7 +257,7 @@ explain SELECT id, name, grade, level
 FROM student
 CONNECT BY PRIOR id = grade order by id;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	student	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Using filesort
+1	SIMPLE	student	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Connect By; Using temporary; Using filesort
 Warnings:
 Note	1003	/* select#1 */ select "test"."student"."id" AS "id","test"."student"."name" AS "name","test"."student"."grade" AS "grade",level AS "level
 " from "test"."student" connect by (prior "test"."student"."id" = "test"."student"."grade") order by "test"."student"."id"
@@ -267,7 +267,7 @@ FROM student
 CONNECT BY PRIOR id = grade order by id;
 EXPLAIN
 -> Sort: student.id
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
+    -> Stream results  (cost=*** rows=***)
         -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
             -> Table scan on student  (cost=*** rows=***)
 
@@ -978,10 +978,10 @@ select id from student   connect by prior id = grade group by id,prior grade;
 id
 1
 2
-4
-3
 2
 3
+3
+4
 4
 select id from student connect by prior id = grade order by id,prior grade;
 id
@@ -1007,8 +1007,8 @@ select id , lag(id, 1)over() from student connect by prior id = grade group by i
 id	lag(id, 1)over()
 1	NULL
 2	1
-4	2
-3	4
+3	2
+4	3
 select id ,prior grade from student connect by prior id = grade ;
 id	prior grade 
 1	NULL
@@ -1029,6 +1029,15 @@ id	(prior grade)+1
 4	2
 3	NULL
 4	NULL
+explain format=tree
+select id from student connect by prior id = grade group by id,prior grade;
+EXPLAIN
+-> Group (no aggregates)
+    -> Sort: student.id, prior student.grade
+        -> Stream results  (cost=*** rows=***)
+            -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
+                -> Table scan on student  (cost=*** rows=***)
+
 select id,name,grade,connect_by_root name from student;
 ERROR HY000: connect_by_root specified pseudocolumn or operator not allowed :without connect by
 select id,connect_by_root name from student connect by prior id = grade;
@@ -1059,11 +1068,11 @@ select id  from student connect by prior id = grade group by id, connect_by_root
 id
 1
 2
-4
-3
 2
-4
 3
+3
+4
+4
 4
 select id  from student connect by prior id = grade order by connect_by_root grade ;
 id
@@ -1283,7 +1292,7 @@ explain format=tree select id,max(id) from student connect by prior id = grade g
 EXPLAIN
 -> Group aggregate: max(student.id)
     -> Sort: student.id
-        -> Table scan on <connect_by_temp>  (cost=*** rows=***)
+        -> Stream results  (cost=*** rows=***)
             -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
                 -> Table scan on student  (cost=*** rows=***)
 
@@ -1299,9 +1308,8 @@ max(id)	LISTAGG(level, '->')
 explain format=tree select max(id),LISTAGG(level, '->') from student connect by prior id = grade;
 EXPLAIN
 -> Aggregate: max(student.id), listagg(tmp_field , '->')  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
-            -> Table scan on student  (cost=*** rows=***)
+    -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
+        -> Table scan on student  (cost=*** rows=***)
 
 select max(id),LISTAGG(level, '->') from student connect by prior id = grade group by id;
 max(id)	LISTAGG(level, '->')
@@ -1313,7 +1321,7 @@ explain format=tree select max(id),LISTAGG(level, '->') from student connect by 
 EXPLAIN
 -> Group aggregate: max(student.id), listagg(tmp_field , '->')
     -> Sort: student.id
-        -> Table scan on <connect_by_temp>  (cost=*** rows=***)
+        -> Stream results  (cost=*** rows=***)
             -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
                 -> Table scan on student  (cost=*** rows=***)
 
@@ -1327,9 +1335,8 @@ EXPLAIN
 -> Filter: (s2.id > 3)  (cost=*** rows=***)
     -> Table scan on s2  (cost=*** rows=***)
         -> Materialize  (cost=*** rows=***)
-            -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-                -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
-                    -> Table scan on student  (cost=*** rows=***)
+            -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
+                -> Table scan on student  (cost=*** rows=***)
 
 select  * from (select * from student connect by prior id = grade) a where id = 2;
 id	name	grade
@@ -1349,24 +1356,21 @@ explain format=tree select  * from (select * from student connect by prior id = 
 EXPLAIN
 -> Index lookup on a using <auto_key0> (id=2)  (cost=*** rows=***)
     -> Materialize  (cost=*** rows=***)
-        -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-            -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
-                -> Table scan on student  (cost=*** rows=***)
+        -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
+            -> Table scan on student  (cost=*** rows=***)
 
 explain format=tree select  * from (select * from student where id > 1) a  connect by prior id = grade;
 EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
-    -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
-        -> Filter: (student.id > 1)  (cost=*** rows=***)
-            -> Table scan on student  (cost=*** rows=***)
+-> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
+    -> Filter: (student.id > 1)  (cost=*** rows=***)
+        -> Table scan on student  (cost=*** rows=***)
 
 explain format=tree select * from (select * from (select id, grade from student) t connect by prior id = grade) t2 where id =2;
 EXPLAIN
 -> Index lookup on t2 using <auto_key0> (id=2)  (cost=*** rows=***)
     -> Materialize  (cost=*** rows=***)
-        -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-            -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
-                -> Table scan on student  (cost=*** rows=***)
+        -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
+            -> Table scan on student  (cost=*** rows=***)
 
 drop table student;
 CREATE TABLE student (
@@ -1416,25 +1420,23 @@ id	grade	name
 4	2	test4
 explain format=tree select s1.id , s1.grade, t2.name  from s1,t2 where s1.id = t2.grade connect by prior s1.id = s1.grade;
 EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
-    -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
-        -> Inner hash join (t2.grade = s1.id)  (cost=*** rows=***)
-            -> Table scan on t2  (cost=*** rows=***)
-            -> Hash
-                -> Table scan on s1  (cost=*** rows=***)
+-> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
+    -> Inner hash join (t2.grade = s1.id)  (cost=*** rows=***)
+        -> Table scan on t2  (cost=*** rows=***)
+        -> Hash
+            -> Table scan on s1  (cost=*** rows=***)
 
 select s1.id , s1.grade, t2.name  from s1 join t2 on s1.id = t2.grade and s1.id > 3  connect by prior s1.id = s1.grade;
 id	grade	name
 4	2	test4
 explain format=tree select s1.id , s1.grade, t2.name  from s1 join t2 on s1.id = t2.grade and s1.id > 3  connect by prior s1.id = s1.grade;
 EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
-    -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
-        -> Inner hash join (t2.grade = s1.id)  (cost=*** rows=***)
-            -> Table scan on t2  (cost=*** rows=***)
-            -> Hash
-                -> Filter: (s1.id > 3)  (cost=*** rows=***)
-                    -> Table scan on s1  (cost=*** rows=***)
+-> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
+    -> Inner hash join (t2.grade = s1.id)  (cost=*** rows=***)
+        -> Table scan on t2  (cost=*** rows=***)
+        -> Hash
+            -> Filter: (s1.id > 3)  (cost=*** rows=***)
+                -> Table scan on s1  (cost=*** rows=***)
 
 create index idx1 on s1(id);
 select s1.id , s1.grade, t2.name  from s1,t2 where s1.id = t2.grade connect by prior s1.id = s1.grade;
@@ -1449,21 +1451,19 @@ id	grade	name
 4	2	test4
 explain format=tree select s1.id , s1.grade, t2.name  from s1,t2 where s1.id = t2.grade connect by prior s1.id = s1.grade;
 EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
-    -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
-        -> Nested loop inner join  (cost=*** rows=***)
-            -> Filter: (t2.grade is not null)  (cost=*** rows=***)
-                -> Table scan on t2  (cost=*** rows=***)
-            -> Index lookup on s1 using idx1 (id=t2.grade)  (cost=*** rows=***)
+-> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
+    -> Nested loop inner join  (cost=*** rows=***)
+        -> Filter: (t2.grade is not null)  (cost=*** rows=***)
+            -> Table scan on t2  (cost=*** rows=***)
+        -> Index lookup on s1 using idx1 (id=t2.grade)  (cost=*** rows=***)
 
 explain format=tree select s1.id , s1.grade, t2.name  from s1 join t2 on s1.id = t2.grade connect by prior s1.id = s1.grade;
 EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
-    -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
-        -> Nested loop inner join  (cost=*** rows=***)
-            -> Filter: (t2.grade is not null)  (cost=*** rows=***)
-                -> Table scan on t2  (cost=*** rows=***)
-            -> Index lookup on s1 using idx1 (id=t2.grade)  (cost=*** rows=***)
+-> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
+    -> Nested loop inner join  (cost=*** rows=***)
+        -> Filter: (t2.grade is not null)  (cost=*** rows=***)
+            -> Table scan on t2  (cost=*** rows=***)
+        -> Index lookup on s1 using idx1 (id=t2.grade)  (cost=*** rows=***)
 
 select s1.id , s1.grade, t2.name  from s1,t2 where s1.id = t2.grade and s1.id > 3  connect by prior s1.id = s1.grade;
 id	grade	name
@@ -1473,24 +1473,22 @@ id	grade	name
 explain format=tree select s1.id , s1.grade, t2.name  from s1,t2 where s1.id = t2.grade and s1.id > 3  connect by prior s1.id = s1.grade;
 EXPLAIN
 -> Filter: (s1.id > 3)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
-            -> Nested loop inner join  (cost=*** rows=***)
-                -> Filter: (t2.grade is not null)  (cost=*** rows=***)
-                    -> Table scan on t2  (cost=*** rows=***)
-                -> Index lookup on s1 using idx1 (id=t2.grade)  (cost=*** rows=***)
+    -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
+        -> Nested loop inner join  (cost=*** rows=***)
+            -> Filter: (t2.grade is not null)  (cost=*** rows=***)
+                -> Table scan on t2  (cost=*** rows=***)
+            -> Index lookup on s1 using idx1 (id=t2.grade)  (cost=*** rows=***)
 
 select s1.id , s1.grade, t2.name  from s1 join t2 on s1.id = t2.grade and s1.id > 3  connect by prior s1.id = s1.grade;
 id	grade	name
 4	2	test4
 explain format=tree select s1.id , s1.grade, t2.name  from s1 join t2 on s1.id = t2.grade and s1.id > 3  connect by prior s1.id = s1.grade;
 EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
-    -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
-        -> Inner hash join (t2.grade = s1.id)  (cost=*** rows=***)
-            -> Table scan on t2  (cost=*** rows=***)
-            -> Hash
-                -> Index range scan on s1 using idx1 over (3 < id), with index condition: (s1.id > 3)  (cost=*** rows=***)
+-> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
+    -> Inner hash join (t2.grade = s1.id)  (cost=*** rows=***)
+        -> Table scan on t2  (cost=*** rows=***)
+        -> Hash
+            -> Index range scan on s1 using idx1 over (3 < id), with index condition: (s1.id > 3)  (cost=*** rows=***)
 
 SELECT *, connect_by_isleaf , connect_by_iscycle ,level   FROM  student CONNECT BY nocycle 1=1;
 ERROR HY000: connect by loop in user data
@@ -1498,9 +1496,8 @@ explain format=tree select * from (select * from s1 connect by prior id = grade)
 EXPLAIN
 -> Table scan on s1  (cost=*** rows=***)
     -> Materialize  (cost=*** rows=***)
-        -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-            -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
-                -> Table scan on s1  (cost=*** rows=***)
+        -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior s1.id) (reverse)  (cost=*** rows=***)
+            -> Table scan on s1  (cost=*** rows=***)
 
 select id  from student connect by prior id = grade group by id ;
 id
@@ -1512,7 +1509,7 @@ explain format=tree select id  from student connect by prior id = grade group by
 EXPLAIN
 -> Group (no aggregates)
     -> Sort: student.id
-        -> Table scan on <connect_by_temp>  (cost=*** rows=***)
+        -> Stream results  (cost=*** rows=***)
             -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
                 -> Table scan on student  (cost=*** rows=***)
 
@@ -1534,24 +1531,21 @@ explain format=tree select  * from (select * from student connect by prior id = 
 EXPLAIN
 -> Index lookup on a using <auto_key0> (id=2)  (cost=*** rows=***)
     -> Materialize  (cost=*** rows=***)
-        -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-            -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
-                -> Table scan on student  (cost=*** rows=***)
+        -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
+            -> Table scan on student  (cost=*** rows=***)
 
 explain format=tree select  * from (select * from student where id > 1) a  connect by prior id = grade;
 EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
-    -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
-        -> Filter: (student.id > 1)  (cost=*** rows=***)
-            -> Index range scan on student using PRIMARY over (1 < id)  (cost=*** rows=***)
+-> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
+    -> Filter: (student.id > 1)  (cost=*** rows=***)
+        -> Index range scan on student using PRIMARY over (1 < id)  (cost=*** rows=***)
 
 explain format=tree select * from (select * from (select id, grade from student) t connect by prior id = grade) t2 where id =2;
 EXPLAIN
 -> Index lookup on t2 using <auto_key0> (id=2)  (cost=*** rows=***)
     -> Materialize  (cost=*** rows=***)
-        -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-            -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
-                -> Table scan on student  (cost=*** rows=***)
+        -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (grade=prior student.id) (reverse)  (cost=*** rows=***)
+            -> Table scan on student  (cost=*** rows=***)
 
 drop table student,t2,s1;
 CREATE TABLE tb_ct2
@@ -1593,30 +1587,26 @@ id	pid	sys_connect_by_path(id, '->')
 explain format=tree select * from t1 where level < 2 connect by nocycle pid = prior id start with id = 2;
 EXPLAIN
 -> Filter: (level < 2)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(nocycle)Index lookup on <connect_by_cache> using <auto_key1> (pid=prior t1.id) (reverse) start with: (t1.id = 2)  (cost=*** rows=***)
-            -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(nocycle)Index lookup on <connect_by_cache> using <auto_key1> (pid=prior t1.id) (reverse) start with: (t1.id = 2)  (cost=*** rows=***)
+        -> Table scan on t1  (cost=*** rows=***)
 
 explain format=tree select * from t1 where connect_by_iscycle < 2 connect by nocycle pid = prior id start with id = 2;
 EXPLAIN
 -> Filter: (connect_by_iscycle < 2)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(nocycle)Index lookup on <connect_by_cache> using <auto_key1> (pid=prior t1.id) (reverse) start with: (t1.id = 2)  (cost=*** rows=***)
-            -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(nocycle)Index lookup on <connect_by_cache> using <auto_key1> (pid=prior t1.id) (reverse) start with: (t1.id = 2)  (cost=*** rows=***)
+        -> Table scan on t1  (cost=*** rows=***)
 
 explain format=tree select * from t1 where connect_by_isleaf != 0 connect by nocycle pid = prior id start with id = 2;
 EXPLAIN
 -> Filter: (connect_by_isleaf <> 0)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(nocycle)Index lookup on <connect_by_cache> using <auto_key1> (pid=prior t1.id) (reverse) start with: (t1.id = 2)  (cost=*** rows=***)
-            -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(nocycle)Index lookup on <connect_by_cache> using <auto_key1> (pid=prior t1.id) (reverse) start with: (t1.id = 2)  (cost=*** rows=***)
+        -> Table scan on t1  (cost=*** rows=***)
 
 explain format=tree select * from t1 where level < id connect by nocycle pid = prior id start with id = 2;
 EXPLAIN
 -> Filter: (level < t1.id)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(nocycle)Index lookup on <connect_by_cache> using <auto_key1> (pid=prior t1.id) (reverse) start with: (t1.id = 2)  (cost=*** rows=***)
-            -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(nocycle)Index lookup on <connect_by_cache> using <auto_key1> (pid=prior t1.id) (reverse) start with: (t1.id = 2)  (cost=*** rows=***)
+        -> Table scan on t1  (cost=*** rows=***)
 
 drop table t1;
 create table t1(c1 int primary key,c2 int);
@@ -1807,9 +1797,8 @@ explain format=tree select a from  (select 2 a from dual connect by level <=3) t
 EXPLAIN
 -> Table scan on t1  (cost=*** rows=***)
     -> Materialize  (cost=*** rows=***)
-        -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-            -> connect by scan:(level <= 3)  (cost=*** rows=***)
-                -> Rows fetched before execution  (cost=*** rows=***)
+        -> connect by scan:(level <= 3)  (cost=*** rows=***)
+            -> Rows fetched before execution  (cost=*** rows=***)
 
 explain format=json select a from  (select 2 a from dual connect by level <=3) t1 ;
 EXPLAIN
@@ -1865,9 +1854,8 @@ EXPLAIN
 -> Window aggregate with buffering: sum(a) OVER () 
     -> Table scan on t1  (cost=*** rows=***)
         -> Materialize  (cost=*** rows=***)
-            -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-                -> connect by scan:(level <= 3)  (cost=*** rows=***)
-                    -> Rows fetched before execution  (cost=*** rows=***)
+            -> connect by scan:(level <= 3)  (cost=*** rows=***)
+                -> Rows fetched before execution  (cost=*** rows=***)
 
 explain format=json select sum(a) over() from  (select 2 a from dual connect by level <=3) t1;
 EXPLAIN
@@ -1935,9 +1923,8 @@ Note	1003	/* select#1 */ select ratio_to_report(6) OVER ()  AS "ratio_to_report(
 explain format=tree select ratio_to_report(6) over() from dual connect by level<=5;
 EXPLAIN
 -> Window aggregate with buffering: ratio_to_report(6) OVER () 
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level <= 5)  (cost=*** rows=***)
-            -> Rows fetched before execution  (cost=*** rows=***)
+    -> connect by scan:(level <= 5)  (cost=*** rows=***)
+        -> Rows fetched before execution  (cost=*** rows=***)
 
 explain format=json select ratio_to_report(6) over() from dual connect by level<=5;
 EXPLAIN
@@ -2081,15 +2068,13 @@ id	pid
 5	2
 explain format=tree select id,pid from tbl_test connect by prior pid = id and prior id= pid;
 EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
-    -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (id=prior tbl_test.PID, pid=prior tbl_test.ID) (reverse)  (cost=*** rows=***)
-        -> Table scan on tbl_test  (cost=*** rows=***)
+-> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (id=prior tbl_test.PID, pid=prior tbl_test.ID) (reverse)  (cost=*** rows=***)
+    -> Table scan on tbl_test  (cost=*** rows=***)
 
 explain format=tree select pid,id from tbl_test connect by prior pid = id and prior id= pid;
 EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
-    -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (pid=prior tbl_test.ID, id=prior tbl_test.PID) (reverse)  (cost=*** rows=***)
-        -> Table scan on tbl_test  (cost=*** rows=***)
+-> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (pid=prior tbl_test.ID, id=prior tbl_test.PID) (reverse)  (cost=*** rows=***)
+    -> Table scan on tbl_test  (cost=*** rows=***)
 
 drop table tbl_test;
 create table t1(c1 int, c2 varchar2(10)) ;
@@ -2202,6 +2187,14 @@ rownum *id +1	id	name
 25	4	Sarah
 22	3	Nancy
 33	4	Sarah
+select rownum *id +1 ,id, name from student start with rownum < 3 connect by nocycle prior id = grade;
+rownum *id +1	id	name
+2	1	John
+5	2	Paul
+13	4	Sarah
+13	3	Nancy
+11	2	Paul
+25	4	Sarah
 drop table student;
 set timestamp =1;
 SELECT sysdate - (to_number(to_char(sysdate - 1, 'd')) - 1) - (rownum - 1) * 7 AS startDate , sysdate + (7 - to_number(to_char(sysdate - 1, 'd'))) - (rownum - 1) * 7 AS endDate , level FROM dual CONNECT BY level <= 5;
@@ -2225,7 +2218,7 @@ level
 8
 select level,rownum from dual where rownum < 3 and level=2 connect by level<=10;
 level	rownum
-2	2
+2	1
 set sql_mode=default;
 CREATE TABLE student (
 id       INT,
@@ -2477,47 +2470,43 @@ explain format=tree
 select * from c1 join c2 on (c2.id <> c1.id)+sysdate or c1.id <> 1 where (c2.id <> c1.id)+sysdate  or c1.id <> 1 connect by level < 2;
 EXPLAIN
 -> Filter: ((0 <> ((c2.id <> c1.id) + sysdate())) or (c1.id <> 1))  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 2)  (cost=*** rows=***)
-            -> Filter: ((0 <> ((c2.id <> c1.id) + sysdate())) or (c1.id <> 1))  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on c2  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on c1  (cost=*** rows=***)
+    -> connect by scan:(level < 2)  (cost=*** rows=***)
+        -> Filter: ((0 <> ((c2.id <> c1.id) + sysdate())) or (c1.id <> 1))  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on c2  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on c1  (cost=*** rows=***)
 
 explain format=tree 
 select * from c1 join c2 on (c2.id <> c1.id) or c1.id <> 1 where (c2.id <> c1.id)+sysdate  or c1.id <> 1 connect by level < 2;
 EXPLAIN
 -> Filter: ((0 <> ((c2.id <> c1.id) + sysdate())) or (c1.id <> 1))  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 2)  (cost=*** rows=***)
-            -> Filter: ((c2.id <> c1.id) or (c1.id <> 1))  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on c2  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on c1  (cost=*** rows=***)
+    -> connect by scan:(level < 2)  (cost=*** rows=***)
+        -> Filter: ((c2.id <> c1.id) or (c1.id <> 1))  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on c2  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on c1  (cost=*** rows=***)
 
 explain format=tree 
 select * from c1 join c2 on (c2.id <> c1.id)+sysdate or c1.id <> 1 where (c2.id <> c1.id)  or c1.id <> 1 connect by level < 2;
 EXPLAIN
 -> Filter: ((c2.id <> c1.id) or (c1.id <> 1))  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 2)  (cost=*** rows=***)
-            -> Filter: ((0 <> ((c2.id <> c1.id) + sysdate())) or (c1.id <> 1))  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on c2  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on c1  (cost=*** rows=***)
+    -> connect by scan:(level < 2)  (cost=*** rows=***)
+        -> Filter: ((0 <> ((c2.id <> c1.id) + sysdate())) or (c1.id <> 1))  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on c2  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on c1  (cost=*** rows=***)
 
 explain format=tree select * from c1 join c2 on (c2.id = c1.id ) where c2.sid = c1.sid connect by level < 2;
 EXPLAIN
 -> Filter: (c2.sid = c1.sid)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 2)  (cost=*** rows=***)
-            -> Inner hash join (c2.id = c1.id)  (cost=*** rows=***)
-                -> Table scan on c2  (cost=*** rows=***)
-                -> Hash
-                    -> Table scan on c1  (cost=*** rows=***)
+    -> connect by scan:(level < 2)  (cost=*** rows=***)
+        -> Inner hash join (c2.id = c1.id)  (cost=*** rows=***)
+            -> Table scan on c2  (cost=*** rows=***)
+            -> Hash
+                -> Table scan on c1  (cost=*** rows=***)
 
 SELECT * FROM c2, c1 INNER JOIN c3 ON (c1.id =c3.id ) WHERE c2.id= c3.id AND c1.sid = c2.sid CONNECT BY LEVEL < 2;
 id	sid	id	sid	id	sid
@@ -2526,15 +2515,14 @@ id	sid	id	sid	id	sid
 3	4	3	4	3	4
 explain format=tree SELECT * FROM c2, c1 INNER JOIN c3 ON (c1.id =c3.id ) WHERE c2.id= c3.id AND c1.sid = c2.sid CONNECT BY LEVEL < 2;
 EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
-    -> connect by scan:(level < 2)  (cost=*** rows=***)
-        -> Inner hash join (c3.id = c2.id)  (cost=*** rows=***)
-            -> Table scan on c3  (cost=*** rows=***)
-            -> Hash
-                -> Inner hash join (c1.sid = c2.sid), (c1.id = c2.id)  (cost=*** rows=***)
-                    -> Table scan on c1  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on c2  (cost=*** rows=***)
+-> connect by scan:(level < 2)  (cost=*** rows=***)
+    -> Inner hash join (c3.id = c2.id)  (cost=*** rows=***)
+        -> Table scan on c3  (cost=*** rows=***)
+        -> Hash
+            -> Inner hash join (c1.sid = c2.sid), (c1.id = c2.id)  (cost=*** rows=***)
+                -> Table scan on c1  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on c2  (cost=*** rows=***)
 
 SELECT * FROM c2, c1 INNER JOIN c3 ON (c1.id =c3.id ) WHERE c2.id= c3.id AND c1.sid = c2.sid AND c1.id <> 1 CONNECT BY LEVEL < 2;
 id	sid	id	sid	id	sid
@@ -2544,81 +2532,76 @@ explain format=tree
 SELECT * FROM c2, c1 INNER JOIN c3 ON (c1.id =c3.id ) WHERE c2.id= c3.id AND c1.sid = c2.sid AND c1.id <> 1 CONNECT BY LEVEL < 2;
 EXPLAIN
 -> Filter: (c1.id <> 1)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 2)  (cost=*** rows=***)
-            -> Inner hash join (c3.id = c2.id)  (cost=*** rows=***)
-                -> Table scan on c3  (cost=*** rows=***)
-                -> Hash
-                    -> Inner hash join (c1.sid = c2.sid), (c1.id = c2.id)  (cost=*** rows=***)
-                        -> Table scan on c1  (cost=*** rows=***)
-                        -> Hash
-                            -> Table scan on c2  (cost=*** rows=***)
+    -> connect by scan:(level < 2)  (cost=*** rows=***)
+        -> Inner hash join (c3.id = c2.id)  (cost=*** rows=***)
+            -> Table scan on c3  (cost=*** rows=***)
+            -> Hash
+                -> Inner hash join (c1.sid = c2.sid), (c1.id = c2.id)  (cost=*** rows=***)
+                    -> Table scan on c1  (cost=*** rows=***)
+                    -> Hash
+                        -> Table scan on c2  (cost=*** rows=***)
 
 explain format=tree
 select * from  c4,c1 inner join c2 ON  c1.id = c2.id   JOIN c3 ON c1.id = c2.id    where c3.sid = c4.sid    CONNECT BY LEVEL < 2 ;
 EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
-    -> connect by scan:(level < 2)  (cost=*** rows=***)
-        -> Inner hash join (c2.id = c1.id)  (cost=*** rows=***)
-            -> Table scan on c2  (cost=*** rows=***)
-            -> Hash
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on c1  (cost=*** rows=***)
-                    -> Hash
-                        -> Inner hash join (c3.sid = c4.sid)  (cost=*** rows=***)
-                            -> Table scan on c3  (cost=*** rows=***)
-                            -> Hash
-                                -> Table scan on c4  (cost=*** rows=***)
+-> connect by scan:(level < 2)  (cost=*** rows=***)
+    -> Inner hash join (c2.id = c1.id)  (cost=*** rows=***)
+        -> Table scan on c2  (cost=*** rows=***)
+        -> Hash
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on c1  (cost=*** rows=***)
+                -> Hash
+                    -> Inner hash join (c3.sid = c4.sid)  (cost=*** rows=***)
+                        -> Table scan on c3  (cost=*** rows=***)
+                        -> Hash
+                            -> Table scan on c4  (cost=*** rows=***)
 
 explain format=tree
 select * from c1 inner join c2 ON  c1.id = c2.id   JOIN c3 ON c1.id = c2.id   where c3.sid = c1.sid    CONNECT BY LEVEL < 2 ;
 EXPLAIN
 -> Filter: (c3.sid = c1.sid)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 2)  (cost=*** rows=***)
-            -> Inner hash join (no condition)  (cost=*** rows=***)
-                -> Table scan on c3  (cost=*** rows=***)
-                -> Hash
-                    -> Inner hash join (c2.id = c1.id)  (cost=*** rows=***)
-                        -> Table scan on c2  (cost=*** rows=***)
-                        -> Hash
-                            -> Table scan on c1  (cost=*** rows=***)
+    -> connect by scan:(level < 2)  (cost=*** rows=***)
+        -> Inner hash join (no condition)  (cost=*** rows=***)
+            -> Table scan on c3  (cost=*** rows=***)
+            -> Hash
+                -> Inner hash join (c2.id = c1.id)  (cost=*** rows=***)
+                    -> Table scan on c2  (cost=*** rows=***)
+                    -> Hash
+                        -> Table scan on c1  (cost=*** rows=***)
 
 explain format=tree
 select * from c4,c1 inner join (c2, c3) on c1.id = c2.id  where  c3.sid = c1.sid connect by level < 2 ;
 EXPLAIN
 -> Filter: (c3.sid = c1.sid)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 2)  (cost=*** rows=***)
-            -> Inner hash join (no condition)  (cost=*** rows=***)
-                -> Table scan on c3  (cost=*** rows=***)
-                -> Hash
-                    -> Inner hash join (c2.id = c1.id)  (cost=*** rows=***)
-                        -> Table scan on c2  (cost=*** rows=***)
-                        -> Hash
-                            -> Inner hash join (no condition)  (cost=*** rows=***)
-                                -> Table scan on c1  (cost=*** rows=***)
-                                -> Hash
-                                    -> Table scan on c4  (cost=*** rows=***)
+    -> connect by scan:(level < 2)  (cost=*** rows=***)
+        -> Inner hash join (no condition)  (cost=*** rows=***)
+            -> Table scan on c3  (cost=*** rows=***)
+            -> Hash
+                -> Inner hash join (c2.id = c1.id)  (cost=*** rows=***)
+                    -> Table scan on c2  (cost=*** rows=***)
+                    -> Hash
+                        -> Inner hash join (no condition)  (cost=*** rows=***)
+                            -> Table scan on c1  (cost=*** rows=***)
+                            -> Hash
+                                -> Table scan on c4  (cost=*** rows=***)
 
 explain format=tree 
 select * from c4,c1 inner join ((select 1 as a,2 as b) cc ,c3,c2)  on c1.id = c2.id  where  
 c3.sid = c1.sid and cc.a <> c1.id and c4.id = cc.b  connect by level < 2;
 EXPLAIN
 -> Filter: ((c3.sid = c1.sid) and ('1' <> c1.id))  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 2)  (cost=*** rows=***)
-            -> Inner hash join (no condition)  (cost=*** rows=***)
-                -> Table scan on c3  (cost=*** rows=***)
-                -> Hash
-                    -> Inner hash join (c2.id = c1.id)  (cost=*** rows=***)
-                        -> Table scan on c2  (cost=*** rows=***)
-                        -> Hash
-                            -> Inner hash join (no condition)  (cost=*** rows=***)
-                                -> Table scan on c1  (cost=*** rows=***)
-                                -> Hash
-                                    -> Filter: (c4.id = '2')  (cost=*** rows=***)
-                                        -> Table scan on c4  (cost=*** rows=***)
+    -> connect by scan:(level < 2)  (cost=*** rows=***)
+        -> Inner hash join (no condition)  (cost=*** rows=***)
+            -> Table scan on c3  (cost=*** rows=***)
+            -> Hash
+                -> Inner hash join (c2.id = c1.id)  (cost=*** rows=***)
+                    -> Table scan on c2  (cost=*** rows=***)
+                    -> Hash
+                        -> Inner hash join (no condition)  (cost=*** rows=***)
+                            -> Table scan on c1  (cost=*** rows=***)
+                            -> Hash
+                                -> Filter: (c4.id = '2')  (cost=*** rows=***)
+                                    -> Table scan on c4  (cost=*** rows=***)
 
 drop table c1;
 drop table c2;
@@ -2651,9 +2634,8 @@ ida	age	name
 explain format=tree select * from t1 where t1.name IN (select name from t3) connect by level<3;
 EXPLAIN
 -> Filter: <in_optimizer>(t1.`name`,<exists>(select #2))  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Table scan on t1  (cost=*** rows=***)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (cost=*** rows=***)
             -> Filter: (<cache>(t1.`name`) = t3.`name`)  (cost=*** rows=***)
@@ -2662,9 +2644,8 @@ EXPLAIN
 explain format=tree select * from t1 where t1.name NOT IN (select name from t3) connect by level<3;
 EXPLAIN
 -> Filter: <in_optimizer>(t1.`name`,<exists>(select #2) is false)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Table scan on t1  (cost=*** rows=***)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (cost=*** rows=***)
             -> Filter: <if>(outer_field_is_not_null, <is_not_null_test>(t3.`name`), true)  (cost=*** rows=***)
@@ -2684,9 +2665,8 @@ NULL	2	a
 explain format=tree select * from t1 aa where EXISTS (select name from t3 b WHERE aa.name=b.name) connect by level<3;
 EXPLAIN
 -> Filter: exists(select #2)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Table scan on aa  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Table scan on aa  (cost=*** rows=***)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (cost=*** rows=***)
             -> Filter: (aa.`name` = b.`name`)  (cost=*** rows=***)
@@ -2703,9 +2683,8 @@ ida	age	name
 explain format=tree select * from t1 aa where EXISTS (select name from t3 b WHERE aa.name=b.name) connect by level<3;
 EXPLAIN
 -> Filter: exists(select #2)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Table scan on aa  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Table scan on aa  (cost=*** rows=***)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (cost=*** rows=***)
             -> Filter: (aa.`name` = b.`name`)  (cost=*** rows=***)
@@ -2790,9 +2769,8 @@ EXPLAIN
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (cost=*** rows=***)
             -> Filter: (t2.ida = t1.ida)  (cost=*** rows=***)
-                -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-                    -> connect by scan:(level <= 3)  (cost=*** rows=***)
-                        -> Table scan on t2  (cost=*** rows=***)
+                -> connect by scan:(level <= 3)  (cost=*** rows=***)
+                    -> Table scan on t2  (cost=*** rows=***)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.ida' of SELECT #2 was resolved in SELECT #1
@@ -2804,9 +2782,8 @@ EXPLAIN
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (cost=*** rows=***)
             -> Filter: (t2.ida = t1.ida)  (cost=*** rows=***)
-                -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-                    -> connect by scan:(level <= 3)  (cost=*** rows=***)
-                        -> Table scan on t2  (cost=*** rows=***)
+                -> connect by scan:(level <= 3)  (cost=*** rows=***)
+                    -> Table scan on t2  (cost=*** rows=***)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.ida' of SELECT #2 was resolved in SELECT #1
@@ -2814,15 +2791,13 @@ explain format=tree
 SELECT name FROM t1 WHERE EXISTS (SELECT ida FROM t3 WHERE t3.ida = t1.ida CONNECT BY LEVEL <=3) CONNECT BY LEVEL<3;
 EXPLAIN
 -> Filter: exists(select #2)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Table scan on t1  (cost=*** rows=***)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (cost=*** rows=***)
             -> Filter: (t3.ida = t1.ida)  (cost=*** rows=***)
-                -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-                    -> connect by scan:(level <= 3)  (cost=*** rows=***)
-                        -> Table scan on t3  (cost=*** rows=***)
+                -> connect by scan:(level <= 3)  (cost=*** rows=***)
+                    -> Table scan on t3  (cost=*** rows=***)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.ida' of SELECT #2 was resolved in SELECT #1
@@ -2831,9 +2806,8 @@ SELECT count(*) FROM t1 WHERE ida IN (SELECT ida FROM t2 WHERE t2.ida=t1.ida) CO
 EXPLAIN
 -> Aggregate: count(0)  (cost=*** rows=***)
     -> Filter: <in_optimizer>(t1.ida,<exists>(select #2))  (cost=*** rows=***)
-        -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-            -> connect by scan:(level < 3)  (cost=*** rows=***)
-                -> Table scan on t1  (cost=*** rows=***)
+        -> connect by scan:(level < 3)  (cost=*** rows=***)
+            -> Table scan on t1  (cost=*** rows=***)
         -> Select #2 (subquery in condition; dependent)
             -> Limit: 1 row(s)  (cost=*** rows=***)
                 -> Filter: ((t2.ida = t1.ida) and (<cache>(t1.ida) = t2.ida))  (cost=*** rows=***)
@@ -2851,7 +2825,10 @@ INSERT INTO student VALUES(2, 'Paul', 1);
 INSERT INTO student VALUES(3, 'Nancy', 1);
 INSERT INTO student VALUES(4, 'Sarah', 3);
 SELECT * FROM t1 WHERE EXISTS (SELECT id FROM student t  CONNECT BY t.id = t1.ida  ) CONNECT BY LEVEL< 2;
-ERROR HY000: Recursive query aborted after 1000 iterations. Try increasing @@cte_max_recursion_depth to a larger value.
+ida	age	name
+1	2	K
+5	2	a
+3	2	b
 SELECT * FROM t1 WHERE EXISTS (SELECT id FROM student t  CONNECT BY nocycle  prior t.id = t1.ida  ) CONNECT BY LEVEL< 3;
 ida	age	name
 1	2	K
@@ -2989,47 +2966,43 @@ explain format=tree
 select * from t1,t3  WHERE t1.IDA in (t3.ida, 1 )  connect by level<3;
 EXPLAIN
 -> Filter: (t1.ida = 1)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Inner hash join (t3.ida = t1.ida)  (cost=*** rows=***)
-                -> Table scan on t3  (cost=*** rows=***)
-                -> Hash
-                    -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Inner hash join (t3.ida = t1.ida)  (cost=*** rows=***)
+            -> Table scan on t3  (cost=*** rows=***)
+            -> Hash
+                -> Table scan on t1  (cost=*** rows=***)
 
 explain format=tree 
 select * from t1,t3  WHERE 1 in (t3.ida, t1.ida , 3)  connect by level<3;
 EXPLAIN
 -> Filter: (1 in (t3.ida,t1.ida,3))  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Inner hash join (no condition)  (cost=*** rows=***)
+            -> Table scan on t3  (cost=*** rows=***)
+            -> Hash
+                -> Table scan on t1  (cost=*** rows=***)
+
+explain format=tree 
+select * from t1,t3  WHERE t1.IDA NOT in (t3.ida, t3.age ,1 )  connect by level<3;
+EXPLAIN
+-> Filter: (t1.ida <> 1)  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Filter: (t1.ida not in (t3.ida,t3.age))  (cost=*** rows=***)
             -> Inner hash join (no condition)  (cost=*** rows=***)
                 -> Table scan on t3  (cost=*** rows=***)
                 -> Hash
                     -> Table scan on t1  (cost=*** rows=***)
 
 explain format=tree 
-select * from t1,t3  WHERE t1.IDA NOT in (t3.ida, t3.age ,1 )  connect by level<3;
-EXPLAIN
--> Filter: (t1.ida <> 1)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida not in (t3.ida,t3.age))  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
-
-explain format=tree 
 select * from t1,t3  WHERE t1.IDA NOT in (t3.ida ,1 , 2)  connect by level<3;
 EXPLAIN
 -> Filter: (t1.ida not in (1,2))  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida <> t3.ida)  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Filter: (t1.ida <> t3.ida)  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on t3  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on t1  (cost=*** rows=***)
 
 select * from t1,t3  WHERE t1.IDA in (t3.ida, t3.age ,(select ida from t2 limit 1))  connect by level <3;
 ida	age	name	ida	age	name
@@ -3042,13 +3015,12 @@ explain format=tree
 select * from t1,t3  WHERE t1.IDA in (t3.ida, t3.age ,(select ida from t2 limit 1))  connect by level <3;
 EXPLAIN
 -> Filter: (t1.ida = (select #2))  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida in (t3.ida,t3.age))  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Filter: (t1.ida in (t3.ida,t3.age))  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on t3  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on t1  (cost=*** rows=***)
     -> Select #2 (subquery in condition; run only once)
         -> Limit: 1 row(s)  (cost=*** rows=***)
             -> Table scan on t2  (cost=*** rows=***)
@@ -3059,12 +3031,11 @@ explain format=tree
 select * from t1,t3  WHERE t1.age in (t3.ida, t1.ida )  connect by level<3;
 EXPLAIN
 -> Filter: (t1.age = t1.ida)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Inner hash join (t3.ida = t1.age)  (cost=*** rows=***)
-                -> Table scan on t3  (cost=*** rows=***)
-                -> Hash
-                    -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Inner hash join (t3.ida = t1.age)  (cost=*** rows=***)
+            -> Table scan on t3  (cost=*** rows=***)
+            -> Hash
+                -> Table scan on t1  (cost=*** rows=***)
 
 select * from t1,t3  WHERE 1 in (t3.ida, t1.ida , 3)  connect by level<3;
 ida	age	name	ida	age	name
@@ -3122,62 +3093,58 @@ explain format=tree
 select * from t1,t3  WHERE 1 in (t3.ida, t1.ida , 3)  connect by level<3;
 EXPLAIN
 -> Filter: (1 in (t3.ida,t1.ida,3))  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Inner hash join (no condition)  (cost=*** rows=***)
+            -> Table scan on t3  (cost=*** rows=***)
+            -> Hash
+                -> Table scan on t1  (cost=*** rows=***)
+
+select * from t1,t3  WHERE t1.IDA < any (t3.ida ,1 )  connect by level<3;
+ida	age	name	ida	age	name
+select * from t1,t3  WHERE t1.IDA < any (t3.ida ,1 , 2)  connect by level<3;
+ida	age	name	ida	age	name
+1	2	K	2	3	a
+1	2	K	2	3	a
+1	2	K	5	5	K
+1	2	K	2	3	a
+1	2	K	5	5	K
+1	2	K	5	5	K
+1	2	K	2	3	a
+1	2	K	5	5	K
+select * from t1,t3  WHERE t1.IDA < any (t3.ida, t3.age ,1 )  connect by level<3;
+ida	age	name	ida	age	name
+explain format=tree
+select * from t1,t3  WHERE t1.IDA < any (t3.ida ,1 )  connect by level<3;
+EXPLAIN
+-> Filter: (t1.ida < 1)  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Filter: (t1.ida < t3.ida)  (cost=*** rows=***)
             -> Inner hash join (no condition)  (cost=*** rows=***)
                 -> Table scan on t3  (cost=*** rows=***)
                 -> Hash
                     -> Table scan on t1  (cost=*** rows=***)
 
-select * from t1,t3  WHERE t1.IDA < any (t3.ida ,1 )  connect by level<3;
-ida	age	name	ida	age	name
-select * from t1,t3  WHERE t1.IDA < any (t3.ida ,1 , 2)  connect by level<3;
-ida	age	name	ida	age	name
-1	2	K	2	3	a
-1	2	K	2	3	a
-1	2	K	5	5	K
-1	2	K	2	3	a
-1	2	K	5	5	K
-1	2	K	5	5	K
-1	2	K	2	3	a
-1	2	K	5	5	K
-select * from t1,t3  WHERE t1.IDA < any (t3.ida, t3.age ,1 )  connect by level<3;
-ida	age	name	ida	age	name
-explain format=tree
-select * from t1,t3  WHERE t1.IDA < any (t3.ida ,1 )  connect by level<3;
-EXPLAIN
--> Filter: (t1.ida < 1)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida < t3.ida)  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
-
 explain format=tree
 select * from t1,t3  WHERE t1.IDA < any (t3.ida ,1 , 2)  connect by level<3;
 EXPLAIN
 -> Filter: (t1.ida < greatest(1,2))  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida < t3.ida)  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Filter: (t1.ida < t3.ida)  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on t3  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on t1  (cost=*** rows=***)
 
 explain format=tree
 select * from t1,t3  WHERE t1.IDA < any (t3.ida, t3.age ,1 )  connect by level<3;
 EXPLAIN
 -> Filter: (t1.ida < 1)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida < greatest(t3.ida,t3.age))  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Filter: (t1.ida < greatest(t3.ida,t3.age))  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on t3  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on t1  (cost=*** rows=***)
 
 select * from t1,t3  WHERE t1.IDA > any (t3.ida ,1 )  connect by level<3;
 ida	age	name	ida	age	name
@@ -3566,71 +3533,65 @@ explain format=tree
 select * from t1,t3  WHERE t1.IDA >= any (t1.age ,t1.ida)  connect by level<3;
 EXPLAIN
 -> Filter: (t1.ida >= least(t1.age,t1.ida))  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Inner hash join (no condition)  (cost=*** rows=***)
-                -> Table scan on t3  (cost=*** rows=***)
-                -> Hash
-                    -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Inner hash join (no condition)  (cost=*** rows=***)
+            -> Table scan on t3  (cost=*** rows=***)
+            -> Hash
+                -> Table scan on t1  (cost=*** rows=***)
 
 explain format=tree
 select * from t1,t3  WHERE t1.IDA >= any (t1.age ,t3.ida,t3.age )  connect by level<3;
 EXPLAIN
 -> Filter: (t1.ida >= t1.age)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida >= least(t3.ida,t3.age))  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Filter: (t1.ida >= least(t3.ida,t3.age))  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on t3  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on t1  (cost=*** rows=***)
 
 explain format=tree
 select * from t1,t3  WHERE t1.IDA > any (t3.ida ,1 )  connect by level<3;
 EXPLAIN
 -> Filter: (t1.ida > 1)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida > t3.ida)  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Filter: (t1.ida > t3.ida)  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on t3  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on t1  (cost=*** rows=***)
 
 explain format=tree
 select * from t1,t3  WHERE t1.IDA > any (t3.ida ,1,2 )  connect by level<3;
 EXPLAIN
 -> Filter: (t1.ida > least(1,2))  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida > t3.ida)  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Filter: (t1.ida > t3.ida)  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on t3  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on t1  (cost=*** rows=***)
 
 explain format=tree
 select * from t1,t3  WHERE t1.IDA > any (t3.ida ,1, t3.age )  connect by level<3;
 EXPLAIN
 -> Filter: (t1.ida > 1)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida > least(t3.ida,t3.age))  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
-
-explain format=tree
-select * from t1,t3  WHERE 1 < any (t3.ida ,1, t1.ida )  connect by level<3;
-EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
     -> connect by scan:(level < 3)  (cost=*** rows=***)
-        -> Filter: (1 < greatest(t3.ida,1,t1.ida))  (cost=*** rows=***)
+        -> Filter: (t1.ida > least(t3.ida,t3.age))  (cost=*** rows=***)
             -> Inner hash join (no condition)  (cost=*** rows=***)
                 -> Table scan on t3  (cost=*** rows=***)
                 -> Hash
                     -> Table scan on t1  (cost=*** rows=***)
+
+explain format=tree
+select * from t1,t3  WHERE 1 < any (t3.ida ,1, t1.ida )  connect by level<3;
+EXPLAIN
+-> connect by scan:(level < 3)  (cost=*** rows=***)
+    -> Filter: (1 < greatest(t3.ida,1,t1.ida))  (cost=*** rows=***)
+        -> Inner hash join (no condition)  (cost=*** rows=***)
+            -> Table scan on t3  (cost=*** rows=***)
+            -> Hash
+                -> Table scan on t1  (cost=*** rows=***)
 
 select * from t1,t3  WHERE t1.IDA = any (t3.ida, t3.age ,1 )  connect by level<3;
 ida	age	name	ida	age	name
@@ -3643,13 +3604,12 @@ explain format=tree
 select * from t1,t3  WHERE t1.IDA = any (t3.ida, t3.age ,1 )  connect by level<3;
 EXPLAIN
 -> Filter: (t1.ida = 1)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida in (t3.ida,t3.age))  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Filter: (t1.ida in (t3.ida,t3.age))  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on t3  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on t1  (cost=*** rows=***)
 
 select * from t1,t3  WHERE t1.IDA between t3.ida  and 10   connect by level<3;
 ida	age	name	ida	age	name
@@ -3699,13 +3659,12 @@ explain format=tree
 select * from t1,t3  WHERE t1.IDA between t3.ida  and 10   connect by level<3;
 EXPLAIN
 -> Filter: (t1.ida <= 10)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida >= t3.ida)  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Filter: (t1.ida >= t3.ida)  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on t3  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on t1  (cost=*** rows=***)
 
 select * from t1,t3  WHERE t1.IDA not between t3.ida  and 10   connect by level<3;
 ida	age	name	ida	age	name
@@ -3713,28 +3672,452 @@ explain format=tree
 select * from t1,t3  WHERE t1.IDA not between t3.ida  and 10   connect by level<3;
 EXPLAIN
 -> Filter: (t1.ida > 10)  (cost=*** rows=***)
-    -> Table scan on <connect_by_temp>  (cost=*** rows=***)
-        -> connect by scan:(level < 3)  (cost=*** rows=***)
-            -> Filter: (t1.ida < t3.ida)  (cost=*** rows=***)
-                -> Inner hash join (no condition)  (cost=*** rows=***)
-                    -> Table scan on t3  (cost=*** rows=***)
-                    -> Hash
-                        -> Table scan on t1  (cost=*** rows=***)
+    -> connect by scan:(level < 3)  (cost=*** rows=***)
+        -> Filter: (t1.ida < t3.ida)  (cost=*** rows=***)
+            -> Inner hash join (no condition)  (cost=*** rows=***)
+                -> Table scan on t3  (cost=*** rows=***)
+                -> Hash
+                    -> Table scan on t1  (cost=*** rows=***)
 
 select * from t1,t3  WHERE 10 between t1.ida  and t3.ida   connect by level<3;
 ida	age	name	ida	age	name
 explain format=tree
 select * from t1,t3  WHERE 10 between t1.ida  and t3.ida   connect by level<3;
 EXPLAIN
--> Table scan on <connect_by_temp>  (cost=*** rows=***)
-    -> connect by scan:(level < 3)  (cost=*** rows=***)
-        -> Filter: (10 between t1.ida and t3.ida)  (cost=*** rows=***)
-            -> Inner hash join (no condition)  (cost=*** rows=***)
-                -> Table scan on t3  (cost=*** rows=***)
-                -> Hash
-                    -> Table scan on t1  (cost=*** rows=***)
+-> connect by scan:(level < 3)  (cost=*** rows=***)
+    -> Filter: (10 between t1.ida and t3.ida)  (cost=*** rows=***)
+        -> Inner hash join (no condition)  (cost=*** rows=***)
+            -> Table scan on t3  (cost=*** rows=***)
+            -> Hash
+                -> Table scan on t1  (cost=*** rows=***)
 
 drop table student;
 drop table t1;
 drop table t2;
 drop table t3;
+create table  emp  
+(	 empno  int, 
+ename  varchar2(10), 
+job  varchar2(9), 
+mgr  number(4,0), 
+hiredate varchar2(50),
+sal  number(7,2), 
+comm  number(7,2), 
+deptno  number(2,0)
+)  partition by hash(empno) partitions 15 ;
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7369,'smith','clerk',7902,'2017-12-08',800,null,20);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7499,'allen','salesman',7698,'2020-02-08',1600,300,30);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7521,'ward','salesman',7698,'2022-02-08',1250,500,30);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7566,'jones','manager',7839,'2002-10-01',2975,null,20);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7654,'martin','salesman',7698,'2001-02-09',1250,1400,30);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7698,'blake','manager',7839,'2023-03-08',2850,null,30);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7782,'clark','manager',7839,'2021-01-18',2450,null,10);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7788,'SCOTT','analyst',7566,'2019-06-07',3000,null,20);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7839,'KING','president',null,'2019-07-07',5000,null,10);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7844,'turner','salesman',7698,'2021-04-17',1500,0,30);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7876,'adams','clerk',7788,'2022-01-01',1100,null,20);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7900,'james','clerk',7698,'2018-01-08',950,null,30);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7902,'ford','analyst',7566,'2017-02-08',3000,null,20);
+insert into emp (empno,ename,job,mgr,hiredate,sal,comm,deptno) values (7934,'miller','clerk',7782,'2016-02-08',1300,null,10);
+select empno from emp where mgr in (select mgr from emp connect by prior empno=mgr start with empno=7839);
+empno
+7876
+7698
+7788
+7369
+7654
+7521
+7566
+7900
+7782
+7902
+7499
+7844
+7934
+explain format=tree
+select empno from emp where mgr in (select mgr from emp connect by prior empno=mgr start with empno=7839);
+EXPLAIN
+-> Filter: <in_optimizer>(emp.mgr,emp.mgr in (select #2))  (cost=*** rows=***)
+    -> Table scan on emp  (cost=*** rows=***)
+    -> Select #2 (subquery in condition; run only once)
+        -> Filter: ((emp.mgr = `<materialized_subquery>`.mgr))  (cost=*** rows=***)
+            -> Limit: 1 row(s)  (cost=*** rows=***)
+                -> Index lookup on <materialized_subquery> using <auto_distinct_key> (mgr=emp.mgr)
+                    -> Materialize with deduplication  (cost=*** rows=***)
+                        -> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (mgr=prior emp.empno) (reverse) start with: (emp.empno = 7839)  (cost=*** rows=***)
+                            -> Table scan on emp  (cost=*** rows=***)
+
+select empno,mgr from emp b where mgr in (select mgr from emp connect by nocycle prior empno=b.mgr start with empno=7839);
+empno	mgr
+7698	7839
+7566	7839
+7782	7839
+explain format=tree
+select empno,mgr from emp b where mgr in (select mgr from emp connect by nocycle prior empno=b.mgr start with empno=7839);
+EXPLAIN
+-> Filter: <in_optimizer>(b.mgr,<exists>(select #2))  (cost=*** rows=***)
+    -> Table scan on b  (cost=*** rows=***)
+    -> Select #2 (subquery in condition; dependent)
+        -> Limit: 1 row(s)  (cost=*** rows=***)
+            -> Filter: (<cache>(b.mgr) = emp.mgr)  (cost=*** rows=***)
+                -> connect by scan:(nocycle)(prior emp.empno = b.mgr) start with: (emp.empno = 7839)  (cost=*** rows=***)
+                    -> Table scan on emp  (cost=*** rows=***)
+
+Warnings:
+Note	1276	Field or reference 'test.b.mgr' of SELECT #2 was resolved in SELECT #1
+select empno,mgr from emp b where mgr in (select mgr from emp connect by nocycle prior  b.mgr = empno start with empno=7839);
+empno	mgr
+explain format=tree
+select empno,mgr from emp b where mgr in (select mgr from emp connect by nocycle prior  b.mgr = empno start with empno=7839);
+EXPLAIN
+-> Filter: <in_optimizer>(b.mgr,<exists>(select #2))  (cost=*** rows=***)
+    -> Table scan on b  (cost=*** rows=***)
+    -> Select #2 (subquery in condition; dependent)
+        -> Limit: 1 row(s)  (cost=*** rows=***)
+            -> Filter: (<cache>(b.mgr) = emp.mgr)  (cost=*** rows=***)
+                -> connect by scan:(nocycle)Index lookup on <connect_by_cache> using <auto_key1> (empno=prior b.mgr) (reverse) start with: (emp.empno = 7839)  (cost=*** rows=***)
+                    -> Table scan on emp  (cost=*** rows=***)
+
+Warnings:
+Note	1276	Field or reference 'test.b.mgr' of SELECT #2 was resolved in SELECT #1
+drop table emp;
+CREATE TABLE sales ( department VARCHAR2(50), product VARCHAR2(50), amount NUMBER );
+INSERT INTO sales VALUES ('A', 'Product1', 100);
+INSERT INTO sales VALUES ('A', 'Product2', 200);
+INSERT INTO sales VALUES ('A', 'Product3', 300);
+INSERT INTO sales VALUES ('B', 'Product1', 150);
+INSERT INTO sales VALUES ('B', 'Product2', 250);
+INSERT INTO sales VALUES ('B', 'Product3', 350);
+select * FROM  sales  connect by level <3 and rownum =3;
+department	product	amount
+A	Product1	100.000000000000000000000000000000
+A	Product2	200.000000000000000000000000000000
+A	Product1	100.000000000000000000000000000000
+A	Product3	300.000000000000000000000000000000
+B	Product1	150.000000000000000000000000000000
+B	Product2	250.000000000000000000000000000000
+B	Product3	350.000000000000000000000000000000
+explain format=tree
+select * FROM  sales  connect by level <3 and rownum =3;
+EXPLAIN
+-> COUNTER ROWNUM
+    -> connect by scan:((level < 3) and (rownum = 3))  (cost=*** rows=***)
+        -> Table scan on sales  (cost=*** rows=***)
+
+drop table sales;
+SELECT row_number() over() rn, level connect by level<10;
+rn	level
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+SELECT row_number() over(order by level) rn, level connect by level<10;
+rn	level
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+SELECT row_number() over(order by level) rn, level connect by level<10 group by level;
+rn	level
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+SELECT row_number() over() rn, level connect by level<10 group by level;
+rn	level
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+SELECT sum(level) over() rn, level connect by level<10;
+rn	level
+45	1
+45	2
+45	3
+45	4
+45	5
+45	6
+45	7
+45	8
+45	9
+SELECT sum(level) over(order by level) rn, level connect by level<10;
+rn	level
+1	1
+3	2
+6	3
+10	4
+15	5
+21	6
+28	7
+36	8
+45	9
+SELECT sum(level) over(order by level) rn, level connect by level<10 group by level;
+rn	level
+1	1
+3	2
+6	3
+10	4
+15	5
+21	6
+28	7
+36	8
+45	9
+SELECT sum(level) over() rn, level connect by level<10 group by level;
+rn	level
+45	1
+45	2
+45	3
+45	4
+45	5
+45	6
+45	7
+45	8
+45	9
+SELECT sum(level) over() rn, row_number() over(), level connect by level<10;
+rn	row_number() over()	level
+45	1	1
+45	2	2
+45	3	3
+45	4	4
+45	5	5
+45	6	6
+45	7	7
+45	8	8
+45	9	9
+SELECT sum(level) over() rn, row_number() over(order by level), level connect by level<10;
+rn	row_number() over(order by level)	level
+45	1	1
+45	2	2
+45	3	3
+45	4	4
+45	5	5
+45	6	6
+45	7	7
+45	8	8
+45	9	9
+SELECT sum(level) over(order by level) rn, row_number() over(), level connect by level<10;
+rn	row_number() over()	level
+1	1	1
+3	2	2
+6	3	3
+10	4	4
+15	5	5
+21	6	6
+28	7	7
+36	8	8
+45	9	9
+SELECT sum(level) over(order by level) rn, row_number() over(order by level), level connect by level<10;
+rn	row_number() over(order by level)	level
+1	1	1
+3	2	2
+6	3	3
+10	4	4
+15	5	5
+21	6	6
+28	7	7
+36	8	8
+45	9	9
+SELECT sum(level) over(order by level) rn,row_number() over(), level connect by level<10 group by level;
+rn	row_number() over()	level
+1	1	1
+3	2	2
+6	3	3
+10	4	4
+15	5	5
+21	6	6
+28	7	7
+36	8	8
+45	9	9
+SELECT sum(level) over(order by level) rn,row_number() over(order by level), level connect by level<10 group by level;
+rn	row_number() over(order by level)	level
+1	1	1
+3	2	2
+6	3	3
+10	4	4
+15	5	5
+21	6	6
+28	7	7
+36	8	8
+45	9	9
+SELECT sum(level) over() rn, row_number() over(),  level connect by level<10 group by level;
+rn	row_number() over()	level
+45	1	1
+45	2	2
+45	3	3
+45	4	4
+45	5	5
+45	6	6
+45	7	7
+45	8	8
+45	9	9
+SELECT sum(level) over() rn, row_number() over(order by level),  level connect by level<10 group by level;
+rn	row_number() over(order by level)	level
+45	1	1
+45	2	2
+45	3	3
+45	4	4
+45	5	5
+45	6	6
+45	7	7
+45	8	8
+45	9	9
+select rownum from dual connect by level <= 10 group by rownum;
+rownum
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+select level from dual connect by level <= 10 group by level;
+level
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+select level from dual connect by level <= 10 group by rownum;
+level
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+select rownum from dual connect by level <= 10 group by level;
+rownum
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+create table t1(c1 int primary key, c2 int, key(c2));
+create table t2(c1 int, c2 int, key(c1));
+select * from t1 
+connect by prior t1.c1 = t1.c2
+start with t1.c1 in (select c2 from t2 where c1=0);
+c1	c2
+explain format=tree 
+select * from t1 
+connect by prior t1.c1 = t1.c2
+start with t1.c1 in (select c2 from t2 where c1=0);
+EXPLAIN
+-> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (c2=prior t1.c1) (reverse) start with: <in_optimizer>(t1.c1,<exists>(select #2))  (cost=*** rows=***)
+    -> Index scan on t1 using c2  (cost=*** rows=***)
+    -> Select #2 (subquery in start_with; dependent)
+        -> Limit: 1 row(s)  (cost=*** rows=***)
+            -> Filter: <is_not_null_test>(t2.c2)  (cost=*** rows=***)
+                -> Filter: ((<cache>(t1.c1) = t2.c2) or (t2.c2 is null))  (cost=*** rows=***)
+                    -> Index lookup on t2 using c1 (c1=0)  (cost=*** rows=***)
+
+explain analyze
+select * from t1
+connect by prior t1.c1 = t1.c2
+start with t1.c1 in (select c2 from t2 where c1=0);
+EXPLAIN
+-> connect by scan:Index lookup on <connect_by_cache> using <auto_key1> (c2=prior t1.c1) (reverse) start with: <in_optimizer>(t1.c1,<exists>(select #2))  (cost=*** rows=***) (actual time=N.NNN..N.NNN rows=*** loops=1)
+    -> Covering index scan on t1 using c2  (cost=*** rows=***) (actual time=N.NNN..N.NNN rows=*** loops=1)
+    -> Select #2 (subquery in start_with; dependent)
+        -> Limit: 1 row(s)  (cost=*** rows=***) (never executed)
+            -> Filter: <is_not_null_test>(t2.c2)  (cost=*** rows=***) (never executed)
+                -> Filter: ((<cache>(t1.c1) = t2.c2) or (t2.c2 is null))  (cost=*** rows=***) (never executed)
+                    -> Index lookup on t2 using c1 (c1=0)  (cost=*** rows=***) (never executed)
+
+explain analyze
+select 1 from  dual connect by level < 10;
+EXPLAIN
+-> connect by scan:(level < 10)  (cost=*** rows=***) (actual time=N.NNN..N.NNN rows=*** loops=1)
+    -> Rows fetched before execution  (cost=*** rows=***) (actual time=N.NNN..N.NNN rows=*** loops=10)
+
+SET profiling = 1;
+Warnings:
+Warning	1287	'@@profiling' is deprecated and will be removed in a future release.
+select * from t1
+connect by prior t1.c1 = t1.c2
+start with t1.c1 in (select c2 from t2 where c1=0);
+c1	c2
+SHOW PROFILES;
+Query_ID	Duration	Query
+1	###	SHOW WARNINGS
+2	###	select * from t1
+connect by prior t1.c1 = t1.c2
+start with t1.c1 in (select c2 from t2 where c1=0)
+Warnings:
+Warning	###	'SHOW PROFILES' is deprecated and will be removed in a future release. Please use Performance Schema instead
+SHOW PROFILE;
+Status	Duration
+starting	###
+query end	###
+closing tables	###
+freeing items	###
+cleaning up	###
+Warnings:
+Warning	###	'SHOW PROFILE' is deprecated and will be removed in a future release. Please use Performance Schema instead
+SHOW PROFILE FOR QUERY 2;
+Status	Duration
+starting	###
+Executing hook on transaction 	###
+starting	###
+checking permissions	###
+checking permissions	###
+Opening tables	###
+init	###
+System lock	###
+optimizing	###
+statistics	###
+preparing	###
+optimizing	###
+statistics	###
+preparing	###
+executing	###
+end	###
+query end	###
+waiting for handler commit	###
+closing tables	###
+freeing items	###
+cleaning up	###
+Warnings:
+Warning	###	'SHOW PROFILE' is deprecated and will be removed in a future release. Please use Performance Schema instead
+SET profiling = 0;
+Warnings:
+Warning	1287	'@@profiling' is deprecated and will be removed in a future release.
+drop table t1;
+drop table t2;

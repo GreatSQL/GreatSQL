@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2004, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -119,8 +119,8 @@ bool get_table_for_trigger(THD *thd, const LEX_CSTRING &db_name,
                    ER_THD(thd, ER_TRG_DOES_NOT_EXIST));
       return false;
     }
-
-    my_error(ER_TRG_DOES_NOT_EXIST, MYF(0));
+    if (!thd->lex->is_sp_create_or_replace())
+      my_error(ER_TRG_DOES_NOT_EXIST, MYF(0));
     return true;
   }
 
@@ -347,6 +347,38 @@ void Sql_cmd_ddl_trigger_common::restore_original_mdl_state(
     mdl_ticket->downgrade_lock(MDL_SHARED_NO_READ_WRITE);
 }
 
+bool Sql_cmd_ddl_trigger_common::drop_trigger_before_create(THD *thd) {
+  if (check_readonly(thd, true)) return true;
+  LEX_CSTRING trg_db = thd->lex->spname->m_db;
+  LEX_STRING trg_name = thd->lex->spname->m_name;
+
+  Table_ref *found_trigger_table = nullptr;
+  if (get_table_for_trigger(thd, trg_db, trg_name, false, &found_trigger_table))
+    return false;
+
+  if (my_strcasecmp(table_alias_charset, found_trigger_table->table_name,
+                    m_trigger_table->table_name)) {
+    // trigger has been exists on another table
+    my_error(ER_CREATE_OR_REPLACE_TRG_EXISTS_ON_DIFFERENT_TABLE, MYF(0),
+             trg_db.str, trg_name.str);
+    return true;
+  }
+
+  dd::Table *dd_table = nullptr;
+  if (thd->dd_client()->acquire_for_modification(
+          found_trigger_table->db, found_trigger_table->table_name, &dd_table))
+    return true;
+  assert(dd_table != nullptr);
+
+  const dd::Trigger *dd_trig_obj = dd_table->get_trigger(trg_name.str);
+  if (dd_trig_obj == nullptr) return false;
+
+  dd_table->drop_trigger(dd_trig_obj);
+  bool result = thd->dd_client()->update(dd_table);
+
+  return result;
+}
+
 /**
   Execute CREATE TRIGGER statement.
 
@@ -369,6 +401,8 @@ void Sql_cmd_ddl_trigger_common::restore_original_mdl_state(
 
 bool Sql_cmd_create_trigger::execute(THD *thd) {
   DBUG_TRACE;
+
+  bool is_create_or_replace_mode = thd->lex->is_sp_create_or_replace();
 
   if (!thd->lex->spname->m_db.length || !m_trigger_table->db_length) {
     my_error(ER_NO_DB_ERROR, MYF(0));
@@ -458,6 +492,10 @@ bool Sql_cmd_create_trigger::execute(THD *thd) {
 
   DEBUG_SYNC(thd, "create_trigger_has_acquired_mdl");
 
+  if (is_create_or_replace_mode && drop_trigger_before_create(thd)) {
+    restore_original_mdl_state(thd, mdl_ticket);
+    return true;
+  }
   if (table->triggers == nullptr &&
       (table->triggers = Table_trigger_dispatcher::create(table)) == nullptr) {
     restore_original_mdl_state(thd, mdl_ticket);

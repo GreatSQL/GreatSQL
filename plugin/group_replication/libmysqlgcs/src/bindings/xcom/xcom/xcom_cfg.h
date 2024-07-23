@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -29,6 +29,9 @@
 #include "xcom/network/include/network_provider.h"
 #include "xdr_gen/xcom_vp.h"
 
+#define DEFAULT_EXPEL_TIMEOUT 5
+#define MAX_IP_PORT_LEN 64
+
 typedef struct cfg_app_xcom {
   /*
    The number of spin loops the XCom thread does before
@@ -43,6 +46,7 @@ typedef struct cfg_app_xcom {
 
   uint64_t m_flp_timeout;
 
+  char ip_port[MAX_IP_PORT_LEN];
   /*
    The (address, incarnation) pair that uniquely identifies this XCom instance.
   */

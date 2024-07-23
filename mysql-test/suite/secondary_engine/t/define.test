@@ -1,5 +1,7 @@
 # Tests for the SECONDARY_ENGINE table option.
 
+SET @@use_secondary_engine = ON;
+
 --echo #
 --echo # Attempt to load table into an undefined secondary engine.
 --echo #

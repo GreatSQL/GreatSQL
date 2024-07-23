@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, GreatDB Software Co., Ltd. All rights reserved.
+/* Copyright (c) 2023, 2024, GreatDB Software Co., Ltd. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -145,18 +145,19 @@ bool param_Init(THD *thd, Connect_by_param *param) {
   if (param->cache && init(thd, param->cache.get())) return true;
   if (param->stack && init(thd, param->stack.get())) return true;
   if (param->history && init(thd, param->history.get())) return true;
-  if (param->start_rownum_it) {
-    param->start_rownum_it->reset_value();
-  }
+
   return false;
 }
 
 TempStore *CreateTempTab(THD *thd, const char *alias, Query_block *query_block,
-                         uint ref_item_slice_size,
+                         Item **slice, uint ref_item_slice_size,
                          mem_root_deque<Item *> *fields,
                          Temp_table_param &tmp_table_param,
                          longlong opt_connect_by) {
-  auto temp = new (thd->mem_root) TempStore(thd, ref_item_slice_size);
+  if (slice == nullptr) {
+    slice = thd->mem_root->ArrayAlloc<Item *>(ref_item_slice_size);
+  }
+  auto temp = new (thd->mem_root) TempStore(thd, slice, ref_item_slice_size);
   if (temp == nullptr) return nullptr;
 
   temp->param =
@@ -166,9 +167,8 @@ TempStore *CreateTempTab(THD *thd, const char *alias, Query_block *query_block,
   temp->param->allow_connect_by_tmp_table = opt_connect_by;
 
   temp->param->skip_create_table = true;
-  temp->tab =
-      create_tmp_table(thd, temp->param, *fields, nullptr, false, false,
-                       query_block->active_options(), HA_POS_ERROR, alias);
+  temp->tab = create_tmp_table(thd, temp->param, *fields, nullptr, false, false,
+                               0, HA_POS_ERROR, alias);
   if (temp->tab == nullptr) return nullptr;
   if (change_to_use_tmp_fields_except_sums_or_connect_by(
           fields, thd, query_block, temp->ref_items, &temp->fields,
@@ -274,7 +274,7 @@ bool create_index_for_cond(THD *thd, mem_root_deque<Item *> *idx_list,
   return false;
 }
 
-bool SetupConnectByTmp(THD *thd, JOIN *join, uint qep_tab_n,
+bool SetupConnectByTmp(THD *thd, JOIN *join,
                        mem_root_deque<Item *> *curr_fields,
                        Temp_table_param &tmp_table_param) {
   mem_root_deque<Item *> cond_by_idx_list(thd->mem_root);
@@ -284,81 +284,76 @@ bool SetupConnectByTmp(THD *thd, JOIN *join, uint qep_tab_n,
   List<Item> rownum_filter_cond;
 
   mem_root_deque<Item_func_prior *> cond_cits(thd->mem_root);
-
-  Item_func_rownum *start_rownum_it{nullptr};
-
-  if (join->start_with_cond)
-    if (join->start_with_cond->has_rownum_expr()) {
-      Item *new_item = join->start_with_cond->transform(
-          &Item::replace_rownum_func, pointer_cast<uchar *>(&start_rownum_it));
-      if (!new_item) return true;
-      if (new_item != join->start_with_cond) {
-        join->start_with_cond = new_item;
-      }
-    }
-
   // only get by conect by cond use for check uniq history
   join->connect_by_cond->walk(&Item::collect_connect_by_item_processor,
-                              enum_walk::POSTFIX, (uchar *)(&cond_cits));
+                              enum_walk::PREFIX, (uchar *)(&cond_cits));
 
   if (connect_by_cond_lookup_ref(thd, join->connect_by_cond, &cond_by_idx_list,
                                  &connect_func_cond, &filter_cond,
                                  &rownum_filter_cond, &filter_cond2))
     return true;
-
-  QEP_TAB *tab = &join->qep_tab[qep_tab_n];
   auto connect_by_param = new (thd->mem_root)
       Connect_by_param(thd, join->start_with_cond, join->connect_by_cond,
                        join->query_block->connect_by_nocycle);
   if (connect_by_param == nullptr) return true;
-  if (start_rownum_it) {
-    connect_by_param->start_rownum_it = start_rownum_it;
+
+  for (Item *field : *curr_fields) {
+    if (field->has_connect_by_func()) {
+      WalkItem(field, enum_walk::PREFIX, [connect_by_param](Item *it) {
+        if (it->type() == Item::CONNECT_BY_FUNC_ITEM) {
+          auto cit = down_cast<Item_connect_by_func *>(it);
+          switch (cit->ConnectBy_func()) {
+            case Item_connect_by_func::LEVEL_FUNC: {
+              auto l = down_cast<Item_connect_by_func_level *>(cit);
+              l->store_ptr(&connect_by_param->currLevel);
+            } break;
+            case Item_connect_by_func::ISCYCLE_FUNC: {
+              auto cycle_func = down_cast<Item_connect_by_func_iscycle *>(cit);
+              cycle_func->store_ptr(&connect_by_param->isCycle);
+            } break;
+            case Item_connect_by_func::ISLEAF_FUNC: {
+              auto isleaf_func = down_cast<Item_connect_by_func_isleaf *>(cit);
+              isleaf_func->store_ptr(&connect_by_param->isLeaf);
+            } break;
+            default:
+              break;
+          }
+
+          connect_by_param->connect_by_func_list.insert(cit);
+          return true;
+        }
+        return false;
+      });
+    }
   }
 
   Item_connect_by_func_level *level_it = nullptr;
-  for (Item *it : *curr_fields) {
-    if (it->has_connect_by_func()) {
-      if (it->type() == Item::CONNECT_BY_FUNC_ITEM) {
-        auto cit = dynamic_cast<Item_connect_by_func *>(it);
-        if (!cit) return true;
-        if (!level_it &&
-            cit->ConnectBy_func() == Item_connect_by_func::LEVEL_FUNC) {
-          level_it = dynamic_cast<Item_connect_by_func_level *>(cit);
-        }
-        switch (cit->ConnectBy_func()) {
-          case Item_connect_by_func::ISLEAF_FUNC:
-            connect_by_param->func_leaf_list.push_back(cit);
-            break;
-          case Item_connect_by_func::ISCYCLE_FUNC:
-            /* code */
-            connect_by_param->func_cycle_list.push_back(cit);
-            break;
-          default:
-            connect_by_param->connect_by_func_list.push_back(cit);
-            break;
-        }
-      } else {
-        it->walk(&Item::collect_connect_by_leaf_cycle_or_ref_processor,
-                 enum_walk::POSTFIX, (uchar *)connect_by_param);
-      }
+
+  for (auto cit : connect_by_param->connect_by_func_list) {
+    if (cit->ConnectBy_func() == Item_connect_by_func::LEVEL_FUNC) {
+      level_it = down_cast<Item_connect_by_func_level *>(cit);
+      break;
     }
   }
   if (!level_it) {
     assert(level_it);
+    my_error(ER_INDEX_CORRUPT, MYF(0), "<connect_by_stack>.level");
     return true;
   }
-  connect_by_param->level_it = level_it;
+
   auto query_block = join->query_block;
-  auto ref_item_size = join->ref_items[0].size();
+  auto ref_slice = join->current_ref_item_slice;
+  auto ref_item_size = join->ref_items[ref_slice].size();
   // copy all result into start with if start with is empty
 
-  auto result_table = CreateTempTab(
-      thd, "<connect_by_cache>", query_block, ref_item_size, curr_fields,
-      tmp_table_param, (EXCEPT_CONNECT_BY_FUNC | EXCEPT_RAND_FUNC));
-  if (!result_table) return true;
-  if (result_table->tab->connect_by_field)
-    if (create_index_for_table(result_table->tab->connect_by_field,
-                               result_table->tab))
+  auto cache_table =
+      CreateTempTab(thd, "<connect_by_cache>", query_block, nullptr,
+                    ref_item_size, curr_fields, tmp_table_param,
+                    (EXCEPT_CONNECT_BY_FUNC | EXCEPT_RAND_FUNC));
+  if (!cache_table) return true;
+  if (cache_table->tab->connect_by_field)
+    if (create_index_for_table(cache_table->tab->connect_by_field,
+                               cache_table->tab))
       return true;
 
   // create index
@@ -366,7 +361,7 @@ bool SetupConnectByTmp(THD *thd, JOIN *join, uint qep_tab_n,
     Index_lookup *ref = new (thd->mem_root) Index_lookup;
 
     if (!create_index_for_cond(thd, &cond_by_idx_list, &connect_func_cond,
-                               result_table->tab, join->const_table_map, ref)) {
+                               cache_table->tab, join->const_table_map, ref)) {
       if (thd->is_error()) return true;
       connect_by_param->ref = ref;
       connect_by_param->connect_by_cond = CreateConjunction(&filter_cond);
@@ -374,28 +369,40 @@ bool SetupConnectByTmp(THD *thd, JOIN *join, uint qep_tab_n,
       filter_cond.concat(&filter_cond2);
       connect_by_param->connect_by_cond = CreateConjunction(&filter_cond);
     }
-  }
-  //
-  if (!rownum_filter_cond.is_empty()) {
-    connect_by_param->connect_by_rownum_it =
-        CreateConjunction(&rownum_filter_cond);
+    if (!rownum_filter_cond.is_empty()) {
+      connect_by_param->connect_by_rownum_it =
+          CreateConjunction(&rownum_filter_cond);
+    }
+
+  } else {
+    if (!rownum_filter_cond.is_empty()) {
+      connect_by_param->connect_by_cond = CreateConjunction(&filter_cond);
+      connect_by_param->connect_by_rownum_it =
+          CreateConjunction(&rownum_filter_cond);
+    }
   }
 
-  connect_by_param->cache.reset(result_table);
+  if (query_block->start_with_counter) {
+    connect_by_param->start_rownum_counter = query_block->start_with_counter;
+  }
 
-  join->copy_ref_item_slice(join->ref_items[REF_SLICE_ACTIVE],
-                            result_table->ref_items);
+  connect_by_param->cache.reset(cache_table);
+
+  join->copy_ref_item_slice(join->ref_items[ref_slice], cache_table->ref_items);
+
+  if (join->alloc_ref_item_slice(thd, REF_SLICE_CONNECT_BY_RES)) return true;
 
   auto stack =
-      CreateTempTab(thd, "<connect_by_stack>", query_block, ref_item_size,
-                    &result_table->fields, tmp_table_param,
+      CreateTempTab(thd, "<connect_by_stack>", query_block,
+                    join->ref_items[REF_SLICE_CONNECT_BY_RES].data(),
+                    ref_item_size, &cache_table->fields, tmp_table_param,
                     (EXCEPT_CONNECT_BY_VALUE | EXCEPT_RAND_FUNC));
   if (!stack) return true;
 
   auto level_it_field = level_it->get_result_field();
-  assert(level_it_field);
   if (!level_it_field) {
-    my_error(ER_INDEX_CORRUPT, MYF(0), "<connect_by_stack>");
+    assert(level_it_field);
+    my_error(ER_INDEX_CORRUPT, MYF(0), "<connect_by_stack>.level");
     return true;
   }
 
@@ -403,8 +410,8 @@ bool SetupConnectByTmp(THD *thd, JOIN *join, uint qep_tab_n,
 
   connect_by_param->stack.reset(stack);
 
-  join->copy_ref_item_slice(join->ref_items[REF_SLICE_ACTIVE],
-                            stack->ref_items);
+  join->set_ref_item_slice(REF_SLICE_CONNECT_BY_RES);
+
   // setup join to stack temp table
   for (auto it : connect_by_param->connect_by_func_list) {
     if (it->setup(thd)) return true;
@@ -426,232 +433,161 @@ bool SetupConnectByTmp(THD *thd, JOIN *join, uint qep_tab_n,
       connect_by_param->history->param->skip_create_table = true;
       connect_by_param->history->tab = create_tmp_table(
           thd, connect_by_param->history->param, history_fields, nullptr, true,
-          false, query_block->active_options(), HA_POS_ERROR,
-          "<conect_by_history>");
+          false, 0, HA_POS_ERROR, "<conect_by_history>");
       if (connect_by_param->history->tab == nullptr) return true;
     }
   }
 
-  tab->connect_by = connect_by_param;
-
-  curr_fields = &stack->fields;
-  // Need to set them now for correct group_fields setup, reset at the end.
-  {
-    tab->tmp_table_param =
-        new (thd->mem_root) Temp_table_param(thd->mem_root, tmp_table_param);
-    if (tab->tmp_table_param == nullptr) {
-      return true;
-    }
-    // tab->tmp_table_param ->precomputed_group_by = false;
-    tab->tmp_table_param->skip_create_table = true;
-    TABLE *res_table =
-        create_tmp_table(thd, tab->tmp_table_param, *curr_fields, nullptr,
-                         false, false, join->query_block->active_options(),
-                         HA_POS_ERROR, "<connect_by_result>");
-    if (res_table == nullptr) {
-      tab->set_table(nullptr);
-      return true;
-    }
-    join->tmp_table_param->using_outer_summary_function =
-        tab->tmp_table_param->using_outer_summary_function;
-    assert(tab->idx() > 0);
-    tab->set_table(res_table);
-  }
-  if (join->alloc_ref_item_slice(thd, REF_SLICE_CONNECT_BY_RES)) return true;
-  if (change_to_use_tmp_fields_except_sums(
-          curr_fields, thd, join->query_block,
-          join->ref_items[REF_SLICE_CONNECT_BY_RES],
-          &(join->tmp_fields[REF_SLICE_CONNECT_BY_RES]),
-          join->query_block->m_added_non_hidden_fields))
-    return true;
-  // repalce rownum
-  if (join->after_connect_by_cond && query_block->has_rownum_in_cond) {
-    Item *new_cond = join->after_connect_by_cond->transform(
-        &Item::replace_rownum_use_tmp_field, nullptr);
-    if (!new_cond) return true;
-    if (new_cond != join->after_connect_by_cond) {
-      join->after_connect_by_cond = new_cond;
-    }
-  }
+  join->connect_by_param = connect_by_param;
   return false;
 }
 
-template <typename Profiler>
-class ConnectbyIterator final : public TableRowIterator {
-  Temp_table_param *m_result_table_param;
-  unique_ptr_destroy_only<RowIterator> m_src_iter;
-  unique_ptr_destroy_only<RowIterator> m_table_iterator;
-  Connect_by_param *m_param;
+class ConnectbyIterator final : public RowIterator {
   JOIN *m_join;
-  int m_in_ref_slice;
-  int m_out_ref_slice;
+  unique_ptr_destroy_only<RowIterator> m_src_iter;
+  Connect_by_param *m_param;
+  uint m_in_ref_slice;
+  bool _init;
+
+  /**
+   *  Index key for level
+   *  level Field_longlong
+   */
+  uchar last_key[Field_longlong::PACK_LENGTH] = {0};
+  longlong last_level{0};
 
  public:
-  ConnectbyIterator(THD *thd, JOIN *join, TABLE *table,
-                    Temp_table_param *temp_table_param,
+  ConnectbyIterator(THD *thd, JOIN *join,
                     unique_ptr_destroy_only<RowIterator> source,
-                    unique_ptr_destroy_only<RowIterator> result,
-                    Connect_by_param *connect_by_param, int ref_slice)
-      : TableRowIterator(thd, table),
-        m_result_table_param(temp_table_param),
-        m_src_iter(move(source)),
-        m_table_iterator(move(result)),
-        m_param(connect_by_param),
+                    Connect_by_param *connect_by_param)
+      : RowIterator(thd),
         m_join(join),
+        m_src_iter(move(source)),
+        m_param(connect_by_param),
         m_in_ref_slice(0),
-        m_out_ref_slice(ref_slice) {}
+        _init(true) {}
 
-  bool Init() override;
-
-  int Read() override;
-
-  void SetNullRowFlag(bool is_null_row) override {
-    m_table_iterator->SetNullRowFlag(is_null_row);
-  }
-  void EndPSIBatchModeIfStarted() override {
-    m_table_iterator->EndPSIBatchModeIfStarted();
-    m_src_iter->EndPSIBatchModeIfStarted();
-  }
-
-  const IteratorProfiler *GetProfiler() const override {
-    assert(thd()->lex->is_explain_analyze);
-    return &m_profiler;
+  bool Init() override {
+    m_in_ref_slice = m_join->get_ref_item_slice();
+    if (param_Init(thd(), m_param)) return true;
+    m_param->currLevel = 1;
+    last_level = 1;
+    m_param->isCycle = 0;
+    m_param->isLeaf = 1;
+    _init = true;
+    return m_src_iter->Init();
   }
 
-  const Profiler *GetTableIterProfiler() const {
-    return &m_table_iter_profiler;
-  }
-
- private:
-  bool isleaf{true};
-  bool iscycle{false};
-  IteratorProfilerImpl::TimeStamp r_time;
-  IteratorProfilerImpl::TimeStamp read_stack_time;
-  IteratorProfilerImpl::TimeStamp cond_time;
-  ha_rows loop;
-
-  bool preorder_dfs() {
-    DBUG_EXECUTE_IF("connect_by_time",
-                    { r_time = IteratorProfilerImpl::Now(); });
+  int Read() override {
     ha_rows rows = 0;
-    ha_rows level = 1;
-    Item_func_rownum *ir = m_join->query_block->rownum_func;
+    bool rownum_incr = false;
 
-    if (get_result_by_scan(m_param->start_with_cond, m_param->start_rownum_it,
-                           rows))
-      return true;
-    if (rows == 0) return false;
+    if (_init) {
+      if (get_result_by_scan(false, m_param->start_with_cond, rows)) return 1;
+      if (rows == 0) {
+        return -1;  // EOF
+      }
 
-    for (auto it : m_param->connect_by_func_list) {
-      if (it->reset()) return true;
-    }
-#ifndef NDEBUG
-    auto old_rows = rows;
-#endif
-    rows = 0;
-    if (reverse_order_copy(true, rows)) return true;
-    assert(old_rows == rows);
+      for (auto it : m_param->connect_by_func_list) {
+        if (it->reset()) return true;
+      }
+      rows = 0;
+      if (reverse_order_copy(true, rows)) return 1;
+      assert(rows);
 
-    DBUG_EXECUTE_IF("connect_by_time", {
-      cond_time = read_stack_time = IteratorProfilerImpl::Now();
-      loop = 0;
-    });
-
-    if (m_param->ref) {
-      // copy all souce iter into temp result
-      if (get_result_by_scan(nullptr, nullptr, rows)) return true;
-      DBUG_PRINT("info", ("JOIN %p ref slice %u -> connect_by_result", m_join,
-                          m_in_ref_slice));
+      last_level = m_param->currLevel;
+      if (m_param->ref) {
+        // copy all souce iter into temp result
+        rows = 0;
+        if (get_result_by_scan(true, nullptr, rows)) return 1;
+      }
     }
 
-    if (!m_param->stack->ref_items.is_null()) {
-      m_join->copy_ref_item_slice(m_join->ref_items[REF_SLICE_ACTIVE],
-                                  m_param->stack->ref_items);
-      m_join->current_ref_item_slice = -1;
-    }
-
-    bool find_next = true;
-    bool stack_slice = false;
     for (;;) {
-      DBUG_EXECUTE_IF("connect_by_time", { loop++; });
-      if (read_stack_last(level)) return true;
-      if (level == 0) {
-        break;
+      if (!_init) {
+        if (delete_last_row()) return 1;
+      } else {
+        _init = false;
       }
 
-      if ((level + 1) > thd()->variables.cte_max_recursion_depth) {
-        my_error(ER_CTE_MAX_RECURSION_DEPTH, MYF(0), level);
-        return true;
+      m_join->set_ref_item_slice(REF_SLICE_CONNECT_BY_RES);
+
+      if (read_stack_last()) return 1;
+
+      if (last_level == 0) {  // EOF
+        return -1;
+      }
+      m_param->currLevel = last_level;
+
+      if (m_param->currLevel > thd()->variables.cte_max_recursion_depth) {
+        my_error(ER_CTE_MAX_RECURSION_DEPTH, MYF(0), --m_param->currLevel);
+        return 1;
       }
 
-      isleaf = true;
-      iscycle = false;
-
-      if (level == 1) {
+      if (m_param->currLevel == 1) {
         if (m_param->history) clear_data(m_param->history->tab);
       }
-      // read from stack
-      if (update_connect_by_func(level + 1)) return true;
 
+      // read from stack
+      if (update_connect_by_func(m_param->currLevel)) return 1;
+      rownum_incr = false;
       if (m_param->connect_by_rownum_it) {
-        if (m_param->connect_by_rownum_it->val_int()) {
-          find_next = true;
-        } else {
-          if (level != 1) {
-            if (delete_last_row()) return true;
-            ir->fallback_value();
-            ir->reset_read_flag();
-            find_next = false;
+        if (m_param->connect_by_rownum_it->val_int() == 0) {
+          // filiter by rownum  like connect by rownum = 3
+          if (m_param->currLevel != 1) {
             continue;
           } else {
-            find_next = false;
+            // force this record is leaf
+            rownum_incr = true;
           }
         }
       }
-      stack_slice = false;
-
-      if (find_next) {
-        if (m_param->ref) {
-          if (get_result_by_index(level)) return true;
-        } else {
-          if (get_result_by_connect_by(level)) return true;
-        }
-
-        if (update_leaf_cycle_into_stack()) return true;
-
-        if (!m_param->stack->ref_items.is_null()) {
-          m_join->copy_ref_item_slice(m_join->ref_items[REF_SLICE_ACTIVE],
-                                      m_param->stack->ref_items);
-          m_join->current_ref_item_slice = -1;
-          stack_slice = true;
-        }
-        if (!isleaf) {
-          if (save_into_history()) return true;
-        }
-      }
-
-      if (!stack_slice && !m_param->stack->ref_items.is_null()) {
-        m_join->copy_ref_item_slice(m_join->ref_items[REF_SLICE_ACTIVE],
-                                    m_param->stack->ref_items);
-        m_join->current_ref_item_slice = -1;
-        stack_slice = true;
-      }
+      m_param->currLevel++;
+      m_param->isCycle = 0;
+      m_param->isLeaf = 1;
 
       rows = 0;
-      if (copy_funcs(m_result_table_param, thd())) return true;
-      if (write_to_tb(thd(), table(), rows)) return true;
-      assert(rows);
-
-      if (delete_last_row()) return true;
-      if (ir) {
-        ir->reset_read_flag();
+      if (m_param->ref) {
+        if (get_result_by_index(rows)) return 1;
+      } else {
+        if (get_result_by_connect_by(rows)) return 1;
       }
+
+      if (rows != 0) {
+        last_level = m_param->currLevel;
+      }
+
+      // if (update_leaf_cycle_into_stack()) return true;
+      m_param->currLevel--;
+      if (rownum_incr) {
+        m_param->isLeaf = 1;
+      }
+
+      m_join->set_ref_item_slice(REF_SLICE_CONNECT_BY_RES);
+      if (!m_param->isLeaf) {
+        if (save_into_history()) return 1;
+      }
+      return 0;
     }
-    return false;
+    return -1;
   }
 
-  bool get_result_by_index(ha_rows &level) {
-    ha_rows rows = 0;
+  void UnlockRow() override {
+    // m_src_iter->UnlockRow();
+  }
+
+  void SetNullRowFlag(bool is_null_row) override {
+    m_src_iter->SetNullRowFlag(is_null_row);
+  }
+
+  void StartPSIBatchMode() override { m_src_iter->StartPSIBatchMode(); }
+
+  void EndPSIBatchModeIfStarted() override {
+    m_src_iter->EndPSIBatchModeIfStarted();
+  }
+
+ private:
+  bool get_result_by_index(ha_rows &rows) {
     if (!m_param->cache->ref_items.is_null()) {
       m_join->copy_ref_item_slice(m_join->ref_items[REF_SLICE_ACTIVE],
                                   m_param->cache->ref_items);
@@ -665,7 +601,6 @@ class ConnectbyIterator final : public TableRowIterator {
     if (iter->Init()) return true;
     bool matched = true;
     auto cond = m_param->connect_by_cond;
-
     int err = 0;
     for (;;) {
       err = iter->Read();
@@ -691,133 +626,45 @@ class ConnectbyIterator final : public TableRowIterator {
       }
       if (save_into_stack(false, rows)) return true;
     }
-
-    DBUG_EXECUTE_IF("connect_by_time", {
-      auto now = IteratorProfilerImpl::Now();
-      DBUG_PRINT(
-          "connect_by_time",
-          ("get_by_idx loop: %llu,rows: %llu,dur: %lf,rdur: %lf", loop, rows,
-           std::chrono::duration<double>(now - r_time).count() * 1e3,
-           std::chrono::duration<double>(now - cond_time).count() * 1e3));
-      cond_time = r_time = now;
-    });
     DBUG_PRINT("connect_by", ("connect index with %llu", rows));
-
-    level = rows > 0 ? level + 1 : level;
     restore_record(m_param->stack->tab, record[1]);
     return false;
   }
 
-  bool get_result_by_connect_by(ha_rows &level) {
-    ha_rows rows = 0;
-    if (m_param->connect_by_cond) {
-      if (get_result_by_scan(m_param->connect_by_cond, nullptr, rows))
-        return true;
-
-      DBUG_EXECUTE_IF("connect_by_time", {
-        auto now = IteratorProfilerImpl::Now();
-        DBUG_PRINT(
-            "connect_by_time",
-            ("get_result_by loop: %llu,rows: %llu,dur: %lf,rdur: %lf", loop,
-             rows, std::chrono::duration<double>(now - r_time).count() * 1e3,
-             std::chrono::duration<double>(now - cond_time).count() * 1e3));
-        cond_time = r_time = now;
-      });
-
-      if (rows != 0) {
-        rows = 0;
-        // store result into stack
-        // if result is not empty stack_table->record[0] will change to last
-        if (reverse_order_copy(false, rows)) return true;
-
-        DBUG_EXECUTE_IF("connect_by_time", {
-          auto now = IteratorProfilerImpl::Now();
-          DBUG_PRINT(
-              "connect_by_time",
-              ("reverse_order loop: %llu,rows: %llu,dur: %lf", loop, rows,
-               std::chrono::duration<double>(now - r_time).count() * 1e3));
-          r_time = now;
-        });
-        if (rows != 0) {
-          level++;
-        }
-        restore_record(m_param->stack->tab, record[1]);
-      }
-    } else {
-      // only rownum copy first into stack
-      if (get_first_result_by_scan(rows)) return true;
-      if (rows != 0) {
-        level++;
-        restore_record(m_param->stack->tab, record[1]);
-      }
+  bool get_result_by_connect_by(ha_rows &rows) {
+    if (get_result_by_scan(true, m_param->connect_by_cond, rows)) return true;
+    if (rows != 0) {
+      rows = 0;
+      // store result into stack
+      // if result is not empty stack_table->record[0] will change to last
+      if (reverse_order_copy(false, rows)) return true;
+      restore_record(m_param->stack->tab, record[1]);
     }
     return false;
   }
 
-  bool update_connect_by_func(ha_rows level) {
+  bool update_connect_by_func(longlong level) {
     for (auto it : m_param->connect_by_func_list) {
       if (it->update_value(level)) return true;
     }
     return false;
   }
 
-  bool update_leaf_cycle_into_stack() {
-    longlong val_leaf = isleaf ? 1 : 0;
-    longlong val_cycle = iscycle ? 1 : 0;
-    for (Item *it : m_param->func_leaf_list) {
-      if (it->type() == Item::CONNECT_BY_FUNC_ITEM) {
-        auto cit = dynamic_cast<Item_connect_by_func *>(it);
-        if (!cit) return true;
-        cit->update_value(val_leaf);
-      }
-    }
-    for (Item *it : m_param->func_cycle_list) {
-      if (it->type() == Item::CONNECT_BY_FUNC_ITEM) {
-        auto cit = dynamic_cast<Item_connect_by_func *>(it);
-        if (!cit) return true;
-        cit->update_value(val_cycle);
-      }
-    }
-    return false;
-  }
-
-  bool get_first_result_by_scan(ha_rows &rows) {
-    if (m_in_ref_slice != -1) {
-      assert(m_join != nullptr);
-      if (!m_join->ref_items[m_in_ref_slice].is_null()) {
-        m_join->set_ref_item_slice(m_in_ref_slice);
-      }
-    }
-    if (m_src_iter->Init()) return true;
-
-    auto err = m_src_iter->Read();
-    if (err != 0) {
-      if (err > 0 || thd()->is_error())  // Fatal error
-        return true;
-      else if (err < 0)
-        return false;
-    }
-    if (copy_funcs(m_param->cache->param, thd())) return true;
-
-    // not need into cache
-
-    if (copy_funcs(m_param->stack->param, thd())) return true;
-
-    if (write_to_tb(thd(), m_param->stack->tab, rows)) return true;
-    return false;
-  }
-
   // get start with cond match rows
-  bool get_result_by_scan(Item *cond, Item_func_rownum *rown_it,
-                          ha_rows &rows) {
-    if (m_in_ref_slice != -1) {
-      assert(m_join != nullptr);
-      if (!m_join->ref_items[m_in_ref_slice].is_null()) {
-        m_join->set_ref_item_slice(m_in_ref_slice);
+  bool get_result_by_scan(bool init, Item *cond, ha_rows &rows) {
+    if (!m_join->ref_items[m_in_ref_slice].is_null()) {
+      m_join->set_ref_item_slice(m_in_ref_slice);
+    }
+    if (init) {
+      if (m_src_iter->Init()) return true;
+    } else {
+      // start rownum counter
+      if (m_param->start_rownum_counter) {
+        m_param->start_rownum_counter->Reset();
+        m_param->start_rownum_counter->Incr();
       }
     }
-    // rownum
-    if (m_src_iter->Init()) return true;
+
     int err = 0;
     bool matched = true;
     for (;;) {
@@ -838,30 +685,15 @@ class ConnectbyIterator final : public TableRowIterator {
       if (thd()->is_error()) return true;
       if (!matched) {
         m_src_iter->UnlockRow();
-
-        if (rown_it) {
-          rown_it->fallback_value();
-          rown_it->reset_read_flag();
-        }
         continue;
       }
-
       if (copy_funcs(m_param->cache->param, thd())) return true;
       if (write_to_tb(thd(), m_param->cache->tab, rows)) return true;
-      if (rown_it) {
-        rown_it->reset_read_flag();
+      if (!init && rows != 0 && m_param->start_rownum_counter) {
+        m_param->start_rownum_counter->Incr();
       }
     }
-
-    DBUG_PRINT("connect_by", ("get_result_by with %llu", rows));
-    DBUG_EXECUTE_IF("connect_by_time", {
-      auto now = IteratorProfilerImpl::Now();
-      DBUG_PRINT(
-          "connect_by_time",
-          ("get_result_by %lf, rows: %llu",
-           std::chrono::duration<double>(now - r_time).count() * 1e3, rows));
-      r_time = now;
-    });
+    DBUG_PRINT("connect_by", ("get_result_by init %d with %llu", init, rows));
     return false;
   }
 
@@ -869,10 +701,10 @@ class ConnectbyIterator final : public TableRowIterator {
     if (!m_param->cache->ref_items.is_null()) {
       m_join->copy_ref_item_slice(m_join->ref_items[REF_SLICE_ACTIVE],
                                   m_param->cache->ref_items);
-      m_join->current_ref_item_slice = -1;
     }
     auto table = m_param->cache->tab;
-    uchar connect_by_key[MAX_KEY_LENGTH] = {0};
+    // Fiel
+    uchar connect_by_key[Field_longlong::PACK_LENGTH] = {0};
     auto index = 0;
     int err = table->file->ha_index_init(index, false);
     if (err != 0) {
@@ -911,13 +743,6 @@ class ConnectbyIterator final : public TableRowIterator {
     }
     clear_data(table);
     DBUG_PRINT("connect_by", ("reverse_order rows:%llu", rows));
-    DBUG_EXECUTE_IF("connect_by_time", {
-      auto now = IteratorProfilerImpl::Now();
-      DBUG_PRINT("connect_by_time",
-                 ("reverse order copy: %lf",
-                  std::chrono::duration<double>(now - r_time).count() * 1e3));
-      r_time = now;
-    });
     return false;
   }
 
@@ -927,7 +752,7 @@ class ConnectbyIterator final : public TableRowIterator {
       if (find_history()) {
         if (m_param->nocycle) {
           DBUG_PRINT("connect_by", ("nocycle skip %llu", rows + 1));
-          iscycle = true;
+          m_param->isCycle = true;
           return false;
         } else {
           my_error(ER_CONNECT_BY_LOOP, MYF(0));
@@ -937,19 +762,15 @@ class ConnectbyIterator final : public TableRowIterator {
     }
     if (write_to_tb(thd(), m_param->stack->tab, rows)) return true;
     if (!start) {
-      isleaf = false;
+      m_param->isLeaf = false;
     }
-    key_copy(last_key, m_param->stack->tab->record[0],
-             m_param->stack->tab->key_info,
-             m_param->stack->tab->key_info->key_length);
     return false;
   }
 
-  uchar last_key[MAX_KEY_LENGTH] = {0};
   /**
    * get last index value
    */
-  bool read_stack_last(ha_rows &level) {
+  bool read_stack_last() {
     // see reverse_order_copy
     auto stack_table = m_param->stack->tab;
     int err = stack_table->file->ha_index_init(0, false);
@@ -957,30 +778,21 @@ class ConnectbyIterator final : public TableRowIterator {
       stack_table->file->print_error(err, MYF(0));
       return true;
     }
+
     for (;;) {
+      memcpy(last_key, &last_level, Field_longlong::PACK_LENGTH);
       err = stack_table->file->ha_index_read_last_map(stack_table->record[0],
                                                       last_key, HA_WHOLE_KEY);
       if (err != 0) {
         if (handleError(err, stack_table) > 0) {
           return true;
         } else {
-          level--;
-          if (level == 0) {
+          last_level--;
+          if (last_level == 0) {
             stack_table->file->ha_index_end();
             return false;
           }
-          DBUG_PRINT("connect_by", ("index not find %llu", level));
-
-          if (m_param->level_it->update_value(level)) {
-            return true;
-          }
-          if (m_param->level_it->save_in_field(
-                  m_param->level_it->get_result_field(), false) != 0) {
-            my_error(ER_WRONG_ARGUMENTS, MYF(0), "level change");
-            return true;
-          }
-          key_copy(last_key, stack_table->record[0], stack_table->key_info,
-                   stack_table->key_info->key_length);
+          DBUG_PRINT("connect_by", ("index not find %llu", last_level));
         }
       } else {
         break;
@@ -997,16 +809,6 @@ class ConnectbyIterator final : public TableRowIterator {
       if (copy_funcs(m_param->history->param, thd())) return true;
       store_record(m_param->history->tab, record[1]);
     }
-
-    DBUG_EXECUTE_IF("connect_by_time", {
-      auto now = IteratorProfilerImpl::Now();
-      DBUG_PRINT(
-          "connect_by_time",
-          ("read_stack_last loop: %llu,dur: %lf,rdur: %lf", loop,
-           std::chrono::duration<double>(now - r_time).count() * 1e3,
-           std::chrono::duration<double>(now - read_stack_time).count() * 1e3));
-      read_stack_time = r_time = now;
-    });
     return false;
   }
 
@@ -1055,7 +857,7 @@ class ConnectbyIterator final : public TableRowIterator {
 
     auto err = history_table->file->ha_index_init(0, false);
     if (err != 0) {
-      HandleError(err);
+      history_table->file->print_error(err, MYF(0));
       return true;
     }
     // check is in history
@@ -1106,84 +908,11 @@ class ConnectbyIterator final : public TableRowIterator {
       return 1;
     }
   }
-  /**
-    Profiling data for this iterator. Used for 'EXPLAIN ANALYZE'.
-    @see MaterializeIterator#m_profiler for a description of how
-    this is used.
-  */
-  Profiler m_profiler;
-
-  /**
-      Profiling data for m_table_iterator,
-      @see MaterializeIterator#m_table_iter_profiler.
-  */
-  Profiler m_table_iter_profiler;
 };
 
-template <typename Profiler>
-bool ConnectbyIterator<Profiler>::Init() {
-  const typename Profiler::TimeStamp start_time = Profiler::Now();
-  if (!table()->materialized) {
-    m_in_ref_slice = m_join->get_ref_item_slice();
-
-    if (init_tmp_table(thd(), table())) return true;
-
-    if (param_Init(thd(), m_param)) return true;
-
-    if (preorder_dfs()) {
-      return true;
-    }
-    if (m_in_ref_slice != -1) {
-      assert(m_join != nullptr);
-      if (!m_join->ref_items[m_out_ref_slice].is_null()) {
-        m_join->set_ref_item_slice(m_in_ref_slice);
-      }
-    }
-    table()->materialized = true;
-  }
-  m_profiler.StopInit(start_time);
-  int err = m_table_iterator->Init();
-  m_table_iter_profiler.StopInit(start_time);
-  return err;
-}
-
-template <typename Profiler>
-int ConnectbyIterator<Profiler>::Read() {
-  const typename Profiler::TimeStamp start_time = Profiler::Now();
-
-  if (m_out_ref_slice != -1) {
-    assert(m_join != nullptr);
-    if (!m_join->ref_items[m_out_ref_slice].is_null()) {
-      m_join->set_ref_item_slice(m_out_ref_slice);
-    }
-  }
-
-  int err = m_table_iterator->Read();
-  m_table_iter_profiler.StopRead(start_time, err == 0);
-  return err;
-}
-
-RowIterator *connect_by_iterator::CreateIterator(
-    THD *thd, JOIN *join, TABLE *table, Temp_table_param *temp_table_param,
-    unique_ptr_destroy_only<RowIterator> src_iter,
-    unique_ptr_destroy_only<RowIterator> res_iter,
-    Connect_by_param *connect_by_param, int ref_slice) {
-  if (thd->lex->is_explain_analyze) {
-    RowIterator *const table_iter_ptr = res_iter.get();
-
-    auto iter = new (thd->mem_root) ConnectbyIterator<IteratorProfilerImpl>(
-        thd, join, table, temp_table_param, move(src_iter), move(res_iter),
-        connect_by_param, ref_slice);
-    /*
-      Provide timing data for the iterator that iterates over the temporary
-      table. This should include the time spent both materializing the table
-      and iterating over it.
-    */
-    table_iter_ptr->SetOverrideProfiler(iter->GetTableIterProfiler());
-    return iter;
-  } else {
-    return new (thd->mem_root) ConnectbyIterator<DummyIteratorProfiler>(
-        thd, join, table, temp_table_param, move(src_iter), move(res_iter),
-        connect_by_param, ref_slice);
-  }
+unique_ptr_destroy_only<RowIterator> connect_by_iterator::CreateIterator(
+    THD *thd, JOIN *join, unique_ptr_destroy_only<RowIterator> src_iter,
+    Connect_by_param *connect_by_param) {
+  return NewIterator<ConnectbyIterator>(thd, thd->mem_root, join,
+                                        std::move(src_iter), connect_by_param);
 }

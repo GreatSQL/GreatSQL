@@ -2,6 +2,7 @@
 
 Copyright (c) 1996, 2022, Oracle and/or its affiliates.
 Copyright (c) 2012, Facebook Inc.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -2488,6 +2489,7 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   new_index->set_committed(index->is_committed());
   new_index->allow_duplicates = index->allow_duplicates;
   new_index->nulls_equal = index->nulls_equal;
+  new_index->ora_mode = index->ora_mode;
   new_index->disable_ahi = index->disable_ahi;
   new_index->srid_is_valid = index->srid_is_valid;
   new_index->srid = index->srid;

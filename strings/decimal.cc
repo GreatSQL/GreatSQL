@@ -1,4 +1,5 @@
 /* Copyright (c) 2004, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -195,6 +196,10 @@ static inline dec1 div_by_pow10(dec1 x, int p) {
       assert(false);
       return x / powers10[p];
   }
+}
+
+decimal_digit_t div_by_pow10_extern(decimal_digit_t x, int p) {
+  return div_by_pow10(x, p);
 }
 
 static inline dec1 mod_by_pow10(dec1 x, int p) {
@@ -469,6 +474,11 @@ static inline dec1 *remove_leading_zeroes(const decimal_t *from,
   assert(intg <= from->intg);
   *intg_result = intg;
   return buf0;
+}
+
+decimal_digit_t *remove_leading_zeroes_extern(const decimal_t *from,
+                                              int *intg_result) {
+  return remove_leading_zeroes(from, intg_result);
 }
 
 /*

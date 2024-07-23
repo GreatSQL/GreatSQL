@@ -1,5 +1,5 @@
 # Copyright (c) 2006, 2022, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2023, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -22,6 +22,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 INCLUDE_DIRECTORIES(SYSTEM ${BOOST_PATCHES_DIR} ${BOOST_INCLUDE_DIR})
+INCLUDE_DIRECTORIES(${GMOCK_INCLUDE_DIRS})
 
 ADD_WSHADOW_WARNING()
 
@@ -389,12 +390,15 @@ SET(SQL_SHARED_SOURCES
   auth/sha2_password.cc
   ssl_wrapper_service.cc
   binlog_crypt_data.cc
+  binlog_base.cc
   bootstrap.cc
   check_stack.cc
   conn_handler/connection_handler_manager.cc
   clone_handler.cc
+  clone_compress.cc
   create_field.cc
   current_thd.cc
+  data_mask/data_masking.cc
   dd_sql_view.cc
   dd_sp.cc
   dd_table_share.cc
@@ -465,6 +469,7 @@ SET(SQL_SHARED_SOURCES
   key.cc
   key_spec.cc
   keycaches.cc
+  local_binlog_reader.cc
   lock.cc
   locked_tables_list.cc
   locking_service.cc
@@ -477,7 +482,6 @@ SET(SQL_SHARED_SOURCES
   my_decimal.cc
   mysqld.cc
   mysqld_thd_manager.cc
-  mysqld_dbms_pipe_manager.cc
   session_package_data.cc
   opt_costconstantcache.cc
   opt_costconstants.cc
@@ -544,8 +548,10 @@ SET(SQL_SHARED_SOURCES
   rpl_write_set_handler.cc
   rules_table_service.cc
   rwlock_scoped_lock.cc
+  sched_affinity_manager.cc
   sd_notify.cc
   sdi_utils.cc
+  secondary_engine_inc_load_task.cc
   session_tracker.cc
   set_var.cc
   sp.cc
@@ -1521,4 +1527,11 @@ ADD_CUSTOM_TARGET(distclean
 
 ADD_CUSTOM_TARGET(show-dist-name
   COMMAND ${CMAKE_COMMAND} -E echo "${CPACK_PACKAGE_FILE_NAME}"
+)
+
+INSTALL(FILES
+${CMAKE_CURRENT_SOURCE_DIR}/data_mask/sys_masking.sql
+DESTINATION ${INSTALL_MYSQLSHAREDIR}
+COMPONENT SupportFiles
+PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )

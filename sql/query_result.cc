@@ -1,6 +1,6 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -953,7 +953,9 @@ bool Query_dumpvar::prepare(THD *thd, const mem_root_deque<Item *> &list,
         if (thd->sp_runtime_ctx->get_item(var_list.head()->get_offset())
                 ->is_ora_type() &&
             CountVisibleFields(list) == 1 &&
-            list.at(0)->this_item()->is_ora_type())
+            list.at(0)->this_item()->is_ora_type() &&
+            (list.at(0)->this_item()->get_udt_table() ||
+             list.at(0)->this_item()->result_type() == ROW_RESULT))
           return false;
         my_error(ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT, MYF(0));
         return true;
@@ -969,7 +971,10 @@ bool Query_dumpvar::prepare(THD *thd, const mem_root_deque<Item *> &list,
       if (thd->sp_runtime_ctx->get_item(var_list.head()->get_offset())->cols() -
                   1 !=
               CountVisibleFields(list) &&
-          CountVisibleFields(list) != 1) {
+          !(CountVisibleFields(list) == 1 &&
+            list.at(0)->this_item()->is_ora_type() &&
+            (list.at(0)->this_item()->get_udt_table() ||
+             list.at(0)->this_item()->result_type() == ROW_RESULT))) {
         my_error(ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT, MYF(0));
         return true;
       }
@@ -1057,8 +1062,9 @@ void Query_dumpvar::push_param_rela(enum_dumpvar_type var_type, THD *thd,
       // SELECT tab.a INTO tmp_clob_a FROM test_lob as tab limit 1;
       // SELECT tab.a INTO tmp_clob_a FROM test_lob as tab where rownum<=1;
       // because unable to locate the record, so not allowed.
-      param.is_rownum_or_limit = (block->has_rownum_in_cond ||
-                                  block->has_limit() || block->has_connect_by);
+      param.is_rownum_or_limit =
+          ((current_where && current_where->has_rownum_expr()) ||
+           block->has_limit() || block->has_connect_by);
       if (!param.is_rownum_or_limit) {
         param.query_expr_cond.assign(Sp_rcontext_layer::locate_rec(
             thd, lex->query_tables, current_where, &param));
@@ -1196,24 +1202,21 @@ bool Query_dumpvar::send_eof(THD *thd) {
   */
   if (thd->is_error()) return true;
 
+  if (var_list.head()->var_is_record_table_type() &&
+      var_list.head()->var_is_bulk_collect()) {
+    if (thd->sp_runtime_ctx->fill_bulk_table_with_tmp_table(
+            var_list.head()->get_offset()))
+      return true;
+  }
   ::my_ok(thd, row_count);
   return false;
 }
 
 bool Query_dumpvar::start_execution(THD *thd) {
-  if (var_list.head()->var_is_record_table_type()) {
-    thd->sp_runtime_ctx->cleanup_record_variable_row_table(
+  if (var_list.head()->var_is_record_table_type() &&
+      var_list.head()->var_is_bulk_collect()) {
+    thd->sp_runtime_ctx->cleanup_record_variable_tmp_row_table(
         var_list.head()->get_offset());
   }
   return false;
-}
-
-void Query_result_subquery::reset_rownum_ref() {
-  Query_expression *qe = item->unit;
-  for (Query_block *select = qe->first_query_block(); select != nullptr;
-       select = select->next_query_block()) {
-    if (select->rownum_func && select->need_to_reset_flag) {
-      select->reset_rownum_read_flag();
-    }
-  }
 }

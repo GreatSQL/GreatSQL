@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2023, GreatDB Software Co., Ltd. All rights
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd. All rights
    reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -108,6 +108,7 @@ class Gdb_cmd_cb_data {
   uint error_no() { return m_errno; }
   std::string &error_msg() { return m_errmsg; }
   uint rows() { return m_cur_row; }
+  uint columns() { return m_num_cols; }
   std::string &get_value(uint row, uint field) { return m_result[row][field]; }
   ulonglong affected_rows() { return m_affected_rows; }
 

@@ -1,4 +1,5 @@
 /* Copyright (c) 2019, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,6 +34,7 @@ Clone Plugin: Clone status as performance schema plugin table
 #include "my_io.h"
 #include "plugin/clone/include/clone.h"
 #include "plugin/clone/include/clone_client.h"
+#include "sql/clone_handler.h"
 
 SERVICE_TYPE_NO_CONST(pfs_plugin_table_v1) *mysql_pfs_table = nullptr;
 SERVICE_TYPE_NO_CONST(pfs_plugin_column_integer_v1) *mysql_pfscol_int = nullptr;
@@ -99,16 +101,18 @@ std::array<const char *, Table_pfs::NUM_STATES> Table_pfs::s_state_names = {};
 std::array<const char *, Table_pfs::NUM_STAGES> Table_pfs::s_stage_names = {};
 
 /** Clone client status data. */
-Status_pfs::Data Client::s_status_data = {};
+Status_pfs Client::s_status_data = {};
 
 /** Clone client progress data. */
-Progress_pfs::Data Client::s_progress_data = {};
+Progress_pfs Client::s_progress_data = {};
 
 /** Mutex to protect status and progress data. */
 mysql_mutex_t Client::s_table_mutex;
 
 /** Number of concurrent clone clients. */
 uint32_t Client::s_num_clones = 0;
+uint32_t Client::s_num_replace_clones = 0;
+uint32_t Client::s_num_history_clones = 0;
 
 int Table_pfs::create_proxy_tables() {
   auto thd = thd_get_current_thd();
@@ -335,7 +339,10 @@ Status_pfs::Status_pfs() : Table_pfs(S_NUM_ROWS) {
       "`ERROR_MESSAGE` varchar(512),"
       "`BINLOG_FILE` varchar(512),"
       "`BINLOG_POSITION` bigint,"
-      "`GTID_EXECUTED` varchar(4096)";
+      "`GTID_EXECUTED` varchar(4096),"
+      "`START_LSN` bigint,"
+      "`PAGE_TRACK_LSN` bigint,"
+      "`END_LSN` bigint";
   table->get_row_count = cbk_status_row_count;
 
   auto &proxy_table = table->m_proxy_engine_table;
@@ -343,8 +350,10 @@ Status_pfs::Status_pfs() : Table_pfs(S_NUM_ROWS) {
 }
 
 int Status_pfs::rnd_init() {
-  Client::copy_pfs_data(m_data);
-  Table_pfs::init_position(m_data.m_id);
+  Client::copy_pfs_data(*this);
+  Table_pfs::init_position(Client::s_num_history_clones > MAX_CLONE_NUM
+                               ? MAX_CLONE_NUM
+                               : Client::s_num_history_clones);
   return (0);
 }
 
@@ -356,59 +365,76 @@ int Status_pfs::read_column_value(PSI_field *field, uint32_t index) {
   /* Return NULL if cursor is positioned at beginning or end. */
   auto row_index = get_position();
   bool is_null = (row_index == 0 || row_index > S_NUM_ROWS);
-
+  row_index -= 1;
   switch (index) {
     case 0: /* ID: Clone ID */
-      int_value.val = m_data.m_id;
+      int_value.val = m_data[row_index].m_id;
       int_value.is_null = is_null;
       mysql_pfscol_int->set_unsigned(field, int_value);
       break;
     case 1: /* PID: Process List ID */
-      int_value.val = m_data.m_pid;
+      int_value.val = m_data[row_index].m_pid;
       int_value.is_null = is_null;
       mysql_pfscol_int->set_unsigned(field, int_value);
       break;
     case 2: /* STATE */
       mysql_pfscol_string->set_char_utf8mb4(
-          field, s_state_names[m_data.m_state],
-          strlen(s_state_names[m_data.m_state]));
+          field, s_state_names[m_data[row_index].m_state],
+          strlen(s_state_names[m_data[row_index].m_state]));
       break;
     case 3: /* BEGIN_TIME */
-      mysql_pfscol_timestamp->set2(field, is_null ? 0 : m_data.m_start_time);
+      mysql_pfscol_timestamp->set2(
+          field, is_null ? 0 : m_data[row_index].m_start_time);
       break;
     case 4: /* END_TIME */
-      mysql_pfscol_timestamp->set2(field, is_null ? 0 : m_data.m_end_time);
+      mysql_pfscol_timestamp->set2(field,
+                                   is_null ? 0 : m_data[row_index].m_end_time);
       break;
     case 5: /* SOURCE */
       mysql_pfscol_string->set_varchar_utf8mb4(
-          field, is_null ? nullptr : m_data.m_source);
+          field, is_null ? nullptr : m_data[row_index].m_source);
       break;
     case 6: /* DESTINATION */
       mysql_pfscol_string->set_varchar_utf8mb4(
-          field, is_null ? nullptr : m_data.m_destination);
+          field, is_null ? nullptr : m_data[row_index].m_destination);
       break;
     case 7: /* ERROR_NUMBER */
-      int_value.val = m_data.m_error_number;
+      int_value.val = m_data[row_index].m_error_number;
       int_value.is_null = is_null;
       mysql_pfscol_int->set_unsigned(field, int_value);
       break;
     case 8: /* ERROR_MESSAGE */
       mysql_pfscol_string->set_varchar_utf8mb4(
-          field, is_null ? nullptr : m_data.m_error_mesg);
+          field, is_null ? nullptr : m_data[row_index].m_error_mesg);
       break;
     case 9: /* BINLOG_FILE */ {
-      size_t dir_len = dirname_length(m_data.m_binlog_file);
+      size_t dir_len = dirname_length(m_data[row_index].m_binlog_file);
       mysql_pfscol_string->set_varchar_utf8mb4(
-          field, is_null ? nullptr : m_data.m_binlog_file + dir_len);
+          field, is_null ? nullptr : m_data[row_index].m_binlog_file + dir_len);
     } break;
     case 10: /* BINLOG_POSITION */
-      bigint_value.val = m_data.m_binlog_pos;
+      bigint_value.val = m_data[row_index].m_binlog_pos;
       bigint_value.is_null = is_null;
       mysql_pfscol_bigint->set_unsigned(field, bigint_value);
       break;
     case 11: /* GTID_EXECUTED */ {
       mysql_pfscol_string->set_varchar_utf8mb4(
-          field, is_null ? nullptr : m_data.m_gtid_string.c_str());
+          field, is_null ? nullptr : m_data[row_index].m_gtid_string.c_str());
+    } break;
+    case 12: /* START LSN */ {
+      bigint_value.val = m_data[row_index].m_start_lsn;
+      bigint_value.is_null = is_null;
+      mysql_pfscol_bigint->set_unsigned(field, bigint_value);
+    } break;
+    case 13: /* PAGE_TRACK_LSN */ {
+      bigint_value.val = m_data[row_index].m_page_track_lsn;
+      bigint_value.is_null = is_null;
+      mysql_pfscol_bigint->set_unsigned(field, bigint_value);
+    } break;
+    case 14: /* END LSN */ {
+      bigint_value.val = m_data[row_index].m_end_lsn;
+      bigint_value.is_null = is_null;
+      mysql_pfscol_bigint->set_unsigned(field, bigint_value);
     } break;
     default:         /* purecov: inspected */
       assert(false); /* purecov: inspected */
@@ -451,6 +477,9 @@ void Status_pfs::Data::write(bool write_error) {
     status_file << ER_QUERY_INTERRUPTED << std::endl;
     status_file << "Query execution was interrupted" << std::endl;
   }
+  /* Write lsn columns. */
+  status_file << m_start_lsn << " " << m_page_track_lsn << " " << m_end_lsn
+              << std::endl;
   /* Write binary log information. */
   status_file << m_binlog_file << std::endl;
   status_file << m_binlog_pos << std::endl;
@@ -505,14 +534,18 @@ void Status_pfs::Data::read() {
         strncpy(m_error_mesg, file_line.c_str(), sizeof(m_error_mesg) - 1);
         break;
       case 6:
+        /* Read time columns. */
+        file_data >> m_start_lsn >> m_page_track_lsn >> m_end_lsn;
+        break;
+      case 7:
         /* Read binary log file name. */
         strncpy(m_binlog_file, file_line.c_str(), sizeof(m_binlog_file) - 1);
         break;
-      case 7:
+      case 8:
         /* Read binary log position. */
         file_data >> m_binlog_pos;
         break;
-      case 8:
+      case 9:
         /* Read GTID_EXECUTED. */
         m_gtid_string.assign(file_data.str());
         break;
@@ -522,6 +555,9 @@ void Status_pfs::Data::read() {
         break;
     }
   }
+  /* this function was called only once after recover */
+  Client::s_num_history_clones = 1;
+
   status_file.close();
 }
 
@@ -564,8 +600,12 @@ void Status_pfs::Data::recover() {
         break;
     }
   }
+  // after recover, clean the lsn info
+  m_start_lsn = 0;
+  m_page_track_lsn = 0;
+  m_end_lsn = 0;
+
   recovery_file.close();
-  std::remove(CLONE_RECOVERY_FILE);
 
   if (recovery_end_time == 0) {
     m_error_number = ER_INTERNAL_ERROR;
@@ -585,6 +625,10 @@ void Status_pfs::Data::recover() {
 
   /* Write back to the file after updating binary log positions. */
   write(true);
+
+  // the delete operation should be after the binlog and gtid info was written
+  // in CLONE_VIEW_STATUS_FILE
+  std::remove(CLONE_RECOVERY_FILE);
 }
 
 static unsigned long long cbk_progress_row_count() {
@@ -621,8 +665,10 @@ Progress_pfs::Progress_pfs() : Table_pfs(S_NUM_ROWS) {
 }
 
 int Progress_pfs::rnd_init() {
-  Client::copy_pfs_data(m_data);
-  Table_pfs::init_position(m_data.m_id);
+  Client::copy_pfs_data(*this);
+  Table_pfs::init_position(Client::s_num_history_clones > MAX_CLONE_NUM
+                               ? MAX_CLONE_NUM * S_NUM_ROWS
+                               : Client::s_num_history_clones * S_NUM_ROWS);
   return (0);
 }
 
@@ -633,21 +679,26 @@ int Progress_pfs::read_column_value(PSI_field *field, uint32_t index) {
 
   /* Return NULL if cursor is positioned at beginning or end. */
   auto row_index = get_position();
-  bool is_null = (row_index == 0 || row_index > S_NUM_ROWS);
+  bool is_null = (row_index == 0 || row_index > S_NUM_ROWS * MAX_CLONE_NUM);
 
+  auto data_index = (row_index - 1) / S_NUM_ROWS;
   switch (index) {
     case 0: /* ID: Clone ID */
-      int_value.val = m_data.m_id;
+      int_value.val = m_data[data_index].m_id;
       int_value.is_null = false;
       mysql_pfscol_int->set_unsigned(field, int_value);
       break;
     case 1: /* STAGE */
       mysql_pfscol_string->set_char_utf8mb4(
-          field, s_stage_names[row_index],
-          is_null ? 0 : strlen(s_stage_names[row_index]));
+          field, s_stage_names[(row_index + data_index) % (S_NUM_ROWS + 1)],
+          is_null ? 0
+                  : strlen(s_stage_names[(row_index + data_index) %
+                                         (S_NUM_ROWS + 1)]));
       break;
     case 2: /* STATE */ {
-      auto name_index = m_data.m_states[row_index];
+      auto name_index =
+          m_data[data_index]
+              .m_states[(row_index + data_index) % (S_NUM_ROWS + 1)];
       mysql_pfscol_string->set_char_utf8mb4(
           field, s_state_names[name_index],
           is_null ? 0 : strlen(s_state_names[name_index]));
@@ -655,43 +706,65 @@ int Progress_pfs::read_column_value(PSI_field *field, uint32_t index) {
     }
     case 3: /* BEGIN_TIME */
       mysql_pfscol_timestamp->set2(
-          field, is_null ? 0 : m_data.m_start_time[row_index]);
+          field,
+          is_null
+              ? 0
+              : m_data[data_index]
+                    .m_start_time[(row_index + data_index) % (S_NUM_ROWS + 1)]);
       break;
     case 4: /* END_TIME */
-      mysql_pfscol_timestamp->set2(field,
-                                   is_null ? 0 : m_data.m_end_time[row_index]);
+      mysql_pfscol_timestamp->set2(
+          field,
+          is_null
+              ? 0
+              : m_data[data_index]
+                    .m_end_time[(row_index + data_index) % (S_NUM_ROWS + 1)]);
       break;
     case 5: /* THREADS */
-      int_value.val = m_data.m_threads[row_index];
+      int_value.val =
+          m_data[data_index]
+              .m_threads[(row_index + data_index) % (S_NUM_ROWS + 1)];
       int_value.is_null = is_null;
       mysql_pfscol_int->set_unsigned(field, int_value);
       break;
     case 6: /* ESTIMATE */
-      bigint_value.val = m_data.m_estimate[row_index];
+      bigint_value.val =
+          m_data[data_index]
+              .m_estimate[(row_index + data_index) % (S_NUM_ROWS + 1)];
       bigint_value.is_null = is_null;
       mysql_pfscol_bigint->set_unsigned(field, bigint_value);
       break;
     case 7: /* DATA */
-      bigint_value.val = m_data.m_complete[row_index];
+      bigint_value.val =
+          m_data[data_index]
+              .m_complete[(row_index + data_index) % (S_NUM_ROWS + 1)];
       bigint_value.is_null = is_null;
       mysql_pfscol_bigint->set_unsigned(field, bigint_value);
       break;
     case 8: /* NETWORK */
-      bigint_value.val = m_data.m_network[row_index];
+      bigint_value.val =
+          m_data[data_index]
+              .m_network[(row_index + data_index) % (S_NUM_ROWS + 1)];
       bigint_value.is_null = is_null;
       mysql_pfscol_bigint->set_unsigned(field, bigint_value);
       break;
     case 9: /* DATA_SPEED */
-      int_value.val = (m_data.m_states[row_index] == STATE_STARTED)
-                          ? m_data.m_data_speed
-                          : 0;
+      int_value.val =
+          (m_data[data_index]
+               .m_states[(row_index + data_index) % (S_NUM_ROWS + 1)] ==
+           STATE_STARTED)
+              ? m_data[data_index].m_data_speed
+              : 0;
       int_value.is_null = is_null;
       mysql_pfscol_int->set_unsigned(field, int_value);
       break;
     case 10: /* NETWORK_SPEED */
-      int_value.val = (m_data.m_states[row_index] == STATE_STARTED)
-                          ? m_data.m_network_speed
-                          : 0;
+      int_value.val =
+          (m_data[data_index]
+               .m_states[(row_index + data_index) % (S_NUM_ROWS + 1)] ==
+           STATE_STARTED)
+              ? m_data[(row_index - 1) / S_NUM_ROWS].m_network_speed
+              : 0;
       int_value.is_null = is_null;
       mysql_pfscol_int->set_unsigned(field, int_value);
       break;

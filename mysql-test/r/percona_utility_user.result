@@ -51,7 +51,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 CREATE USER 'frankjr'@'localhost' IDENTIFIED BY 'password';
 GRANT ALL ON mysql.* TO 'frankjr'@'localhost';

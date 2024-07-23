@@ -1,6 +1,6 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -173,7 +173,7 @@ extern PSI_memory_key key_memory_user_var_entry;
 extern PSI_memory_key key_memory_user_var_entry_value;
 extern PSI_memory_key key_memory_sp_cache;
 extern PSI_memory_key key_memory_write_set_extraction;
-
+extern PSI_memory_key key_memory_data_mask;
 // Percona PSI memory keys
 
 extern PSI_memory_key key_memory_userstat_table_stats;

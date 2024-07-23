@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -84,6 +85,8 @@ class Log_Arch_Client_Ctx {
 
   /** Release archived data so that system can purge it */
   void release();
+
+  lsn_t end_lsn() { return m_end_lsn; }
 
  private:
   /** Archiver client state */

@@ -1,5 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -766,6 +766,13 @@ static std::unique_ptr<Json_object> ExplainQueryPlan(
         dml_desc = string("Replace into ") +
                    query_plan->get_lex()->insert_table_leaf->table->alias;
         break;
+      case SQLCOM_INSERT_ALL_SELECT:
+        dml_desc = string("Insert all/first");
+        for (auto tb = query_plan->get_lex()->insert_table_leaf; tb != nullptr;
+             tb = tb->next_leaf) {
+          dml_desc += string(" into ") + tb->table->alias;
+        }
+        break;
       default:
         // SELECTs have no top-level node.
         break;
@@ -1400,13 +1407,10 @@ static std::unique_ptr<Json_object> SetObjectMembers(
     }
     case AccessPath::CONNECT_BY_SCAN: {
       error |= AddMemberToObject<Json_string>(obj, "access_type", "connect_by");
+
       auto param = &path->connect_by_scan();
-      ret_obj = AssignParentPath(param->table_path, nullptr, std::move(ret_obj),
-                                 join);
-      if (ret_obj == nullptr) return nullptr;
-      description =
-          "connect by scan:";  //+
-                               // param->connect_by_param->ExplainToString();
+
+      description = "connect by scan:";
       if (param->connect_by_param->nocycle) {
         description += "(nocycle)";
       }
@@ -1425,8 +1429,14 @@ static std::unique_ptr<Json_object> SetObjectMembers(
         }
       }
       if (param->connect_by_param->connect_by_cond) {
-        description += ItemToString(param->connect_by_param->connect_by_cond);
+        Item *cond = param->connect_by_param->connect_by_cond;
+        if (param->connect_by_param->connect_by_rownum_it) {
+          cond = and_conds(param->connect_by_param->connect_by_cond,
+                           param->connect_by_param->connect_by_rownum_it);
+        }
+        description += ItemToString(cond);
       }
+
       if (param->connect_by_param->start_with_cond) {
         description += string(" start with: ") +
                        ItemToString(param->connect_by_param->start_with_cond);
@@ -1702,12 +1712,9 @@ static std::unique_ptr<Json_object> SetObjectMembers(
       children->push_back({path->update_rows().child});
       break;
     }
-    case AccessPath::ROWNUM_FILTER: {
-      description =
-          string("Filter: ") + ItemToString(path->rownum_filter().condition);
-      children->push_back({path->rownum_filter().child});
-      GetAccessPathsFromItem(path->rownum_filter().condition, "condition",
-                             children);
+    case AccessPath::COUNTER: {
+      description = string(path->counter().counter->Description());
+      children->push_back({path->counter().child});
       break;
     }
     case AccessPath::PARALLEL_SCAN: {

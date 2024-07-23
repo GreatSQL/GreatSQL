@@ -22,6 +22,7 @@ INSERT INTO t1 SELECT i+4,c FROM t1;
 INSERT INTO t1 SELECT i+8,c FROM t1;
 INSERT INTO t1 SELECT i+16,c FROM t1;
 # Check the slow log result. One "select" query should be found.
+select routine_name from information_schema.routines where routine_schema = 'mysqldump_long_query_time' and routine_type='TYPE';
 select @@collation_database;
 
 ## TEST 3: mysqldump with custom flag set to 0, global set to default
@@ -29,7 +30,9 @@ SET @@GLOBAL.long_query_time = @my_long_query_time;
 
 # Check the slow log result.
 # Results should equal to previous test, one additional "select" query should appear.
+select routine_name from information_schema.routines where routine_schema = 'mysqldump_long_query_time' and routine_type='TYPE';
 select @@collation_database;
+select routine_name from information_schema.routines where routine_schema = 'mysqldump_long_query_time' and routine_type='TYPE';
 select @@collation_database;
 
 # Cleanup

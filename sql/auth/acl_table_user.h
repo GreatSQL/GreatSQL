@@ -1,5 +1,5 @@
 /* Copyright (c) 2018, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -262,7 +262,9 @@ class Acl_table_user_writer : public Acl_table {
   bool update_password_require_current();
   bool update_user_attributes(std::string &current_password,
                               Acl_table_user_writer_status &return_value);
-
+#ifdef CASCADE_REVOKE
+  bool update_user_granter();
+#endif
   void replace_user_application_user_metadata(
       std::function<bool(TABLE *table)> const &update);
   ulong get_user_privileges();

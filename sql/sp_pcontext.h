@@ -1,6 +1,6 @@
 /* -*- C++ -*- */
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -130,9 +130,21 @@ class sp_label {
   /// IF,CASE,LOOP stmt,use this to control it.
   uint beginblock_label_ip;
 
+  /// ip of loop block's start,used for CONTINUE.
+  uint loop_ip;
+
+  /// FOR LOOP characteristics,used for CONTINUE
+  Oracle_sp_for_loop_index_and_bounds *m_for_loop;
+
  public:
   sp_label(LEX_CSTRING _name, uint _ip, enum_type _type, sp_pcontext *_ctx)
-      : name(_name), ip(_ip), type(_type), ctx(_ctx), beginblock_label_ip(0) {}
+      : name(_name),
+        ip(_ip),
+        type(_type),
+        ctx(_ctx),
+        beginblock_label_ip(0),
+        loop_ip(_ip),
+        m_for_loop(nullptr) {}
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -471,7 +483,7 @@ class sp_pcontext {
   Item *make_item_plsql_cursor_attr(THD *thd, LEX_CSTRING name, uint offset);
   Item *make_item_plsql_sp_for_loop_attr(THD *thd, int m_direction, Item *var,
                                          Item *value_to);
-  Item *make_item_plsql_plus_one(THD *thd, POS &pos, int direction,
+  Item *make_item_plsql_plus_one(THD *thd, int direction,
                                  Item_splocal *item_splocal);
 
   /// Retrieve full type information about SP-variables in this parsing
@@ -657,7 +669,15 @@ class sp_pcontext {
 
   sp_label *last_goto_label() { return m_goto_labels.head(); }
 
+  sp_label *find_continue_label(LEX_CSTRING name);
+
+  sp_label *find_continue_label_current_loop_start(
+      bool current_scope_only = false);
+
   void push_unique_goto_label(sp_label *a);
+
+  void set_for_loop_to_label(Oracle_sp_for_loop_index_and_bounds *for_loop,
+                             uint loop_ip);
 
   /////////////////////////////////////////////////////////////////////////
   // Conditions.

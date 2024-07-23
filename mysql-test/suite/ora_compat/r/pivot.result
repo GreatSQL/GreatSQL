@@ -2048,7 +2048,7 @@ ERROR HY000: Invalid use of group function
 #
 create type t_pair as object(id int, name varchar2(1024));
 select * from pivot1 pivot(sum(t_pair(1, 'wang')) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
-ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 select * from pivot1 pivot(sum(t_pair(1, 'wang').id) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
 ERROR HY000: It is only allowed in a procedure
 drop type t_pair;
@@ -2083,9 +2083,9 @@ stu_record_val.score := 3.22;
 select * from pivot1 pivot(sum(stu_record_val) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
 end |
 call p1()|
-ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 call p1()|
-ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 drop procedure p1|
 create or replace procedure p1 as
 type stu_record is record(
@@ -2139,9 +2139,9 @@ stu_record_val(1).score := 3.22;
 select * from pivot1 pivot(sum(stu_record_val(0)) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
 end |
 call p1()|
-ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 call p1()|
-ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 drop procedure p1|
 create or replace procedure p1 as
 type stu_record is record(
@@ -2231,7 +2231,7 @@ end |
 select f1()|
 ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
 select f1()|
-ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 drop function f1|
 create or replace function f1() return float as
 n float := 0;
@@ -2274,7 +2274,7 @@ end |
 select f1()|
 ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
 select f1()|
-ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 drop function f1|
 create or replace function f1() return float as
 n float := 0;
@@ -2293,9 +2293,9 @@ select `1` from pivot1 pivot(sum(stu_record_val(0)) for (a) in (1, 2, 3, 4, 5 ,6
 return n;
 end |
 select f1()|
-ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 select f1()|
-ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 drop function f1|
 create or replace function f1() return float as
 n float := 0;

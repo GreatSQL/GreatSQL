@@ -399,7 +399,7 @@ select returnacursor()+1;
 end;
 $$
 call p1;
-ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+ERROR 42000: This version of MySQL doesn't yet support 'ref cursor used in table'
 drop PROCEDURE p1;
 #
 # test of refcursor used in function
@@ -1439,6 +1439,10 @@ c1	c2	c3
 5	ee	5
 drop function returnacursor2;
 drop PROCEDURE p1;
+insert into t1 select returnacursor(),'nam2'  from t1;
+ERROR 42000: This version of MySQL doesn't yet support 'ref cursor used in table'
+replace into t1  select returnacursor(),'nam2' from t1;
+ERROR 42000: This version of MySQL doesn't yet support 'ref cursor used in table'
 drop procedure pro_return;
 drop function returnacursor;
 drop function returnacursor1;

@@ -1,7 +1,7 @@
 # Prepare for creating Encrypted Table
 # create bootstrap file
 # Create and start mysqld with keyring plugin.
-# restart: --datadir=ENCRYPT_DATADIR --early-plugin-load=keyring_file=KEYRING_PLUGIN --keyring_file_data=MYSQL_TMP_DIR/mysecret_keyring
+# restart: --datadir=ENCRYPT_DATADIR --lower_case_table_names=CASE_TABLE_NAME --early-plugin-load=keyring_file=KEYRING_PLUGIN --keyring_file_data=MYSQL_TMP_DIR/mysecret_keyring
 INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
 # In connection CON1
 CREATE TABLESPACE tbs;

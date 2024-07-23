@@ -219,7 +219,7 @@ id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered
 1	PRIMARY	<derived2>	NULL	system	NULL	NULL	NULL	NULL	1	100.00	NULL
 2	DERIVED	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 Warnings:
-Note	1003	insert  all into `test`.`employees` PARTITION (`p0`) (`test`.`employees`.`id`,`test`.`employees`.`fname`,`test`.`employees`.`lname`,`test`.`employees`.`store_id`,`test`.`employees`.`department_id`) VALUES (3,'Tim','Greene',3,1) into `test`.`employees` PARTITION (`p1`,`p2`) (`test`.`employees`.`id`,`test`.`employees`.`fname`,`test`.`employees`.`lname`,`test`.`employees`.`store_id`,`test`.`employees`.`department_id`) VALUES (8,'Linda','Mills',2,1) 
+Note	1003	insert  all into `test`.`employees` PARTITION (`p0`) (`test`.`employees`.`id`,`test`.`employees`.`fname`,`test`.`employees`.`lname`,`test`.`employees`.`store_id`,`test`.`employees`.`department_id`) VALUES (3,'Tim','Greene',3,1) into `test`.`employees` PARTITION (`p1`,`p2`) (`test`.`employees`.`id`,`test`.`employees`.`fname`,`test`.`employees`.`lname`,`test`.`employees`.`store_id`,`test`.`employees`.`department_id`) VALUES (8,'Linda','Mills',2,1) /* select#1 */ select 3 AS `3`,'Tim' AS `Tim`,'Greene' AS `Greene`,3 AS `3`,1 AS `1`,8 AS `8`,'Linda' AS `Linda`,'Mills' AS `Mills`,2 AS `2`,1 AS `1` from dual
 drop table employees;
 explain format=tree insert all
 into t2 
@@ -227,7 +227,8 @@ into t3(id, col2, col1) values (id, col1, col2)
 into t4 values( id+1, col2, col1)
 select  id , col1, col2 from t1 ;
 EXPLAIN
--> Table scan on t1  (cost=*** rows=***)
+-> Insert all/first into t2 into t3 into t4
+    -> Table scan on t1  (cost=*** rows=***)
 
 explain insert all into t2 into t3 into t4
 select * from t1 ;
@@ -237,7 +238,7 @@ id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered
 1	INSERT	t4	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
 Warnings:
-Note	1003	insert  all into `test`.`t2` (`test`.`t2`.`id`,`test`.`t2`.`col1`,`test`.`t2`.`col2`) VALUES (`test`.`t1`.`id`,`test`.`t1`.`col1`,`test`.`t1`.`col2`) into `test`.`t3` (`test`.`t3`.`id`,`test`.`t3`.`col1`,`test`.`t3`.`col2`) VALUES (`test`.`t1`.`id`,`test`.`t1`.`col1`,`test`.`t1`.`col2`) into `test`.`t4` (`test`.`t4`.`id`,`test`.`t4`.`col1`,`test`.`t4`.`col2`) VALUES (`test`.`t1`.`id`,`test`.`t1`.`col1`,`test`.`t1`.`col2`) 
+Note	1003	insert  all into `test`.`t2` (`test`.`t2`.`id`,`test`.`t2`.`col1`,`test`.`t2`.`col2`) VALUES (`test`.`t1`.`id`,`test`.`t1`.`col1`,`test`.`t1`.`col2`) into `test`.`t3` (`test`.`t3`.`id`,`test`.`t3`.`col1`,`test`.`t3`.`col2`) VALUES (`test`.`t1`.`id`,`test`.`t1`.`col1`,`test`.`t1`.`col2`) into `test`.`t4` (`test`.`t4`.`id`,`test`.`t4`.`col1`,`test`.`t4`.`col2`) VALUES (`test`.`t1`.`id`,`test`.`t1`.`col1`,`test`.`t1`.`col2`) /* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`col1` AS `col1`,`test`.`t1`.`col2` AS `col2`,`test`.`t1`.`id` AS `id`,`test`.`t1`.`col1` AS `col1`,`test`.`t1`.`col2` AS `col2`,`test`.`t1`.`id` AS `id`,`test`.`t1`.`col1` AS `col1`,`test`.`t1`.`col2` AS `col2` from `test`.`t1`
 drop table t1,t2,t3,t4;
 create table t_date(c1 int);
 create table t_date2(c1 int);
@@ -255,7 +256,7 @@ id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered
 1	INSERT	nokey	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 1	SIMPLE	nokey	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using temporary
 Warnings:
-Note	1003	insert  all into `test`.`nokey` (`test`.`nokey`.`id`,`test`.`nokey`.`col1`) VALUES (`test`.`nokey`.`id`,`test`.`nokey`.`col1`) 
+Note	1003	insert  all into `test`.`nokey` (`test`.`nokey`.`id`,`test`.`nokey`.`col1`) VALUES (`test`.`nokey`.`id`,`test`.`nokey`.`col1`) /* select#1 */ select sql_buffer_result `test`.`nokey`.`id` AS `id`,`test`.`nokey`.`col1` AS `col1` from `test`.`nokey`
 drop table nokey;
 create table t1 (id int, c char(1));
 set OPTIMIZER_TRACE="enabled=on";
@@ -287,7 +288,7 @@ insert all into t1 select 1 from dual	{
             }
           },
           {
-            "expanded_query": "insert  all into `t1` (`t1`.`id`,`t1`.`c`) VALUES (`1`) "
+            "expanded_query": "insert  all into `t1` (`t1`.`id`,`t1`.`c`) VALUES (`1`) /* select#1 */ select `1` AS `1` from dual"
           }
         ]
       }
@@ -524,6 +525,22 @@ ELSE
 INTO employees  VALUES (x, 'Linda', 'Mills', 2, 1)
 INTO employees VALUES (x, 'Linda4', 'Mills4', 42, 41)
 SELECT id x FROM t1;
+set sql_mode=oracle;
+explain format=tree
+INSERT first
+WHEN 3>x THEN
+INTO employees  VALUES (x, 'Gary', 'Kang', 4, 5)
+INTO employees  VALUES (x, 'Tim1', 'Greene1', 31, 11)
+WHEN 2<x THEN
+INTO employees2  VALUES (x,   'Tim',  'Greene',  3,  1)
+ELSE
+INTO employees  VALUES (x, 'Linda', 'Mills', 2, 1)
+INTO employees VALUES (x, 'Linda4', 'Mills4', 42, 41)
+SELECT id x FROM t1;
+EXPLAIN
+-> Insert all/first into employees into employees into employees2 into employees into employees
+    -> Table scan on t1  (cost=*** rows=***)
+
 DROP TABLE employees;
 DROP TABLE employees2;
 DROP TABLE t1;
@@ -554,10 +571,11 @@ select * from temp1
 union
 select * from temp2;
 EXPLAIN
--> Table scan on   (cost=*** rows=***)
-    -> Union materialize with deduplication  (cost=*** rows=***)
-        -> Table scan on temp1  (cost=*** rows=***)
-        -> Table scan on temp2  (cost=*** rows=***)
+-> Insert all/first into temp3
+    -> Table scan on   (cost=*** rows=***)
+        -> Union materialize with deduplication  (cost=*** rows=***)
+            -> Table scan on temp1  (cost=*** rows=***)
+            -> Table scan on temp2  (cost=*** rows=***)
 
 drop table temp1;
 drop table temp2;

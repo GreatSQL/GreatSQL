@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -3413,6 +3413,7 @@ bool Protocol_classic::store_string(const char *from, size_t length,
   assert(send_metadata || field_types == nullptr ||
          field_types[field_pos] == MYSQL_TYPE_DECIMAL ||
          field_types[field_pos] == MYSQL_TYPE_NULL ||
+         field_types[field_pos] == MYSQL_TYPE_LONG ||
          field_types[field_pos] == MYSQL_TYPE_BIT ||
          field_types[field_pos] == MYSQL_TYPE_NEWDECIMAL ||
          field_types[field_pos] == MYSQL_TYPE_NEWDATE ||
@@ -3426,7 +3427,9 @@ bool Protocol_classic::store_string(const char *from, size_t length,
       (MYSQL_TYPE_DECIMAL == field_types[field_pos] ||
        MYSQL_TYPE_NEWDECIMAL == field_types[field_pos])) {
     std::string str(from, length);
-    if (str.find('.') != std::string::npos) {
+    if (str.find('e') == std::string::npos &&
+        str.find('E') == std::string::npos &&
+        str.find('.') != std::string::npos) {
       std::size_t pos = str.find_last_not_of('0');
       length = str.find('.') == pos ? pos : pos + 1;
     }

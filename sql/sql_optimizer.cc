@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -201,6 +201,7 @@ JOIN::JOIN(THD *thd_arg, Query_block *select)
       start_with_cond(reinterpret_cast<Item *>(1)),
       connect_by_cond(reinterpret_cast<Item *>(1)),
       after_connect_by_cond(reinterpret_cast<Item *>(1)),
+      counter(select->counter),
       having_cond(reinterpret_cast<Item *>(1)),
       having_for_explain(reinterpret_cast<Item *>(1)),
       tables_list(reinterpret_cast<Table_ref *>(1)),
@@ -1265,6 +1266,8 @@ bool JOIN::optimize(bool finalize_access_paths) {
     can sort one table but not a join of tables, so we need a tmp table
     then. If GROUP BY was optimized away, the pre-windowing result is 0 or 1
     row so doesn't need sorting.
+
+    (9) If has rownum sort one table also need a tmp table
   */
 
   if (rollup_state != RollupState::NONE &&  // (1)
@@ -1295,10 +1298,27 @@ bool JOIN::optimize(bool finalize_access_paths) {
          !has_windows &&
          !(query_expression()->derived_table &&
            query_expression()
-               ->derived_table->uses_materialization())) ||     // (7)
-        (has_windows && (primary_tables - const_tables) > 1 &&  // (8)
-         m_windows[0]->needs_sorting() && !group_optimized_away))
+               ->derived_table->uses_materialization())) ||  // (7)
+        (has_windows &&
+         ((primary_tables - const_tables) > 1 ||  // (8)
+          counter) &&                             // (9)
+         m_windows[0]->needs_sorting() &&
+         !group_optimized_away))
       need_tmp_before_win = true;
+  }
+
+  // use for from dual connect by
+  if (!need_tmp_before_win && connect_by_cond && plan_is_const()) {
+    if ((has_windows && m_windows.elements > 0 &&
+         m_windows[0]->needs_sorting() &&
+         !group_optimized_away) ||                 // (8)  sum() over (order by)
+        (!group_list.empty() && !simple_group) ||  // (3)
+        (!has_windows && (select_distinct ||       // (4)
+                          (!order.empty() && !simple_order) ||       // (5)
+                          (!group_list.empty() && !order.empty())))  // (6)
+    ) {
+      need_tmp_before_win = true;
+    }
   }
 
   DBUG_EXECUTE("info", TEST_join(this););
@@ -1307,7 +1327,7 @@ bool JOIN::optimize(bool finalize_access_paths) {
 
   if (!plan_is_const()) {
     // Test if we can use an index instead of sorting
-    if (!connect_by_cond) test_skip_sort();
+    test_skip_sort();
 
     if (finalize_table_conditions(thd)) return true;
   }
@@ -1976,7 +1996,8 @@ bool JOIN::optimize_distinct_group_order() {
   ORDER *old_group_list = group_list.order;
   group_list = ORDER_with_src(
       remove_const(group_list.order, where_cond,
-                   rollup_state == RollupState::NONE, &simple_group, true),
+                   rollup_state == RollupState::NONE && !connect_by_cond,
+                   &simple_group, true),
       group_list.src);
 
   if (thd->is_error()) {
@@ -2021,6 +2042,8 @@ void JOIN::test_skip_sort() {
   JOIN_TAB *const tab = best_ref[const_tables];
 
   assert(m_ordered_index_usage == ORDERED_INDEX_VOID);
+  // if has connect by , must re-order by
+  if (connect_by_cond) return;
 
   if (!group_list.empty())  // GROUP BY honoured first
                             // (DISTINCT was rewritten to GROUP BY if skippable)
@@ -3443,7 +3466,6 @@ bool JOIN::get_best_combination() {
       1? + // For aggregation functions aggregated in outer query
            // when used with distinct
       1? + // For ORDER BY
-      1? + // connect by
       1?   // buffer result
 
     Up to 2 tmp tables + N window output tmp are allocated (NOTE: windows also
@@ -3454,7 +3476,7 @@ bool JOIN::get_best_combination() {
            ? 1
            : 0) +
       (select_distinct ? (tmp_table_param->outer_sum_func_count ? 2 : 1) : 0) +
-      (order.empty() ? 0 : 1) + (connect_by_cond ? 1 : 0) +
+      (order.empty() ? 0 : 1) +
       (query_block->active_options() &
                (SELECT_BIG_RESULT | OPTION_BUFFER_RESULT)
            ? 1
@@ -7765,6 +7787,12 @@ bool add_key_fields(THD *thd, JOIN *join, Key_field **key_fields,
     if (down_cast<Item_cond *>(cond)->functype() == Item_func::COND_AND_FUNC) {
       Item *item;
       while ((item = li++)) {
+        //   Item_in_optimizer transform cache
+        //   cache can not equals index key if cond has rownum
+        //   EMPLOYEE_ID=<cache>(a.EMPLOYEE_ID) and rownum < 3
+        if (item->created_by_in2exists() && cond->has_rownum_expr()) {
+          continue;
+        }
         if (add_key_fields(thd, join, key_fields, and_level, item,
                            usable_tables, sargables))
           return true;
@@ -10543,7 +10571,11 @@ ORDER *JOIN::remove_const(ORDER *first_order, Item *cond, bool change,
    * sort operation needs to be done after rownum.
    * so tmp table is needed before sort.
    */
-  if (query_block->has_rownum_in_select) {
+  if (query_block->has_rownum) {
+    *simple_order = false;
+  }
+
+  if (connect_by_cond) {
     *simple_order = false;
   }
 
@@ -11176,7 +11208,7 @@ void JOIN::optimize_keyuse() {
 bool connect_by_cond_lookup_ref(THD *thd, Item *cond,
                                 mem_root_deque<Item *> *idx_field_list,
                                 mem_root_deque<Item *> *connect_by_list,
-                                List<Item> *other_list, List<Item> *rownum_it,
+                                List<Item> *other_list, List<Item> *rownum_list,
                                 List<Item> *other_list2) {
   Mem_root_array<Item *> condition_parts(thd->mem_root);
   ExtractConditions(cond, &condition_parts);
@@ -11204,13 +11236,13 @@ bool connect_by_cond_lookup_ref(THD *thd, Item *cond,
   bool is_connect_by_index = false;
   for (auto it : condition_parts) {
     if (it->has_rownum_expr()) {
-      rownum_it->push_back(it);
+      rownum_list->push_back(it);
       continue;
     }
 
     is_connect_by_index = false;
     if (it->has_connect_by_func() && (it->type() == Item::FUNC_ITEM)) {
-      auto cond_func = dynamic_cast<Item_func *>(it);
+      auto cond_func = down_cast<Item_func *>(it);
       if (!cond_func) return true;
       if (cond_func->functype() == Item_func::EQ_FUNC ||
           cond_func->functype() == Item_func::EQUAL_FUNC) {
@@ -11470,6 +11502,18 @@ static void calculate_materialization_costs(JOIN *join, Table_ref *sj_nest,
 bool JOIN::decide_subquery_strategy() {
   assert(query_expression()->item);
 
+  SecondaryEngineFlags engine_flags = 0;
+  if (const handlerton *secondary_engine = SecondaryEngineHandlerton(thd);
+      secondary_engine != nullptr) {
+    engine_flags = secondary_engine->secondary_engine_flags;
+  }
+  if (thd->secondary_engine_optimization() ==
+          Secondary_engine_optimization::SECONDARY &&
+      !Overlaps(engine_flags,
+                MakeSecondaryEngineFlags(
+                    SecondaryEngineFlag::SUPPORTS_NESTED_LOOP_JOIN))) {
+    return false;
+  }
   switch (query_expression()->item->substype()) {
     case Item_subselect::IN_SUBS:
     case Item_subselect::ALL_SUBS:

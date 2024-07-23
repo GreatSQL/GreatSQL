@@ -1,7 +1,7 @@
 /*
    Copyright (c) 2002, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1565,7 +1565,7 @@ void init_sp_psi_keys() {
   mysql_statement_register(category, &sp_instr_preturn::psi_info, 1);
   mysql_statement_register(category, &sp_instr_cpush_rowtype::psi_info, 1);
   mysql_statement_register(category, &sp_instr_cursor_copy_struct::psi_info, 1);
-  mysql_statement_register(category, &sp_instr_set_row_field::psi_info, 1);
+  mysql_statement_register(category, &sp_instr_setup_row_field::psi_info, 1);
   mysql_statement_register(category, &sp_instr_set_row_field_by_name::psi_info,
                            1);
   mysql_statement_register(category,
@@ -1575,6 +1575,7 @@ void init_sp_psi_keys() {
   mysql_statement_register(category, &sp_instr_cfetch_bulk::psi_info, 1);
   mysql_statement_register(category, &sp_instr_copen_for::psi_info, 1);
   mysql_statement_register(category, &sp_instr_goto::psi_info, 1);
+  mysql_statement_register(category, &sp_instr_continue::psi_info, 1);
 }
 #endif
 
@@ -1683,6 +1684,7 @@ sp_name::sp_name(const Sroutine_hash_entry *rt, char *qname_buff) {
     m_qname.length = m_name.length;
   }
   m_explicit_name = false;
+  m_is_with_function = rt->m_is_with_function;
 }
 
 /**
@@ -4500,6 +4502,14 @@ void sp_parser_data::finish_parsing_sp_body(THD *thd) {
 
   m_saved_memroot = nullptr;
   m_saved_item_list = nullptr;
+}
+
+void sp_parser_data::set_cursor_parameter_start_ptr(const char *ptr) {
+  m_cursor_param_start_ptr = ptr;
+}
+
+void sp_parser_data::set_cursor_parameter_end_ptr(const char *ptr) {
+  m_cursor_param_end_ptr = ptr;
 }
 
 bool sp_parser_data::add_backpatch_entry(sp_branch_instr *i, sp_label *label,

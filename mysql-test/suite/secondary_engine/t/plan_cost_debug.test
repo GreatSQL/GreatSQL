@@ -2,6 +2,8 @@
 # Offloading planning to a secondary engine is not yet supported by hypergraph.
 --source include/not_hypergraph.inc
 
+SET @@use_secondary_engine = ON;
+
 --disable_query_log
 eval INSTALL PLUGIN MOCK SONAME '$MOCK_PLUGIN';
 --enable_query_log

@@ -1,5 +1,5 @@
 /* Copyright (c) 2004, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -50,8 +50,10 @@
 #endif                 /* _WIN32 */
 
 #include "field_types.h"
+#include "my_inttypes.h"
 #include "my_time_t.h"
 #include "mysql_time.h"  // struct MYSQL_TIME, shared with client code
+#include "sql_string.h"
 
 extern const unsigned long long int log_10_int[20];
 extern const unsigned char days_in_month[];
@@ -697,6 +699,99 @@ int date_to_ISO_week(int n_year, int n_month, int n_day);
   standard.
 */
 int date_to_ISO_year(int n_year, int n_month, int n_day);
+
+typedef enum {
+  FMT_BASE = 128,
+  FMT_AD,
+  FMT_Ad,
+  FMT_ad,
+  FMT_AD_DOT,
+  FMT_ad_DOT,
+  FMT_AM,
+  FMT_Am,
+  FMT_am,
+  FMT_AM_DOT,
+  FMT_am_DOT,
+  FMT_BC,
+  FMT_Bc,
+  FMT_bc,
+  FMT_BC_DOT,
+  FMT_bc_DOT,
+  FMT_CC,
+  FMT_SCC,
+  FMT_D,
+  FMT_DAY,
+  FMT_Day,
+  FMT_day,
+  FMT_DD,
+  FMT_DDD,
+  FMT_DL,
+  FMT_DS,
+  FMT_DY,
+  FMT_Dy,
+  FMT_dy,
+  FMT_E,
+  FMT_EE,
+  FMT_FF,
+  FMT_FM,
+  FMT_FX,
+  FMT_HH,
+  FMT_HH12,
+  FMT_HH24,
+  FMT_IW,
+  FMT_I,
+  FMT_IY,
+  FMT_IYY,
+  FMT_IYYY,
+  FMT_J,
+  FMT_MI,
+  FMT_MM,
+  FMT_MON,
+  FMT_Mon,
+  FMT_mon,
+  FMT_MONTH,
+  FMT_Month,
+  FMT_month,
+  FMT_PM,
+  FMT_Pm,
+  FMT_pm,
+  FMT_PM_DOT,
+  FMT_pm_DOT,
+  FMT_Q,
+  FMT_rm,
+  FMT_Rm,
+  FMT_RM,
+  FMT_RR,
+  FMT_RRRR,
+  FMT_SP,
+  FMT_SS,
+  FMT_SSSSS,
+  FMT_th,
+  FMT_TH,
+  FMT_TS,
+  FMT_TZD,
+  FMT_TZH,
+  FMT_TZM,
+  FMT_TZR,
+  FMT_W,
+  FMT_WW,
+  FMT_X,
+  FMT_Y,
+  FMT_YY,
+  FMT_YYY,
+  FMT_YYYY,
+  FMT_YYYY_COMMA,
+  FMT_year,
+  FMT_Year,
+  FMT_YEAR,
+  FMT_SYYYY,
+  FMT_SYEAR,
+  FMT_BASE_END
+} FORMAT_ORACLE_DATE_TYPE_E;
+
+bool get_trunc_unit_type(const String *format, uint16 *unit_type);
+
+int strncasecmpwrap(const String *format, const char *pattern);
 
 /**
   @} (end of ingroup MY_TIME)

@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -32,8 +33,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef CLONE_DESC_INCLUDE
 #define CLONE_DESC_INCLUDE
 
+#include "libbinlogevents/include/uuid.h"
 #include "mem0mem.h"
 #include "os0file.h"
+#include "sql/mysqld.h"
 #include "univ.i"
 
 /** Invalid locator ID. */
@@ -41,8 +44,9 @@ const uint64_t CLONE_LOC_INVALID_ID = 0;
 
 /** Maximum base length for any serialized descriptor. This is only used for
 optimal allocation and has no impact on version compatibility. */
-const uint32_t CLONE_DESC_MAX_BASE_LEN =
-    64 + Encryption::KEY_LEN + Encryption::KEY_LEN;
+const uint32_t CLONE_DESC_MAX_BASE_LEN = 64 + Encryption::KEY_LEN +
+                                         Encryption::KEY_LEN +
+                                         binary_log::Uuid::BYTE_LENGTH;
 /** Align by 4K for O_DIRECT */
 const uint32_t CLONE_ALIGN_DIRECT_IO = 4 * 1024;
 
@@ -362,6 +366,7 @@ struct Clone_Desc_Locator {
   /** Descriptor header */
   Clone_Desc_Header m_header;
 
+  char m_uuid[UUID_LENGTH + 1];
   /** Unique identifier for a clone operation. */
   uint64_t m_clone_id;
 
@@ -383,8 +388,8 @@ struct Clone_Desc_Locator {
   @param[in]    state   snapshot state
   @param[in]    version Descriptor version
   @param[in]    index   clone index */
-  void init(uint64_t id, uint64_t snap_id, Snapshot_State state, uint version,
-            uint index);
+  void init(char *uuid, uint64_t id, uint64_t snap_id, Snapshot_State state,
+            uint version, uint index);
 
   /** Check if the passed locator matches the current one.
   @param[in]    other_desc      input locator descriptor
@@ -451,11 +456,26 @@ struct Clone_Desc_State {
   /** Number of files in current state */
   uint m_num_files;
 
+  /** Number of files in current state for HA_CLONE_PAG*/
+  uint m_clone_page_num_files;
+
   /** Number of estimated bytes to transfer */
   uint64_t m_estimate;
 
   /** Number of estimated bytes on disk */
   uint64_t m_estimate_disk;
+
+  /** clone start lsn */
+  uint64_t m_start_lsn{0};
+
+  /** page track lsn */
+  uint64_t m_page_track_lsn{0};
+
+  /** clone end lsn */
+  uint64_t m_end_lsn{0};
+
+  /** clone file compress mode */
+  file_compress_mode_t m_file_compress_mode;
 
   /** If start processing state */
   bool m_is_start;
@@ -604,6 +624,9 @@ struct Clone_Desc_Data {
 
   /** File identifier */
   uint32_t m_file_index;
+
+  /** File identifier */
+  uint32_t m_page_index;
 
   /** Data Length */
   uint32_t m_data_len;

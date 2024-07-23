@@ -7,7 +7,6 @@ information_schema
 mtr
 mysql
 performance_schema
-sys_audit
 test
 # restart:--upgrade=FORCE
 SHOW DATABASES;
@@ -17,7 +16,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 TRUNCATE TABLE mysql.tables_priv;
 INSERT INTO mysql.tables_priv (SELECT * FROM mysql.tmp_backup_tables_priv);

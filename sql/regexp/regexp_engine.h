@@ -2,7 +2,7 @@
 #define SQL_REGEXP_REGEXP_ENGINE_H_
 
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -170,6 +170,35 @@ class Regexp_engine {
                                 int occurrence);
 
   /**
+    Iterates over the subject string, replacing matches.
+
+    @param replacement This function generates the string to replace the match.
+    @param start Start position, 0-based.
+    @param occurrence Which occurrence to replace. If zero, replace all
+    occurrences.
+
+    @return Reference to a the result of the operation.
+  */
+  const std::u16string &Replace(
+      std::function<bool(std::u16string &)> gen_replacement, int start,
+      int occurrence);
+
+  /**
+    Extract the string for the specified matching expression or subexpression.
+
+    @param groupNum The capture group to extract. Group 0 is the complete match.
+    The value of this parameter must be less than or equal to the number of
+    capture groups in the pattern.
+    @param dest 	  Buffer to receive the matching string data.
+
+    @return Length of matching data, or 0 if no applicable match.
+  */
+  int32_t GroupOfMatch(int32_t groupNum, std::u16string &dest) {
+    return uregex_group(m_re, groupNum, pointer_cast<UChar *>(&dest.at(0)),
+                        dest.size(), &m_error_code);
+  }
+
+  /**
     The start of the match and its length.
 
     @return The index of the first code point of the match, and the length of
@@ -182,6 +211,9 @@ class Regexp_engine {
   }
   bool IsError() const { return U_FAILURE(m_error_code); }
   bool CheckError() const { return check_icu_status(m_error_code); }
+  bool IsBufferOverflow() const {
+    return U_BUFFER_OVERFLOW_ERROR == m_error_code;
+  }
 
   virtual ~Regexp_engine() { uregex_close(m_re); }
 

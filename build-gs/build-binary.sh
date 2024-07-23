@@ -30,6 +30,7 @@ CMAKE_BUILD_TYPE=''
 COMMON_FLAGS=''
 NO_GIT_INFO=0
 LOCAL_BOOST=0
+CHECK_SSL=false
 #
 #
 # Some programs that may be overriden
@@ -103,6 +104,7 @@ do
         shift
         BUILD_COMMENT="${BUILD_COMMENT:-}-gmssl"
         SSL_GM_EXTRA='-DWITH_SSL_GM=ON'
+        CHECK_SSL=true
         ;;
     --with-no-git )
        shift
@@ -262,7 +264,6 @@ fi
         -DROUTER_INSTALL_PLUGINDIR="/usr/local/$PRODUCT_FULL/lib/mysqlrouter/plugin" \
         -DCOMPILATION_COMMENT="$COMMENT" \
         -DINSTALL_SECURE_FILE_PRIVDIR="" \
-        -DFN_NO_CASE_SENSE=1 \
         -DWITH_AUTHENTICATION_LDAP=OFF \
         -DWITH_PAM=ON \
         -DWITH_ROCKSDB=OFF \
@@ -278,6 +279,7 @@ fi
         -DWITH_LIBEVENT=bundled \
         -DWITH_ZSTD=bundled \
         -DWITH_SYSTEMD=1 \
+        -DWITHOUT_RAPID_SECONDARY_STORAGE_ENGINE=ON \
         -DWITH_BOOST="$WORKDIR_ABS/boost_1_77_0.tar.bz2" \
         $WITH_MECAB_OPTION $OPENSSL_INCLUDE $OPENSSL_LIBRARY $CRYPTO_LIBRARY
 
@@ -324,11 +326,14 @@ fi
 
                     # Some libraries may have dependencies on earlier openssl libraries, such as authentication_ldap_simple.so,
                     # thus we need to treat them specially here, other than stripping version suffix.
-                    if [[ "${lib_realpath_basename}" =~ ^libcrypto.so.1.0.* ]] || [[ "${lib_realpath_basename}" =~ ^libssl.so.1.0.* ]];
+                    if [[ "${CHECK_SSL}" == "true" ]];
                     then
-                      lib_without_version_suffix=$(basename ${libfromelf})
+                      if [[ "${lib_realpath_basename}" =~ ^libcrypto.so.1.0.* ]] || [[ "${lib_realpath_basename}" =~ ^libssl.so.1.0.* ]];
+                      then
+                        lib_without_version_suffix=$(basename ${libfromelf})
+                      fi
                     fi
-
+                    
 
                     if [ ! -f "lib/private/${lib_realpath_basename}" ] && [ ! -L "lib/private/${lib_realpath_basename}" ]; then
                     

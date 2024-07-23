@@ -525,6 +525,38 @@ CALL p1();
 rec2	rec3	rec4	rec5	rec6	rec7	rec8
 1	bbb	bbb4	bbb5	bbb6	bbb7	bbb8
 DROP PROCEDURE p1;
+#
+# test bug9955
+#
+CREATE or replace PROCEDURE p1() AS 
+CURSOR c_country (ii int) IS SELECT * FROM t1 WHERE id =ii;
+BEGIN
+FOR rec IN c_country(1)
+loop
+SELECT rec.id,rec.en1;
+END loop;
+END;
+$$
+CALL p1();
+rec.id	rec.en1
+1	aaa
+rec.id	rec.en1
+1	a
+rec.id	rec.en1
+1	c
+DROP TABLE t1;
+CALL p1();
+ERROR 42S02: Table 'test.t1' doesn't exist
+CREATE TABLE t1 (id2 int, id int, en1 enum('aaa','a','b','c'));
+INSERT INTO t1 VALUES(1,1,'aaa'),(2,1,'a'),(3,3,'b'),(4,1,'c');
+CALL p1();
+rec.id	rec.en1
+1	aaa
+rec.id	rec.en1
+1	a
+rec.id	rec.en1
+1	c
+DROP PROCEDURE p1;
 DROP TABLE t1;
 #
 # error ER_NOT_SUPPORTED_YET

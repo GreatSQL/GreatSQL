@@ -1,4 +1,4 @@
-# restart:--innodb-directories=MYSQL_TMP_DIR
+# restart:--innodb-directories=MYSQL_TMP_DIR --lower_case_table_names=CASE_TABLE_NAME
 # create bootstrap file
 INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
 CREATE TABLE t1(col1 INT PRIMARY KEY, col2 char(64));
@@ -91,16 +91,16 @@ SET GLOBAL clone_max_concurrency = 8;
 CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATADIR';
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Completed	0
+0	Completed	0
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
-1	DROP DATA	Completed
-1	FILE COPY	Completed
-1	PAGE COPY	Completed
-1	REDO COPY	Completed
-1	FILE SYNC	Completed
-1	RESTART	Not Started
-1	RECOVERY	Not Started
+0	DROP DATA	Completed
+0	FILE COPY	Completed
+0	PAGE COPY	Completed
+0	REDO COPY	Completed
+0	FILE SYNC	Completed
+0	RESTART	Not Started
+0	RECOVERY	Not Started
 DROP SCHEMA testdb_clone;
 DROP USER 'user_clone'@'localhost';
 # 1A. Genaral Tablespace with absolute path
@@ -113,9 +113,17 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'MYSQL_TMP_
 ERROR HY000: File 'MYSQL_TMP_DIR/tbs1_data1.ibd' already exists
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
+0	Completed	0
 1	Failed	1086
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Completed
+0	FILE COPY	Completed
+0	PAGE COPY	Completed
+0	REDO COPY	Completed
+0	FILE SYNC	Completed
+0	RESTART	Not Started
+0	RECOVERY	Not Started
 1	DROP DATA	Completed
 1	FILE COPY	Failed
 1	PAGE COPY	Not Started
@@ -127,7 +135,7 @@ DROP TABLE t2;
 DROP TABLESPACE tbs1;
 UNINSTALL PLUGIN clone;
 # 2. Encrypted Table
-# restart: --datadir=ENCRYPT_DATADIR --early-plugin-load=keyring_file=KEYRING_PLUGIN --keyring_file_data=MYSQL_TMP_DIR/mysecret_keyring
+# restart: --lower_case_table_names=CASE_TABLE_NAME --datadir=ENCRYPT_DATADIR --early-plugin-load=keyring_file=KEYRING_PLUGIN --keyring_file_data=MYSQL_TMP_DIR/mysecret_keyring
 INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
 CREATE TABLE t1 (col1 INT PRIMARY KEY)  ENCRYPTION="Y";
 SET GLOBAL clone_autotune_concurrency = OFF;
@@ -137,16 +145,16 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 3872 : Clone needs SSL connection for encrypted table..
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Failed	3862
+0	Failed	3862
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
-1	DROP DATA	Completed
-1	FILE COPY	Failed
-1	PAGE COPY	Not Started
-1	REDO COPY	Not Started
-1	FILE SYNC	Not Started
-1	RESTART	Not Started
-1	RECOVERY	Not Started
+0	DROP DATA	Completed
+0	FILE COPY	Failed
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
 DROP TABLE t1;
 # 2A. Enable Redo Encryption
 SET GLOBAL innodb_redo_log_encrypt = ON;
@@ -163,9 +171,17 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 3872 : Clone needs SSL connection for encrypted table..
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
+0	Failed	3862
 1	Failed	3862
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Completed
+0	FILE COPY	Failed
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
 1	DROP DATA	Completed
 1	FILE COPY	Failed
 1	PAGE COPY	Not Started
@@ -189,9 +205,18 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 3872 : Clone needs SSL connection for encrypted table..
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
+0	Failed	3862
 1	Failed	3862
+2	Failed	3862
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Completed
+0	FILE COPY	Failed
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
 1	DROP DATA	Completed
 1	FILE COPY	Failed
 1	PAGE COPY	Not Started
@@ -199,6 +224,13 @@ ID	STAGE	STATE
 1	FILE SYNC	Not Started
 1	RESTART	Not Started
 1	RECOVERY	Not Started
+2	DROP DATA	Completed
+2	FILE COPY	Failed
+2	PAGE COPY	Not Started
+2	REDO COPY	Not Started
+2	FILE SYNC	Not Started
+2	RESTART	Not Started
+2	RECOVERY	Not Started
 SET GLOBAL innodb_undo_log_encrypt = OFF;
 # 3. Enable sql_require_primary_key
 UNINSTALL PLUGIN clone;
@@ -212,5 +244,5 @@ SET global sql_require_primary_key = @saved_sql_require_primary_key;
 #Cleanup
 UNINSTALL PLUGIN clone;
 UNINSTALL PLUGIN keyring_file;
-# restart:
+# restart: --lower_case_table_names=CASE_TABLE_NAME
 DROP TABLE t1;

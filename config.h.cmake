@@ -1,4 +1,5 @@
 /* Copyright (c) 2009, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
  
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -358,6 +359,7 @@
 /* coredumper library */
 #cmakedefine01 HAVE_LIBCOREDUMPER
 
+#cmakedefine GMOCK_FOUND 1
 
 /* From libmysql/CMakeLists.txt */
 #cmakedefine HAVE_UNIX_DNS_SRV @HAVE_UNIX_DNS_SRV@

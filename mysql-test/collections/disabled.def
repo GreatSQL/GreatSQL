@@ -203,96 +203,39 @@ group_replication.gr_parallel_applier_indexes_commit_order        : BUG#0 skip s
 group_replication.gr_switch_primary_timeout_node_kill             : BUG#0 skip online primary change logic changed
 group_replication.gr_startup_check_node_seed_skips_own_address_v6 : BUG#0 skip ipv6 test for docker
 group_replication.gr_startup_check_node_seed_skips_own_address    : BUG#0 skip ipv6 test for docker
-group_replication.gr_member_status_applier_error_bug              : BUG#0 skip
-group_replication.gr_parallel_applier_indexes_commit_order        : BUG#0 skip since garbage logical changed
 
 # GreatDB-Server-5 tests
 main.basedir      : BUG#0 disable the testcase
-main.coredump : BUG#0 disabled, failed when run as root
-main.dd_upgrade_error : BUG#0 disabled, failed when run as root
-main.dd_upgrade_error_cs : BUG#0 disabled, failed when run as root
-main.grant_user_lock : BUG#0 disabled, failed when run as root
-main.mysql_inplace_upgrade : BUG#0 disabled, failed when run as root
-main.mysqld_cmdline_warnings : BUG#0 disabled, failed when run as root
-main.mysqld_daemon : BUG#0 disabled, failed when run as root
-main.mysqld_safe : BUG#0 disabled, failed when run as root
-main.percona_bug1011047 : BUG#0 disabled, failed when run as root
 main.percona_dd_upgrade_undo_encrypted : BUG#0 disabled, Insecure configuration
-main.percona_enforce_storage_engine_disabled : BUG#0 disabled, failed when run as root
-main.persisted_variables_bugs_fast : BUG#0 disabled, failed when run as root
-main.resource_group_thr_prio_unsupported : BUG#0 disabled, failed when run as root
-main.restart_server : BUG#0 disabled, failed when run as root
-main.dd_bootstrap : BUG#0 disabled, failed when run as root
-main.read_only_ddl : BUG#0 disabled, failed when run as root
-main.upgrade : BUG#0 disabled, failed when run as root
-main.mysql_upgrade_fails_toku_57 : BUG#0 disabled, failed when run as root
-main.mysql_57_inplace_upgrade : BUG#0 disabled, failed when run as root
-main.mysql_80_inplace_upgrade : BUG#0 disabled, failed when run as root
-main.dd_upgrade_lctn_cs_lin : BUG#0 disabled, failed when run as root
-main.mysql_upgrade_fails_toku_80 : BUG#0 disabled, failed when run as root
-main.mysql_upgrade : BUG#0 disabled, failed when run as root
-sys_vars.proxy_protocol_networks_malformed : BUG#0 disabled, failed when run as root
 innodb.ibd2sdi : BUG#0 disable, ci no openssl
-innodb.log_deprecated_params_upgrade : BUG#0 disabled, failed when run as root
-innodb.log_deprecated_params : BUG#0 disabled, failed when run as root
-innodb.percona_sys_tablespace_encrypt : BUG#0 disabled, failed when run as root
-innodb.tablespace_portability : BUG#0 disabled, failed when run as root
-innodb.log_8_0_19_case1 : BUG#0 disabled, failed when run as root
-innodb.log_5_7_9_case7 : BUG#0 disabled, failed when run as root
-innodb.log_sys_vars : BUG#0 disabled, failed when run as root
-innodb.log_5_7_8_case2 : BUG#0 disabled, failed when run as root
-innodb.log_5_7_9_case1 : BUG#0 disabled, failed when run as root
-innodb.log_5_7_9_case3 : BUG#0 disabled, failed when run as root
-innodb.alter_kill : BUG#0 disabled, failed when run as root
-innodb.alter_rename_existing_xtra : BUG#0 disabled, failed when run as root
-innodb.log_5_7_8_case1 : BUG#0 disabled, failed when run as root
-innodb.bootstrap : BUG#0 disabled, failed when run as root
-innodb.log_file_system : BUG#0 disabled, failed when run as root
-innodb.innodb_read_only-2 : BUG#0 disabled, failed when run as root
-innodb.log_file_size : BUG#0 disabled, failed when run as root
-innodb.log_file_checkpoint : BUG#0 disabled, failed when run as root
-innodb.discarded_partition_upgrade_from_57 : BUG#0 disabled, failed when run as root
-innodb.temporary_table : BUG#0 disabled, failed when run as root
-innodb.log_5_6_case1 : BUG#0 disabled, failed when run as root
-innodb.log_corruption_1 : BUG#0 disabled, failed when run as root
-innodb.innodb_page_size_func : BUG#0 disabled, failed when run as root 
-innodb.log_encrypt_6 : BUG#0 disabled, failed when run as root
-innodb.tablespace_encrypt_9 : BUG#0 disabled, failed when run as root
-innodb.log_5_7_9_case6 : BUG#0 disabled, failed when run as root 
-innodb.tablespace_encrypt_10 : BUG#0 disabled, failed when run as root 
-innodb.log_first_rec_group : BUG#0 disabled, failed when run as root 
-innodb.doublewrite_reduced_odirect : BUG#0 disabled, failed when run as root
-innodb.tablespace_encrypt_11 : BUG#0 disabled, failed when run as root 
-innodb.log_read_only : BUG#0 disabled, failed when run as root 
-innodb.doublewrite_reduced : BUG#0 disabled, failed when run as root 
-innodb.doublewrite_on_to_reduced : BUG#0 disabled, failed when run as root 
-innodb.log_8_0_11_case1 : BUG#0 disabled, failed when run as root 
-innodb.temp_table_encrypt : BUG#0 disabled, failed when run as root 
-innodb.log_5_7_9_case4 : BUG#0 disabled, failed when run as root 
-innodb.log_5_7_9_case5 : BUG#0 disabled, failed when run as root 
-innodb.log_invalid_format : BUG#0 disabled, failed when run as root 
-innodb.checkpoint_too_soon : BUG#0 disabled, failed when run as root 
-innodb.log_file_invalid_start_lsn : BUG#0 disabled, failed when run as root 
-innodb.log_file_marked_as_full : BUG#0 disabled, failed when run as root 
-innodb.log_5_7_9_case2 : BUG#0 disabled, failed when run as root 
-innodb.log_file_invalid_lsn_ranges : BUG#0 disabled, failed when run as root 
-innodb.log_crash : BUG#0 disabled, failed when run as root 
-innodb.log_file_invalid_checkpoint : BUG#0 disabled, failed when run as root 
-innodb.log_file_missing : BUG#0 disabled, failed when run as root 
-innodb.log_corruption : BUG#0 disabled, failed when run as root 
-innodb.log_upgrade : BUG#0 disabled, failed when run as root 
-innodb.percona_crash_recovery_innodb_status : BUG#0 disabled, failed when run as root 
-innodb.tablespace_temp_table_debug : BUG#0 disabled, failed when run as root 
-innodb.blob-crash : BUG#0 disabled, failed when run as root 
-innodb.partition_import_57 : BUG#0 disabled, failed when run as root 
 
+binlog_gtid.binlog_gtid_mysqlpump : BUG#0 disabled, also cannot be passed with official code
+auth_sec.mysql_ssl_rsa_setup :  BUG#0 no openssl tool installed
+auth_sec.openssl_cert_generation_subject :  BUG#0 no openssl tool installed
+lock_order.cycle : BUG#0 disabled, also cannot be passed with official code
+
+# tests that cannot be passed with bugs, need to be fixed
+information_schema.i_s_schema_definition_debug : BUG#0 disabled, needs to upgrade IS_DD_VERSION
+
+innodb.innodb_read_only-2 : BUG#0 disabled
+innodb.log_file_size : BUG#0 disabled
+
+clone.remote_dml_recovery : BUG#0 disabled
+clone.remote_boundary : BUG#0 disabled
+
+component_keyring_file.keyring_encryption_test : BUG#0 disabled
+
+perfschema.hostcache_ipv4_addrinfo_noname_deny : BUG#0 disabled
+perfschema.hostcache_ipv4_addrinfo_again_deny : BUG#0 disabled
+perfschema.hostcache_ipv4_addrinfo_bad_deny : BUG#0 disabled
+perfschema.hostcache_ipv4_format : BUG#0 disabled
+perfschema.hostcache_ipv4_addrinfo_good_deny : BUG#0 disabled
+perfschema.hostcache_ipv4_nameinfo_again_deny : BUG#0 disabled
+perfschema.hostcache_ipv4_nameinfo_noname_deny : BUG#0 disabled
+
+special.innodb_dedicated_server : BUG#0 disabled, does not has Sys::MemInfo module
 
 #TBD
-main.compression : BUG#0 disabled, TBD
-main.dd_schema_definition_after_upgrade_57_debug : BUG#0 disabled, TBD
-main.mysql_client_test : BUG#0 disabled, TBD
-main.mysqlpump_charset : BUG#0 disabled, TBD
-main.ctype_euckr       : BUG#0 disabled, TBD
 main.percona_encryption_udf_digests  :  BUG#0 no openssl tool installed
 main.percona_encryption_udf_dsa_1024 :  BUG#0 no openssl tool installed:
 main.percona_encryption_udf_dsa_4096 :  BUG#0 no openssl tool installed

@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -130,10 +131,11 @@ void deliver_to_app(pax_machine *pma, app_data_ptr app,
 
   IFDBG(D_NONE, FN; PTREXP(pma); PTREXP(app); NDBG(app_status, d);
         COPY_AND_FREE_GOUT(dbg_app_data(app)));
-  if (pma)
+  if (pma) {
     site = find_site_def(pma->synode);
-  else
+  } else {
     site = get_site_def();
+  }
 
   while (app) {
     if (app->body.c_t == app_type) { /* Decode application data */
@@ -161,7 +163,16 @@ void deliver_to_app(pax_machine *pma, app_data_ptr app,
           }
           ADD_DBG(D_EXEC, add_synode_event(pma->synode););
           synode_no origin = pma->synode;
-          origin.node = app->unique_id.node;
+          if (app->unique_id.node == VOID_NODE_NO) {
+            G_WARNING("unique id is wrong for msgno:%lu, node:%d and omit it",
+                      origin.msgno, origin.node);
+          } else {
+            if (app->unique_id.node != origin.node) {
+              G_INFO("unique id node:%d is different from origin node:%d",
+                     app->unique_id.node, origin.node);
+            }
+            origin.node = app->unique_id.node;
+          }
           xcom_receive_data(pma->synode, origin, site, detector_node_set(site),
                             copy_len, cache_get_last_removed(), copy);
         } else {

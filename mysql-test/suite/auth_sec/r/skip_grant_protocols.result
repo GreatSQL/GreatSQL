@@ -12,6 +12,10 @@ current_user
 root@localhost
 SELECT user, plugin FROM mysql.user;
 user	plugin
+SYSTEM_DAA	caching_sha2_password
+SYSTEM_DBA	caching_sha2_password
+SYSTEM_DSA	caching_sha2_password
+greatdb.sys	caching_sha2_password
 mysql.infoschema	caching_sha2_password
 mysql.session	caching_sha2_password
 mysql.sys	caching_sha2_password

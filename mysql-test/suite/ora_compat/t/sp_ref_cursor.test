@@ -1136,5 +1136,79 @@ call p1();
 drop PROCEDURE p1;
 
 
+--echo #
+--echo # Bugfix#9202
+--echo #
+CREATE TABLE employees (EMPLOYEE_ID int, FIRST_NAME VARCHAR2(20), LAST_NAME VARCHAR(25), 
+EMAIL VARCHAR2(25), PHONE_NUMBER VARCHAR2(20) DEFAULT NULL, HIRE_DATE DATE DEFAULT NULL, 
+JOB_ID VARCHAR2(10), SALARY NUMBER(8,2) DEFAULT 1000, COMMISSION_PCT DECIMAL(2,2) DEFAULT NULL,
+MANAGER_ID float(6,0), DEPARTMENT_ID NUMBER(4,0),PRIMARY KEY(EMPLOYEE_ID))  
+ partition by hash(EMPLOYEE_ID) partitions 15;
+Insert into employees values (145,'John','Russell','JRUSSEL','011.44.1344.429268','2020-3-1','SA_MAN',14000,0.4,100,80);
+Insert into employees values (146,'Karen','Partners','KPARTNER','011.44.1344.467268','2020-4-1','SA_MAN',13500,0.3,100,80);
+Insert into employees values (147,'Alberto','Errazuriz','AERRAZUR','011.44.1344.429278','2020-5-1','SA_MAN',12000,0.3,145,80);
+Insert into employees values (148,'Gerald','Cambrault','GCAMBRAU',NULL,'2020-6-1','SA_MAN',11000,0.3,145,80);
+Insert into employees values (149,'Eleni','Zlotkey','EZLOTKEY','011.44.1344.429018','2020-7-1','SA_MAN',10500,0.2,145,90);
+Insert into employees values (150,'Peter','Tucker','PTUCKER','011.44.1344.129268','2020-8-1','SA_REP',10000,0.3,146,90);
+Insert into employees values (151,'David','Bernstein','DBERNSTE',NULL,'2020-9-1','SA_REP',9500,0.25,146,90);
+Insert into employees values (152,'Peter','Hall','PHALL','011.44.1344.478968','2020-10-1','SA_REP',9000,0.25,147,90);
+Insert into employees values (153,'Christopher','Olsen','COLSEN','011.44.1344.498718','2020-11-1','SA_REP',8000,0.2,147,90);
+Insert into employees values (154,'Nanette','Cambrault','NCAMBRAU','011.44.1344.987668','2020-12-1','SA_REP',7500,0.2,148,90);
+Insert into employees values (155,'Oliver','Tuvault','OTUVAULT','011.44.1344.486508','2021-1-1','SA_REP',7000,0.15,152,50);
+Insert into employees values (156,'Janette','King','JKING','011.44.1345.429268','2021-1-1','SA_REP',15000,0.35,155,50);
+
+DELIMITER $$;
+CREATE OR REPLACE  PROCEDURE p1() as
+  CURSOR c return employees%ROWTYPE IS SELECT * FROM employees WHERE employee_id IN (145,146);
+  CURSOR sc1 RETURN c%rowtype IS SELECT * FROM employees WHERE employee_id IN (147,148);
+  CURSOR sc2 RETURN sc1%rowtype IS SELECT * FROM employees WHERE employee_id IN (149,150);
+  CURSOR sc3 RETURN sc2%rowtype IS SELECT * FROM employees WHERE employee_id IN (151,153);
+  TYPE ref_rs1 IS REF CURSOR RETURN sc1%rowtype;
+  TYPE ref_rs2 IS REF CURSOR RETURN sc3%rowtype;
+  c1 ref_rs1;
+  c2 ref_rs2;
+   v_employee employees%ROWTYPE;
+  a1 int;
+  b1 varchar(20);
+BEGIN
+ open c1 for  SELECT * FROM employees  WHERE employee_id IN (151,153) ORDER BY employee_id;
+   LOOP
+    FETCH c1 INTO v_employee;
+    EXIT WHEN c1%NOTFOUND;
+    select 'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name;
+  END LOOP;
+  CLOSE c1; 
+END;
+$$
+DELIMITER ;$$
+call p1();
+call p1();
+call p1();
+call p1();
+drop PROCEDURE p1;
+
+DELIMITER $$;
+CREATE OR REPLACE  PROCEDURE p1() as
+  CURSOR c return employees%ROWTYPE IS SELECT * FROM employees WHERE employee_id IN (145,146);  
+  TYPE ref_rs1 IS REF CURSOR RETURN c%rowtype;
+  c1 ref_rs1;
+   v_employee employees%ROWTYPE;
+BEGIN
+  OPEN c1 FOR SELECT * FROM employees WHERE employee_id IN (145,146) ;
+   LOOP
+    FETCH c1 INTO v_employee;
+    EXIT WHEN c1%NOTFOUND;
+    select 'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name;
+  END LOOP;
+  CLOSE c1; 
+END;
+$$
+DELIMITER ;$$
+call p1();
+call p1();
+call p1();
+call p1();
+drop PROCEDURE p1;
+drop TABLE employees;
 
 

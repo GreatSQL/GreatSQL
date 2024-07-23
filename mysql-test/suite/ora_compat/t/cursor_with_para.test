@@ -518,6 +518,29 @@ $$
 DELIMITER ;$$
 CALL p1();
 DROP PROCEDURE p1;
+
+--echo #
+--echo # test bug9955
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() AS 
+  CURSOR c_country (ii int) IS SELECT * FROM t1 WHERE id =ii;
+BEGIN
+  FOR rec IN c_country(1)
+  loop
+    SELECT rec.id,rec.en1;
+  END loop;
+END;
+$$
+DELIMITER ;$$
+CALL p1();
+DROP TABLE t1;
+--error ER_NO_SUCH_TABLE
+CALL p1();
+CREATE TABLE t1 (id2 int, id int, en1 enum('aaa','a','b','c'));
+INSERT INTO t1 VALUES(1,1,'aaa'),(2,1,'a'),(3,3,'b'),(4,1,'c');
+CALL p1();
+DROP PROCEDURE p1;
 DROP TABLE t1;
 
 --echo #
@@ -532,4 +555,3 @@ begin
 END;
 $$
 DELIMITER ;$$
-

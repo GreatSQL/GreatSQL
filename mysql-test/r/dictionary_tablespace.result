@@ -1,5 +1,6 @@
 # Bug#26142776 : DIFFERENT MYSQL SCHEMA AFTER UPGRADE
 #files in mysql schema
+clone_history.ibd
 general_log.CSM
 general_log.CSV
 general_log_XXX.sdi
@@ -17,6 +18,7 @@ WHERE tables1.name NOT IN ('ndb_binlog_index') ORDER BY tables1.name;
 catalogs	mysql
 character_sets	mysql
 check_constraints	mysql
+clone_history	\N
 collations	mysql
 column_statistics	mysql
 column_type_elements	mysql
@@ -199,6 +201,7 @@ t1	CREATE TABLE `t1` (
 (PARTITION p0 VALUES LESS THAN ('ц├ц┤') ENGINE = InnoDB,
  PARTITION p1 VALUES LESS THAN (MAXVALUE) ENGINE = InnoDB) */
 #files in mysql schema
+clone_history.ibd
 general_log.CSM
 general_log.CSV
 general_log_XXX.sdi

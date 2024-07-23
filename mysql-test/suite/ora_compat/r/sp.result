@@ -460,7 +460,7 @@ SET sql_mode=ORACLE|
 CREATE PROCEDURE p1(str VARCHAR(16383)) AS x VARCHAR(16383); BEGIN x := str; SELECT x; END;|
 CREATE PROCEDURE p2(str VARCHAR) AS x VARCHAR(16383); BEGIN x := str; SELECT x; END;|
 CREATE PROCEDURE p3(str VARCHAR(16383)) AS x VARCHAR; BEGIN x := str; SELECT x; END;|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VARCHAR; BEGIN x := str; SELECT x; END' at line 1
 CALL p1('hello world')|
 x
 hello world
@@ -478,7 +478,7 @@ Warnings:
 Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
 Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
 CREATE PROCEDURE p3(str NVARCHAR(21845)) AS x NVARCHAR; BEGIN SET x = str; SELECT x; END;|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NVARCHAR; BEGIN SET x = str; SELECT x; END' at line 1
 CALL p1('hello world')|
 x
 hello world
@@ -494,7 +494,7 @@ DROP PROCEDURE p2|
 CREATE PROCEDURE p1(str VARBINARY(65535)) AS x VARBINARY(65535); BEGIN SET x = str; SELECT x; END;|
 CREATE PROCEDURE p2(str VARCHAR) AS x VARBINARY(65535); BEGIN SET x = str; SELECT x; END;|
 CREATE PROCEDURE p3(str VARBINARY(65535)) AS x VARCHAR; BEGIN SET x = str; SELECT x; END;|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VARCHAR; BEGIN SET x = str; SELECT x; END' at line 1
 CALL p1('hello world')|
 x
 hello world
@@ -548,7 +548,7 @@ CREATE FUNCTION f1(str VARCHAR(16383)) RETURN VARCHAR(16383) AS x VARCHAR(16383)
 CREATE FUNCTION f2(str VARCHAR) RETURN VARCHAR(16383) AS x VARCHAR(16383); BEGIN x := str; RETURN x; END;|
 CREATE FUNCTION f3(str VARCHAR(16383)) RETURN VARCHAR AS x VARCHAR(16383); BEGIN x := str; RETURN x; END;|
 CREATE FUNCTION f4(str VARCHAR(16383)) RETURN VARCHAR(16383) AS x VARCHAR; BEGIN x := str; RETURN x; END;|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VARCHAR; BEGIN x := str; RETURN x; END' at line 1
 CREATE FUNCTION f5(str VARCHAR) RETURN VARCHAR AS x VARCHAR(16383); BEGIN x := str; RETURN x; END;|
 SELECT f1('hello world')|
 f1('hello world')
@@ -582,7 +582,7 @@ Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which wi
 Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
 Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
 CREATE FUNCTION f4(str NVARCHAR(21845)) RETURN NVARCHAR(21845) AS x NVARCHAR; BEGIN x := str; RETURN x; END;|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NVARCHAR; BEGIN x := str; RETURN x; END' at line 1
 CREATE FUNCTION f5(str NVARCHAR) RETURN NVARCHAR AS x NVARCHAR(21845); BEGIN x := str; RETURN x; END;|
 Warnings:
 Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
@@ -616,7 +616,7 @@ CREATE FUNCTION f1(str VARBINARY(65535)) RETURN VARBINARY(65535) AS x VARBINARY(
 CREATE FUNCTION f2(str VARBINARY) RETURN VARBINARY(65535) AS x VARBINARY(65535); BEGIN x := str; RETURN x; END;|
 CREATE FUNCTION f3(str VARBINARY(65535)) RETURN VARBINARY AS x VARBINARY(65535); BEGIN x := str; RETURN x; END;|
 CREATE FUNCTION f4(str VARBINARY(65535)) RETURN VARBINARY(65535) AS x VARBINARY; BEGIN x := str; RETURN x; END;|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VARBINARY; BEGIN x := str; RETURN x; END' at line 1
 CREATE FUNCTION f5(str VARBINARY) RETURN VARBINARY AS x VARBINARY(65535); BEGIN x := str; RETURN x; END;|
 SELECT f1('hello world')|
 f1('hello world')

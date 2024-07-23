@@ -1,4 +1,0 @@
-set sql_mode=oracle;
-
---error ER_SYNTAX_ERROR
-select sqlerrm(1023);

@@ -1,4 +1,5 @@
 /* Copyright (c) 2014, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -209,6 +210,7 @@ void System_tables::add_remaining_dd_tables() {
   register_table("backup_history", system);
   register_table("backup_progress", system);
   register_table("backup_sbt_history", system);
+  register_table("clone_history", system);
   register_table("columns_priv", system);
   register_table("component", system);
   register_table("compression_dictionary", system);

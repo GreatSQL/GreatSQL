@@ -12,9 +12,11 @@ CALL mtr.add_suppression("The slave coordinator and worker threads are stopped")
 [ Connection Master ]
 INSTALL PLUGIN mock SONAME 'ha_mock.so';
 SET @@secondary_engine_cost_threshold = 0;
+SET @@use_secondary_engine = ON;
 [ Connection Slave ]
 INSTALL PLUGIN mock SONAME 'ha_mock.so';
 SET @@secondary_engine_cost_threshold = 0;
+SET @@use_secondary_engine = ON;
 [ Connection Master ]
 CREATE TABLE t1 (pk INT PRIMARY KEY AUTO_INCREMENT, vc VARCHAR(10), j JSON, b BLOB, vb VARBINARY(32)) SECONDARY_ENGINE=MOCK;
 include/sync_slave_sql_with_master.inc

@@ -1,4 +1,5 @@
 /* Copyright (c) 2008, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -144,7 +145,7 @@ xcng(volatile unsigned * addr, int val)
   return prev;
 }
 
-#elif defined(__aarch64__)
+#elif defined(__aarch64__) || defined(__sw_64__)
 #include <atomic>
 #define NDB_HAVE_MB
 #define NDB_HAVE_RMB
@@ -156,6 +157,30 @@ xcng(volatile unsigned * addr, int val)
 #define wmb() std::atomic_thread_fence(std::memory_order_seq_cst)
 
 #define cpu_pause()  __asm__ __volatile__ ("yield")
+#elif defined(__loongarch64)
+
+#define NDB_HAVE_MB
+#define NDB_HAVE_RMB
+#define NDB_HAVE_WMB
+//#define NDB_HAVE_XCNG
+
+// details frome kernel-6.9 arch/loongarch/include/asm/barrier.h
+
+#define DBAR(hint) __asm__ __volatile__("dbar %0 " : : "I"(hint) : "memory")
+
+#define crwrw 0b00000
+#define cr_r_ 0b00101
+#define c_w_w 0b01010
+
+#define c_sync() DBAR(crwrw)
+#define c_rsync() DBAR(cr_r_)
+#define c_wsync() DBAR(c_w_w)
+
+#define mb() c_sync()
+#define rmb() c_rsync()
+#define wmb() c_wsync()
+
+#define cpu_pause() __asm__ __volatile__("nop")
 
 #else
 #define NDB_NO_ASM "Unsupported architecture (gcc)"

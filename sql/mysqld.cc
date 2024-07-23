@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -783,6 +783,7 @@ MySQL clients support the protocol:
 #include "sql/conn_handler/connection_handler_manager.h"  // Connection_handler_manager
 #include "sql/conn_handler/socket_connection.h"  // stmt_info_new_packet
 #include "sql/current_thd.h"                     // current_thd
+#include "sql/data_mask/data_masking.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/debug_sync.h"  // debug_sync_end
 #include "sql/derror.h"
@@ -805,11 +806,11 @@ MySQL clients support the protocol:
 #include "sql/mdl_context_backup.h"  // mdl_context_backup_manager
 #include "sql/my_decimal.h"
 #include "sql/mysqld_daemon.h"
-#include "sql/mysqld_thd_manager.h"     // Global_THD_manager
-#include "sql/opt_costconstantcache.h"  // delete_optimizer_cost_module
-#include "sql/options_mysqld.h"                   // OPT_THREAD_CACHE_SIZE
-#include "sql/partitioning/partition_handler.h"   // partitioning_init
-#include "sql/persisted_variable.h"               // Persisted_variables_cache
+#include "sql/mysqld_thd_manager.h"              // Global_THD_manager
+#include "sql/opt_costconstantcache.h"           // delete_optimizer_cost_module
+#include "sql/options_mysqld.h"                  // OPT_THREAD_CACHE_SIZE
+#include "sql/partitioning/partition_handler.h"  // partitioning_init
+#include "sql/persisted_variable.h"              // Persisted_variables_cache
 #include "sql/plugin_table.h"
 #include "sql/protocol.h"
 #include "sql/psi_memory_key.h"  // key_memory_MYSQL_RELAY_LOG_index
@@ -839,6 +840,7 @@ MySQL clients support the protocol:
 #include "sql/rpl_rli.h"      // Relay_log_info
 #include "sql/rpl_source.h"   // max_binlog_dump_events
 #include "sql/rpl_trx_tracking.h"
+#include "sql/sched_affinity_manager.h"
 #include "sql/sd_notify.h"  // sd_notify_connect
 #include "sql/session_tracker.h"
 #include "sql/set_var.h"
@@ -980,7 +982,6 @@ MySQL clients support the protocol:
 #include "sql/server_component/mysql_server_keyring_lockable_imp.h"
 #include "sql/server_component/persistent_dynamic_loader_imp.h"
 #include "sql/srv_session.h"
-#include "sql/mysqld_dbms_pipe_manager.h"
 #include "sql/sp_cache.h"
 
 using std::max;
@@ -1218,6 +1219,10 @@ bool opt_keyring_migration_to_component = false;
 bool opt_libcoredumper, opt_corefile = 0;
 bool opt_persist_sensitive_variables_in_plaintext{true};
 
+extern std::map<sched_affinity::Thread_type, const char *>
+    sched_affinity_parameter;
+extern bool sched_affinity_numa_aware;
+
 #if defined(_WIN32)
 /*
   Thread handle of shutdown event handler thread.
@@ -1384,7 +1389,8 @@ ulong delayed_insert_errors, flush_time;
 ulong specialflag = 0;
 ulong binlog_cache_use = 0, binlog_cache_disk_use = 0;
 ulong binlog_stmt_cache_use = 0, binlog_stmt_cache_disk_use = 0;
-ulong max_connections, max_connect_errors, audit_log_max_rows;
+ulong max_connections, max_connect_errors;
+bool enable_data_masking = false;
 ulong rpl_stop_replica_timeout = LONG_TIMEOUT;
 bool log_bin_use_v1_row_events = false;
 bool thread_cache_size_specified = false;
@@ -1485,6 +1491,7 @@ time_t server_start_time, flush_status_time;
 
 char server_uuid[UUID_LENGTH + 1];
 const char *server_uuid_ptr;
+const char *clone_incremental_dir = nullptr;
 #if defined(HAVE_BUILD_ID_SUPPORT)
 char server_build_id[42];
 const char *server_build_id_ptr;
@@ -2639,6 +2646,7 @@ static void clean_up(bool print_message) {
   sequences_free(true);
   acl_free(true);
   grant_free();
+  data_masking::free();
   hostname_cache_free();
   range_optimizer_free();
   item_func_sleep_free();
@@ -2702,7 +2710,6 @@ static void clean_up(bool print_message) {
   mysql_client_plugin_deinit();
 
   Global_THD_manager::destroy_instance();
-  Global_dbms_pipe_manager::destroy_instance();
   Sp_version_changed::destroy_instance();
 
   my_free(const_cast<char *>(log_bin_basename));
@@ -2737,6 +2744,7 @@ static void clean_up(bool print_message) {
   */
   sys_var_end();
   free_status_vars();
+  sched_affinity::Sched_affinity_manager::free_instance();
 
   finish_client_errs();
   deinit_errmessage();  // finish server errs
@@ -8245,6 +8253,12 @@ int mysqld_main(int argc, char **argv)
   /* Determine default TCP port and unix socket name */
   set_ports();
 
+  if (sched_affinity::Sched_affinity_manager::create_instance(
+          sched_affinity_parameter, sched_affinity_numa_aware) == nullptr) {
+    LogErr(ERROR_LEVEL, ER_CANNOT_CREATE_SCHED_AFFINITY_MANAGER);
+    unireg_abort(MYSQLD_ABORT_EXIT);
+  }
+
   if (init_server_components()) unireg_abort(MYSQLD_ABORT_EXIT);
 
   if (!server_id_supplied)
@@ -8629,6 +8643,7 @@ int mysqld_main(int argc, char **argv)
     send_service_status(s);
   }
 #endif
+  if (!opt_initialize) data_masking::init();
 
   server_components_initialized();
 
@@ -9793,6 +9808,10 @@ struct my_option my_long_options[] = {
      "user has access to in a comma delimited list.",
      &utility_user_schema_access, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0,
      0},
+    {"clone_incremental_dir", 0,
+     "apply .delta files in the specified directory to the full clone data "
+     "directory.",
+     &clone_incremental_dir, 0, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
      0, nullptr, 0, nullptr}};
@@ -9800,6 +9819,36 @@ struct my_option my_long_options[] = {
 static int show_queries(THD *thd, SHOW_VAR *var, char *) {
   var->type = SHOW_LONGLONG;
   var->value = (char *)&thd->query_id;
+  return 0;
+}
+
+static int show_sched_affinity_status(THD *, SHOW_VAR *var, char *buff) {
+  var->type = SHOW_CHAR;
+  var->value = buff;
+  std::string group_snapshot =
+      sched_affinity::Sched_affinity_manager::get_instance()
+          ->take_group_snapshot();
+  strncpy(buff, group_snapshot.c_str(), SHOW_VAR_FUNC_BUFF_SIZE);
+  buff[SHOW_VAR_FUNC_BUFF_SIZE] = '\0';
+  return 0;
+}
+
+static int show_sched_affinity_group_number(THD *, SHOW_VAR *var, char *buff) {
+  var->type = SHOW_SIGNED_INT;
+  var->value = buff;
+  *(reinterpret_cast<int32 *>(buff)) =
+      sched_affinity::Sched_affinity_manager::get_instance()
+          ->get_total_node_number();
+  return 0;
+}
+
+static int show_sched_affinity_group_capacity(THD *, SHOW_VAR *var,
+                                              char *buff) {
+  var->type = SHOW_SIGNED_INT;
+  var->value = buff;
+  *(reinterpret_cast<int32 *>(buff)) =
+      sched_affinity::Sched_affinity_manager::get_instance()
+          ->get_cpu_number_per_node();
   return 0;
 }
 
@@ -10402,6 +10451,12 @@ SHOW_VAR status_vars[] = {
     {"Queries", (char *)&show_queries, SHOW_FUNC, SHOW_SCOPE_ALL},
     {"Questions", (char *)offsetof(System_status_var, questions),
      SHOW_LONGLONG_STATUS, SHOW_SCOPE_ALL},
+    {"Sched_affinity_status", (char *)&show_sched_affinity_status, SHOW_FUNC,
+     SHOW_SCOPE_ALL},
+    {"Sched_affinity_group_number", (char *)&show_sched_affinity_group_number,
+     SHOW_FUNC, SHOW_SCOPE_ALL},
+    {"Sched_affinity_group_capacity",
+     (char *)&show_sched_affinity_group_capacity, SHOW_FUNC, SHOW_SCOPE_ALL},
     {"Secondary_engine_execution_count",
      (char *)offsetof(System_status_var, secondary_engine_execution_count),
      SHOW_LONGLONG_STATUS, SHOW_SCOPE_ALL},
@@ -11733,10 +11788,6 @@ static int get_options(int *argc_ptr, char ***argv_ptr) {
     LogErr(ERROR_LEVEL, ER_THREAD_HANDLING_OOM);
     return 1;
   }
-  if (Global_dbms_pipe_manager::create_instance()) {
-    LogErr(ERROR_LEVEL, ER_OOM);
-    return 1;
-  }
   if (Sp_version_changed::create_instance()) {
     LogErr(ERROR_LEVEL, ER_OOM);
     return 1;
@@ -12456,8 +12507,8 @@ PSI_mutex_key key_mutex_replica_worker_hash;
 PSI_mutex_key key_monitor_info_run_lock;
 PSI_mutex_key key_LOCK_delegate_connection_mutex;
 PSI_mutex_key key_LOCK_group_replication_connection_mutex;
-PSI_mutex_key key_LOCK_dbms_pipe_map_mutex;
 PSI_mutex_key key_LOCK_sp_version_change_mutex;
+PSI_mutex_key key_sched_affinity_mutex;
 
 /* clang-format off */
 static PSI_mutex_info all_server_mutexes[]=
@@ -12558,8 +12609,8 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_authentication_policy, "LOCK_authentication_policy", PSI_FLAG_SINGLETON, 0, "A lock to ensure execution of CREATE USER or ALTER USER sql and SET @@global.authentication_policy variable are serialized"},
   { &key_LOCK_global_conn_mem_limit, "LOCK_global_conn_mem_limit", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_pq_threads_running, "LOCK_pq_threads_running", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-  { &key_LOCK_dbms_pipe_map_mutex, "LOCK_dbms_pipe_map_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-  { &key_LOCK_sp_version_change_mutex, "LOCK_sp_version_change_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
+  { &key_LOCK_sp_version_change_mutex, "LOCK_sp_version_change_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_sched_affinity_mutex, "Sched_affinity::m_mutex", 0, 0, PSI_DOCUMENT_ME}
 };
 /* clang-format on */
 
@@ -12632,7 +12683,6 @@ PSI_cond_key key_cond_slave_worker_hash;
 PSI_cond_key key_monitor_info_run_cond;
 PSI_cond_key key_COND_delegate_connection_cond_var;
 PSI_cond_key key_COND_group_replication_connection_cond_var;
-PSI_cond_key key_COND_dbms_pipe_cond_var;
 
 /* clang-format off */
 static PSI_cond_info all_server_conds[]=
@@ -12676,8 +12726,7 @@ static PSI_cond_info all_server_conds[]=
   { &key_monitor_info_run_cond, "Source_IO_monitor::run_cond", 0, 0, PSI_DOCUMENT_ME},
   { &key_COND_delegate_connection_cond_var, "THD::COND_delegate_connection_cond_var", 0, 0, PSI_DOCUMENT_ME},
   { &key_COND_group_replication_connection_cond_var, "THD::COND_group_replication_connection_cond_var", 0, 0, PSI_DOCUMENT_ME},
-  { &key_COND_pq_threads_running, "COND_pq_threads_running", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-  { &key_COND_dbms_pipe_cond_var, "Global_dbms_pipe_manager::cond", 0, 0, PSI_DOCUMENT_ME}
+  { &key_COND_pq_threads_running, "COND_pq_threads_running", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
 };
 /* clang-format on */
 
@@ -12869,7 +12918,6 @@ PSI_stage_info stage_rpl_failover_updating_source_member_details= { 0, "Updating
 PSI_stage_info stage_rpl_failover_wait_before_next_fetch= { 0, "Wait before trying to fetch next membership changes from source", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_communication_delegation= { 0, "Connection delegated to Group Replication", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_restoring_secondary_keys= { 0, "restoring secondary keys", 0, PSI_DOCUMENT_ME};
-PSI_stage_info stage_dbms_pipe_receive_message= { 0, "dbms_pipe receive message", 0, PSI_DOCUMENT_ME};
 /* clang-format on */
 
 extern PSI_stage_info stage_waiting_for_disk_space;
@@ -12974,8 +13022,7 @@ PSI_stage_info *all_server_stages[] = {
     &stage_rpl_failover_updating_source_member_details,
     &stage_rpl_failover_wait_before_next_fetch,
     &stage_communication_delegation,
-    &stage_restoring_secondary_keys,
-    &stage_dbms_pipe_receive_message};
+    &stage_restoring_secondary_keys};
 
 PSI_socket_key key_socket_tcpip;
 PSI_socket_key key_socket_unix;

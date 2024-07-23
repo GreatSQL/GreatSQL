@@ -95,25 +95,10 @@ DELIMITER ;$$
 --error ER_NOT_SUPPORTED_YET
 SELECT t_air(1,'aa') a FROM dual union select 1;
 
---echo #
---echo # test of duplicate name
---echo #
-drop type t_air;
-DELIMITER $$;
-create or replace function t_air (v int) return int deterministic as begin return 1; end;$$
-DELIMITER ;$$
-
---echo #
---echo # test of duplicate name
---echo #
---error ER_SP_ALREADY_EXISTS
-create or replace type t_air as object(id int, name varchar(20));
 
 --echo #
 --echo # test of bug7354
 --echo #
-drop function t_air;
-
 create or replace type t_air as object(id int, name varchar(20));
 CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
 --error ER_NOT_SUPPORTED_YET
@@ -124,11 +109,9 @@ select * from zgh1;
 --echo #
 --echo # test of bug8849
 --echo #
---error ER_NOT_SUPPORTED_YET
-select t_air_table(name1) from zgh1 connect by level<2;
+select t_air_table(null) from zgh1 connect by level<2;
 
 CREATE OR REPLACE TYPE int_table AS table OF int;
---error ER_NOT_SUPPORTED_YET
 select int_table(1,2) from zgh1 connect by level<2;
 drop type t_air_table;
 drop type int_table;

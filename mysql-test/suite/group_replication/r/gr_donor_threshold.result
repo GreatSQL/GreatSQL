@@ -1,0 +1,99 @@
+include/group_replication.inc [rpl_server_count=3]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+SET PERSIST group_replication_start_on_boot = OFF;
+include/spawn_monitoring_process.inc
+include/start_and_bootstrap_group_replication.inc
+include/start_group_replication.inc
+include/rpl_gr_wait_for_number_of_members.inc
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+INSERT INTO t1 VALUES (1,1);
+include/rpl_sync.inc
+## test chose donor without clone
+LOCK TABLES t1 READ;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+SET GLOBAL group_replication_donor_threshold=10;
+include/start_group_replication.inc
+SELECT COUNT(*) FROM performance_schema.error_log WHERE data LIKE '%host:127.0.0.1, port:port_1 is suitable for donor%' AND logged > '0';
+COUNT(*)
+1
+SELECT COUNT(*) FROM performance_schema.error_log WHERE data LIKE '%host:127.0.0.1, port:port_2 is not suitable for donor%' AND logged > '0';
+COUNT(*)
+1
+include/stop_group_replication.inc
+UNLOCK TABLES;
+include/rpl_sync.inc
+## test chose donor with clone
+LOCK TABLES t1 READ;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+UPDATE t1 SET c2=c2+1;
+SET GLOBAL group_replication_donor_threshold=10;
+SET GLOBAL group_replication_clone_threshold=1;
+START GROUP_REPLICATION;
+UNLOCK TABLES;
+include/rpl_reconnect.inc
+include/gr_wait_for_member_state.inc
+SELECT COUNT(*) FROM performance_schema.error_log WHERE data LIKE '%host:127.0.0.1, port:port_1 is suitable for clone donor%' AND logged>'0';
+COUNT(*)
+1
+SELECT COUNT(*) FROM performance_schema.error_log WHERE data LIKE '%host:127.0.0.1, port:port_2 is not suitable for clone donor%' AND logged>'0';
+COUNT(*)
+1
+DROP TABLE t1;
+include/rpl_sync.inc
+include/rpl_sync.inc
+UNINSTALL PLUGIN clone;
+UNINSTALL PLUGIN clone;
+UNINSTALL PLUGIN clone;
+set session sql_log_bin=0;
+call mtr.add_suppression("This member will start distributed recovery using clone. It is due to the number of missing transactions being higher than the configured threshold of*");
+call mtr.add_suppression("Clone removing all user data for provisioning: Started");
+call mtr.add_suppression("Clone removing all user data for provisioning: Finished");
+set session sql_log_bin=1;
+RESET PERSIST;
+include/clean_monitoring_process.inc
+include/group_replication_end.inc
+Warnings:
+Warning	3615	Variable group_replication_ip_allowlist does not exist in persisted config file

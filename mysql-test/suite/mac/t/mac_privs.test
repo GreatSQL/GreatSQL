@@ -1,0 +1,266 @@
+--source ../include/mac_row_policy_create.inc
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+call sys_mac.mac_set_user_priv('root', 'localhost', 'P1', 'read');
+call sys_mac.mac_apply_user_policy('root','localhost','P2','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+
+connect (master,localhost,root,,);
+--connection master
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+--echo ##########################test read#############################
+
+create database db;
+use db;
+create table t1(C1 int primary key, c2 int);
+insert into t1 values(1, 1),(2, 2),(3, 3),(4, 4);
+--echo ##########################test database#############################
+
+call sys_mac.mac_apply_database_policy('db','P1', 'L3:C3:G1');
+call sys_mac.mac_apply_database_policy('db','P2', 'L3:C3:G1');
+
+select * from db.t1;
+
+--error ER_DATABASEMAC_DEINED_ERROR
+insert into db.t1 values(5, 5);
+
+call sys_mac.mac_drop_database_policy('db', 'P1');
+call sys_mac.mac_drop_database_policy('db', 'P2');
+
+--echo ##########################test table#############################
+
+call sys_mac.mac_apply_table_policy('db', 't1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_table_policy('db', 't1', 'P2', 'L3:C3:G1');
+
+select * from db.t1;
+
+--error ER_TABLEMAC_DEINED_ERROR
+insert into db.t1 values(5, 5);
+
+call sys_mac.mac_drop_table_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_table_policy('db', 't1', 'P2');
+
+--echo ##########################test column#############################
+
+call sys_mac.mac_apply_column_policy('db', 't1', 'c1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_column_policy('db', 't1', 'c1', 'P2', 'L3:C3:G1');
+
+
+
+select * from db.t1;
+
+--error ER_COLUMNMAC_DEINED_ERROR
+insert into db.t1 values(5, 5);
+
+call sys_mac.mac_drop_column_policy('db', 't1', 'c1', 'P1');
+call sys_mac.mac_drop_column_policy('db', 't1', 'c1', 'P2');
+
+--echo ##########################test row#############################
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3:G1', 1);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 1);
+
+
+select * from db.t1;
+
+--error ER_MAC_ROW_WRITE_DEINED_ERROR
+insert into db.t1 values(5, 5, 2, 2);
+
+--error ER_MAC_ROW_WRITE_DEINED_ERROR
+insert into db.t1 values(5, 5, 500, 2);
+
+--error ER_MAC_ROW_WRITE_DEINED_ERROR
+insert into db.t1 values(5, 5, 1, 2);
+
+call sys_mac.mac_drop_row_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_row_policy('db', 't1', 'P2');
+
+--echo ##########################test full #############################
+call sys_mac.mac_set_user_priv('root', 'localhost', 'P1', 'full');
+connect (user1,localhost,root,,);
+--connection user1
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+
+--echo ##########################test database#############################
+
+call sys_mac.mac_apply_database_policy('db','P1', 'L3:C3:G1');
+call sys_mac.mac_apply_database_policy('db','P2', 'L3:C3:G1');
+
+select * from db.t1;
+
+insert into db.t1 values(5, 5);
+
+call sys_mac.mac_drop_database_policy('db', 'P1');
+call sys_mac.mac_drop_database_policy('db', 'P2');
+
+--echo ##########################test table#############################
+
+call sys_mac.mac_apply_table_policy('db', 't1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_table_policy('db', 't1', 'P2', 'L3:C3:G1');
+
+select * from db.t1;
+
+insert into db.t1 values(6, 6);
+
+call sys_mac.mac_drop_table_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_table_policy('db', 't1', 'P2');
+
+--echo ##########################test column#############################
+
+call sys_mac.mac_apply_column_policy('db', 't1', 'c1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_column_policy('db', 't1', 'c1', 'P2', 'L3:C3:G1');
+
+
+
+select * from db.t1;
+
+insert into db.t1 values(7, 7);
+
+call sys_mac.mac_drop_column_policy('db', 't1', 'c1', 'P1');
+call sys_mac.mac_drop_column_policy('db', 't1', 'c1', 'P2');
+
+--echo ##########################test row#############################
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3:G1', 1);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 1);
+
+
+select * from db.t1;
+
+insert into db.t1 values(8, 8, 2, 2);
+
+insert into db.t1 values(9, 9, 500, 2);
+
+insert into db.t1 values(10, 10, 1, 2);
+
+call sys_mac.mac_drop_user_policy('root','localhost', 'P1');
+call sys_mac.mac_drop_user_policy('root','localhost', 'P2');
+
+--disconnect user1
+--connection master
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+connect (user2,localhost,root,,);
+--connection user2
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+select * from db.t1;
+
+--error ER_MAC_ROW_WRITE_DEINED_ERROR
+insert into db.t1 values(100, 100, 1, 2);
+
+call sys_mac.mac_drop_row_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_row_policy('db', 't1', 'P2');
+
+--disconnect user2
+--connection master
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+
+--echo ##########################test privileged #############################
+call sys_mac.mac_grant_user_all_privs('root', 'localhost');
+connect (user3,localhost,root,,);
+--connection user3
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+--echo ##########################test database#############################
+
+call sys_mac.mac_apply_database_policy('db','P1', 'L3:C3:G1');
+call sys_mac.mac_apply_database_policy('db','P2', 'L3:C3:G1');
+
+select * from db.t1;
+
+insert into db.t1 values(11, 11);
+
+call sys_mac.mac_drop_database_policy('db', 'P1');
+call sys_mac.mac_drop_database_policy('db', 'P2');
+
+--echo ##########################test table#############################
+
+call sys_mac.mac_apply_table_policy('db', 't1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_table_policy('db', 't1', 'P2', 'L3:C3:G1');
+
+select * from db.t1;
+
+insert into db.t1 values(12, 12);
+
+call sys_mac.mac_drop_table_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_table_policy('db', 't1', 'P2');
+
+--echo ##########################test column#############################
+
+call sys_mac.mac_apply_column_policy('db', 't1', 'c1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_column_policy('db', 't1', 'c1', 'P2', 'L3:C3:G1');
+
+select * from db.t1;
+
+insert into db.t1 values(13, 13);
+
+call sys_mac.mac_drop_column_policy('db', 't1', 'c1', 'P1');
+call sys_mac.mac_drop_column_policy('db', 't1', 'c1', 'P2');
+
+--echo ##########################test row#############################
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3:G1', 1);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 1);
+
+
+select * from db.t1;
+
+insert into db.t1 values(14, 14, 2, 2);
+
+insert into db.t1 values(15, 15, 500, 2);
+
+insert into db.t1 values(16, 16, 1, 2);
+
+call sys_mac.mac_revoke_user_all_privs('root', 'localhost');
+
+select * from sys_mac.mac_privileged_users;
+
+
+--disconnect user3
+--connection master
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+connect (user4,localhost,root,,);
+--connection user4
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+select * from db.t1;
+
+--error ER_MAC_ROW_WRITE_DEINED_ERROR
+insert into db.t1 values(100, 100, 1, 2);
+
+drop database db;
+
+--disconnect user4
+--connection master
+
+--source ../include/mac_destory.inc
+disconnect master;
+

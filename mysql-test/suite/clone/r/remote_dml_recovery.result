@@ -154,16 +154,16 @@ SET GLOBAL clone_valid_donor_list = 'HOST:PORT';
 CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' ;
 select ID, STATE, ERROR_NO, ERROR_MESSAGE from performance_schema.clone_status;
 ID	STATE	ERROR_NO	ERROR_MESSAGE
-1	Failed	1815	Recovery failed. Please Retry Clone. For details, look into server error log.
+0	Failed	1815	Recovery failed. Please Retry Clone. For details, look into server error log.
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
-1	DROP DATA	Completed
-1	FILE COPY	Completed
-1	PAGE COPY	Completed
-1	REDO COPY	Completed
-1	FILE SYNC	Completed
-1	RESTART	Completed
-1	RECOVERY	Failed
+0	DROP DATA	Completed
+0	FILE COPY	Completed
+0	PAGE COPY	Completed
+0	REDO COPY	Completed
+0	FILE SYNC	Completed
+0	RESTART	Completed
+0	RECOVERY	Failed
 SET global debug="-d,clone_recovery_crash_point";
 # In connection default - Finished Cloning
 # In connection con1 - Waiting

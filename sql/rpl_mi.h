@@ -1,5 +1,5 @@
 /* Copyright (c) 2006, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -351,6 +351,10 @@ class Master_info : public Rpl_info {
   char compression_algorithm[COMPRESSION_ALGORITHM_NAME_BUFFER_SIZE];
   int zstd_compression_level;
   NET_SERVER server_extn;  // maintain compress context info.
+  /**
+    Bytes to be transferred per second.
+  */
+  std::atomic<uint64_t> data_speed{0};
 
   int mi_init_info();
   void end_info();

@@ -624,7 +624,7 @@ select * from pivot1 pivot(wm_concat(c) for (a) in (1, 2, 3)) order by b;
 create type t_pair as object(id int, name varchar2(1024));
 --error 1235
 select * from pivot1 pivot(sum(t_pair(1, 'wang')) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
---error 7537
+--error 7539
 select * from pivot1 pivot(sum(t_pair(1, 'wang').id) for (a) in (1, 2, 3, 4, 5 ,6)) order by b;
 drop type t_pair;
 

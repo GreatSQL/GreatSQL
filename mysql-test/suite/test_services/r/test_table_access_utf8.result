@@ -20,6 +20,7 @@ mtr
 mysql
 performance_schema
 sys
+sys_mac
 test
 ∀p∊ℙ
 CREATE TABLE `∀p∊ℙ`.`∃s∊ℚ`(`s(p)≎⊤` VARCHAR(255) CHARACTER SET `utf8mb4`);

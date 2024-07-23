@@ -106,6 +106,7 @@ mtr
 mysql
 performance_schema
 sys
+sys_mac
 test
 #
 # Stop slave.

@@ -2,7 +2,7 @@
 
 Copyright (c) 1997, 2021, Oracle and/or its affiliates.
 Copyright (c) 2022, Huawei Technologies Co., Ltd.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -486,11 +486,25 @@ bool row_search_index_stats(const char *db_name, const char *tbl_name,
 class Row_sel_get_clust_rec_for_mysql {
   const rec_t *cached_clust_rec;
   rec_t *cached_old_vers;
+  lsn_t cached_lsn;
+  page_no_t cached_page_no;
+  space_id_t cached_space_id;
 
  public:
   /** Constructor */
   Row_sel_get_clust_rec_for_mysql()
-      : cached_clust_rec(nullptr), cached_old_vers(nullptr) {}
+      : cached_clust_rec(nullptr),
+        cached_old_vers(nullptr),
+        cached_lsn(0),
+        cached_page_no(0),
+        cached_space_id(0) {
+    if (nullptr != cached_clust_rec) {
+      page_t *page = page_align(cached_clust_rec);
+      cached_lsn = mach_read_from_8(page + FIL_PAGE_LSN);
+      cached_page_no = mach_read_from_4(page + FIL_PAGE_OFFSET);
+      cached_space_id = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
+    }
+  }
   ~Row_sel_get_clust_rec_for_mysql() {}
   /** Retrieve the clustered index record corresponding to a record in a
   non-clustered index. Does the necessary locking.

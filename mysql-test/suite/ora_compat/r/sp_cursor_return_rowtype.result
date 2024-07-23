@@ -81,7 +81,7 @@ fetch c into a1,b1;
 end;
 $$
 call p1;
-ERROR HY000: Incorrect integer value: 'dd' for column 'name_d' at row 1
+ERROR HY000: Incorrect integer value: 'dd' for column 'b' at row 1
 #
 # test of cursor return table%rowtype is select_stmt with different type
 #
@@ -108,7 +108,7 @@ fetch c into a1,b1;
 end;
 $$
 call p1;
-ERROR HY000: Incorrect integer value: 'dd' for column 'a' at row 1
+ERROR HY000: Incorrect integer value: 'dd' for column 'b' at row 1
 #
 # test of cursor return cursor%rowtype is select_stmt with different type
 #
@@ -137,7 +137,7 @@ fetch c1 into a1,b1;
 end;
 $$
 call p1;
-ERROR HY000: Incorrect integer value: 'dd' for column 'a' at row 1
+ERROR HY000: Incorrect integer value: 'dd' for column 'b' at row 1
 #
 # test of type is ref cursor return record%type
 #
@@ -365,14 +365,14 @@ exit when sc2%notfound;
 select a1,b1;
 end loop;
 for i in sc3 loop
-select i.id,i.type1;
+select i.a,i.b;
 end loop;
 end;
 $$
 call p1;
 a1	b1
 4	dd
-i.id	i.type1
+i.a	i.b
 5	ee
 #
 # test of strong cursor set to strong cursor
@@ -557,6 +557,36 @@ a	b
 4	dd
 5	ee
 1	cc
+drop function f1;
+#
+# test of bug9462
+#
+create or replace function f1()
+return  int
+as
+begin
+insert into t1 values(1,'aa');
+return 1;
+end;
+$$
+CREATE or replace PROCEDURE p1() as
+a int;
+cursor c2 is select f1()  from dual ;
+begin
+open c2;
+end ;
+$$
+select count(*) from t1;
+count(*)
+6
+call p1;
+select count(*) from t1;
+count(*)
+7
+call p1;
+select count(*) from t1;
+count(*)
+8
 drop function f1;
 drop procedure pro_return;
 drop procedure p1;

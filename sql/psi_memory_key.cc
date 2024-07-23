@@ -1,6 +1,6 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -147,6 +147,7 @@ PSI_memory_key key_memory_user_var_entry_value;
 PSI_memory_key key_memory_sp_cache;
 PSI_memory_key key_memory_write_set_extraction;
 PSI_memory_key key_memory_pq_mem_root;
+PSI_memory_key key_memory_data_mask;
 
 // Percona Server PSI memory keys
 PSI_memory_key key_memory_userstat_table_stats;
@@ -383,6 +384,8 @@ static PSI_memory_info all_server_memory[] = {
      PSI_DOCUMENT_ME},
     {&key_memory_histograms, "histograms", 0, 0, PSI_DOCUMENT_ME},
     {&key_memory_hash_join, "hash_join", PSI_FLAG_MEM_COLLECT, 0,
+     PSI_DOCUMENT_ME},
+    {&key_memory_data_mask, "sql_data_mask", PSI_FLAG_ONLY_GLOBAL_STAT, 0,
      PSI_DOCUMENT_ME},
 
     {&key_memory_userstat_table_stats, "userstat_table_stats",

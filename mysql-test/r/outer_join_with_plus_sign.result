@@ -671,27 +671,30 @@ r1	r2	r1	r2
 8.000000000000000000000000000000	8a	8.000000000000000000000000000000	8b
 explain format=tree select * from t1,t2 where t1.r1=t2.r1(+) and rownum<5;
 EXPLAIN
--> Filter: (rownum < 5)  (cost=16.31 rows=160)
-    -> Left hash join (t2.r1 = t1.r1)  (cost=16.31 rows=160)
-        -> Table scan on t1  (cost=2.25 rows=20)
-        -> Hash
-            -> Table scan on t2  (cost=0.05 rows=8)
+-> COUNTER ROWNUM
+    -> Filter: (rownum < 5)  (cost=16.31 rows=160)
+        -> Left hash join (t2.r1 = t1.r1)  (cost=16.31 rows=160)
+            -> Table scan on t1  (cost=2.25 rows=20)
+            -> Hash
+                -> Table scan on t2  (cost=0.05 rows=8)
 
 explain format=tree select * from t1,t2 where t1.r1=t2.r1 and rownum<5;
 EXPLAIN
--> Filter: (rownum < 5)  (cost=17.30 rows=16)
-    -> Inner hash join (t1.r1 = t2.r1)  (cost=17.30 rows=16)
-        -> Table scan on t1  (cost=0.06 rows=20)
-        -> Hash
-            -> Table scan on t2  (cost=1.05 rows=8)
+-> COUNTER ROWNUM
+    -> Filter: (rownum < 5)  (cost=17.30 rows=16)
+        -> Inner hash join (t1.r1 = t2.r1)  (cost=17.30 rows=16)
+            -> Table scan on t1  (cost=0.06 rows=20)
+            -> Hash
+                -> Table scan on t2  (cost=1.05 rows=8)
 
 explain format=tree select * from t1,t2 where t1.r1=t2.r1(+) and rownum<t2.r1;
 EXPLAIN
--> Filter: (rownum < t2.r1)  (cost=16.77 rows=16)
-    -> Inner hash join (t1.r1 = t2.r1)  (cost=16.77 rows=16)
-        -> Table scan on t1  (cost=0.17 rows=20)
-        -> Hash
-            -> Table scan on t2  (cost=0.52 rows=8)
+-> COUNTER ROWNUM
+    -> Filter: (rownum < t2.r1)  (cost=16.77 rows=16)
+        -> Inner hash join (t1.r1 = t2.r1)  (cost=16.77 rows=16)
+            -> Table scan on t1  (cost=0.17 rows=20)
+            -> Hash
+                -> Table scan on t2  (cost=0.52 rows=8)
 
 select * from t1, t2 where rownum < t1.r1;
 r1	r2	r1	r2

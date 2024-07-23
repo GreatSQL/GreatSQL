@@ -1,0 +1,391 @@
+--source include/have_debug.inc
+SET sql_mode=ORACLE;
+
+show variables like '%udt_format_result%';
+set @@udt_format_result='DBA';
+
+--echo #
+--echo # test of create type
+--echo #
+create or replace type t_air as object(id int,type varchar(20));
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+create table tt_air(id int,name1 t_air);
+insert into tt_air values(1,t_air(10,'aabb'));
+insert into tt_air values(2,t_air(20,'qwed'));
+CREATE TABLE t1 (a INT, b VARCHAR(30));
+insert into t1 values(1,'aa'),(2,'bb'),(3,'cc'),(4,'dd'),(5,'ee') ;
+
+--echo #
+--echo # test of type is table of static cursor%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+CURSOR c IS SELECT * FROM t1 WHERE a>3;
+type tklist is table of c%rowtype index by binary_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(0).a := 1;
+ stu_record_val(0).b := 'aa1';
+ stu_record_val(2).a := 2;
+ stu_record_val(2).b := 'aa2';
+ select stu_record_val(0), stu_record_val(2);
+ SELECT stu_record_val.count;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of type is table of ref cursor%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type t_test1 is record(
+  id int := 1,
+  type1  varchar(200));
+  t_test t_test1;
+  CURSOR c return t_test%type IS SELECT * FROM t1 WHERE a>3;
+  TYPE ref_rs1 IS REF CURSOR RETURN c%rowtype;
+  c1 ref_rs1;
+  type tklist is table of c1%rowtype index by binary_integer;
+  stu_record_val tklist;
+begin
+ stu_record_val(0).a := 1;
+ stu_record_val(0).b := 'aa1';
+ stu_record_val(2).a := 2;
+ stu_record_val(2).b := 'aa2';
+ select stu_record_val(0), stu_record_val(2);
+ SELECT stu_record_val.count;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of type is table of t_air%rowtype,unsupport
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type tklist is table of t_air%rowtype index by binary_integer;
+stu_record_val tklist;
+begin
+end;
+$$
+DELIMITER ;$$
+--error ER_NO_SUCH_TABLE
+call p1;
+
+--echo #
+--echo # test of type is table of t1%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type tklist is table of tt_air%rowtype index by binary_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(0).id := 1;
+ stu_record_val(0).name1 := t_air(10,'aa10');
+ stu_record_val(2).id := 2;
+ stu_record_val(2).name1 := t_air(102,'aa102');
+ select stu_record_val(0), stu_record_val(2);
+ SELECT stu_record_val.count;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of type is table of static cursor%rowtype used in record
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+CURSOR c IS SELECT * FROM t1 WHERE a>3;
+type tklist is table of c%rowtype index by binary_integer;
+type t_test1 is record(
+  id int := 1,
+  type1 tklist);
+t_test t_test1;
+begin
+ t_test.type1(0).a := 1;
+ t_test.type1(0).b := 'aa1';
+ t_test.type1(2).a := 2;
+ t_test.type1(2).b := 'aa2';
+ select t_test.type1(0).a, t_test.type1(0).b,t_test.type1(2).a,t_test.type1(2).b;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of type is table of static cursor%rowtype used in record table
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+CURSOR c IS SELECT * FROM t1 WHERE a>3;
+type tklist is table of c%rowtype index by binary_integer;
+type t_test1 is record(
+  id int := 1,
+  type1 tklist);
+type tklist1 is table of t_test1 index by binary_integer;
+t_test tklist1;
+begin
+ t_test(0).type1(0).a := 1;
+ t_test(0).type1(0).b := 'aa1';
+ t_test(1).type1(2).a := 2;
+ t_test(1).type1(2).b := 'aa2';
+ select t_test(0).type1(0).a, t_test(0).type1(0).b,t_test(1).type1(2).a,t_test(1).type1(2).b;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of type is table of ref cursor%rowtype used in record table
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR c return t1%rowtype IS SELECT * FROM t1 WHERE a>3;
+  TYPE ref_rs1 IS REF CURSOR RETURN c%rowtype;
+  c1 ref_rs1;
+  type tklist is table of c1%rowtype index by binary_integer;
+type t_test1 is record(
+  id int := 1,
+  type1 tklist);
+type tklist1 is table of t_test1 index by binary_integer;
+t_test tklist1;
+begin
+ t_test(0).type1(0).a := 1;
+ t_test(0).type1(0).b := 'aa1';
+ t_test(1).type1(2).a := 2;
+ t_test(1).type1(2).b := 'aa2';
+ select t_test(0).type1(0).a, t_test(0).type1(0).b,t_test(1).type1(2).a,t_test(1).type1(2).b;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of type is table of ref cursor%rowtype and c%rowtype
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+CURSOR c IS SELECT * FROM tt_air WHERE id>3;
+type tklist is table of c%rowtype index by binary_integer;
+stu_record_val tklist;
+cc c%rowtype;
+begin
+ stu_record_val(0).id := 1;
+ stu_record_val(0).name1 := t_air(1,'aa');
+ stu_record_val(2).id := 2;
+ stu_record_val(2).name1 := t_air(2,'aa1');
+cc:=stu_record_val(2);
+select cc;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of type is table of ref cursor%rowtype and c%rowtype
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+CURSOR c IS SELECT name1 FROM tt_air WHERE id>3;
+CURSOR c1 IS SELECT * FROM tt_air WHERE id>3;
+type tklist is table of c%rowtype index by binary_integer;
+stu_record_val tklist;
+cc c1%rowtype;
+begin
+ stu_record_val(0).name1 := t_air(1,'aa');
+ stu_record_val(2).name1 := t_air(2,'aa1');
+cc:=stu_record_val(2);
+select cc;
+end;
+$$
+DELIMITER ;$$
+--error ER_TABLES_DIFFERENT_METADATA
+call p1;
+
+--echo #
+--echo # test of type is table of ref cursor%rowtype and table%rowtype
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+CURSOR c IS SELECT * FROM tt_air WHERE id>3;
+type tklist is table of c%rowtype index by binary_integer;
+stu_record_val tklist;
+cc tt_air%rowtype;
+begin
+ stu_record_val(0).id := 1;
+ stu_record_val(0).name1 := t_air(1,'aa');
+ stu_record_val(2).id := 2;
+ stu_record_val(2).name1 := t_air(2,'aa1');
+cc:=stu_record_val(2);
+select cc;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of ER_UDT_INCONS_DATATYPES
+--echo #
+DELIMITER $$;
+--error ER_UDT_INCONS_DATATYPES
+declare
+    type test IS TABLE OF int;
+    v1 test;
+begin
+    v1 := test(test(2,7,8,9,10),7,4);
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of cursor set to itself
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1 as
+type t_test1 is record(
+  id int := 1,
+  type1  varchar2(200));
+  t_test t_test1;
+  CURSOR c return t_test%type IS SELECT * FROM t1 WHERE a>3;
+  TYPE ref_rs1 IS REF CURSOR RETURN c%rowtype;
+  TYPE ref_rs2 IS REF CURSOR RETURN t_test1;
+  c1 ref_rs1;
+  c2 ref_rs2;
+begin
+  c1:=c1;
+  c2:=c2;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of cursor set to ref cursor
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+   type ref_cursor1 is ref cursor;
+   ref_c ref_cursor1;
+   cursor c return t1%rowtype is select * from t1 where a>3;
+   type ref_rs1 is ref cursor return c%rowtype;
+   c1 ref_rs1;
+   var t1%rowtype;
+begin
+   open c1 for select * from t1 where rownum<=1;
+   c1:=ref_c;
+   ref_c:=null;
+   open c1 for select * from t1 where rownum<=1;
+   loop
+     fetch c1 into var;
+     select var;
+     exit when c1%notfound;
+   end loop;
+   close c1;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of udt table index
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+CURSOR c IS SELECT * FROM t1 WHERE a>3;
+type tklist is table of c%rowtype index by binary_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(0).a := 2;
+ stu_record_val(stu_record_val(0).a).b := 'aa1';
+ select stu_record_val(0), stu_record_val(2);
+ SELECT stu_record_val.count;
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of udt table index
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+CURSOR c IS SELECT * FROM t1 WHERE a>3;
+type tklist is table of c%rowtype index by binary_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(0).a := 1;
+ stu_record_val(0).b := 'aa1';
+ stu_record_val(length(stu_record_val(0).a)).a := 2;
+ stu_record_val(1).b := 'xxx';
+ select stu_record_val(0), stu_record_val(1);
+end;
+$$
+DELIMITER ;$$
+call p1;
+
+--echo #
+--echo # test of udt table index
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+CURSOR c IS SELECT * FROM t1 WHERE a>3;
+type tklist is table of c%rowtype index by binary_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(0).a := 1;
+ stu_record_val(0).b := 'aa1';
+ select stu_record_val(0),stu_record_val(t_air(20,'QWED'));
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1;
+
+--echo #
+--echo # test of sp_prepare_func_item index
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+  CURSOR c IS SELECT name1 FROM tt_air WHERE id>3;
+  CURSOR c1 IS SELECT * FROM tt_air WHERE id>3;
+  type tklist is table of c%rowtype index by binary_integer;
+  stu_record_val tklist;
+  cc c1%rowtype;
+begin
+ stu_record_val(-10).name1 := t_air(2,'aa1');
+  select stu_record_val;
+end;
+$$
+DELIMITER ;$$
+call p1;
+call p1;
+
+--echo #
+--echo # test of sp_prepare_func_item index
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+  type t_test1 is record(
+  id int := 1,
+  type1  varchar(200));
+  t_test t_test1;
+  CURSOR c return t_test%type IS SELECT a FROM t1 WHERE a>3;
+begin
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT
+call p1;
+
+drop PROCEDURE p1;
+drop type t_air_table;
+drop table tt_air;
+drop table t1;
+drop type t_air;
+
+
+

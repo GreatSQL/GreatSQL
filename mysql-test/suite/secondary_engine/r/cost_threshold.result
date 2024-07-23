@@ -1,6 +1,7 @@
 #
 # Test cases for the secondary_engine_cost_threshold variable.
 #
+SET @@use_secondary_engine = ON;
 SELECT @@secondary_engine_cost_threshold,
 @@global.secondary_engine_cost_threshold;
 @@secondary_engine_cost_threshold	@@global.secondary_engine_cost_threshold

@@ -19,6 +19,7 @@ SET PASSWORD='';
 SELECT user, host, plugin, LENGTH(authentication_string)
 FROM mysql.user ORDER by user;
 user	host	plugin	LENGTH(authentication_string)
+greatdb.sys	localhost	caching_sha2_password	70
 mysql.infoschema	localhost	caching_sha2_password	70
 mysql.session	localhost	caching_sha2_password	70
 mysql.sys	localhost	caching_sha2_password	70
@@ -69,6 +70,7 @@ SELECT 1;
 SELECT user, host, plugin, LENGTH(authentication_string)
 FROM mysql.user ORDER BY user;
 user	host	plugin	LENGTH(authentication_string)
+greatdb.sys	localhost	caching_sha2_password	70
 mysql.infoschema	localhost	caching_sha2_password	70
 mysql.session	localhost	caching_sha2_password	70
 mysql.sys	localhost	caching_sha2_password	70
@@ -132,7 +134,6 @@ CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_P
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	information_schema	utf8mb3	utf8mb3_general_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
-def	sys_audit	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 # Shut server down

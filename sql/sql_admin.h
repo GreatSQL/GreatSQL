@@ -1,4 +1,5 @@
 /* Copyright (c) 2010, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -409,8 +410,9 @@ class Sql_cmd_clone : public Sql_cmd {
         m_passwd(),
         m_data_dir(),
         m_clone(),
-        m_is_local(false) {}
-
+        m_is_local(false),
+        m_based_lsn(0),
+        m_enable_page_track(false) {}
   /** Construct clone command for clone client
   @param[in]  user_info user, password and remote host information
   @param[in]  port port for remote server
@@ -425,8 +427,12 @@ class Sql_cmd_clone : public Sql_cmd {
         m_user(),
         m_passwd(),
         m_data_dir(data_dir),
+
         m_clone(),
-        m_is_local(true) {}
+        m_is_local(true),
+        m_based_lsn(0),
+        m_enable_page_track(false),
+        m_base_dir(EMPTY_CSTR) {}
 
   enum_sql_command sql_command_code() const override { return SQLCOM_CLONE; }
 
@@ -450,6 +456,14 @@ class Sql_cmd_clone : public Sql_cmd {
 
   /** @return true, if it is local clone command */
   bool is_local() const { return (m_is_local); }
+
+  void set_enable_page_track() { m_enable_page_track = true; }
+
+  void set_based_lsn(ulonglong based_lsn) { m_based_lsn = based_lsn; }
+
+  LEX_CSTRING data_dir() { return m_data_dir; }
+
+  void set_based_dir(LEX_CSTRING data_dir) { m_base_dir = data_dir; }
 
  private:
   /** Remote server IP */
@@ -475,5 +489,14 @@ class Sql_cmd_clone : public Sql_cmd {
 
   /** If it is local clone operation */
   bool m_is_local;
+
+  /** start lsn increment backup based on */
+  ulonglong m_based_lsn;
+
+  /** If it is enable page track operation */
+  bool m_enable_page_track;
+
+  /** Based data directory for increment cloned data */
+  LEX_CSTRING m_base_dir;
 };
 #endif

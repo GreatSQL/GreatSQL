@@ -1,5 +1,5 @@
 # Copyright (c) 2006, 2022, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2023, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -27,13 +27,8 @@ ADD_SUBDIRECTORY(sys_schema)
 
 MYSQL_ADD_EXECUTABLE(comp_sql comp_sql.cc SKIP_INSTALL)
 
-IF(WITH_CASCADE_REVOKE)
-  SET(MYSQL_SYSTEM_TABLES_SQL mysql_system_tables_cr.sql)
-  SET(MYSQL_SYSTEM_TABLES_FIX_SQL mysql_system_tables_fix_cr.sql)
-ELSE()
-  SET(MYSQL_SYSTEM_TABLES_SQL mysql_system_tables.sql)
-  SET(MYSQL_SYSTEM_TABLES_FIX_SQL mysql_system_tables_fix.sql)
-ENDIF()
+SET(MYSQL_SYSTEM_TABLES_SQL mysql_system_tables.sql)
+SET(MYSQL_SYSTEM_TABLES_FIX_SQL mysql_system_tables_fix.sql)
 
 # Add compiler information, for easier debugging of output from mysql_config.
 SET(COMPILER_ID_AND_VERSION
@@ -441,6 +436,7 @@ ELSE()
   IF(WITH_SYSTEMD)
     SET(BIN_SCRIPTS
       mysql_config
+      mysqldecompress
       mysqldumpslow
       mysqld_safe
       ps_mysqld_helper
@@ -449,6 +445,7 @@ ELSE()
   ELSE()
     SET(BIN_SCRIPTS
       mysql_config
+      mysqldecompress
       mysqldumpslow
       mysqld_multi
       mysqld_safe

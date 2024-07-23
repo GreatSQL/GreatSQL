@@ -1,5 +1,5 @@
 /* Copyright (c) 2019, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -371,15 +371,18 @@ struct Oracle_sp_for_loop_bounds {
   int direction;
   sp_assignment_lex *from;
   sp_assignment_lex *to;
+  bool is_select_loop;
   Oracle_sp_for_loop_bounds(uint m_offset, LEX_STRING m_cursor_name,
                             bool is_cursor_m, int m_direction,
-                            sp_assignment_lex *m_from, sp_assignment_lex *m_to)
+                            sp_assignment_lex *m_from, sp_assignment_lex *m_to,
+                            bool m_is_select_loop = false)
       : offset(m_offset),
         cursor_name(m_cursor_name),
         is_cursor(is_cursor_m),
         direction(m_direction),
         from(m_from),
-        to(m_to) {}
+        to(m_to),
+        is_select_loop(m_is_select_loop) {}
 };
 
 struct Oracle_sp_for_loop_index_and_bounds {
@@ -394,6 +397,9 @@ struct Oracle_sp_for_loop_index_and_bounds {
   uint var_index;
   const char *start_ident_pos;
   const char *end_ident_pos;
+  // If it's for in (select statement),when run CONTINUE in loop,it should close
+  // cursor before CONTINUE next loop.
+  bool is_select_loop;
   Oracle_sp_for_loop_index_and_bounds(
       const Oracle_sp_for_loop_bounds oracle_sp_for_loop_bounds,
       LEX_STRING m_cursor_var, Item_splocal *m_cursor_var_item,
@@ -408,7 +414,8 @@ struct Oracle_sp_for_loop_index_and_bounds {
         jump_condition(oracle_sp_for_loop_bounds.to),
         var_index(m_var_index),
         start_ident_pos(m_start_pos),
-        end_ident_pos(m_end_pos) {}
+        end_ident_pos(m_end_pos),
+        is_select_loop(oracle_sp_for_loop_bounds.is_select_loop) {}
 };
 
 struct Ora_sp_forall_loop {

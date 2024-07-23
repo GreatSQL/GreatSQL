@@ -3,7 +3,7 @@
 Copyright (c) 1995, 2022, Oracle and/or its affiliates.
 Copyright (c) 2008, 2009, Google Inc.
 Copyright (c) 2009, Percona Inc.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -854,6 +854,12 @@ extern ulint srv_sched_priority_io;
 
 /* The relative scheduling priority of the master thread */
 extern ulint srv_sched_priority_master;
+
+/* The relative scheduling priority of the page cleaner thread */
+extern ulint srv_sched_priority_pc;
+
+/* The relative scheduling priority of the percona lru manager thread */
+extern ulint srv_sched_priority_lru_flush;
 
 /* The relative priority of the current thread.  If 0, low priority; if 1, high
 priority.  */

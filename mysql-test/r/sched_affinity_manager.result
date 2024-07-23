@@ -1,0 +1,1454 @@
+# default config
+SHOW VARIABLES LIKE 'sched_affinity_foreground_thread';
+Variable_name	Value
+sched_affinity_foreground_thread	
+SHOW VARIABLES LIKE 'sched_affinity_log_writer';
+Variable_name	Value
+sched_affinity_log_writer	
+SHOW VARIABLES LIKE 'sched_affinity_log_flusher';
+Variable_name	Value
+sched_affinity_log_flusher	
+SHOW VARIABLES LIKE 'sched_affinity_log_write_notifier';
+Variable_name	Value
+sched_affinity_log_write_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_flush_notifier';
+Variable_name	Value
+sched_affinity_log_flush_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_checkpointer';
+Variable_name	Value
+sched_affinity_log_checkpointer	
+SHOW VARIABLES LIKE 'sched_affinity_purge_coordinator';
+Variable_name	Value
+sched_affinity_purge_coordinator	
+SHOW VARIABLES LIKE 'sched_affinity_numa_aware';
+Variable_name	Value
+sched_affinity_numa_aware	OFF
+# set foreground sys_var
+# restart: --sched_affinity_foreground_thread=0-3,5,6
+SHOW VARIABLES LIKE 'sched_affinity_foreground_thread';
+Variable_name	Value
+sched_affinity_foreground_thread	0-3,5,6
+SHOW VARIABLES LIKE 'sched_affinity_log_writer';
+Variable_name	Value
+sched_affinity_log_writer	
+SHOW VARIABLES LIKE 'sched_affinity_log_flusher';
+Variable_name	Value
+sched_affinity_log_flusher	
+SHOW VARIABLES LIKE 'sched_affinity_log_write_notifier';
+Variable_name	Value
+sched_affinity_log_write_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_flush_notifier';
+Variable_name	Value
+sched_affinity_log_flush_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_checkpointer';
+Variable_name	Value
+sched_affinity_log_checkpointer	
+SHOW VARIABLES LIKE 'sched_affinity_purge_coordinator';
+Variable_name	Value
+sched_affinity_purge_coordinator	
+SHOW VARIABLES LIKE 'sched_affinity_numa_aware';
+Variable_name	Value
+sched_affinity_numa_aware	OFF
+# set log_writer sys_var
+# restart: --sched_affinity_log_writer=4
+SHOW VARIABLES LIKE 'sched_affinity_foreground_thread';
+Variable_name	Value
+sched_affinity_foreground_thread	
+SHOW VARIABLES LIKE 'sched_affinity_log_writer';
+Variable_name	Value
+sched_affinity_log_writer	4
+SHOW VARIABLES LIKE 'sched_affinity_log_flusher';
+Variable_name	Value
+sched_affinity_log_flusher	
+SHOW VARIABLES LIKE 'sched_affinity_log_write_notifier';
+Variable_name	Value
+sched_affinity_log_write_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_flush_notifier';
+Variable_name	Value
+sched_affinity_log_flush_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_checkpointer';
+Variable_name	Value
+sched_affinity_log_checkpointer	
+SHOW VARIABLES LIKE 'sched_affinity_purge_coordinator';
+Variable_name	Value
+sched_affinity_purge_coordinator	
+SHOW VARIABLES LIKE 'sched_affinity_numa_aware';
+Variable_name	Value
+sched_affinity_numa_aware	OFF
+# set foreground sys_var and log_writer sys_var
+# restart: --sched_affinity_foreground_thread=0-3,5,6 --sched_affinity_log_writer=4
+SHOW VARIABLES LIKE 'sched_affinity_foreground_thread';
+Variable_name	Value
+sched_affinity_foreground_thread	0-3,5,6
+SHOW VARIABLES LIKE 'sched_affinity_log_writer';
+Variable_name	Value
+sched_affinity_log_writer	4
+SHOW VARIABLES LIKE 'sched_affinity_log_flusher';
+Variable_name	Value
+sched_affinity_log_flusher	
+SHOW VARIABLES LIKE 'sched_affinity_log_write_notifier';
+Variable_name	Value
+sched_affinity_log_write_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_flush_notifier';
+Variable_name	Value
+sched_affinity_log_flush_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_checkpointer';
+Variable_name	Value
+sched_affinity_log_checkpointer	
+SHOW VARIABLES LIKE 'sched_affinity_purge_coordinator';
+Variable_name	Value
+sched_affinity_purge_coordinator	
+SHOW VARIABLES LIKE 'sched_affinity_numa_aware';
+Variable_name	Value
+sched_affinity_numa_aware	OFF
+# set foreground sys_var, log_writer sys_var and numa_aware sys_var
+# restart: --sched_affinity_foreground_thread=0-3,5,6 --sched_affinity_log_writer=4 --sched_affinity_numa_aware=ON
+SHOW VARIABLES LIKE 'sched_affinity_foreground_thread';
+Variable_name	Value
+sched_affinity_foreground_thread	0-3,5,6
+SHOW VARIABLES LIKE 'sched_affinity_log_writer';
+Variable_name	Value
+sched_affinity_log_writer	4
+SHOW VARIABLES LIKE 'sched_affinity_log_flusher';
+Variable_name	Value
+sched_affinity_log_flusher	
+SHOW VARIABLES LIKE 'sched_affinity_log_write_notifier';
+Variable_name	Value
+sched_affinity_log_write_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_flush_notifier';
+Variable_name	Value
+sched_affinity_log_flush_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_checkpointer';
+Variable_name	Value
+sched_affinity_log_checkpointer	
+SHOW VARIABLES LIKE 'sched_affinity_purge_coordinator';
+Variable_name	Value
+sched_affinity_purge_coordinator	
+SHOW VARIABLES LIKE 'sched_affinity_numa_aware';
+Variable_name	Value
+sched_affinity_numa_aware	ON
+# test foreground thread group
+# restart: --sched_affinity_foreground_thread=0,1,2,24-25
+SHOW VARIABLES LIKE 'sched_affinity_foreground_thread';
+Variable_name	Value
+sched_affinity_foreground_thread	0,1,2,24-25
+SHOW VARIABLES LIKE 'sched_affinity_log_writer';
+Variable_name	Value
+sched_affinity_log_writer	
+SHOW VARIABLES LIKE 'sched_affinity_log_flusher';
+Variable_name	Value
+sched_affinity_log_flusher	
+SHOW VARIABLES LIKE 'sched_affinity_log_write_notifier';
+Variable_name	Value
+sched_affinity_log_write_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_flush_notifier';
+Variable_name	Value
+sched_affinity_log_flush_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_checkpointer';
+Variable_name	Value
+sched_affinity_log_checkpointer	
+SHOW VARIABLES LIKE 'sched_affinity_purge_coordinator';
+Variable_name	Value
+sched_affinity_purge_coordinator	
+SHOW VARIABLES LIKE 'sched_affinity_numa_aware';
+Variable_name	Value
+sched_affinity_numa_aware	OFF
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 2/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 3/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 4/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 5/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 6/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 7/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 8/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 9/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 10/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 11/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 12/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 13/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 14/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 15/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 16/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 17/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 18/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 19/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 20/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 21/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 22/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 23/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 24/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 25/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 26/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 27/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 28/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 29/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 30/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 31/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 32/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 33/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 34/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 35/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 36/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 37/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 38/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 39/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 40/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 41/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 42/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 43/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 44/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 45/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 46/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 47/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 48/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 49/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 50/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 51/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 52/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 53/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 54/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 55/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 56/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 57/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 58/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 59/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 60/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 61/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 62/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 63/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 64/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 65/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 66/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 67/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 68/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 69/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 70/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 71/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 72/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 73/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 74/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 75/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 76/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 77/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 78/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 79/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 80/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 81/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 82/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 83/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 84/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 85/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 86/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 87/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 88/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 89/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 90/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 91/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 92/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 93/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 94/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 95/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 96/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 97/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 98/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 99/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 100/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 101/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 100/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 99/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 98/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 97/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 96/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 95/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 94/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 93/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 92/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 91/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 90/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 89/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 88/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 87/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 86/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 85/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 84/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 83/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 82/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 81/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 80/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 79/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 78/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 77/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 76/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 75/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 74/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 73/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 72/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 71/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 70/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 69/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 68/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 67/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 66/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 65/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 64/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 63/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 62/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 61/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 60/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 59/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 58/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 57/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 56/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 55/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 54/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 53/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 52/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 51/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 50/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 49/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 48/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 47/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 46/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 45/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 44/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 43/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 42/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 41/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 40/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 39/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 38/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 37/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 36/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 35/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 34/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 33/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 32/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 31/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 30/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 29/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 28/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 27/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 26/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 25/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 24/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 23/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 22/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 21/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 20/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 19/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 18/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 17/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 16/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 15/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 14/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 13/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 12/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 11/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 10/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 9/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 8/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 7/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 6/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 5/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 4/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 3/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 2/5; 
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 1/5; 
+# test foreground thread group with numa_aware
+# restart: --sched_affinity_foreground_thread=0,1,2,24-25 --sched_affinity_numa_aware=ON
+SHOW VARIABLES LIKE 'sched_affinity_foreground_thread';
+Variable_name	Value
+sched_affinity_foreground_thread	0,1,2,24-25
+SHOW VARIABLES LIKE 'sched_affinity_log_writer';
+Variable_name	Value
+sched_affinity_log_writer	
+SHOW VARIABLES LIKE 'sched_affinity_log_flusher';
+Variable_name	Value
+sched_affinity_log_flusher	
+SHOW VARIABLES LIKE 'sched_affinity_log_write_notifier';
+Variable_name	Value
+sched_affinity_log_write_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_flush_notifier';
+Variable_name	Value
+sched_affinity_log_flush_notifier	
+SHOW VARIABLES LIKE 'sched_affinity_log_checkpointer';
+Variable_name	Value
+sched_affinity_log_checkpointer	
+SHOW VARIABLES LIKE 'sched_affinity_purge_coordinator';
+Variable_name	Value
+sched_affinity_purge_coordinator	
+SHOW VARIABLES LIKE 'sched_affinity_numa_aware';
+Variable_name	Value
+sched_affinity_numa_aware	ON
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 1/3; 1/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 2/3; 1/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 2/3; 2/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 3/3; 2/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 4/3; 2/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 4/3; 3/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 5/3; 3/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 5/3; 4/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 6/3; 4/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 7/3; 4/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 7/3; 5/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 8/3; 5/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 8/3; 6/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 9/3; 6/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 10/3; 6/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 10/3; 7/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 11/3; 7/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 11/3; 8/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 12/3; 8/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 13/3; 8/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 13/3; 9/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 14/3; 9/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 14/3; 10/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 15/3; 10/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 16/3; 10/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 16/3; 11/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 17/3; 11/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 17/3; 12/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 18/3; 12/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 19/3; 12/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 19/3; 13/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 20/3; 13/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 20/3; 14/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 21/3; 14/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 22/3; 14/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 22/3; 15/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 23/3; 15/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 23/3; 16/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 24/3; 16/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 25/3; 16/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 25/3; 17/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 26/3; 17/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 26/3; 18/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 27/3; 18/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 28/3; 18/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 28/3; 19/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 29/3; 19/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 29/3; 20/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 30/3; 20/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 31/3; 20/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 31/3; 21/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 32/3; 21/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 32/3; 22/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 33/3; 22/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 34/3; 22/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 34/3; 23/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 35/3; 23/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 35/3; 24/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 36/3; 24/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 37/3; 24/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 37/3; 25/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 38/3; 25/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 38/3; 26/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 39/3; 26/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 40/3; 26/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 40/3; 27/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 41/3; 27/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 41/3; 28/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 42/3; 28/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 43/3; 28/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 43/3; 29/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 44/3; 29/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 44/3; 30/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 45/3; 30/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 46/3; 30/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 46/3; 31/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 47/3; 31/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 47/3; 32/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 48/3; 32/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 49/3; 32/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 49/3; 33/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 50/3; 33/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 50/3; 34/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 51/3; 34/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 52/3; 34/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 52/3; 35/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 53/3; 35/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 53/3; 36/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 54/3; 36/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 55/3; 36/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 55/3; 37/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 56/3; 37/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 56/3; 38/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 57/3; 38/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 58/3; 38/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 58/3; 39/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 59/3; 39/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 59/3; 40/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 60/3; 40/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 61/3; 40/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 61/3; 39/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 60/3; 39/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 60/3; 38/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 59/3; 38/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 58/3; 38/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 58/3; 37/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 57/3; 37/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 57/3; 36/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 56/3; 36/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 55/3; 36/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 55/3; 35/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 54/3; 35/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 54/3; 34/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 53/3; 34/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 52/3; 34/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 52/3; 33/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 51/3; 33/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 51/3; 32/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 50/3; 32/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 49/3; 32/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 49/3; 31/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 48/3; 31/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 48/3; 30/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 47/3; 30/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 46/3; 30/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 46/3; 29/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 45/3; 29/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 45/3; 28/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 44/3; 28/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 43/3; 28/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 43/3; 27/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 42/3; 27/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 42/3; 26/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 41/3; 26/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 40/3; 26/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 40/3; 25/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 39/3; 25/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 39/3; 24/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 38/3; 24/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 37/3; 24/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 37/3; 23/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 36/3; 23/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 36/3; 22/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 35/3; 22/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 34/3; 22/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 34/3; 21/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 33/3; 21/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 33/3; 20/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 32/3; 20/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 31/3; 20/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 31/3; 19/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 30/3; 19/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 30/3; 18/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 29/3; 18/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 28/3; 18/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 28/3; 17/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 27/3; 17/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 27/3; 16/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 26/3; 16/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 25/3; 16/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 25/3; 15/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 24/3; 15/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 24/3; 14/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 23/3; 14/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 22/3; 14/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 22/3; 13/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 21/3; 13/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 21/3; 12/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 20/3; 12/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 19/3; 12/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 19/3; 11/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 18/3; 11/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 18/3; 10/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 17/3; 10/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 16/3; 10/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 16/3; 9/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 15/3; 9/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 15/3; 8/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 14/3; 8/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 13/3; 8/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 13/3; 7/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 12/3; 7/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 12/3; 6/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 11/3; 6/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 10/3; 6/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 10/3; 5/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 9/3; 5/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 9/3; 4/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 8/3; 4/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 7/3; 4/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 7/3; 3/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 6/3; 3/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 6/3; 2/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 5/3; 2/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 4/3; 2/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 4/3; 1/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 3/3; 1/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 3/3; 0/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 2/3; 0/2
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 1/3; 0/2
+# Change sched_affinity related system variables
+SET GLOBAL sched_affinity_foreground_thread='0,1,2';;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 1/3; 0/0
+SET GLOBAL sched_affinity_foreground_thread="";;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+
+SET GLOBAL sched_affinity_foreground_thread='0,1,2,24-25';;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 1/3; 0/2
+SET GLOBAL sched_affinity_foreground_thread='???';;
+ERROR HY000: Invalid cpu string ???.
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 61/3; 40/2
+SET GLOBAL sched_affinity_foreground_thread='24-25';;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 0/0; 101/2
+SET GLOBAL sched_affinity_foreground_thread='???';;
+ERROR HY000: Invalid cpu string ???.
+SET GLOBAL sched_affinity_foreground_thread='1-100000';;
+ERROR HY000: Invalid cpu string 1-100000.
+SET GLOBAL sched_affinity_foreground_thread='';;
+SET GLOBAL sched_affinity_foreground_thread='';;
+SET GLOBAL sched_affinity_foreground_thread='0,1,2,24-25';;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 61/3; 40/2
+SET GLOBAL sched_affinity_foreground_thread='0,24-30';;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 13/1; 89/7
+SET GLOBAL sched_affinity_foreground_thread='24-25';;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 0/0; 101/2
+SET GLOBAL sched_affinity_foreground_thread="";;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+
+SET GLOBAL sched_affinity_numa_aware=0;;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+
+SET GLOBAL sched_affinity_numa_aware=1;;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+
+SET GLOBAL sched_affinity_numa_aware=0;;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+
+SET GLOBAL sched_affinity_foreground_thread='0,1,2,24-25';;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 101/5; 
+SET GLOBAL sched_affinity_numa_aware=0;;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 101/5; 
+SET GLOBAL sched_affinity_numa_aware=1;;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 61/3; 40/2
+SET GLOBAL sched_affinity_numa_aware=0;;
+SELECT SUBSTRING_INDEX(variable_value,';',2) from performance_schema.global_status WHERE variable_name='Sched_affinity_status';
+SUBSTRING_INDEX(variable_value,';',2)
+foreground: 101/5; 
+# Clean up

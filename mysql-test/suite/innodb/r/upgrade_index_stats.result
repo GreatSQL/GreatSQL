@@ -53,9 +53,6 @@ mysql	component	primary	size
 sys	sys_config	primary	n_diff_pfx01
 sys	sys_config	primary	n_leaf_pages
 sys	sys_config	primary	size
-sys_audit	audit_log	primary	n_diff_pfx01
-sys_audit	audit_log	primary	n_leaf_pages
-sys_audit	audit_log	primary	size
 test	t_no_part_pk	primary	n_diff_pfx01
 test	t_no_part_pk	primary	n_leaf_pages
 test	t_no_part_pk	primary	size

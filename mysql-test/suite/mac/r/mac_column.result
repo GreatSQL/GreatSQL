@@ -1,0 +1,1094 @@
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+drop database if exists mac;
+create database mac;
+#test only the object have lable#
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L1::');
+select * from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c1 from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c1 from mac.v2;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c1) values(2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c1 = 4 where c2 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v2 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v2 (c2) values(6);
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+#test only the user have lable#
+call sys_mac.mac_apply_user_policy('root','localhost','P1','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+insert into mac.t1 (c1) values(2);
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+update mac.t1 set c1 = 4 where c2 = 1;
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+4	4
+2	2
+2	NULL
+0	2
+select c1 from mac.v1;
+c1
+4
+2
+2
+0
+select c2 from mac.v1;
+c2
+4
+2
+NULL
+2
+insert into mac.v1 values(5, 5);
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+#############################################################
+#test level#
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L4:C3:G1');
+select * from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c1 from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c1 from mac.v2;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c1) values(2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c1 = 4 where c2 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v2 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v2 (c2) values(6);
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C3:G1');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+insert into mac.t1 (c1) values(2);
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+update mac.t1 set c1 = 4 where c2 = 1;
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+4	4
+2	2
+2	NULL
+0	2
+select c1 from mac.v1;
+c1
+4
+2
+2
+0
+select c2 from mac.v1;
+c2
+4
+2
+NULL
+2
+insert into mac.v1 values(5, 5);
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L2:C3:G1');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+insert into mac.t1 (c1) values(2);
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+update mac.t1 set c1 = 4 where c2 = 1;
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+4	4
+2	2
+2	NULL
+0	2
+select c1 from mac.v1;
+c1
+4
+2
+2
+0
+select c2 from mac.v1;
+c2
+4
+2
+NULL
+2
+insert into mac.v1 values(5, 5);
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L1:C3:G1');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c1) values(2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c1 = 4 where c2 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+1	4
+0	2
+select c1 from mac.v1;
+c1
+1
+0
+select c2 from mac.v1;
+c2
+4
+2
+insert into mac.v1 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+#test compartment#
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C2,C3,C4:G1');
+select * from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c1 from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c1 from mac.v2;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c1) values(2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c1 = 4 where c2 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v2 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v2 (c2) values(6);
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C3,C4:G1');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+insert into mac.t1 (c1) values(2);
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+update mac.t1 set c1 = 4 where c2 = 1;
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+4	4
+2	2
+2	NULL
+0	2
+select c1 from mac.v1;
+c1
+4
+2
+2
+0
+select c2 from mac.v1;
+c2
+4
+2
+NULL
+2
+insert into mac.v1 values(5, 5);
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C3:G1');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+insert into mac.t1 (c1) values(2);
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+update mac.t1 set c1 = 4 where c2 = 1;
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+4	4
+2	2
+2	NULL
+0	2
+select c1 from mac.v1;
+c1
+4
+2
+2
+0
+select c2 from mac.v1;
+c2
+4
+2
+NULL
+2
+insert into mac.v1 values(5, 5);
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C4:');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c1) values(2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c1 = 4 where c2 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+1	4
+0	2
+select c1 from mac.v1;
+c1
+1
+0
+select c2 from mac.v1;
+c2
+4
+2
+insert into mac.v1 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C4:');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c1) values(2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c1 = 4 where c2 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+1	4
+0	2
+select c1 from mac.v1;
+c1
+1
+0
+select c2 from mac.v1;
+c2
+4
+2
+insert into mac.v1 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C3,C4:');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c1) values(2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c1 = 4 where c2 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+1	4
+0	2
+select c1 from mac.v1;
+c1
+1
+0
+select c2 from mac.v1;
+c2
+4
+2
+insert into mac.v1 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C3:');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+insert into mac.t1 (c1) values(2);
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+update mac.t1 set c1 = 4 where c2 = 1;
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+4	4
+2	2
+2	NULL
+0	2
+select c1 from mac.v1;
+c1
+4
+2
+2
+0
+select c2 from mac.v1;
+c2
+4
+2
+NULL
+2
+insert into mac.v1 values(5, 5);
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C2:');
+select * from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c1 from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c1 from mac.v2;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c1) values(2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c1 = 4 where c2 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v2 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v2 (c2) values(6);
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C3:G1_1_1');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+insert into mac.t1 (c1) values(2);
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+update mac.t1 set c1 = 4 where c2 = 1;
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+4	4
+2	2
+2	NULL
+0	2
+select c1 from mac.v1;
+c1
+4
+2
+2
+0
+select c2 from mac.v1;
+c2
+4
+2
+NULL
+2
+insert into mac.v1 values(5, 5);
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C3:G1,G2');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+insert into mac.t1 (c1) values(2);
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+update mac.t1 set c1 = 4 where c2 = 1;
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+4	4
+2	2
+2	NULL
+0	2
+select c1 from mac.v1;
+c1
+4
+2
+2
+0
+select c2 from mac.v1;
+c2
+4
+2
+NULL
+2
+insert into mac.v1 values(5, 5);
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C3:G1_1_1,G2_2_1');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+insert into mac.t1 (c1) values(2);
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+update mac.t1 set c1 = 4 where c2 = 1;
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+4	4
+2	2
+2	NULL
+0	2
+select c1 from mac.v1;
+c1
+4
+2
+2
+0
+select c2 from mac.v1;
+c2
+4
+2
+NULL
+2
+insert into mac.v1 values(5, 5);
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3::G1');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+insert into mac.t1 (c1) values(2);
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+update mac.t1 set c1 = 4 where c2 = 1;
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+4	4
+2	2
+2	NULL
+0	2
+select c1 from mac.v1;
+c1
+4
+2
+2
+0
+select c2 from mac.v1;
+c2
+4
+2
+NULL
+2
+insert into mac.v1 values(5, 5);
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3::');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+insert into mac.t1 (c1) values(2);
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+update mac.t1 set c1 = 4 where c2 = 1;
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+4	4
+2	2
+2	NULL
+0	2
+select c1 from mac.v1;
+c1
+4
+2
+2
+0
+select c2 from mac.v1;
+c2
+4
+2
+NULL
+2
+insert into mac.v1 values(5, 5);
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+#############################################################
+#test two policy#
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P2', 'L3:C3:G1');
+select * from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c1 from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c1 from mac.v2;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c1) values(2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c1 = 4 where c2 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v2 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v2 (c2) values(6);
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P2');
+#############################################################
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+call sys_mac.mac_apply_user_policy('root','localhost','P2','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P2', 'L3:C3:G1');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+insert into mac.t1 (c1) values(2);
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+update mac.t1 set c1 = 4 where c2 = 1;
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+4	4
+2	2
+2	NULL
+0	2
+select c1 from mac.v1;
+c1
+4
+2
+2
+0
+select c2 from mac.v1;
+c2
+4
+2
+NULL
+2
+insert into mac.v1 values(5, 5);
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P2');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C3,C4:');
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P2', 'L3:C3:G1');
+select * from mac.t1;
+c1	c2
+1	1
+select c1 from mac.t1;
+c1
+1
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+c1	c2
+1	1
+select c1 from mac.v2;
+c1
+1
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c1) values(2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c1 = 4 where c2 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+select * from mac.v1;
+c1	c2
+1	4
+0	2
+select c1 from mac.v1;
+c1
+1
+0
+select c2 from mac.v1;
+c2
+4
+2
+insert into mac.v1 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v1 (c2) values(6);
+drop view mac.v1;
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P2');
+#############################################################
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P1', 'L3:C3,C4:G1');
+call sys_mac.mac_apply_column_policy('mac', 't1', 'c1', 'P2', 'L3:C2,C3:G1');
+select * from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c1 from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c2 from mac.t1;
+c2
+1
+select * from mac.v2;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c1 from mac.v2;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+select c2 from mac.v2;
+c2
+1
+insert into mac.t1 values(2, 2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c1) values(2);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.t1 (c2) values(2);
+update mac.t1 set c1 = 3 where c1 = 1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c1 = 4 where c2 = 1;
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+update mac.t1 set c2 = 4 where c2 = 1;
+create view mac.v1 as select c1 , c2 from mac.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v2 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+insert into mac.v2 (c2) values(6);
+drop view mac.v2;
+drop table mac.t1;
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P1');
+call sys_mac.mac_drop_column_policy('mac', 't1', 'c1', 'P2');
+#############################################################
+drop database mac;

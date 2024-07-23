@@ -2,7 +2,7 @@
 #define ITEM_SUM_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2454,7 +2454,7 @@ class Item_rank : public Item_non_framing_wf {
     For ref cursor,advance clear m_previous to avoid crash when free_lex.
     for more info turn to sp_instr_copen_for_sql::exec_core.
   */
-  void clear_previous() {
+  void cleanup_for_refcursor() override {
     for (Cached_item *ci : m_previous) {
       destroy(ci);
     }
@@ -3050,6 +3050,18 @@ class Item_connect_by_func : public Item_func {
   virtual bool reset() = 0;
   // update cache level is change
   virtual bool update_value(longlong val) = 0;
+
+  bool eq(const Item *item, bool binary_cmp) const override {
+    if (this == item) return true;
+    if (item->type() != CONNECT_BY_FUNC_ITEM) return false;
+
+    const Item_connect_by_func *item_func =
+        down_cast<const Item_connect_by_func *>(item);
+    if (item_func->ConnectBy_func() != ConnectBy_func()) {
+      return false;
+    }
+    return AllItemsAreEqual(args, item_func->args, arg_count, binary_cmp);
+  }
 };
 
 class Item_connect_by_func_value : public Item_connect_by_func {
@@ -3141,7 +3153,7 @@ class Item_connect_by_func_root final : public Item_connect_by_func_value {
   }
   bool update_value(longlong level) override {
     assert(m_value);
-    return level == 2 ? !m_value->cache_value() : false;
+    return level == 1 ? !m_value->cache_value() : false;
   }
 
   bool is_evaluate_value() override { return true; }
@@ -3241,15 +3253,17 @@ class Item_connect_by_func_sys_path final : public Item_connect_by_func {
 
 class Item_connect_by_func_int : public Item_connect_by_func {
  protected:
-  longlong m_val;
+  longlong *m_val;
   longlong m_val_def;  // default value
  public:
   Item_connect_by_func_int(const POS &pos, longlong value)
-      : Item_connect_by_func(pos), m_val(value), m_val_def(value) {
+      : Item_connect_by_func(pos), m_val(nullptr), m_val_def(value) {
     set_data_type_longlong();
   }
 
-  longlong val_int() override { return m_val; }
+  longlong val_int() override {
+    return m_val == nullptr ? m_val_def : (*m_val);
+  }
 
   bool resolve_type(THD *) override {
     set_nullable(false);
@@ -3275,12 +3289,12 @@ class Item_connect_by_func_int : public Item_connect_by_func {
     return get_date_from_int(ltime, fuzzydate);
   }
   bool get_time(MYSQL_TIME *ltime) override { return get_time_from_int(ltime); }
-  //
-  bool reset() override {
-    m_val = m_val_def;
-    return false;
-  }
+
+  void store_ptr(longlong *ptr) { m_val = ptr; }
+  bool update_value(longlong) override { return false; }
+  bool reset() override { return false; }
 };
+
 class Item_connect_by_func_level final : public Item_connect_by_func_int {
   typedef Item_connect_by_func_int super;
 
@@ -3292,11 +3306,6 @@ class Item_connect_by_func_level final : public Item_connect_by_func_int {
   bool fix_fields(THD *thd, Item **ref) override;
   enum ConnectByfunctype ConnectBy_func() const override {
     return Item_connect_by_func::LEVEL_FUNC;
-  }
-
-  bool update_value(longlong val) override {
-    m_val = val;
-    return false;
   }
 };
 
@@ -3322,12 +3331,6 @@ class Item_connect_by_func_iscycle final : public Item_connect_by_func_int {
     }
     return false;
   }
-
-  bool update_value(longlong val) override {
-    if (val > 1) val = 1;
-    m_val = val;
-    return false;
-  }
 };
 
 class Item_connect_by_func_isleaf final : public Item_connect_by_func_int {
@@ -3344,18 +3347,6 @@ class Item_connect_by_func_isleaf final : public Item_connect_by_func_int {
     return Item_connect_by_func::ISLEAF_FUNC;
   }
   bool is_evaluate_value() override { return true; }
-  bool update_value(longlong val) override {
-    if (val > 1) val = 1;
-    m_val = val;
-    return false;
-  }
-};
-
-struct Collect_leaf_cycle_info {
-  Collect_leaf_cycle_info(THD *thd)
-      : func_leaf_list(thd->mem_root), func_cycle_list(thd->mem_root) {}
-  mem_root_deque<Item *> func_leaf_list;
-  mem_root_deque<Item *> func_cycle_list;
 };
 
 /***CONNECT BY FUNC END ****/

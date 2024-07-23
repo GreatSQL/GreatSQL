@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2005, 2022, Oracle and/or its affiliates. All rights reserved.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -232,6 +232,7 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
   it is necessary to carry this flag from index_def_t here.
 */
   index->nulls_equal = index_def->m_nulls_equal;
+  index->ora_mode = index_def->m_ora_mode;
 
   bool has_new_v_col{};
 

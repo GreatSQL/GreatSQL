@@ -13,7 +13,6 @@ mysql
 performance_schema
 some_very_long,database_na'me`some_very_long_database_n"ame____q
 sys
-sys_audit
 test
 SET GLOBAL audit_log_include_databases= '`some_very_long,database_na\'me``some_very_long_database_n"ame____q`,```db1"`,db3';
 SELECT @@audit_log_include_databases, @@audit_log_exclude_databases;

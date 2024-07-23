@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2007, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -83,6 +83,7 @@
 #include "sql/protocol.h"
 #include "sql/protocol_classic.h"
 #include "sql/psi_memory_key.h"
+#include "sql/server_component/gdb_cmd_service.h"
 #include "sql/sql_audit.h"  // MYSQL_AUDIT_NOTIFY_CONNECTION_CONNECT
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_error.h"
@@ -937,6 +938,8 @@ static int check_connection(THD *thd) {
 
   auth_rc = acl_authenticate(thd, COM_CONNECT);
 
+  thd->conn_start_time = my_micro_time();
+
   if (mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_CONNECTION_CONNECT))) {
     return 1;
   }
@@ -1180,9 +1183,7 @@ bool thd_prepare_connection(THD *thd) {
   bool rc;
   lex_start(thd);
   rc = login_connection(thd);
-
   if (rc) return rc;
-
   prepare_new_connection_state(thd);
   return false;
 }

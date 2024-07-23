@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1154,9 +1154,11 @@ static void fill_dd_indexes_from_keyinfo(
     if (key->flags & HA_CLUSTERING) {
       idx_options->set("clustering_key", true);
     }
-
-    if (key->flags & HA_NULL_ARE_EQUAL) {
-      idx_options->set("nulls_equal", true);
+    /*
+      Mark key create from oracle mode
+    */
+    if (key->flags & HA_FROM_ORA_MODE) {
+      idx_options->set("ora_mode", true);
     }
 
     /*

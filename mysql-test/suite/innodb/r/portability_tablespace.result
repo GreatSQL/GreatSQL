@@ -107,8 +107,6 @@ MYSQL_TMP_DIR/new/undo_dir/undo_001	UNDO LOG	innodb_undo_001
 MYSQL_TMP_DIR/new/undo_dir/undo_002	UNDO LOG	innodb_undo_002
 MYSQL_TMP_DIR/new/undo_dir/undo_003.ibu	UNDO LOG	undo_003
 MYSQL_TMP_DIR/new/remote_dir/undo_004.ibu	UNDO LOG	undo_004
-Warnings:
-Warning	1812	Tablespace is missing for table sys_audit/audit_log.
 SELECT path FROM INFORMATION_SCHEMA.INNODB_DATAFILES WHERE path LIKE '%undo_0%' ORDER BY path;
 PATH
 MYSQL_TMP_DIR/new/remote_dir/undo_004.ibu
@@ -163,8 +161,6 @@ MYSQL_TMP_DIR/new/undo_dir/undo_001	UNDO LOG	innodb_undo_001
 MYSQL_TMP_DIR/new/undo_dir/undo_002	UNDO LOG	innodb_undo_002
 MYSQL_TMP_DIR/new/undo_dir/undo_003.ibu	UNDO LOG	undo_003
 MYSQL_TMP_DIR/new/remote_dir/undo_004.ibu	UNDO LOG	undo_004
-Warnings:
-Warning	1812	Tablespace is missing for table sys_audit/audit_log.
 SELECT path FROM INFORMATION_SCHEMA.INNODB_DATAFILES WHERE path LIKE '%undo_0%' ORDER BY path;
 PATH
 MYSQL_TMP_DIR/new/remote_dir/undo_004.ibu
@@ -316,10 +312,10 @@ InnoDB	mtr/global_suppressions
 InnoDB	mtr/test_ignored_global_suppressions
 InnoDB	mtr/test_suppressions
 InnoDB	mysql
+InnoDB	mysql/clone_history
 InnoDB	mysql/greatdb_sequences
 InnoDB	mysql/greatdb_sequences_persist
 InnoDB	sys/sys_config
-InnoDB	sys_audit/audit_log
 InnoDB	test/tab3#p#p0
 InnoDB	test/tab3#p#p1
 InnoDB	ts2

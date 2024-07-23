@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -659,6 +659,14 @@ bool read_view(Table_ref *view, const dd::View &view_obj, MEM_ROOT *mem_root) {
   view->view_body_utf8.length = vd_utf8.length();
   view->view_body_utf8.str =
       (char *)strmake_root(mem_root, vd_utf8.c_str(), vd_utf8.length());
+
+  // Get force view option.
+  const dd::Properties &view_options = view_obj.options();
+  if (view_options.exists("is_force_view")) {
+    bool is_force_view = false;
+    view_options.get("is_force_view", &is_force_view);
+    view->is_force_view = is_force_view;
+  }
 
   // Get updatable.
   view->updatable_view = view_obj.is_updatable();

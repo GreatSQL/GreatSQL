@@ -2,7 +2,7 @@
 #define SQL_CREATE_FIELD_INCLUDED
 
 /* Copyright (c) 2018, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -88,6 +88,8 @@ class Row_definition_list : public List<class Create_field> {
   bool make_new_create_field_to_store_index(
       THD *thd, const char *str_length, bool is_index_by,
       Row_definition_list **list_new) const;
+  bool make_from_defs(MEM_ROOT *mem_root, List<Create_field> *defs,
+                      bool is_need_index_column = true);
 };
 
 class Ora_record_refer {
@@ -117,6 +119,7 @@ class Ora_record_refer {
   bool is_ref_cursor;
   bool is_ref_cursor_define;
   int m_cursor_offset;  // for c sys_refcursor
+  bool m_is_sp_param;   // for sp(param_list),it needs to do row_create_items()
 
   Ora_record_refer()
       : m_row_field_definitions(nullptr),
@@ -136,7 +139,8 @@ class Ora_record_refer {
         is_index_by(false),
         is_ref_cursor(false),
         is_ref_cursor_define(false),
-        m_cursor_offset(-1) {}
+        m_cursor_offset(-1),
+        m_is_sp_param(false) {}
   void set_record(Ora_record_refer *from) {
     m_row_field_definitions = from->row_field_definitions();
     m_row_field_table_definitions = from->row_field_table_definitions();
@@ -156,10 +160,9 @@ class Ora_record_refer {
     is_ref_cursor = from->is_ref_cursor;
     is_ref_cursor_define = from->is_ref_cursor_define;
     m_cursor_offset = from->m_cursor_offset;
+    m_is_sp_param = from->m_is_sp_param;
   }
   bool is_cursor_rowtype_ref() const { return m_cursor_rowtype_ref; }
-  bool is_column_type_ref() const { return m_column_type_ref != nullptr; }
-  bool is_table_rowtype_ref() const { return m_table_rowtype_ref != nullptr; }
 
   Qualified_column_ident *column_type_ref() const { return m_column_type_ref; }
 
@@ -181,10 +184,6 @@ class Ora_record_refer {
     m_cursor_rowtype_ref = true;
     m_cursor_rowtype_offset = offset;
   }
-
-  uint is_row() const { return m_row_field_definitions != nullptr; }
-
-  uint is_row_table() const { return m_row_field_table_definitions != nullptr; }
 
   Row_definition_list *row_field_definitions() const {
     return m_row_field_definitions;

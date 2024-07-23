@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,14 +28,20 @@ Clone Plugin: Client implementation
 */
 #include <inttypes.h>
 
+#include "plugin/clone/include/clone.h"
 #include "plugin/clone/include/clone_client.h"
 #include "plugin/clone/include/clone_os.h"
 
 #include "my_aes.h"
 #include "my_byteorder.h"
 #include "my_systime.h"  // my_sleep()
+#include "sql/clone_handler.h"
 #include "sql/encrypt.h"
+#include "sql/gdb_common.h"
+#include "sql/server_component/gdb_cmd_service.h"
+#include "sql/sql_base.h"
 #include "sql/sql_thd_internal_api.h"
+#include "sql/table.h"
 #include "sql_string.h"
 
 /* Namespace for all clone data types */
@@ -63,7 +69,15 @@ static void clone_client(Client_Share *share, uint32_t index) {
 
   Client clone_inst(thd, share, index, false);
 
+  if (share->m_compress_mode) {
+    clone_inst.compress_init();
+  }
+
   clone_inst.clone();
+
+  if (share->m_compress_mode) {
+    clone_inst.compress_deinit();
+  }
 
   /* Drop the statement and session */
   mysql_service_clone_protocol->mysql_clone_finish_statement(thd);
@@ -122,8 +136,8 @@ void Thread_Info::throttle(uint64_t data_target, uint64_t net_target) {
   m_last_update = Clock::now();
 }
 
-void Client_Stat::update(bool reset, const Thread_Vector &threads,
-                         uint32_t num_workers) {
+void Client_Stat::update(class Client *cli, bool reset,
+                         const Thread_Vector &threads, uint32_t num_workers) {
   /* Ignore reset requests when stat is not initialized. */
   if (!m_initialized && reset) {
     return;
@@ -177,8 +191,7 @@ void Client_Stat::update(bool reset, const Thread_Vector &threads,
 
     data_speed = (data_inc * 1000) / value_ms;
     net_speed = (net_inc * 1000) / value_ms;
-    Client::update_pfs_data(data_inc, net_inc, data_speed, net_speed,
-                            num_workers);
+    cli->update_pfs_data(data_inc, net_inc, data_speed, net_speed, num_workers);
   }
 
   /* Calculate speed in MiB per second. */
@@ -504,7 +517,7 @@ uint32_t Client::update_stat(bool is_reset) {
     return (m_num_active_workers);
   }
   auto &stat = m_share->m_stat;
-  stat.update(is_reset, m_share->m_threads, m_num_active_workers);
+  stat.update(this, is_reset, m_share->m_threads, m_num_active_workers);
 
   if (is_reset) {
     return (m_num_active_workers);
@@ -573,18 +586,33 @@ int Client::pfs_begin_state() {
   if (!is_master()) {
     return (0);
   }
+  bool replace_clone = (get_data_dir() == nullptr);
   mysql_mutex_lock(&s_table_mutex);
   /* Check and exit if concurrent clone in progress. */
-  if (s_num_clones != 0) {
+  if (s_num_clones >= MAX_CLONE_COURRENCY_NUM) {
     mysql_mutex_unlock(&s_table_mutex);
-    assert(s_num_clones == 1);
+    assert(s_num_clones == MAX_CLONE_COURRENCY_NUM);
+    my_error(ER_CLONE_TOO_MANY_CONCURRENT_CLONES, MYF(0),
+             MAX_CLONE_COURRENCY_NUM);
+    return (ER_CLONE_TOO_MANY_CONCURRENT_CLONES);
+  }
+  if (s_num_replace_clones == 1 || (replace_clone && s_num_clones != 0)) {
+    mysql_mutex_unlock(&s_table_mutex);
     my_error(ER_CLONE_TOO_MANY_CONCURRENT_CLONES, MYF(0), 1);
     return (ER_CLONE_TOO_MANY_CONCURRENT_CLONES);
   }
-  s_num_clones = 1;
-  s_status_data.begin(1, get_thd(), m_share->m_host, m_share->m_port,
+
+  s_num_clones++;
+
+  m_clone_id = s_num_history_clones;
+  s_num_history_clones++;
+
+  if (replace_clone) s_num_replace_clones++;
+
+  s_progress_data.init_stage(m_clone_id, get_data_dir());
+
+  s_status_data.begin(m_clone_id, get_thd(), m_share->m_host, m_share->m_port,
                       get_data_dir());
-  s_progress_data.init_stage(get_data_dir());
   mysql_mutex_unlock(&s_table_mutex);
 
   return (0);
@@ -595,10 +623,12 @@ void Client::pfs_change_stage(uint64_t estimate) {
     return;
   }
   mysql_mutex_lock(&s_table_mutex);
-  s_progress_data.end_stage(false, get_data_dir());
-  s_progress_data.begin_stage(1, get_data_dir(), m_num_active_workers + 1,
-                              estimate);
-  s_status_data.write(false);
+
+  s_progress_data.end_stage(m_clone_id, false, get_data_dir());
+  s_progress_data.begin_stage(m_clone_id, get_data_dir(),
+                              m_num_active_workers + 1, estimate,
+                              m_share->m_start_id ? true : false);
+  s_status_data.write(m_clone_id, false);
   mysql_mutex_unlock(&s_table_mutex);
 }
 
@@ -607,33 +637,36 @@ void Client::pfs_end_state(uint32_t err_num, const char *err_mesg) {
     return;
   }
   mysql_mutex_lock(&s_table_mutex);
-  assert(s_num_clones == 1);
+  assert(s_num_clones >= 1);
 
   bool provisioning = (get_data_dir() == nullptr);
   bool failed = (err_num != 0);
 
   /* In case provisioning is successful, clone operation is still
   in progress and will continue after restart. */
-  if (!provisioning || failed) {
-    s_num_clones = 0;
+  if (!provisioning) {
+    s_num_clones--;
+  } else if (failed) {
+    s_num_clones--;
+    if (provisioning) s_num_replace_clones--;
   }
 
-  s_progress_data.end_stage(failed, get_data_dir());
-  s_status_data.end(err_num, err_mesg, provisioning);
+  s_progress_data.end_stage(m_clone_id, failed, get_data_dir());
+  s_status_data.end(m_clone_id, err_num, err_mesg, provisioning);
   mysql_mutex_unlock(&s_table_mutex);
 }
 
-void Client::copy_pfs_data(Status_pfs::Data &pfs_data) {
+void Client::copy_pfs_data(Status_pfs &pfs_data) {
   mysql_mutex_lock(&s_table_mutex);
   /* If clone operation is started skip recovering previous data. */
   if (s_num_clones == 0) {
-    s_status_data.recover();
+    s_status_data.recover(0);
   }
   pfs_data = s_status_data;
   mysql_mutex_unlock(&s_table_mutex);
 }
 
-void Client::copy_pfs_data(Progress_pfs::Data &pfs_data) {
+void Client::copy_pfs_data(Progress_pfs &pfs_data) {
   mysql_mutex_lock(&s_table_mutex);
   pfs_data = s_progress_data;
   mysql_mutex_unlock(&s_table_mutex);
@@ -642,8 +675,13 @@ void Client::copy_pfs_data(Progress_pfs::Data &pfs_data) {
 void Client::update_pfs_data(uint64_t data, uint64_t network,
                              uint32_t data_speed, uint32_t net_speed,
                              uint32_t num_workers) {
-  s_progress_data.update_data(data, network, data_speed, net_speed,
+  s_progress_data.update_data(m_clone_id, data, network, data_speed, net_speed,
                               num_workers);
+}
+
+void Client::update_clone_lsn(uint64_t start_lsn, uint64_t page_track_lsn,
+                              uint64_t end_lsn) {
+  s_status_data.update_lsn(m_clone_id, start_lsn, page_track_lsn, end_lsn);
 }
 
 bool Client::s_pfs_initialized = false;
@@ -651,8 +689,8 @@ bool Client::s_pfs_initialized = false;
 void Client::init_pfs() {
   mysql_mutex_init(PSI_NOT_INSTRUMENTED, &s_table_mutex, MY_MUTEX_INIT_FAST);
   /* Recover PFS data. */
-  s_progress_data.read();
-  s_status_data.read();
+  s_progress_data.read(0);
+  s_status_data.read(0);
   s_pfs_initialized = true;
 }
 
@@ -886,9 +924,15 @@ int Client::clone() {
   uint32_t err_number = 0;
   mysql_service_clone_protocol->mysql_clone_get_error(get_thd(), &err_number,
                                                       &err_mesg);
+
   pfs_end_state(err_number, err_mesg);
 
-  return (err);
+  if (m_is_master && m_share->m_data_dir != nullptr) {
+    err_number = persist_clone_view(m_share->m_start_id ? false : true) ||
+                 dump_metadata();
+  }
+
+  return (err ? err : err_number);
 }
 
 int Client::connect_remote(bool is_restart, bool use_aux) {
@@ -1247,8 +1291,10 @@ int Client::remote_command(Command_RPC com, bool use_aux) {
 
 int Client::init_storage(enum Ha_clone_mode mode, size_t &cmd_len) {
   /* Get locators for negotiating with remote server */
-  auto err = hton_clone_apply_begin(m_server_thd, m_share->m_data_dir,
-                                    m_share->m_storage_vec, m_tasks, mode);
+  auto err = hton_clone_apply_begin(
+      m_server_thd, m_share->m_data_dir, m_share->m_storage_vec, m_tasks, mode,
+      m_share->m_max_concurrency, m_share->m_start_id,
+      m_share->m_enable_page_track, m_share->m_compress_mode);
   if (err == 0) {
     m_storage_initialized = true;
     err = serialize_init_cmd(cmd_len);
@@ -1347,6 +1393,15 @@ int Client::serialize_init_cmd(size_t &buf_len) {
   /* Add length for DDL timeout value */
   buf_len += 4;
 
+  /* Add length for enable_page_track */
+  buf_len += 4;
+
+  /* Add length for start lsn used in increment backup*/
+  buf_len += 8;
+
+  /* Add length for file compress mode*/
+  buf_len += 4;
+
   /* Add SE and locator length */
   for (auto &loc : m_share->m_storage_vec) {
     buf_len += loc.serlialized_length();
@@ -1372,6 +1427,18 @@ int Client::serialize_init_cmd(size_t &buf_len) {
   }
 
   int4store(buf_ptr, timeout_value);
+  buf_ptr += 4;
+
+  /* Store enable page track value. */
+  int4store(buf_ptr, m_share->m_enable_page_track);
+  buf_ptr += 4;
+
+  /* Store start base lsn value. */
+  int8store(buf_ptr, m_share->m_start_id);
+  buf_ptr += 8;
+
+  /* Store enable page track value. */
+  int4store(buf_ptr, m_share->m_compress_mode);
   buf_ptr += 4;
 
   /* Store SE information and Locators */
@@ -1645,8 +1712,11 @@ int Client::set_locators(const uchar *buffer, size_t length) {
   pfs_change_stage(0);
 
   /* Re-initialize SE locators based on remote locators */
-  err = hton_clone_apply_begin(m_server_thd, m_share->m_data_dir,
-                               local_locators, m_tasks, begin_mode);
+  err = hton_clone_apply_begin(
+      m_server_thd, m_share->m_data_dir, local_locators, m_tasks, begin_mode,
+      m_share->m_max_concurrency, m_share->m_start_id,
+      m_share->m_enable_page_track, m_share->m_compress_mode);
+
   if (err != 0) {
     return (err);
   }
@@ -1696,6 +1766,10 @@ int Client::set_descriptor(const uchar *buffer, size_t length) {
   auto share = get_share();
   clone_callback->enable_encryption(share->m_encrypt_mode, share->m_encrypt_key,
                                     share->m_encrypt_iv);
+
+  if (share->m_compress_mode) {
+    clone_callback->set_compress_file(m_compress_file);
+  }
 
   /* Apply using descriptor */
   assert(loc_index < m_tasks.size());
@@ -1819,6 +1893,138 @@ int Client::delay_if_needed() {
   return err;
 }
 
+int Client::persist_clone_view(bool full_clone) {
+  Gdb_cmd_service cmd_service;
+  auto status = s_status_data.get_data(m_clone_id % MAX_CLONE_NUM);
+
+  std::vector<std::string> sqls;
+  sqls.push_back("set session sql_log_bin=off");
+
+  std::string sql("INSERT INTO mysql.clone_history VALUES (");
+  sql += "NULL, ";
+  sql += std::to_string(status.m_pid) + ", ";
+  if (full_clone) {
+    sql += "'full clone', '";
+  } else {
+    sql += "'increment clone', '";
+  }
+  sql += std::string(Status_pfs::s_state_names[status.m_state]) +
+         "', (select from_unixtime(";
+  sql += std::to_string(status.m_start_time) +
+         "/1000000)), (select from_unixtime(";
+  sql += std::to_string(status.m_end_time) + "/1000000)), '";
+  sql += std::string(status.m_source) + "', '";
+  sql += std::string(status.m_destination) + "', ";
+  sql += std::to_string(status.m_error_number) + ", ";
+  sql +=
+      gdb_string_add_quote(std::string(status.m_error_mesg), VALUE_QUOTE_CHAR) +
+      ", ";
+  sql += gdb_string_add_quote(std::string(status.m_binlog_file),
+                              VALUE_QUOTE_CHAR) +
+         ", ";
+  sql += std::to_string(status.m_binlog_pos) + ", '";
+  sql += status.m_gtid_string + "', ";
+  sql += std::to_string(status.m_start_lsn) + ", ";
+  sql += std::to_string(status.m_page_track_lsn) + ", ";
+  sql += std::to_string(status.m_end_lsn) + ")";
+
+  sqls.push_back(sql);
+
+  sqls.push_back("set session sql_log_bin=on");
+
+  auto &cb_data = cmd_service.get_cb_data();
+  if (cmd_service.execute_sqls(sqls) || cb_data.is_error()) {
+    my_error(ER_CLONE_DONOR, MYF(0), "persist clone history failed");
+    return ER_CLONE_DONOR;
+  }
+  return false;
+}
+
+/** Print clone meta info to a specified file. */
+int Client::dump_metadata() {
+  char buf[1024];
+  char fullpath[FN_REFLEN];
+  char errbuf[MYSYS_STRERROR_SIZE];
+  size_t len;
+
+  auto status = s_status_data.get_data(m_clone_id % MAX_CLONE_NUM);
+  snprintf(buf, sizeof(buf),
+           START_LSN LSN_PF "\n" PAGE_TRACK_LSN LSN_PF "\n" END_LSN LSN_PF "\n",
+           status.m_start_lsn, status.m_page_track_lsn, status.m_end_lsn);
+  len = strlen(buf);
+
+  sprintf(fullpath, "%s/%s", m_share->m_data_dir, CLONE_METADATA_FILENAME);
+  auto fd = my_create(fullpath, 0, O_WRONLY | O_EXCL | O_NOFOLLOW, MYF(MY_WME));
+  if (fd < 0) {
+    my_error(ER_ERROR_ON_WRITE, MYF(0), fullpath, errno,
+             my_strerror(errbuf, sizeof(errbuf), errno));
+    return errno;
+  }
+
+  if (my_write(fd, (const uchar *)(buf), len, MYF(MY_WME | MY_NABP))) {
+    my_error(ER_ERROR_ON_WRITE, MYF(0), fullpath, errno,
+             my_strerror(errbuf, sizeof(errbuf), errno));
+    return errno;
+  }
+  posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
+  if (my_sync(fd, MYF(MY_WME)) || my_close(fd, MYF(MY_WME))) {
+    my_error(ER_ERROR_ON_WRITE, MYF(0), fullpath, errno,
+             my_strerror(errbuf, sizeof(errbuf), errno));
+    return errno;
+  }
+  return 0;
+}
+
+int Client::read_metadata(uint64_t &page_track_lsn) {
+  char metadata_path[FN_REFLEN];
+  char errbuf[MYSYS_STRERROR_SIZE];
+  sprintf(metadata_path, "%s/%s", m_share->m_based_dir,
+          CLONE_METADATA_FILENAME);
+
+  FILE *fp;
+  bool r = false;
+
+  fp = fopen(metadata_path, "r");
+  if (!fp) {
+    my_error(ER_ERROR_ON_READ, MYF(0), metadata_path, errno,
+             my_strerror(errbuf, sizeof(errbuf), errno));
+    return errno;
+  }
+
+  uint64_t start_lsn = 0;
+  uint64_t end_lsn = 0;
+  /* Use UINT64PF instead of LSN_PF here, as we have to maintain the file
+  format. */
+  if (fscanf(fp, START_LSN LSN_PF "\n", &start_lsn) != 1) {
+    r = true;
+    goto end;
+  }
+  if (fscanf(fp, PAGE_TRACK_LSN LSN_PF "\n", &page_track_lsn) != 1) {
+    r = true;
+    goto end;
+  }
+  if (fscanf(fp, END_LSN LSN_PF "\n", &end_lsn) != 1) {
+    r = true;
+    goto end;
+  }
+  assert(start_lsn <= page_track_lsn && page_track_lsn <= end_lsn);
+  if (start_lsn > page_track_lsn || page_track_lsn > end_lsn) {
+    my_error(ER_ERROR_ON_READ, MYF(0),
+             "the lsn failed to reach the required standard: "
+             "start_lsn > page_track_lsn > end_lsn, please check the file: %s",
+             metadata_path);
+    return true;
+  }
+end:
+  fclose(fp);
+
+  if (r) {
+    my_error(ER_ERROR_ON_READ, MYF(0), "failed to read lsn from based datadir");
+    return r;
+  }
+  return (r);
+}
+
 /* Key file has 3 lines.
  * First line: aes_opmode, max_size 32
  * Second line: encrypt key, max_size 256
@@ -1869,6 +2075,8 @@ int Client_Cbk::buffer_cbk(uchar *from_buffer [[maybe_unused]], uint buf_len) {
 
   uint64_t data_estimate = 0;
   if (is_state_change(data_estimate)) {
+    client->update_clone_lsn(page_start_lsn(), page_track_lsn(),
+                             clone_end_lsn());
     client->pfs_change_stage(data_estimate);
     return (0);
   }
@@ -1971,13 +2179,17 @@ int Client_Cbk::apply_cbk(Ha_clone_file to_file, bool apply_file,
   }
 
   if (apply_file) {
+    auto comp_file = compress_file();
     if (encryption()) {
-      err = encrypt_and_write(&m_buffer_node, m_cipher_buff, buf_ptr, to_file,
-                              length, get_dest_name(), encrypt_mode(),
-                              encrypt_key(), encrypt_iv());
-    } else
-      err =
-          clone_os_copy_buf_to_file(buf_ptr, to_file, length, get_dest_name());
+      err = encrypt_and_write_cbk(buf_ptr, to_file, length, get_dest_name());
+    } else if (comp_file) {
+      err = comp_file->compress_and_write((char *)buf_ptr, to_file.file_desc,
+                                          length, get_dest_name());
+    } else {
+      err = clone_os_copy_buf_to_file(buf_ptr, to_file.file_desc, length,
+                                      get_dest_name());
+    }
+
   } else {
     err = 0;
     to_buffer = buf_ptr;
@@ -1998,4 +2210,12 @@ int Client_Cbk::apply_cbk(Ha_clone_file to_file, bool apply_file,
   }
   return (err);
 }
+
+int Client_Cbk::encrypt_and_write_cbk(uchar *source, Ha_clone_file to_file,
+                                      size_t length, const char *dest_name) {
+  return encrypt_and_write(&m_buffer_node, m_cipher_buff, source, to_file,
+                           length, dest_name, encrypt_mode(), encrypt_key(),
+                           encrypt_iv(), compress_file());
+}
+
 }  // namespace myclone

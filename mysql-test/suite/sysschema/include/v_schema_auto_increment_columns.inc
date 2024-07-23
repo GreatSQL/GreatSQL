@@ -162,6 +162,6 @@ analyze table auto_incs.intcol;
 analyze table auto_incs.intcolunsigned;
 analyze table auto_incs.bigintcol;
 analyze table auto_incs.bigintcolunsigned;
-SELECT * FROM sys.schema_auto_increment_columns;
+SELECT * FROM sys.schema_auto_increment_columns ORDER BY table_schema, table_name;
 
 DROP DATABASE auto_incs;

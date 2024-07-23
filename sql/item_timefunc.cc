@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -182,95 +182,6 @@ static int get_rr_year(const char *nptr, const char **endptr, int *error,
   }
   return ret_year;
 }
-
-typedef enum {
-  FMT_BASE = 128,
-  FMT_AD,
-  FMT_Ad,
-  FMT_ad,
-  FMT_AD_DOT,
-  FMT_ad_DOT,
-  FMT_AM,
-  FMT_Am,
-  FMT_am,
-  FMT_AM_DOT,
-  FMT_am_DOT,
-  FMT_BC,
-  FMT_Bc,
-  FMT_bc,
-  FMT_BC_DOT,
-  FMT_bc_DOT,
-  FMT_CC,
-  FMT_SCC,
-  FMT_D,
-  FMT_DAY,
-  FMT_Day,
-  FMT_day,
-  FMT_DD,
-  FMT_DDD,
-  FMT_DL,
-  FMT_DS,
-  FMT_DY,
-  FMT_Dy,
-  FMT_dy,
-  FMT_E,
-  FMT_EE,
-  FMT_FF,
-  FMT_FM,
-  FMT_FX,
-  FMT_HH,
-  FMT_HH12,
-  FMT_HH24,
-  FMT_IW,
-  FMT_I,
-  FMT_IY,
-  FMT_IYY,
-  FMT_IYYY,
-  FMT_J,
-  FMT_MI,
-  FMT_MM,
-  FMT_MON,
-  FMT_Mon,
-  FMT_mon,
-  FMT_MONTH,
-  FMT_Month,
-  FMT_month,
-  FMT_PM,
-  FMT_Pm,
-  FMT_pm,
-  FMT_PM_DOT,
-  FMT_pm_DOT,
-  FMT_Q,
-  FMT_rm,
-  FMT_Rm,
-  FMT_RM,
-  FMT_RR,
-  FMT_RRRR,
-  FMT_SP,
-  FMT_SS,
-  FMT_SSSSS,
-  FMT_th,
-  FMT_TH,
-  FMT_TS,
-  FMT_TZD,
-  FMT_TZH,
-  FMT_TZM,
-  FMT_TZR,
-  FMT_W,
-  FMT_WW,
-  FMT_X,
-  FMT_Y,
-  FMT_YY,
-  FMT_YYY,
-  FMT_YYYY,
-  FMT_YYYY_COMMA,
-  FMT_year,
-  FMT_Year,
-  FMT_YEAR,
-  FMT_SYYYY,
-  FMT_SYEAR,
-  FMT_BASE_END
-} FORMAT_ORACLE_DATE_TYPE_E;
 
 /**
   Extract datetime value to MYSQL_TIME struct from string value
@@ -3520,17 +3431,6 @@ inline bool append_val(int val, int size, String *str) {
   return str->append_with_prefill(intbuff, len, size, '0');
 }
 
-inline bool append_fill(int val, int size, String *str) {
-  char intbuff[15];
-  ulong len = (ulong)(longlong10_to_str(val, intbuff, 10) - intbuff);
-
-  len = len > (ulong)size ? (ulong)size : len;
-  auto fill_len = str->length() + size;
-
-  if (str->append(intbuff, len)) return true;
-  return str->fill(fill_len, '0');
-}
-
 bool Item_func_to_char::generate_number_format_array(const String *format,
                                                      uint *fmt_len) {
   const char *ptr, *end;
@@ -4175,12 +4075,24 @@ bool Item_func_to_char::make_date_str_oracle(const MYSQL_TIME *l_time,
         }
         break;
       case FMT_FF: {
+        char second_part[10] = {0};
+        auto second_part_len =
+            longlong10_to_str(l_time->second_part, second_part, 10) -
+            second_part;
         if ((ptr + 1) != nullptr && *(ptr + 1) != 0) {
-          if (append_fill(l_time->second_part, *(ptr + 1), str)) goto err_exit;
+          second_part_len = (*(ptr + 1)) - (6 - second_part_len);
+          if (second_part_len > 0) {
+            if (str->append_with_prefill(second_part, second_part_len,
+                                         *(ptr + 1), '0'))
+              goto err_exit;
+          } else {
+            if (append_val(0, *(ptr + 1), str)) goto err_exit;
+          }
           tmp_num = *(ptr + 1);
           ptr++;
         } else {
-          if (append_fill(l_time->second_part, 6, str)) goto err_exit;
+          if (str->append_with_prefill(second_part, second_part_len, 6, '0'))
+            goto err_exit;
           tmp_num = 6;
         }
         tmp_num = tmp_num > 1 ? ((*str)[str->length() - 2] - '0') * 10 +
@@ -7016,7 +6928,14 @@ null_date:
 }
 
 bool Item_func_trunc::resolve_type(THD *thd) {
-  if (is_temporal_type(args[0]->data_type())) {
+  bool is_ora_current_timestamp = false;
+  if (thd->variables.sql_mode & MODE_ORACLE) {
+    Item_func_now *item = dynamic_cast<Item_func_now *>(args[0]);
+    if (item) {
+      is_ora_current_timestamp = item->is_ora_current_timestmap;
+    }
+  }
+  if (is_temporal_type(args[0]->data_type()) || is_ora_current_timestamp) {
     if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_DATETIME)) return true;
     // trunc(date) expected, reset the datatype.
     set_data_type_datetime(0);
@@ -7025,42 +6944,6 @@ bool Item_func_trunc::resolve_type(THD *thd) {
     return param_type_uses_non_param(thd);
   } else {
     return super::resolve_type(thd);
-  }
-}
-
-/**
-  Check the arguments of function trunc(number).
-  prompt error if the conversion from any of the arguments to number(my_strntod)
-  returns error.
-
-*/
-void Item_func_trunc::check_trunc_number_params() {
-  null_value = false;
-  for (uint i = 0; i < arg_count; i++) {
-    if (args[i]->is_null()) {
-      null_value = true;
-      return;
-    }
-    if (args[i]->result_type() == STRING_RESULT) {
-      int error;
-      StringBuffer<STRING_BUFFER_USUAL_SIZE> tmp;
-      const String *res = args[i]->val_str(&tmp);
-      if (!res || !res->length()) {
-        null_value = true;
-        return;
-      }
-      // Try to convert the args from string to number.
-      const CHARSET_INFO *cs = res->charset();
-      const char *cptr = res->ptr();
-      size_t length = res->length();
-      const char *end = cptr + length;
-      const char *endptr = cptr + length;
-      my_strntod(cs, cptr, length, &endptr, &error);
-      if (error || cptr == endptr ||
-          (end != endptr && !check_if_only_end_space(cs, endptr, end))) {
-        my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
-      }
-    }
   }
 }
 
@@ -7132,100 +7015,6 @@ my_decimal *Item_func_trunc::decimal_op(my_decimal *decimal_value) {
 
   return nullptr;
 }
-/**
-  A simple wrapper for native_strncasecmp(), which adds length comparing between
-  format string and pattern string.
-  native_strcasecmp() used to be considered, but it is not applicable in the
-  following case:
-
-  create table t1 (date char(60), format varchar(10) not null);
-  insert into t1 values
-  ('2003-01-02 10:11:12', 'YEAR'),
-  ('2003-01-02 02:11:12 AM', 'DAY');
-  select trunc(date, format) as trunc_2 from t1;
-
-  when dealing with 'DAY', the string buffer for format stays as 'DAYR',
-  which leads to no match for any format mask and null value is returned from
-  trunc().
-
-  @param format trunc unit format
-  @param pattern trunc unit type
-  @retval         1 on error, 0 of success.
-*/
-int Item_func_trunc::strncasecmpwrap(const String *format,
-                                     const char *pattern) {
-  const char *ptr = format->ptr();
-  size_t format_length = format->length();
-
-  if (format_length != strlen(pattern)) return 1;
-  return native_strncasecmp(ptr, pattern, format_length);
-}
-
-bool Item_func_trunc::get_trunc_unit_type(const String *format) {
-  if (!format) return true;
-  if (default_arg) {
-    unit_type = TRUNC_DAY;
-    return false;
-  }
-
-  if (strncasecmpwrap(format, "CC") == 0 ||
-      strncasecmpwrap(format, "SCC") == 0) {
-    unit_type = TRUNC_CENTURY;
-    return false;
-  } else if (strncasecmpwrap(format, "IYYY") == 0 ||
-             strncasecmpwrap(format, "IYY") == 0 ||
-             strncasecmpwrap(format, "IY") == 0 ||
-             strncasecmpwrap(format, "I") == 0) {
-    unit_type = TRUNC_ISO_YEAR;
-    return false;
-  } else if (strncasecmpwrap(format, "SYEAR") == 0 ||
-             strncasecmpwrap(format, "SYYYY") == 0 ||
-             strncasecmpwrap(format, "YYYY") == 0 ||
-             strncasecmpwrap(format, "YYY") == 0 ||
-             strncasecmpwrap(format, "YY") == 0 ||
-             strncasecmpwrap(format, "Y") == 0 ||
-             strncasecmpwrap(format, "YEAR") == 0) {
-    unit_type = TRUNC_YEAR;
-    return false;
-  } else if (strncasecmpwrap(format, "Q") == 0) {
-    unit_type = TRUNC_QUARTER;
-    return false;
-  } else if (strncasecmpwrap(format, "MONTH") == 0 ||
-             strncasecmpwrap(format, "MON") == 0 ||
-             strncasecmpwrap(format, "MM") == 0 ||
-             strncasecmpwrap(format, "RM") == 0) {
-    unit_type = TRUNC_MONTH;
-    return false;
-  } else if (strncasecmpwrap(format, "IW") == 0) {
-    unit_type = TRUNC_ISO_WEEK;
-    return false;
-  } else if (strncasecmpwrap(format, "WW") == 0) {
-    unit_type = TRUNC_WEEKDAY_YEAR;
-    return false;
-  } else if (strncasecmpwrap(format, "W") == 0) {
-    unit_type = TRUNC_WEEKDAY_MONTH;
-    return false;
-  } else if (strncasecmpwrap(format, "DDD") == 0 ||
-             strncasecmpwrap(format, "DD") == 0 ||
-             strncasecmpwrap(format, "J") == 0) {
-    unit_type = TRUNC_DAY;
-    return false;
-  } else if (strncasecmpwrap(format, "DAY") == 0 ||
-             strncasecmpwrap(format, "DY") == 0 ||
-             strncasecmpwrap(format, "D") == 0) {
-    unit_type = TRUNC_DOW;
-    return false;
-  } else if (strncasecmpwrap(format, "HH") == 0 ||
-             strncasecmpwrap(format, "HH12") == 0 ||
-             strncasecmpwrap(format, "HH24") == 0) {
-    unit_type = TRUNC_HOUR;
-    return false;
-  } else if (strncasecmpwrap(format, "MI") == 0) {
-    unit_type = TRUNC_MINUTE;
-    return false;
-  }
-  return true;
-}
 
 bool Item_func_trunc::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzy_date) {
   bool datetime_overflow = false;
@@ -7274,10 +7063,17 @@ bool Item_func_trunc::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzy_date) {
      format->chop();
      ...
   */
-  if (get_trunc_unit_type(format)) goto null_date;
+  if (format && default_arg) {
+    unit_type = FMT_DDD;
+  } else {
+    if (get_trunc_unit_type(format, &unit_type)) {
+      my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+      goto null_date;
+    }
+  }
 
   switch (unit_type) {
-    case TRUNC_CENTURY:  // CC,SCC: First day of the centory.
+    case FMT_CC:  // CC,SCC: First day of the centory.
       ltime->year = ((ltime->year + 99) / 100) * 100 - 99;
       ltime->month = 1;
       ltime->day = 1;
@@ -7286,8 +7082,8 @@ bool Item_func_trunc::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzy_date) {
       ltime->second = 0;
       ltime->second_part = 0;
       break;
-    case TRUNC_ISO_YEAR:  // IYYY,IYY,IY,I Year containing the calendar week, as
-                          // defined by the ISO 8601 standard.
+    case FMT_IYYY:  // IYYY,IYY,IY,I Year containing the calendar week, as
+                    // defined by the ISO 8601 standard.
       // set ltime to Monday of the ISO week.
       jd = jd -
            (date_to_ISO_week(ltime->year, ltime->month, ltime->day) - 1) * 7 -
@@ -7306,7 +7102,7 @@ bool Item_func_trunc::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzy_date) {
       ltime->second = 0;
       ltime->second_part = 0;
       break;
-    case TRUNC_YEAR:  // SYYYY,YYYY,YEAR,SYEAR,YYY,YY,Y: Year.
+    case FMT_YEAR:  // SYYYY,YYYY,YEAR,SYEAR,YYY,YY,Y: Year.
       ltime->month = 1;
       ltime->day = 1;
       ltime->hour = 0;
@@ -7314,7 +7110,7 @@ bool Item_func_trunc::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzy_date) {
       ltime->second = 0;
       ltime->second_part = 0;
       break;
-    case TRUNC_QUARTER:  // Q: Quarter
+    case FMT_Q:  // Q: Quarter
       ltime->month = (3 * ((ltime->month - 1) / 3)) + 1;
       ltime->day = 1;
       ltime->hour = 0;
@@ -7322,16 +7118,16 @@ bool Item_func_trunc::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzy_date) {
       ltime->second = 0;
       ltime->second_part = 0;
       break;
-    case TRUNC_MONTH: /* MONTH,MON,MM,RM: Month */
+    case FMT_MON: /* MONTH,MON,MM,RM: Month */
       ltime->day = 1;
       ltime->hour = 0;
       ltime->minute = 0;
       ltime->second = 0;
       ltime->second_part = 0;
       break;
-    case TRUNC_ISO_WEEK:  // IW: Same day of the week as the first day of the
-                          // calendar week as defined by the ISO 8601 standard,
-                          // which is Monday.
+    case FMT_IW:  // IW: Same day of the week as the first day of the
+                  // calendar week as defined by the ISO 8601 standard,
+                  // which is Monday.
       jd = jd - weekday_iso;
       julianday_to_date(jd, year_julian_day, mon_julian_day, day_julian_day);
       if (year_julian_day < 1) {
@@ -7347,8 +7143,8 @@ bool Item_func_trunc::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzy_date) {
       ltime->second = 0;
       ltime->second_part = 0;
       break;
-    case TRUNC_WEEKDAY_YEAR:  // WW: Same day of the week as the first day of
-                              // the year.
+    case FMT_WW:  // WW: Same day of the week as the first day of
+                  // the year.
       jd = jd - (weekday_iso >= weekday_year_iso
                      ? weekday_iso - weekday_year_iso
                      : 7 + weekday_iso - weekday_year_iso);
@@ -7366,8 +7162,8 @@ bool Item_func_trunc::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzy_date) {
       ltime->second = 0;
       ltime->second_part = 0;
       break;
-    case TRUNC_WEEKDAY_MONTH:  // W: Same day of the week as the first day of
-                               // the month.
+    case FMT_W:  // W: Same day of the week as the first day of
+                 // the month.
       jd = jd - (weekday_iso >= weekday_month_iso
                      ? weekday_iso - weekday_month_iso
                      : 7 + weekday_iso - weekday_month_iso);
@@ -7385,13 +7181,13 @@ bool Item_func_trunc::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzy_date) {
       ltime->second = 0;
       ltime->second_part = 0;
       break;
-    case TRUNC_DAY:  // DDD,DD,J: Day.
+    case FMT_DDD:  // DDD,DD,J: Day.
       ltime->hour = 0;
       ltime->minute = 0;
       ltime->second = 0;
       ltime->second_part = 0;
       break;
-    case TRUNC_DOW:  // DAY,DY,D: Starting day of week.
+    case FMT_DAY:  // DAY,DY,D: Starting day of week.
       if (weekday > 0) {
         /* get the first day of week by using julianday_to_date(), to handle
         exceptions such as trunc('2003-01-02','day'), whose result is
@@ -7413,12 +7209,12 @@ bool Item_func_trunc::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzy_date) {
       ltime->second = 0;
       ltime->second_part = 0;
       break;
-    case TRUNC_HOUR:  // HH,HH12,HH24: Hour.
+    case FMT_HH:  // HH,HH12,HH24: Hour.
       ltime->minute = 0;
       ltime->second = 0;
       ltime->second_part = 0;
       break;
-    case TRUNC_MINUTE:  // MI: Minute.
+    case FMT_MI:  // MI: Minute.
       ltime->second = 0;
       ltime->second_part = 0;
       break;
@@ -7473,8 +7269,22 @@ bool Item_func_add_months::get_month_interval(Item *intvl_arg,
       break;
     }
     case REAL_RESULT: {
-      month_interval = (longlong)intvl_arg->val_real();
+      double interval_real = intvl_arg->val_real();
       if (intvl_arg->null_value) return true;
+
+#ifdef SW_64
+      if (interval_real <= LLONG_MIN || interval_real > LLONG_MAX) {
+        /* Warn about overflow */
+        push_warning_printf(current_thd, Sql_condition::SL_WARNING,
+                            ER_DATETIME_FUNCTION_OVERFLOW,
+                            ER_THD(current_thd, ER_DATETIME_FUNCTION_OVERFLOW),
+                            func_name());
+        null_value = true;
+        return true;
+      }
+#endif
+
+      month_interval = (longlong)interval_real;
       break;
     }
     case STRING_RESULT: {

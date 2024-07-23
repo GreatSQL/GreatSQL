@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -109,6 +109,7 @@
 #include "sql/query_options.h"
 #include "sql/query_result.h"
 #include "sql/rpl_source.h"
+#include "sql/secondary_engine_inc_load_task.h"
 #include "sql/set_var.h"
 #include "sql/sp.h"        // sp_cache_routine
 #include "sql/sp_head.h"   // sp_head
@@ -440,6 +441,7 @@ bool Sql_cmd_show_create_table::execute_inner(THD *thd) {
 
   lex->only_view = m_is_view;
   lex->sql_command = old_lex->sql_command;
+  lex->create_force_view_mode = old_lex->create_force_view_mode;
 
   // Disable constant subquery evaluation as we won't be locking tables.
   lex->context_analysis_only = CONTEXT_ANALYSIS_ONLY_VIEW;
@@ -1360,6 +1362,9 @@ bool mysqld_show_create(THD *thd, Table_ref *table_list) {
         new Item_empty_string("character_set_client", MY_CS_NAME_SIZE));
     field_list.push_back(
         new Item_empty_string("collation_connection", MY_CS_NAME_SIZE));
+    if (thd->lex->create_force_view_mode)
+      field_list.push_back(
+          new Item_return_int("View Type", 4, MYSQL_TYPE_LONG));
   } else if (thd->lex->is_materialized_view()) {
     field_list.push_back(
         new Item_empty_string("Materialized View", NAME_CHAR_LEN));
@@ -1400,6 +1405,9 @@ bool mysqld_show_create(THD *thd, Table_ref *table_list) {
     protocol->store(
         table_list->view_creation_ctx->get_connection_cl()->m_coll_name,
         system_charset_info);
+    if (thd->lex->create_force_view_mode) {
+      protocol->store((uint32)table_list->is_force_view ? 1 : 0);
+    }
   } else
     protocol->store_string(buffer.ptr(), buffer.length(), buffer.charset());
 
@@ -2398,7 +2406,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
     else
       packet->append(STRING_WITH_LEN("KEY "));
 
-    nulls_equal = nulls_equal || (key_info->flags & HA_NULL_ARE_EQUAL);
+    nulls_equal = nulls_equal || (key_info->flags & HA_FROM_ORA_MODE);
 
     if (!found_primary)
       append_identifier(thd, packet, key_info->name, strlen(key_info->name));
@@ -6220,6 +6228,101 @@ extern ST_FIELD_INFO optimizer_trace_info[];
 
 */
 
+ST_FIELD_INFO secondary_engine_inc_task_info[] = {
+    {"DB_NAME", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"TABLE_NAME", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"START_TIME", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"START_GTID", 65535, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"COMMITTED_GTID_SET", 65535, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"READ_GTID", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"READ_BINLOG_FILE", 1024, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"READ_BINLOG_POS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 0,
+     nullptr, 0},
+    {"DELAY", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 0, nullptr,
+     0},
+    {"STATUS", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"END_TIME", NAME_LEN, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {"INFO", 1024, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
+    {nullptr, 0, MYSQL_TYPE_STRING, 0, 0, nullptr, 0}};
+
+static int fill_secondary_engine_inc_task_info(
+    THD *thd, Table_ref *tables, Item *cond MY_ATTRIBUTE((unused))) {
+  TABLE *const table = tables->table;
+  DBUG_ENTER("fill_secondary_engine_inc_task_info");
+
+  Secondary_engine_increment_load_task_manager &task_mgr =
+      Secondary_engine_increment_load_task_manager::instance();
+  task_mgr.lock();
+  auto *task_map = task_mgr.get_all_tasks();
+
+  for (const auto &it : *task_map) {
+    int col = 0;
+    table->field[col++]->store(it.first.first.c_str(), it.first.first.size(),
+                               system_charset_info);  // db_name
+    table->field[col++]->store(it.first.second.c_str(), it.first.second.size(),
+                               system_charset_info);  // table_name
+    auto &start_time = it.second->start_time();
+    table->field[col++]->store(start_time.c_str(), start_time.size(),
+                               system_charset_info);  // start_time
+    auto &start_gtid = it.second->start_gtid();
+    table->field[col++]->store(start_gtid.c_str(), start_gtid.size(),
+                               system_charset_info);  // start_gtid
+    auto committed_gtid_str = it.second->get_sync_gtid_set_str();
+    if (committed_gtid_str != nullptr) {
+      table->field[col++]->store(committed_gtid_str, strlen(committed_gtid_str),
+                                 system_charset_info);  // committed_gtid_set
+      my_free(committed_gtid_str);
+    } else {
+      table->field[col++]->store("", 0,
+                                 system_charset_info);  // committed_gtid_set
+    }
+    auto gtid = it.second->get_last_gtid();
+    table->field[col++]->store(gtid.c_str(), gtid.size(),
+                               system_charset_info);  // read_gtid
+    auto file = it.second->get_last_file();
+    table->field[col++]->store(file.c_str(), file.size(),
+                               system_charset_info);  // read_binlog_file
+    auto pos = it.second->get_last_pos();
+    table->field[col++]->store(pos, true);  // read_binlog_pos
+    time_t sync_time = it.second->get_sync_timestamp();
+    if (sync_time == 0) {
+      table->field[col++]->store(0, true);
+    } else {
+      time_t cur_time = std::time(nullptr);
+      auto delay = cur_time > sync_time ? cur_time - sync_time : 0;
+      table->field[col++]->store(delay, true);
+    }
+    if (it.second->task_stopped()) {
+      table->field[col++]->store(STRING_WITH_LEN("NOT RUNNING"),
+                                 system_charset_info);  // status
+      auto &end_time = it.second->end_time();
+      table->field[col++]->store(end_time.c_str(), end_time.size(),
+                                 system_charset_info);  // end_time
+    } else {
+      table->field[col++]->store(STRING_WITH_LEN("RUNNING"),
+                                 system_charset_info);         // status
+      table->field[col++]->store("", 0, system_charset_info);  // end_time
+    }
+    if (it.second->has_error()) {
+      auto err_msg = it.second->error();
+      table->field[col++]->store(err_msg, strlen(err_msg),
+                                 system_charset_info);  // INFO
+    } else if (it.second->task_stopped()) {
+      table->field[col++]->store(STRING_WITH_LEN("NORMAL EXIT"),
+                                 system_charset_info);  // INFO
+    } else {
+      table->field[col++]->store("", 0, system_charset_info);  // INFO
+    }
+
+    if (schema_table_store_record(thd, table)) {
+      task_mgr.unlock();
+      DBUG_RETURN(1);
+    }
+  }
+  task_mgr.unlock();
+  DBUG_RETURN(0);
+}
+
 ST_SCHEMA_TABLE schema_tables[] = {
     {"COLUMN_PRIVILEGES", column_privileges_fields_info,
      fill_schema_column_privileges, nullptr, nullptr, false},
@@ -6265,6 +6368,8 @@ ST_SCHEMA_TABLE schema_tables[] = {
      make_old_format, nullptr, false},
     {"SEQUENCES", sequences_field_info, fill_sequences, nullptr, nullptr,
      false},
+    {"SECONDARY_ENGINE_INCREMENT_LOAD_TASK", secondary_engine_inc_task_info,
+     fill_secondary_engine_inc_task_info, nullptr, nullptr, false},
     {nullptr, nullptr, nullptr, nullptr, nullptr, false}};
 
 int initialize_schema_table(st_plugin_int *plugin) {

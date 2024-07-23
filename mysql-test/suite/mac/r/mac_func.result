@@ -1,0 +1,528 @@
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+call sys_mac.mac_apply_user_policy('root','localhost','P1','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+select mac_reset_session_labels('P1');
+ERROR HY000: this user don't apply this policy.
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+select mac_set_def_label('P1', 'L5::');
+ERROR HY000: the new session label mismatch the rule.
+select mac_set_def_label('P1', 'L1::');
+ERROR HY000: the new session label mismatch the rule.
+select mac_set_def_label('P1', 'L3:C1:');
+ERROR HY000: the new session label mismatch the rule.
+select mac_set_def_label('P1', 'L3:C5:');
+ERROR HY000: the new session label mismatch the rule.
+select mac_set_def_label('P1', 'L3::G2');
+ERROR HY000: the new session label mismatch the rule.
+select mac_set_def_label('P1', 'L2:C2:G1');
+mac_set_def_label('P1', 'L2:C2:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L2:C2:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C2:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L2:C2:G1
+
+select mac_set_def_label('P1', 'L2:C3:G1');
+mac_set_def_label('P1', 'L2:C3:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L2:C3:G1
+
+select mac_set_def_label('P1', 'L2:C4:G1');
+mac_set_def_label('P1', 'L2:C4:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L2:C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2::G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L2::G1
+
+select mac_set_def_label('P1', 'L2:C2,C3:G1');
+mac_set_def_label('P1', 'L2:C2,C3:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L2:C2,C3:G1
+
+select mac_set_def_label('P1', 'L2:C2,C4:G1');
+mac_set_def_label('P1', 'L2:C2,C4:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L2:C2,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C2:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L2:C2:G1
+
+select mac_set_def_label('P1', 'L2:C3,C4:G1');
+mac_set_def_label('P1', 'L2:C3,C4:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L2:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L2:C3:G1
+
+select mac_set_def_label('P1', 'L2:C2,C3,C4:G1');
+mac_set_def_label('P1', 'L2:C2,C3,C4:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L2:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L2:C2,C3:G1
+
+select mac_set_def_label('P1', 'L3:C2:G1');
+mac_set_def_label('P1', 'L3:C2:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C2:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C2:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C2:G1
+
+select mac_set_def_label('P1', 'L3:C3:G1');
+mac_set_def_label('P1', 'L3:C3:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+select mac_set_def_label('P1', 'L3:C4:G1');
+mac_set_def_label('P1', 'L3:C4:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2::G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3::G1
+
+select mac_set_def_label('P1', 'L3:C2,C3:G1');
+mac_set_def_label('P1', 'L3:C2,C3:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C2,C3:G1
+
+select mac_set_def_label('P1', 'L3:C2,C4:G1');
+mac_set_def_label('P1', 'L3:C2,C4:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C2,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C2:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C2:G1
+
+select mac_set_def_label('P1', 'L3:C3,C4:G1');
+mac_set_def_label('P1', 'L3:C3,C4:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+select mac_set_def_label('P1', 'L3:C2,C3,C4:G1');
+mac_set_def_label('P1', 'L3:C2,C3,C4:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C2,C3:G1
+
+select mac_reset_session_labels('P1');
+mac_reset_session_labels('P1')
+success to reset session labels
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+select mac_set_def_label('P1', 'L4:C2:G1');
+mac_set_def_label('P1', 'L4:C2:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L4:C2:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C2:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L4:C2:G1
+
+select mac_set_def_label('P1', 'L4:C3:G1');
+mac_set_def_label('P1', 'L4:C3:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L4:C3:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L4:C3:G1
+
+select mac_set_def_label('P1', 'L4:C4:G1');
+mac_set_def_label('P1', 'L4:C4:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L4:C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2::G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L4::G1
+
+select mac_set_def_label('P1', 'L4:C2,C3:G1');
+mac_set_def_label('P1', 'L4:C2,C3:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L4:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L4:C2,C3:G1
+
+select mac_set_def_label('P1', 'L4:C2,C4:G1');
+mac_set_def_label('P1', 'L4:C2,C4:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L4:C2,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C2:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L4:C2:G1
+
+select mac_set_def_label('P1', 'L4:C3,C4:G1');
+mac_set_def_label('P1', 'L4:C3,C4:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L4:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L4:C3:G1
+
+select mac_set_def_label('P1', 'L4:C2,C3,C4:G1');
+mac_set_def_label('P1', 'L4:C2,C3,C4:G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L4:C2,C3:G1
+
+select mac_set_def_label('P1', 'L4::');
+mac_set_def_label('P1', 'L4::')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L4::
+DEF_WRITE_LABEL : L2::
+DEF_ROW_LABEL : L4::
+
+select mac_set_def_label('P1', 'L4::G1');
+mac_set_def_label('P1', 'L4::G1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L4::G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2::G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L4::G1
+
+select mac_set_def_label('P1', 'L4::G1_1');
+mac_set_def_label('P1', 'L4::G1_1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L4::G1_1,G1_1_1
+DEF_WRITE_LABEL : L2::G1_1,G1_1_1
+DEF_ROW_LABEL : L4::G1_1
+
+select mac_set_def_label('P1', 'L4::G1_2');
+mac_set_def_label('P1', 'L4::G1_2')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L4::G1_2
+DEF_WRITE_LABEL : L2::G1_2
+DEF_ROW_LABEL : L4::G1_2
+
+select mac_set_def_label('P1', 'L4::G1_1_1');
+mac_set_def_label('P1', 'L4::G1_1_1')
+success to set def label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L4::G1_1_1
+DEF_WRITE_LABEL : L2::G1_1_1
+DEF_ROW_LABEL : L4::G1_1_1
+
+select mac_reset_session_labels('P1');
+mac_reset_session_labels('P1')
+success to reset session labels
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+select mac_set_row_label('P1', 'L4::');
+ERROR HY000: the row session label mismatch the rule.
+select mac_set_row_label('P1', 'L1::');
+ERROR HY000: the row session label mismatch the rule.
+select mac_set_row_label('P1', 'L2::');
+mac_set_row_label('P1', 'L2::')
+success to set row label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L2::
+
+select mac_set_row_label('P1', 'L2::');
+mac_set_row_label('P1', 'L2::')
+success to set row label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L2::
+
+select mac_reset_session_labels('P1');
+mac_reset_session_labels('P1')
+success to reset session labels
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+select mac_set_row_label('P1', 'L3:C1:');
+ERROR HY000: the row session label mismatch the rule.
+select mac_set_row_label('P1', 'L3:C2:');
+ERROR HY000: the row session label mismatch the rule.
+select mac_set_row_label('P1', 'L3:C3:');
+mac_set_row_label('P1', 'L3:C3:')
+success to set row label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:
+
+select mac_set_row_label('P1', 'L3:C4:');
+ERROR HY000: the row session label mismatch the rule.
+select mac_set_row_label('P1', 'L3:C2,C4:');
+ERROR HY000: the row session label mismatch the rule.
+select mac_set_row_label('P1', 'L3:C1,C4:');
+ERROR HY000: the row session label mismatch the rule.
+select mac_set_row_label('P1', 'L3:C1,C2,C4:');
+ERROR HY000: the row session label mismatch the rule.
+select mac_set_row_label('P1', 'L3:C2,C3:');
+ERROR HY000: the row session label mismatch the rule.
+select mac_set_row_label('P1', 'L3::');
+mac_set_row_label('P1', 'L3::')
+success to set row label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3::
+
+select mac_reset_session_labels('P1');
+mac_reset_session_labels('P1')
+success to reset session labels
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+select mac_set_row_label('P1', 'L3::G1');
+mac_set_row_label('P1', 'L3::G1')
+success to set row label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3::G1
+
+select mac_set_row_label('P1', 'L3::G1_1');
+mac_set_row_label('P1', 'L3::G1_1')
+success to set row label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3::G1_1
+
+select mac_set_row_label('P1', 'L3::G1_1_1');
+mac_set_row_label('P1', 'L3::G1_1_1')
+success to set row label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3::G1_1_1
+
+select mac_set_row_label('P1', 'L3::G1_2');
+mac_set_row_label('P1', 'L3::G1_2')
+success to set row label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3::G1_2
+
+select mac_set_row_label('P1', 'L3::G1_2');
+mac_set_row_label('P1', 'L3::G1_2')
+success to set row label
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3::G1_2
+
+select mac_set_row_label('P1', 'L3::G2');
+ERROR HY000: the row session label mismatch the rule.

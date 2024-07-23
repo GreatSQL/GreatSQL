@@ -1,5 +1,7 @@
 --source include/elide_costs.inc
 
+SET @@use_secondary_engine = ON;
+
 --disable_query_log
 eval INSTALL PLUGIN mock SONAME '$MOCK_PLUGIN';
 --enable_query_log

@@ -1,4 +1,5 @@
 /* Copyright (c) 2018, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -52,6 +53,14 @@ struct Hton {
 
   /** clone target data directory */
   const char *m_data_dir;
+
+  uint32_t m_max_concurrency;
+
+  uint64_t m_start_id;
+
+  bool m_enable_page_track;
+
+  file_compress_mode_t m_compress_mode;
 };
 
 }  // namespace myclone
@@ -74,7 +83,8 @@ static bool run_hton_clone_begin(THD *thd, plugin_ref plugin, void *arg) {
 
     clone_arg->m_err = hton->clone_interface.clone_begin(
         hton, thd, loc.m_loc, loc.m_loc_len, task_id, clone_arg->m_type,
-        clone_arg->m_mode);
+        clone_arg->m_mode, clone_arg->m_enable_page_track,
+        clone_arg->m_start_id, clone_arg->m_compress_mode);
 
     clone_arg->m_loc_vec->push_back(loc);
     clone_arg->m_task_vec->push_back(task_id);
@@ -89,7 +99,8 @@ static bool run_hton_clone_begin(THD *thd, plugin_ref plugin, void *arg) {
 
 int hton_clone_begin(THD *thd, Storage_Vector &clone_loc_vec,
                      Task_Vector &task_vec, Ha_clone_type clone_type,
-                     Ha_clone_mode clone_mode) {
+                     Ha_clone_mode clone_mode, uint64_t start_id,
+                     bool enable_page_track, file_compress_mode_t comp_mode) {
   assert(task_vec.empty());
   /* If Storage locators are empty, construct them here. */
   if (clone_loc_vec.empty()) {
@@ -102,6 +113,9 @@ int hton_clone_begin(THD *thd, Storage_Vector &clone_loc_vec,
     clone_args.m_type = clone_type;
     clone_args.m_mode = clone_mode;
     clone_args.m_data_dir = nullptr;
+    clone_args.m_start_id = start_id;
+    clone_args.m_enable_page_track = enable_page_track;
+    clone_args.m_compress_mode = comp_mode;
 
     plugin_foreach(thd, run_hton_clone_begin, MYSQL_STORAGE_ENGINE_PLUGIN,
                    &clone_args);
@@ -129,7 +143,7 @@ int hton_clone_begin(THD *thd, Storage_Vector &clone_loc_vec,
 #endif
     auto err = loc_iter.m_hton->clone_interface.clone_begin(
         loc_iter.m_hton, thd, loc_iter.m_loc, loc_iter.m_loc_len, task_id,
-        clone_type, clone_mode);
+        clone_type, clone_mode, enable_page_track, start_id, comp_mode);
 
     if (err != 0) {
       return (err);
@@ -199,7 +213,9 @@ static bool run_hton_clone_apply_begin(THD *thd, plugin_ref plugin, void *arg) {
 
     clone_arg->m_err = hton->clone_interface.clone_apply_begin(
         hton, thd, loc.m_loc, loc.m_loc_len, task_id, clone_arg->m_mode,
-        clone_arg->m_data_dir);
+        clone_arg->m_data_dir, clone_arg->m_max_concurrency,
+        clone_arg->m_enable_page_track, clone_arg->m_start_id,
+        clone_arg->m_compress_mode);
 
     clone_arg->m_loc_vec->push_back(loc);
 
@@ -213,7 +229,9 @@ static bool run_hton_clone_apply_begin(THD *thd, plugin_ref plugin, void *arg) {
 
 int hton_clone_apply_begin(THD *thd, const char *clone_data_dir,
                            Storage_Vector &clone_loc_vec, Task_Vector &task_vec,
-                           Ha_clone_mode clone_mode) {
+                           Ha_clone_mode clone_mode, uint32_t max_concurrency,
+                           uint64_t start_id, bool enable_page_track,
+                           file_compress_mode_t comp_mode) {
   /* If Storage locators are empty, construct them here. */
   auto add_task = task_vec.empty();
 
@@ -229,6 +247,10 @@ int hton_clone_apply_begin(THD *thd, const char *clone_data_dir,
     clone_args.m_type = HA_CLONE_HYBRID;
     clone_args.m_mode = clone_mode;
     clone_args.m_data_dir = clone_data_dir;
+    clone_args.m_max_concurrency = max_concurrency;
+    clone_args.m_enable_page_track = enable_page_track;
+    clone_args.m_start_id = start_id;
+    clone_args.m_compress_mode = comp_mode;
 
     plugin_foreach(thd, run_hton_clone_apply_begin, MYSQL_STORAGE_ENGINE_PLUGIN,
                    &clone_args);
@@ -258,7 +280,8 @@ int hton_clone_apply_begin(THD *thd, const char *clone_data_dir,
 #endif
     auto err = loc_iter.m_hton->clone_interface.clone_apply_begin(
         loc_iter.m_hton, thd, loc_iter.m_loc, loc_iter.m_loc_len, task_id,
-        clone_mode, clone_data_dir);
+        clone_mode, clone_data_dir, max_concurrency, enable_page_track,
+        start_id, comp_mode);
 
     if (err != 0) {
       return (err);

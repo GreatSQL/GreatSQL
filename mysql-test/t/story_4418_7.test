@@ -1,0 +1,542 @@
+#-- sql #0
+create table t__ ( 
+c_pawzj int ,
+c_ad6 text ,
+c_ld5pq tinyint ,
+primary key(c_pawzj),
+unique(c_ld5pq, c_pawzj)
+);
+
+
+#-- sql #9
+create table t_ggp ( 
+c_qott2i int ,
+c_gbpf double ,
+c_x int ,
+c_sngxi tinyint not null ,
+c_y0zr1vtgs6 text ,
+primary key(c_qott2i, c_x),
+unique(c_x)
+);
+
+
+#-- sql #11
+#-- sql #12
+begin;
+create table t_t ( 
+c_tz4jefad6 int ,
+c_p3 double not null ,
+c__0z text ,
+primary key(c_tz4jefad6),
+unique(c_p3)
+);
+delete from t_ggp
+where 
+EXISTS (
+  select  
+      (select c_pawzj from t__ order by c_pawzj limit 1 offset 6)
+         as c0
+    from 
+      (t_t as ref_0
+        cross join t_t as ref_1
+        )
+    where t_ggp.c_gbpf in (
+      select  
+          30.24 as c0
+        from 
+          t__ as ref_2
+        where EXISTS (
+          select  
+              ref_3.c__0z as c0, 
+              ref_3.c_p3 as c1
+            from 
+              (t_t as ref_3
+                inner join t__ as ref_4
+                on (1=1))
+            where (ref_2.c_pawzj = ( 
+                  select  
+                        ref_5.c_tz4jefad6 as c0
+                      from 
+                        t_t as ref_5
+                      where 95 in (
+                        ref_3.c_tz4jefad6)
+                    union all
+                    select  
+                        ref_3.c_tz4jefad6 as c0
+                      from 
+                        t_t as ref_6
+                      where ref_4.c_pawzj <= ref_2.c_pawzj)) 
+                and (ref_4.c_pawzj is not NULL) OR ref_4.c_ad6 is not NULL
+            order by c0, c1 desc)
+        order by c0 desc) limit 99);
+alter table t__ add column c_bay double;
+create unique index t_b8op1a_idx_1 on t_t (c_tz4jefad6, c_p3);
+rollback;
+
+
+#-- sql #29
+#-- sql #30
+alter table t_ggp add column c_vafdusf3 double;
+
+
+#-- error occurred when executing next sql
+#-- sql #33
+#-- sql #34
+#-- error occurred after next sql (#35)
+select  
+    ref_20.c_tz4jefad6 as c0, 
+    ref_20.c_tz4jefad6 as c1, 
+    ref_23.c_y0zr1vtgs6 as c2, 
+    ref_23.c_y0zr1vtgs6 as c3, 
+    ref_17.c_ad6 as c4, 
+    ref_24.c_x as c5, 
+    ref_24.c_y0zr1vtgs6 as c6, 
+    ref_23.c_y0zr1vtgs6 as c7
+  from 
+    (((t__ as ref_15
+          cross join t_ggp as ref_16
+          )
+        cross join t__ as ref_17
+        )
+      cross join ((t_t as ref_18
+          cross join ((t_t as ref_19
+              left outer join t_t as ref_20
+              on (ref_19.c__0z < ( 
+                  select  
+                        ref_21.c__0z as c0
+                      from 
+                        t_t as ref_21
+                      where ref_20.c_tz4jefad6 between 72 and ref_21.c_tz4jefad6
+                    union
+                    select  
+                        ref_22.c_ad6 as c0
+                      from 
+                        t__ as ref_22
+                      where ref_20.c_tz4jefad6 is not NULL)))
+            inner join t_ggp as ref_23
+            on (ref_19.c_p3 = ref_23.c_gbpf ))
+          )
+        cross join t_ggp as ref_24
+        )
+      )
+  where 1=1
+union
+select distinct 
+    (select count(c_qott2i) from t_ggp)
+       as c0, 
+    case when subq_0.c1 between cast(coalesce(
+          25, 
+          subq_0.c1
+          ) as signed) and subq_0.c1 then length(
+        cast(case when subq_0.c1 in (
+              select  
+                  ref_46.c_pawzj as c0
+                from 
+                  t__ as ref_46
+                where ref_46.c_ld5pq is NULL) OR EXISTS (
+                select  
+                    ref_47.c_tz4jefad6 as c0, 
+                    ref_47.c_p3 as c1, 
+                    ref_47.c_tz4jefad6 as c2, 
+                    ref_47.c_p3 as c3, 
+                    ref_47.c_p3 as c4, 
+                    ref_47.c_p3 as c5, 
+                    44 as c6
+                  from 
+                    t_t as ref_47
+                  where subq_0.c1 > ( 
+                    select  
+                          ref_47.c_tz4jefad6 as c0
+                        from 
+                          t_t as ref_48
+                        where subq_0.c1 not in (
+                          select  
+                                ref_49.c_tz4jefad6 as c0
+                              from 
+                                t_t as ref_49
+                              where EXISTS (
+                                select distinct 
+                                    ref_50.c_pawzj as c0, 
+                                    ref_50.c_ad6 as c1, 
+                                    ref_50.c_bay as c2, 
+                                    ref_50.c_ad6 as c3, 
+                                    ref_50.c_ld5pq as c4, 
+                                    ref_50.c_ld5pq as c5, 
+                                    ref_50.c_pawzj as c6
+                                  from 
+                                    t__ as ref_50
+                                  where (ref_50.c_pawzj >= ref_49.c_tz4jefad6 OR 1=1 OR ref_49.c_tz4jefad6 <= ref_50.c_pawzj) 
+                                    or (EXISTS (
+                                      select  
+                                          ref_51.c__0z as c0, 
+                                          ref_49.c_tz4jefad6 as c1, 
+                                          ref_49.c_p3 as c2, 
+                                          ref_51.c_tz4jefad6 as c3, 
+                                          ref_51.c_tz4jefad6 as c4, 
+                                          ref_49.c__0z as c5, 
+                                          ref_51.c_tz4jefad6 as c6, 
+                                          ref_51.c_tz4jefad6 as c7, 
+                                          ref_51.c__0z as c8, 
+                                          ref_51.c_tz4jefad6 as c9, 
+                                          ref_51.c_p3 as c10, 
+                                          ref_51.c_tz4jefad6 as c11, 
+                                          ref_51.c_tz4jefad6 as c12, 
+                                          ref_51.c_tz4jefad6 as c13, 
+                                          ref_51.c__0z as c14
+                                        from 
+                                          t_t as ref_51
+                                        where ref_50.c_pawzj > ref_50.c_pawzj OR ref_51.c_tz4jefad6 <= ref_49.c_tz4jefad6 OR ref_51.c_tz4jefad6 = ref_50.c_pawzj
+                                        order by c0, -c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14 asc)))
+                            union
+                            select  
+                                92 as c0
+                              from 
+                                t_t as ref_52
+                              where (ref_52.c_tz4jefad6 = ( 
+                                  select  
+                                        ref_53.c_qott2i as c0
+                                      from 
+                                        t_ggp as ref_53
+                                      where ref_52.c_tz4jefad6 <= ( 
+                                        select  
+                                              ref_52.c_tz4jefad6 as c0
+                                            from 
+                                              t_ggp as ref_54
+                                            where ref_54.c_y0zr1vtgs6 not like '%oud0605' OR ref_52.c__0z like '_'
+                                          union all
+                                          select distinct 
+                                              ref_53.c_qott2i as c0
+                                            from 
+                                              t_t as ref_55
+                                            where ref_52.c__0z not like '%%ftvk4x9%')
+                                    union
+                                    select  
+                                        ref_56.c_x as c0
+                                      from 
+                                        t_ggp as ref_56
+                                      where ref_56.c_qott2i = ref_56.c_x)) 
+                                and (((ref_52.c_tz4jefad6 = ref_52.c_tz4jefad6) 
+                                    and (1=1)) 
+                                  and (40 between ref_52.c_tz4jefad6 and ref_52.c_tz4jefad6)))
+                      union
+                      select  
+                          ref_57.c_tz4jefad6 as c0
+                        from 
+                          t_t as ref_57
+                        where EXISTS (
+                          select  
+                              ref_58.c_ld5pq as c0, 
+                              ref_57.c_tz4jefad6 as c1, 
+                              ref_57.c_p3 as c2, 
+                              ref_58.c_bay as c3, 
+                              ref_58.c_bay as c4, 
+                              ref_47.c__0z as c5
+                            from 
+                              t__ as ref_58
+                            where ref_58.c_bay <= ( 
+                              select distinct 
+                                  ref_58.c_bay as c0
+                                from 
+                                  t_t as ref_59
+                                where ((subq_0.c1 <> subq_0.c1) 
+                                    and ((subq_0.c1 < ref_57.c_tz4jefad6) 
+                                      and (ref_59.c_tz4jefad6 <= ref_59.c_tz4jefad6))) 
+                                  and (ref_59.c_tz4jefad6 <> ref_47.c_tz4jefad6)
+                                window ry169 as ( partition by ref_57.c__0z, ref_47.c_tz4jefad6 order by ref_58.c_ad6, ref_47.c_p3 desc) limit 101)))) AND (subq_0.c1 is not NULL) 
+                and (subq_0.c1 >= (select count(c_qott2i) from t_ggp)
+                    ) then cast(null as char) else (select c_y0zr1vtgs6 from t_ggp order by c_y0zr1vtgs6 limit 1 offset 3)
+             end
+           as char)) else subq_0.c1 end
+       as c1, 
+    cast(coalesce(
+      'c8kg', 
+      hex(
+        cast(case when (1=1) 
+            and (subq_0.c1 > subq_0.c1) then 'atangx' else (select c_ad6 from t__ order by c_ad6 limit 1 offset 4)
+             end
+           as char))
+      ) as char) as c2, 
+    'lu625zxop' as c3, 
+    case when subq_0.c1 <= subq_0.c1 then case when subq_0.c0 >= ( 
+          select  
+                subq_0.c1 not in (
+                  select  
+                        ref_61.c_pawzj as c0
+                      from 
+                        t__ as ref_61
+                      where ref_61.c_pawzj between ref_61.c_pawzj and ref_61.c_pawzj OR (ref_61.c_pawzj between ref_61.c_pawzj and ref_61.c_pawzj) 
+                          and (1=1 OR 1=1 AND 96 is NULL)
+                    union
+                    select  
+                        ref_62.c_tz4jefad6 as c0
+                      from 
+                        t_t as ref_62
+                      where ref_62.c_tz4jefad6 is not NULL) as c0
+              from 
+                t_ggp as ref_60
+              where 1=1
+            union
+            select  
+                ref_63.c_pawzj = ref_63.c_pawzj as c0
+              from 
+                t__ as ref_63
+              where subq_0.c0 >= ( 
+                select  
+                      (select count(c_pawzj) from t__)
+                           >= ref_64.c_x as c0
+                    from 
+                      t_ggp as ref_64
+                    where (0<>0) 
+                      and ((ref_64.c_sngxi in (
+                                select distinct 
+                                      0<>0 as c0
+                                    from 
+                                      t__ as ref_65
+                                    where ref_65.c_pawzj <> ref_65.c_pawzj
+                                  union
+                                  select  
+                                      ref_66.c_ad6 not in (
+                                        select  
+                                              ref_68.c_y0zr1vtgs6 as c0
+                                            from 
+                                              t_ggp as ref_68
+                                            where ref_68.c_y0zr1vtgs6 like 'io5%o'
+                                          union
+                                          select  
+                                              ref_69.c_ad6 as c0
+                                            from 
+                                              t__ as ref_69
+                                            where ref_69.c_pawzj between ref_69.c_pawzj and ref_69.c_pawzj OR ref_69.c_ad6 like 'h_mn') as c0
+                                    from 
+                                      t__ as ref_66
+                                    where (EXISTS (
+                                        select  
+                                            ref_67.c_gbpf as c0, 
+                                            ref_67.c_y0zr1vtgs6 as c1, 
+                                            ref_67.c_y0zr1vtgs6 as c2
+                                          from 
+                                            t_ggp as ref_67
+                                          where 0<>0)) 
+                                      or (1=1))) 
+                              or ((EXISTS (
+                                  select  
+                                      ref_70.c_x as c0, 
+                                      ref_63.c_ad6 as c1
+                                    from 
+                                      t_ggp as ref_70
+                                    where ref_64.c_x between 23 and ref_64.c_qott2i)) 
+                                or ((select c_qott2i from t_ggp order by c_qott2i limit 1 offset 99)
+                                     <> ref_64.c_x)) OR EXISTS (
+                              select  
+                                  ref_71.c_ad6 as c0, 
+                                  ref_63.c_ad6 as c1
+                                from 
+                                  t__ as ref_71
+                                where ref_71.c_pawzj < subq_0.c1) OR 0<>0 AND EXISTS (
+                          select  
+                              ref_72.c_y0zr1vtgs6 as c0, 
+                              ref_63.c_bay as c1, 
+                              ref_63.c_pawzj as c2, 
+                              ref_72.c_vafdusf3 as c3, 
+                              ref_72.c_vafdusf3 as c4
+                            from 
+                              t_ggp as ref_72
+                            where 1=1))
+                  union
+                  select  
+                      subq_0.c1 between ref_63.c_pawzj and (select count(c_gbpf) from t_ggp)
+                           as c0
+                    from 
+                      t_ggp as ref_73
+                    where 1=1)) then 'd7' else rtrim(
+          cast(cast(null as char) as char)) end
+         else (select c_y0zr1vtgs6 from t_ggp order by c_y0zr1vtgs6 limit 1 offset 4)
+         end
+       as c4, 
+    subq_0.c1 as c5, 
+    case when cast(coalesce(
+          (select c__0z from t_t order by c__0z limit 1 offset 6)
+            , 
+          (select c_y0zr1vtgs6 from t_ggp order by c_y0zr1vtgs6 limit 1 offset 51)
+            
+          ) as char) like 'gz_r_2q' then case when subq_0.c1 > subq_0.c1 then 
+          LAST_VALUE(
+            cast((select c_y0zr1vtgs6 from t_ggp order by c_y0zr1vtgs6 limit 1 offset 49)
+               as char)) over (partition by subq_0.c1 order by subq_0.c0, subq_0.c0, subq_0.c0) else 'uln4a' end
+         else (select c_ad6 from t__ order by c_ad6 limit 1 offset 1)
+         end
+       as c6, 
+    'j' as c7
+  from 
+    (select  
+          (ref_25.c_pawzj < ref_25.c_pawzj) as c0, 
+          (select count(c_pawzj) from t__)
+             as c1
+        from 
+          t__ as ref_25
+        where ref_25.c_bay > ( 
+          select  
+                ref_25.c_bay as c0
+              from 
+                t_ggp as ref_26
+              where (1=1 AND ref_26.c_y0zr1vtgs6 not like 'i2_tv') 
+                or ((select c_bay from t__ order by c_bay limit 1 offset 8)
+                     <= ( 
+                  select  
+                      (select min(c_bay) from t__)
+                         as c0
+                    from 
+                      t_ggp as ref_27
+                    where EXISTS (
+                      select  
+                          ref_25.c_ld5pq as c0
+                        from 
+                          t_ggp as ref_28
+                        where 0<>0) limit 122))
+            union
+            select  
+                (select c_p3 from t_t order by c_p3 limit 1 offset 5)
+                   as c0
+              from 
+                t_t as ref_29
+              where ref_25.c_pawzj > ref_29.c_tz4jefad6)) as subq_0
+  where (subq_0.c1 in (
+        select  
+            ref_30.c_x as c0
+          from 
+            t_ggp as ref_30
+          where ref_30.c_x not in (
+            select  
+                ref_31.c_qott2i as c0
+              from 
+                t_ggp as ref_31
+              where EXISTS (
+                select distinct 
+                    ref_32.c_bay as c0, 
+                    ref_32.c_pawzj as c1, 
+                    ref_32.c_ld5pq as c2, 
+                    ref_32.c_pawzj as c3, 
+                    ref_32.c_pawzj as c4, 
+                    ref_31.c_y0zr1vtgs6 as c5, 
+                    ref_32.c_bay as c6, 
+                    ref_32.c_ld5pq as c7, 
+                    ref_32.c_ld5pq as c8, 
+                    ref_32.c_ld5pq as c9, 
+                    ref_32.c_ld5pq as c10, 
+                    ref_32.c_pawzj as c11, 
+                    ref_31.c_vafdusf3 as c12, 
+                    ref_32.c_pawzj as c13, 
+                    ref_32.c_bay as c14, 
+                    ref_32.c_bay as c15, 
+                    ref_32.c_bay as c16, 
+                    ref_32.c_pawzj as c17, 
+                    ref_32.c_bay as c18, 
+                    ref_32.c_ld5pq as c19, 
+                    ref_32.c_ld5pq as c20, 
+                    ref_32.c_ld5pq as c21, 
+                    ref_32.c_pawzj as c22, 
+                    ref_32.c_bay as c23, 
+                    ref_31.c_y0zr1vtgs6 as c24, 
+                    ref_32.c_bay as c25, 
+                    ref_31.c_qott2i as c26, 
+                    ref_32.c_bay as c27, 
+                    ref_32.c_pawzj as c28, 
+                    ref_32.c_ld5pq as c29, 
+                    ref_32.c_ad6 as c30
+                  from 
+                    t__ as ref_32
+                  where ref_32.c_ad6 like 'bem%ueg%'))
+          window epry8 as ( partition by ref_30.c_qott2i order by ref_30.c_x, ref_30.c_qott2i desc))) 
+      and (0<>0) OR EXISTS (
+      select  
+          ref_33.c_vafdusf3 as c0, 
+          ref_33.c_x as c1, 
+          subq_0.c1 as c2, 
+          ref_33.c_qott2i as c3, 
+          ref_33.c_sngxi as c4, 
+          ref_33.c_vafdusf3 as c5
+        from 
+          t_ggp as ref_33
+        where EXISTS (
+          select  
+              subq_0.c0 as c0, 
+              ref_34.c_vafdusf3 as c1, 
+              ref_38.c_y0zr1vtgs6 as c2, 
+              ref_35.c_pawzj as c3, 
+              ref_35.c_bay as c4, 
+              ref_34.c_qott2i as c5
+            from 
+              ((t_ggp as ref_34
+                  inner join t__ as ref_35
+                  on ((select c_vafdusf3 from t_ggp order by c_vafdusf3 limit 1 offset 31)
+                         in (
+                      select distinct 
+                            ref_36.c_bay as c0
+                          from 
+                            t__ as ref_36
+                          where (1=1) 
+                            or ((ref_36.c_ad6 not like 'll_ey1d') 
+                              or (ref_36.c_ad6 is NULL))
+                        union
+                        select  
+                            24.12 as c0
+                          from 
+                            t_ggp as ref_37
+                          where 1=1)))
+                inner join t_ggp as ref_38
+                on (ref_35.c_ld5pq = ref_38.c_sngxi ))
+            where ref_33.c_x not in (
+              select  
+                  ref_39.c_qott2i as c0
+                from 
+                  t_ggp as ref_39
+                where ref_39.c_qott2i > ( 
+                    select  
+                        ref_40.c_qott2i as c0
+                      from 
+                        t_ggp as ref_40
+                      where (ref_39.c_y0zr1vtgs6 like '%') 
+                        and (ref_39.c_sngxi = ( 
+                          select  
+                                ref_41.c_ad6 like '_' as c0
+                              from 
+                                t__ as ref_41
+                              where (1=1) 
+                                or (0<>0)
+                            union
+                            select  
+                                ref_39.c_qott2i <= ref_39.c_qott2i as c0
+                              from 
+                                t__ as ref_42
+                              where ((ref_42.c_pawzj between ref_42.c_pawzj and ref_39.c_x) 
+                                    or (ref_40.c_qott2i between ref_39.c_qott2i and ref_40.c_x) OR 24 > ref_40.c_qott2i) 
+                                or (ref_40.c_qott2i <> ref_42.c_pawzj)))) OR (ref_39.c_qott2i > ref_39.c_x) 
+                    or (EXISTS (
+                      select distinct 
+                          ref_43.c_vafdusf3 as c0, 
+                          ref_43.c_gbpf as c1, 
+                          ref_43.c_y0zr1vtgs6 as c2, 
+                          ref_43.c_vafdusf3 as c3, 
+                          ref_43.c_vafdusf3 as c4, 
+                          ref_43.c_vafdusf3 as c5
+                        from 
+                          t_ggp as ref_43
+                        where ref_43.c_gbpf is not NULL OR (ref_43.c_x = ( 
+                              select  
+                                    ref_39.c_qott2i as c0
+                                  from 
+                                    t_t as ref_44
+                                  where ref_39.c_gbpf is not NULL
+                                union
+                                select  
+                                    ref_45.c_qott2i as c0
+                                  from 
+                                    t_ggp as ref_45
+                                  where ref_43.c_qott2i <> ref_45.c_qott2i)) 
+                            and ((ref_39.c_gbpf is not NULL) 
+                              and (ref_43.c_y0zr1vtgs6 not like 'r2r_%cbb1'))))
+                order by c0 asc) limit 49) limit 34);
+
+drop table t__ ;
+drop table t_ggp ; 
+drop table t_t ;

@@ -19,3 +19,4 @@ main.ssl_cache            : WL#000 ignore
 main.ssl_cache_tls13      : WL#000 ignore
 innodb.ddl_kill           : WL#000 ignore
 main.acl_mdl_scalability  : WL#000 ignore
+main.func_gm              : WL#000 skip need babassl

@@ -6,9 +6,13 @@ CREATE USER userX, userY, userZ;
 include/save_binlog_position.inc
 SELECT user, authentication_string FROM mysql.user;
 user	authentication_string
+SYSTEM_DAA	
+SYSTEM_DBA	
+SYSTEM_DSA	
 userX	
 userY	
 userZ	
+greatdb.sys	$A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED
 mysql.infoschema	$A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED
 mysql.session	$A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED
 mysql.sys	$A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED
@@ -71,8 +75,12 @@ ERROR HY000: Operation ALTER USER failed for 'userW'@'%'
 # Must succeed
 SELECT user FROM mysql.user;
 user
+SYSTEM_DAA
+SYSTEM_DBA
+SYSTEM_DSA
 userY
 userZ
+greatdb.sys
 mysql.infoschema
 mysql.session
 mysql.sys
@@ -128,7 +136,11 @@ Warnings:
 Note	3162	Authorization ID 'userW'@'%' does not exist.
 SELECT user FROM mysql.user;
 user
+SYSTEM_DAA
+SYSTEM_DBA
+SYSTEM_DSA
 userY
+greatdb.sys
 mysql.infoschema
 mysql.session
 mysql.sys

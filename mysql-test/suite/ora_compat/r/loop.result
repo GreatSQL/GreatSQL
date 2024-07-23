@@ -668,3 +668,106 @@ BEGIN
 for rec in to_char('1') loop
 end loop;
 ERROR 42000: This version of MySQL doesn't yet support 'for loop use the expression, only support cursor sql'
+#
+# test of 1 ..2
+#
+CREATE or replace PROCEDURE p1(i float,j float) as
+BEGIN
+for x IN reverse i ..j LOOP
+select x;
+END LOOP;
+for x IN 1. ..2. LOOP
+select x;
+END LOOP;
+for x IN 1 ..2 LOOP
+select x;
+END LOOP;
+for x IN -1.. .2 LOOP
+select x;
+END LOOP;
+for x IN -1. .. .2 LOOP
+select x;
+END LOOP;
+END//
+CALL p1(1.4,2.5);
+x
+3
+x
+2
+x
+1
+x
+1
+x
+2
+x
+1
+x
+2
+x
+-1
+x
+0
+x
+-1
+x
+0
+DROP PROCEDURE IF EXISTS p1;
+#
+# test of 1..2
+#
+CREATE or replace PROCEDURE p1(i float,j float) as
+BEGIN
+for x IN reverse i..j LOOP
+select x;
+END LOOP;
+for x IN 1..2 LOOP
+select x;
+END LOOP;
+for x IN -.1.. 2. LOOP
+select x;
+END LOOP;
+for x IN -.1..2. LOOP
+select x;
+END LOOP;
+END//
+CALL p1(1.4,2.5);
+x
+3
+x
+2
+x
+1
+x
+1
+x
+2
+x
+0
+x
+1
+x
+2
+x
+0
+x
+1
+x
+2
+DROP PROCEDURE IF EXISTS p1;
+#
+# test of statement_digest_text
+#
+select statement_digest_text('CREATE or replace PROCEDURE p1() as
+begin
+  for i in 1..2 loop
+   exit when i=1;
+  end loop;
+end;');
+statement_digest_text('CREATE or replace PROCEDURE p1() as
+begin
+  for i in 1..2 loop
+   exit when i=1;
+  end loop;
+end;')
+CREATE OR REPLACE PROCEDURE `p1` ( ) AS BEGIN FOR `i` IN ? .. ? LOOP EXIT WHEN `i` = ? ; END LOOP ; END ;

@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -517,6 +517,16 @@ class Table_function_record final : public Table_function {
         m_forall_i_offset(forall_i_offset),
         m_row_count(0),
         m_is_str_index(is_str_index) {}
+
+  Table_function_record(Table_function_record *table_record)
+      : Table_function(),
+        m_table_alias(table_record->m_table_alias),
+        m_vt_list(table_record->m_vt_list),
+        m_item_field_row(nullptr),
+        m_spv_offset(0),
+        m_forall_i_offset(0),
+        m_row_count(0),
+        m_is_str_index(table_record->get_is_str_index()) {}
   /**
     Returns function's name
   */
@@ -538,8 +548,10 @@ class Table_function_record final : public Table_function {
       false on success
   */
   virtual bool fill_result_table() override;
+  bool check_count_and_fields(uint count);
   bool fill_result_table_all_col(THD *thd, const mem_root_deque<Item *> &items,
-                                 Item *item_index);
+                                 Item *item_index, bool is_bulk_into = false);
+  bool fill_result_table_with_table(TABLE *table_from);
   /**
    * @brief
    *  get ref object
@@ -594,7 +606,6 @@ class Table_function_record final : public Table_function {
                                    mem_root_deque<Item *> *items);
   bool create_result_table(THD *thd, ulonglong options,
                            const char *table_alias) override;
-  bool copy_to_other_table(Table_function_record *dst_table);
   longlong get_row_count() { return m_row_count; }
   String *get_index_first() {
     return m_first_last_str_list.size() > 0 ? m_first_last_str_list.head()
@@ -621,16 +632,13 @@ class Table_function_record final : public Table_function {
     m_row_count = 0;
     clear_first_last_str_list();
   }
+  bool get_is_str_index() { return m_is_str_index; }
 };
 
 class Table_function_udt final : public Table_function {
  public:
   Table_function_udt(const char *alias, Item *a)
-      : Table_function(),
-        m_table_alias(alias),
-        m_source(a),
-        m_precalculated_upper_bound(0),
-        m_upper_bound_precalculated(false) {}
+      : Table_function(), m_table_alias(alias), m_source(a) {}
   /**
     Returns function's name
   */
@@ -671,8 +679,6 @@ class Table_function_udt final : public Table_function {
 
  private:
   Item *m_source;
-  ulonglong m_precalculated_upper_bound;
-  bool m_upper_bound_precalculated;
 
  public:
   /**
@@ -681,7 +687,6 @@ class Table_function_udt final : public Table_function {
   virtual List<Create_field> *get_field_list() override;
   virtual bool do_init_args() override;
   virtual void do_cleanup() override;
-  ulonglong calculate_upper_bound() const;
 };
 
 /**

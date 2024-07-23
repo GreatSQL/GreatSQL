@@ -30,7 +30,6 @@ performance_schema
 sakila
 sp
 sys
-sys_audit
 tablespace
 test
 test_mismatch

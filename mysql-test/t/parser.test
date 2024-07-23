@@ -2651,10 +2651,13 @@ CREATE TABLE full(i INT);
 DROP TABLE full;
 CREATE TABLE `full`(i INT);
 SELECT * from `full`;
+--error ER_PARSE_ERROR
 SELECT * from `full` AS full;
 SELECT * from `full` AS `full`;
 SELECT * from full;
+--error ER_PARSE_ERROR
 SELECT * from full as full;
+--error ER_PARSE_ERROR
 SELECT * from `full` full;
 
 SET @save_sql_mode=@@sql_mode;

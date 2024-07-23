@@ -685,17 +685,17 @@ id	f1	id	f1
 3	id1:999 | name1:bbb303	3	id1:999 | name1:bbb303
 4	id1:404 | name1:aaa404aaa	4	id1:404 | name1:aaa404aaa
 SELECT MAX(f1),MIN(f1) FROM t1;
-ERROR HY000: Incorrect arguments to max
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 SELECT f1 , FIRST_VALUE(f1) over (order by i) a from t1;
 ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 SELECT avg(f1) FROM t1;
-ERROR HY000: Incorrect arguments to avg
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 SELECT MAX(f1),MIN(f1) FROM t1;
-ERROR HY000: Incorrect arguments to max
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 SELECT f1 , nth_VALUE(f1,1) over (order by i) a from t1;
 ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 select VAR_SAMP(f1) as a from t1;
-ERROR HY000: Incorrect arguments to var_samp
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 SELECT DATE_SUB(f1,INTERVAL 1 MONTH) from t1;
 ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
 drop VIEW v_t1;

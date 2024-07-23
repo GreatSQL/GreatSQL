@@ -1,6 +1,6 @@
 /* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -414,6 +414,11 @@ Field *create_tmp_field(THD *thd, TABLE *table, Item *item, Item::Type type,
     item = down_cast<Item_cache *>(item)->get_example();
     type = item->type();
   }
+  if (item->mask_data()) {
+    auto r = down_cast<Item_data_mask_with_ref *>(item);
+    item = r->ref_mask();
+    type = item->type();
+  }
 
   if (type != Item::FIELD_ITEM &&
       item->real_item()->type() == Item::FIELD_ITEM) {
@@ -489,10 +494,6 @@ Field *create_tmp_field(THD *thd, TABLE *table, Item *item, Item::Type type,
 
         if (item_func_sp->is_ora_type()) {
           result = create_tmp_field_from_item(item, table, root);
-        } else if (item_func_sp->is_ora_table()) {
-          my_error(ER_NOT_SUPPORTED_YET, MYF(0),
-                   "udt table as subquery table column");
-          return nullptr;
         } else {
           result = create_tmp_field_from_field(thd, sp_result_field,
                                                item_func_sp->item_name.ptr(),
@@ -1192,6 +1193,14 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
         }
       }
       if (except_rand_item && (item->used_tables() & (RAND_TABLE_BIT))) {
+        store_column = false;
+      }
+
+      if (item->mask_data()) {
+        store_column = false;
+      }
+
+      if (item->has_sequence()) {
         store_column = false;
       }
     }

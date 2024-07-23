@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -249,6 +249,11 @@ Chunks are reserved by each thread for multi-threaded clone. For 16k page
 size, chunk size is 64M. */
 const uint SNAPSHOT_DEF_CHUNK_SIZE_POW2 = 12;
 
+/** Default chunk size in power of 2 in unit of pages.
+Chunks are reserved by each thread for multi-threaded clone. For 16k page
+size, chunk size is 16T. this make one tablespace must be in the one chunk */
+const uint SNAPSHOT_DEF_COMP_CHUNK_SIZE_POW2 = 10 + 10 + 10;
+
 /** Default block size in power of 2 in unit of pages.
 Data transfer callback is invoked once for each block. This is also
 the maximum size of data that would be re-send if clone is stopped
@@ -294,9 +299,14 @@ class Clone_Snapshot {
   @param[in]    hdl_type        copy, apply
   @param[in]    clone_type      clone type
   @param[in]    arr_idx         index in global array
-  @param[in]    snap_id         unique snapshot ID */
+  @param[in]    snap_id         unique snapshot ID
+  @param[in]	start_id		start lsn for increment clone (Clone
+  Type: HA_CLONE_PAGE)
+  @param[in]	enable_page_track	enable page track when clone end */
   Clone_Snapshot(Clone_Handle_Type hdl_type, Ha_clone_type clone_type,
-                 uint arr_idx, uint64_t snap_id);
+                 uint arr_idx, uint64_t snap_id, bool enable_page_track,
+                 uint64_t start_id, uint64_t page_track_lsn,
+                 file_compress_mode_t comp_mode);
 
   /** Release contexts and free heap */
   ~Clone_Snapshot();
@@ -574,6 +584,14 @@ class Clone_Snapshot {
   @param[in]            chunk_num       current chunk
   @param[in,out]        block_num       current, next block */
   void skip_deleted_blocks(uint32_t chunk_num, uint32_t &block_num);
+
+  /** Build file name along with path for cloned data files.
+   @param[in]    data_dir    clone data directory
+   @param[in]    file_desc   file descriptor
+   @param[out]   file_path   built file path if returned 0
+   @return error code (0 on success) */
+  int build_file_path(const char *data_dir, const Clone_File_Meta *file_desc,
+                      std::string &file_path);
 
  private:
   /** Allow DDL file operation after 64 pages. */
@@ -906,14 +924,6 @@ class Clone_Snapshot {
   int update_sys_file_name(bool replace, const Clone_File_Meta *file_meta,
                            std::string &file_name);
 
-  /** Build file name along with path for cloned data files.
-  @param[in]    data_dir    clone data directory
-  @param[in]    file_desc   file descriptor
-  @param[out]   file_path   built file path if returned 0
-  @return error code (0 on success) */
-  int build_file_path(const char *data_dir, const Clone_File_Meta *file_desc,
-                      std::string &file_path);
-
   /** Build file context from file path.
   @param[in]    extn            file extension type
   @param[in]    file_meta       file descriptor
@@ -946,6 +956,16 @@ class Clone_Snapshot {
 
  public:
   void set_enable_encryption() { m_enable_encryption = true; }
+
+  bool enable_encryption() { return m_enable_encryption; }
+
+  void set_file_compress_mode(file_compress_mode_t mode) {
+    m_file_compress_mode = mode;
+  }
+
+  file_compress_mode_t file_compress_mode() { return m_file_compress_mode; }
+
+  inline bool is_clone_page_type() { return m_snapshot_type == HA_CLONE_PAGE; }
 
  private:
   /** @name Snapshot type and ID */
@@ -1073,6 +1093,21 @@ class Clone_Snapshot {
 
   /** Enable encryption */
   bool m_enable_encryption;
+
+  /** file compress mode */
+  file_compress_mode_t m_file_compress_mode;
+
+  /** enable page track for inc clone */
+  bool m_enable_page_track;
+
+  /** start lsn for inc clone only work in CLONE_HDL_COPY */
+  uint64_t m_start_id;
+
+  /** page track lsn for inc clone only work in CLONE_HDL_COPY */
+  uint64_t m_page_track_lsn;
+
+  /** end lsn for clone */
+  uint64_t m_end_id;
 
   /** Performance Schema accounting object to monitor stage progress */
   Clone_Monitor m_monitor;

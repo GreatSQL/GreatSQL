@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2023, GreatDB Software Co., Ltd. All rights
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd. All rights
    reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -78,8 +78,10 @@ static ulong sql_get_client_capabilities(void *) {
   DBUG_RETURN(0);
 }
 
-static int sql_get_null(void *) {
+static int sql_get_null(void *ctx) {
   DBUG_ENTER("sql_get_null");
+  auto *cb_data = static_cast<Gdb_cmd_cb_data *>(ctx);
+  cb_data->store("NULL", sizeof("NULL"));
   DBUG_RETURN(false);
 }
 
@@ -256,7 +258,7 @@ void Gdb_cmd_cb_data::handle_shutdown(int shutdown_server) {
 static const char *user_localhost = "localhost";
 static const char *user_local = "127.0.0.1";
 static const char *user_db = "";
-static const char *user_privileged = "root";
+static const char *user_privileged = "greatdb.sys";
 
 static void switch_user(MYSQL_SESSION session, const char *user) {
   DBUG_TRACE;

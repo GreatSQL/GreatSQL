@@ -156,7 +156,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_ !@#$%^&*()_+-={}[]|\?<>,. 	General	DEFAULT	0	1	1	Any	s_utf8.ibd
 s_Cöŀumň	General	DEFAULT	0	1	1	Any	s_utf8_a.ibd
 s_cöĿǖmň	General	DEFAULT	0	1	1	Any	s_utf8_b.ibd
@@ -169,9 +168,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_ !@#$%^&*()_+-={}[]|\?<>,. 	TABLESPACE	InnoDB	NORMAL	s_ !@#$%^&*()_+-={}[]|\?<>,. 	MYSQLD_DATADIR/s_utf8.ibd
 s_Cöŀumň	TABLESPACE	InnoDB	NORMAL	s_Cöŀumň	MYSQLD_DATADIR/s_utf8_a.ibd
 s_cöĿǖmň	TABLESPACE	InnoDB	NORMAL	s_cöĿǖmň	MYSQLD_DATADIR/s_utf8_b.ibd
@@ -182,7 +181,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/@0023sql_1	#sql_1	161	5	Dynamic	0	General
 test/t@0020@0021@0040@0023@0024@0025@005e@0026@002a@0028@0029_@002b@002d@003d@007b@007d@005b@005d@007c@005c@003f@003c@003e@002c@002e	s_ !@#$%^&*()_+-={}[]|\?<>,. 	161	5	Dynamic	0	General
 test/t_utf8_1	s_Cöŀumň	161	5	Dynamic	0	General
@@ -340,7 +338,6 @@ s1_#_hash	General	DEFAULT	0	1	1	Any	s1_#_hash.ibd
 s1_remote	General	DEFAULT	0	1	1	Any	MYSQL_TMP_DIR/s1.ibd.ibd
 s2_remote	General	DEFAULT	0	1	1	Any	MYSQL_TMP_DIR/s2_#_dir/s2.ibd
 s4_def	General	DEFAULT	0	1	1	Any	MYSQL_TMP_DIR/tablespace.ibd/s4.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 === information_schema.files ===
 Space_Name	File_Type	Engine	Status	Tablespace_Name	Path
@@ -349,13 +346,13 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
 s1_#_hash	TABLESPACE	InnoDB	NORMAL	s1_#_hash	MYSQLD_DATADIR/s1_#_hash.ibd
 s1_remote	TABLESPACE	InnoDB	NORMAL	s1_remote	MYSQL_TMP_DIR/s1.ibd.ibd
 s2_remote	TABLESPACE	InnoDB	NORMAL	s2_remote	MYSQL_TMP_DIR/s2_#_dir/s2.ibd
 s4_def	TABLESPACE	InnoDB	NORMAL	s4_def	MYSQL_TMP_DIR/tablespace.ibd/s4.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 # Directory listing of MYSQLD_DATADIR/
 mysql.ibd
@@ -394,7 +391,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_single	test/t_single	33	5	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
@@ -403,7 +399,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 test/t_single	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/test/t_single.ibd
 === information_schema.files ===
@@ -413,9 +408,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 test/t_single	TABLESPACE	InnoDB	NORMAL	test/t_single	MYSQLD_DATADIR/test/t_single.ibd
 CREATE TABLE t_general (a int, b text) TABLESPACE test/t_single engine=InnoDB;
@@ -462,7 +457,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 === information_schema.files ===
 Space_Name	File_Type	Engine	Status	Tablespace_Name	Path
@@ -471,9 +465,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 #
 # Row format is not allowed on CREATE TABLESPACE
@@ -503,7 +497,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 === information_schema.files ===
 Space_Name	File_Type	Engine	Status	Tablespace_Name	Path
@@ -512,9 +505,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
@@ -522,7 +515,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_def_in_def	s_def	161	5	Dynamic	0	General
 test/t_dyn_in_def	s_def	161	5	Dynamic	0	General
 test/t_red_in_def	s_def	128	5	Redundant	0	General
@@ -553,7 +545,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/test@002ft_def_in_def	s_def	161	5	Dynamic	0	General
 test/t_def_in_def	s_def	161	5	Dynamic	0	General
 === information_schema.innodb_tablespaces and innodb_datafiles ===
@@ -563,7 +554,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 === information_schema.files ===
 Space_Name	File_Type	Engine	Status	Tablespace_Name	Path
@@ -572,9 +562,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 # Directory listing of MYSQLD_DATADIR/
 mysql.ibd
@@ -630,7 +620,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 test/s_single	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/test/s_single.ibd
 === information_schema.files ===
@@ -640,9 +629,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 test/s_single	TABLESPACE	InnoDB	NORMAL	test/s_single	MYSQLD_DATADIR/test/s_single.ibd
 DROP TABLE s_single;
@@ -716,7 +705,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 === information_schema.files ===
 Space_Name	File_Type	Engine	Status	Tablespace_Name	Path
@@ -725,9 +713,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
@@ -735,7 +723,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/test@002ft_def_in_def	s_def	161	5	Dynamic	0	General
 test/t_def_in_def	s_def	161	5	Dynamic	0	General
 DROP TABLE t_def_in_def;
@@ -759,7 +746,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 === information_schema.files ===
 Space_Name	File_Type	Engine	Status	Tablespace_Name	Path
@@ -768,9 +754,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
 Table Name	Tablespace	Table Flags	Columns	Row Format	Zip Size	Space Type
@@ -778,7 +764,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_com_in_system	innodb_system	129	5	Compact	0	System
 test/t_dyn_in_system	innodb_system	161	5	Dynamic	0	System
 test/t_red_in_system	innodb_system	128	5	Redundant	0	System
@@ -808,7 +793,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 test/t_com_as_file_per_table	Single	DEFAULT	0	1	1	Compact or Redundant	MYSQLD_DATADIR/test/t_com_as_file_per_table.ibd
 test/t_def_as_remote	Single	DEFAULT	0	1	1	Dynamic	MYSQL_TMP_DIR/test/t_def_as_remote.ibd
@@ -821,9 +805,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 test/t_com_as_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_com_as_file_per_table	MYSQLD_DATADIR/test/t_com_as_file_per_table.ibd
 test/t_def_as_remote	TABLESPACE	InnoDB	NORMAL	test/t_def_as_remote	MYSQL_TMP_DIR/test/t_def_as_remote.ibd
@@ -835,7 +819,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_com_as_file_per_table	test/t_com_as_file_per_table	1	5	Compact	0	Single
 test/t_def_as_remote	test/t_def_as_remote	97	5	Dynamic	0	Single
 test/t_dyn_as_file_per_table	test/t_dyn_as_file_per_table	33	5	Dynamic	0	Single
@@ -886,7 +869,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 s_multiple	General	DEFAULT	0	1	1	Any	multiple.ibd
 === information_schema.files ===
@@ -896,9 +878,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 s_multiple	TABLESPACE	InnoDB	NORMAL	s_multiple	MYSQLD_DATADIR/multiple.ibd
 === information_schema.innodb_tables  and innodb_tablespaces ===
@@ -907,7 +889,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_com_was_file_per_table	s_multiple	129	5	Compact	0	General
 test/t_def_was_remote	s_multiple	161	5	Dynamic	0	General
 test/t_dyn_was_file_per_table	s_multiple	161	5	Dynamic	0	General
@@ -934,7 +915,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 s_multiple	General	DEFAULT	0	1	1	Any	multiple.ibd
 test/t_com_to_file_per_table	Single	DEFAULT	0	1	1	Compact or Redundant	MYSQLD_DATADIR/test/t_com_to_file_per_table.ibd
@@ -948,9 +928,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 s_multiple	TABLESPACE	InnoDB	NORMAL	s_multiple	MYSQLD_DATADIR/multiple.ibd
 test/t_com_to_file_per_table	TABLESPACE	InnoDB	NORMAL	test/t_com_to_file_per_table	MYSQLD_DATADIR/test/t_com_to_file_per_table.ibd
@@ -963,7 +943,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_com_to_file_per_table	test/t_com_to_file_per_table	1	5	Compact	0	Single
 test/t_def_to_file_per_table	test/t_def_to_file_per_table	33	5	Dynamic	0	Single
 test/t_dyn_to_file_per_table	test/t_dyn_to_file_per_table	33	5	Dynamic	0	Single
@@ -1078,7 +1057,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 s_ignore1	General	DEFAULT	0	1	1	Any	s_ignore1.ibd
 s_ignore2	General	DEFAULT	0	1	1	Any	s_ignore2.ibd
@@ -1090,9 +1068,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 s_ignore1	TABLESPACE	InnoDB	NORMAL	s_ignore1	MYSQLD_DATADIR/s_ignore1.ibd
 s_ignore2	TABLESPACE	InnoDB	NORMAL	s_ignore2	MYSQLD_DATADIR/s_ignore2.ibd
@@ -1127,7 +1105,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_in_def	s_def	161	5	Dynamic	0	General
 ALTER TABLE t_in_def ROW_FORMAT=redundant;
 SHOW CREATE TABLE t_in_def;
@@ -1285,7 +1262,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t	s_def	161	5	Dynamic	0	General
 INSERT INTO t VALUES(200, "after RENAME TABLE t_in_def TO t");
 SELECT aa, left(bb,50) FROM t;
@@ -1308,7 +1284,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_alt1	General	DEFAULT	0	1	1	Any	s_alt1.ibd
 s_alt2	General	DEFAULT	0	1	1	Any	s_alt2.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
@@ -1319,9 +1294,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_alt1	TABLESPACE	InnoDB	NORMAL	s_alt1	MYSQLD_DATADIR/s_alt1.ibd
 s_alt2	TABLESPACE	InnoDB	NORMAL	s_alt2	MYSQLD_DATADIR/s_alt2.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
@@ -1342,7 +1317,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_nomad	s_alt1	161	5	Dynamic	0	General
 ALTER TABLE t_nomad TABLESPACE s_alt2;
 SHOW CREATE TABLE t_nomad;
@@ -1361,7 +1335,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_nomad	s_alt2	161	5	Dynamic	0	General
 ALTER TABLE t_nomad TABLESPACE s_def, DROP COLUMN bb;
 SHOW CREATE TABLE t_nomad;
@@ -1378,7 +1351,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_nomad	s_def	161	4	Dynamic	0	General
 === information_schema.innodb_tablespaces and innodb_datafiles ===
 Space_Name	Space_Type	Page_Size	Zip_Size	BlockSize!=0	FileSize!=0	Formats_Permitted	Path
@@ -1387,7 +1359,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_alt1	General	DEFAULT	0	1	1	Any	s_alt1.ibd
 s_alt2	General	DEFAULT	0	1	1	Any	s_alt2.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
@@ -1398,9 +1369,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_alt1	TABLESPACE	InnoDB	NORMAL	s_alt1	MYSQLD_DATADIR/s_alt1.ibd
 s_alt2	TABLESPACE	InnoDB	NORMAL	s_alt2	MYSQLD_DATADIR/s_alt2.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
@@ -1429,7 +1400,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_system	innodb_system	33	5	Dynamic	0	System
 ALTER TABLE t_system TABLESPACE s_def;
 SHOW CREATE TABLE t_system;
@@ -1446,7 +1416,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_system	s_def	161	5	Dynamic	0	General
 ALTER TABLE t_system TABLESPACE=`innodb_system`;
 SHOW CREATE TABLE t_system;
@@ -1463,7 +1432,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_system	innodb_system	161	5	Dynamic	0	System
 #
 # Do a few ALTER TABLES for this table that was moved out and back into the system tablespace.
@@ -1546,7 +1514,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_still_system	innodb_system	161	5	Dynamic	0	System
 DROP TABLE t_still_system;
 #
@@ -1628,7 +1595,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_single	test/t_single	33	5	Dynamic	0	Single
 ALTER TABLE t_single TABLESPACE s_def;
 SHOW CREATE TABLE t_single;
@@ -1645,7 +1611,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_single	s_def	161	5	Dynamic	0	General
 DROP TABLE t_single;
 #
@@ -1677,7 +1642,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_innodb	s_def	161	5	Dynamic	0	General
 ALTER TABLE t_innodb RENAME TO t_myisam, ENGINE=MyISAM;
 INSERT INTO t_myisam(b) VALUES(33);
@@ -1710,7 +1674,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_innodb	s_def	161	5	Dynamic	0	General
 DROP TABLE t_innodb;
 #
@@ -1734,7 +1697,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_dyn_in_s_def	s_def	161	5	Dynamic	0	General
 ALTER TABLE t_dyn_in_s_def ENGINE=MyISAM;
 INSERT INTO t_dyn_in_s_def(b) VALUES(22);
@@ -1752,7 +1714,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 ALTER TABLE t_dyn_in_s_def ENGINE=InnoDB;
 INSERT INTO t_dyn_in_s_def(b) VALUES(33);
 SHOW CREATE TABLE t_dyn_in_s_def;
@@ -1769,7 +1730,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_dyn_in_s_def	s_def	161	5	Dynamic	0	General
 ALTER TABLE t_dyn_in_s_def ENGINE=Memory;
 INSERT INTO t_dyn_in_s_def(b) VALUES(44);
@@ -1787,7 +1747,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 ALTER TABLE t_dyn_in_s_def ENGINE=InnoDB;
 INSERT INTO t_dyn_in_s_def(b) VALUES(55);
 SELECT * FROM t_dyn_in_s_def;
@@ -1811,7 +1770,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_dyn_in_s_def	s_def	161	5	Dynamic	0	General
 CHECK TABLE t_dyn_in_s_def;
 Table	Op	Msg_type	Msg_text
@@ -1838,7 +1796,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_nomad	s_short_life	161	5	Dynamic	0	General
 ALTER TABLE t_nomad ENGINE=MyISAM;
 INSERT INTO t_nomad(b) VALUES(22);
@@ -1856,7 +1813,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 DROP TABLESPACE s_short_life;
 ALTER TABLE t_nomad ENGINE=InnoDB;
 ERROR HY000: Tablespace s_short_life doesn't exist.
@@ -1876,7 +1832,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_nomad	s_shorter_life	161	5	Dynamic	0	General
 DROP TABLE t_nomad;
 DROP TABLESPACE s_shorter_life;
@@ -1914,7 +1869,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_general	s_def	161	5	Dynamic	0	General
 test/t_single	test/t_single	33	5	Dynamic	0	Single
 test/t_system	innodb_system	33	5	Dynamic	0	System
@@ -1928,7 +1882,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 s_empty1	General	DEFAULT	0	1	1	Any	s_empty1.ibd
 test/t_single	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/test/t_single.ibd
@@ -1940,9 +1893,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 s_empty1	TABLESPACE	InnoDB	NORMAL	s_empty1	MYSQLD_DATADIR/s_empty1.ibd
 test/t_single	TABLESPACE	InnoDB	NORMAL	test/t_single	MYSQLD_DATADIR/test/t_single.ibd
@@ -1954,7 +1907,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t_general	s_def	161	5	Dynamic	0	General
 test/t_single	test/t_single	33	5	Dynamic	0	Single
 test/t_system	innodb_system	33	5	Dynamic	0	System
@@ -1965,7 +1917,6 @@ mtr/asserted_test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/a
 mtr/global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/mtr/test_suppressions.ibd
-sys_audit/audit_log	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	General	DEFAULT	0	1	1	Any	s_def.ibd
 s_empty1	General	DEFAULT	0	1	1	Any	s_empty1.ibd
 test/t_single	Single	DEFAULT	0	1	1	Dynamic	MYSQLD_DATADIR/test/t_single.ibd
@@ -1976,9 +1927,9 @@ mtr/asserted_test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/asserted_test_suppre
 mtr/global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/global_suppressions	MYSQLD_DATADIR/mtr/global_suppressions.ibd
 mtr/test_ignored_global_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_ignored_global_suppressions	MYSQLD_DATADIR/mtr/test_ignored_global_suppressions.ibd
 mtr/test_suppressions	TABLESPACE	InnoDB	NORMAL	mtr/test_suppressions	MYSQLD_DATADIR/mtr/test_suppressions.ibd
+mysql/clone_history	TABLESPACE	InnoDB	NORMAL	mysql/clone_history	MYSQLD_DATADIR/mysql/clone_history.ibd
 mysql/greatdb_sequences	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences	MYSQLD_DATADIR/mysql/greatdb_sequences.ibd
 mysql/greatdb_sequences_persist	TABLESPACE	InnoDB	NORMAL	mysql/greatdb_sequences_persist	MYSQLD_DATADIR/mysql/greatdb_sequences_persist.ibd
-sys_audit/audit_log	TABLESPACE	InnoDB	NORMAL	sys_audit/audit_log	MYSQLD_DATADIR/sys_audit/audit_log.ibd
 s_def	TABLESPACE	InnoDB	NORMAL	s_def	MYSQLD_DATADIR/s_def.ibd
 s_empty1	TABLESPACE	InnoDB	NORMAL	s_empty1	MYSQLD_DATADIR/s_empty1.ibd
 test/t_single	TABLESPACE	InnoDB	NORMAL	test/t_single	MYSQLD_DATADIR/test/t_single.ibd
@@ -2001,7 +1952,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t1	s1	161	4	Dynamic	0	General
 test/t2	innodb_system	33	4	Dynamic	0	System
 SELECT * FROM t1;
@@ -2033,7 +1983,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t1	innodb_system	33	4	Dynamic	0	System
 CALL p1();
 === information_schema.innodb_tables  and innodb_tablespaces ===
@@ -2042,7 +1991,6 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-sys_audit/audit_log	sys_audit/audit_log	33	15	Dynamic	0	Single
 test/t1	s1	161	4	Dynamic	0	General
 DROP PROCEDURE p1;
 #

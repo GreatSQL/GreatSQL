@@ -1314,7 +1314,7 @@ setup_instruments	CREATE TABLE `setup_instruments` (
 show create table setup_objects;
 Table	Create Table
 setup_objects	CREATE TABLE `setup_objects` (
-  `OBJECT_TYPE` enum('EVENT','FUNCTION','PROCEDURE','TABLE','TRIGGER') NOT NULL DEFAULT 'TABLE',
+  `OBJECT_TYPE` enum('EVENT','FUNCTION','PROCEDURE','TABLE','TRIGGER','PACKAGE','PACKAGE BODY','TYPE') NOT NULL DEFAULT 'TABLE',
   `OBJECT_SCHEMA` varchar(64) DEFAULT '%',
   `OBJECT_NAME` varchar(64) NOT NULL DEFAULT '%',
   `ENABLED` enum('YES','NO') NOT NULL DEFAULT 'YES',

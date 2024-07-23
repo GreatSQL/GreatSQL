@@ -1,5 +1,5 @@
 # Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2023, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -9945,6 +9945,15 @@ ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS
 ER_CANT_SET_PERSISTED
   eng "Failed to set persisted options."
 
+ER_INVALID_CPU_STRING
+  eng "Invalid cpu string %s."
+
+ER_CANNOT_UPDATE_SCHED_AFFINITY_PARAMETER
+  eng "Cannot update %s successfully."
+
+ER_CANNOT_UPDATE_SCHED_AFFINITY_NUMA_AWARE
+  eng "Cannot update sched_affinity_numa_aware successfully."
+
 #
 #  End of 8.0 error messages (server-to-client).
 #  Do NOT add messages intended for the error log above!
@@ -10144,6 +10153,12 @@ ER_MERGE_INFO
 ER_PSEUDOCOLUMN_NOT_ALLOW
   eng "%s specified pseudocolumn or operator not allowed :%s"
 
+ER_DBLINK_NOT_SUPPORTED_YET
+  eng "This version of DBLINK doesn\'t yet support"
+
+ER_DBLINK_SERVER_DOESNT_EXIST
+  eng "The dblink server name you are trying to reference does not exist. Data source error:  %-.64s"
+
 ER_INSERT_FIRST_WITHOUT_WHEN
   eng "no WHEN clause found after INSERT FIRST"
 
@@ -10238,6 +10253,9 @@ ER_UDF_TYPE_USED_AS_KEY 42000
 ER_WRONG_UDT_DATA_TYPE
   eng "inconsistent datatypes: expected '%s'.'%s' got '%s'.'%s'"
 
+ER_AWR_GENERATOR
+  eng "awr %s"
+
 ER_ALTER_WITH_OF_TYPE_TABLE
   eng "cannot alter column from an object type table"
 
@@ -10291,10 +10309,23 @@ ER_TOO_MANY_SP_DECLARATIONS_MATCH
 ER_PARAMETER_IN_OVERLOAD_ROUTINES_NOT_ALLOWED
   eng "parameter is not allowed for overloaded routine '%s'"
 
+ER_CREATE_OR_REPLACE_TRG_EXISTS_ON_DIFFERENT_TABLE
+  eng "Trigger '%-.192s'.'%-.192s' already exists on a different table."
+
 #
 # End of specific client messages for GreatDB compatibility features
 #
 
+start-error-number 7736
+ER_MULTIPLE_GRANT_ERROR
+  eng "The user '%-.48s'@'%-.64s' already has an grantor"
+
+ER_AUDIT_UPDATE_DENIED_ERROR
+  eng "Audit log update denied with sql_log_bin = on"
+
+#
+# End of mac error client messages
+#
 
 #
 # Start of MyRocks specific messages to be sent to client

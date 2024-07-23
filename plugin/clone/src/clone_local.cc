@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,14 +39,16 @@ namespace myclone {
 @param[in]	share	shared client information
 @param[in]	server	shared server handle
 @param[in]	index	index of current thread */
-static void clone_local(Client_Share *share, Server *server, uint32_t index) {
+static void clone_local(Client_Share *share, Server *server, uint32_t index,
+                        uint64_t start_id, bool enable_page_track) {
   THD *thd = nullptr;
 
   /* Create a session statement and set PFS keys */
   mysql_service_clone_protocol->mysql_clone_start_statement(
       thd, clone_local_thd_key, PSI_NOT_INSTRUMENTED);
 
-  Local clone_inst(thd, server, share, index, false);
+  Local clone_inst(thd, server, share, index, false, start_id,
+                   enable_page_track);
 
   /* Worker task has already reported the error. We ignore any error
   returned  here. */
@@ -57,8 +59,11 @@ static void clone_local(Client_Share *share, Server *server, uint32_t index) {
 }
 
 Local::Local(THD *thd, Server *server, Client_Share *share, uint32_t index,
-             bool is_master)
-    : m_clone_server(server), m_clone_client(thd, share, index, is_master) {}
+             bool is_master, uint64_t start_id, bool enable_page_track)
+    : m_clone_server(server),
+      m_clone_client(thd, share, index, is_master),
+      m_start_id(start_id),
+      m_enable_page_track(enable_page_track) {}
 
 int Local::clone() {
   /* Begin PFS state if no concurrent clone in progress. */
@@ -67,6 +72,13 @@ int Local::clone() {
     return (err);
   }
 
+  if (strlen(m_clone_client.get_share()->m_based_dir)) {
+    assert(m_start_id == 0);
+    err = m_clone_client.read_metadata(m_start_id);
+    if (err != 0) {
+      return (err);
+    }
+  }
   /* Move to first stage. */
   m_clone_client.pfs_change_stage(0);
 
@@ -81,7 +93,15 @@ int Local::clone() {
   mysql_service_clone_protocol->mysql_clone_get_error(thd, &err_number,
                                                       &err_mesg);
   m_clone_client.pfs_end_state(err_number, err_mesg);
-  return (err);
+
+  auto persist_err =
+      m_clone_client.persist_clone_view(m_start_id ? false : true);
+  persist_err = m_clone_client.dump_metadata();
+
+  if (err)
+    return (err);
+  else
+    return (persist_err);
 }
 
 int Local::clone_exec() {
@@ -94,6 +114,8 @@ int Local::clone_exec() {
   auto &client_vector = m_clone_client.get_storage_vector();
   auto &client_tasks = m_clone_client.get_task_vector();
   auto &server_vector = m_clone_server->get_storage_vector();
+
+  auto comp_mode = m_clone_client.get_file_compress_mode();
 
   Task_Vector server_tasks;
   server_tasks.reserve(MAX_CLONE_STORAGE_ENGINE);
@@ -110,9 +132,12 @@ int Local::clone_exec() {
 
   auto begin_mode = is_master ? HA_CLONE_MODE_START : HA_CLONE_MODE_ADD_TASK;
 
+  int error = 0;
   /* Begin clone copy from source. */
-  auto error = hton_clone_begin(thd, server_vector, server_tasks,
-                                HA_CLONE_HYBRID, begin_mode);
+  error =
+      hton_clone_begin(thd, server_vector, server_tasks,
+                       m_start_id ? HA_CLONE_PAGE : HA_CLONE_HYBRID, begin_mode,
+                       m_start_id, m_enable_page_track, comp_mode);
 
   if (error != 0) {
     /* Release DDL lock */
@@ -128,8 +153,10 @@ int Local::clone_exec() {
     client_vector = server_vector;
 
     /* Begin clone apply to destination. */
-    error = hton_clone_apply_begin(thd, dir_name, client_vector, client_tasks,
-                                   begin_mode);
+    error =
+        hton_clone_apply_begin(thd, dir_name, client_vector, client_tasks,
+                               begin_mode, m_clone_client.get_max_concurrency(),
+                               m_start_id, m_enable_page_track, comp_mode);
 
     if (error != 0) {
       hton_clone_end(thd, server_vector, server_tasks, error);
@@ -146,7 +173,8 @@ int Local::clone_exec() {
       /* Limit number of workers based on other configurations. */
       auto to_spawn = m_clone_client.limit_workers(num_workers);
       using namespace std::placeholders;
-      auto func = std::bind(clone_local, _1, m_clone_server, _2);
+      auto func = std::bind(clone_local, _1, m_clone_server, _2, m_start_id,
+                            m_enable_page_track);
       m_clone_client.spawn_workers(to_spawn, func);
     }
 
@@ -156,8 +184,10 @@ int Local::clone_exec() {
     1. Auxiliary threads don't overwrite the locator in apply begin
     2. Auxiliary threads must wait for apply state to reach
     copy state */
-    error = hton_clone_apply_begin(thd, dir_name, server_vector, client_tasks,
-                                   begin_mode);
+    error =
+        hton_clone_apply_begin(thd, dir_name, server_vector, client_tasks,
+                               begin_mode, m_clone_client.get_max_concurrency(),
+                               m_start_id, m_enable_page_track, comp_mode);
     if (error != 0) {
       hton_clone_end(thd, server_vector, server_tasks, error);
       return (error);
@@ -172,6 +202,11 @@ int Local::clone_exec() {
   auto share = m_clone_client.get_share();
   clone_callback->enable_encryption(share->m_encrypt_mode, share->m_encrypt_key,
                                     share->m_encrypt_iv);
+
+  if (share->m_compress_mode) {
+    m_clone_client.compress_init();
+    clone_callback->set_compress_file(m_clone_client.comp_file());
+  }
 
   /* Copy data from source and apply to destination. */
   error = hton_clone_copy(thd, server_vector, server_tasks, clone_callback);
@@ -191,6 +226,11 @@ int Local::clone_exec() {
   if (acquire_backup_lock) {
     mysql_service_mysql_backup_lock->release(thd);
   }
+
+  if (share->m_compress_mode) {
+    m_clone_client.compress_deinit();
+  }
+
   return (error);
 }
 
@@ -234,6 +274,8 @@ int Local_Callback::apply_ack() {
   uint64_t data_estimate = 0;
   /* Check and update PFS table while beginning state. */
   if (is_state_change(data_estimate)) {
+    client->update_clone_lsn(page_start_lsn(), page_track_lsn(),
+                             clone_end_lsn());
     client->pfs_change_stage(data_estimate);
     return (0);
   }
@@ -320,7 +362,8 @@ int Local_Callback::apply_cbk(Ha_clone_file to_file, bool apply_file,
 
   /* Spawn new concurrent client tasks, if needed. */
   using namespace std::placeholders;
-  auto func = std::bind(clone_local, _1, server, _2);
+  auto func =
+      std::bind(clone_local, _1, server, _2, get_clone_page_lsn(), false);
   client->spawn_workers(num_workers, func);
 
   auto ext_link = get_client_data_link();
@@ -335,13 +378,16 @@ int Local_Callback::apply_cbk(Ha_clone_file to_file, bool apply_file,
            from_buf->m_buffer == clone_os_align(from_buf->m_buffer));
 
     if (apply_file) {
+      auto comp_file = compress_file();
       if (encryption()) {
-        error =
-            encrypt_and_write(&m_buffer_node, m_cipher_buff, from_buf->m_buffer,
-                              to_file, from_buf->m_length, get_dest_name(),
-                              encrypt_mode(), encrypt_key(), encrypt_iv());
+        error = encrypt_and_write_cbk(from_buf->m_buffer, to_file,
+                                      from_buf->m_length, get_dest_name());
+      } else if (comp_file != nullptr) {
+        error = comp_file->compress_and_write(
+            (char *)from_buf->m_buffer, to_file.file_desc, from_buf->m_length,
+            get_dest_name());
       } else {
-        error = clone_os_copy_buf_to_file(from_buf->m_buffer, to_file,
+        error = clone_os_copy_buf_to_file(from_buf->m_buffer, to_file.file_desc,
                                           from_buf->m_length, get_dest_name());
       }
     } else {
@@ -374,10 +420,15 @@ int Local_Callback::apply_cbk(Ha_clone_file to_file, bool apply_file,
     auto from_file = ext_link->get_file();
 
     if (apply_file) {
+      if (compress_file()) {
+        buf_len = 128 * CLONE_OS_ALIGN;
+        buf_ptr = client->get_aligned_buffer(buf_len);
+      }
       error = clone_os_copy_file_to_file(
           from_file->m_file_desc, to_file, from_file->m_length, buf_ptr,
           buf_len, get_source_name(), get_dest_name(), &m_buffer_node,
-          m_cipher_buff, encrypt_mode(), encrypt_key(), encrypt_iv());
+          m_cipher_buff, encrypt_mode(), encrypt_key(), encrypt_iv(),
+          compress_file());
     } else {
       to_len = from_file->m_length;
       to_buffer = client->get_aligned_buffer(to_len);
@@ -396,4 +447,13 @@ int Local_Callback::apply_cbk(Ha_clone_file to_file, bool apply_file,
 
   return (error);
 }
+
+int Local_Callback::encrypt_and_write_cbk(uchar *source, Ha_clone_file to_file,
+                                          size_t length,
+                                          const char *dest_name) {
+  return encrypt_and_write(&m_buffer_node, m_cipher_buff, source, to_file,
+                           length, dest_name, encrypt_mode(), encrypt_key(),
+                           encrypt_iv(), compress_file());
+}
+
 }  // namespace myclone

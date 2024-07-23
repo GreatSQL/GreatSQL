@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, GreatDB Software Co., Ltd.
+/* Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,7 +27,9 @@
 #include <net/ethernet.h>
 #include <net/if.h>
 #include <netdb.h>
+#include <netinet/icmp6.h>
 #include <netinet/in.h>
+#include <netinet/ip6.h>
 #include <netinet/ip_icmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -76,6 +78,9 @@ namespace greatdb {
 #define HEART_STRING_BUFFER 200
 #define DEST_MAC \
   { 0xFF, 0xff, 0xff, 0xff, 0xff, 0xff }
+#define DEST_IP6_ADDR "ff02::1"
+#define HA_CONNECT_TIMEOUT 3
+#define HA_BIND_RETRY_TIMES 5
 
 /*ping variables begin*/
 #define PACKET_SIZE 4096
@@ -87,9 +92,11 @@ int send_id = 0;
 int ping_sock = -1;
 bool need_stopped_by_ping = false;
 struct sockaddr_in dest_addr;
+struct sockaddr_in6 dest_addr6;
 my_thread_handle ping_thread;
 pthread_mutex_t ping_mutex;
 pthread_cond_t ping_cv;
+bool is_register_services;
 /*ping variables end*/
 
 char *mgr_vip_addr;
@@ -105,6 +112,7 @@ enum message_type_t {
   GET_BIND_VIPS_REPLY,
   OK_REPLY,
   ERROR_REPLY,
+  YOU_ARE_NOT_PRIMARY,
 };
 
 struct st_row_group_members {
@@ -127,22 +135,65 @@ struct st_row_group_members {
   bool is_invalid = false;
 };
 
+struct st_row_group_member_stats {
+  char channel_name[CHANNEL_NAME_LENGTH];
+  uint channel_name_length;
+  char view_id[HOSTNAME_LENGTH];
+  uint view_id_length;
+  char member_id[UUID_LENGTH];
+  uint member_id_length;
+  ulonglong trx_in_queue;
+  ulonglong trx_checked;
+  ulonglong trx_conflicts;
+  ulonglong trx_rows_validating;
+  char *trx_committed;
+  size_t trx_committed_length;
+  char last_cert_trx[Gtid::MAX_TEXT_LENGTH + 1];
+  int last_cert_trx_length;
+  ulonglong trx_remote_applier_queue;
+  ulonglong trx_remote_applied;
+  ulonglong trx_local_proposed;
+  ulonglong trx_local_rollback;
+};
+
 struct greatdb_ha_message {
   void set_message_type(enum message_type_t type) {
-    message_length = sizeof(int) + sizeof(message_type_t);
+    message_length = 2 * sizeof(int) + sizeof(message_type_t);
     message_type = type;
+    view_id_length = 0;
+  }
+  void set_view_id(std::string view_id_stamp, int view_id_version) {
+    if (!view_id_stamp.empty() && view_id_version > 0) {
+      view_id_stamp += ":" + std::to_string(view_id_version);
+      view_id_length = view_id_stamp.size();
+      memcpy(message_content, view_id_stamp.c_str(), view_id_length);
+      message_length += view_id_length;
+    }
   }
   void set_message_content(const char *message) {
     if (message) {
-      memcpy(message_content, message, strlen(message));
+      memcpy(message_content + view_id_length, message, strlen(message));
       message_length += strlen(message);
     }
   }
+  bool get_view_id(std::string &recv_view_id_stamp, int &recv_view_id_version) {
+    if (view_id_length <= 0) return false;
+    std::string str_view_id(message_content, view_id_length);
+    std::size_t view_id_position = str_view_id.find(":");
+    if (str_view_id.size() != static_cast<long unsigned int>(view_id_length) ||
+        view_id_position == 0 || view_id_position == std::string::npos) {
+      return false;
+    }
+    recv_view_id_stamp = str_view_id.substr(0, view_id_position);
+    recv_view_id_version = std::stoi(str_view_id.substr(view_id_position + 1));
+    return true;
+  }
   message_type_t get_message_type() { return message_type; }
-  char *get_message_content() { return message_content; }
+  char *get_message_content() { return message_content + view_id_length; }
 
   int message_length;
   message_type_t message_type;
+  int view_id_length;
   char message_content[1];
 };
 
@@ -155,6 +206,8 @@ char *all_vip_tope = all_vip_tope_value;
 ulong read_vip_floating_type;
 bool is_primary_for_check_kill_connection = false;
 bool is_primary_for_vip = false;
+std::string view_id_stamp;
+int view_id_version = 0;
 std::map<std::string, std::string>
     bind_ips_with_nicname;                           // ip address, nicname
 std::map<std::string, std::string> system_bind_ips;  // ip address, nicname
@@ -167,6 +220,8 @@ std::map<std::string, int>
     secondary_plugin_ports;  // server_uuid, server_plugin_port
 pthread_mutex_t vip_variable_mutex;
 std::set<std::string> read_vips;
+sa_family_t ping_family = AF_INET;
+sa_family_t vip_family = AF_INET;
 char *vip_nic;
 char *vip_broadip;
 char *plugin_port;
@@ -208,6 +263,20 @@ struct arppacket {
   unsigned char ar_tip[4];           // RECEIVE IP
 };
 
+struct napacket {
+  struct nd_neighbor_advert na;
+  struct nd_opt_hdr hdr;
+  uint8_t na_pl_mac[ETH_ALEN];
+} __attribute__((packed));
+
+struct in6_ifreq {
+  struct in6_addr ifr6_addr;
+  uint32_t ifr6_prefixlen;
+  unsigned int ifr6_ifindex;
+  short int ifr6_flags;
+  char ifrn6_name[IFNAMSIZ];
+};
+
 struct sockaddr_ll {
   unsigned short int sll_family;
   unsigned short int sll_protocol;
@@ -243,14 +312,25 @@ class Kill_Ip_Conn : public Do_THD_Impl {
     if (thd_to_kill->get_net()->vio && get_client_host(*thd_to_kill) &&
         thd_to_kill->killed != THD::KILL_CONNECTION &&
         !thd_to_kill->slave_thread && !is_utility_user) {
-      struct sockaddr_in addr;
-      socklen_t addr_len = sizeof(addr);
-      getsockname(thd_to_kill->get_net()->fd, (struct sockaddr *)&addr,
-                  &addr_len);
-      char ip[INET_ADDRSTRLEN];
-      inet_ntop(AF_INET, &(addr.sin_addr), ip, INET_ADDRSTRLEN);
-      if (strcmp(ip, ip_address_need_to_kill) == 0)
-        thd_to_kill->awake(THD::KILL_CONNECTION);
+      if (vip_family == AF_INET) {
+        struct sockaddr_in addr;
+        socklen_t addr_len = sizeof(addr);
+        getsockname(thd_to_kill->get_net()->fd, (struct sockaddr *)&addr,
+                    &addr_len);
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(addr.sin_addr), ip, INET_ADDRSTRLEN);
+        if (strcmp(ip, ip_address_need_to_kill) == 0)
+          thd_to_kill->awake(THD::KILL_CONNECTION);
+      } else {
+        struct sockaddr_in6 addr6;
+        socklen_t addr6_len = sizeof(addr6);
+        getsockname(thd_to_kill->get_net()->fd, (struct sockaddr *)&addr6,
+                    &addr6_len);
+        char ip[INET6_ADDRSTRLEN];
+        inet_ntop(AF_INET6, &(addr6.sin6_addr), ip, INET6_ADDRSTRLEN);
+        if (strcmp(ip, ip_address_need_to_kill) == 0)
+          thd_to_kill->awake(THD::KILL_CONNECTION);
+      }
     }
     mysql_mutex_unlock(&thd_to_kill->LOCK_thd_data);
   }
@@ -261,7 +341,7 @@ class Kill_Ip_Conn : public Do_THD_Impl {
 
 static void kill_connection_bind_to_vip(const char *need_unbind_vip) {
   Global_THD_manager *thd_manager = Global_THD_manager::get_instance();
-  my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+  my_plugin_log_message(&plugin_ptr, MY_WARNING_LEVEL,
                         "kill connections binding to vip: %s", need_unbind_vip);
   Kill_Ip_Conn unbind_vip_kill_conn(need_unbind_vip);
   thd_manager->do_for_all_thd(&unbind_vip_kill_conn);
@@ -293,8 +373,13 @@ static int send_packet(int ping_sock_fd) {
   memset(icmp->icmp_data, 0xff, datalen);
   icmp->icmp_cksum =
       get_checksum((unsigned short *)icmp, sizeof(struct icmp) + datalen);
-  return sendto(ping_sock_fd, sendpacket, sizeof(struct icmp) + datalen, 0,
-                (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+  int ret =
+      ping_family == AF_INET
+          ? sendto(ping_sock_fd, sendpacket, sizeof(struct icmp) + datalen, 0,
+                   (struct sockaddr *)&dest_addr, sizeof(dest_addr))
+          : sendto(ping_sock_fd, sendpacket, sizeof(struct icmp) + datalen, 0,
+                   (struct sockaddr *)&dest_addr6, sizeof(dest_addr6));
+  return ret;
 }
 
 static void gdb_cmd_run_force_member() {
@@ -321,9 +406,12 @@ static ssize_t recv_packet(int ping_sock_fd) {
     n = select(maxfds, &fds, NULL, NULL, &tv);
     if (n <= 0) return -1;
     memset(recvpacket, 0, sizeof(recvpacket));
-    len = sizeof(dest_addr);
-    n = recvfrom(ping_sock_fd, recvpacket, sizeof(recvpacket), 0,
-                 (struct sockaddr *)&dest_addr, (socklen_t *)&len);
+    len = ping_family == AF_INET ? sizeof(dest_addr) : sizeof(dest_addr6);
+    n = ping_family == AF_INET
+            ? recvfrom(ping_sock_fd, recvpacket, sizeof(recvpacket), 0,
+                       (struct sockaddr *)&dest_addr, (socklen_t *)&len)
+            : recvfrom(ping_sock_fd, recvpacket, sizeof(recvpacket), 0,
+                       (struct sockaddr *)&dest_addr6, (socklen_t *)&len);
     if (n == -1) return -1;
     if (n < (ssize_t)(sizeof(struct iphdr) + sizeof(struct icmp))) continue;
     iph = (struct iphdr *)recvpacket;
@@ -338,37 +426,50 @@ static ssize_t recv_packet(int ping_sock_fd) {
   return n;
 }
 
+sa_family_t check_ip_version(const char *ip) {
+  if (!ip) return 0;
+  struct sockaddr_storage sa;
+  if (inet_pton(AF_INET, ip, &(((struct sockaddr_in *)&sa)->sin_addr)) == 1) {
+    return AF_INET;
+  } else if (inet_pton(AF_INET6, ip,
+                       &(((struct sockaddr_in *)&sa)->sin_addr)) == 1) {
+    return AF_INET6;
+  } else
+    return 0;
+}
+
 bool ping_gateway(int ping_sock_fd, const char *gateway_ip) {
   if (!gateway_ip || !strlen(gateway_ip)) return true;
-  unsigned long inaddr = 0;
   int n;
   int size = 50 * 1024;
   setsockopt(ping_sock_fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
   bzero(&dest_addr, sizeof(dest_addr));
-  dest_addr.sin_family = AF_INET;
-  inaddr = inet_addr(gateway_ip);
-  if (inaddr == INADDR_NONE) {
+  bzero(&dest_addr6, sizeof(dest_addr6));
+  if (ping_family == AF_INET &&
+      inet_pton(AF_INET, gateway_ip, &dest_addr) == 1) {
+    dest_addr.sin_family = AF_INET;
+  } else if (ping_family == AF_INET6 &&
+             inet_pton(AF_INET6, gateway_ip, &dest_addr6) == 1) {
+    dest_addr6.sin6_family = AF_INET6;
+  } else {
     my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
                           "Error: gateway ip is wrong.");
-    goto end;
-  } else
-    dest_addr.sin_addr.s_addr = inaddr;
+    return false;
+  }
   if (send_packet(ping_sock_fd) < 0) {
     my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
                           "Error:send ping to gateway failed.");
-    goto end;
+    return false;
   }
   n = recv_packet(ping_sock_fd);
   if (n == -1) {
     my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
                           "Error:receive ping from gateway failed.");
-    goto end;
+    return false;
   }
   my_plugin_log_message(&plugin_ptr, MY_INFORMATION_LEVEL,
                         "ping gateway success");
   return true;
-end:
-  return false;
 }
 
 void *ping_func(void *) {
@@ -387,7 +488,8 @@ void *ping_func(void *) {
     pthread_cond_wait(&ping_cv, &ping_mutex);
   pthread_mutex_unlock(&ping_mutex);
   if (need_exit) goto end;
-  ping_sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+  ping_family = greatdb::check_ip_version(gateway_address_var);
+  ping_sock = socket(ping_family, SOCK_RAW, IPPROTO_ICMP);
   if (ping_sock < 0) {
     my_plugin_log_message(
         &plugin_ptr, MY_ERROR_LEVEL,
@@ -443,7 +545,7 @@ ping gateway thread end
 int get_mac(const char *eno, unsigned char *mac) {
   struct ifreq ifreq;
   int sock;
-  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+  if ((sock = socket(vip_family, SOCK_STREAM, 0)) < 0) {
     return 0;
   }
   strcpy(ifreq.ifr_name, eno);
@@ -479,6 +581,11 @@ void get_all_ips() {
                       NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
       if (s != 0) continue;
       system_bind_ips[host] = ifa->ifa_name;
+    } else if (family == AF_INET6) {
+      s = getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in6), host,
+                      NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+      if (s != 0) continue;
+      system_bind_ips[host] = ifa->ifa_name;
     }
   }
   freeifaddrs(ifaddr);
@@ -492,6 +599,124 @@ static std::string get_nic_name(size_t nic_pos) {
   nic_name.append(":");
   nic_name.append(std::to_string(nic_pos));
   return nic_name;
+}
+
+/*
+  Callbacks implementation for GROUP_REPLICATION_GROUP_MEMBER_STATS_CALLBACKS.
+*/
+static void set_channel_name_stats(void *const context, const char &value,
+                                   size_t length) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+  const size_t max = CHANNEL_NAME_LENGTH;
+  length = std::min(length, max);
+
+  row->channel_name_length = length;
+  memcpy(row->channel_name, &value, length);
+}
+
+static void set_view_id_stats(void *const context, const char &value,
+                              size_t length) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+  const size_t max = HOSTNAME_LENGTH;
+  length = std::min(length, max);
+
+  row->view_id_length = length;
+  memcpy(row->view_id, &value, length);
+}
+
+static void set_member_id_stats(void *const context, const char &value,
+                                size_t length) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+  const size_t max = UUID_LENGTH;
+  length = std::min(length, max);
+
+  row->member_id_length = length;
+  memcpy(row->member_id, &value, length);
+}
+
+static void set_transactions_committed(void *const context, const char &value,
+                                       size_t length) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+
+  if (row->trx_committed != nullptr) {
+    my_free(row->trx_committed);
+  }
+
+  row->trx_committed_length = length;
+  row->trx_committed = (char *)my_malloc(PSI_NOT_INSTRUMENTED, length, MYF(0));
+  memcpy(row->trx_committed, &value, length);
+}
+
+static void set_last_conflict_free_transaction(void *const context,
+                                               const char &value,
+                                               size_t length) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+  const size_t max = Gtid::MAX_TEXT_LENGTH + 1;
+  length = std::min(length, max);
+
+  row->last_cert_trx_length = length;
+  memcpy(row->last_cert_trx, &value, length);
+}
+
+static void set_transactions_in_queue(void *const context,
+                                      unsigned long long int value) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+  row->trx_in_queue = value;
+}
+
+static void set_transactions_certified(void *const context,
+                                       unsigned long long int value) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+  row->trx_checked = value;
+}
+
+static void set_transactions_conflicts_detected(void *const context,
+                                                unsigned long long int value) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+  row->trx_conflicts = value;
+}
+
+static void set_transactions_rows_in_validation(void *const context,
+                                                unsigned long long int value) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+  row->trx_rows_validating = value;
+}
+
+static void set_transactions_remote_applier_queue(
+    void *const context, unsigned long long int value) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+  row->trx_remote_applier_queue = value;
+}
+
+static void set_transactions_remote_applied(void *const context,
+                                            unsigned long long int value) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+  row->trx_remote_applied = value;
+}
+
+static void set_transactions_local_proposed(void *const context,
+                                            unsigned long long int value) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+  row->trx_local_proposed = value;
+}
+
+static void set_transactions_local_rollback(void *const context,
+                                            unsigned long long int value) {
+  struct st_row_group_member_stats *row =
+      static_cast<struct st_row_group_member_stats *>(context);
+  row->trx_local_rollback = value;
 }
 
 static void set_member_id(void *const context, const char &value,
@@ -606,6 +831,103 @@ static int send_arp(const char *vip) {
   return 1;
 }
 
+static int send_na(const char *vip) {
+  if (DBUG_EVALUATE_IF("test_vip", true, false)) {
+    return 1;
+  }
+  int sockfd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+  if (sockfd < 0) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "Get socket IPPROTO_ICMPV6 failed. %s",
+                          strerror(errno));
+    return 0;
+  }
+
+  int ifindex = if_nametoindex(vip_nic);
+  if (setsockopt(sockfd, IPPROTO_IPV6, IPV6_MULTICAST_IF, &ifindex,
+                 sizeof(ifindex)) < 0) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "setsockopt IPV6_MULTICAST_IF failed %s",
+                          strerror(errno));
+    close(sockfd);
+    return 0;
+  }
+
+  /* must be 255. see rfc4861 7.1.2 */
+  int hop_limit = 255;
+  if (setsockopt(sockfd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hop_limit,
+                 sizeof(hop_limit)) < 0) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "setsockopt IPV6_MULTICAST_HOPS failed %s",
+                          strerror(errno));
+    close(sockfd);
+    return 0;
+  }
+
+  struct napacket na_packet;
+  memset(&na_packet, 0, sizeof(na_packet));
+  na_packet.na.nd_na_type = ND_NEIGHBOR_ADVERT;
+  na_packet.na.nd_na_code = 0;
+  na_packet.na.nd_na_cksum = 0;
+  na_packet.na.nd_na_flags_reserved = ND_NA_FLAG_OVERRIDE;
+  inet_pton(AF_INET6, vip, &na_packet.na.nd_na_target);
+
+  na_packet.hdr.nd_opt_type = ND_OPT_TARGET_LINKADDR;
+  na_packet.hdr.nd_opt_len = 1;
+  if (!get_mac(vip_nic, na_packet.na_pl_mac)) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "get mac failed when send u-na packet %s",
+                          strerror(errno));
+    close(sockfd);
+    return 0;
+  }
+
+  size_t packet_size =
+      sizeof(struct nd_neighbor_advert) + sizeof(struct nd_opt_hdr) + ETH_ALEN;
+
+  // Define source address and bind it to the socket
+  struct sockaddr_in6 na_src_addr;
+  memset(&na_src_addr, 0, sizeof(na_src_addr));
+  na_src_addr.sin6_family = AF_INET6;
+  inet_pton(AF_INET6, vip, &na_src_addr.sin6_addr);
+  if (IN6_IS_ADDR_LINKLOCAL(&na_src_addr.sin6_addr) ||
+      IN6_IS_ADDR_MC_LINKLOCAL(&na_src_addr.sin6_addr)) {
+    na_src_addr.sin6_scope_id = ifindex;
+  }
+
+  ulong retry_time = 0;
+  while (retry_time < HA_BIND_RETRY_TIMES) {
+    if (bind(sockfd, (struct sockaddr *)&na_src_addr, sizeof(na_src_addr)) ==
+        0) {
+      break;
+    }
+    retry_time++;
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "bind %s na_src_addr failed %s", vip,
+                          strerror(errno));
+    sleep(1);
+  }
+  if (retry_time >= HA_BIND_RETRY_TIMES) {
+    close(sockfd);
+    return 0;
+  }
+
+  struct sockaddr_in6 na_dest_addr;
+  memset(&na_dest_addr, 0, sizeof(na_dest_addr));
+  na_dest_addr.sin6_family = AF_INET6;
+  inet_pton(AF_INET6, DEST_IP6_ADDR, &na_dest_addr.sin6_addr);
+  if (sendto(sockfd, &na_packet, packet_size, 0,
+             (struct sockaddr *)&na_dest_addr, sizeof(na_dest_addr)) <= 0) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "sendto na_dest_addr fail %s", strerror(errno));
+    close(sockfd);
+    return 0;
+  }
+
+  close(sockfd);
+  return 1;
+}
+
 static void release_nic_pos(const char *nic_name) {
   if (!nic_name) return;
   std::string nic_name_str(nic_name);
@@ -620,31 +942,73 @@ static bool unbind_vip(const char *vip, const char *nic_name) {
     release_nic_pos(nic_name);
     return true;
   }
-  struct sockaddr_in inet_addr;
   int fd = 0;
-  if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+  if ((fd = socket(vip_family, SOCK_DGRAM, 0)) < 0) {
     return false;
   }
-  inet_addr.sin_family = AF_INET;
-  if (inet_pton(AF_INET, vip, &(inet_addr.sin_addr)) != 1) return false;
-  struct ifreq ifr;
-  memcpy(ifr.ifr_ifrn.ifrn_name, nic_name, strlen(nic_name) + 1);
-  memcpy(&ifr.ifr_addr, &inet_addr, sizeof(struct sockaddr));
-  if (ioctl(fd, SIOCSIFADDR, &ifr) < 0) {
-    perror("SIOCSIFADDR");
-    close(fd);
-    return false;
-  }
-  if (ioctl(fd, SIOCGIFFLAGS, &ifr) < 0) {
-    perror("SIOCSIFFLAGS");
-    close(fd);
-    return false;
-  }
-  ifr.ifr_flags &= ~IFF_UP;
-  if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0) {
-    perror("SIOCSIFFLAGS");
-    close(fd);
-    return false;
+  if (vip_family == AF_INET) {
+    struct sockaddr_in inet_addr;
+    inet_addr.sin_family = AF_INET;
+    if (inet_pton(AF_INET, vip, &(inet_addr.sin_addr)) != 1) return false;
+    struct ifreq ifr;
+    memcpy(ifr.ifr_name, nic_name, strlen(nic_name) + 1);
+    memcpy(&ifr.ifr_addr, &inet_addr, sizeof(struct sockaddr));
+    if (ioctl(fd, SIOCSIFADDR, &ifr) < 0) {
+      my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                            "unbind AF_INET SIOCSIFADDR failed  %s",
+                            strerror(errno));
+      close(fd);
+      return false;
+    }
+    if (ioctl(fd, SIOCGIFFLAGS, &ifr) < 0) {
+      my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                            "unbind AF_INET SIOCSIFFLAGS %s", strerror(errno));
+      close(fd);
+      return false;
+    }
+    ifr.ifr_flags &= ~IFF_UP;
+    if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0) {
+      my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                            "unbind AF_INET SIOCSIFFLAGS %s", strerror(errno));
+      close(fd);
+      return false;
+    }
+  } else {
+    struct in6_ifreq ifr6;
+    struct ifreq ifr;
+    struct sockaddr_in6 sa6;
+
+    memset(&sa6, 0, sizeof(struct sockaddr_in6));
+    sa6.sin6_family = AF_INET6;
+
+    if (inet_pton(AF_INET6, vip, &sa6.sin6_addr) != 1) {
+      my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                            "unbind AF_INET6 inet_pton %s", strerror(errno));
+      close(fd);
+      return false;
+    }
+
+    // get interface index and check
+    strncpy(ifr.ifr_name, nic_name, strlen(nic_name) + 1);
+    if (ioctl(fd, SIOGIFINDEX, &ifr) != 0) {
+      my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                            "unbind AF_INET6 SIOGIFINDEX %s", strerror(errno));
+      close(fd);
+      return false;
+    }
+
+    memset(&ifr6, 0, sizeof(ifr6));
+    memcpy(&ifr6.ifr6_addr, &sa6.sin6_addr, sizeof(struct in6_addr));
+
+    ifr6.ifr6_prefixlen = atoi(vip_netmask);
+    ifr6.ifr6_ifindex = ifr.ifr_ifindex;
+
+    if (ioctl(fd, SIOCDIFADDR, &ifr6) < 0) {
+      my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                            "unbind AF_INET6 SIOCDIFADDR %s", strerror(errno));
+      close(fd);
+      return false;
+    }
   }
   bind_ips_with_nicname.erase(vip);
   release_nic_pos(nic_name);
@@ -704,16 +1068,59 @@ void unbind_all_vips() {
   }
 }
 
-static bool bind_vip(const char *vip) {
-  if (!vip || !vip_netmask || !vip_nic) return false;
-  if (bind_ips_with_nicname.find(vip) != bind_ips_with_nicname.end())
-    return true;
-  if (DBUG_EVALUATE_IF("test_vip", true, false)) {
-    std::string nic_name = get_nic_name(nic_pos_list.front());
-    bind_ips_with_nicname[vip] = nic_name;
-    nic_pos_list.pop();
-    return true;
+static bool bind_vip_ipv6(const char *vip) {
+  struct in6_ifreq ifr6;
+  int sockfd;
+  struct ifreq ifr;
+  struct sockaddr_in6 sa6;
+
+  sockfd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_IP);
+  if (sockfd < 0) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "bind AF_INET6 socket %s", strerror(errno));
+    return false;
   }
+
+  memset(&sa6, 0, sizeof(struct sockaddr_in6));
+  sa6.sin6_family = AF_INET6;
+
+  if (inet_pton(AF_INET6, vip, &sa6.sin6_addr) != 1) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "bind AF_INET6 inet_pton %s", strerror(errno));
+    close(sockfd);
+    return false;
+  }
+
+  strncpy(ifr.ifr_name, vip_nic, strlen(vip_nic) + 1);
+  if (ioctl(sockfd, SIOGIFINDEX, &ifr) != 0) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "bind AF_INET6 SIOGIFINDEX %s", strerror(errno));
+    close(sockfd);
+    return false;
+  }
+
+  memset(&ifr6, 0, sizeof(ifr6));
+  memcpy(&ifr6.ifr6_addr, &sa6.sin6_addr, sizeof(struct in6_addr));
+
+  ifr6.ifr6_prefixlen = atoi(vip_netmask);
+  if (ifr6.ifr6_prefixlen > 128) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "vip_netmask format is error");
+    close(sockfd);
+    return false;
+  }
+  ifr6.ifr6_ifindex = ifr.ifr_ifindex;
+
+  if (ioctl(sockfd, SIOCSIFADDR, &ifr6) < 0 && errno != 17) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "bind AF_INET6 SIOCSIFADDR %s", strerror(errno));
+    close(sockfd);
+    return false;
+  }
+  return true;
+}
+
+static bool bind_vip_ipv4(const char *vip) {
   struct sockaddr_in inet_addr;
   struct sockaddr_in mask_addr;
   int fd = 0;
@@ -729,18 +1136,44 @@ static bool bind_vip(const char *vip) {
   memcpy(ifr.ifr_ifrn.ifrn_name, nic_name.c_str(), nic_name.size() + 1);
   memcpy(&ifr.ifr_addr, &inet_addr, sizeof(struct sockaddr));
   if (ioctl(fd, SIOCSIFADDR, &ifr) < 0) {
-    perror("SIOCSIFADDR");
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "bind AF_INET SIOCSIFADDR %s", strerror(errno));
     close(fd);
     return false;
   }
   memcpy(&ifr.ifr_addr, &mask_addr, sizeof(struct sockaddr));
   if (ioctl(fd, SIOCSIFNETMASK, &ifr) < 0) {
-    perror("SIOCSIFNETMASK");
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "bind AF_INET SIOCSIFNETMASK %s", strerror(errno));
     close(fd);
     return false;
   }
-  bind_ips_with_nicname[vip] = nic_name;
-  if (!send_arp(vip)) {
+  return true;
+}
+
+static bool bind_vip(const char *vip) {
+  if (!vip || !vip_netmask || !vip_nic) return false;
+  if (bind_ips_with_nicname.find(vip) != bind_ips_with_nicname.end())
+    return true;
+  if (nic_pos_list.empty()) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "Virtual Adapter list is empty when bind vip");
+    return false;
+  }
+
+  std::string nic_name = get_nic_name(nic_pos_list.front());
+  if (DBUG_EVALUATE_IF("test_vip", true, false)) {
+    bind_ips_with_nicname[vip] = vip_family == AF_INET ? nic_name : vip_nic;
+    nic_pos_list.pop();
+    return true;
+  }
+
+  if (vip_family == AF_INET ? !bind_vip_ipv4(vip) : !bind_vip_ipv6(vip)) {
+    return false;
+  }
+
+  bind_ips_with_nicname[vip] = vip_family == AF_INET ? nic_name : vip_nic;
+  if (vip_family == AF_INET ? !send_arp(vip) : !send_na(vip)) {
     return false;
   }
   nic_pos_list.pop();
@@ -749,7 +1182,7 @@ static bool bind_vip(const char *vip) {
 
 static void killall_connections() {
   Global_THD_manager *thd_manager = Global_THD_manager::get_instance();
-  my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+  my_plugin_log_message(&plugin_ptr, MY_WARNING_LEVEL,
                         "kill all connections after primary changed");
   Kill_All_Conn set_kill_conn;
   thd_manager->do_for_all_thd(&set_kill_conn);
@@ -859,6 +1292,16 @@ static void bind_vip_according_map() {
           my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
                                 "try to bind vip : %s failed", (*it).c_str());
         }
+      } else {
+        // when signal_hand() receive kill signal
+        bool mysqld_begin_exit = connection_events_loop_aborted();
+        if (!mysqld_begin_exit) {
+          vip_family == AF_INET ? send_arp((*it).c_str())
+                                : send_na((*it).c_str());
+        } else {
+          my_plugin_log_message(&plugin_ptr, MY_INFORMATION_LEVEL,
+                                "not send arp to keep vip due to mysqld exit.");
+        }
       }
     }
     std::map<std::string, std::string> need_unbind_vips;
@@ -945,11 +1388,24 @@ static int get_all_node_ips(
 static void handle_received_message(int sock) {
   pthread_mutex_lock(&vip_variable_mutex);
   greatdb_ha_message *receive_message = (greatdb_ha_message *)recv_message_buf;
+  bool is_old_view_id = false;
+  std::string recv_view_id_stamp;
+  int recv_view_id_version = 0;
+  if (!receive_message->get_view_id(recv_view_id_stamp, recv_view_id_version) ||
+      (recv_view_id_stamp == view_id_stamp &&
+       recv_view_id_version < view_id_version)) {
+    is_old_view_id = true;
+  }
   memset(send_message_buf, 0, 1024);
   greatdb_ha_message *need_send_message =
       (greatdb_ha_message *)send_message_buf;
   switch (receive_message->get_message_type()) {
     case GET_BIND_VIPS: {
+      if (is_old_view_id) {
+        need_send_message->set_message_type(YOU_ARE_NOT_PRIMARY);
+        send_message(sock);
+        break;
+      }
       std::string bind_vips = "";
       for (auto it = bind_ips_with_nicname.begin();
            it != bind_ips_with_nicname.end(); it++) {
@@ -964,6 +1420,9 @@ static void handle_received_message(int sock) {
       break;
     }
     case SET_ALL_NODE_BIND_VIPS: {
+      if (is_old_view_id) {
+        break;
+      }
       char *receive_content = receive_message->get_message_content();
       memset(all_vip_tope_value, 0, 1024);
       memcpy(all_vip_tope_value, receive_content, strlen(receive_content));
@@ -1015,6 +1474,11 @@ static int get_secondary_plugin_port(
   char password[MAX_PASSWORD_LENGTH + 1];
   int secondary_port = -1;
   mysql = mysql_init(mysql);
+  ulong ha_connect_timeout = HA_CONNECT_TIMEOUT;
+  mysql_options(mysql, MYSQL_OPT_CONNECT_TIMEOUT, &ha_connect_timeout);
+  mysql_options(mysql, MYSQL_OPT_READ_TIMEOUT, &ha_connect_timeout);
+  mysql_options(mysql, MYSQL_OPT_WRITE_TIMEOUT, &ha_connect_timeout);
+
   size_t password_size = sizeof(password);
   channel_map.rdlock();
   Master_info *recover_info = channel_map.get_mi("group_replication_recovery");
@@ -1046,6 +1510,46 @@ error:
   return -1;
 }
 
+int connect_with_timeout(int sockfd, struct sockaddr *servaddr,
+                         socklen_t servaddr_size) {
+  unsigned long ul = 1;
+  // set not block
+  ul = 1;
+  ioctl(sockfd, FIONBIO, &ul);
+  if (connect(sockfd, servaddr, servaddr_size) >= 0) {
+    // set block
+    ul = 0;
+    ioctl(sockfd, FIONBIO, &ul);
+    return -1;
+  }
+  int ret = 0;
+  fd_set set;
+  struct timeval tm;
+  tm.tv_sec = HA_CONNECT_TIMEOUT;
+  tm.tv_usec = 0;
+  FD_ZERO(&set);
+  FD_SET(sockfd, &set);
+
+  ret = select(sockfd + 1, NULL, &set, NULL, &tm);
+  if (ret > 0) {
+    // get socket status
+    int error = -1, len = sizeof(int);
+    getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &error, (socklen_t *)&len);
+    if (error == 0) {
+      ret = 0;
+    } else {
+      ret = -3;
+    }
+  } else {
+    ret = -2;
+  }
+
+  // set block
+  ul = 0;
+  ioctl(sockfd, FIONBIO, &ul);
+  return ret;
+}
+
 static int get_socket_by_host(st_row_group_members &secondary_member_info,
                               bool need_force_update_sock_fd) {
   if (need_force_update_sock_fd)
@@ -1057,45 +1561,91 @@ static int get_socket_by_host(st_row_group_members &secondary_member_info,
   // maybe secondary node's changed its greatdb_ha_port, retry and force
   // update the value save in secondary_port_map
   int sockfd;
+  sa_family_t cur_family =
+      check_ip_version(secondary_member_info.member_host.c_str());
   while (1) {
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+    if ((sockfd = socket(cur_family, SOCK_STREAM, 0)) == -1) {
       return -1;
     }
-    struct timeval timeout;
-    timeout.tv_sec = 5;
-    timeout.tv_usec = 0;
-    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-    struct sockaddr_in servaddr;
-    memset(&servaddr, 0, sizeof(servaddr));
-    servaddr.sin_family = AF_INET;
-    // if retry count is 1 means used plugin_port is not available,
-    // so force update plugin port if retry count is 1
-    int secondary_plugin_port =
-        get_secondary_plugin_port(secondary_member_info, retry_count);
-    if (secondary_plugin_port == -1) {
-      close(sockfd);
-      return -1;
-    }
-    servaddr.sin_port = htons(secondary_plugin_port);
-    servaddr.sin_addr.s_addr =
-        inet_addr(secondary_member_info.member_host.c_str());
-    if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) != 0) {
-      close(sockfd);
-      if (retry_count == 1) return -1;
-      retry_count += 1;
-      continue;
+    if (cur_family == AF_INET) {
+      struct sockaddr_in servaddr;
+      memset(&servaddr, 0, sizeof(servaddr));
+      servaddr.sin_family = AF_INET;
+      // if retry count is 1 means used plugin_port is not available,
+      // so force update plugin port if retry count is 1
+      int secondary_plugin_port =
+          get_secondary_plugin_port(secondary_member_info, retry_count);
+      if (secondary_plugin_port == -1) {
+        close(sockfd);
+        return -1;
+      }
+      servaddr.sin_port = htons(secondary_plugin_port);
+      servaddr.sin_addr.s_addr =
+          inet_addr(secondary_member_info.member_host.c_str());
+      int ret = connect_with_timeout(sockfd, (struct sockaddr *)&servaddr,
+                                     sizeof(servaddr));
+      if (ret != 0) {
+        close(sockfd);
+        my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                              "connect_with_timeout %s:%d failed return %d",
+                              secondary_member_info.member_host.c_str(),
+                              secondary_plugin_port, ret);
+        if (retry_count == 1) return -1;
+        retry_count += 1;
+        continue;
+      }
+    } else {
+      struct sockaddr_in6 servaddr6;
+      memset(&servaddr6, 0, sizeof(servaddr6));
+      servaddr6.sin6_family = AF_INET6;
+      // if retry count is 1 means used plugin_port is not available,
+      // so force update plugin port if retry count is 1
+      int secondary_plugin_port =
+          get_secondary_plugin_port(secondary_member_info, retry_count);
+      if (secondary_plugin_port == -1) {
+        close(sockfd);
+        return -1;
+      }
+      servaddr6.sin6_port = htons(secondary_plugin_port);
+      if (inet_pton(AF_INET6, secondary_member_info.member_host.c_str(),
+                    &servaddr6.sin6_addr) != 1) {
+        my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                              "get_socket_by_host AF_INET6 Invalid address/ "
+                              "Address not supported %s",
+                              strerror(errno));
+        close(sockfd);
+        return -1;
+      }
+      int ret = connect_with_timeout(sockfd, (struct sockaddr *)&servaddr6,
+                                     sizeof(servaddr6));
+      if (ret != 0) {
+        close(sockfd);
+        my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                              "connect_with_timeout %s:%d failed return %d",
+                              secondary_member_info.member_host.c_str(),
+                              secondary_plugin_port, ret);
+        if (retry_count == 1) return -1;
+        retry_count += 1;
+        continue;
+      }
     }
     break;
   }
+  struct timeval timeout;
+  timeout.tv_sec = HA_CONNECT_TIMEOUT;
+  timeout.tv_usec = 0;
+  setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+  setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
   server_sock_fds[secondary_member_info.member_id] = sockfd;
   return sockfd;
 }
 
-static void get_secondary_node_bind_ips() {
+static bool get_secondary_node_bind_ips() {
   memset(send_message_buf, 0, 1024);
   greatdb_ha_message *need_send_message =
       (greatdb_ha_message *)send_message_buf;
   need_send_message->set_message_type(GET_BIND_VIPS);
+  need_send_message->set_view_id(view_id_stamp, view_id_version);
   std::set<std::string> has_bind_vips = all_node_bind_vips[server_uuid];
   for (auto it = secondary_members.begin(); it != secondary_members.end();
        ++it) {
@@ -1118,7 +1668,15 @@ static void get_secondary_node_bind_ips() {
       }
       greatdb_ha_message *receive_message =
           (greatdb_ha_message *)recv_message_buf;
-      assert(receive_message->get_message_type() == GET_BIND_VIPS_REPLY);
+      if (receive_message->get_message_type() == YOU_ARE_NOT_PRIMARY) {
+        my_plugin_log_message(
+            &plugin_ptr, MY_INFORMATION_LEVEL,
+            "Cur node receive YOU_ARE_NOT_PRIMARY, will skip this round of "
+            "vip-bind-relationship calculation.");
+        return false;
+      } else {
+        assert(receive_message->get_message_type() == GET_BIND_VIPS_REPLY);
+      }
       std::set<std::string> bind_vips;
       std::vector<std::string> need_erase_vips;
       split_string_according_delimiter(receive_message->get_message_content(),
@@ -1142,10 +1700,12 @@ static void get_secondary_node_bind_ips() {
       it->is_invalid = true;
       server_sock_fds.erase(it->member_id);
       my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
-                            "try to connect or send message to %s failed",
+                            "try to connect or send message to %s failed when "
+                            "get node bind message",
                             it->member_id.c_str());
     }
   }
+  return true;
 }
 
 static void send_secondary_bind_vips_message() {
@@ -1160,6 +1720,7 @@ static void send_secondary_bind_vips_message() {
   greatdb_ha_message *need_send_message =
       (greatdb_ha_message *)send_message_buf;
   need_send_message->set_message_type(SET_ALL_NODE_BIND_VIPS);
+  need_send_message->set_view_id(view_id_stamp, view_id_version);
   need_send_message->set_message_content(message.c_str());
   for (auto it = secondary_members.begin(); it != secondary_members.end();
        ++it) {
@@ -1195,7 +1756,8 @@ static void send_secondary_bind_vips_message() {
       // means retry failed
       server_sock_fds.erase(it->member_id);
       my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
-                            "try to connect or send message to %s failed",
+                            "try to connect or send message to %s failed when "
+                            "send node bind message",
                             it->member_id.c_str());
     }
   }
@@ -1301,8 +1863,87 @@ static void caculate_new_bind_relationship() {
   }
 }
 
+static bool get_cur_group_view_id(std::string &view_id_stamp,
+                                  int &view_id_version) {
+  struct st_row_group_member_stats tmp_row;
+  // Set default values.
+  tmp_row.channel_name_length = 0;
+  tmp_row.trx_committed = nullptr;
+  tmp_row.view_id_length = 0;
+  tmp_row.member_id_length = 0;
+  tmp_row.trx_committed_length = 0;
+  tmp_row.last_cert_trx_length = 0;
+  tmp_row.trx_in_queue = 0;
+  tmp_row.trx_checked = 0;
+  tmp_row.trx_conflicts = 0;
+  tmp_row.trx_rows_validating = 0;
+  tmp_row.trx_remote_applier_queue = 0;
+  tmp_row.trx_remote_applied = 0;
+  tmp_row.trx_local_proposed = 0;
+  tmp_row.trx_local_rollback = 0;
+  // Set callbacks on GROUP_REPLICATION_GROUP_MEMBER_STATS_CALLBACKS.
+  const GROUP_REPLICATION_GROUP_MEMBER_STATS_CALLBACKS callbacks = {
+      &tmp_row,
+      &set_channel_name_stats,
+      &set_view_id_stats,
+      &set_member_id_stats,
+      &set_transactions_committed,
+      &set_last_conflict_free_transaction,
+      &set_transactions_in_queue,
+      &set_transactions_certified,
+      &set_transactions_conflicts_detected,
+      &set_transactions_rows_in_validation,
+      &set_transactions_remote_applier_queue,
+      &set_transactions_remote_applied,
+      &set_transactions_local_proposed,
+      &set_transactions_local_rollback,
+  };
+  // Query plugin and let callbacks do their job.
+  if (get_group_replication_group_member_stats_info(0, callbacks) ||
+      tmp_row.view_id_length == 0) {
+    if (tmp_row.trx_committed != nullptr) {
+      my_free(tmp_row.trx_committed);
+      tmp_row.trx_committed = nullptr;
+    }
+    return false;
+  }
+  if (tmp_row.trx_committed != nullptr) {
+    my_free(tmp_row.trx_committed);
+    tmp_row.trx_committed = nullptr;
+  }
+  std::string str_view_id = tmp_row.view_id;
+  std::size_t view_id_position = str_view_id.find(":");
+  if (view_id_position > 0) {
+    view_id_stamp = str_view_id.substr(0, view_id_position);
+    view_id_version = std::stoi(str_view_id.substr(view_id_position + 1));
+  }
+  if (view_id_position <= 0 || view_id_version < 1 || view_id_stamp.empty()) {
+    return false;
+  }
+  return true;
+}
+
+bool update_vip_family() {
+  sa_family_t cur_family = 0;
+  if (!mgr_write_vip_addr || strlen(mgr_write_vip_addr) < 2) {
+    if (read_vips.size() > 0)
+      cur_family = greatdb::check_ip_version(read_vips.begin()->c_str());
+  } else {
+    cur_family = greatdb::check_ip_version(mgr_write_vip_addr);
+  }
+  if (cur_family == 0) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "Error:greatdb_ha_mgr_vip_ip is in the wrong format, "
+                          "please correct it");
+    return false;
+  }
+  vip_family = cur_family;
+  return true;
+}
+
 static void *mysql_heartbeat() {
   if (!is_group_replication_running()) {
+    unbind_vips(bind_ips_with_nicname);
     return nullptr;
   }
   pthread_mutex_lock(&msg_send_mu_);
@@ -1320,6 +1961,11 @@ static void *mysql_heartbeat() {
     pthread_mutex_unlock(&msg_send_mu_);
     return nullptr;
   }
+  if (!update_vip_family()) {
+    pthread_mutex_unlock(&vip_variable_mutex);
+    pthread_mutex_unlock(&msg_send_mu_);
+    return nullptr;
+  }
   need_break = true;
   for (auto it = server_sock_fds.begin(); it != server_sock_fds.end(); it++) {
     close(it->second);
@@ -1329,6 +1975,7 @@ static void *mysql_heartbeat() {
   bool need_unbind_all_vips = false;
   bool master_is_running = true;
   struct st_row_group_members m_row;
+
   const GROUP_REPLICATION_GROUP_MEMBERS_CALLBACKS callbacks = {
       &m_row,
       &set_channel_name,
@@ -1377,6 +2024,13 @@ static void *mysql_heartbeat() {
   }
   if (work_number <= (n - recover_number) / 2) {
     master_is_running = false;
+  } else {
+    if (!get_cur_group_view_id(view_id_stamp, view_id_version)) {
+      my_plugin_log_message(
+          &plugin_ptr, MY_INFORMATION_LEVEL,
+          "Cannot get MGR group view_id info, maybe need wait "
+          "MGR complete initialization.");
+    }
   }
   is_primary_for_vip = is_master;
   if (master_is_running && is_master) {
@@ -1393,15 +2047,19 @@ static void *mysql_heartbeat() {
     }
     if (secondary_members.size() == 0) {
       all_node_bind_vips[server_uuid] = read_vips;
-    } else {
-      get_secondary_node_bind_ips();
+    } else if (!get_secondary_node_bind_ips()) {
+      pthread_mutex_unlock(&vip_variable_mutex);
+      pthread_mutex_unlock(&msg_send_mu_);
+      return nullptr;
     }
     all_node_bind_vips[server_uuid].insert(mgr_write_vip_addr);
     if (secondary_members.size()) {
       caculate_new_bind_relationship();
+      bind_vip_according_map();
       send_secondary_bind_vips_message();
+    } else {
+      bind_vip_according_map();
     }
-    bind_vip_according_map();
     need_break = false;
     pthread_cond_signal(&msg_send_cv_);
   }
@@ -1531,7 +2189,7 @@ static void *greatdb_ha_check_killconnection_and_force_member_func(void *) {
 static int get_local_listen_sock() {
   if (!plugin_port || !strlen(plugin_port)) return -1;
   int listenfd;
-  listenfd = socket(AF_INET, SOCK_STREAM, 0);
+  listenfd = socket(vip_family, SOCK_STREAM, 0);
   if (listenfd == -1) {
     return -1;
   }
@@ -1539,21 +2197,47 @@ static int get_local_listen_sock() {
   fcntl(listenfd, F_SETFL, flags | O_NONBLOCK);
   int reuse = 1;
   setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse));
-  struct sockaddr_in serveraddr;
-  memset(&serveraddr, 0, sizeof(serveraddr));
-  serveraddr.sin_family = AF_INET;
-  serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
-  serveraddr.sin_port = htons(atoi(plugin_port));
-  if (bind(listenfd, (struct sockaddr *)&serveraddr, sizeof(serveraddr)) != 0) {
-    my_plugin_log_message(
-        &plugin_ptr, MY_ERROR_LEVEL,
-        "Error: bind port to listen primary message failed, please check "
-        "whether port defined by greatdb_ha_plugin_port is available");
-    return -1;
-  }
-  if (listen(listenfd, 5) != 0) {
-    close(listenfd);
-    return -1;
+  if (vip_family == AF_INET) {
+    struct sockaddr_in serveraddr;
+    memset(&serveraddr, 0, sizeof(serveraddr));
+    serveraddr.sin_family = AF_INET;
+    serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serveraddr.sin_port = htons(atoi(plugin_port));
+    if (bind(listenfd, (struct sockaddr *)&serveraddr, sizeof(serveraddr)) !=
+        0) {
+      my_plugin_log_message(
+          &plugin_ptr, MY_ERROR_LEVEL,
+          "Error: bind port to listen primary message failed, please check "
+          "whether port defined by greatdb_ha_plugin_port is available");
+      return -1;
+    }
+    if (listen(listenfd, 5) != 0) {
+      my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                            "Error: listening failed");
+      close(listenfd);
+      return -1;
+    }
+  } else {
+    struct sockaddr_in6 serveraddr6;
+    memset(&serveraddr6, 0, sizeof(serveraddr6));
+    serveraddr6.sin6_family = AF_INET6;
+    serveraddr6.sin6_addr = in6addr_any;
+    serveraddr6.sin6_port = htons(atoi(plugin_port));
+    if (bind(listenfd, (struct sockaddr *)&serveraddr6, sizeof(serveraddr6)) !=
+        0) {
+      my_plugin_log_message(
+          &plugin_ptr, MY_ERROR_LEVEL,
+          "Error: bind port to listen primary message failed, please check "
+          "whether port defined by greatdb_ha_plugin_port is available");
+      close(listenfd);
+      return -1;
+    }
+    if (listen(listenfd, 5) != 0) {
+      my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                            "Error: listening failed");
+      close(listenfd);
+      return -1;
+    }
   }
   return listenfd;
 }
@@ -1652,11 +2336,14 @@ static int greatdb_ha_plugin_init(MYSQL_PLUGIN plugin_info) {
   /*
     No threads exist at this point in time, so this is thread safe.
   */
+  is_register_services = false;
   plugin_ptr = plugin_info;
   greatdb::all_vip_tope = greatdb::all_vip_tope_value;
+  greatdb::nic_pos_list.push(0);
   process_read_vip_ips(greatdb::mgr_read_vip_addrs);
   my_thread_attr_init(&attr);
   my_thread_attr_setdetachstate(&attr, MY_THREAD_CREATE_JOINABLE);
+  update_vip_family();
 
   if (my_thread_create(&ping_thread, &attr, ping_func, nullptr) != 0) {
     fprintf(stderr, "Could not create ping gateway thread!\n");
@@ -1689,7 +2376,7 @@ static int greatdb_ha_plugin_init(MYSQL_PLUGIN plugin_info) {
   }
   unbind_all_vips();
   register_services();
-
+  is_register_services = true;
   return 0;
 }
 
@@ -1719,21 +2406,33 @@ static int greatdb_ha_plugin_deinit(void *) {
   pthread_mutex_lock(&mu_);
   pthread_cond_signal(&heartbeat_cv_);
   pthread_mutex_unlock(&mu_);
-  my_thread_join(&heartbeat_thread, nullptr);
+  if (heartbeat_thread.thread != 0) {
+    my_thread_join(&heartbeat_thread, nullptr);
+  }
   pthread_mutex_lock(&check_killconn_mu_);
   pthread_cond_signal(&check_killconn_cv_);
   pthread_mutex_unlock(&check_killconn_mu_);
-  my_thread_join(&check_killconnection_thread_and_force_member, nullptr);
+  if (check_killconnection_thread_and_force_member.thread != 0) {
+    my_thread_join(&check_killconnection_thread_and_force_member, nullptr);
+  }
   pthread_mutex_lock(&greatdb::ping_mutex);
   pthread_cond_signal(&greatdb::ping_cv);
   pthread_mutex_unlock(&greatdb::ping_mutex);
-  my_thread_join(&ping_thread, nullptr);
+  if (ping_thread.thread != 0) {
+    my_thread_join(&ping_thread, nullptr);
+  }
   pthread_mutex_lock(&msg_send_mu_);
   pthread_cond_signal(&msg_send_cv_);
   pthread_mutex_unlock(&msg_send_mu_);
-  my_thread_join(&primary_check_thread, nullptr);
-  my_thread_join(&listen_thread, nullptr);
-  unregister_services();
+  if (primary_check_thread.thread != 0) {
+    my_thread_join(&primary_check_thread, nullptr);
+  }
+  if (listen_thread.thread != 0) {
+    my_thread_join(&listen_thread, nullptr);
+  }
+  if (is_register_services) {
+    unregister_services();
+  }
   return 0;
 }
 
@@ -1745,7 +2444,6 @@ static int check_write_vip(MYSQL_THD thd, SYS_VAR *, void *save,
                            struct st_mysql_value *value) {
   pthread_mutex_lock(&greatdb::vip_variable_mutex);
   DBUG_TRACE;
-  struct sockaddr_storage sa;
   char buff[NAME_CHAR_LEN];
   const char *str;
   (*(const char **)save) = nullptr;
@@ -1756,9 +2454,7 @@ static int check_write_vip(MYSQL_THD thd, SYS_VAR *, void *save,
     pthread_mutex_unlock(&greatdb::vip_variable_mutex);
     return 1; /* purecov: inspected */
   }
-  if ((strlen(str) != 0) &&
-      (inet_pton(AF_INET, str, &(((struct sockaddr_in *)&sa)->sin_addr)) !=
-       1)) {
+  if ((strlen(str) != 0) && !greatdb::check_ip_version(str)) {
     my_message(ER_WRONG_VALUE_FOR_VAR, "vip format is incorrect", MYF(0));
     pthread_mutex_unlock(&greatdb::vip_variable_mutex);
     return 1;
@@ -1795,11 +2491,20 @@ static int check_read_vip(MYSQL_THD thd, SYS_VAR *, void *save,
   }
   std::set<std::string> vips;
   greatdb::split_string_according_delimiter(str, vips, ",");
+  sa_family_t write_vip_family = 0;
+  if (greatdb::mgr_write_vip_addr && strlen(greatdb::mgr_write_vip_addr) > 2) {
+    write_vip_family = greatdb::check_ip_version(greatdb::mgr_write_vip_addr);
+  }
   for (auto it = vips.begin(); it != vips.end(); it++) {
-    struct sockaddr_storage sa;
-    if (inet_pton(AF_INET, (*it).c_str(),
-                  &(((struct sockaddr_in *)&sa)->sin_addr)) != 1) {
+    sa_family_t ret = greatdb::check_ip_version((*it).c_str());
+    if (ret == 0) {
       my_message(ER_WRONG_VALUE_FOR_VAR, "read vip format is incorrect",
+                 MYF(0));
+      pthread_mutex_unlock(&greatdb::vip_variable_mutex);
+      return 1;
+    } else if (write_vip_family != 0 && ret != write_vip_family) {
+      my_message(ER_WRONG_VALUE_FOR_VAR,
+                 "only support read vip version is the same as write vip",
                  MYF(0));
       pthread_mutex_unlock(&greatdb::vip_variable_mutex);
       return 1;
@@ -1968,20 +2673,21 @@ static int check_gateway_address(MYSQL_THD thd, SYS_VAR *, void *save,
 
   char buff[NAME_CHAR_LEN];
   const char *str;
-  int check_ping_sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-  if (check_ping_sock < 0) {
-    my_message(ER_WRONG_VALUE_FOR_VAR,
-               "ping gateway need set CAP_NET_RAW capability", MYF(0));
-    return 1;
-  }
 
   (*(const char **)save) = nullptr;
   int length = sizeof(buff);
   if ((str = value->val_str(value, buff, &length)))
     str = thd->strmake(str, length);
   else {
-    close(check_ping_sock);
     return 1; /* purecov: inspected */
+  }
+
+  sa_family_t cur_family = greatdb::check_ip_version(str);
+  int check_ping_sock = socket(cur_family, SOCK_RAW, IPPROTO_ICMP);
+  if (check_ping_sock < 0) {
+    my_message(ER_WRONG_VALUE_FOR_VAR,
+               "ping gateway need set CAP_NET_RAW capability", MYF(0));
+    return 1;
   }
 
   if (!greatdb::ping_gateway(check_ping_sock, str)) {
@@ -2102,7 +2808,7 @@ static MYSQL_SYSVAR_BOOL(enable_mgr_vip,      /* name */
                          PLUGIN_VAR_OPCMDARG, "whether enable mgr vip.",
                          nullptr,                /* check func. */
                          mgr_vip_enabled_update, /* update func*/
-                         1                       /* default */
+                         0                       /* default */
 );
 
 static MYSQL_SYSVAR_STR(gateway_address,              /* name */

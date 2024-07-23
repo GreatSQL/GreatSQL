@@ -99,7 +99,6 @@ def	mtr
 def	mysql	
 def	performance_schema	
 def	sys	
-def	sys_audit	
 def	test	
 ALTER SCHEMA S READ ONLY=1;
 SELECT * FROM information_schema.schemata_extensions ORDER BY SCHEMA_NAME;
@@ -110,7 +109,6 @@ def	mtr
 def	mysql	
 def	performance_schema	
 def	sys	
-def	sys_audit	
 def	test	
 ALTER SCHEMA S READ ONLY=0;
 SELECT * FROM information_schema.schemata_extensions ORDER BY SCHEMA_NAME;
@@ -121,7 +119,6 @@ def	mtr
 def	mysql	
 def	performance_schema	
 def	sys	
-def	sys_audit	
 def	test	
 DROP SCHEMA S;
 #--------------------------------------------------------------------
@@ -245,7 +242,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 # Schema operations.
 CREATE SCHEMA S;

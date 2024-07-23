@@ -1,6 +1,6 @@
 /* Copyright (c) 2014, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -170,10 +170,25 @@ struct Index_lookup {
 
   bool has_guarded_conds() const {
     assert(key_parts == 0 || cond_guards != nullptr);
-
     for (uint i = 0; i < key_parts; i++) {
       if (cond_guards[i]) return true;
     }
+    /*
+      In MODE_EMPTYSTRING_EQUAL_NULL mode and value is empty or \0  or '
+      xxx'full scan on NULL key
+    */
+    if (current_thd->variables.sql_mode & MODE_EMPTYSTRING_EQUAL_NULL &&
+        ((items) && (*items)->result_type() == Item_result::STRING_RESULT)) {
+      String tmp_value, temp_val_str;
+      String *res = (*items)->val_str(&tmp_value);
+      if (res != nullptr) {
+        temp_val_str.copy(res->ptr(), res->length(), res->charset());
+        temp_val_str.ltrim();
+        if (temp_val_str.is_empty() || (temp_val_str.ptr()[0] == '\0'))
+          return true;
+      }
+    }
+
     return false;
   }
 };

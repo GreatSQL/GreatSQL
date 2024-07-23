@@ -1,0 +1,242 @@
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+call sys_mac.mac_set_user_priv('root', 'localhost', 'P1', 'read');
+call sys_mac.mac_apply_user_policy('root','localhost','P2','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+##########################test read#############################
+create database db;
+use db;
+create table t1(C1 int primary key, c2 int);
+insert into t1 values(1, 1),(2, 2),(3, 3),(4, 4);
+##########################test database#############################
+call sys_mac.mac_apply_database_policy('db','P1', 'L3:C3:G1');
+call sys_mac.mac_apply_database_policy('db','P2', 'L3:C3:G1');
+select * from db.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+insert into db.t1 values(5, 5);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'db'
+call sys_mac.mac_drop_database_policy('db', 'P1');
+call sys_mac.mac_drop_database_policy('db', 'P2');
+##########################test table#############################
+call sys_mac.mac_apply_table_policy('db', 't1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_table_policy('db', 't1', 'P2', 'L3:C3:G1');
+select * from db.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+insert into db.t1 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for table 't1'
+call sys_mac.mac_drop_table_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_table_policy('db', 't1', 'P2');
+##########################test column#############################
+call sys_mac.mac_apply_column_policy('db', 't1', 'c1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_column_policy('db', 't1', 'c1', 'P2', 'L3:C3:G1');
+select * from db.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+insert into db.t1 values(5, 5);
+ERROR HY000: WRITE_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'C1'
+call sys_mac.mac_drop_column_policy('db', 't1', 'c1', 'P1');
+call sys_mac.mac_drop_column_policy('db', 't1', 'c1', 'P2');
+##########################test row#############################
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3:G1', 1);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 1);
+select * from db.t1;
+C1	c2	_gdb_mac_policy_1	_gdb_mac_policy_2
+1	1	1	2
+2	2	1	2
+3	3	1	2
+4	4	1	2
+insert into db.t1 values(5, 5, 2, 2);
+ERROR HY000: mac row write denied to user 'root'@'localhost' for table 't1'
+insert into db.t1 values(5, 5, 500, 2);
+ERROR HY000: mac row write denied to user 'root'@'localhost' for table 't1'
+insert into db.t1 values(5, 5, 1, 2);
+ERROR HY000: mac row write denied to user 'root'@'localhost' for table 't1'
+call sys_mac.mac_drop_row_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_row_policy('db', 't1', 'P2');
+##########################test full #############################
+call sys_mac.mac_set_user_priv('root', 'localhost', 'P1', 'full');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+##########################test database#############################
+call sys_mac.mac_apply_database_policy('db','P1', 'L3:C3:G1');
+call sys_mac.mac_apply_database_policy('db','P2', 'L3:C3:G1');
+select * from db.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+insert into db.t1 values(5, 5);
+call sys_mac.mac_drop_database_policy('db', 'P1');
+call sys_mac.mac_drop_database_policy('db', 'P2');
+##########################test table#############################
+call sys_mac.mac_apply_table_policy('db', 't1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_table_policy('db', 't1', 'P2', 'L3:C3:G1');
+select * from db.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+insert into db.t1 values(6, 6);
+call sys_mac.mac_drop_table_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_table_policy('db', 't1', 'P2');
+##########################test column#############################
+call sys_mac.mac_apply_column_policy('db', 't1', 'c1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_column_policy('db', 't1', 'c1', 'P2', 'L3:C3:G1');
+select * from db.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+insert into db.t1 values(7, 7);
+call sys_mac.mac_drop_column_policy('db', 't1', 'c1', 'P1');
+call sys_mac.mac_drop_column_policy('db', 't1', 'c1', 'P2');
+##########################test row#############################
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3:G1', 1);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 1);
+select * from db.t1;
+C1	c2	_gdb_mac_policy_1	_gdb_mac_policy_2
+1	1	1	2
+2	2	1	2
+3	3	1	2
+4	4	1	2
+5	5	1	2
+6	6	1	2
+7	7	1	2
+insert into db.t1 values(8, 8, 2, 2);
+insert into db.t1 values(9, 9, 500, 2);
+insert into db.t1 values(10, 10, 1, 2);
+call sys_mac.mac_drop_user_policy('root','localhost', 'P1');
+call sys_mac.mac_drop_user_policy('root','localhost', 'P2');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+select * from db.t1;
+C1	c2	_gdb_mac_policy_1	_gdb_mac_policy_2
+insert into db.t1 values(100, 100, 1, 2);
+ERROR HY000: mac row write denied to user 'root'@'localhost' for table 't1'
+call sys_mac.mac_drop_row_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_row_policy('db', 't1', 'P2');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+##########################test privileged #############################
+call sys_mac.mac_grant_user_all_privs('root', 'localhost');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+##########################test database#############################
+call sys_mac.mac_apply_database_policy('db','P1', 'L3:C3:G1');
+call sys_mac.mac_apply_database_policy('db','P2', 'L3:C3:G1');
+select * from db.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+10	10
+insert into db.t1 values(11, 11);
+call sys_mac.mac_drop_database_policy('db', 'P1');
+call sys_mac.mac_drop_database_policy('db', 'P2');
+##########################test table#############################
+call sys_mac.mac_apply_table_policy('db', 't1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_table_policy('db', 't1', 'P2', 'L3:C3:G1');
+select * from db.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+10	10
+11	11
+insert into db.t1 values(12, 12);
+call sys_mac.mac_drop_table_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_table_policy('db', 't1', 'P2');
+##########################test column#############################
+call sys_mac.mac_apply_column_policy('db', 't1', 'c1', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_column_policy('db', 't1', 'c1', 'P2', 'L3:C3:G1');
+select * from db.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+10	10
+11	11
+12	12
+insert into db.t1 values(13, 13);
+call sys_mac.mac_drop_column_policy('db', 't1', 'c1', 'P1');
+call sys_mac.mac_drop_column_policy('db', 't1', 'c1', 'P2');
+##########################test row#############################
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3:G1', 1);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 1);
+select * from db.t1;
+C1	c2	_gdb_mac_policy_1	_gdb_mac_policy_2
+1	1	1	2
+2	2	1	2
+3	3	1	2
+4	4	1	2
+5	5	1	2
+6	6	1	2
+7	7	1	2
+8	8	1	2
+9	9	1	2
+10	10	1	2
+11	11	1	2
+12	12	1	2
+13	13	1	2
+insert into db.t1 values(14, 14, 2, 2);
+insert into db.t1 values(15, 15, 500, 2);
+insert into db.t1 values(16, 16, 1, 2);
+call sys_mac.mac_revoke_user_all_privs('root', 'localhost');
+select * from sys_mac.mac_privileged_users;
+user	host
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+select * from db.t1;
+C1	c2	_gdb_mac_policy_1	_gdb_mac_policy_2
+insert into db.t1 values(100, 100, 1, 2);
+ERROR HY000: mac row write denied to user 'root'@'localhost' for table 't1'
+drop database db;

@@ -28,8 +28,12 @@ SELECT LOGFILE_GROUP_NAME, FILE_NAME, TOTAL_EXTENTS, INITIAL_SIZE, ENGINE, EXTRA
 SELECT DISTINCT TABLESPACE_NAME, FILE_NAME, LOGFILE_GROUP_NAME, EXTENT_SIZE, INITIAL_SIZE, ENGINE FROM INFORMATION_SCHEMA.FILES WHERE FILE_TYPE = 'DATAFILE' AND TABLESPACE_NAME IN (SELECT DISTINCT TABLESPACE_NAME FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA IN ('test')) ORDER BY TABLESPACE_NAME, LOGFILE_GROUP_NAME
 SHOW VARIABLES LIKE 'ndbinfo\_version'
 test
+select routine_name from information_schema.routines where routine_schema = 'test' and routine_type='TYPE'
 show tables
 show table status like 't1'
+SET SESSION character_set_results = 'binary'
+SHOW CREATE VIEW ATTRIBUTE `t1`
+SET SESSION character_set_results = 'utf8mb4'
 SET SQL_QUOTE_SHOW_CREATE=1
 SET SESSION character_set_results = 'binary'
 show create table `t1`
@@ -46,6 +50,9 @@ SET SESSION character_set_results = 'binary'
 SELECT COLUMN_NAME,                       JSON_EXTRACT(HISTOGRAM, '$."number-of-buckets-specified"')                FROM information_schema.COLUMN_STATISTICS                WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
 SET SESSION character_set_results = 'utf8mb4'
 show table status like 't2'
+SET SESSION character_set_results = 'binary'
+SHOW CREATE VIEW ATTRIBUTE `t2`
+SET SESSION character_set_results = 'utf8mb4'
 SET SQL_QUOTE_SHOW_CREATE=1
 SET SESSION character_set_results = 'binary'
 show create table `t2`
@@ -85,8 +92,12 @@ SELECT DISTINCT TABLESPACE_NAME, FILE_NAME, LOGFILE_GROUP_NAME, EXTENT_SIZE, INI
 SHOW VARIABLES LIKE 'ndbinfo\_version'
 test
 SAVEPOINT sp
+select routine_name from information_schema.routines where routine_schema = 'test' and routine_type='TYPE'
 show tables
 show table status like 't1'
+SET SESSION character_set_results = 'binary'
+SHOW CREATE VIEW ATTRIBUTE `t1`
+SET SESSION character_set_results = 'utf8mb4'
 SET SQL_QUOTE_SHOW_CREATE=1
 SET SESSION character_set_results = 'binary'
 show create table `t1`
@@ -104,6 +115,9 @@ SELECT COLUMN_NAME,                       JSON_EXTRACT(HISTOGRAM, '$."number-of-
 SET SESSION character_set_results = 'utf8mb4'
 ROLLBACK TO SAVEPOINT sp
 show table status like 't2'
+SET SESSION character_set_results = 'binary'
+SHOW CREATE VIEW ATTRIBUTE `t2`
+SET SESSION character_set_results = 'utf8mb4'
 SET SQL_QUOTE_SHOW_CREATE=1
 SET SESSION character_set_results = 'binary'
 show create table `t2`
@@ -146,8 +160,12 @@ SELECT DISTINCT TABLESPACE_NAME, FILE_NAME, LOGFILE_GROUP_NAME, EXTENT_SIZE, INI
 SHOW VARIABLES LIKE 'ndbinfo\_version'
 test
 SAVEPOINT sp
+select routine_name from information_schema.routines where routine_schema = 'test' and routine_type='TYPE'
 show tables
 show table status like 't1'
+SET SESSION character_set_results = 'binary'
+SHOW CREATE VIEW ATTRIBUTE `t1`
+SET SESSION character_set_results = 'utf8mb4'
 SET SQL_QUOTE_SHOW_CREATE=1
 SET SESSION character_set_results = 'binary'
 show create table `t1`
@@ -165,6 +183,9 @@ SELECT COLUMN_NAME,                       JSON_EXTRACT(HISTOGRAM, '$."number-of-
 SET SESSION character_set_results = 'utf8mb4'
 ROLLBACK TO SAVEPOINT sp
 show table status like 't2'
+SET SESSION character_set_results = 'binary'
+SHOW CREATE VIEW ATTRIBUTE `t2`
+SET SESSION character_set_results = 'utf8mb4'
 SET SQL_QUOTE_SHOW_CREATE=1
 SET SESSION character_set_results = 'binary'
 show create table `t2`

@@ -344,32 +344,68 @@ ida	rownum
 2	6
 explain format=tree select * from t2 where ida < 8 and age < 6 and rownum < 4;
 EXPLAIN
--> Filter: (rownum < 4)  (cost=*** rows=***)
-    -> Filter: ((t2.ida < 8) and (t2.age < 6))  (cost=*** rows=***)
+-> COUNTER ROWNUM
+    -> Filter: ((t2.ida < 8) and (t2.age < 6) and (rownum < 4))  (cost=*** rows=***)
         -> Table scan on t2  (cost=*** rows=***)
 
 explain format=tree select * from (select * from t2 where rownum <=3 ) t where age < 5;
 EXPLAIN
 -> Filter: (t.age < 5)  (cost=***..3.51 rows=***)
-    -> Table scan on t  (cost=***..4.66 rows=***)
-        -> Materialize  (cost=***..2.05 rows=***)
-            -> Filter: (rownum <= 3)  (cost=*** rows=***)
-                -> Table scan on t2  (cost=*** rows=***)
+    -> Table scan on t  (cost=***..2.50 rows=***)
+        -> Materialize  (cost=***..0.00 rows=***)
+            -> COUNTER ROWNUM
+                -> Filter: (rownum <= 3)  (cost=*** rows=***)
+                    -> Table scan on t2  (cost=*** rows=***)
 
 select * from t2 t1 where t1.ida in (select ida from t2 where rownum < t1.age);
-ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+ida	age	name
+1	2	a
+2	5	b
+1	5	c
+2	3	c
 select * from t2 t1 where t1.ida in (select ida from t2 where rownum < 5);
-ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+ida	age	name
+1	2	a
+2	5	b
+1	5	c
+2	3	c
 select * from t2 t1 where ida in (select rownum from t2 where age < t1.age);
-ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+ida	age	name
+1	2	a
+2	5	b
+1	5	c
+2	3	c
+3	7	ccc
+select * from t2 t1 right join t2 on t1.ida = t2.ida and rownum < 3;
+ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM occur in outer join on conditions.'
+select * from t2 t1 full join t2 on t1.ida = t2.ida and rownum < 3;
+ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM occur in outer join on conditions.'
 select * from t2 t1 left join t2 on t1.ida = t2.ida and rownum < 3;
 ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM occur in outer join on conditions.'
 select * from t2 t1 where exists (select rownum from t2);
-ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
-select * from t2 t1 where ida not in (select * from t2 where rownum < 10);
-ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
-select (select rownum from t2 where age = t2.age) from t2 t1;
-ERROR 21000: Subquery returns more than 1 row
+ida	age	name
+1	2	a
+2	5	b
+NULL	1	
+1	5	c
+NULL	NULL	
+2	3	c
+3	7	ccc
+5	4	d
+9	NULL	NULL
+select * from t2 t1 where ida not in (select t2.ida from t2 where rownum < 10);
+ida	age	name
+select (select rownum from t2 where age = t2.age limit 1) from t2 t1;
+(select rownum from t2 where age = t2.age limit 1)
+1
+1
+1
+1
+1
+1
+1
+1
+1
 drop table t2;
 CREATE TABLE t2
 (EMPNO decimal(4,0),
@@ -414,21 +450,23 @@ r	sal
 14	800.00
 explain format=tree select rownum,u.* from (select sal from t2 order by sal desc) u where rownum < 11 ;
 EXPLAIN
--> Filter: (rownum < 11)  (cost=*** rows=14)
-    -> Table scan on u  (cost=*** rows=14)
-        -> Materialize  (cost=*** rows=14)
-            -> Sort: t2.SAL DESC  (cost=*** rows=14)
-                -> Table scan on t2  (cost=*** rows=14)
+-> COUNTER ROWNUM
+    -> Filter: (rownum < 11)  (cost=*** rows=14)
+        -> Table scan on u  (cost=*** rows=14)
+            -> Materialize  (cost=*** rows=14)
+                -> Sort: t2.SAL DESC  (cost=*** rows=14)
+                    -> Table scan on t2  (cost=*** rows=14)
 
 explain format=tree select u.* from (select rownum r,a.* from (select sal from t2 order by sal desc) a ) u where r > 11;
 EXPLAIN
 -> Filter: (u.r > 11)  (cost=*** rows=5)
-    -> Table scan on u  (cost=*** rows=14)
-        -> Materialize  (cost=*** rows=14)
-            -> Table scan on a  (cost=*** rows=14)
-                -> Materialize  (cost=*** rows=14)
-                    -> Sort: t2.SAL DESC  (cost=*** rows=14)
-                        -> Table scan on t2  (cost=*** rows=14)
+    -> Table scan on u  (cost=*** rows=0)
+        -> Materialize  (cost=*** rows=0)
+            -> COUNTER ROWNUM
+                -> Table scan on a  (cost=*** rows=14)
+                    -> Materialize  (cost=*** rows=14)
+                        -> Sort: t2.SAL DESC  (cost=*** rows=14)
+                            -> Table scan on t2  (cost=*** rows=14)
 
 CREATE TABLE `tt1` (
 `id` int NOT NULL,
@@ -459,13 +497,15 @@ insert into t1 values(3, 4);
 create table t2(ida int, age int);
 insert into t2 values(2, 5);
 select * from t2 where t2.ida in (select ida from t1 where rownum < 2);
-ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+ida	age
 select (select ida from t1 where age = t2.age and rownum <2) a from t2;
-ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+a
+NULL
 select (select ida from t1 where rownum < 2 union all select 1 from t1 where t2.age < 7 and rownum < 1) b from t2;
-ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+b
+1
 select * from t1 where ida = (select ida from t2 where rownum < 2 and age < t1.age);
-ERROR 42000: This version of MySQL doesn't yet support 'ROWNUM & IN/ALL/ANY/SOME subquery'
+ida	age
 select (select ida from t1 where rownum = 1) a from t2;
 a
 1
@@ -610,11 +650,11 @@ test.t1	analyze	status	OK
 test.t2	analyze	status	OK
 explain format=tree delete t1, t2 from t1 join  t2 on t1.ida = t2.id and t2.id >= rownum;
 EXPLAIN
--> Delete from t1 (buffered), t2 (immediate)  (cost=*** rows=***)
-    -> Nested loop inner join  (cost=*** rows=***)
-        -> Table scan on t2  (cost=*** rows=***)
-        -> Filter: (t2.id >= rownum)  (cost=*** rows=***)
-            -> Filter: (t1.ida = t2.id)  (cost=*** rows=***)
+-> Delete from t1 (buffered), t2 (immediate)
+    -> COUNTER ROWNUM
+        -> Nested loop inner join  (cost=*** rows=***)
+            -> Table scan on t2  (cost=*** rows=***)
+            -> Filter: ((t1.ida = t2.id) and (t2.id >= rownum))  (cost=*** rows=***)
                 -> Table scan on t1  (cost=*** rows=***)
 
 delete t1, t2 from t1 join  t2 on t1.ida = t2.id and t2.id >= rownum;
@@ -882,14 +922,14 @@ INSERT INTO sales VALUES ('C', 'Product2', 260);
 INSERT INTO sales VALUES ('C', 'Product3', 360);
 explain SELECT * FROM (SELECT department, product, amount FROM sales ) PIVOT ( SUM(amount) FOR product IN ('Product1' as 'A', 'Product2' as 'B', 'Product3' as 'C') )  where rownum <6 and rownum !=2 ORDER BY department ;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using where; Using filesort
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using where; Using temporary; Using filesort
 2	DERIVED	sales	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary; Using filesort
 SELECT * FROM (SELECT department, product, amount FROM sales ) PIVOT ( SUM(amount) FOR product IN ('Product1' as 'A', 'Product2' as 'B', 'Product3' as 'C') )  where rownum <6 and rownum !=2 ORDER BY department ;
 department	'A'	'B'	'C'
 A	100	200	300
 explain SELECT * FROM (SELECT department, product, amount FROM sales ) PIVOT ( SUM(amount) FOR product IN ('Product1' as 'A', 'Product2' as 'B', 'Product3' as 'C') )  where rownum <6 or rownum =2 ORDER BY department ;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using where; Using filesort
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using where; Using temporary; Using filesort
 2	DERIVED	sales	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using temporary; Using filesort
 SELECT * FROM (SELECT department, product, amount FROM sales ) PIVOT ( SUM(amount) FOR product IN ('Product1' as 'A', 'Product2' as 'B', 'Product3' as 'C') )  where rownum <6 or rownum =2 ORDER BY department ;
 department	'A'	'B'	'C'
@@ -898,7 +938,7 @@ B	150	250	350
 C	160	260	360
 explain SELECT * FROM ( select * from sales) where rownum <10 order by department;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using where; Using filesort
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using where; Using temporary; Using filesort
 2	DERIVED	sales	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	NULL
 SELECT * FROM ( select * from sales) where rownum <10 order by department;
 department	product	amount
@@ -913,7 +953,7 @@ C	Product2	260
 C	Product3	360
 explain SELECT * FROM ( select * from sales) as a where rownum < 2 order by a.department;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using where; Using filesort
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	Using where; Using temporary; Using filesort
 2	DERIVED	sales	NULL	ALL	NULL	NULL	NULL	NULL	9	100.00	NULL
 SELECT * FROM ( select * from sales) as a where rownum <2 order by a.department;
 department	product	amount
@@ -957,4 +997,193 @@ rownum * id + 1	id	rownum	cume_dist_val
 5	2	2	0.5
 10	3	3	1
 17	4	4	1
+select rownum * id + 1, id,rownum, ROW_NUMBER() OVER (ORDER BY grade) row_num from student where rownum < 4;
+rownum * id + 1	id	rownum	row_num
+2	1	1	1
+5	2	2	2
+10	3	3	3
+select rownum * id + 1, id,rownum, CUME_DIST() OVER (ORDER BY grade) cume_dist_val from student where rownum < 4;
+rownum * id + 1	id	rownum	cume_dist_val
+2	1	1	0.3333333333333333
+5	2	2	0.6666666666666666
+10	3	3	1
 drop table student;
+create table t1( col35 int,
+col351 NUMBER(10,0),
+col352 NUMBER(10,3),
+col36 VARCHAR2(100),
+col37 int);
+insert into t1 values(null,null,null,null,null);
+insert into t1 values(1.234,1.234,1.234, 'ooooooo', 987);
+Warnings:
+Note	1265	Data truncated for column 'col351' at row 1
+create table t2( col35 int,
+col351 NUMBER(10,0),
+col352 NUMBER(10,3),
+col36 VARCHAR2(100),
+col37 int);
+insert into t2 values(2.234,1.2234,1.1234, 'ooooooro', 987);
+Warnings:
+Note	1265	Data truncated for column 'col351' at row 1
+Note	1265	Data truncated for column 'col352' at row 1
+insert into t2 values(null,null,null,null,null);
+insert into t2 values(3.234,11.2234,1.1234, 'oeoooooro', 1987);
+Warnings:
+Note	1265	Data truncated for column 'col351' at row 1
+Note	1265	Data truncated for column 'col352' at row 1
+select * from t1 INNER join  t2 
+on t1.col35<>t2.col35 or t1.col35 is not null AND rownum=2  
+where t1.col35<>t2.col35 or t1.col35 is not NULL;
+col35	col351	col352	col36	col37	col35	col351	col352	col36	col37
+1	1	1.234	ooooooo	987	2	1	1.123	ooooooro	987
+1	1	1.234	ooooooo	987	NULL	NULL	NULL	NULL	NULL
+1	1	1.234	ooooooo	987	3	11	1.123	oeoooooro	1987
+update t1 set col35 = rownum;
+select * from t1;
+col35	col351	col352	col36	col37
+1	NULL	NULL	NULL	NULL
+2	1	1.234	ooooooo	987
+drop table t1;
+drop table t2;
+CREATE TABLE event3 (
+name VARCHAR(20) PRIMARY KEY,
+score INT NOT NULL,
+team varchar(2)
+);
+INSERT INTO
+event3(name, score,team)
+VALUES
+('Smith',81,'2'),
+('Jones',55,'2'),
+('Williams',55,'1'),
+('Taylor',62,'3'),
+('Brown',62,'2'),
+('Davies',84,'1'),
+('Evans',87,'2'),
+('Wilson',72,'2'),
+('Thomas',72,'1'),
+('Johnson',100,'3');
+select rownum,ROW_NUMBER() OVER (ORDER BY score) row_num from event3 where rownum < 8;
+rownum	row_num
+5	1
+1	2
+7	3
+6	4
+2	5
+3	6
+4	7
+select rownum,ROW_NUMBER() OVER () row_num from event3 where rownum < 8;
+rownum	row_num
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+drop table event3;
+CREATE TABLE `employees` (
+`EMPLOYEE_ID` int DEFAULT NULL,
+`FIRST_NAME` varchar(20) CHARACTER SET utf8mb3 DEFAULT NULL,
+`LAST_NAME` varchar(25) CHARACTER SET utf8mb3 DEFAULT NULL,
+`EMAIL` varchar(25) CHARACTER SET utf8mb3 DEFAULT NULL,
+`PHONE_NUMBER` varchar(20) CHARACTER SET utf8mb3 DEFAULT NULL,
+`HIRE_DATE` date DEFAULT NULL,
+`JOB_ID` varchar(10) CHARACTER SET utf8mb3 DEFAULT NULL,
+`SALARY` decimal(8,2) DEFAULT NULL,
+`COMMISSION_PCT` decimal(2,2) DEFAULT NULL,
+`MANAGER_ID` decimal(6,0) DEFAULT NULL,
+`DEPARTMENT_ID` decimal(4,0) DEFAULT NULL
+);
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (147, 'Alberto', 'Errazuriz', 'AERRAZUR', '011.44.1344.429278', '2006-09-01', 'SA_MAN', 12000.00, 0.30, 100, 80);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (150, 'Peter', 'Tucker', 'PTUCKER', '011.44.1344.129268', '2009-05-01', 'SA_REP', 10000.00, 0.30, 145, 90);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (145, 'John', 'Russell', 'JRUSSEL', '011.44.1344.429268', '2005-01-05', 'SA_MAN', 14000.00, 0.40, 100, 80);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (148, 'Gerald', 'Cambrault', 'GCAMBRAU', '011.44.1344.619268', '2007-03-01', 'SA_MAN', 11000.00, 0.30, 100, 80);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (151, 'David', 'Bernstein', 'DBERNSTE', '011.44.1344.345268', '2010-07-01', 'SA_REP', 9500.00, 0.25, 145, 90);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (146, 'Karen', 'Partners', 'KPARTNER', '011.44.1344.467268', '2004-10-01', 'SA_MAN', 13500.00, 0.30, 100, 80);
+create table tt4 select * from employees;
+select * FROM tt4 a WHERE a.EMPLOYEE_ID IN ( SELECT link1.EMPLOYEE_ID as f1  FROM employees  link1, employees link2 
+WHERE  link1.EMPLOYEE_ID=link2.EMPLOYEE_ID  AND link1.JOB_ID = ANY  ('SA_MAN','SA_REP')   AND rownum<=3 order by f1);
+EMPLOYEE_ID	FIRST_NAME	LAST_NAME	EMAIL	PHONE_NUMBER	HIRE_DATE	JOB_ID	SALARY	COMMISSION_PCT	MANAGER_ID	DEPARTMENT_ID
+147	Alberto	Errazuriz	AERRAZUR	011.44.1344.429278	2006-09-01	SA_MAN	12000	0.3	100	80
+150	Peter	Tucker	PTUCKER	011.44.1344.129268	2009-05-01	SA_REP	10000	0.3	145	90
+145	John	Russell	JRUSSEL	011.44.1344.429268	2005-01-05	SA_MAN	14000	0.4	100	80
+explain format = tree
+select * FROM tt4 a WHERE a.EMPLOYEE_ID IN ( SELECT link1.EMPLOYEE_ID as f1  FROM employees  link1, employees link2 
+WHERE  link1.EMPLOYEE_ID=link2.EMPLOYEE_ID  AND link1.JOB_ID = ANY  ('SA_MAN','SA_REP')   AND rownum<=3 order by f1);
+EXPLAIN
+-> Filter: <in_optimizer>(a.EMPLOYEE_ID,a.EMPLOYEE_ID in (select #2))  (cost=*** rows=***)
+    -> Table scan on a  (cost=*** rows=***)
+    -> Select #2 (subquery in condition; run only once)
+        -> Filter: ((a.EMPLOYEE_ID = "<materialized_subquery>".f1))  (cost=*** rows=***)
+            -> Limit: 1 row(s)  (cost=*** rows=***)
+                -> Index lookup on <materialized_subquery> using <auto_distinct_key> (f1=a.EMPLOYEE_ID)
+                    -> Materialize with deduplication  (cost=*** rows=***)
+                        -> COUNTER ROWNUM
+                            -> Filter: (rownum <= 3)  (cost=*** rows=***)
+                                -> Inner hash join (link2.EMPLOYEE_ID = link1.EMPLOYEE_ID)  (cost=*** rows=***)
+                                    -> Table scan on link2  (cost=*** rows=***)
+                                    -> Hash
+                                        -> Filter: (link1.JOB_ID in ('SA_MAN','SA_REP'))  (cost=*** rows=***)
+                                            -> Table scan on link1  (cost=*** rows=***)
+
+drop table tt4;
+drop table employees;
+CREATE TABLE `employees` (
+`EMPLOYEE_ID` int key,
+`FIRST_NAME` varchar(20) CHARACTER SET utf8mb3 DEFAULT NULL,
+`LAST_NAME` varchar(25) CHARACTER SET utf8mb3 DEFAULT NULL,
+`EMAIL` varchar(25) CHARACTER SET utf8mb3 DEFAULT NULL,
+`PHONE_NUMBER` varchar(20) CHARACTER SET utf8mb3 DEFAULT NULL,
+`HIRE_DATE` date DEFAULT NULL,
+`JOB_ID` varchar(10) CHARACTER SET utf8mb3 DEFAULT NULL,
+`SALARY` decimal(8,2) DEFAULT NULL,
+`COMMISSION_PCT` decimal(2,2) DEFAULT NULL,
+`MANAGER_ID` decimal(6,0) DEFAULT NULL,
+`DEPARTMENT_ID` decimal(4,0) DEFAULT NULL
+);
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (147, 'Alberto', 'Errazuriz', 'AERRAZUR', '011.44.1344.429278', '2006-09-01', 'SA_MAN', 12000.00, 0.30, 100, 80);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (150, 'Peter', 'Tucker', 'PTUCKER', '011.44.1344.129268', '2009-05-01', 'SA_REP', 10000.00, 0.30, 145, 90);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (145, 'John', 'Russell', 'JRUSSEL', '011.44.1344.429268', '2005-01-05', 'SA_MAN', 14000.00, 0.40, 100, 80);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (148, 'Gerald', 'Cambrault', 'GCAMBRAU', '011.44.1344.619268', '2007-03-01', 'SA_MAN', 11000.00, 0.30, 100, 80);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (151, 'David', 'Bernstein', 'DBERNSTE', '011.44.1344.345268', '2010-07-01', 'SA_REP', 9500.00, 0.25, 145, 90);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (146, 'Karen', 'Partners', 'KPARTNER', '011.44.1344.467268', '2004-10-01', 'SA_MAN', 13500.00, 0.30, 100, 80);
+create table tt4 select * from employees;
+select * FROM tt4 a WHERE a.EMPLOYEE_ID IN ( SELECT link1.EMPLOYEE_ID as f1  FROM employees  link1, employees link2 
+WHERE  link1.EMPLOYEE_ID=link2.EMPLOYEE_ID  AND link1.JOB_ID = ANY  ('SA_MAN','SA_REP')   AND rownum<=3 order by f1);
+EMPLOYEE_ID	FIRST_NAME	LAST_NAME	EMAIL	PHONE_NUMBER	HIRE_DATE	JOB_ID	SALARY	COMMISSION_PCT	MANAGER_ID	DEPARTMENT_ID
+145	John	Russell	JRUSSEL	011.44.1344.429268	2005-01-05	SA_MAN	14000	0.4	100	80
+146	Karen	Partners	KPARTNER	011.44.1344.467268	2004-10-01	SA_MAN	13500	0.3	100	80
+147	Alberto	Errazuriz	AERRAZUR	011.44.1344.429278	2006-09-01	SA_MAN	12000	0.3	100	80
+explain format = tree
+select * FROM tt4 a WHERE a.EMPLOYEE_ID IN ( SELECT link1.EMPLOYEE_ID as f1  FROM employees  link1, employees link2 
+WHERE  link1.EMPLOYEE_ID=link2.EMPLOYEE_ID  AND link1.JOB_ID = ANY  ('SA_MAN','SA_REP')   AND rownum<=3 order by f1);
+EXPLAIN
+-> Filter: <in_optimizer>(a.EMPLOYEE_ID,a.EMPLOYEE_ID in (select #2))  (cost=*** rows=***)
+    -> Table scan on a  (cost=*** rows=***)
+    -> Select #2 (subquery in condition; run only once)
+        -> Filter: ((a.EMPLOYEE_ID = "<materialized_subquery>".f1))  (cost=*** rows=***)
+            -> Limit: 1 row(s)  (cost=*** rows=***)
+                -> Index lookup on <materialized_subquery> using <auto_distinct_key> (f1=a.EMPLOYEE_ID)
+                    -> Materialize with deduplication  (cost=*** rows=***)
+                        -> COUNTER ROWNUM
+                            -> Nested loop inner join  (cost=*** rows=***)
+                                -> Filter: (link1.JOB_ID in ('SA_MAN','SA_REP'))  (cost=*** rows=***)
+                                    -> Table scan on link1  (cost=*** rows=***)
+                                -> Filter: (rownum <= 3)  (cost=*** rows=***)
+                                    -> Single-row covering index lookup on link2 using PRIMARY (EMPLOYEE_ID=link1.EMPLOYEE_ID)  (cost=*** rows=***)
+
+drop table tt4;
+drop table employees;

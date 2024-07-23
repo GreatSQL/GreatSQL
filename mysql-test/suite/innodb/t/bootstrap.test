@@ -46,6 +46,7 @@ let SEARCH_PATTERN=\[ERROR\] .*MY-\\d+.* File .*ibdata1: 'open' returned OS erro
 --list_files $bugdir/data
 --rmdir $bugdir/data/undo_002
 --remove_file $bugdir/data/auto.cnf
+--force-rmdir $bugdir/data/#file_purge
 
 --echo # Start mysqld to create tablespaces according to my.cnf
 --exec $MYSQLD $args --initialize-insecure

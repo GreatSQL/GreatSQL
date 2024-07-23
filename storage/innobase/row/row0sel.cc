@@ -3,7 +3,7 @@
 Copyright (c) 1997, 2022, Oracle and/or its affiliates.
 Copyright (c) 2008, Google Inc.
 Copyright (c) 2022, Huawei Technologies Co., Ltd.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -3107,6 +3107,11 @@ non-clustered index. Does the necessary locking.
   rec_t *old_vers;
   dberr_t err;
   trx_t *trx;
+  page_t *page = nullptr;
+  lsn_t page_lsn = 0;
+  space_id_t space_id = 0;
+  page_no_t page_no = 0;
+  bool use_cache = false;
 
   srv_sec_rec_cluster_reads.fetch_add(1, std::memory_order_relaxed);
 
@@ -3266,7 +3271,16 @@ non-clustered index. Does the necessary locking.
     if (trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
         !lock_clust_rec_cons_read_sees(clust_rec, clust_index, *offsets,
                                        trx_get_read_view(trx))) {
-      if (clust_rec != cached_clust_rec) {
+      page = page_align(clust_rec);
+      page_lsn = mach_read_from_8(page + FIL_PAGE_LSN);
+      page_no = mach_read_from_4(page + FIL_PAGE_OFFSET);
+      space_id = mach_read_from_4(page + FIL_PAGE_SPACE_ID);
+      if ((clust_rec == cached_clust_rec) && (page_lsn == cached_lsn) &&
+          (page_no == cached_page_no) && (space_id == cached_space_id)) {
+        use_cache = true;
+      }
+
+      if (!use_cache) {
         /* The following call returns 'offsets' associated with 'old_vers' */
         err = row_sel_build_prev_vers_for_mysql(
             trx->read_view, clust_index, prebuilt, clust_rec, offsets,
@@ -3277,6 +3291,11 @@ non-clustered index. Does the necessary locking.
         }
         cached_clust_rec = clust_rec;
         cached_old_vers = old_vers;
+
+        cached_lsn = page_lsn;
+        cached_page_no = page_no;
+        cached_space_id = space_id;
+
       } else {
         err = DB_SUCCESS;
         old_vers = cached_old_vers;

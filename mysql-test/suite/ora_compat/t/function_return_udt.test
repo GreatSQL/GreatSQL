@@ -120,7 +120,7 @@ end
 delimiter ;//
 call p1(4,5);
 call p1(4,5);
---error ER_SP_MISMATCH_RECORD_VAR
+--error ER_UDT_INCONS_DATATYPES
 call p2();
 drop procedure p1;
 drop procedure p2;
@@ -174,7 +174,7 @@ drop procedure p1;
 drop table t1;
 
 ## cant be some function parameter
---error ER_WRONG_ARGUMENTS
+--error ER_NOT_SUPPORTED_YET
 select sum(fr_object1(5,6));
 --error ER_NOT_SUPPORTED_YET
 select conv(fr_object1(5,6), 10, 2);

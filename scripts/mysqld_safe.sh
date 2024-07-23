@@ -639,12 +639,17 @@ then
     # mysqld does not add ".err" to "--log-error=foo."; it considers a
     # trailing "." as an extension
     
+    ## NOTE: the pre-load libasan will change the return value of following cmd
+    #    expr "$err_log" : '.*\.[^/]*$'
+    OLD_LD_PRELOAD=$LD_PRELOAD
+    LD_PRELOAD=
     if expr "$err_log" : '.*\.[^/]*$' > /dev/null
     then
         :
     else
       err_log="$err_log".err
     fi
+    LD_PRELOAD=$OLD_LD_PRELOAD
 
     err_log_append="$err_log"
     case "$err_log" in
@@ -1124,13 +1129,23 @@ do
     # but should work for the rest of the servers.
     # The only thing is ps x => redhat 5 gives warnings when using ps -x.
     # kill -9 is used or the process won't react on the kill.
+
+    ## NOTE: the preloaded libasan will block most of the system-tools of the procps project, such as:
+    #        ps, pgrep, w, w.procps, uptime, vmstat, top, and free. clear any of preload library before ps.
+    #  ref: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90589
+    OLD_LD_PRELOAD=$LD_PRELOAD
+    LD_PRELOAD=
     numofproces=`ps xaww | grep -v "grep" | grep "$ledir/$MYSQLD\>" | grep -c "pid-file=$pid_file"`
+    LD_PRELOAD=$OLD_LD_PRELOAD
 
     log_notice "Number of processes running now: $numofproces"
     I=1
     while test "$I" -le "$numofproces"
     do 
-      PROC=`ps xaww | grep "$ledir/$MYSQLD\>" | grep -v "grep" | grep "pid-file=$pid_file" | sed -n '$p'` 
+      OLD_LD_PRELOAD=$LD_PRELOAD
+      LD_PRELOAD=
+      PROC=`ps xaww | grep "$ledir/$MYSQLD\>" | grep -v "grep" | grep "pid-file=$pid_file" | sed -n '$p'`
+      LD_PRELOAD=$OLD_LD_PRELOAD
 
       for T in $PROC
       do

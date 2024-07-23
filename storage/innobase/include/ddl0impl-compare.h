@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -48,7 +48,8 @@ struct Compare_key {
         m_n_unique(dict_index_get_n_unique(index)),
         m_n_fields(compare_all ? dict_index_get_n_fields(index) : m_n_unique),
         m_fields(index->fields),
-        m_nulls_equal(index->nulls_equal) {
+        m_nulls_equal(index->nulls_equal),
+        m_ora_mode(index->ora_mode) {
     ut_a(m_n_unique <= m_n_fields);
     ut_a(m_dups == nullptr || index == m_dups->m_index);
   }
@@ -76,11 +77,12 @@ struct Compare_key {
     found or we run out of fields to compare. If cmp == 0 at
     the end, then the tuples are equal. */
     int cmp;
-
+    size_t null_field_sum = 0;
     do {
       if (m_nulls_equal && dfield_is_null(lhs_f) && dfield_is_null(rhs_f)) {
         cmp = 0;
         lhs_f++, rhs_f++, f++;
+        null_field_sum++;
       } else {
         cmp = cmp_dfield_dfield(lhs_f++, rhs_f++, (f++)->is_ascending);
       }
@@ -88,7 +90,12 @@ struct Compare_key {
 
     if (cmp != 0) {
       return cmp;
-    }
+    } else
+        /*
+          oracle mode dont equal when all index fields are null
+        */
+        if (m_ora_mode && m_nulls_equal && (null_field_sum == m_n_unique))
+      return -1;
 
     if (m_dups != nullptr) {
       bool report{true};
@@ -139,6 +146,9 @@ struct Compare_key {
   const dict_field_t *m_fields{};
 
   bool m_nulls_equal;
+
+  /** from oracle mode */
+  bool m_ora_mode;
 };
 
 }  // namespace ddl

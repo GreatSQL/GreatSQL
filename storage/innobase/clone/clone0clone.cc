@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -226,7 +227,7 @@ int Clone_Sys::find_free_index(Clone_Handle_Type hdl_type, uint &free_index) {
 }
 
 int Clone_Sys::add_clone(const byte *loc, Clone_Handle_Type hdl_type,
-                         Clone_Handle *&clone_hdl) {
+                         Clone_Handle *&clone_hdl, uint32_t max_concurrency) {
   ut_ad(mutex_own(&m_clone_sys_mutex));
   ut_ad(m_num_clones <= MAX_CLONES);
   ut_ad(m_num_apply_clones <= MAX_CLONES);
@@ -242,7 +243,8 @@ int Clone_Sys::add_clone(const byte *loc, Clone_Handle_Type hdl_type,
 
   /* Create a new clone. */
   clone_hdl = ut::new_withkey<Clone_Handle>(
-      ut::make_psi_memory_key(mem_key_clone), hdl_type, version, free_idx);
+      ut::make_psi_memory_key(mem_key_clone), hdl_type, version, free_idx,
+      max_concurrency);
 
   if (clone_hdl == nullptr) {
     my_error(ER_OUTOFMEMORY, MYF(0), sizeof(Clone_Handle));
@@ -307,7 +309,10 @@ Clone_Handle *Clone_Sys::get_clone_by_index(const byte *loc, uint loc_len) {
 
 int Clone_Sys::attach_snapshot(Clone_Handle_Type hdl_type,
                                Ha_clone_type clone_type, uint64_t snapshot_id,
-                               bool is_pfs_monitor, Clone_Snapshot *&snapshot) {
+                               bool is_pfs_monitor, bool enable_page_track,
+                               uint64_t start_id,
+                               file_compress_mode_t comp_mode,
+                               Clone_Snapshot *&snapshot) {
   uint idx;
   uint free_idx = SNAPSHOT_ARR_SIZE;
 
@@ -336,7 +341,7 @@ int Clone_Sys::attach_snapshot(Clone_Handle_Type hdl_type,
   /* Create a new snapshot. */
   snapshot = ut::new_withkey<Clone_Snapshot>(
       ut::make_psi_memory_key(mem_key_clone), hdl_type, clone_type, free_idx,
-      snapshot_id);
+      snapshot_id, enable_page_track, start_id, 0, comp_mode);
 
   if (snapshot == nullptr) {
     my_error(ER_OUTOFMEMORY, MYF(0), sizeof(Clone_Snapshot));
@@ -813,6 +818,8 @@ void Clone_Task_Manager::init(Clone_Snapshot *snapshot) {
   m_transferred_file_meta = false;
   m_saved_error = 0;
 
+  m_finish_send_file = false;
+
   /* Initialize error file name */
   m_err_file_name.assign("Clone File");
 }
@@ -1025,6 +1032,12 @@ bool Clone_Task_Manager::wait_before_add(const byte *ref_loc, uint loc_len) {
       !is_file_metadata_transferred()) {
     return (true);
   }
+
+  if (m_clone_snapshot->is_clone_page_type() &&
+      !is_file_metadata_transferred()) {
+    return (true);
+  }
+
   return (false);
 }
 
@@ -1683,6 +1696,25 @@ int Clone_Task_Manager::wait_ack(Clone_Handle *clone, Clone_Task *task,
   return (err);
 }
 
+void Clone_Task_Manager::finish_send_file() {
+  mutex_enter(&m_state_mutex);
+  m_finish_send_file = true;
+  mutex_exit(&m_state_mutex);
+}
+
+void Clone_Task_Manager::wait_finish_send_file() {
+  while (true) {
+    bool finish_send = false;
+    mutex_enter(&m_state_mutex);
+    finish_send = m_finish_send_file;
+    mutex_exit(&m_state_mutex);
+    if (finish_send)
+      break;
+    else
+      my_sleep(500);
+  }
+}
+
 int Clone_Task_Manager::finish_state(Clone_Task *task) {
   mutex_enter(&m_state_mutex);
 
@@ -1906,7 +1938,7 @@ int Clone_Task_Manager::check_state(Clone_Task *task, Snapshot_State new_state,
 }
 
 Clone_Handle::Clone_Handle(Clone_Handle_Type handle_type, uint clone_version,
-                           uint clone_index)
+                           uint clone_index, uint32_t max_concurrency)
     : m_clone_handle_type(handle_type),
       m_clone_handle_state(CLONE_STATE_INIT),
       m_clone_locator(),
@@ -1915,6 +1947,7 @@ Clone_Handle::Clone_Handle(Clone_Handle_Type handle_type, uint clone_version,
       m_restart_loc_len(),
       m_clone_desc_version(clone_version),
       m_clone_arr_index(clone_index),
+      m_max_concurrency(max_concurrency),
       m_clone_id(),
       m_ref_count(),
       m_allow_restart(false),
@@ -1923,8 +1956,9 @@ Clone_Handle::Clone_Handle(Clone_Handle_Type handle_type, uint clone_version,
       m_clone_task_manager() {
   mutex_create(LATCH_ID_CLONE_TASK, m_clone_task_manager.get_mutex());
 
+  memset(m_uuid, 0, UUID_LENGTH + 1);
   Clone_Desc_Locator loc_desc;
-  loc_desc.init(0, 0, CLONE_SNAPSHOT_NONE, clone_version, clone_index);
+  loc_desc.init(m_uuid, 0, 0, CLONE_SNAPSHOT_NONE, clone_version, clone_index);
 
   auto loc = &m_version_locator[0];
   uint len = CLONE_DESC_MAX_BASE_LEN;
@@ -1991,7 +2025,8 @@ int Clone_Handle::create_clone_directory() {
 }
 
 int Clone_Handle::init(const byte *ref_loc, uint ref_len, Ha_clone_type type,
-                       const char *data_dir) {
+                       const char *data_dir, bool enable_page_track,
+                       uint64_t start_id, file_compress_mode_t comp_mode) {
   uint64_t snapshot_id;
   Clone_Snapshot *snapshot;
 
@@ -2001,6 +2036,7 @@ int Clone_Handle::init(const byte *ref_loc, uint ref_len, Ha_clone_type type,
 
   /* Generate unique clone identifiers for copy clone handle. */
   if (is_copy_clone()) {
+    memcpy(m_uuid, server_uuid, UUID_LENGTH);
     m_clone_id = clone_sys->get_next_id();
     snapshot_id = clone_sys->get_next_id();
 
@@ -2032,6 +2068,7 @@ int Clone_Handle::init(const byte *ref_loc, uint ref_len, Ha_clone_type type,
 
     loc_desc.deserialize(ref_loc, ref_len, nullptr);
 
+    memcpy(m_uuid, loc_desc.m_uuid, UUID_LENGTH);
     m_clone_id = loc_desc.m_clone_id;
     snapshot_id = loc_desc.m_snapshot_id;
 
@@ -2041,7 +2078,8 @@ int Clone_Handle::init(const byte *ref_loc, uint ref_len, Ha_clone_type type,
 
   /* Create and attach to snapshot. */
   auto err = clone_sys->attach_snapshot(m_clone_handle_type, type, snapshot_id,
-                                        enable_monitor, snapshot);
+                                        enable_monitor, enable_page_track,
+                                        start_id, comp_mode, snapshot);
 
   if (err != 0) {
     return (err);
@@ -2051,6 +2089,14 @@ int Clone_Handle::init(const byte *ref_loc, uint ref_len, Ha_clone_type type,
   m_clone_task_manager.init(snapshot);
 
   m_clone_handle_state = CLONE_STATE_ACTIVE;
+
+  if ((type == HA_CLONE_PAGE || comp_mode) &&
+      m_clone_handle_type == CLONE_HDL_APPLY) {
+    err = clone_incremental_init();
+    if (err != 0) {
+      return (err);
+    }
+  }
 
   return (0);
 }
@@ -2091,7 +2137,7 @@ void Clone_Handle::build_descriptor(Clone_Desc_Locator *loc_desc) {
     snapshot_id = snapshot->get_id();
   }
 
-  loc_desc->init(m_clone_id, snapshot_id, state, m_clone_desc_version,
+  loc_desc->init(m_uuid, m_clone_id, snapshot_id, state, m_clone_desc_version,
                  m_clone_arr_index);
 }
 
@@ -2230,6 +2276,22 @@ int Clone_Handle::open_file(Clone_Task *task, const Clone_file_ctx *file_ctx,
   std::string file_name;
 
   file_ctx->get_file_name(file_name);
+  auto snapshot = get_snapshot();
+
+  if (m_clone_handle_type == CLONE_HDL_APPLY &&
+      snapshot->is_clone_page_type() && task &&
+      task->m_task_meta.m_task_index > 0 &&
+      snapshot->get_state() == CLONE_SNAPSHOT_PAGE_COPY) {
+    if (snapshot->enable_encryption()) {
+      const auto n = file_name.rfind(".xbcrypt");
+      ut_ad(n != std::string::npos);
+      file_name = file_name.substr(0, n) +
+                  std::to_string(task->m_task_meta.m_task_index) +
+                  file_name.substr(n);
+    } else {
+      file_name.append(std::to_string(task->m_task_meta.m_task_index));
+    }
+  }
 
   /* Check if file exists */
   auto status = os_file_status(file_name.c_str(), &exists, &type);
@@ -2315,6 +2377,51 @@ int Clone_Handle::open_file(Clone_Task *task, const Clone_file_ctx *file_ctx,
   return 0;
 }
 
+bool Clone_Handle::write_delta_metadata(const char *data_dir,
+                                        const Clone_File_Meta *info) {
+  char buf[200];
+  size_t len;
+  char fullpath[FN_REFLEN];
+  char errbuf[MYSYS_STRERROR_SIZE];
+  page_size_t page_size(0, 0, false);
+  if (info->m_space_id == UINT32_UNDEFINED) return false;
+  page_size.copy_from(page_size_t(info->m_fsp_flags));
+
+  snprintf(buf, sizeof(buf),
+           "page_size = %lu\n"
+           "zip_size = %lu\n"
+           "space_id = %u\n"
+           "space_flags = %u\n",
+           page_size.physical(),
+           page_size.is_compressed() ? page_size.physical() : 0,
+           info->m_space_id, info->m_fsp_flags);
+  len = strlen(buf);
+
+  std::string file_path;
+  get_snapshot()->build_file_path(data_dir, info, file_path);
+  sprintf(fullpath, "%s%s", file_path.c_str(), ".meta");
+  auto fd = my_create(fullpath, 0, O_WRONLY | O_EXCL | O_NOFOLLOW, MYF(MY_WME));
+  if (fd < 0) {
+    my_error(ER_ERROR_ON_WRITE, MYF(0), fullpath, errno,
+             my_strerror(errbuf, sizeof(errbuf), errno));
+    return 1;
+  }
+
+  if (my_write(fd, (const uchar *)(buf), len, MYF(MY_WME | MY_NABP))) {
+    my_error(ER_ERROR_ON_WRITE, MYF(0), fullpath, errno,
+             my_strerror(errbuf, sizeof(errbuf), errno));
+    return 1;
+  }
+  posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
+  if (my_sync(fd, MYF(MY_WME)) || my_close(fd, MYF(MY_WME))) {
+    my_error(ER_ERROR_ON_WRITE, MYF(0), fullpath, errno,
+             my_strerror(errbuf, sizeof(errbuf), errno));
+    return 1;
+  }
+
+  return 0;
+}
+
 int Clone_Handle::close_file(Clone_Task *task) {
   bool success = true;
 
@@ -2365,7 +2472,7 @@ int Clone_Handle::file_callback(Ha_clone_cbk *cbk, Clone_Task *task, uint len,
   register_pfs_file_io_begin(&state, locker, task->m_current_file_des, len,
                              psi_op, location);
 #endif /* UNIV_PFS_IO */
-
+  auto snapshot = get_snapshot();
   /* Call appropriate callback to transfer data. */
   if (is_copy_clone()) {
     /* Send data from file. */
@@ -2377,8 +2484,13 @@ int Clone_Handle::file_callback(Ha_clone_cbk *cbk, Clone_Task *task, uint len,
     /* Get data buffer */
     err = cbk->apply_buffer_cbk(data_buf, data_len);
     if (err == 0) {
-      /* Modify and write data buffer to file. */
-      err = modify_and_write(task, offset, data_buf, data_len);
+      if (snapshot->get_state() == CLONE_SNAPSHOT_PAGE_COPY &&
+          snapshot->file_compress_mode()) {
+        clone_incremental_write(task, data_buf, data_len);
+      } else {
+        /* Modify and write data buffer to file. */
+        err = modify_and_write(task, offset, data_buf, data_len);
+      }
     }
   } else {
     /* Write directly to file. */

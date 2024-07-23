@@ -54,6 +54,10 @@ FROM information_schema.schema_privileges WHERE table_catalog IS NOT NULL;
 GRANTEE	TABLE_CATALOG	TABLE_SCHEMA	PRIVILEGE_TYPE
 'mysql.sys'@'localhost'	def	sys	TRIGGER
 'mysql.session'@'localhost'	def	performance_schema	SELECT
+'SYSTEM_DBA'@'%'	def	mysql	SELECT
+'SYSTEM_DBA'@'%'	def	mysql	EXECUTE
+'SYSTEM_DBA'@'%'	def	sys	SELECT
+'SYSTEM_DBA'@'%'	def	sys	EXECUTE
 ''@'%'	def	test	SELECT
 ''@'%'	def	test	INSERT
 ''@'%'	def	test	UPDATE
@@ -70,6 +74,27 @@ GRANTEE	TABLE_CATALOG	TABLE_SCHEMA	PRIVILEGE_TYPE
 ''@'%'	def	test	CREATE ROUTINE
 ''@'%'	def	test	EVENT
 ''@'%'	def	test	TRIGGER
+'SYSTEM_DBA'@'%'	def	information_schema	SELECT
+'SYSTEM_DBA'@'%'	def	information_schema	EXECUTE
+'SYSTEM_DBA'@'%'	def	performance_schema	SELECT
+'SYSTEM_DBA'@'%'	def	performance_schema	EXECUTE
+'SYSTEM_DAA'@'%'	def	sys_audit	SELECT
+'SYSTEM_DAA'@'%'	def	sys_audit	INDEX
+'SYSTEM_DAA'@'%'	def	sys_audit	CREATE TEMPORARY TABLES
+'SYSTEM_DAA'@'%'	def	sys_audit	LOCK TABLES
+'SYSTEM_DAA'@'%'	def	sys_audit	EXECUTE
+'SYSTEM_DAA'@'%'	def	sys_audit	CREATE VIEW
+'SYSTEM_DAA'@'%'	def	sys_audit	SHOW VIEW
+'SYSTEM_DAA'@'%'	def	sys_audit	CREATE ROUTINE
+'SYSTEM_DAA'@'%'	def	sys_audit	ALTER ROUTINE
+'SYSTEM_DAA'@'%'	def	sys_audit	TRIGGER
+'SYSTEM_DSA'@'%'	def	sys_mac	SELECT
+'SYSTEM_DSA'@'%'	def	sys_mac	INSERT
+'SYSTEM_DSA'@'%'	def	sys_mac	UPDATE
+'SYSTEM_DSA'@'%'	def	sys_mac	DELETE
+'SYSTEM_DSA'@'%'	def	sys_mac	CREATE TEMPORARY TABLES
+'SYSTEM_DSA'@'%'	def	sys_mac	LOCK TABLES
+'SYSTEM_DSA'@'%'	def	sys_mac	EXECUTE
 ###############################################################################
 # Testcase 3.2.15.2-3.2.15.4 INFORMATION_SCHEMA.SCHEMA_PRIVILEGES accessibility
 ###############################################################################

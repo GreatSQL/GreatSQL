@@ -1,0 +1,58 @@
+--source include/have_debug.inc
+set sql_mode="oracle";
+set @@udt_format_result='DBA';
+
+CREATE TABLE t1 (a INT, b VARCHAR(3));
+insert into t1 values(1,'aa'),(2,'bb'),(3,'cc'),(4,'dd'),(5,'ee') ;
+CREATE TABLE t2 (a1 INT, b1 VARCHAR(3));
+insert into t2 values(1,'aa'),(2,'bb'),(3,'cc'),(4,'dd'),(5,'ee') ;
+CREATE TABLE t3 (a2 INT, b2 VARCHAR(30));
+insert into t3 values(1,'aa'),(2,'bb'),(3,'cc'),(4,'dd'),(5,'ee') ;
+CREATE TABLE t4 (a3 INT, b3 VARCHAR(30));
+insert into t4 values(1,'aa'),(2,'bb'),(3,'cc'),(4,'dd'),(5,'ee') ;
+
+--echo #
+--echo # test of bug9571
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+BEGIN
+for i in (select * from t1 aa where aa.a<2) loop
+  select i;
+  for i in (select * from t2 aa where aa.a1>4) loop
+    select i;
+  end loop;
+end loop;
+for j in (select * from t3 aa where aa.a2>4) loop
+  select j;
+  for i in (select * from t4 aa where aa.a3<2) loop
+    select i;
+  end loop;
+  declare
+  begin
+    for i in (select * from t1 aa where aa.a<2) loop
+      select i;
+      for i in (select * from t4 aa where aa.a3<2) loop
+        select i;
+      end loop;
+    end loop;
+  end;
+end loop;
+END;
+$$
+DELIMITER ;$$
+call p1;
+call p1;
+
+--echo #
+--echo # test of alter table
+--echo #
+alter table t4 add c int;
+call p1;
+call p1;
+drop PROCEDURE p1;
+
+drop TABLE t1,t2,t3,t4;
+
+
+

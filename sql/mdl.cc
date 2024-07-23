@@ -1,5 +1,5 @@
 /* Copyright (c) 2007, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -142,7 +142,8 @@ PSI_stage_info MDL_key::m_namespace_to_wait_state_name[NAMESPACE_END] = {
     {0, "Waiting for resource groups metadata lock", 0, PSI_DOCUMENT_ME},
     {0, "Waiting for foreign key metadata lock", 0, PSI_DOCUMENT_ME},
     {0, "Waiting for check constraint metadata lock", 0, PSI_DOCUMENT_ME},
-    {0, "Waiting for table backup lock", 0, PSI_DOCUMENT_ME}};
+    {0, "Waiting for table backup lock", 0, PSI_DOCUMENT_ME},
+    {0, "Waiting for data mask cache lock", 0, PSI_DOCUMENT_ME}};
 
 #ifdef HAVE_PSI_INTERFACE
 void MDL_key::init_psi_keys() {
@@ -269,6 +270,7 @@ class MDL_map {
   MDL_lock *m_acl_cache_lock;
   /** Pre-allocated MDL_lock object for BACKUP_LOCK namespace. */
   MDL_lock *m_backup_lock;
+  /** pre-allocated MDL_lock object for MAC_ACL namespace. */
 
   /**
     Number of unused MDL_lock objects in the server.

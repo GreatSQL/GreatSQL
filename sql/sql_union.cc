@@ -1,6 +1,6 @@
 /* Copyright (c) 2001, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -65,6 +65,7 @@
 #include "sql/handler.h"
 #include "sql/item.h"
 #include "sql/item_subselect.h"
+#include "sql/item_timefunc.h"
 #include "sql/iterators/row_iterator.h"
 #include "sql/join_optimizer/access_path.h"
 #include "sql/join_optimizer/bit_utils.h"
@@ -783,6 +784,9 @@ bool Query_expression::prepare(THD *thd, Query_result *sel_result,
         if (item_tmp->is_ora_udt_type()) {
           my_error(ER_NOT_SUPPORTED_YET, MYF(0), "udt value in join sql");
           return true;
+        }
+        if (item_tmp->mask_data()) {
+          item_tmp = down_cast<Item_data_mask_with_ref *>(item_tmp)->ref_mask();
         }
         auto holder = new Item_type_holder(thd, item_tmp);
         if (!holder) return true; /* purecov: inspected */
@@ -1715,6 +1719,109 @@ bool Query_expression::ClearForExecution() {
   return false;
 }
 
+static void create_rapid_fields(THD *thd, mem_root_deque<Item *> *fields,
+                                mem_root_deque<Item *> **rapid_fields) {
+  *rapid_fields = new (thd->mem_root) mem_root_deque<Item *>(thd->mem_root);
+  for (auto &item : *fields) {
+    if (item->hidden) continue;
+    Item *fake_field;
+    switch (item->data_type()) {
+      /* numeric data types */
+      case MYSQL_TYPE_TINY: {
+        fake_field = new Item_int(0);
+        fake_field->set_data_type(MYSQL_TYPE_TINY);
+        break;
+      }
+      case MYSQL_TYPE_SHORT: {
+        fake_field = new Item_int(0);
+        fake_field->set_data_type(MYSQL_TYPE_SHORT);
+        break;
+      }
+      case MYSQL_TYPE_INT24: {
+        fake_field = new Item_int(0);
+        fake_field->set_data_type(MYSQL_TYPE_INT24);
+        break;
+      }
+      case MYSQL_TYPE_LONG: {
+        fake_field = new Item_int(0);
+        fake_field->set_data_type(MYSQL_TYPE_LONG);
+        break;
+      }
+      case MYSQL_TYPE_LONGLONG: {
+        fake_field = new Item_int(0);
+        fake_field->set_data_type(MYSQL_TYPE_LONGLONG);
+        break;
+      }
+      case MYSQL_TYPE_FLOAT: {
+        fake_field = new Item_float((double)0, DECIMAL_NOT_SPECIFIED);
+        fake_field->set_data_type(MYSQL_TYPE_FLOAT);
+        break;
+      }
+      case MYSQL_TYPE_DOUBLE: {
+        fake_field = new Item_float((double)0, DECIMAL_NOT_SPECIFIED);
+        fake_field->set_data_type(MYSQL_TYPE_DOUBLE);
+        break;
+      }
+      case MYSQL_TYPE_DECIMAL:
+      case MYSQL_TYPE_NEWDECIMAL: {
+        fake_field = new Item_decimal((double)0);
+        break;
+      }
+      /* string data types */
+      case MYSQL_TYPE_STRING:
+      case MYSQL_TYPE_VARCHAR:
+      case MYSQL_TYPE_BLOB: {
+        // Item_field *item_field = down_cast<Item_field *>(item);
+        // Field_str *field_str = down_cast<Field_str *>(item_field->field);
+        // fake_field = new Item_string("", 0, field_str->charset());
+        fake_field = new Item_string("", 0, item->charset_for_protocol());
+        break;
+      }
+      /* date and time data types */
+      case MYSQL_TYPE_DATE:
+      case MYSQL_TYPE_NEWDATE: {
+        MYSQL_TIME time;
+        set_zero_time(&time, MYSQL_TIMESTAMP_DATE);
+        fake_field = new Item_date_literal(&time);
+        break;
+      }
+      case MYSQL_TYPE_TIME:
+      case MYSQL_TYPE_TIME2: {
+        MYSQL_TIME time;
+        set_zero_time(&time, MYSQL_TIMESTAMP_TIME);
+        fake_field = new Item_time_literal(&time, item->decimals);
+        break;
+      }
+      case MYSQL_TYPE_DATETIME:
+      case MYSQL_TYPE_DATETIME2: {
+        MYSQL_TIME time;
+        set_zero_time(&time, MYSQL_TIMESTAMP_DATETIME);
+        fake_field = new Item_datetime_literal(&time, item->decimals,
+                                               thd->variables.time_zone);
+        fake_field->set_data_type(MYSQL_TYPE_DATETIME);
+        break;
+      }
+      case MYSQL_TYPE_TIMESTAMP:
+      case MYSQL_TYPE_TIMESTAMP2: {
+        MYSQL_TIME time;
+        set_zero_time(&time, MYSQL_TIMESTAMP_DATETIME);
+        fake_field = new Item_datetime_literal(&time, item->decimals,
+                                               thd->variables.time_zone);
+        fake_field->set_data_type(MYSQL_TYPE_TIMESTAMP);
+        break;
+      }
+      default: {
+        fake_field = new Item_string("", 0, &my_charset_latin1);
+        break;
+      }
+    }
+    fake_field->decimals = item->decimals;
+    fake_field->item_name = item->item_name;
+    fake_field->unsigned_flag = item->unsigned_flag;
+    (*rapid_fields)->push_back(fake_field);
+  }
+}
+
 bool Query_expression::ExecuteIteratorQuery(THD *thd) {
   THD_STAGE_INFO(thd, stage_executing);
   DEBUG_SYNC(thd, "before_join_exec");
@@ -1732,6 +1839,10 @@ bool Query_expression::ExecuteIteratorQuery(THD *thd) {
   }
 
   mem_root_deque<Item *> *fields = get_field_list();
+  if (thd->lex->use_rapid_exec) {
+    create_rapid_fields(thd, fields, &(thd->lex->rapid_fields));
+    fields = thd->lex->rapid_fields;
+  }
   Query_result *query_result = this->query_result();
   assert(query_result != nullptr);
 
@@ -1749,7 +1860,8 @@ bool Query_expression::ExecuteIteratorQuery(THD *thd) {
     thd->current_found_rows = 0;
     for (Query_block *select = first_query_block(); select != nullptr;
          select = select->next_query_block()) {
-      if (select->join->override_executor_func(select->join, query_result)) {
+      if (select->join->override_executor_func != nullptr &&
+          select->join->override_executor_func(select->join, query_result)) {
         return true;
       }
       thd->current_found_rows += select->join->send_records;
@@ -1866,13 +1978,6 @@ bool Query_expression::ExecuteIteratorQuery(THD *thd) {
       if (query_result->send_data(thd, *fields)) {
         execute_error = true;
         break;
-      }
-      Query_block *sl = thd->lex->query_block;
-      if (sl->has_sequence && sl->need_to_reset_flag) {
-        sl->reset_sequence_read_flag();
-      }
-      if (sl->rownum_func && sl->need_to_reset_flag) {
-        sl->reset_rownum_read_flag();
       }
       thd->get_stmt_da()->inc_current_row_for_condition();
     }

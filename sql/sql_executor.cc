@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -219,7 +219,7 @@ bool JOIN::create_intermediate_table(
   tmp_table_param->using_outer_summary_function =
       tab->tmp_table_param->using_outer_summary_function;
 
-  assert(tab->idx() > 0);
+  // assert(tab->idx() > 0);
   tab->set_table(table);
 
   /**
@@ -560,11 +560,6 @@ void setup_tmptable_write_func(QEP_TAB *tab, Opt_trace_object *trace) {
       tmp_tbl->items_to_copy->push_back(
           Func_ptr(*func_ptr, (*func_ptr)->get_result_field()));
     }
-  } else if (tab->connect_by) {
-    description = "continuously_connect_by_row";
-    DBUG_PRINT("info", ("Using continuously_connect_by_row"));
-    tab->op_type = QEP_TAB::OT_CONNECT_BY;
-
   } else {
     description = "write_all_rows";
     tab->op_type = (phase >= REF_SLICE_WIN_1 ? QEP_TAB::OT_WINDOWING_FUNCTION
@@ -776,8 +771,10 @@ AccessPath *PossiblyAttachFilter(AccessPath *path,
   // See if any of the sub-conditions are known to be always false,
   // and filter out any conditions that are known to be always true.
   List<Item> items;
-  List<Item> rownum_items;
-  bool cond_has_rownum = thd->lex->current_query_block()->has_rownum_in_cond;
+  bool cond_has_rownum =
+      thd->lex->current_query_block()->join->counter ? true : false;
+  List<Item> items_in2exists;
+  bool exist_rownum = false;
   for (Item *cond : conditions) {
     if (cond->const_item()) {
       if (cond->val_int() == 0) {
@@ -791,11 +788,23 @@ AccessPath *PossiblyAttachFilter(AccessPath *path,
         // Known to be always true, so skip it.
       }
     } else {
-      if (cond_has_rownum && has_rownum_func(cond, thd)) {
-        rownum_items.push_back(cond);
+      if (cond_has_rownum && cond->has_rownum_expr()) {
+        exist_rownum = true;
+      }
+      // sub in exist transform condition  xx in (select rownum )
+      if (cond_has_rownum && cond->created_by_in2exists()) {
+        items_in2exists.push_back(cond);
       } else {
         items.push_back(cond);
       }
+    }
+  }
+  // xx in (select xx from t1,t2 where rownum < 10 and cond2)
+  // cond2 push into t2 subquery not exist rownum
+  if (!exist_rownum) {
+    if (!items_in2exists.is_empty()) {
+      items.concat(&items_in2exists);
+      items_in2exists.clear();
     }
   }
 
@@ -807,14 +816,17 @@ AccessPath *PossiblyAttachFilter(AccessPath *path,
     CopyBasicProperties(*final_path, filter_path);
     final_path = filter_path;
   }
+  if (!items_in2exists.is_empty()) {
+    Item *filter2xists = CreateConjunction(&items_in2exists);
+    *conditions_depend_on_outer_tables |= filter2xists->used_tables();
 
-  Item *rownum_filter = CreateConjunction(&rownum_items);
-  if (rownum_filter) {
-    *conditions_depend_on_outer_tables |= rownum_filter->used_tables();
-    AccessPath *rownum_path =
-        NewRownumFilterAccessPath(thd, final_path, rownum_filter);
-    CopyBasicProperties(*final_path, rownum_path);
-    final_path = rownum_path;
+    auto join = thd->lex->current_query_block()->join;
+
+    AccessPath *counter = NewCounterAccessPath(thd, final_path, join->counter);
+    join->counter = nullptr;
+    AccessPath *filter_path = NewFilterAccessPath(thd, counter, filter2xists);
+    CopyBasicProperties(*final_path, filter_path);
+    final_path = filter_path;
   }
 
   return final_path;
@@ -1565,18 +1577,6 @@ static void RecalculateTablePathCost(AccessPath *path,
       EstimateMaterializeCost(current_thd, path);
       break;
 
-    case AccessPath::ROWNUM_FILTER: {
-      const AccessPath &child = *path->rownum_filter().child;
-      path->set_num_output_rows(child.num_output_rows());
-      path->init_cost = child.init_cost;
-
-      const FilterCost filterCost = EstimateFilterCost(
-          current_thd, path->num_output_rows(), path->rownum_filter().condition,
-          &outer_query_block);
-
-      path->cost = child.cost + filterCost.cost_if_not_materialized;
-    } break;
-
     default:
       assert(false);
   }
@@ -1664,8 +1664,8 @@ AccessPath *MoveCompositeIteratorsFromTablePath(
             .param->query_blocks[0]
             .subquery_path = path;
         break;
-      case AccessPath::ROWNUM_FILTER:
-        bottom_of_table_path->rownum_filter().child = path;
+      case AccessPath::COUNTER:
+        bottom_of_table_path->counter().child = path;
         break;
       default:
         assert(false);
@@ -2531,6 +2531,14 @@ AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,
     }
 
     QEP_TAB *qep_tab = &qep_tabs[i];
+    // the inner join inside the join relations as follows will be
+    // wrongly recognized as 'outer' join
+    // `t1 join (t2 full join t3)`
+    // outer_to_inner is added to determine if we should adjust
+    // the Substructure back to JoinType::INNER
+    bool outer_to_inner = qep_tab->table_ref->embedding &&
+                          qep_tab->table_ref->embedding->foj_nest &&
+                          !qep_tab->table_ref->embedding->outer_join;
     if (substructure == Substructure::OUTER_JOIN ||
         substructure == Substructure::FULL_OUTER_JOIN ||
         substructure == Substructure::SEMIJOIN) {
@@ -2606,6 +2614,8 @@ AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,
         join_type =
             (pending_conditions == nullptr) ? JoinType::ANTI : JoinType::OUTER;
 
+        if (join_type == JoinType::OUTER && outer_to_inner)
+          join_type = JoinType::INNER;
         // Normally, a ”found” trigger means that the condition should be moved
         // up above some outer join (ie., it's a WHERE, not an ON condition).
         // However, there is one specific case where the optimizer sets up such
@@ -2649,6 +2659,8 @@ AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,
       } else {
         join_type = substructure == Substructure::SEMIJOIN ? JoinType::SEMI
                                                            : JoinType::OUTER;
+        if (join_type == JoinType::OUTER && outer_to_inner)
+          join_type = JoinType::INNER;
       }
 
       // If the entire slice is a semijoin (e.g. because we are semijoined
@@ -3197,16 +3209,34 @@ AccessPath *JOIN::create_root_access_path_for_join() {
     }
   }
 
+  unsigned start_table_idx = const_tables + 1;
+  if (connect_by_param) {
+    AccessPath *const child = path;
+
+    path = NewConnectByAccessPath(thd, path, connect_by_param);
+
+    CopyBasicProperties(*child, path);
+    if (after_connect_by_cond) {
+      qep_tab_map conditions_depend_on_outer_tables = 0;
+      path = PossiblyAttachFilter(path, vector<Item *>{after_connect_by_cond},
+                                  thd, &conditions_depend_on_outer_tables);
+    }
+    if (tables_list == nullptr) {
+      start_table_idx = 0;
+    }
+  }
+  if (counter) {
+    path = NewCounterAccessPath(thd, path, counter);
+  }
+
   // Deal with any materialization happening at the end (typically for
   // sorting, grouping or distinct).
-  for (unsigned table_idx = const_tables + 1; table_idx <= tables;
-       ++table_idx) {
+  for (unsigned table_idx = start_table_idx; table_idx <= tables; ++table_idx) {
     QEP_TAB *qep_tab = &this->qep_tab[table_idx];
     if (qep_tab->op_type != QEP_TAB::OT_MATERIALIZE &&
         qep_tab->op_type != QEP_TAB::OT_AGGREGATE_THEN_MATERIALIZE &&
         qep_tab->op_type != QEP_TAB::OT_AGGREGATE_INTO_TMP_TABLE &&
-        qep_tab->op_type != QEP_TAB::OT_WINDOWING_FUNCTION &&
-        qep_tab->op_type != QEP_TAB::OT_CONNECT_BY) {
+        qep_tab->op_type != QEP_TAB::OT_WINDOWING_FUNCTION) {
       continue;
     }
     if (qep_tab->op_type == QEP_TAB::OT_AGGREGATE_THEN_MATERIALIZE) {
@@ -3369,17 +3399,6 @@ AccessPath *JOIN::create_root_access_path_for_join() {
       if (qep_tab->having != nullptr) {
         path = NewFilterAccessPath(thd, path, qep_tab->having);
       }
-    } else if (qep_tab->op_type == QEP_TAB::OT_CONNECT_BY) {
-      qep_tab->table()->alias = "<connect_by_temp>";
-      path = NewConnectByAccessPath(
-          thd, path, qep_tab->tmp_table_param, qep_tab->table(), table_path,
-          qep_tab->connect_by, qep_tab->ref_item_slice);
-      EstimateConnectByCost(thd, path);
-      if (after_connect_by_cond) {
-        qep_tab_map conditions_depend_on_outer_tables = 0;
-        path = PossiblyAttachFilter(path, vector<Item *>{after_connect_by_cond},
-                                    thd, &conditions_depend_on_outer_tables);
-      }
     } else {
       assert(qep_tab->op_type == QEP_TAB::OT_MATERIALIZE ||
              qep_tab->op_type == QEP_TAB::OT_AGGREGATE_THEN_MATERIALIZE);
@@ -3477,6 +3496,10 @@ AccessPath *JOIN::create_root_access_path_for_join() {
           NewAggregateAccessPath(thd, path, rollup_state != RollupState::NONE);
       EstimateAggregateCost(path, query_block);
     }
+  }
+
+  if (query_block->sequences_counter) {
+    path = NewCounterAccessPath(thd, path, query_block->sequences_counter);
   }
 
   return path;
@@ -4503,7 +4526,11 @@ bool change_to_use_tmp_fields(mem_root_deque<Item *> *fields, THD *thd,
                                  : nullptr;
     Item *new_item;
     Field *field;
-    if (item->has_aggregation() && item->type() != Item::SUM_FUNC_ITEM)
+    if (item->mask_data()) {
+      new_item = item;
+    } else if (item->has_sequence()) {
+      new_item = item;
+    } else if (item->has_aggregation() && item->type() != Item::SUM_FUNC_ITEM)
       new_item = item;
     else if (item->type() == Item::FIELD_ITEM)
       new_item = item->get_tmp_table_item(thd);
@@ -4718,8 +4745,13 @@ bool change_to_use_tmp_fields_except_sums(mem_root_deque<Item *> *fields,
       array.
     */
     Item *new_item;
-
-    if (is_rollup_group_wrapper(item)) {
+    if (item->mask_data()) {
+      new_item = item->copy_or_same(thd);
+      if (new_item == nullptr) return true;
+    } else if (item->has_sequence()) {
+      new_item = item->copy_or_same(thd);
+      if (new_item == nullptr) return true;
+    } else if (is_rollup_group_wrapper(item)) {
       // If we cannot evaluate aggregates at this point, we also cannot
       // evaluate rollup NULL items, so we will need to move the wrapper out
       // into this layer.
@@ -4818,7 +4850,13 @@ bool change_to_use_tmp_fields_except_sums_or_connect_by(
   for (size_t i = 0; it != fields->end(); ++i, ++it) {
     Item *item = *it;
     Item *new_item;
-    if (is_rollup_group_wrapper(item)) {
+    if (item->mask_data()) {
+      new_item = item->copy_or_same(thd);
+      if (new_item == nullptr) return true;
+    } else if (item->has_sequence()) {
+      new_item = item->copy_or_same(thd);
+      if (new_item == nullptr) return true;
+    } else if (is_rollup_group_wrapper(item)) {
       Item_rollup_group_item *rollup_item =
           down_cast<Item_rollup_group_item *>(item);
 

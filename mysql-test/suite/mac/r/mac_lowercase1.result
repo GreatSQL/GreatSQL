@@ -1,0 +1,78 @@
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+create database db;
+use db;
+create table t1(C1 int primary key, c2 int);
+insert into t1 values(1, 1),(2, 2),(3, 3),(4, 4);
+##########################test database#############################
+call sys_mac.mac_apply_database_policy('DB','P1', 'L3:C3:G1');
+select * from db.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'db'
+select * from db.T1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'db'
+select * from DB.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'db'
+select * from DB.T1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'db'
+call sys_mac.mac_drop_database_policy('db', 'P1');
+select * from db.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+select * from DB.T1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+##########################test table#############################
+call sys_mac.mac_apply_table_policy('db', 'T1', 'P1', 'L3:C3:G1');
+select * from db.T1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for table 't1'
+select * from DB.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for table 't1'
+call sys_mac.mac_drop_table_policy('DB', 't1', 'P1');
+select * from db.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+##########################test column#############################
+call sys_mac.mac_apply_column_policy('DB', 'T1', 'c1', 'P1', 'L3:C3:G1');
+select * from db.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'C1'
+select C1 from db.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'C1'
+select * from DB.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'C1'
+select c1 from DB.t1;
+ERROR HY000: READ_MAC mac denied to user 'root'@'localhost' for column 't1' in table 'c1'
+call sys_mac.mac_drop_column_policy('db', 't1', 'C1', 'P1');
+select * from db.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+select * from DB.t1;
+C1	c2
+1	1
+2	2
+3	3
+4	4
+##########################test row#############################
+call sys_mac.mac_apply_row_policy('db', 'T1', 'P1', 'L3:C3:G1', 0);
+select * from db.t1;
+C1	c2
+select * from db.T1;
+C1	c2
+select * from DB.t1;
+C1	c2
+select * from DB.T1;
+C1	c2
+call sys_mac.mac_drop_row_policy('db', 'T1', 'P1');
+drop database db;

@@ -2,6 +2,8 @@
 --echo # Test cases for the secondary_engine_cost_threshold variable.
 --echo #
 
+SET @@use_secondary_engine = ON;
+
 --disable_query_log
 --eval INSTALL PLUGIN mock SONAME '$MOCK_PLUGIN'
 --enable_query_log

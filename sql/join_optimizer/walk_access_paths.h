@@ -1,5 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -154,9 +154,6 @@ void WalkAccessPaths(AccessPathPtr path, JoinPtr join,
       WalkAccessPaths(path->connect_by_scan().src_path, join,
                       cross_query_blocks, std::forward<Func &&>(func),
                       post_order_traversal);
-      WalkAccessPaths(path->connect_by_scan().table_path, join,
-                      cross_query_blocks, std::forward<Func &&>(func),
-                      post_order_traversal);
       break;
     case AccessPath::LIMIT_OFFSET:
       WalkAccessPaths(path->limit_offset().child, join, cross_query_blocks,
@@ -223,8 +220,8 @@ void WalkAccessPaths(AccessPathPtr path, JoinPtr join,
       WalkAccessPaths(path->cache_invalidator().child, join, cross_query_blocks,
                       std::forward<Func &&>(func), post_order_traversal);
       break;
-    case AccessPath::ROWNUM_FILTER:
-      WalkAccessPaths(path->rownum_filter().child, join, cross_query_blocks,
+    case AccessPath::COUNTER:
+      WalkAccessPaths(path->counter().child, join, cross_query_blocks,
                       std::forward<Func &&>(func), post_order_traversal);
       break;
     case AccessPath::INDEX_MERGE:
@@ -310,8 +307,6 @@ void WalkTablesUnderAccessPath(AccessPath *root_path, Func &&func,
             return func(path->stream().table);
           case AccessPath::MATERIALIZE:
             return func(path->materialize().param->table);
-          case AccessPath::CONNECT_BY_SCAN:
-            return func(path->connect_by_scan().table);
           case AccessPath::MATERIALIZED_TABLE_FUNCTION:
             return func(path->materialized_table_function().table);
           case AccessPath::ALTERNATIVE:
@@ -353,7 +348,8 @@ void WalkTablesUnderAccessPath(AccessPath *root_path, Func &&func,
           case AccessPath::ROWID_UNION:
           case AccessPath::DELETE_ROWS:
           case AccessPath::UPDATE_ROWS:
-          case AccessPath::ROWNUM_FILTER:
+          case AccessPath::COUNTER:
+          case AccessPath::CONNECT_BY_SCAN:
             return false;
           case AccessPath::PARALLEL_SCAN:
             return func(path->parallel_scan().table);

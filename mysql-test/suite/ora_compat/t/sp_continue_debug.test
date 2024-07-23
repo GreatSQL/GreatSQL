@@ -1,0 +1,50 @@
+--source include/have_debug.inc
+set sql_mode=oracle;
+set @@udt_format_result='DBA';
+
+--echo #
+--echo # CONTINUE statement
+--echo #
+
+--echo #
+--echo # create table
+--echo #
+create table tt_air(id int,name1 varchar(100));
+insert into tt_air values(1,null);
+insert into tt_air values(2,'aabb');
+insert into tt_air values(3,'qwed');
+
+create table t1 (a int, b varchar(100));
+insert into t1 values(1,'aaaaa'),(2,'bbbbb'),(3,'ccccc') ;
+
+--echo # Test show procedure code
+--echo # continue in for cursor loop
+--echo # it should pop cursors and handlers
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  ret varchar(100);
+  CURSOR cc IS SELECT * FROM t1 where a<3;
+  CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+begin
+  for i in cc loop
+    select i;
+    for j in cc1 loop
+      select j;
+      continue;
+      select 'after continue';
+    end loop;
+  end loop;
+end;
+$$
+DELIMITER ;$$
+show procedure code p1;
+call p1;
+call p1;
+DROP PROCEDURE p1;
+
+drop table tt_air;
+drop table t1;
+
+
+
+

@@ -237,7 +237,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 # 'bug58090' database should be present.
 SHOW DATABASES;
@@ -248,7 +247,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 DROP DATABASE bug58090;
 #

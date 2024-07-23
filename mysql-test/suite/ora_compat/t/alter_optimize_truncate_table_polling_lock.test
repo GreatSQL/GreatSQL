@@ -22,22 +22,28 @@ insert into t1 values (4);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 --send alter table t1 rename column  id to id1, ALGORITHM=INPLACE, LOCK=NONE;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -62,24 +68,29 @@ insert into t1 values (4);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send alter table t1 rename column  id to id1, ALGORITHM=INPLACE, LOCK=NONE;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -98,23 +109,29 @@ insert into t1 values (4);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 --send alter table t1 rename to t11;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -139,24 +156,29 @@ insert into t1 values (4);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send alter table t1 rename to t11;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -175,23 +197,29 @@ insert into t1 values (4);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 --send alter table t1 add column name varchar(100);
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -216,24 +244,29 @@ insert into t1 values (4);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send alter table t1 add column name varchar(100);
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -252,23 +285,30 @@ insert into t1 values (4,'name4');
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 --send alter table t1 drop column name;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(3);
+--echo ----[connect addconroot2]
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -293,24 +333,29 @@ insert into t1 values (4,'name4');
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send alter table t1 drop column name;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -329,23 +374,29 @@ insert into t1 values (4,'name4');
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 --send ALTER TABLE t1 ADD PRIMARY KEY (id);
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -370,24 +421,29 @@ insert into t1 values (4,'name4');
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send ALTER TABLE t1 ADD PRIMARY KEY (id);
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -406,23 +462,29 @@ insert into t1 values (4,'name4');
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 --send alter table t1 add index index_name(name);
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -447,24 +509,29 @@ insert into t1 values (4,'name4');
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send alter table t1 add index index_name(name);
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -483,23 +550,29 @@ insert into t1 values (4,'name4');
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 --send create index index_name on t1(name);
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -524,24 +597,29 @@ insert into t1 values (4,'name4');
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send create index index_name on t1(name);
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -560,23 +638,29 @@ insert into t1 values (4,'name4');
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 --send alter table t1 drop index index_name;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -601,24 +685,29 @@ insert into t1 values (4,'name4');
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send alter table t1 drop index index_name;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -637,23 +726,29 @@ insert into t1 values (4,'name4');
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 --send drop index index_name on t1;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -678,24 +773,29 @@ insert into t1 values (4,'name4');
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send drop index index_name on t1;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select * from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t1' and TIME_TO_SEC(query_time) >= 5;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t1';
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -724,23 +824,29 @@ insert into t1 values (2,'name3',sysdate);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 --send  ALTER TABLE t1 ADD PARTITION (PARTITION p5 VALUES LESS THAN (2100));
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select id from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -775,24 +881,29 @@ insert into t1 values (2,'name3',sysdate);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send  ALTER TABLE t1 ADD PARTITION (PARTITION p5 VALUES LESS THAN (2100));
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select id from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 5;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select id from t1';
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -821,23 +932,29 @@ insert into t1 values (2,'name3',sysdate);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 --send  ALTER TABLE t1 DROP PARTITION p0;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select id from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -872,24 +989,29 @@ insert into t1 values (2,'name3',sysdate);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send  ALTER TABLE t1 DROP PARTITION p0;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select id from t1;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t1;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select id from t1' and TIME_TO_SEC(query_time) >= 5;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select id from t1';
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -908,23 +1030,29 @@ insert into t2 values (4);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 --send OPTIMIZE TABLE t2;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select * from t2;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t2;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t2' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select * from t2' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t2' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -948,24 +1076,29 @@ insert into t2 values (4);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send OPTIMIZE TABLE t2;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select * from t2;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
-show create table t2;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t2' and TIME_TO_SEC(query_time) >= 5;
+show create table t1;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t2';
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -983,23 +1116,29 @@ insert into t3 values (4);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=off;
 --send TRUNCATE TABLE t3;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 --send select * from t3;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=2 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t3;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t3' and TIME_TO_SEC(query_time) >= 5;
+
+let $wait_condition= select count(*)=1 FROM mysql.slow_log where sql_text = 'select * from t3' and TIME_TO_SEC(query_time) >= 2;
+--source include/wait_condition_or_abort.inc
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t3' and TIME_TO_SEC(query_time) >= 2;
 
 connection addconroot;
 --echo ----[connect addconroot]
@@ -1024,24 +1163,29 @@ insert into t3 values (4);
 
 connection addconroot;
 --echo ----[connect addconroot]
-SET lock_wait_timeout = 10;
+SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
 SET lock_ddl_polling_runtime=1000;
 --send TRUNCATE TABLE t3;
 
 connection addconroot2;
 --echo ----[connect addconroot2]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 select * from t3;
 
 connection default;
 --echo ----[connect default]
-do sleep(2);
+let $wait_timeout= 5;
+let $wait_condition= select count(*)=1 from information_schema.processlist where state like "%Waiting for table metadata lock%";
+--source include/wait_condition_or_abort.inc
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
 show create table t3;
-do sleep(8);
-SELECT count(*) FROM mysql.slow_log where sql_text = 'select * from t3' and TIME_TO_SEC(query_time) >= 5;
+
+do sleep(2);
+select sql_text FROM mysql.slow_log where sql_text = 'select * from t3';
 
 connection addconroot;
 --echo ----[connect addconroot]

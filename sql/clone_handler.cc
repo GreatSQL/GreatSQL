@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -125,25 +126,27 @@ bool Clone_handler::get_donor_error(Srv_session *session, int &error,
   return (true);
 }
 
-int Clone_handler::clone_local(THD *thd, const char *data_dir) {
+int Clone_handler::clone_local(THD *thd, const char *data_dir,
+                               uint64_t start_id, bool enable_page_track,
+                               const char *based_dir) {
   int error;
   char dir_name[FN_REFLEN];
 
   error = validate_dir(data_dir, dir_name);
 
   if (error == 0) {
-    error = m_plugin_handle->clone_local(thd, dir_name);
+    error = m_plugin_handle->clone_local(thd, dir_name, start_id,
+                                         enable_page_track, based_dir);
   }
 
   return error;
 }
 
-int Clone_handler::clone_remote_client(THD *thd, const char *remote_host,
-                                       uint remote_port,
-                                       const char *remote_user,
-                                       const char *remote_passwd,
-                                       const char *data_dir,
-                                       enum mysql_ssl_mode ssl_mode) {
+int Clone_handler::clone_remote_client(
+    THD *thd, const char *remote_host, uint remote_port,
+    const char *remote_user, const char *remote_passwd, const char *data_dir,
+    enum mysql_ssl_mode ssl_mode, bool enable_page_track, uint64_t start_id,
+    const char *based_dir) {
   int error = 0;
   char dir_name[FN_REFLEN];
   char *dir_ptr = nullptr;
@@ -170,7 +173,8 @@ int Clone_handler::clone_remote_client(THD *thd, const char *remote_host,
   int mode = static_cast<int>(ssl_mode);
 
   error = m_plugin_handle->clone_client(
-      thd, remote_host, remote_port, remote_user, remote_passwd, dir_ptr, mode);
+      thd, remote_host, remote_port, remote_user, remote_passwd, dir_ptr, mode,
+      enable_page_track, start_id, based_dir);
 
   if (error != 0 && provisioning) {
     --s_provision_in_progress;
@@ -466,3 +470,41 @@ bool Clone_handler::block_xa_operation(THD *thd) {
 }
 
 void Clone_handler::unblock_xa_operation() { s_xa_block_op.store(false); }
+
+/** Map to write system call for non-windows platforms. */
+#define os_write(file, buffer, len) write(file, buffer, len)
+
+int clone_os_copy_buf_to_file(uchar *from_buffer, int to_file, uint length,
+                              const char *dest_name) {
+  while (length > 0) {
+    errno = 0;
+    auto ret_size = os_write(to_file, from_buffer, length);
+
+    if (errno == EINTR) {
+      DBUG_PRINT("debug", ("clone write() interrupted"));
+      continue;
+    }
+
+    if (ret_size == -1) {
+      char errbuf[MYSYS_STRERROR_SIZE];
+
+      my_error(ER_ERROR_ON_WRITE, MYF(0), dest_name, errno,
+               my_strerror(errbuf, sizeof(errbuf), errno));
+
+      DBUG_PRINT("debug", ("Error: clone write failed."
+                           " Length left = %u",
+                           length));
+
+      return (ER_ERROR_ON_WRITE);
+    }
+
+    auto actual_size = static_cast<uint>(ret_size);
+
+    assert(length >= actual_size);
+
+    length -= actual_size;
+    from_buffer += actual_size;
+  }
+
+  return (0);
+}

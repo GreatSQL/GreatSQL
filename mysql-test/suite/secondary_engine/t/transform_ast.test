@@ -1,0 +1,39 @@
+# Tests for the SECONDARY_ENGINE.
+
+SET @@use_secondary_engine = ON;
+
+--disable_query_log
+--eval install plugin rapid soname "ha_rapid.so"
+--enable_query_log
+
+CREATE TABLE t1 (a INT, b INT NOT SECONDARY) secondary_engine=rapid;
+--error ER_SECONDARY_ENGINE_PLUGIN
+alter table t1 secondary_load;
+
+ALTER TABLE t1 SECONDARY_ENGINE NULL;
+ALTER TABLE t1 MODIFY b INT;
+ALTER TABLE t1 SECONDARY_ENGINE=rapid;
+insert into t1 values(1,2),(3,4);
+alter table t1 secondary_load;
+
+set use_secondary_engine=forced;
+explain select * from t1;
+select * from t1;
+drop table t1;
+
+CREATE TABLE t1 (c1 int, c2 double, c3 decimal(15,2), c4 varchar(5), c5 char(2), c6 date) secondary_engine rapid;
+insert into t1 values(1, 1.2, 3.4, 'abc', 'de', '20230421');
+insert into t1 values(2, 11.22, 33.44, 'abcde', 'ab', '20230420');
+alter table t1 secondary_load;
+set use_secondary_engine=forced;
+explain select * from t1;
+select * from t1;
+drop table t1;
+
+CREATE TABLE t1 (c1 text) secondary_engine rapid;
+insert into t1 values('abcde');
+--error ER_SECONDARY_ENGINE_PLUGIN
+alter table t1 secondary_load;
+drop table t1;
+
+UNINSTALL PLUGIN rapid;

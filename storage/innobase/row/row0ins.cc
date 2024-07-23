@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -63,6 +64,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <debug_sync.h>
 #include "my_dbug.h"
+#include "sql_class.h"
 
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there
@@ -1909,9 +1911,18 @@ static bool row_allow_duplicates(que_thr_t *thr) {
 
   /* If the secondary index is unique, but one of the fields in the
   n_unique first fields is NULL, a unique key violation cannot occur,
-  since we define NULL != NULL in this case */
-
-  if (!index->nulls_equal) {
+  since we define NULL != NULL in this case
+  The ora_mode index field is different when both are null.
+   */
+  if (index->ora_mode) {
+    ulint null_field_sum = 0;
+    for (ulint i = 0; i < n_unique; i++) {
+      if (UNIV_SQL_NULL == dfield_get_len(dtuple_get_nth_field(entry, i))) {
+        null_field_sum++;
+      }
+    }
+    if (null_field_sum == n_unique) return DB_SUCCESS;
+  } else if (!index->nulls_equal) {
     for (ulint i = 0; i < n_unique; i++) {
       if (UNIV_SQL_NULL == dfield_get_len(dtuple_get_nth_field(entry, i))) {
         return DB_SUCCESS;
@@ -3456,9 +3467,11 @@ dberr_t row_ins_index_entry_set_vals(const dict_index_t *index, dtuple_t *entry,
 
 /** Allocates a row id for row and inits the node->index field. */
 static inline void row_ins_alloc_row_id_step(
-    ins_node_t *node) /*!< in: row insert node */
+    ins_node_t *node, /*!< in: row insert node */
+    que_thr_t *thr)   /*!< in: query thread */
 {
   row_id_t row_id;
+  THD *thd = nullptr;
 
   ut_ad(node->state == INS_NODE_ALLOC_ROW_ID);
 
@@ -3468,9 +3481,14 @@ static inline void row_ins_alloc_row_id_step(
     return;
   }
 
+  thd = thr_get_trx(thr)->mysql_thd;
   /* Fill in row id value to row */
-
-  row_id = dict_sys_get_new_row_id();
+  if (thd_optimize_no_pk_parallel_load(thd)) {
+    row_id = dict_sys_get_new_row_id_with_interval(
+        thd->next_interval_size, thd->left_of_interval, thd->right_of_interval);
+  } else {
+    row_id = dict_sys_get_new_row_id();
+  }
 
   dict_sys_write_row_id(node->row_id_buf, row_id);
 }
@@ -3545,7 +3563,7 @@ static inline void row_ins_get_row_from_query_block(
   DBUG_PRINT("row_ins", ("table: %s", node->table->name.m_name));
 
   if (node->state == INS_NODE_ALLOC_ROW_ID) {
-    row_ins_alloc_row_id_step(node);
+    row_ins_alloc_row_id_step(node, thr);
 
     node->index = node->table->first_index();
     node->entry = UT_LIST_GET_FIRST(node->entry_list);

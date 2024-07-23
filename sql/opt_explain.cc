@@ -1,5 +1,5 @@
 /* Copyright (c) 2011, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1669,6 +1669,10 @@ bool Explain_join::explain_extra() {
       keyno = used_index(range_scan_path);
 
     if (explain_extra_common(range_scan_type, keyno)) return true;
+
+    if (join->connect_by_cond) {
+      if (push_extra(ET_CONNECT_BY)) return true;
+    }
 
     if (((tab->type() == JT_INDEX_SCAN || tab->type() == JT_CONST) &&
          table->covering_keys.is_set(tab->index())) ||

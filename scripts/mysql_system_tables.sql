@@ -1,5 +1,5 @@
 -- Copyright (c) 2007, 2022, Oracle and/or its affiliates. All rights reserved.
--- Copyright (c) 2023, GreatDB Software Co., Ltd.
+-- Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 --
 -- This program is free software; you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License, version 2.0,
@@ -311,6 +311,30 @@ PREPARE stmt FROM @str;
 EXECUTE stmt;
 DROP PREPARE stmt;
 
+-- SET @cmd = "CREATE TABLE IF NOT EXISTS clone_history
+-- (
+--   `ID` int auto_increment PRIMARY KEY,
+--   `PID` int DEFAULT 0,
+--   `CLONE_TYPE` varchar(50) DEFAULT NULL,
+--   `STATE` char(16) DEFAULT NULL,
+--   `BEGIN_TIME` timestamp(3) DEFAULT NULL,
+--   `END_TIME` timestamp(3) DEFAULT NULL,
+--   `SOURCE` varchar(512) DEFAULT NULL,
+--   `DESTINATION` varchar(512) DEFAULT NULL,
+--   `ERROR_NO` int DEFAULT NULL,
+--   `ERROR_MESSAGE` varchar(512) DEFAULT NULL,
+--   `BINLOG_FILE` varchar(512) DEFAULT NULL,
+--   `BINLOG_POSITION` bigint DEFAULT NULL,
+--   `GTID_EXECUTED` varchar(4096) DEFAULT NULL,
+--   `START_LSN` bigint DEFAULT NULL,
+--   `PAGE_TRACK_LSN` bigint DEFAULT NULL,
+--   `END_LSN` bigint DEFAULT NULL
+-- ) engine=INNODB STATS_PERSISTENT=0 CHARACTER SET utf8mb3 engine=InnoDB STATS_PERSISTENT=0 CHARACTER SET utf8mb3 COLLATE utf8mb3_bin comment='Clone history' ROW_FORMAT=DYNAMIC TABLESPACE=mysql";
+-- SET @str = CONCAT(@cmd, " ENCRYPTION='", @is_mysql_encrypted, "'");
+-- PREPARE stmt FROM @str;
+-- EXECUTE stmt;
+-- DROP PREPARE stmt;
+
 
 
 SET @cmd = "CREATE TABLE IF NOT EXISTS time_zone_transition_type (   Time_zone_id int unsigned NOT NULL, Transition_type_id int unsigned NOT NULL, Offset int signed DEFAULT 0 NOT NULL, Is_DST tinyint unsigned DEFAULT 0 NOT NULL, Abbreviation char(8) DEFAULT '' NOT NULL, PRIMARY KEY TzIdTrTId (Time_zone_id, Transition_type_id) ) engine=INNODB STATS_PERSISTENT=0 CHARACTER SET utf8mb3   comment='Time zone transition types' ROW_FORMAT=DYNAMIC TABLESPACE=mysql";
@@ -592,25 +616,6 @@ DROP PREPARE stmt;
 -- Remember for later if proxies_priv table already existed
 set @had_proxies_priv_table= @@warning_count != 0;
 
-SET @@session.sql_require_primary_key = @old_sql_require_primary_key;
-
-CREATE DATABASE IF NOT EXISTS sys_audit DEFAULT CHARACTER SET utf8mb4;
-
-CREATE TABLE IF NOT EXISTS sys_audit.audit_log (
-  name VARCHAR(64) NOT NULL,
-  record VARCHAR(64) NOT NULL,
-  timestamp VARCHAR(64) NOT NULL,
-  command_class VARCHAR(64) NOT NULL,
-  connection_id VARCHAR(64) NOT NULL,
-  status VARCHAR(64) NOT NULL,
-  sqltext MEDIUMTEXT NOT NULL,
-  user VARCHAR(64) NOT NULL,
-  host VARCHAR(64) NOT NULL,
-  os_user VARCHAR(64) NOT NULL,
-  ip VARCHAR(64) NOT NULL,
-  db VARCHAR(64) NOT NULL,
-  PRIMARY KEY record(record)
-) ENGINE=INNODB CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 
 --
 -- Only create the ndb_binlog_index table if the server is built with ndb.

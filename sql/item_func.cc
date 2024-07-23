@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -84,6 +84,7 @@
 #include "prealloced_array.h"
 #include "scope_guard.h"
 #include "sql-common/json_dom.h"  // Json_wrapper
+#include "sql/aggregate_check.h"  // Distinct_check
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_password_strength
 #include "sql/auth/sql_security_ctx.h"
@@ -113,7 +114,6 @@
 #include "sql/log_event.h"  // server_version
 #include "sql/mdl.h"
 #include "sql/mysqld.h"  // log_10 stage_user_sleep
-#include "sql/mysqld_dbms_pipe_manager.h"
 #include "sql/parse_tree_helpers.h"    // PT_item_list
 #include "sql/parse_tree_items.h"      // PTI_user_variable
 #include "sql/parse_tree_node_base.h"  // Parse_context
@@ -147,11 +147,13 @@
 #include "sql/sql_optimizer.h"  // JOIN
 #include "sql/sql_parse.h"      // check_stack_overrun
 #include "sql/sql_show.h"       // append_identifier
+#include "sql/sql_table.h"
 #include "sql/sql_time.h"       // TIME_from_longlong_packed
 #include "sql/sql_tmp_table.h"  // create_tmp_table_from_fields
 #include "sql/sql_zip_dict.h"
 #include "sql/strfunc.h"  // find_type
 #include "sql/system_variables.h"
+#include "sql/table_function.h"
 #include "sql/thd_raii.h"
 #include "sql/transaction.h"
 #include "sql/val_int_compare.h"  // Integer_value
@@ -438,20 +440,27 @@ bool Item_func::fix_fields(THD *thd, Item **) {
 
   if (resolve_type(thd) || thd->is_error())  // Some impls still not error-safe
     return true;
+  if (forbid_udt_table_index()) return true;
   fixed = true;
   return false;
 }
 
 bool Item_func::fix_func_arg(THD *thd, Item **arg) {
+  // To be deleted future.
+  if (m_is_udt_table_index && (*arg)->type() == SUBSELECT_ITEM) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "subquery as record table's index");
+    return true;
+  }
   if ((!(*arg)->fixed && (*arg)->fix_fields(thd, arg))) {
     (*arg)->fixed = false;
     return true; /* purecov: inspected */
   }
   Item *item = *arg;
   // e.g: select (select * from t1)+1
-  if (((item->element_index(0)->is_ora_udt_type() ||
-        item->this_item()->is_ora_udt_type()) &&
+  if (((item->is_ora_udt_type() || item->this_item()->is_ora_udt_type()) &&
        functype() != UDT_FUNC && functype() != UDT_TABLE_FUNC &&
+       (item->this_item()->get_udt_table() ||
+        item->result_type() == ROW_RESULT) &&
        !is_bool_func() && !is_ora_table() && functype() != FUNC_SP) ||
       // e.g: select * from t1 where returnacursor() is null;
       item->this_item()->is_ora_refcursor()) {
@@ -791,6 +800,9 @@ void Item_func::print_op(const THD *thd, String *str,
     str->append(' ');
   }
   args[arg_count - 1]->print(thd, str, query_type);
+
+  /* print extra info */
+  print_op_extra(thd, str, query_type);
   str->append(')');
 }
 
@@ -1639,11 +1651,9 @@ bool reject_geometry_args(uint arg_count, Item **args, Item_result_field *me) {
     isn't a field.
   */
   for (uint i = 0; i < arg_count; i++) {
-    if (((args[i]->result_type() != ROW_RESULT &&
-          args[i]->data_type() == MYSQL_TYPE_GEOMETRY) ||
-         (args[i]->result_type() == ROW_RESULT &&
-          args[i]->is_ora_refcursor())) ||
-        (args[i]->is_ora_udt_type())) {
+    if ((args[i]->result_type() != ROW_RESULT &&
+         args[i]->data_type() == MYSQL_TYPE_GEOMETRY) ||
+        (args[i]->result_type() == ROW_RESULT && args[i]->is_ora_udt_type())) {
       my_error(ER_WRONG_ARGUMENTS, MYF(0), me->func_name());
       return true;
     }
@@ -1679,10 +1689,6 @@ void unsupported_json_comparison(size_t arg_count, Item **args,
 
 bool Item_func_numhybrid::resolve_type(THD *thd) {
   assert(arg_count == 1 || arg_count == 2);
-  if (is_ora_udt_type()) {
-    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "udt value in hybrid_type function");
-    return true;
-  }
   /*
     If no arguments have type information, return and trust
     propagate_type() to assign data types later.
@@ -2086,10 +2092,15 @@ int Item_typeto_number::check_input_str_precision(String *res) {
   tmp_res.ltrim();
   length = tmp_res.length();
   int i = 0, lastzerosum = 0;
-  std::string strformat{"^(\\-|\\+)?\\d+(\\.\\d+)?$"};
-  std::regex re(strformat);
-  std::string numberStr(tmp_res.ptr(), tmp_res.length());
-  if (!(std::regex_match(numberStr, re))) return true;
+
+  char *end = nullptr;
+  std::strtod(tmp_res.ptr(), &end);
+  if (end == tmp_res.ptr() || *end != '\0') return true;
+  if (end != std::find_if(tmp_res.ptr(), end, [](const char &ch) {
+        return ch == 'e' || ch == 'E';
+      })) {
+    return true;
+  }
 
   if (!format_flag) {
     for (i = length; i > 0; i--) {
@@ -3950,6 +3961,17 @@ bool Item_func_minus::date_op(MYSQL_TIME *ltime, my_time_flags_t) {
     return true;
   }
 
+#ifdef SW_64
+  if (num <= LLONG_MIN || num > LLONG_MAX) {
+    /* Warn about overflow */
+    push_warning_printf(
+        current_thd, Sql_condition::SL_WARNING, ER_DATETIME_FUNCTION_OVERFLOW,
+        ER_THD(current_thd, ER_DATETIME_FUNCTION_OVERFLOW), "datetime");
+    null_value = true;
+    return true;
+  }
+#endif
+
   if (ltime->time_type == MYSQL_TIMESTAMP_DATE) {
     date_to_datetime(ltime);
   }
@@ -5212,15 +5234,52 @@ double my_double_round(double value, longlong dec, bool dec_unsigned,
   return dec < 0 ? rint(value_div_tmp) * tmp : rint(value_mul_tmp) / tmp;
 }
 
+longlong Item_func_round::get_decimal_place() {
+  if (!(current_thd->variables.sql_mode & MODE_ORACLE))
+    return args[1]->val_int();
+  longlong decimal_place = UINT64_MAX;
+
+  my_decimal a, b;
+  my_decimal *d = args[1]->val_decimal(&a);
+  if (my_decimal_round(E_DEC_FATAL_ERROR, d, 0, true, &b)) return decimal_place;
+  my_decimal2int(0, &b, false, &decimal_place);
+  return decimal_place;
+}
+
 double Item_func_round::real_op() {
-  const double value = args[0]->val_real();
-  const longlong decimal_places = args[1]->val_int();
+  const longlong decimal_places = get_decimal_place();
 
-  if (!(null_value = args[0]->null_value || args[1]->null_value))
-    return my_double_round(value, decimal_places, args[1]->unsigned_flag,
-                           truncate);
+  if (!(current_thd->variables.sql_mode & MODE_ORACLE)) {
+    const double value = args[0]->val_real();
+    if (!(null_value = args[0]->null_value || args[1]->null_value))
+      return my_double_round(value, decimal_places, args[1]->unsigned_flag,
+                             truncate);
 
-  return 0.0;
+    return 0.0;
+  } else {
+    StringBuffer<STRING_BUFFER_USUAL_SIZE> tmp;
+    const String *str_value = args[0]->val_str(&tmp);
+    if (!str_value || !str_value->length()) {
+      null_value = true;
+      return 0.0;
+    }
+
+    const char *begin = str_value->ptr();
+    const char *end = begin + str_value->length();
+    my_decimal val1, val2;
+    double res = 0.0;
+
+    int rc = str2my_decimal(E_DEC_FATAL_ERROR, begin, &val1, &end);
+    if (rc != E_DEC_OK) {
+      const double value = args[0]->val_real();
+      return my_double_round(value, decimal_places, args[1]->unsigned_flag,
+                             truncate);
+    }
+
+    my_decimal_round(E_DEC_FATAL_ERROR, &val1, decimal_places, truncate, &val2);
+    my_decimal2double(E_DEC_FATAL_ERROR, &val2, &res);
+    return res;
+  }
 }
 
 /*
@@ -5242,7 +5301,7 @@ static inline ulonglong my_unsigned_round(ulonglong value, ulonglong to,
 
 longlong Item_func_round::int_op() {
   longlong value = args[0]->val_int();
-  longlong dec = args[1]->val_int();
+  longlong dec = get_decimal_place();
   decimals = 0;
   ulonglong abs_dec;
   if ((null_value = args[0]->null_value || args[1]->null_value)) return 0;
@@ -5308,7 +5367,13 @@ longlong Item_func_round::int_op() {
 
 my_decimal *Item_func_round::decimal_op(my_decimal *decimal_value) {
   my_decimal val, *value = args[0]->val_decimal(&val);
-  longlong dec = args[1]->val_int();
+
+  // reset decimals every time in case it is cached.
+  if (current_thd->variables.sql_mode & MODE_ORACLE)
+    decimals = args[0]->null_value ? DECIMAL_MAX_SCALE
+                                   : decimal_actual_fraction(value);
+
+  longlong dec = get_decimal_place();
   if (dec >= 0 || args[1]->unsigned_flag)
     dec = min<ulonglong>(dec, decimals);
   else if (dec < INT_MIN)
@@ -5319,6 +5384,397 @@ my_decimal *Item_func_round::decimal_op(my_decimal *decimal_value) {
                                        truncate, decimal_value) > 1)))
     return decimal_value;
   return nullptr;
+}
+
+/**
+  Check the arguments of function round(number).
+  prompt error if the conversion from any of the arguments to number(my_strntod)
+  returns error.
+
+*/
+void Item_func_round::check_trunc_number_params() {
+  null_value = false;
+  if (!(current_thd->variables.sql_mode & MODE_ORACLE) &&
+      (my_strcasecmp(system_charset_info, func_name(), "round") == 0 ||
+       my_strcasecmp(system_charset_info, func_name(), "truncate") == 0))
+    return;
+
+  // check parameter for trunc/round
+  for (uint i = 0; i < arg_count; i++) {
+    if (args[i]->is_null()) {
+      null_value = true;
+      return;
+    }
+    if (args[i]->result_type() == STRING_RESULT) {
+      int error;
+      StringBuffer<STRING_BUFFER_USUAL_SIZE> tmp;
+      const String *res = args[i]->val_str(&tmp);
+      if (!res || !res->length()) {
+        null_value = true;
+        return;
+      }
+      // Try to convert the args from string to number.
+      const CHARSET_INFO *cs = res->charset();
+      const char *cptr = res->ptr();
+      size_t length = res->length();
+      const char *end = cptr + length;
+      const char *endptr = cptr + length;
+      my_strntod(cs, cptr, length, &endptr, &error);
+      if (error || cptr == endptr ||
+          (end != endptr && !check_if_only_end_space(cs, endptr, end))) {
+        my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+      }
+    }
+  }
+}
+
+bool Item_func_ora_round::get_date(MYSQL_TIME *ltime,
+                                   my_time_flags_t fuzzy_date) {
+  bool datetime_overflow = false;
+  int jd, weekday, year_julian_day, mon_julian_day, day_julian_day;
+  uint weekday_iso, weekday_month_iso, weekday_year_iso;
+
+  if ((null_value = args[0]->get_date(ltime, fuzzy_date))) return true;
+  if (ltime->year == 0) {
+    /* Only AD years are supported */
+    push_warning_printf(
+        current_thd, Sql_condition::SL_WARNING, ER_DATETIME_FUNCTION_OVERFLOW,
+        ER_THD(current_thd, ER_DATETIME_FUNCTION_OVERFLOW), func_name());
+    return (null_value = true);
+  }
+
+  char format_buff[64];
+  String format_str(format_buff, sizeof(format_buff), &my_charset_bin), *format;
+  format = args[1]->val_str(&format_str);
+
+  /* TODO: verify safety using append/chop
+     It is much more elegant by using append/chop,
+     then using native_strcasescmp() in function get_trunc_unit_type.
+     While for now it is not sure if this implementation is safe, will
+     do it at some point at the future:
+
+     format->append("\0", 1);
+     format->chop();
+     ...
+  */
+  // need test round(date),round(date,"0")
+  if (format && strncasecmpwrap(format, "0") == 0) {
+    unit_type = FMT_DDD;
+  } else {
+    if (get_trunc_unit_type(format, &unit_type)) {
+      my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
+      goto null_date;
+    }
+  }
+
+  jd = date_to_julianday(ltime->year, ltime->month, ltime->day);
+  weekday = julianday_to_day_of_week(jd);
+  weekday_iso = julianday_to_day_of_week(jd, 0);
+
+  /**
+   * For dates between 1582-10-02 and 1582-12-31, we should use
+   * 1582-10-15 to calculate the weekday for the first day of the year.
+   * And similarly, we should use 1582-10-15 to calculate the first day
+   * of the month for dates between 1582-10-05 and 1582-10-31.
+   */
+  weekday_year_iso =
+      (jd >= 2299158 && jd <= 2299238)
+          ? julianday_to_day_of_week(date_to_julianday(1582, 10, 15), 0)
+          : julianday_to_day_of_week(date_to_julianday(ltime->year, 1, 1), 0);
+
+  weekday_month_iso =
+      (jd >= 2299158 && jd <= 2299177)
+          ? julianday_to_day_of_week(date_to_julianday(1582, 10, 15), 0)
+          : julianday_to_day_of_week(
+                date_to_julianday(ltime->year, ltime->month, 1), 0);
+
+  switch (unit_type) {
+    case FMT_CC:  // CC,SCC: First day of the centory.
+      if (ltime->year % 100 > 50) {
+        /*
+          When converting the century to a string display, the maximum cannot
+          exceed the 99th century, and the maximum is converted to the 0th
+          century,so round function, The maximum supported year is 9950
+        */
+        if (ltime->year / 100 == 99) {
+          datetime_overflow = true;
+          goto null_date;
+        }
+        ltime->year = ((ltime->year + 99) / 100) * 100 + 1;
+      } else
+        ltime->year = ((ltime->year + 99) / 100) * 100 - 99;
+      ltime->month = 1;
+      ltime->day = 1;
+      ltime->hour = 0;
+      ltime->minute = 0;
+      ltime->second = 0;
+      ltime->second_part = 0;
+      break;
+    case FMT_IYYY:
+      /*
+        IYYY,IYY,IY,I Year containing the calendar
+        week, as defined by the ISO 8601 standard.
+        set ltime to Monday of the ISO week.
+       */
+      if (ltime->month > 6) {  // recount jd and weekday_iso.
+        ltime->year++;
+        jd = date_to_julianday(ltime->year, ltime->month, ltime->day);
+        weekday_iso = julianday_to_day_of_week(jd, 0);
+      }
+      jd = jd -
+           (date_to_ISO_week(ltime->year, ltime->month, ltime->day) - 1) * 7 -
+           weekday_iso;
+      julianday_to_date(jd, year_julian_day, mon_julian_day, day_julian_day);
+      if (year_julian_day < 1) {
+        datetime_overflow = true;
+        goto null_date;
+      }
+
+      ltime->year = year_julian_day;
+      ltime->month = mon_julian_day;
+      ltime->day = day_julian_day;
+      ltime->hour = 0;
+      ltime->minute = 0;
+      ltime->second = 0;
+      ltime->second_part = 0;
+      break;
+    case FMT_YEAR:  // SYYYY,YYYY,YEAR,SYEAR,YYY,YY,Y: Year.
+      if (ltime->month > 6) ltime->year++;
+      ltime->month = 1;
+      ltime->day = 1;
+      ltime->hour = 0;
+      ltime->minute = 0;
+      ltime->second = 0;
+      ltime->second_part = 0;
+      break;
+    case FMT_Q:  // Q: Quarter
+      /* If the middle month is greater than 15 in a quarter, round it to the
+       * next quarter.
+       */
+      if ((ltime->month - ((3 * ((ltime->month - 1) / 3)) + 1)) < 1)
+        ltime->month = (3 * ((ltime->month - 1) / 3)) + 1;
+      else if ((ltime->month - ((3 * ((ltime->month - 1) / 3)) + 1)) == 1 &&
+               ltime->day < 16)
+        ltime->month = (3 * ((ltime->month - 1) / 3)) + 1;
+      else
+        ltime->month = (3 * (((ltime->month - 1) / 3) + 1)) + 1;
+      if (ltime->month > 12) {
+        ltime->month = ltime->month - 12;
+        ltime->year++;
+      }
+      ltime->day = 1;
+      ltime->hour = 0;
+      ltime->minute = 0;
+      ltime->second = 0;
+      ltime->second_part = 0;
+      break;
+    case FMT_MON: /* MONTH,MON,MM,RM: Month */
+      if (ltime->day > 15) ltime->month++;
+      if (ltime->month > 12) {
+        ltime->year++;
+        ltime->month = ltime->month - 12;
+      }
+      ltime->day = 1;
+      ltime->hour = 0;
+      ltime->minute = 0;
+      ltime->second = 0;
+      ltime->second_part = 0;
+      break;
+    case FMT_IW:
+      /** IW: Same day of the week as the first day of
+      the calendar week as defined by the ISO 8601
+      standard, which is Monday.
+      If it is greater than Wednesday 12:00:00, it will be the
+      following week
+      When Last week of the year，trunc week **/
+      if (weekday_iso > 3 || (weekday_iso == 3 && ltime->hour > 11)) {
+        jd = jd - weekday_iso + 7;
+        julianday_to_date(jd, year_julian_day, mon_julian_day, day_julian_day);
+        if ((year_julian_day - ltime->year) > 0) jd = jd - 7;
+      } else
+        jd = jd - weekday_iso;
+      julianday_to_date(jd, year_julian_day, mon_julian_day, day_julian_day);
+      if (year_julian_day < 1) {
+        datetime_overflow = true;
+        goto null_date;
+      }
+
+      ltime->year = year_julian_day;
+      ltime->month = mon_julian_day;
+      ltime->day = day_julian_day;
+      ltime->hour = 0;
+      ltime->minute = 0;
+      ltime->second = 0;
+      ltime->second_part = 0;
+      break;
+    case FMT_WW:  // WW: Same day of the week as the first day
+                  // of the year.If now time - first day >= 3,it returns next
+                  // week's first day of year.
+    {
+      uint diff = weekday_iso >= weekday_year_iso
+                      ? weekday_iso - weekday_year_iso
+                      : 7 + weekday_iso - weekday_year_iso;
+      jd = jd - diff +
+           7 * ((diff > 3 || (diff == 3 && ltime->hour > 11)) ? 1 : 0);
+
+      julianday_to_date(jd, year_julian_day, mon_julian_day, day_julian_day);
+      if (year_julian_day < 1) {
+        datetime_overflow = true;
+        goto null_date;
+      }
+
+      ltime->year = year_julian_day;
+      ltime->month = mon_julian_day;
+      ltime->day = day_julian_day;
+      ltime->hour = 0;
+      ltime->minute = 0;
+      ltime->second = 0;
+      ltime->second_part = 0;
+      break;
+    }
+    case FMT_W:  // W: Same day of the week as the first day
+                 // of the month.If now time - first day > 3,it returns next
+                 // week's first day of month.
+    {
+      uint diff = weekday_iso >= weekday_month_iso
+                      ? weekday_iso - weekday_month_iso
+                      : 7 + weekday_iso - weekday_month_iso;
+
+      jd = jd - diff +
+           7 * ((diff > 3 || (diff == 3 && ltime->hour > 11)) ? 1 : 0);
+      julianday_to_date(jd, year_julian_day, mon_julian_day, day_julian_day);
+      if (year_julian_day < 1) {
+        datetime_overflow = true;
+        goto null_date;
+      }
+
+      ltime->year = year_julian_day;
+      ltime->month = mon_julian_day;
+      ltime->day = day_julian_day;
+      ltime->hour = 0;
+      ltime->minute = 0;
+      ltime->second = 0;
+      ltime->second_part = 0;
+      break;
+    }
+    case FMT_DDD:  // DDD,DD,J: Day.
+      if (ltime->hour > 11) {
+        ltime->day++;
+      }
+      if (ltime->day > calc_days_in_month(ltime->year, ltime->month)) {
+        ltime->day = 1;
+        ltime->month++;
+      }
+      if (ltime->month > 12) {
+        ltime->month = ltime->month - 12;
+        ltime->year++;
+      }
+      ltime->hour = 0;
+      ltime->minute = 0;
+      ltime->second = 0;
+      ltime->second_part = 0;
+      break;
+    case FMT_DAY:  // DAY,DY,D: Starting day of week.
+      if (weekday > 0) {
+        /* get the first day of week by using julianday_to_date(), to
+        handle exceptions such as round('2003-01-02','day'), whose result
+        is '2002-12-29'.
+        If hour time is Wednesday over 12:00:00,it should be this Sunday,else
+        if it's before 12:00:00,it should be last Sunday.
+        */
+        if (weekday > 3)
+          jd = jd - weekday + 7;
+        else if (weekday == 3)
+          jd = jd - weekday + 7 * (ltime->hour > 11 ? 1 : 0);
+        else
+          jd = jd - weekday;
+        julianday_to_date(jd, year_julian_day, mon_julian_day, day_julian_day);
+        if (year_julian_day < 1) {
+          datetime_overflow = true;
+          goto null_date;
+        }
+
+        ltime->year = year_julian_day;
+        ltime->month = mon_julian_day;
+        ltime->day = day_julian_day;
+      }
+      ltime->hour = 0;
+      ltime->minute = 0;
+      ltime->second = 0;
+      ltime->second_part = 0;
+      break;
+    case FMT_HH:  // HH,HH12,HH24: Hour.
+      if (ltime->minute > 29) {
+        ltime->minute = ltime->minute - 60;
+        ltime->hour++;
+      }
+      if (ltime->hour > 23) {
+        ltime->hour = ltime->hour - 24;
+        ltime->day++;
+      }
+      if (ltime->day > calc_days_in_month(ltime->year, ltime->month)) {
+        ltime->day = 1;
+        ltime->month++;
+      }
+      if (ltime->month > 12) {
+        ltime->month = ltime->month - 12;
+        ltime->year++;
+      }
+      ltime->minute = 0;
+      ltime->second = 0;
+      ltime->second_part = 0;
+      break;
+    case FMT_MI:  // MI: Minute.
+      if (ltime->second > 29) ltime->minute++;
+      if (ltime->minute > 59) {
+        ltime->minute = ltime->minute - 60;
+        ltime->hour++;
+      }
+      if (ltime->hour > 23) {
+        ltime->hour = ltime->hour - 24;
+        ltime->day++;
+      }
+      if (ltime->day > calc_days_in_month(ltime->year, ltime->month)) {
+        ltime->day = 1;
+        ltime->month++;
+      }
+      if (ltime->month > 12) {
+        ltime->month = ltime->month - 12;
+        ltime->year++;
+      }
+      ltime->second = 0;
+      ltime->second_part = 0;
+      break;
+    default:
+      goto null_date;
+  }
+  if (ltime->year > 9999) {
+    datetime_overflow = true;
+    goto null_date;
+  }
+  return false;
+
+null_date:
+  if (datetime_overflow) {
+    push_warning_printf(
+        current_thd, Sql_condition::SL_WARNING, ER_DATETIME_FUNCTION_OVERFLOW,
+        ER_THD(current_thd, ER_DATETIME_FUNCTION_OVERFLOW), func_name());
+  }
+  return (null_value = true);
+}
+
+bool Item_func_ora_round::resolve_type(THD *thd) {
+  if (is_temporal_type(args[0]->data_type()) ||
+      dynamic_cast<Item_func_now *>(args[0])) {
+    if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_DATETIME)) return true;
+    // round(date) expected, reset the datatype.
+    set_data_type_datetime(0);
+    trunc_date = true;
+    hybrid_type = STRING_RESULT;
+    return param_type_uses_non_param(thd);
+  } else {
+    return super::resolve_type(thd);
+  }
 }
 
 bool Item_func_rand::itemize(Parse_context *pc, Item **res) {
@@ -10195,13 +10651,15 @@ bool Item_func_udt_constructor::fix_fields(THD *thd, Item **ref) {
     if (res) return res;
   }
 
-  if (super::fix_fields(thd, ref)) return true;
+  if (thd->lex->check_udt_type_field()) {
+    return true;
+  }
 
   set_nullable(true);
 
   null_value = false;
 
-  fixed = true;
+  if (super::fix_fields(thd, ref)) return true;
 
   return false;
 }
@@ -10217,51 +10675,9 @@ bool Item_func_udt_constructor::refix_fields() {
   return false;
 }
 
-bool Item_func_udt_constructor::fill_udt() {
-  sql_mode_t old_sql_mode = current_thd->variables.sql_mode;
-  current_thd->variables.sql_mode = m_sql_mode;
-  enum_check_fields save_check_for_truncated_fields =
-      current_thd->check_for_truncated_fields;
-  current_thd->check_for_truncated_fields = CHECK_FIELD_ERROR_FOR_NULL;
-  Strict_error_handler strict_handler(
-      Strict_error_handler::ENABLE_SET_SELECT_STRICT_ERROR_HANDLER);
-  if (current_thd->is_strict_mode() && !current_thd->lex->is_ignore())
-    current_thd->push_internal_handler(&strict_handler);
-  auto rb = create_scope_guard([&]() {
-    if (current_thd->is_strict_mode() && !current_thd->lex->is_ignore())
-      current_thd->pop_internal_handler();
-    current_thd->check_for_truncated_fields = save_check_for_truncated_fields;
-    current_thd->variables.sql_mode = old_sql_mode;
-  });
-  // @@TODO@@ mimic sp_head::set_security_ctx()
-  if (!m_table) {
-    m_table = create_tmp_table_from_fields(current_thd, *m_field_def_list);
-    if (!m_table) {
-      return true;
-    }
-  }
-  Field **flds = m_table->visible_field_ptr();
-  for (uint i = 0; i < arg_count; i++) {
-    // in sp,the arg_count maybe changed.
-    if (!flds[i]) {
-      null_value = true;
-      return true;
-    }
-    args[i]->save_in_field(flds[i], false);
-    if (current_thd->is_error()) {
-      null_value = true;
-      return true;
-    }
-  }
-  // @@TODO@@ mimic sp_head::set_security_ctx()
-  // m_security_ctx.restore_security_context(thd, save_security_ctx);
-  return false;
-}
-
 String *Item_func_udt_constructor::val_str(String *str) {
-  if (is_null()) return nullptr;
-
-  if (fill_udt()) return nullptr;
+  val_udt();
+  if (null_value) return nullptr;
 
   if (current_thd->variables.udt_format_result == UDT_FORMAT_RESULT_BINARY) {
     str->set(pointer_cast<const char *>(m_table->record[0]),
@@ -10270,6 +10686,82 @@ String *Item_func_udt_constructor::val_str(String *str) {
     return show_udt_values(m_table, str);
   }
   return str;
+}
+
+TABLE *Item_func_udt_constructor::val_udt() {
+  assert(fixed);
+
+  null_value = true;
+
+  if (m_table == nullptr) {
+    m_table = create_tmp_table_from_fields(current_thd, *m_field_def_list);
+    if (m_table == nullptr) return nullptr;
+    if (create_table_for_udt_column(m_table, m_field_def_list)) return nullptr;
+  }
+
+  for (uint i = 0; i < arg_count; i++) {
+    m_table->field[i]->reset();
+    if (sp_eval_expr(current_thd, m_table->field[i], &args[i])) {
+      return nullptr;
+    }
+  }
+
+  null_value = false;
+  return m_table;
+}
+
+bool Item_func_udt_constructor::create_table_for_udt_column(
+    TABLE *table, List<Create_field> *field_list) {
+  assert(table->s->fields == field_list->size());
+
+  THD *thd = current_thd;
+  Create_field *cdf = nullptr;
+  List_iterator_fast<Create_field> it(*field_list);
+  uint idx = 0;
+  while ((cdf = it++)) {
+    if (cdf->udt_name.length != 0) {
+      assert(cdf->udt_db_name.str);
+      Field *field = table->field[idx];
+      field->set_udt_name(to_lex_cstring(cdf->udt_name));
+      field->set_udt_db_name(cdf->udt_db_name.str);
+
+      if (cdf->ora_record.row_field_definitions()) {
+        Field_row *fld = dynamic_cast<Field_row *>(field);
+        List<Create_field> *fld_list = cdf->ora_record.row_field_definitions();
+        fld->create_udt_table(thd, fld_list);
+        fld->set_arg_count(fld_list->size());
+        create_table_for_udt_column(fld->val_udt(), fld_list);
+
+      } else if (cdf->ora_record.row_field_table_definitions()) {
+        Field_row_table *fld = dynamic_cast<Field_row_table *>(field);
+        fld->m_is_record_table_type_define =
+            cdf->ora_record.is_record_table_type_define;
+        fld->m_is_index_by = cdf->ora_record.is_index_by;
+        if (cdf->nested_table_udt.str) {
+          fld->set_nested_table_udt(cdf->nested_table_udt);
+        }
+        fld->m_varray_size_limit = -1;
+        if (cdf->table_type == (uint)enum_udt_table_of_type::TYPE_VARRAY) {
+          fld->m_varray_size_limit = cdf->varray_limit;
+        }
+
+        List<Create_field> *fld_list =
+            cdf->ora_record.row_field_table_definitions()
+                ->find_row_fields_by_offset(0);
+        if (fld->create_tmp_record_table_to_store_bulk_data(thd, "", *fld_list,
+                                                            0, 0, false))
+          return true;
+
+        fld->m_udt_table = fld->table_record->table;
+        fld->set_arg_count(fld_list->size());
+        create_table_for_udt_column(fld->val_udt(), fld_list);
+      }
+    }
+
+    idx++;
+  }
+
+  return false;
 }
 
 bool Item_func_udt_constructor::resolve_type(THD *thd) {
@@ -10303,7 +10795,8 @@ void Item_func_udt_constructor::make_field(Send_field *tmp_field) {
 }
 
 bool Item_func_udt_constructor::udt_table_store_to_table(TABLE *table_to) {
-  if (fill_udt()) return true;
+  val_udt();
+  if (null_value) return true;
 
   if (table_to->s->db.length && table_to->s->udt_name.length &&
       (my_strcasecmp(table_alias_charset, table_to->s->db.str,
@@ -10327,55 +10820,17 @@ type_conversion_status Item_func_udt_constructor::udt_table_store_to_field(
     my_error(ER_NOT_SUPPORTED_YET, MYF(0), "udt value stores to record table");
     return TYPE_ERR_BAD_VALUE;
   }
-  if (arg_count != to->virtual_tmp_table_addr()[0]->s->fields) {
+  if (arg_count != to->val_udt()->s->fields) {
     my_error(ER_WRONG_USAGE, MYF(0), item_name.ptr(), to->field_name);
     return TYPE_ERR_BAD_VALUE;
   }
   for (uint i = 0; i < arg_count; i++) {
-    if (sp_eval_expr(current_thd, to->virtual_tmp_table_addr()[0]->field[i],
-                     &args[i])) {
+    if (sp_eval_expr(current_thd, to->val_udt()->field[i], &args[i])) {
       return TYPE_ERR_BAD_VALUE;
     }
   }
   to->set_udt_value_initialized(true);
   return TYPE_OK;
-}
-
-type_conversion_status Item_func_udt_constructor::save_in_field_inner(
-    Field *field, bool no_conversions) {
-  Field_row *field_row = dynamic_cast<Field_row *>(field);
-  Field_row_table *field_table = dynamic_cast<Field_row_table *>(field);
-  if (field_table) {
-    my_error(ER_UDT_INCONS_DATATYPES, myf(0));
-    return TYPE_ERR_BAD_VALUE;
-  }
-  if (!field->get_udt_db_name() || !field->udt_name().str) {
-    my_error(ER_UDT_INCONS_DATATYPES, myf(0));
-    return TYPE_ERR_BAD_VALUE;
-  }
-  if (my_strcasecmp(system_charset_info, get_udt_db_name().str,
-                    field->get_udt_db_name()) != 0 ||
-      my_strcasecmp(system_charset_info, get_udt_name().str,
-                    field->udt_name().str) != 0) {
-    my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), field->get_udt_db_name(),
-             field->udt_name().str, get_udt_db_name().str, get_udt_name().str);
-    return TYPE_ERR_BAD_VALUE;
-  }
-
-  if (null_value) {
-    type_conversion_status ret =
-        set_field_to_null_with_conversions(field, no_conversions);
-    if (field_row && ret == TYPE_OK) field_row->set_udt_value_initialized(true);
-    return ret;
-  }
-  field->set_notnull();
-  if (!field_row) {
-    fill_udt();
-    return field->store((const char *)m_table->record[0], m_table->s->reclength,
-                        &my_charset_bin);
-  } else {
-    return udt_table_store_to_field(field, no_conversions);
-  }
 }
 
 Field *Item_func_udt_constructor::tmp_table_field(TABLE *table) {
@@ -10385,6 +10840,92 @@ Field *Item_func_udt_constructor::tmp_table_field(TABLE *table) {
   if (field) field->init(table);
   return field;
 }
+
+Item_func_udt_collection::Item_func_udt_collection(
+    const POS &pos, const LEX_STRING &db_name, const LEX_STRING &udt_name,
+    enum_udt_table_of_type table_type, ulonglong varray_limit,
+    PT_item_list *item_list, List<Create_field> *field_def, ulong reclength,
+    sql_mode_t sql_mode, int index_length, LEX_CSTRING nested_table_udt)
+    : Item_func_udt_constructor(pos, db_name, udt_name, true, item_list,
+                                field_def, reclength, sql_mode) {
+  m_nested_table_udt = nested_table_udt;
+  m_table_type = table_type;
+  m_varray_size_limit = varray_limit;
+  m_has_assignment_list = item_list ? item_list->m_has_assignment_list : false;
+  m_index_length = index_length;
+}
+
+TABLE *Item_func_udt_collection::val_udt() {
+  assert(fixed);
+
+  null_value = true;
+
+  if (m_table) {
+    if (m_table->empty_result_table()) return nullptr;
+  } else {
+    m_table =
+        create_tmp_table_from_fields(current_thd, *m_field_def_list, false);
+    if (m_table == nullptr) return nullptr;
+    if (create_table_for_udt_column(m_table, m_field_def_list)) return nullptr;
+    if (instantiate_tmp_table(current_thd, m_table)) return nullptr;
+  }
+
+  for (uint i = m_has_assignment_list; i < arg_count;
+       i = i + m_has_assignment_list + 1) {
+    Item *item_index = nullptr;
+    if (m_has_assignment_list) {
+      item_index = arguments()[i - 1]->this_item();
+    } else {
+      item_index = new (current_thd->mem_root) Item_uint(i + 1);
+    }
+
+    if (sp_eval_expr(current_thd, m_table->field[0], &item_index))
+      return nullptr;
+
+    if (m_nested_table_udt.length == 0) {
+      // single type
+      if (sp_eval_expr(current_thd, m_table->field[1], &args[i]))
+        return nullptr;
+    } else {
+      // object
+      TABLE *table = args[i]->val_udt();
+      if (args[i]->null_value) {
+        for (uint j = 1; j < m_table->s->fields; j++) {
+          if (set_field_to_null_with_conversions(m_table->field[j], false))
+            return nullptr;
+        }
+      } else {
+        // table(index) has index column, bad smell
+        int off = m_table->s->fields - table->s->fields;
+        for (uint j = 1; j < m_table->s->fields; j++) {
+          Item *item_field =
+              new (current_thd->mem_root) Item_field(table->field[j - off]);
+          if (sp_eval_expr(current_thd, m_table->field[j], &item_field))
+            return nullptr;
+        }
+      }
+    }
+
+    int error;
+    if ((error = m_table->file->ha_write_row(m_table->record[0]))) {
+      if (!m_table->file->is_ignorable_error(error) &&
+          create_ondisk_from_heap(current_thd, m_table, error, true, true,
+                                  nullptr))
+        return nullptr;
+    }
+  }
+
+  null_value = false;
+  return m_table;
+}
+
+String *Item_func_udt_collection::val_str(String *str) {
+  TABLE *table = val_udt();
+  if (null_value) return nullptr;
+  str = get_udt_table_val_str(str, table, m_udt_name, m_nested_table_udt);
+  return str;
+}
+
 /****************************************************************************
   Item_func_udt_table
   e.g: CREATE OR REPLACE TYPE t_air_table AS table OF db1.t_air;
@@ -10394,21 +10935,17 @@ Item_func_udt_table::Item_func_udt_table(
     LEX_CSTRING nested_table_udt, ulong reclength,
     enum_udt_table_of_type table_type, ulonglong varray_limit,
     PT_item_list *item_list, List<Create_field> *field_def, int index_length)
-    : Item_func_udt_constructor(pos, db_name, udt_name, true, item_list,
-                                field_def, reclength,
-                                current_thd->variables.sql_mode) {
-  m_nested_table_udt = nested_table_udt;
-  m_table_type = table_type;
-  m_varray_size_limit = varray_limit;
-  m_has_assignment_list = item_list ? item_list->m_has_assignment_list : false;
-  m_index_length = index_length;
+    : Item_func_udt_collection(pos, db_name, udt_name, table_type, varray_limit,
+                               item_list, field_def, reclength,
+                               current_thd->variables.sql_mode, index_length,
+                               nested_table_udt) {
   set_ora_table();
   reset_ora_type();
 }
 
 bool Item_func_udt_table::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
-  if (super::itemize(pc, res)) return true;
+  if (Item_func::itemize(pc, res)) return true;
 
   THD *thd = pc->thd;
   LEX *lex = thd->lex;
@@ -10426,48 +10963,27 @@ bool Item_func_udt_table::itemize(Parse_context *pc, Item **res) {
 }
 
 bool Item_func_udt_table::fix_fields(THD *thd, Item **ref) {
-  Security_context *save_security_ctx = thd->security_context();
-
-  DBUG_TRACE;
-  assert(fixed == 0);
-  /*
-    Checking privileges to execute the function while creating view and
-    executing the function of select.
-   */
-  if (!thd->lex->is_view_context_analysis() ||
-      (thd->lex->sql_command == SQLCOM_CREATE_VIEW)) {
-    if (context->security_ctx) {
-      /* Set view definer security context */
-      thd->set_security_context(context->security_ctx);
-    }
-
-    /*
-      Check whether user has execute privilege or not
-     */
-
-    Internal_error_handler_holder<View_error_handler, Table_ref> view_handler(
-        thd, context->view_error_handler, context->view_error_handler_arg);
-    bool res = check_routine_access(thd, EXECUTE_ACL, m_db_name.str,
-                                    m_udt_name.str, enum_sp_type::TYPE, false);
-    thd->set_security_context(save_security_ctx);
-
-    if (res) return res;
-  }
-
-  if (thd->lex->query_block && thd->lex->query_block->has_connect_by) {
-    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "connect by used with udt table");
-    return true;
-  }
-  if (super::fix_fields(thd, ref)) return true;
+  if (super::fix_fields(thd, ref)) goto error;
 
   /* args are initialized in super::itemize() */
-  if (refix_fields()) return true;
-  set_nullable(true);
-  null_value = false;
+  if (refix_fields()) goto error;
 
-  fixed = true;
-
+  // table%rowtype
+  if (thd->sp_runtime_ctx && m_field_def_list->size() == 0) {
+    const Sp_rcontext_handler *rh = nullptr;
+    sp_variable *sp_var =
+        thd->lex->find_variable(m_udt_name.str, m_udt_name.length, &rh);
+    assert(sp_var);
+    m_field_def_list =
+        sp_var->field_def.ora_record.row_field_table_definitions()
+            ->find_row_fields_by_offset(0);
+  }
   return false;
+
+error:
+  null_value = true;
+  fixed = false;
+  return true;
 }
 
 // used for sp.cc : sp_prepare_func_item
@@ -10513,112 +11029,6 @@ void Item_func_udt_table::make_field(Send_field *tmp_field) {
   tmp_field->decimals = 0;
 }
 
-String *Item_func_udt_table::val_str(String *str) {
-  str->length(0);
-  str->append(m_udt_name.str);
-  str->append('(');
-  String tmp;
-  for (uint i = m_has_assignment_list; i < arg_count;
-       i = i + m_has_assignment_list + 1) {
-    Field *fld = nullptr;
-    Item_func_udt_constructor *udt =
-        dynamic_cast<Item_func_udt_constructor *>(args[i]);
-    if (udt) {
-      if (udt->fill_udt()) {
-        null_value = true;
-        return nullptr;
-      }
-      str->append(m_nested_table_udt.str);
-      str->append('(');
-      for (uint j = 0; j < udt->m_table->visible_field_count(); j++) {
-        fld = udt->m_table->field[j];
-        if (!fld->is_null()) {
-          append_field_to_string(fld, str);
-        } else
-          str->append(STRING_WITH_LEN("NULL"));
-        if (j < udt->arg_count - 1)
-          str->append(',');
-        else
-          str->append(')');
-      }
-    }
-    Item_field *item_field = dynamic_cast<Item_field *>(args[i]);
-    if (item_field) {
-      Field_udt_type *field = dynamic_cast<Field_udt_type *>(item_field->field);
-      if (!field) {
-        null_value = true;
-        return nullptr;
-      }
-      str->append(m_nested_table_udt.str);
-      str->append('(');
-      TABLE *table = field->virtual_tmp_table_addr()[0];
-      if (field->field_udt_table_store_to_table(table)) {
-        null_value = true;
-        return nullptr;
-      }
-      for (uint j = 0; j < table->s->fields; j++) {
-        fld = table->field[j];
-        if (!fld->is_null()) {
-          append_field_to_string(fld, str);
-        } else
-          str->append(STRING_WITH_LEN("NULL"));
-        if (j < table->s->fields - 1)
-          str->append(',');
-        else
-          str->append(')');
-      }
-    }
-    if (args[i]->this_item()->type() == Item::NULL_ITEM)
-      str->append(STRING_WITH_LEN("NULL"));
-    Item_func_sp *item_func_sp = dynamic_cast<Item_func_sp *>(args[i]);
-    if (item_func_sp) {
-      item_func_sp->val_str(&tmp);
-      TABLE *table =
-          item_func_sp->get_sp_result_field()->virtual_tmp_table_addr()[0];
-      str->append(m_nested_table_udt.str);
-      str->append('(');
-      for (uint j = 0; j < table->s->fields; j++) {
-        fld = table->field[j];
-        if (fld->is_null()) {
-          str->append(STRING_WITH_LEN("NULL"));
-        } else {
-          append_field_to_string(fld, str);
-        }
-        str->append(',');
-      }
-      (*str)[str->length() - 1] = ')';
-    }
-    Item_splocal *item_splocal = dynamic_cast<Item_splocal *>(args[i]);
-    if (item_splocal != nullptr) {
-      item_field = dynamic_cast<Item_field *>(item_splocal->this_item());
-      Field_row *field = dynamic_cast<Field_row *>(item_field->field);
-      if (!field) {
-        null_value = true;
-        return nullptr;
-      }
-      TABLE *table = field->virtual_tmp_table_addr()[0];
-      str->append(m_nested_table_udt.str);
-      str->append('(');
-      int b = 0;
-      if (dynamic_cast<Item_splocal_row_field_table_by_index *>(item_splocal)) {
-        b = 1;
-      }
-      for (uint j = b; j < table->s->fields; j++) {
-        fld = table->field[j];
-        if (fld->is_null()) {
-          str->append(STRING_WITH_LEN("NULL"));
-        } else {
-          append_field_to_string(fld, str);
-        }
-        str->append(',');
-      }
-      (*str)[str->length() - 1] = ')';
-    }
-    if (i < arg_count - 1) str->append(',');
-  }
-  str->append(')');
-  return str;
-}
 /****************************************************************************
   Item_func_udt_single_type_table
   e.g: create type my_integer is varray(100) of integer;
@@ -10628,19 +11038,16 @@ Item_func_udt_single_type_table::Item_func_udt_single_type_table(
     enum_udt_table_of_type table_type, ulonglong varray_limit,
     PT_item_list *item_list, List<Create_field> *field_def, ulong reclength,
     sql_mode_t sql_mode, int index_length)
-    : Item_func_udt_constructor(pos, db_name, udt_name, true, item_list,
-                                field_def, reclength, sql_mode) {
-  m_table_type = table_type;
-  m_varray_size_limit = varray_limit;
-  m_has_assignment_list = item_list ? item_list->m_has_assignment_list : false;
-  m_index_length = index_length;
+    : Item_func_udt_collection(pos, db_name, udt_name, table_type, varray_limit,
+                               item_list, field_def, reclength, sql_mode,
+                               index_length, NULL_CSTR) {
   set_ora_table();
   reset_ora_type();
 }
 
 bool Item_func_udt_single_type_table::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
-  if (super::itemize(pc, res)) return true;
+  if (Item_func::itemize(pc, res)) return true;
 
   THD *thd = pc->thd;
   LEX *lex = thd->lex;
@@ -10658,56 +11065,19 @@ bool Item_func_udt_single_type_table::itemize(Parse_context *pc, Item **res) {
 }
 
 bool Item_func_udt_single_type_table::fix_fields(THD *thd, Item **ref) {
-  Security_context *save_security_ctx = thd->security_context();
-
-  DBUG_TRACE;
-  assert(fixed == 0);
-  /*
-    Checking privileges to execute the function while creating view and
-    executing the function of select.
-   */
-  if (!thd->lex->is_view_context_analysis() ||
-      (thd->lex->sql_command == SQLCOM_CREATE_VIEW)) {
-    if (context->security_ctx) {
-      /* Set view definer security context */
-      thd->set_security_context(context->security_ctx);
-    }
-
-    /*
-      Check whether user has execute privilege or not
-     */
-
-    Internal_error_handler_holder<View_error_handler, Table_ref> view_handler(
-        thd, context->view_error_handler, context->view_error_handler_arg);
-    bool res = check_routine_access(thd, EXECUTE_ACL, m_db_name.str,
-                                    m_udt_name.str, enum_sp_type::TYPE, false);
-    thd->set_security_context(save_security_ctx);
-
-    if (res) return res;
-  }
-
-  if (thd->lex->query_block && thd->lex->query_block->has_connect_by) {
-    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "connect by used with udt table");
-    return true;
-  }
-  if (super::fix_fields(thd, ref)) return true;
+  if (super::fix_fields(thd, ref)) goto error;
 
   // check the index's value.
   if (m_has_assignment_list) {
-    if (check_record_table_index(m_index_length)) return true;
+    if (check_record_table_index(m_index_length)) goto error;
   }
-
-  set_nullable(true);
-
-  if (!m_table) {
-    m_table = create_tmp_table_from_fields(current_thd, *m_field_def_list);
-    if (!m_table) {
-      return true;
-    }
-  }
-  fixed = true;
 
   return false;
+
+error:
+  null_value = true;
+  fixed = false;
+  return true;
 }
 
 void Item_func_udt_single_type_table::make_field(Send_field *tmp_field) {
@@ -10723,76 +11093,6 @@ void Item_func_udt_single_type_table::make_field(Send_field *tmp_field) {
   tmp_field->field = false;
 
   tmp_field->decimals = 0;
-}
-
-bool Item_func_udt_single_type_table::fill_udt_single_type(int number) {
-  sql_mode_t old_sql_mode = current_thd->variables.sql_mode;
-  current_thd->variables.sql_mode = m_sql_mode;
-  enum_check_fields save_check_for_truncated_fields =
-      current_thd->check_for_truncated_fields;
-  current_thd->check_for_truncated_fields = CHECK_FIELD_ERROR_FOR_NULL;
-  Strict_error_handler strict_handler(
-      Strict_error_handler::ENABLE_SET_SELECT_STRICT_ERROR_HANDLER);
-  if (current_thd->is_strict_mode() && !current_thd->lex->is_ignore())
-    current_thd->push_internal_handler(&strict_handler);
-  auto rb = create_scope_guard([&]() {
-    if (current_thd->is_strict_mode() && !current_thd->lex->is_ignore())
-      current_thd->pop_internal_handler();
-    current_thd->check_for_truncated_fields = save_check_for_truncated_fields;
-    current_thd->variables.sql_mode = old_sql_mode;
-  });
-  // @@TODO@@ mimic sp_head::set_security_ctx()
-  if (!m_table) {
-    m_table = create_tmp_table_from_fields(current_thd, *m_field_def_list);
-    if (!m_table) {
-      return true;
-    }
-  }
-  Field **flds = m_table->visible_field_ptr();
-  if (number == -1) {
-    for (uint i = m_has_assignment_list; i < arg_count;
-         i = i + m_has_assignment_list + 1) {
-      args[i]->save_in_field(flds[0], false);
-      if (current_thd->is_error()) {
-        null_value = true;
-        return true;
-      }
-    }
-  } else {
-    if (number > (int)arg_count - 1) return true;
-
-    args[number]->save_in_field(flds[0], false);
-    if (current_thd->is_error()) {
-      null_value = true;
-      return true;
-    }
-  }
-  // @@TODO@@ mimic sp_head::set_security_ctx()
-  // m_security_ctx.restore_security_context(thd, save_security_ctx);
-  return false;
-}
-
-String *Item_func_udt_single_type_table::val_str(String *str) {
-  str->length(0);
-  str->append(m_udt_name.str);
-  str->append('(');
-  String tmp;
-  null_value = false;
-  for (uint i = m_has_assignment_list; i < arg_count;
-       i = i + m_has_assignment_list + 1) {
-    if (fill_udt_single_type()) {
-      null_value = true;
-      return nullptr;
-    }
-    if (args[i]->val_str(&tmp))
-      str->append(args[i]->val_str(&tmp)->ptr(),
-                  args[i]->val_str(&tmp)->length());
-    else
-      str->append(STRING_WITH_LEN("NULL"));
-    if (i < arg_count - 1) str->append(',');
-  }
-  str->append(')');
-  return str;
 }
 
 bool Item_func_udt_single_type_table::udt_table_store_to_table(
@@ -10821,7 +11121,7 @@ Item_func_sp::Item_func_sp(const POS &pos, const LEX_STRING &db_name,
   m_save_explicit_name = m_name->m_explicit_name;
 }
 
-Item_func_sp::~Item_func_sp() { cleanup_udt(); }
+Item_func_sp::~Item_func_sp() { cleanup_for_refcursor(); }
 
 bool Item_func_sp::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
@@ -10843,10 +11143,9 @@ bool Item_func_sp::itemize(Parse_context *pc, Item **res) {
     mark db as emptry string, so that sp_cache_routine/sp_find_routine
     knows the with-function should be picked.
   */
-  bool use_with_func =
+  m_name->m_is_with_function =
       (thd->lex->m_with_func && !m_name->m_explicit_name &&
        sp_eq_routine_name(thd->lex->spname->m_name, m_name->m_name));
-  if (use_with_func) m_name->m_db = EMPTY_CSTR;
 
   if (m_name->m_db.str == nullptr) {
     if (thd->lex->copy_db_to(&m_name->m_db.str, &m_name->m_db.length)) {
@@ -11041,6 +11340,9 @@ static const RAW_PARAM_POS_TYPE utl_encode_param_pos_hash = {
     {"UTL_ENCODE.QUOTED_PRINTABLE_ENCODE", {0}},
     {"UTL_ENCODE.UUDECODE", {0}},
     {"UTL_ENCODE.UUENCODE", {0}}};
+
+static const RAW_PARAM_POS_TYPE utl_i18n_param_pos_hash = {
+    {"UTL_I18N.RAW_TO_CHAR", {0}}};
 /**
   This table is used to configure which functions in the UTL_RAW package should
   be processed with the is_raw_params_invalid() function before execution Key -
@@ -11048,7 +11350,8 @@ static const RAW_PARAM_POS_TYPE utl_encode_param_pos_hash = {
 */
 static const std::unordered_map<std::string, RAW_PARAM_POS_TYPE>
     pkg_func_with_raw_param = {{"UTL_RAW", raw_param_pos_hash},
-                               {"UTL_ENCODE", utl_encode_param_pos_hash}};
+                               {"UTL_ENCODE", utl_encode_param_pos_hash},
+                               {"UTL_I18N", utl_i18n_param_pos_hash}};
 
 Item_func_sp::Backup_args_defer::Backup_args_defer(Item_func_sp *item)
     : outer(item) {
@@ -11056,7 +11359,9 @@ Item_func_sp::Backup_args_defer::Backup_args_defer(Item_func_sp *item)
       (0 == my_strcasecmp(system_charset_info, outer->m_pkg_name->m_name.str,
                           "UTL_RAW") ||
        0 == my_strcasecmp(system_charset_info, outer->m_pkg_name->m_name.str,
-                          "UTL_ENCODE"))) {
+                          "UTL_ENCODE") ||
+       0 == my_strcasecmp(system_charset_info, outer->m_pkg_name->m_name.str,
+                          "UTL_I18N"))) {
     std::string pkg_ident = to_string(outer->m_pkg_name->m_name);
     for (auto &it : pkg_ident) it = std::toupper(it);
     auto pkg_entry = pkg_func_with_raw_param.find(pkg_ident);
@@ -11078,7 +11383,9 @@ bool Item_func_sp::is_raw_params_invalid() {
       (0 == my_strcasecmp(system_charset_info, m_pkg_name->m_name.str,
                           "UTL_RAW") ||
        0 == my_strcasecmp(system_charset_info, m_pkg_name->m_name.str,
-                          "UTL_ENCODE"))) {
+                          "UTL_ENCODE") ||
+       0 == my_strcasecmp(system_charset_info, m_pkg_name->m_name.str,
+                          "UTL_I18N"))) {
     std::string pkg_ident = to_string(m_pkg_name->m_name);
     for (auto &it : pkg_ident) it = std::toupper(it);
     auto pkg_entry = pkg_func_with_raw_param.find(pkg_ident);
@@ -11190,64 +11497,6 @@ bool Item_func_sp::udt_table_store_to_table(TABLE *table_to) {
   return sp_result_field->field_udt_table_store_to_table(table_to);
 }
 
-type_conversion_status Item_func_sp::save_in_field_inner(Field *field,
-                                                         bool no_conversions) {
-  if (is_ora_type()) {
-    if (!field->get_udt_db_name() || !field->udt_name().str) {
-      my_error(ER_UDT_INCONS_DATATYPES, myf(0));
-      return TYPE_ERR_BAD_VALUE;
-    }
-
-    if (my_strcasecmp(system_charset_info, get_udt_db_name().str,
-                      field->get_udt_db_name()) != 0 ||
-        my_strcasecmp(system_charset_info, get_udt_name().str,
-                      field->udt_name().str) != 0) {
-      my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), field->get_udt_db_name(),
-               field->udt_name().str, get_udt_db_name().str,
-               get_udt_name().str);
-      return TYPE_ERR_BAD_VALUE;
-    }
-
-    Query_arena backup_arena;
-    StringBuffer<STRING_BUFFER_USUAL_SIZE> tmp;
-    current_thd->swap_query_arena(*current_thd->stmt_arena, &backup_arena);
-    val_str(&tmp);
-    current_thd->swap_query_arena(backup_arena, current_thd->stmt_arena);
-
-    if (null_value) {
-      type_conversion_status ret =
-          set_field_to_null_with_conversions(field, no_conversions);
-      if (ret == TYPE_OK) field->set_udt_value_initialized(true);
-      return ret;
-    }
-
-    field->set_notnull();
-    Field_udt_type *field_udt_type = dynamic_cast<Field_udt_type *>(field);
-    if (field_udt_type) {
-      type_conversion_status ret =
-          field->store(pointer_cast<const char *>(sp_result_field->data_ptr()),
-                       sp_result_field->data_length(), &my_charset_bin);
-      if (ret != TYPE_OK) return ret;
-    } else {  // Field_row
-      dynamic_cast<Field_udt_type *>(sp_result_field)->copy_data_to_table();
-      TABLE *table = sp_result_field->virtual_tmp_table_addr()[0];
-      for (uint i = 0; i < table->s->fields; i++) {
-        Item *item_filed =
-            new (current_thd->mem_root) Item_field(table->field[i]);
-        if (sp_eval_expr(current_thd,
-                         field->virtual_tmp_table_addr()[0]->field[i],
-                         &item_filed))
-          return TYPE_ERR_BAD_VALUE;
-      }
-    }
-
-    field->set_udt_value_initialized(true);
-    return TYPE_OK;
-  }
-
-  return Item::save_in_field_inner(field, no_conversions);
-}
-
 longlong Item_func_sp::val_int() {
   Backup_args_defer backupArgsDefer(this);
   if (is_raw_params_invalid() || execute()) return error_int();
@@ -11312,6 +11561,17 @@ bool Item_func_sp::val_json(Json_wrapper *result) {
   my_error(ER_INVALID_CAST_TO_JSON, MYF(0));
   return error_json();
   /* purecov: end */
+}
+
+TABLE *Item_func_sp::val_udt() {
+  Backup_args_defer backupArgsDefer(this);
+  if (is_raw_params_invalid() || execute()) {
+    null_value = is_nullable();
+    return nullptr;
+  }
+  if (null_value) return nullptr;
+
+  return sp_result_field->val_udt();
 }
 
 /**
@@ -11607,10 +11867,7 @@ bool Item_func_sp::fix_fields(THD *thd, Item **ref) {
   }
 
   if (Item_func::fix_fields(thd, ref)) return true;
-  if (is_ora_udt_type() && get_udt_name().length == 0) {
-    reset_ora_type();
-    reset_ora_table();
-  }
+  if (resolve_udt_type(thd)) return true;
 
   for (uint i = 0; i < arg_count; i++) {
     if (args[i]->data_type() == MYSQL_TYPE_INVALID) {
@@ -11648,6 +11905,34 @@ bool Item_func_sp::fix_fields(THD *thd, Item **ref) {
 
   // Cleanup immediately, thus execute() will always attach to the routine.
   cleanup();
+
+  return false;
+}
+
+bool Item_func_sp::resolve_udt_type(THD *thd) {
+  if (is_ora_udt_type() && get_udt_name().length == 0) {
+    reset_ora_type();
+    reset_ora_table();
+  }
+  /* select returnacursor() from t1 --unallowed.
+  select returnacursor() into c1 from dual --allowed.
+  */
+  if (thd->lex->sql_command != SQLCOM_SELECT &&
+      thd->lex->sql_command != SQLCOM_INSERT_SELECT &&
+      thd->lex->sql_command != SQLCOM_REPLACE_SELECT &&
+      thd->lex->sql_command != SQLCOM_INSERT_ALL_SELECT)
+    return false;
+
+  if (dynamic_cast<Field_refcursor *>(sp_result_field) &&
+      (!dynamic_cast<Query_dumpvar *>(thd->lex->result) ||
+       (dynamic_cast<Query_dumpvar *>(thd->lex->result) &&
+        thd->lex->query_tables &&
+        // It's not function()'s table,but from table.
+        !(*thd->lex->query_tables_own_last)))) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "ref cursor used in table");
+    return true;
+  }
+  if (is_ora_udt_type() && thd->lex->check_udt_type_field()) return true;
 
   return false;
 }
@@ -13399,57 +13684,78 @@ bool Item_func::ensure_multi_equality_fields_are_available_walker(uchar *arg) {
   return false;
 }
 
-longlong Item_func_rownum::val_int() {
-  if (first_read) {
-    first_read = false;
-    return ++row_no;
-  } else {
-    return row_no;
+bool Item_func_rownum::resolve_type(THD *thd) {
+  used_tables_cache |= RAND_TABLE_BIT;
+  set_nullable(true);
+  set_rownum();
+  // set all
+  if (thd && thd->lex) {
+    auto query_block = thd->lex->current_query_block();
+    if (query_block->resolve_place == Query_block::RESOLVE_START_WITH) {
+      if (query_block->start_with_counter == nullptr) {
+        auto cc = new (thd->mem_root) RownumCounter();
+        if (cc == nullptr) return true;
+        query_block->start_with_counter = cc;
+      }
+      ref = query_block->start_with_counter->GetValue();
+    } else {
+      if (query_block->counter == nullptr) {
+        auto cc = new (thd->mem_root) RownumCounter();
+        if (cc == nullptr) return true;
+        query_block->counter = cc;
+      }
+      ref = query_block->counter->GetValue();
+    }
   }
+  return false;
 }
 
 bool Item_func_rownum::itemize(Parse_context *pc, Item **res) {
   if (skip_itemize(res)) return false;
   if (super::itemize(pc, res)) return true;
   pc->select->has_rownum = true;
-  enum_parsing_context parse_place = pc->select->parsing_place;
-  if (parse_place == CTX_SELECT_LIST) {
-    pc->select->has_rownum_in_select = true;
-  }
-  if (parse_place == CTX_WHERE || parse_place == CTX_HAVING ||
-      parse_place == CTX_ON || parse_place == CTX_CONNECT_BY) {
-    pc->select->has_rownum_in_cond = true;
-  }
-
-  if (!pc->select->rownum_func) {
-    pc->select->rownum_func = this;
-  }
   return false;
 }
 
-/**
- * @brief replace to base rownum func
- *
- * @param arg
- * @return Item*
- */
-Item *Item_func_rownum::replace_rownum_func(uchar *arg) {
-  auto base_item = pointer_cast<Item_func_rownum **>(arg);
-  if (*base_item) {
-    return *base_item;
-  } else {
-    *base_item = this;
+bool Item_func_rownum::fix_fields(THD *thd, Item **res) {
+  auto query_block = thd->lex->current_query_block();
+  if (query_block->resolve_place == Query_block::RESOLVE_JOIN_NEST &&
+      (query_block->resolve_nest && query_block->resolve_nest->outer_join)) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "ROWNUM occur in outer join on conditions.");
+    return true;
   }
-  return this;
+  if (super::fix_fields(thd, res)) return true;
+
+  if (query_block->having_fix_field) {
+    // rownum ref
+    uint counter = 0;
+    enum_resolution_type resolution;
+    Item **select_item =
+        find_item_in_list(thd, this, query_block->get_fields_list(), &counter,
+                          REPORT_EXCEPT_NOT_FOUND, &resolution);
+    if (select_item == nullptr) return true;
+    if (select_item == not_found_item) {
+      select_item = query_block->add_hidden_item(this);
+    } else {
+      select_item = &query_block->base_ref_items[counter];
+    }
+    Item *ref = new (thd->mem_root)
+        Item_ref(&query_block->context, select_item, this->item_name.ptr());
+    if (ref == nullptr) return true;
+    *res = ref;
+  }
+
+  return false;
 }
 
-Item *Item_func_rownum::replace_rownum_use_tmp_field(uchar *) {
-  Field *field = nullptr;
-  if ((field = get_tmp_table_field())) {
-    return new (current_thd->mem_root) Item_field(field);
-  } else {
-    return this;
+longlong Item_func_rownum::val_int() {
+  // if ref is nullptr means not execute
+  if (ref) {
+    null_value = false;
+    return (*ref);
   }
+  return 0;
 }
 
 bool Item_func_lnnvl_advisor::is_valid_expr(Item *expr) {
@@ -13507,8 +13813,7 @@ bool Item_func_lnnvl::resolve_type(THD *thd) {
   return error;
 }
 
-bool Item_func_lnnvl::validate_cond(THD *thd) {
-  assert(thd);
+bool Item_func_lnnvl::validate_cond(THD *thd [[maybe_unused]]) {
   Item *expr = args[0];
 
   if (Item_func_lnnvl_advisor::is_lnnvl_expr(expr)) {
@@ -13524,123 +13829,215 @@ bool Item_func_lnnvl::validate_cond(THD *thd) {
   return false;
 }
 
-String *Item_func_sequence::val_str(String *str) {
-  DBUG_TRACE;
-  if (ref_seq_func) {
-    return ref_seq_func->val_str(str);
-  } else {
-    if (first_read) {
-      THD *session = thd_get_current_thd();
-      if (read_next) {
-        if (!m_seq_def->read_val(read_next, curval)) {
-          session->update_seq_cache_entity(db_name, table_name,
-                                           m_seq_def->volatile_id(), curval);
-        }
-      } else {
-        set_val_with_cached_currval();
-      }
-      first_read = false;
-    }
-    my_decimal2string(E_DEC_FATAL_ERROR, &curval, str);
-    return str;
+bool Item_func_sequence::resolve_type(THD *thd) {
+  auto select = thd->lex->current_query_block();
+  if (select->master_query_expression()->is_set_operation() ||
+      select->outer_query_block() || select->is_grouped() ||
+      select->is_distinct() || select->is_ordered() ||
+      select->select_limit_fetch ||
+      (!(select->resolve_place == Query_block::RESOLVE_SELECT_LIST ||
+         select->resolve_place == Query_block::RESOLVE_NONE))) {
+    my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), "");
+    return true;
   }
+
+  if (select->sequences_counter == nullptr) {
+    select->sequences_counter = new (thd->mem_root) SequenceCounter(thd);
+  }
+
+  auto iter = std::find_if(select->sequences_counter->sequence_funcs.begin(),
+                           select->sequences_counter->sequence_funcs.end(),
+                           [this](const SequenceEntity *p) {
+                             return p->entity == this->m_seq_def->entity;
+                           });
+
+  if (iter != select->sequences_counter->sequence_funcs.end()) {
+    m_seq_def = *iter;
+  } else {
+    select->sequences_counter->sequence_funcs.push_back(m_seq_def);
+  }
+
+  if (read_next) m_seq_def->read_next = true;
+  set_sequence();
+  set_nullable(true);
+  unsigned_flag = false;
+  collation.set(&my_charset_numeric, DERIVATION_NUMERIC);
+  set_data_type_decimal(28, 0);  // force return decimal value
+
+  return false;
 }
 
-double Item_func_sequence::val_real() {
-  DBUG_TRACE;
-  if (ref_seq_func) {
-    return ref_seq_func->val_real();
-  } else {
-    if (first_read) {
-      THD *session = thd_get_current_thd();
-      if (read_next) {
-        if (!m_seq_def->read_val(read_next, curval)) {
-          session->update_seq_cache_entity(db_name, table_name,
-                                           m_seq_def->volatile_id(), curval);
-        }
-      } else {
-        set_val_with_cached_currval();
-      }
-      first_read = false;
-    }
-    double res;
-    my_decimal2double(E_DEC_FATAL_ERROR, &curval, &res);
-    return res;
-  }
+String *Item_func_sequence::val_str(String *str) {
+  my_decimal decimal_value, *val;
+  if (!(val = val_decimal(&decimal_value))) return nullptr;  // null is set
+  my_decimal_round(E_DEC_FATAL_ERROR, val, decimals, false, val);
+  str->set_charset(collation.collation);
+  my_decimal2string(E_DEC_FATAL_ERROR, val, str);
+  return str;
 }
 
 longlong Item_func_sequence::val_int() {
-  DBUG_TRACE;
-  if (ref_seq_func) {
-    return ref_seq_func->val_int();
-  } else {
-    if (first_read) {
-      THD *session = thd_get_current_thd();
-      if (read_next) {
-        if (!m_seq_def->read_val(read_next, curval)) {
-          session->update_seq_cache_entity(db_name, table_name,
-                                           m_seq_def->volatile_id(), curval);
-        }
-      } else {
-        set_val_with_cached_currval();
-      }
-      first_read = false;
-    }
-    longlong res;
-    my_decimal2int(E_DEC_FATAL_ERROR, &curval, false, &res);
-    return res;
-  }
+  my_decimal decimal_value, *val;
+  if (!(val = val_decimal(&decimal_value))) return 0;  // null is set
+  longlong result;
+  my_decimal2int(E_DEC_FATAL_ERROR, val, unsigned_flag, &result);
+  return result;
+}
+
+double Item_func_sequence::val_real() {
+  my_decimal decimal_value, *val;
+  double result;
+  if (!(val = val_decimal(&decimal_value))) return 0.0;  // null is set
+  my_decimal2double(E_DEC_FATAL_ERROR, val, &result);
+  return result;
 }
 
 my_decimal *Item_func_sequence::val_decimal(my_decimal *) {
   DBUG_TRACE;
-  if (ref_seq_func) {
-    return ref_seq_func->val_decimal(nullptr);
-  } else {
-    if (first_read) {
-      THD *session = thd_get_current_thd();
-      if (read_next) {
-        if (!m_seq_def->read_val(read_next, curval)) {
-          session->update_seq_cache_entity(db_name, table_name,
-                                           m_seq_def->volatile_id(), curval);
+  assert(m_seq_def && m_seq_def->entity);
+  null_value = true;
+  if (m_seq_def && m_seq_def->entity) {
+    // set val
+    if (!m_seq_def->init) {
+      if (m_seq_def->read_next) {
+        if (m_seq_def->executed) {  // has run in iterator
+          return nullptr;
+        } else {
+          if (m_seq_def->Read_val()) return nullptr;
         }
       } else {
-        set_val_with_cached_currval();
+        if (m_seq_def->Reset()) return nullptr;
       }
-      first_read = false;
     }
+    curval = m_seq_def->curval;
+    null_value = false;
     return &curval;
   }
+
+  return nullptr;
 }
 
-void Item_func_sequence::reset_read_flag() {
-  assert(!ref_seq_func);
-  first_read = true;
+void Item_func_sequence::print(const THD *thd, String *str,
+                               enum_query_type query_type) const {
+  m_seq_def->print(thd, str, query_type);
+  str->append(func_name());
+}
+
+void Item_func_sequence::update_used_tables() {
+  Item_func::update_used_tables();
+  set_sequence();
+  used_tables_cache |=
+      RAND_TABLE_BIT &
+      current_thd->lex->current_query_block()->all_tables_map();
 }
 
 /* recheck metadata version of sequence
    @return:
       false  check pass
       true   version changed or sequence no longer exist */
-bool Item_func_sequence::recheck_sequence_version(THD *thd) {
-  assert(!ref_seq_func);  // not for ref seq func item
-
-  if (sequences_metadata_version == 0) return true;
+bool SequenceEntity::check_sequence_version(THD *thd) {
+  if (sequence_metadata_version == 0) return true;
   auto new_version = has_sequence_def(thd, db_name, table_name);
-  if (new_version != sequences_metadata_version) return true;
+  if (new_version != sequence_metadata_version) return true;
   return false;
 }
 
-void Item_func_sequence::set_val_with_cached_currval() {
-  THD *session = thd_get_current_thd();
-  const my_decimal *cached_val =
-      session->get_cached_seq_currval(db_name, table_name, m_seq_def);
-  if (cached_val) {
-    this->curval = *cached_val;
-  } else {
-    my_error(ER_UNKNOWN_TABLE, MYF(0),
-             "CURRVAL of sequence is not yet defined in this session");
+bool SequenceEntity::check_and_refix(THD *thd) {
+  auto gdb_seq_entity = find_sequence_def(thd, db_name, table_name);
+  if (gdb_seq_entity &&
+      gdb_seq_entity->metadata_version() == sequence_metadata_version)
+    return false;
+
+  if (!gdb_seq_entity) {
+    my_error(ER_GDB_READ_SEQUENCE, MYF(0), "sequence not found!");
+    return true;
   }
+
+  // re-fix sequence
+  sequence_metadata_version = gdb_seq_entity->metadata_version();
+  if (entity != gdb_seq_entity.get()) {
+    /* sequence re-created */
+    entity = gdb_seq_entity.get();
+    init = false;
+    executed = false;
+  }
+  return false;
+}
+
+bool SequenceEntity::Reset() {
+  if (read_next) {
+    init = false;
+    executed = true;
+  } else {
+    /**
+     * For compatibility with Oracle, see #4421
+     * */
+    auto cached_currval = current_thd->get_cached_seq_currval(entity);
+    if (cached_currval == nullptr) {
+      my_error(ER_GDB_READ_SEQUENCE, MYF(0),
+               "currval is not yet defined in this session");
+      return true;
+    } else {
+      curval = *cached_currval;
+      init = true;
+    }
+  }
+  return false;
+}
+
+bool SequenceEntity::Read_val() {
+  if (entity->read_val(read_next, curval)) {
+    return true;
+  } else {
+    current_thd->update_seq_cache_entity(entity, curval);
+    init = true;
+    return false;
+  }
+}
+
+void SequenceEntity::print(const THD *thd, String *str,
+                           enum_query_type query_type) const {
+  if (!(query_type & QT_NO_DB)) {
+    append_identifier(thd, str, db_name, strlen(db_name));
+    str->append('.');
+  }
+
+  append_identifier(thd, str, table_name, strlen(table_name));
+  str->append('.');
+}
+
+bool SequenceCounter::Reset() {
+  for (auto seq : sequence_funcs) {
+    if (seq->Reset()) return true;
+  }
+  return false;
+}
+
+bool SequenceCounter::Incr() {
+  for (auto seq : sequence_funcs) {
+    if (seq->read_next) {
+      if (seq->Read_val()) return true;
+    }
+  }
+  return false;
+}
+
+bool SequenceCounter::check_sequence_version(THD *thd) {
+  for (auto &seq : sequence_funcs) {
+    if (seq->check_sequence_version(thd)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool SequenceCounter::check_and_refix(THD *thd) {
+  for (auto &seq : sequence_funcs) {
+    if (seq->check_and_refix(thd)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool Item_func::check_record_table_index(int index_length) {

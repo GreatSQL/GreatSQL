@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2013, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -114,6 +114,8 @@ bool Table_trigger_dispatcher::create_trigger(
   assert(m_subject_table);
   assert(!already_exists);
   LEX *lex = thd->lex;
+  bool is_create_or_replace_mode = lex->is_sp_create_or_replace();
+
   dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
 
   // If this table has broken triggers, CREATE TRIGGER is not allowed.
@@ -168,7 +170,8 @@ bool Table_trigger_dispatcher::create_trigger(
     }
   }
 
-  if (table_name != "") {
+  // for CREATE_OR_REPLACE mode, old trigger must have been dropped in cache
+  if (table_name != "" and !is_create_or_replace_mode) {
     // Trigger with the same name already exists in this schema.
     if (if_not_exists) {
       /*

@@ -2,7 +2,7 @@
 
 Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 Copyright (c) 2021, Huawei Technologies Co., Ltd.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -3132,7 +3132,8 @@ static void innobase_create_index_def(const TABLE *altered_table,
   index_def->m_n_fields = n_fields;
   index_def->m_name = mem_heap_strdup(heap, key->name);
   index_def->m_rebuild = new_clustered;
-  index_def->m_nulls_equal = ((key->flags & HA_NULL_ARE_EQUAL));
+  index_def->m_nulls_equal = index_def->m_ora_mode =
+      ((key->flags & HA_FROM_ORA_MODE) ? true : false);
 
   /* If this is a spatial index, we need to fetch the SRID */
   if (key->flags & HA_SPATIAL) {

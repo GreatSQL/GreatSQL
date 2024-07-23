@@ -95,14 +95,16 @@ end;
 $$
 show procedure code p1;
 Pos	Instruction
-0	set stu_record_val@1 tklist('aa','bb','cc')
-1	set id@2 1
-2	stmt "select stu_record_val(id)"
-3	set_record_table stu_record_val(id) 1
+0	setup_row_field tklist@0
+1	setup_row_field stu_record_val@1
+2	set stu_record_val@1 tklist('aa','bb','cc')
+3	set id@2 1
 4	stmt "select stu_record_val(id)"
-5	set_record_table stu_record_val(3) 1
-6	stmt "select stu_record_val(id), stu_record..."
-7	stmt "SELECT stu_record_val.count"
+5	set_record_table stu_record_val(id) 1
+6	stmt "select stu_record_val(id)"
+7	set_record_table stu_record_val(3) 1
+8	stmt "select stu_record_val(id), stu_record..."
+9	stmt "SELECT stu_record_val.count"
 call p1;
 stu_record_val(id)
 aa
@@ -606,14 +608,18 @@ end;
 $$
 show procedure code p1;
 Pos	Instruction
-0	set stu_record.id@0[0] 1
-1	set stu_record.name_d@0[1] 'a'
-2	set stu_record.score@0[2] 0
-3	set stu_record_val@2 tklist@1
-4	set stu_record_val1@3 stu_record@0
-5	set stu_record_val1@3 stu_record(10,'bb',0.2)
-6	set_record_table stu_record_val(1) stu_record_val1@3
-7	stmt "select stu_record_val(1)"
+0	setup_row_field stu_record@0
+1	set stu_record.id@0[0] 1
+2	set stu_record.name_d@0[1] 'a'
+3	set stu_record.score@0[2] 0
+4	setup_row_field tklist@1
+5	setup_row_field stu_record_val@2
+6	set stu_record_val@2 tklist@1
+7	setup_row_field stu_record_val1@3
+8	set stu_record_val1@3 stu_record@0
+9	set stu_record_val1@3 stu_record(10,'bb',0.2)
+10	set_record_table stu_record_val(1) stu_record_val1@3
+11	stmt "select stu_record_val(1)"
 call p1;
 stu_record_val(1)
 id:10 | name_d:bb | score:0.2
@@ -963,7 +969,7 @@ $$
 call p1;
 dr_table.first	dr_table.last
 id	id2
-ERROR 22007: Truncated incorrect DOUBLE value: 'id'
+ERROR HY000: Incorrect arguments to round
 drop PROCEDURE p1;
 #
 # test of type dr_type is table of table%rowtype
@@ -1184,7 +1190,7 @@ end loop;
 end;
 $$
 call p1;
-ERROR 22007: Truncated incorrect DOUBLE value: 'aa'
+ERROR HY000: Incorrect arguments to round
 drop PROCEDURE p1;
 #
 # test of type dr_type is table of record table

@@ -1,0 +1,225 @@
+--source include/master-slave.inc
+--sync_slave_with_master
+
+connection master;
+--disable_warnings
+--replace_result $SLAVE_MYPORT SLAVE_PORT
+eval CHANGE REPLICATION SOURCE TO SOURCE_HOST="127.0.0.1", SOURCE_USER="root", SOURCE_PASSWORD="", SOURCE_PORT=$SLAVE_MYPORT;
+START REPLICA;
+--enable_warnings
+
+--exec $MYSQL --local-infile=1 < $MYSQL_TEST_DIR/suite/data_mask/include/sys_masking.sql
+
+connection master;
+
+CREATE TABLE t1 (
+        col_tinyint tinyint AUTO_INCREMENT PRIMARY KEY,
+        col_tinyintus tinyint unsigned,
+        col_smallint smallint,
+        col_smallintus smallint unsigned,
+        col_mediumint mediumint,
+        col_mediumintus mediumint unsigned,
+        col_int int,
+        col_intus int unsigned,
+        col_integer integer,
+        col_integerus int unsigned,
+        col_bigint bigint,
+        col_bigintus bigint unsigned,
+        col_decimal decimal(10, 2),
+        col_dec dec(10, 2),
+        col_numeric numeric(10, 2),
+        col_float float,
+        col_double double,
+        col_real real,
+        col_bool bool,
+        col_boolean boolean,
+        col_DATE DATE,
+        col_DATETIME DATETIME,
+        col_TIMESTAMP TIMESTAMP,
+        col_TIME TIME,
+        col_YEAR YEAR,
+        col_CHAR CHAR(10),
+        col_VARCHAR VARCHAR(20),
+        col_BINARY BINARY(10),
+        col_VARBINARY VARBINARY(50),
+        col_TEXT TEXT,
+        col_TINYTEXT TINYTEXT,
+        col_MEDIUMTEXT MEDIUMTEXT,
+        col_LONGTEXT LONGTEXT,
+        col_BLOB BLOB,
+        col_TINYBLOB TINYBLOB,
+        col_MEDIUMBLOB MEDIUMBLOB,
+        col_LONGBLOB LONGBLOB,
+        col_bit bit,
+        col_enum enum('上北','下南','左西','右东','simple','-128','127'),
+        col_SET SET('C', 'G', 'O'),
+        col_CLOB CLOB,
+        col_number number,
+        col_VARCHAR2 VARCHAR2(100),
+        col_plsinteger PLS_INTEGER,
+        col_long long,
+        col_raw varchar2(200),
+        col_json json
+);
+
+INSERT INTO t1
+VALUES (-128,0,-32768,0, -8388608,0, -2147483648,0, -2147483648,0
+        , -9223372036854775808,0, -99999999.99, -99999999.99, -99999999.99, -3.402823466E+38
+        , -1.7976931348623157E+308, -3.402823466E+38, 0, 0, '1000-01-01'
+        , '1000-01-01 00:00:00', '1970-01-01 08:00:01.000000', '-838:59:59.000000', '1901', 'halo'
+        , 'halo', 'nuphy', 'nuphy', 'MySQL的提供了四种TEXT类型：TINYTEXT，TEXT，MEDIUMTEXT，和LONGTEXT', 'MySQL的提供了四种TEXT类型：TINYTEXT，TEXT，MEDIUMTEXT，和LONGTEXT'
+        , 'MySQL的提供了四种TEXT类型：TINYTEXT，TEXT，MEDIUMTEXT，和LONGTEXT', 'MySQL的提供了四种TEXT类型：TINYTEXT，TEXT，MEDIUMTEXT，和LONGTEXT', 'MySQL中BLOB是个类型系列，包括：TinyBlob、Blob、MediumBlob、LongBlob，这几个类型之间的唯一区别是在存储文件的最大大小上不同', 'MySQL中BLOB是个类型系列，包括：TinyBlob、Blob、MediumBlob、LongBlob，这几个类型之间的唯一区别是在存储文件的最大大小上不同', 'MySQL中BLOB是个类型系列，包括：TinyBlob、Blob、MediumBlob、LongBlob，这几个类型之间的唯一区别是在存储文件的最大大小上不同'
+        , 'MySQL中BLOB是个类型系列，包括：TinyBlob、Blob、MediumBlob、LongBlob，这几个类型之间的唯一区别是在存储文件的最大大小上不同', b'0', '上北', 'C', 'clob'
+        , '1.234', 'ooooooo', '987', 'woshi long','woshi raw',
+        '{"username":"admin","password":"123"}'
+);
+INSERT INTO t1
+VALUES (1,127, +32767,65535, +8388607,8388607, +2147483647,2147483647, +2147483647,2147483647
+        , +9223372036854775807,9223372036854775807, +99999999.99, +99999999.99, +99999999.99, 0
+        , 0, 0, 0, 1, null
+        , null, null, '00:00:00', '0000', '!@#$%^&*()'
+        , '!@#$%^&*()', 'binary,me', 'varbinary,me.varbinary,me.varbinary,me.', 'text col,me.text col,me.text col,me.', 'tinytext col,me.tinytext col,me.tinytext col,me.'
+        , 'mediumtext col,me.mediumtext col,me.mediumtext col,me.', 'longtext col,me.longtext col,me.longtext col,me.', 'this is blob col,loc bolb si siht.this is blob col,loc bolb si siht.this is blob col,loc bolb si siht.', 'this is tinyblob col,loc bolbynit si siht.this is tinyblob col,loc bolbynit si siht.this is tinyblob col,loc bolbynit si siht.', 'this is mediumblob col,loc bolbmuidem si siht.this is mediumblob col,loc bolbmuidem si siht.this is mediumblob col,loc bolbmuidem si siht.'
+        , 'this is longblob col,loc bolbgnol si siht.this is longblob col,loc bolbgnol si siht.this is longblob col,loc bolbgnol si siht.', b'0', '右东', 'C,G,O', 'woshi clob ,bolc ihsow.woshi clob ,bolc ihsow.'
+        , '301.9', 'this is varchar2 col.this is varchar2 col.this is varchar2 col.', '666', 'this is long col.this is long col.','this is raw col.this is raw col.',
+     '[{"username":"bazhu","password":"root"},{"username":"batai","password":"qiantai"},{"username":"shouhuoji","password":"free"}]'
+);
+INSERT INTO t1
+VALUES (3,255, 32767,65535, 8388607,16777215, 2147483647,4294967295, 2147483647,4294967295
+        , 9223372036854775807,18446744073709551615, 99999999.99, 99999999.99, 99999999.99, -1.175494351E-38
+        , -2.2250738585072014E-308, 3.402823466E+38, 1, 1, '9999-12-31'
+        , '9999-12-31 23:59:59', '2038-01-19 03:14:07.000000', '838:59:59.000000', '2155', 'thisischar'
+        , 'thisisvarchar', 'me,binary', 'thisisvarbinary', 'this is text col', 'this is tinytext col'
+        , 'this is mediumtext col', 'this is longtext col', 'this is blob col,loc bolb si siht', 'this is tinyblob col,loc bolbynit si siht', 'this is mediumblob col,loc bolbmuidem si siht'
+        , 'this is longblob col,loc bolbgnol si siht', b'1', '下南', 'G', 'woshi clob ,bolc ihsow'
+        , '9.301', 'this is varchar2 col', '930', 'this is long col','this is raw col',
+        '{"username":"wangguan","password":"root"}'
+);
+
+create user 'user1'@'localhost' IDENTIFIED with mysql_native_password;
+create user 'user2'@'localhost' IDENTIFIED with mysql_native_password;
+
+GRANT ALL PRIVILEGES ON test.* TO 'user1'@'localhost' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON test.* TO 'user2'@'localhost' WITH GRANT OPTION;
+
+call sys_masking.create_label('test','t1','col_int','label_1');
+call sys_masking.create_label('test','t1','col_VARCHAR','label_2');
+
+call sys_masking.create_policy('policy1', 'maskall', '*');
+call sys_masking.policy_add_label('policy1', 'label_1');
+call sys_masking.policy_add_user('policy1', 'user2@localhost');
+
+call sys_masking.create_policy('policy2', 'mask_inside', '2,4,*');
+call sys_masking.policy_add_label('policy2', 'label_2');
+call sys_masking.policy_add_user('policy2', 'user1@localhost');
+
+set global enable_data_masking = on;
+FLUSH PRIVILEGES;
+
+connect (root,localhost,root,,);
+connect (user1,localhost,user1,,);
+connect (user2,localhost,user2,,);
+--connection user1
+--echo connect user1
+
+select col_int,col_VARCHAR from t1 ;
+
+select col_int from t1 group by col_int;
+
+select col_VARCHAR from t1 group by col_VARCHAR;
+
+select col_int,col_VARCHAR from t1 order by col_int;
+
+select col_VARCHAR from t1 union select col_int from t1;
+
+select col_VARCHAR as a from t1 union select col_int from t1 order by a;
+
+select col_VARCHAR from t1 union all select col_int from t1;
+
+select col_VARCHAR as a from t1 union  all select col_int from t1 order by a;
+
+
+select col_int from t1 union select col_VARCHAR from t1;
+
+select col_int as a from t1 union select col_VARCHAR from t1 order by a;
+
+select col_int from t1 union all select col_VARCHAR from t1;
+
+select col_int as a from t1 union  all select col_VARCHAR from t1 order by a;
+
+
+--connection user2
+--echo connect user2
+
+select col_int,col_VARCHAR from t1 ;
+
+select col_int from t1 group by col_int;
+
+select col_VARCHAR from t1 group by col_VARCHAR;
+
+select col_int,col_VARCHAR from t1 order by col_int;
+
+select col_VARCHAR from t1 union select col_int from t1;
+
+select col_VARCHAR as a from t1 union select col_int from t1 order by a;
+
+select col_VARCHAR from t1 union all select col_int from t1;
+
+select col_VARCHAR as a from t1 union  all select col_int from t1 order by a;
+
+select col_int from t1 union select col_VARCHAR from t1;
+
+select col_int as a from t1 union select col_VARCHAR from t1 order by a;
+
+select col_int from t1 union all select col_VARCHAR from t1;
+
+select col_int as a from t1 union  all select col_VARCHAR from t1 order by a;
+
+--disconnect user1
+--disconnect user2
+
+connection master;
+
+--sync_slave_with_master
+--echo "on slave"
+connection slave;
+set global enable_data_masking = on;
+
+select polname,maskaction,optinal,polenabled from sys_masking.masking_policy;
+select polname,label_name from sys_masking.masking_policy_labels;
+select polname,user_name from sys_masking.masking_policy_users;
+select label_id,label_name,db_name,table_name,field_name from sys_masking.masking_label;
+
+FLUSH PRIVILEGES;
+
+connect (slave_user1, 127.0.0.1, user1, , test, $SLAVE_MYPORT, );
+connect (slave_user2, 127.0.0.1, user2, , test, $SLAVE_MYPORT, );
+
+--connection slave_user1
+select col_int,col_VARCHAR from t1 ;
+
+--connection slave_user2
+
+select col_int,col_VARCHAR from t1 ;
+
+--disconnect slave_user1
+--disconnect slave_user2
+
+connection slave;
+set persist  enable_data_masking = OFF;
+RESET PERSIST;
+
+connection master;
+
+drop user 'user1'@'localhost' ;
+drop user 'user2'@'localhost' ;
+
+set persist  enable_data_masking = OFF;
+RESET PERSIST;
+drop table t1;
+
+drop database sys_masking;
+drop TABLESPACE gdb_sys_masking;
+
+STOP REPLICA;
+--source include/rpl_end.inc

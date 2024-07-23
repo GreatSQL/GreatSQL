@@ -28,3 +28,4 @@ main.join_cache_bka_nobnl : BUG#0 skipped
 main.mtr_unit_tests : BUG#0 skipped
 main.multiaddress_bind : BUG#0 skipped
 main.dd_bootstrap_debug : BUG#0 skipped
+main.func_gm              : WL#000 skip need babassl

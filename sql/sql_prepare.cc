@@ -1,6 +1,6 @@
 /* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2993,7 +2993,7 @@ bool Prepared_statement::prepare(THD *thd, const char *query_str,
     has to be adjusted to not do rollback in substatement.
   */
   // dbms_sql allow dynamic SQL  but only allow dml in substatement
-  assert(!thd->in_sub_stmt || thd->use_in_dbms_sql);
+  assert(!thd->in_sub_stmt || thd->use_in_dyn_sql);
   if (thd->transaction_rollback_request) {
     trans_rollback_implicit(thd);
     thd->mdl_context.release_transactional_locks();
@@ -3501,10 +3501,12 @@ reexecute:
       // If (re-?)preparation or optimization failed and it was for
       // a secondary storage engine, disable the secondary storage
       // engine and try again without it.
+      // If use_secondary_engine is FORCED, there is no need to retry.
       if (error && m_lex->m_sql_cmd != nullptr &&
           thd->secondary_engine_optimization() ==
               Secondary_engine_optimization::SECONDARY &&
-          !m_lex->unit->is_executed()) {
+          !m_lex->unit->is_executed() &&
+          thd->variables.use_secondary_engine != SECONDARY_ENGINE_FORCED) {
         thd->clear_error();
         thd->set_secondary_engine_optimization(
             Secondary_engine_optimization::PRIMARY_ONLY);

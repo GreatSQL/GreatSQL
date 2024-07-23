@@ -374,6 +374,12 @@ INSERT INTO global_suppressions VALUES
  */
  ("Manifest file '.*' is not read-only. For better security, please make sure that the file is read-only."),
 
+ /*
+   sched affinity
+*/
+ ("libnuma test fail."),
+ ("numa_available test fail."),
+
  ("THE_LAST_SUPPRESSION");
 
 

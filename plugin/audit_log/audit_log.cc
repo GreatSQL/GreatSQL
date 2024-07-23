@@ -1,5 +1,6 @@
 /* Copyright (c) 2014-2016 Percona LLC and/or its affiliates. All rights
    reserved.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License
@@ -23,6 +24,7 @@
 
 #include "m_ctype.h"
 #include "my_sys.h"
+#include "my_systime.h"
 #include "mysql/components/services/component_sys_var_service.h"
 #include "mysql/plugin.h"
 #include "mysql/plugin_audit.h"
@@ -48,36 +50,32 @@ static const constexpr auto MAX_TIMESTAMP_SIZE = 25;
 
 struct audit_record_t {
   audit_record_t() {
-    memset(name, 0, sizeof(name));
-    memset(record, 0, sizeof(record));
-    memset(timestamp, 0, sizeof(timestamp));
-    memset(command_class, 0, sizeof(command_class));
     connection_id = 0;
     status = 0;
-    memset(user, 0, sizeof(user));
-    memset(host, 0, sizeof(host));
-    memset(os_user, 0, sizeof(os_user));
-    memset(ip, 0, sizeof(ip));
-    memset(db, 0, sizeof(db));
+    timegmt = my_micro_time();
   }
-  char name[64];
-  char record[MAX_RECORD_ID_SIZE];
-  char timestamp[MAX_TIMESTAMP_SIZE];
-  char command_class[64]{0};
+  std::string name;
+  std::string record;
+  std::string timestamp;
+  std::string command_class;
   unsigned long connection_id;
   int status;
   std::string sqltext;
-  char user[USERNAME_LENGTH + 1];
-  char host[HOSTNAME_LENGTH + 1];
-  char os_user[USERNAME_LENGTH + 1];
-  char ip[HOSTNAME_LENGTH + 1];
-  char db[NAME_LEN + 1];
+  std::string user;
+  std::string host;
+  std::string priv_user;
+  std::string proxy_user;
+  std::string os_user;
+  std::string ip;
+  std::string db;
+  std::string server_version;
+  std::string os_version;
+  ulonglong timegmt;
 };
 
-static std::string replace_special_char(const char *s) {
-  std::string str(s);
+static void replace_special_char(std::string &str) {
   size_t len = str.length();
-  if (len == 0) return str;
+  if (len == 0) return;
   size_t i = 0;
   while (i < str.length()) {
     char c = str[i];
@@ -87,31 +85,52 @@ static std::string replace_special_char(const char *s) {
     }
     i++;
   }
-  return str;
+}
+
+static void audit_replace_special_char(audit_record_t &audit_record) {
+  replace_special_char(audit_record.name);
+  replace_special_char(audit_record.record);
+  replace_special_char(audit_record.timestamp);
+  replace_special_char(audit_record.command_class);
+  replace_special_char(audit_record.sqltext);
+  replace_special_char(audit_record.user);
+  replace_special_char(audit_record.host);
+  replace_special_char(audit_record.os_user);
+  replace_special_char(audit_record.ip);
+  replace_special_char(audit_record.db);
+  replace_special_char(audit_record.server_version);
+  replace_special_char(audit_record.os_version);
 }
 
 static void audit_log_in_table(audit_record_t &audit_record) {
   char connection_id[32];
   char status[11];
+  char timegmt[32];
+  char serverid[32];
   snprintf(connection_id, sizeof(connection_id), "%lu",
            audit_record.connection_id);
   snprintf(status, sizeof(status), "%d", audit_record.status);
+  snprintf(timegmt, sizeof(timegmt), "%llu", audit_record.timegmt);
+  snprintf(serverid, sizeof(serverid), "%ld", server_id);
 
   Gdb_cmd_service cmd_service;
 
-  std::string sql("INSERT INTO sys_audit.audit_log VALUES (");
-  sql = sql + "'" + replace_special_char(audit_record.name) + "'" + ", '" +
-        replace_special_char(audit_record.record) + "'" + ", '" +
-        replace_special_char(audit_record.timestamp) + "'" + ", '" +
-        replace_special_char(audit_record.command_class) + "'" + ", '" +
-        connection_id + "'" + ", '" + status + "'" + ", '" +
-        replace_special_char(audit_record.sqltext.c_str()) + "'" + ", '" +
-        replace_special_char(audit_record.user) + "'" + ", '" +
-        replace_special_char(audit_record.host) + "'" + ", '" +
-        replace_special_char(audit_record.os_user) + "'" + ", '" +
-        replace_special_char(audit_record.ip) + "'" + ", '" +
-        replace_special_char(audit_record.db) + "'" + ")";
+  audit_replace_special_char(audit_record);
+  std::string sql("INSERT INTO sys_audit.audit_log SET ");
+  sql = sql + "name = '" + audit_record.name + "', " + "record = '" +
+        audit_record.record + "', " + "timestamp = '" + audit_record.timestamp +
+        "', " + "command_class = '" + audit_record.command_class + "', " +
+        "connection_id = " + connection_id + ", " + "status = '" + status +
+        "', " + "sqltext = '" + audit_record.sqltext + "', " + "user = '" +
+        audit_record.user + "', " + "host = '" + audit_record.host + "', " +
+        "priv_user = '" + audit_record.priv_user + "', " + "os_user = '" +
+        audit_record.os_user + "', " + "ip = '" + audit_record.ip + "', " +
+        "db = '" + audit_record.db + "', " + "server_version = '" +
+        audit_record.server_version + "', " + "os_version = '" +
+        audit_record.os_version + "', " + "server_id = " + serverid + ", " +
+        "timegmt = " + timegmt;
 
+  cmd_service.execute_sql("SET SESSION SQL_LOG_BIN = OFF");
   cmd_service.execute_sql(sql);
 }
 
@@ -218,7 +237,7 @@ static char *make_timestamp(char *buf, size_t buf_len, time_t t) noexcept {
   tm tm;
 
   memset(&tm, 0, sizeof(tm));
-  strftime(buf, buf_len, "%FT%TZ", localtime_r(&t, &tm));
+  strftime(buf, buf_len, "%F %T", localtime_r(&t, &tm));
 
   return buf;
 }
@@ -228,7 +247,7 @@ static char *make_record_id(char *buf, size_t buf_len) noexcept {
   size_t len;
 
   memset(&tm, 0, sizeof(tm));
-  len = snprintf(buf, buf_len, "%llu_", next_record_id());
+  len = snprintf(buf, buf_len, "%lu_%llu_", server_id, next_record_id());
 
   strftime(buf + len, buf_len - len, "%FT%T", gmtime_r(&log_file_time, &tm));
 
@@ -500,13 +519,14 @@ static char *audit_log_audit_record(char *buf, size_t buflen, const char *name,
   /* make sure that record is not truncated */
   assert(buf + *outlen <= buf + buflen);
 
-  memcpy(audit_record.name, name, sizeof(audit_record.name) - 1);
-  memcpy(audit_record.record, id_str, sizeof(audit_record.record) - 1);
-  memcpy(audit_record.timestamp, timestamp, sizeof(audit_record.timestamp) - 1);
-  memcpy(audit_record.command_class, server_version, SERVER_VERSION_LENGTH);
-  audit_record.sqltext.assign(arg_buf, sizeof(arg_buf));
-  snprintf(audit_record.os_user, sizeof(audit_record.os_user), "%s-%s",
-           MACHINE_TYPE, SYSTEM_TYPE);
+  audit_record.name = name;
+  audit_record.record = id_str;
+  audit_record.timestamp = timestamp;
+  audit_record.server_version = server_version;
+  audit_record.sqltext = arg_buf;
+  audit_record.os_version.assign(MACHINE_TYPE);
+  audit_record.os_version.append("-");
+  audit_record.os_version.append(SYSTEM_TYPE);
 
   return buf;
 }
@@ -636,21 +656,21 @@ static char *audit_log_general_record(char *buf, size_t buflen,
   /* make sure that record is not truncated */
   assert(endptr + *outlen <= buf + buflen);
 
-  memcpy(audit_record.name, name, sizeof(audit_record.name) - 1);
-  memcpy(audit_record.record, id_str, sizeof(audit_record.record) - 1);
-  memcpy(audit_record.timestamp, timestamp, sizeof(audit_record.timestamp) - 1);
-  memcpy(audit_record.command_class, event.general_sql_command.str,
-         sizeof(audit_record.command_class) - 1);
+  audit_record.name = name;
+  audit_record.record = id_str;
+  audit_record.timestamp = timestamp;
+  audit_record.command_class.assign(event.general_sql_command.str,
+                                    event.general_sql_command.length);
   audit_record.connection_id = event.general_thread_id;
   audit_record.status = status;
   if (event.general_user.length)
     audit_record.sqltext.assign(event.general_query.str,
                                 event.general_query.length);
-  memcpy(audit_record.user, user, sizeof(audit_record.user) - 1);
-  memcpy(audit_record.host, host, sizeof(audit_record.host) - 1);
-  memcpy(audit_record.os_user, external_user, sizeof(audit_record.os_user) - 1);
-  memcpy(audit_record.ip, ip, sizeof(audit_record.ip) - 1);
-  memcpy(audit_record.db, db, sizeof(audit_record.db) - 1);
+  audit_record.user = user;
+  audit_record.host = host;
+  audit_record.os_user = external_user;
+  audit_record.ip = ip;
+  audit_record.db = db;
 
   return endptr;
 }
@@ -661,7 +681,8 @@ static char *audit_log_connection_record(
     audit_record_t &audit_record) noexcept {
   char id_str[MAX_RECORD_ID_SIZE];
   char timestamp[MAX_TIMESTAMP_SIZE];
-  char *user, *priv_user, *external_user, *proxy_user, *host, *ip, *database;
+  char *user, *priv_user, *external_user, *proxy_user, *host, *ip, *database,
+      *priv_host;
   char *endptr = buf, *endbuf = buf + buflen;
 
   static const char *format_string[] = {
@@ -723,6 +744,8 @@ static char *audit_log_connection_record(
                              endptr, endbuf - endptr, &endptr, nullptr);
   host = escape_string(event.host.str, event.host.length, endptr,
                        endbuf - endptr, &endptr, nullptr);
+  priv_host = escape_string(event.priv_host.str, event.priv_host.length, endptr,
+                            endbuf - endptr, &endptr, nullptr);
   ip = escape_string(event.ip.str, event.ip.length, endptr, endbuf - endptr,
                      &endptr, nullptr);
   database = escape_string(event.database.str, event.database.length, endptr,
@@ -745,21 +768,22 @@ static char *audit_log_connection_record(
   /* make sure that record is not truncated */
   assert(endptr + *outlen <= buf + buflen);
 
-  memcpy(audit_record.name, name, sizeof(audit_record.name) - 1);
-  memcpy(audit_record.record, id_str, sizeof(audit_record.record) - 1);
-  memcpy(audit_record.timestamp, timestamp, sizeof(audit_record.timestamp) - 1);
-  memcpy(audit_record.command_class, priv_user,
-         sizeof(audit_record.command_class) - 1);
+  audit_record.name = name;
+  audit_record.record = id_str;
+  audit_record.timestamp = timestamp;
   audit_record.connection_id = event.connection_id;
   audit_record.status = event.status;
   if (event.external_user.length)
     audit_record.sqltext.assign(event.external_user.str,
                                 event.external_user.length);
-  memcpy(audit_record.user, user, sizeof(audit_record.user) - 1);
-  memcpy(audit_record.host, host, sizeof(audit_record.host) - 1);
-  memcpy(audit_record.os_user, external_user, sizeof(audit_record.os_user) - 1);
-  memcpy(audit_record.ip, ip, sizeof(audit_record.ip) - 1);
-  memcpy(audit_record.db, database, sizeof(audit_record.db) - 1);
+  audit_record.user = user;
+  audit_record.host = host;
+  audit_record.priv_user.assign(priv_user);
+  audit_record.priv_user.append("@");
+  audit_record.priv_user.append(priv_host);
+  audit_record.os_user = external_user;
+  audit_record.ip = ip;
+  audit_record.db = database;
 
   return endptr;
 }
@@ -1707,18 +1731,6 @@ static void audit_log_include_commands_update(
   }
 }
 
-static void audit_log_to_table_update(MYSQL_THD thd MY_ATTRIBUTE((unused)),
-                                      SYS_VAR *var MY_ATTRIBUTE((unused)),
-                                      void *var_ptr, const void *save) {
-  *static_cast<int *>(var_ptr) = *static_cast<const int *>(save);
-}
-
-static void audit_log_enabled_update(MYSQL_THD thd MY_ATTRIBUTE((unused)),
-                                     SYS_VAR *var MY_ATTRIBUTE((unused)),
-                                     void *var_ptr, const void *save) {
-  *static_cast<int *>(var_ptr) = *static_cast<const int *>(save);
-}
-
 static MYSQL_SYSVAR_STR(
     include_commands, audit_log_include_commands, PLUGIN_VAR_RQCMDARG,
     "Comma separated list of commands for which events should be logged.",
@@ -1727,7 +1739,7 @@ static MYSQL_SYSVAR_STR(
 
 static MYSQL_SYSVAR_INT(enabled, audit_log_enabled, PLUGIN_VAR_RQCMDARG,
                         "Enable audit log, 0 for no, 1 for yes", nullptr,
-                        audit_log_enabled_update, 1, 0, 1, 0);
+                        nullptr, 1, 0, 1, 1);
 
 static MYSQL_THDVAR_STR(local,
                         PLUGIN_VAR_READONLY | PLUGIN_VAR_MEMALLOC |
@@ -1736,7 +1748,7 @@ static MYSQL_THDVAR_STR(local,
 
 static MYSQL_SYSVAR_INT(to_table, audit_log_to_table, PLUGIN_VAR_RQCMDARG,
                         "Audit log to local file, 0 for no, 1 for yes", nullptr,
-                        audit_log_to_table_update, 0, 0, 1, 0);
+                        nullptr, 0, 0, 1, 1);
 
 static MYSQL_THDVAR_ULONG(local_ptr,
                           PLUGIN_VAR_READONLY | PLUGIN_VAR_NOSYSVAR |

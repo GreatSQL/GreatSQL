@@ -1,5 +1,5 @@
 /* Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -101,6 +101,8 @@ const char *cargo_type_to_str(cargo_type x) {
       return "get_leaders_type";
     case set_flp_timeout:
       return "set_flp_timeout";
+    case set_notify_truly_remove:
+      return "set_notify_truly_remove";
     default:
       return "???";
   }

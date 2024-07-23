@@ -1,6 +1,8 @@
 # Test that a secondary engine can use statistics from indexes in the
 # primary engine.
 
+SET @@use_secondary_engine = ON;
+
 --disable_query_log
 eval INSTALL PLUGIN mock SONAME '$MOCK_PLUGIN';
 --enable_query_log

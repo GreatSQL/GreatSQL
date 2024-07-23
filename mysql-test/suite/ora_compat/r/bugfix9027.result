@@ -1,3 +1,0 @@
-set sql_mode=oracle;
-select sqlerrm(1023);
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use

@@ -1,5 +1,5 @@
 /* Copyright (c) 2010, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -702,7 +702,7 @@ int PFS_object_row::make_row(PFS_program *pfs) {
 }
 
 int PFS_column_row::make_row(const MDL_key *mdl) {
-  static_assert(MDL_key::NAMESPACE_END == 21,
+  static_assert(MDL_key::NAMESPACE_END == 22,
                 "Adjust performance schema when changing enum_mdl_namespace");
 
   bool with_schema = false;
@@ -810,6 +810,12 @@ int PFS_column_row::make_row(const MDL_key *mdl) {
       m_object_type = OBJECT_TYPE_CHECK_CONSTRAINT;
       with_schema = true;
       with_object = true;
+      break;
+    case MDL_key::MASKING_CACHE:
+      m_object_type = OBJECT_TYPE_DATA_MASK;
+      m_schema_name_length = mdl->db_name_length();
+      m_object_name_length = mdl->name_length();
+      m_column_name_length = 0;
       break;
     case MDL_key::NAMESPACE_END:
     default:

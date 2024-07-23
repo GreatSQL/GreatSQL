@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -128,9 +128,10 @@ uint32_t Gcs_xcom_utils::mhash(const unsigned char *buf, size_t length) {
   return sum;
 }
 
-void Gcs_xcom_utils::update_zone_id_for_paxos_node(const char *ip, int zone_id,
+void Gcs_xcom_utils::update_zone_id_for_paxos_node(const char *address,
+                                                   int zone_id,
                                                    bool zone_id_sync_mode) {
-  update_zone_id_for_consensus(ip, zone_id, zone_id_sync_mode);
+  update_zone_id_for_consensus(address, zone_id, zone_id_sync_mode);
 }
 
 void Gcs_xcom_utils::update_xcom_cache_mode_for_paxos(int new_mode) {

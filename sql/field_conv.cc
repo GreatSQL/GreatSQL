@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -858,8 +858,7 @@ type_conversion_status field_conv_slow(Field *to, const Field *from) {
                    udt->udt_name().str);
           return TYPE_ERR_BAD_VALUE;
         }
-        if (udt->field_udt_table_store_to_table(
-                to->virtual_tmp_table_addr()[0]))
+        if (udt->field_udt_table_store_to_table(to->val_udt()))
           return TYPE_ERR_BAD_VALUE;
         to->set_udt_value_initialized(true);
         return TYPE_OK;

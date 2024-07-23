@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -392,7 +393,9 @@ static int get_ddl_timeout(THD *thd) {
 }
 
 int innodb_clone_begin(handlerton *, THD *thd, const byte *&loc, uint &loc_len,
-                       uint &task_id, Ha_clone_type type, Ha_clone_mode mode) {
+                       uint &task_id, Ha_clone_type type, Ha_clone_mode mode,
+                       bool enable_page_track, uint64_t start_id,
+                       file_compress_mode_t comp_mode) {
   /* Check if reference locator is valid */
   if (loc != nullptr && !clone_validate_locator(loc, loc_len)) {
     int err = ER_CLONE_PROTOCOL;
@@ -481,12 +484,13 @@ int innodb_clone_begin(handlerton *, THD *thd, const byte *&loc, uint &loc_len,
 
     /* Create new clone handle for copy. Reference locator
     is used for matching the version. */
-    auto err = clone_sys->add_clone(loc, CLONE_HDL_COPY, clone_hdl);
+    auto err = clone_sys->add_clone(loc, CLONE_HDL_COPY, clone_hdl, 0);
     if (err != 0) {
       return (err);
     }
 
-    err = clone_hdl->init(loc, loc_len, type, nullptr);
+    err = clone_hdl->init(loc, loc_len, type, nullptr, enable_page_track,
+                          start_id, comp_mode);
 
     /* Check and wait if clone is marked for wait. */
     if (err == 0) {
@@ -781,7 +785,9 @@ int innodb_clone_end(handlerton *, THD *thd, const byte *loc, uint loc_len,
 
 int innodb_clone_apply_begin(handlerton *, THD *thd, const byte *&loc,
                              uint &loc_len, uint &task_id, Ha_clone_mode mode,
-                             const char *data_dir) {
+                             const char *data_dir, uint32_t max_concurrency,
+                             bool enable_page_track, uint64_t start_id,
+                             file_compress_mode_t comp_mode) {
   /* Check if reference locator is valid */
   if (loc != nullptr && !clone_validate_locator(loc, loc_len)) {
     int err = ER_CLONE_PROTOCOL;
@@ -867,12 +873,15 @@ int innodb_clone_apply_begin(handlerton *, THD *thd, const byte *&loc,
 
     /* Create new clone handle for apply. Reference locator
     is used for matching the version. */
-    auto err = clone_sys->add_clone(loc, CLONE_HDL_APPLY, clone_hdl);
+    auto err =
+        clone_sys->add_clone(loc, CLONE_HDL_APPLY, clone_hdl, max_concurrency);
     if (err != 0) {
       return (err);
     }
 
-    err = clone_hdl->init(loc, loc_len, HA_CLONE_HYBRID, data_dir);
+    err = clone_hdl->init(loc, loc_len,
+                          start_id ? HA_CLONE_PAGE : HA_CLONE_HYBRID, data_dir,
+                          enable_page_track, start_id, comp_mode);
 
     if (err != 0) {
       clone_sys->drop_clone(clone_hdl);

@@ -1,5 +1,5 @@
 /* Copyright (c) 2004, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -718,7 +718,7 @@ bool mysql_create_view(THD *thd, Table_ref *views, enum_view_create_mode mode) {
                 Item_func::Functype::SEQUENCE_FUNC) {
           Item_func_sequence const *item_seq =
               down_cast<Item_func_sequence *>(item);
-          seq_name = item_seq->table_name;
+          seq_name = item_seq->sequence_name();
           is_seq_used_in_the_view = true;
           break;
         }
@@ -1499,6 +1499,8 @@ bool parse_view_definition(THD *thd, Table_ref *view_ref) {
     tbl->open_type = OT_BASE_ONLY;
 
     tbl->belong_to_view = top_view;
+    tbl->belong_to_force_view =
+        ((top_view && top_view->is_force_view) ? top_view : nullptr);
     tbl->referencing_view = view_ref;
     tbl->prelocking_placeholder = view_ref->prelocking_placeholder;
 

@@ -1,0 +1,182 @@
+
+--echo #
+--echo # Begin of GM function
+--echo #
+
+--echo # 
+--echo # Tests of the SM4 functionality
+--echo #
+SET SESSION sm4_encryption_mode='sm4_ecb';
+
+--echo # must work and return a string
+SELECT TO_BASE64(SM4_ENCRYPT('a', 'b'));
+
+--echo # must return 16
+SELECT LENGTH(SM4_ENCRYPT('a', 'b'));
+
+--echo # must return binary
+SELECT CHARSET(SM4_ENCRYPT('a', 'b'));
+
+--echo # must be equal
+SELECT SM4_ENCRYPT('a', 'b') = SM4_ENCRYPT('a', 'b');
+
+--echo #### SM4_ENCRYPT parameters
+
+--echo # must return NULL
+SELECT SM4_ENCRYPT('a', NULL);
+SELECT SM4_ENCRYPT(NULL, 'a');
+SELECT SM4_ENCRYPT(NULL, NULL);
+
+--echo # must return value
+SELECT TO_BASE64(SM4_ENCRYPT('a', 0));
+SELECT TO_BASE64(SM4_ENCRYPT('a', 12.04));
+SELECT TO_BASE64(SM4_ENCRYPT(0, 'a'));
+SELECT TO_BASE64(SM4_ENCRYPT(12.04, 'a'));
+SELECT TO_BASE64(SM4_ENCRYPT(0, 0));
+SELECT TO_BASE64(SM4_ENCRYPT(12.04, 12.04));
+
+--echo #### parameter conversion
+
+--echo must be equal
+SELECT SM4_ENCRYPT('a', 12.04) = SM4_ENCRYPT('a', '12.04');
+SELECT SM4_ENCRYPT('a', 0) = SM4_ENCRYPT('a', '0');
+SELECT SM4_ENCRYPT(12.04, 'a') = SM4_ENCRYPT('12.04', 'a');
+SELECT SM4_ENCRYPT(0, 'a') = SM4_ENCRYPT('0', 'a');
+SELECT SM4_ENCRYPT('\x0Z', 'a') = SM4_ENCRYPT('\x0Z', 'a');
+SELECT SM4_ENCRYPT('a', '\x0Z') = SM4_ENCRYPT('a', '\x0Z');
+
+--echo # must not be equal
+SELECT SM4_ENCRYPT('a', '\x0Y') = SM4_ENCRYPT('a', '\x0Z');
+SELECT SM4_ENCRYPT('\x0Y', 'a') = SM4_ENCRYPT('\x0Z', 'a');
+
+--echo #### algorithm
+--echo # must not be equal
+SELECT SM4_ENCRYPT('a', 'a') = SM4_ENCRYPT('b', 'a');
+SELECT SM4_ENCRYPT('a', 'a') = SM4_ENCRYPT('a', 'b');
+SELECT SM4_ENCRYPT('a', 'a') = SM4_ENCRYPT('aa', 'a');
+SELECT SM4_ENCRYPT('a', 'a') = SM4_ENCRYPT('a', 'aa');
+SELECT SM4_ENCRYPT('a', 'a') = SM4_ENCRYPT(REPEAT('a',1000), 'a');
+SELECT SM4_ENCRYPT('a', 'a') = SM4_ENCRYPT('a', REPEAT('a',1000));
+
+--echo #### persistense
+
+CREATE TABLE t1 (a BINARY(16) PRIMARY KEY);
+
+--echo # must pass without a warning
+INSERT INTO t1 VALUES (SM4_ENCRYPT('a','a'));
+
+--echo # must fail
+--error ER_DUP_ENTRY
+INSERT INTO t1 VALUES (SM4_ENCRYPT('a','a'));
+
+--echo # must pass
+INSERT INTO t1 VALUES (SM4_ENCRYPT('b','a'));
+
+--echo # must return 1
+SELECT COUNT(*) FROM t1 WHERE a = SM4_ENCRYPT('a', 'a');
+
+--echo # must return 1
+SELECT COUNT(*) FROM t1 WHERE a = SM4_ENCRYPT('b', 'a');
+
+--echo # must return 0
+SELECT COUNT(*) FROM t1 WHERE a = SM4_ENCRYPT('c', 'a');
+SELECT COUNT(*) FROM t1 WHERE a = SM4_ENCRYPT('a', 'c');
+
+SELECT TO_BASE64(a) FROM t1 ORDER BY a;
+
+--echo # cleanup
+DROP TABLE t1;
+
+--echo #### IV
+
+--echo # must be equal
+SELECT SM4_ENCRYPT('a', 'a') = SM4_ENCRYPT('a', 'a', REPEAT('a', 16));
+SELECT SM4_ENCRYPT('a', 'a') = SM4_ENCRYPT('a', 'a', REPEAT('b', 16));
+
+--echo # must return a warning
+SELECT TO_BASE64(SM4_ENCRYPT('a', 'a', 'a'));
+
+--echo # must pass
+SELECT TO_BASE64(SM4_ENCRYPT('a', 'a', NULL));
+SELECT TO_BASE64(SM4_ENCRYPT('a', 'a', REPEAT('a', 1024)));
+SELECT TO_BASE64(SM4_ENCRYPT('a', 'a', RANDOM_BYTES(16)));
+
+
+--echo #### RANDOM_BYTES
+
+--echo # must be 1
+SELECT LENGTH(RANDOM_BYTES(1));
+
+--echo # must return binary
+SELECT CHARSET(RANDOM_BYTES(1));
+
+--echo # must return an error
+--error ER_DATA_OUT_OF_RANGE
+SELECT RANDOM_BYTES(1000000000000);
+
+--error ER_DATA_OUT_OF_RANGE
+SELECT LENGTH(RANDOM_BYTES(0));
+
+--echo #### SM4_DECRYPT
+
+--echo # must return binary
+SELECT CHARSET(SM4_DECRYPT(SM4_ENCRYPT('a', 'a'), 'a'));
+
+--echo # must return 1
+SELECT LENGTH(SM4_DECRYPT(SM4_ENCRYPT('a', 'a'), 'a'));
+
+--echo # must be equal
+SELECT SM4_DECRYPT(SM4_ENCRYPT('a','a'), 'a') = 'a';
+
+--echo # must be equal
+SELECT SM4_DECRYPT(SM4_ENCRYPT(_UTF8'Жоро', 'a'), 'a') = _UTF8'Жоро';
+SELECT SM4_DECRYPT(SM4_ENCRYPT('Жоро', 'a'), 'a') = 'Жоро';
+
+--echo # must be NULL
+SELECT SM4_DECRYPT(NULL, 'a');
+SELECT SM4_DECRYPT('a', NULL);
+SELECT SM4_DECRYPT(NULL, NULL);
+
+
+--echo #### SM4_DECRYPT IV
+--echo # must be equal
+SELECT 'a' = SM4_DECRYPT(SM4_ENCRYPT('a', 'a'), 'a', NULL);
+SELECT 'a' = SM4_DECRYPT(SM4_ENCRYPT('a', 'a'), 'a', REPEAT('a',16));
+SELECT 'a' = SM4_DECRYPT(SM4_ENCRYPT('a', 'a'), 'a', REPEAT('a',100));
+
+--echo # must return a warning
+SELECT TO_BASE64(SM4_DECRYPT(SM4_ENCRYPT('a', 'a'), 'a', 'a'));
+
+--echo #### my_sm4_cbc
+SET SESSION sm4_encryption_mode='sm4_cbc';
+--error 1582
+select SM4_ENCRYPT('a', 'a');
+select SM4_ENCRYPT('a', 'a', 0x12345678123456781234567812345678);
+select SM4_DECRYPT(SM4_ENCRYPT('a', 'a', 0x12345678123456781234567812345678), 'a', 0x12345678123456781234567812345678);
+
+--echo #### test SM3
+select SM3('asdfdf');
+select SM3('asdfsffgdgbg');
+
+--echo #### test hmac_SM3
+--echo #### first is msg, second is key 
+select hmac_sm3('a', 'asd');
+select hmac_sm3('as', 'asdasdasffsdgfdhdhfgfw4ewetertety');
+
+--echo #### test sm2 function
+--error 1220
+select sm2_encrypt('asd', '../../std_data/file_not_exist');
+--echo # must be sm2 public key pem file
+--error 1220
+select sm2_encrypt('asd', '../../std_data/sm2_pri.key');
+--error 1220
+select sm2_encrypt('asd', '../../std_data/rsa_public_key.key');
+select sm2_encrypt('asd', '../../std_data/sm2_pub.key');
+select sm2_decrypt(0x306C02205BB640215CD04A7744A306278F1D4B401C3E30607EBBB0660FE3DE0F7DC25BD7022100D737048D71AB1E74484E798FBE9C8D3D01CB1F92BFFCCFA936C4773864C6FF8004207D384F049D129EBD67E8930C0179A541E80DDE6FD4383466ACE2B3C40571534D0403CEDE8B, '../../std_data/sm2_pri.key');
+select sm2_decrypt(sm2_encrypt('asd', '../../std_data/sm2_pub.key'), '../../std_data/sm2_pri.key') = 'asd';
+select sm2_decrypt(sm2_encrypt('asdf', '../../std_data/sm2_pub.key'), '../../std_data/sm2_pri.key') = 'asdf';
+select sm2_decrypt(sm2_encrypt('asdfg', '../../std_data/sm2_pub.key'), '../../std_data/sm2_pri.key') = 'asdfg';
+--echo #
+--echo # End of GM function
+--echo #
+

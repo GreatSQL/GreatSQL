@@ -4,6 +4,7 @@ CREATE USER 'kristofer';
 ALTER USER 'kristofer' IDENTIFIED BY 'secret';
 SELECT user, plugin FROM mysql.user ORDER BY user;
 user	plugin
+greatdb.sys	caching_sha2_password
 kristofer	sha256_password
 mysql.infoschema	caching_sha2_password
 mysql.session	caching_sha2_password

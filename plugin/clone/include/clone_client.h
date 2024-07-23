@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,15 +37,21 @@ Clone Plugin: Client Interface
 
 #include "my_aes.h"
 #include "mysql/psi/mysql_thread.h"
+#include "sql/clone_compress.h"
 #include "sql/encrypt.h"
 
 #include <array>
 #include <atomic>
 #include <thread>
 #include <vector>
-
 /* Namespace for all clone data types */
 namespace myclone {
+
+#define LSN_PF "%" PRIu64
+#define START_LSN "start_lsn = "
+#define PAGE_TRACK_LSN "page_track_lsn = "
+#define END_LSN "end_lsn = "
+#define CLONE_METADATA_FILENAME "#clone/#clone_checkpoints"
 
 using Clock = std::chrono::steady_clock;
 using Time_Point = std::chrono::time_point<Clock>;
@@ -172,7 +178,8 @@ class Client_Stat {
   @param[in]	reset		reset all previous history
   @param[in]	threads		all concurrent thread information
   @param[in]	num_workers	current number of worker threads */
-  void update(bool reset, const Thread_Vector &threads, uint32_t num_workers);
+  void update(class Client *, bool reset, const Thread_Vector &threads,
+              uint32_t num_workers);
 
   /** Tune total number of threads based on stat
   @param[in]	num_threads	current number of active threads
@@ -296,9 +303,13 @@ struct Client_Share {
   @param[in]	user	remote user name
   @param[in]	passwd	remote user's password
   @param[in]	dir	target data directory for clone
-  @param[in]	mode	client SSL mode */
+  @param[in]	mode	client SSL mode
+  @param[in]	start_id		start lsn for increment clone (Clone
+  Type: HA_CLONE_PAGE)
+  @param[in]	enable_page_track	enable page track when clone end*/
   Client_Share(const char *host, const uint port, const char *user,
-               const char *passwd, const char *dir, int mode)
+               const char *passwd, const char *dir, int mode,
+               bool enable_page_track, uint64_t start_id, const char *based_dir)
       : m_host(host),
         m_port(port),
         m_user(user),
@@ -306,18 +317,30 @@ struct Client_Share {
         m_data_dir(dir),
         m_ssl_mode(mode),
         m_max_concurrency(clone_max_concurrency),
-        m_protocol_version(CLONE_PROTOCOL_VERSION) {
+        m_protocol_version(CLONE_PROTOCOL_VERSION),
+        m_file_compress_threads(clone_file_compress_threads),
+        m_compress_zstd_level(clone_file_compress_zstd_level),
+        m_file_compress_chunk_size(clone_file_compress_chunk_size) {
     m_storage_vec.reserve(MAX_CLONE_STORAGE_ENGINE);
     m_threads.resize(m_max_concurrency);
     assert(m_max_concurrency > 0);
     m_stat.init_target();
 
+    m_enable_page_track = enable_page_track;
+    m_start_id = start_id;
+    m_based_dir = based_dir;
     m_encrypt_mode = my_aes_128_ecb;
     m_encrypt_key = nullptr;
     m_encrypt_iv = nullptr;
+
+    m_compress_mode = CLONE_FILE_COMPRESS_NONE;
+    m_compress_thread_pool = {nullptr, nullptr};
   }
 
   int read_encrypt_key(const char *encrypt_key_path);
+  void set_compress_mode(ulong mode) {
+    m_compress_mode = (file_compress_mode_t)mode;
+  }
 
   void free_key() {
     if (m_encrypt_key) my_free(m_encrypt_key);
@@ -356,9 +379,28 @@ struct Client_Share {
   /** Data transfer statistics. */
   Client_Stat m_stat;
 
+  bool m_enable_page_track;
+  uint64_t m_start_id;
+
   my_aes_opmode m_encrypt_mode;
   char *m_encrypt_key;
   char *m_encrypt_iv;
+
+  file_compress_mode_t m_compress_mode;
+
+  compress_thread_pool m_compress_thread_pool;
+
+  /** Number of threads for parallel data compression. */
+  const uint32_t m_file_compress_threads;
+
+  /** Zstandard compression level. */
+  const uint32_t m_compress_zstd_level;
+
+  /** Size of working buffer(s) for compression thread. */
+  const uint32_t m_file_compress_chunk_size;
+
+  /** Cloned based directory */
+  const char *m_based_dir;
 };
 
 /** Auxiliary connection to send ACK */
@@ -481,6 +523,10 @@ class Client {
   @return data directory */
   const char *get_data_dir() const { return (m_share->m_data_dir); }
 
+  file_compress_mode_t get_file_compress_mode() const {
+    return (m_share->m_compress_mode);
+  }
+
   /** Get clone locator for a storage engine at specified index.
   @param[in]	index	locator index
   @param[out]	loc_len	locator length in bytes
@@ -577,11 +623,11 @@ class Client {
 
   /** Copy PFS status data safely.
   @param[out]	pfs_data	status data. */
-  static void copy_pfs_data(Status_pfs::Data &pfs_data);
+  static void copy_pfs_data(Status_pfs &pfs_data);
 
   /** Copy PFS progress data safely.
   @param[out]	pfs_data	progress data. */
-  static void copy_pfs_data(Progress_pfs::Data &pfs_data);
+  static void copy_pfs_data(Progress_pfs &pfs_data);
 
   /** Update data and network consumed.
   @param[in]	data		data bytes transferred
@@ -589,15 +635,72 @@ class Client {
   @param[in]	data_speed	data transfer speed in bytes/sec
   @param[in]	net_speed	network transfer speed in bytes/sec
   @param[in]	num_workers	number of worker threads */
-  static void update_pfs_data(uint64_t data, uint64_t network,
-                              uint32_t data_speed, uint32_t net_speed,
-                              uint32_t num_workers);
+  void update_pfs_data(uint64_t data, uint64_t network, uint32_t data_speed,
+                       uint32_t net_speed, uint32_t num_workers);
+
+  /** Update lsns associate with this clone.
+  @param[in]	clone_start_lsn		clone start lsn
+  @param[in]	page_track_lsn		clone page track lsn when finish start
+  the clone
+  @param[in]	clone_end_lsn   clone end lsn */
+  void update_clone_lsn(uint64_t clone_start_lsn, uint64_t page_track_lsn,
+                        uint64_t clone_end_lsn);
 
   /** Init PFS mutex for table. */
   static void init_pfs();
 
   /** Destroy PFS mutex for table. */
   static void uninit_pfs();
+
+  /** persist clone status view
+  @return error code */
+  int persist_clone_view(bool full_clone);
+
+  /** Print clone meta info to a specified file. */
+  int dump_metadata();
+
+  int read_metadata(uint64_t &page_track_lsn);
+
+  void compress_init() {
+    if (m_share->m_compress_mode == CLONE_FILE_COMPRESS_ZSTD) {
+      m_compress_file = new Zstd_compress_file(m_share->m_file_compress_threads,
+                                               m_share->m_compress_zstd_level);
+
+      if (m_is_master) {
+        m_compress_file->init_compress_thread_pool();
+        m_share->m_compress_thread_pool.zstd_compress_thread =
+            ((Zstd_compress_file *)m_compress_file)->get_thread_pool();
+      } else {
+        ((Zstd_compress_file *)m_compress_file)
+            ->set_thread_pool(
+                m_share->m_compress_thread_pool.zstd_compress_thread);
+      }
+    } else if (m_share->m_compress_mode == CLONE_FILE_COMPRESS_LZ4) {
+      m_compress_file =
+          new Lz4_compress_file(m_share->m_file_compress_threads,
+                                m_share->m_file_compress_chunk_size);
+      if (m_is_master) {
+        m_compress_file->init_compress_thread_pool();
+        m_share->m_compress_thread_pool.lz4_compress_thread =
+            ((Lz4_compress_file *)m_compress_file)->get_thread_pool();
+      } else {
+        ((Lz4_compress_file *)m_compress_file)
+            ->set_thread_pool(
+                m_share->m_compress_thread_pool.lz4_compress_thread);
+      }
+    }
+
+    m_compress_file->compress_init();
+  }
+
+  void compress_deinit() {
+    if (m_is_master) {
+      m_compress_file->deinit_compress_thread_pool();
+    }
+    delete m_compress_file;
+  }
+
+  Compress_file *comp_file() { return m_compress_file; }
 
  private:
   /** Connect to remote server
@@ -738,18 +841,20 @@ class Client {
   /** If PFS table and mutex is initialized. */
   static bool s_pfs_initialized;
 
- private:
+ public:
   /** Clone status table data. */
-  static Status_pfs::Data s_status_data;
-
+  static Status_pfs s_status_data;
+  static uint32_t s_num_clones;
+  static uint32_t s_num_history_clones;
   /** Clone progress table data. */
-  static Progress_pfs::Data s_progress_data;
+  static Progress_pfs s_progress_data;
 
+ private:
   /** Clone table mutex to protect PFS table data. */
   static mysql_mutex_t s_table_mutex;
 
   /** Number of concurrent clone clients. */
-  static uint32_t s_num_clones;
+  static uint32_t s_num_replace_clones;
 
   /** Time out for connecting back to donor server after network failure. */
   static Time_Sec s_reconnect_timeout;
@@ -804,6 +909,10 @@ class Client {
 
   /** Shared client information */
   Client_Share *m_share;
+
+  uint32_t m_clone_id{0};
+
+  Compress_file *m_compress_file;
 };
 
 /** Clone client interface to handle callback from Storage Engine */
@@ -844,6 +953,9 @@ class Client_Cbk : public Ha_clone_cbk {
   @param[out]  len        data length
   @return error code */
   int apply_buffer_cbk(uchar *&to_buffer, uint &len) override;
+
+  int encrypt_and_write_cbk(uchar *source, Ha_clone_file to_file, size_t length,
+                            const char *dest_name) override;
 
  private:
   /** Apply data to local file or buffer.

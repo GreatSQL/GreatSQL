@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -215,6 +216,8 @@ class Page_Arch_Client_Ctx {
   @return error code */
   int get_pages(Page_Arch_Cbk *cbk_func, void *cbk_ctx, byte *buff,
                 uint buf_len);
+
+  int set_start_end_pos(lsn_t &start_id, lsn_t &stop_id);
 
 #ifdef UNIV_DEBUG
   /** Print information related to the archiver client for debugging purposes.

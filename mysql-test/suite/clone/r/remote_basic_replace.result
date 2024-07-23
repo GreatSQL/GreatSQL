@@ -105,16 +105,16 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' ;
 SET GLOBAL clone_delay_after_data_drop = 0;
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Completed	0
+0	Completed	0
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
-1	DROP DATA	Completed
-1	FILE COPY	Completed
-1	PAGE COPY	Completed
-1	REDO COPY	Completed
-1	FILE SYNC	Completed
-1	RESTART	Completed
-1	RECOVERY	Completed
+0	DROP DATA	Completed
+0	FILE COPY	Completed
+0	PAGE COPY	Completed
+0	REDO COPY	Completed
+0	FILE SYNC	Completed
+0	RESTART	Completed
+0	RECOVERY	Completed
 SELECT * from t1 ORDER BY col1;
 col1	col2
 10	clone row 1
@@ -192,9 +192,17 @@ ERROR HY000: Schema 'schema_read_only' is in read only mode.
 SET GLOBAL clone_delay_after_data_drop = 0;
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
+0	Completed	0
 1	Failed	3989
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Completed
+0	FILE COPY	Completed
+0	PAGE COPY	Completed
+0	REDO COPY	Completed
+0	FILE SYNC	Completed
+0	RESTART	Completed
+0	RECOVERY	Completed
 1	DROP DATA	Failed
 1	FILE COPY	Not Started
 1	PAGE COPY	Not Started
@@ -211,16 +219,16 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' ;
 SET GLOBAL clone_delay_after_data_drop = 0;
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Completed	0
+2	Completed	0
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
-1	DROP DATA	Completed
-1	FILE COPY	Completed
-1	PAGE COPY	Completed
-1	REDO COPY	Completed
-1	FILE SYNC	Completed
-1	RESTART	Completed
-1	RECOVERY	Completed
+2	DROP DATA	Completed
+2	FILE COPY	Completed
+2	PAGE COPY	Completed
+2	REDO COPY	Completed
+2	FILE SYNC	Completed
+2	RESTART	Completed
+2	RECOVERY	Completed
 Uninstall clone plugin on recipient server
 UNINSTALL PLUGIN clone;
 UNINSTALL PLUGIN clone;

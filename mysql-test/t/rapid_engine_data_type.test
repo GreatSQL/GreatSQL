@@ -1,0 +1,230 @@
+--source include/have_debug.inc
+INSTALL PLUGIN rapid SONAME "ha_rapid.so";
+
+set sql_log_bin = on;
+
+--echo #
+--echo # test data type - datetime
+--echo #
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a DATETIME(6) NOT NULL
+) AUTO_INCREMENT = 1;
+
+INSERT INTO t1( a ) VALUES ( '2015-01-01 10:30:00.01010' );
+
+SET SESSION debug='+d,test_ignore_lower_case_check';
+alter table t1 secondary_engine=rapid;
+alter table t1 secondary_load;
+
+SELECT * FROM t1;
+SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1;
+SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010';
+SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 10:30:00.01010';
+SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010+04:00';  ## a默认带当前时区
+SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 11:30:00.01010+04:00';  ## a默认带UTC时区
+
+SET time_zone = '+02:00';
+
+SELECT * FROM t1;
+SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1;
+SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010';
+SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 10:30:00.01010';
+SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010+03:00';  ## a默认带当前时区
+SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 11:30:00.01010+03:00';  ## a默认带UTC时区
+
+drop table t1;
+SET time_zone = default;
+
+--echo #
+--echo # test data type - timestamp
+--echo #
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a TIMESTAMP(6) NOT NULL
+) AUTO_INCREMENT = 1;
+
+INSERT INTO t1( a ) VALUES ( '2015-01-01 10:30:00.01010' );
+
+alter table t1 secondary_engine=rapid;
+alter table t1 secondary_load;
+
+SELECT * FROM t1;
+SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1;
+SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010';  ## 常量默认带当前时区
+SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 10:30:00.01010';  ## 常量默认带UTC时区
+SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010+04:00';
+SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 11:30:00.01010+04:00';
+
+SET time_zone = '+02:00';
+
+SELECT * FROM t1;
+SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1;
+SELECT * FROM t1 where a = '2015-01-01 09:30:00.01010';  ## 常量默认带当前时区
+SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 09:30:00.01010';  ## 常量默认带UTC时区
+SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010+03:00';
+SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 10:30:00.01010+03:00';
+
+drop table t1;
+SET time_zone = default;
+
+--echo #
+--echo # test prepared statement - 1
+--echo #
+set use_secondary_engine = on;
+set secondary_engine_cost_threshold = 0;
+
+drop table if exists t1;
+create table t1 (a int, b varchar(3));
+alter table t1 secondary_engine=rapid;
+insert into t1 values(1,'aa'), (2,'bb'), (3,'cc') ;
+alter table t1 secondary_load;
+
+set @a = 1;
+prepare stmt from 'select * from t1 where a = ?';
+sleep 1;
+execute stmt using @a;
+
+drop table t1;
+
+--echo #
+--echo # test prepared statement - 2
+--echo #
+set use_secondary_engine = on;
+set secondary_engine_cost_threshold = 0;
+
+drop table if exists t1;
+create table t1(a int primary key, b char(10));
+alter table t1 secondary_engine=rapid;
+alter table t1 secondary_load;
+SELECT START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1');
+insert into t1 values (1,'one');
+insert into t1 values (2,'two');
+insert into t1 values (3,'three');
+insert into t1 values (4,'four');
+
+set @a=2;
+prepare stmt1 from 'select * from t1 where a <= ?';
+sleep 1;
+execute stmt1 using @a;
+
+SELECT STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1');
+drop table t1;
+
+--echo #
+--echo # test prepared statement - 3
+--echo #
+set use_secondary_engine = on;
+set secondary_engine_cost_threshold = 0;
+set optimizer_switch='materialization=on';
+set optimizer_switch='semijoin=off';
+set optimizer_switch='index_condition_pushdown=off';
+set optimizer_switch='mrr=off';
+
+create table t0 (a int);
+insert into t0 values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+
+create table t1(a int, b int);
+alter table t1 secondary_engine=rapid;
+alter table t1 secondary_load;
+SELECT START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1');
+insert into t1 values (0,0),(1,1),(2,2);
+
+create table t2 as select * from t1;
+alter table t2 secondary_engine=rapid;
+alter table t2 secondary_load;
+SELECT START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't2');
+
+create table t10 (pk int, a int, primary key(pk));
+alter table t10 secondary_engine=rapid;
+alter table t10 secondary_load;
+SELECT START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't10');
+insert into t10 select a,a from t0;
+
+prepare s1 from
+  ' select * from
+    t1 left join t2 on (t2.a= t1.a and t2.a in (select pk from t10))
+  where t1.a < 5';
+sleep 1;
+execute s1;
+
+set optimizer_switch=default;
+SELECT STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1');
+SELECT STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't2');
+SELECT STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't10');
+drop table t0, t1, t2, t10;
+
+--echo #
+--echo # test prepared statement - 4
+--echo #
+set use_secondary_engine = on;
+set secondary_engine_cost_threshold=0;
+
+CREATE TABLE t1
+(pk INTEGER PRIMARY KEY,
+i1 TINYINT,
+u1 TINYINT UNSIGNED,
+i2 SMALLINT,
+u2 SMALLINT UNSIGNED,
+i3 MEDIUMINT,
+u3 MEDIUMINT UNSIGNED,
+i4 INTEGER,
+u4 INTEGER UNSIGNED,
+i8 BIGINT,
+u8 BIGINT UNSIGNED);
+
+INSERT INTO t1 VALUES
+(0, -128, 0, -32768, 0, -8388608, 0, -2147483648, 0, -9223372036854775808, 0),
+(1, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0),
+(2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+(3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+(4, 127, 255, 32767, 65535, 8388607, 16777215, 2147483647, 4294967295,
+9223372036854775807, 18446744073709551615);
+
+alter table t1 secondary_engine=rapid;
+alter table t1 secondary_load;
+
+set @iv= -9223372036854775809;
+set @dv= -9223372036854775809.0;
+set @fv= -9223372036854775809.0e0;
+set @sv= "-9223372036854775809";
+
+prepare s1 from
+"SELECT i1 = ? AS a,
+       u1 = ? AS au,
+       i2 = ? AS b,
+       u2 = ? AS bu,
+       i3 = ? AS c,
+       u3 = ? AS cu,
+       i4 = ? AS d,
+       u4 = ? AS du,
+       i8 = ? AS e,
+       u8 = ? AS eu
+FROM t1;";
+
+execute s1 using @iv, @iv, @iv, @iv, @iv, @iv, @iv, @iv, @iv, @iv;
+execute s1 using @dv, @dv, @dv, @dv, @dv, @dv, @dv, @dv, @dv, @dv;
+## execute s1 using @fv, @fv, @fv, @fv, @fv, @fv, @fv, @fv, @fv, @fv;
+## execute s1 using @sv, @sv, @sv, @sv, @sv, @sv, @sv, @sv, @sv, @sv;
+
+drop table t1;
+
+--echo #
+--echo # test prepared statement - 5
+--echo #
+set use_secondary_engine = on;
+set secondary_engine_cost_threshold=0;
+
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES (10), (100), (200), (-100), (-200);
+
+alter table t1 secondary_engine=rapid;
+alter table t1 secondary_load;
+
+PREPARE p FROM '(SELECT * FROM t1 LIMIT 3) LIMIT ?';
+SET @a = 2;
+EXECUTE p USING @a;
+
+drop table t1;
+
+UNINSTALL PLUGIN rapid;

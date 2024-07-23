@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,6 +34,7 @@ Clone Plugin: OS specific routines for IO and network
 #include "my_sys.h"
 #include "mysqld_error.h"
 #include "mysys_err.h"
+#include "sql/clone_compress.h"
 #include "sql/encrypt.h"
 #include "sql/handler.h"
 
@@ -72,22 +73,12 @@ int clone_os_copy_file_to_file(Ha_clone_file from_file, Ha_clone_file to_file,
                                const char *src_name, const char *dest_name,
                                struct encrypt_op_buffer *buffer_node,
                                char *cipher_buff, my_aes_opmode mode, char *key,
-                               char *iv);
+                               char *iv, Compress_file *comp_file);
 
 int encrypt_and_write(struct encrypt_op_buffer *m_buffer_node,
                       char *m_cipher_buff, uchar *source, Ha_clone_file to_file,
                       size_t length, const char *dest_name, my_aes_opmode mode,
-                      char *key, char *iv);
-
-/** Copy data from buffer to file. File descriptor should be positioned
-by caller.
-@param[in]	from_buffer	source buffer
-@param[in]	to_file		destination file descriptor
-@param[in]	length		length of data in bytes to copy
-@param[in]	dest_name	destination file name
-@return error code */
-int clone_os_copy_buf_to_file(uchar *from_buffer, Ha_clone_file to_file,
-                              uint length, const char *dest_name);
+                      char *key, char *iv, Compress_file *comp_file = nullptr);
 
 /** Send data from buffer to network.
 @param[in]	from_buffer	source buffer

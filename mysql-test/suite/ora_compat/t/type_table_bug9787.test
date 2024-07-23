@@ -1,0 +1,391 @@
+SET sql_mode=ORACLE;
+
+show variables like '%udt_format_result%';
+set @@udt_format_result='DBA';
+
+CREATE SEQUENCE id_seq START WITH 1 INCREMENT BY 2 CACHE 1;
+select id_seq.NEXTVAL;
+
+--echo #
+--echo # test of udt type table index is SEQUENCE
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(id_seq.NEXTVAL+1).id := id_seq.NEXTVAL;
+ select stu_record_val(id_seq.NEXTVAL-1);
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is SEQUENCE
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(1+1).id := id_seq.NEXTVAL;
+ select stu_record_val(id_seq.NEXTVAL-1);
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is ROWNUM
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(rownum+1).id := id_seq.NEXTVAL;
+ select stu_record_val(rownum+1);
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is SEQUENCE
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(id_seq.NEXTVAL+1) := tklist(1=>stu_record(id_seq.NEXTVAL,2,3));
+ select stu_record_val(id_seq.currval+1);
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is rownum
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name1  varchar(20) ,
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+begin
+   stu_record_val.stu_record_val1(9).id :=9;
+   stu_record_val.stu_record_val1(rownum+1).id := 2;
+   select stu_record_val.stu_record_val1(rownum+1).id;
+END;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is rownum
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name1  varchar(20) ,
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+begin
+   stu_record_val.stu_record_val1(9).id :=9;
+   select stu_record_val.stu_record_val1(rownum+1).id;
+END;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is SEQUENCE
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name1  varchar(20) ,
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+begin
+   stu_record_val.stu_record_val1(9).id :=9;
+   stu_record_val.stu_record_val1(id_seq.NEXTVAL*id_seq.NEXTVAL).id := id_seq.NEXTVAL;
+   select stu_record_val.stu_record_val1(id_seq.NEXTVAL/id_seq.NEXTVAL).id;
+END;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is SEQUENCE
+--echo #
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name1  varchar(20) ,
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+begin
+   stu_record_val.stu_record_val1(9).id :=9;
+   select stu_record_val.stu_record_val1(id_seq.NEXTVAL/id_seq.NEXTVAL).id;
+END;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is SEQUENCE
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+count int := id_seq.NEXTVAL;
+begin
+ stu_record_val(count).id := count;
+ select stu_record_val(count);
+ stu_record_val(1) := stu_record_val(id_seq.currval-1);
+ select stu_record_val(1);
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is SEQUENCE
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+count int := id_seq.NEXTVAL;
+begin
+ stu_record_val((select id_seq.currval)) := 1;
+ select stu_record_val(1);
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is SEQUENCE
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+count int := id_seq.NEXTVAL;
+begin
+ stu_record_val((select id_seq.currval)+1) := 1;
+ select stu_record_val(1);
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is SEQUENCE
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+count int := id_seq.NEXTVAL;
+begin
+ select stu_record_val((select id_seq.currval));
+end;
+$$
+DELIMITER ;$$
+--error ER_NOT_SUPPORTED_YET
+call p1();
+--error ER_NOT_SUPPORTED_YET
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is unknown var
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+count int := id_seq.NEXTVAL;
+begin
+ stu_record_val(a1) := 1;
+ select stu_record_val(1);
+end;
+$$
+DELIMITER ;$$
+--error ER_BAD_FIELD_ERROR
+call p1();
+--error ER_BAD_FIELD_ERROR
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of udt type table index is unknown var
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+count int := id_seq.NEXTVAL;
+begin
+ select stu_record_val(a1);
+end;
+$$
+DELIMITER ;$$
+--error ER_BAD_FIELD_ERROR
+call p1();
+--error ER_BAD_FIELD_ERROR
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of SEQUENCE as value
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(3) := stu_record(id_seq.NEXTVAL,'a',1);
+ select stu_record_val(3);
+end;
+$$
+DELIMITER ;$$
+call p1();
+call p1();
+drop PROCEDURE p1;
+
+drop SEQUENCE id_seq;

@@ -1848,13 +1848,13 @@ select * from t1 a,t2 b where lnnvl(a.ida(+)=b.ida);
 select * from t1 a,t2 b where lnnvl(a.ida(+)>1);
 
 select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida(+)=b.ida);
---error 7524
+--error 7526
 select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=b.ida(+));
---error 7524
+--error 7526
 select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida(+)=b.ida(+));
---error 7524
+--error 7526
 select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=2001) or lnnvl(a.ida=2001);
---error 7524
+--error 7526
 select * from t1 a,t2 b where a.ida(+)=b.ida and (lnnvl(a.name(+) = 'b') or lnnvl(a.ida=2001));
 
 #drop tables
@@ -2561,10 +2561,10 @@ INSERT INTO student VALUES(1, 'John', NULL);
 INSERT INTO student VALUES(2, 'Paul', 1);
 INSERT INTO student VALUES(3, 'Nancy', 1);
 INSERT INTO student VALUES(4, 'Sarah', 3);
---error 7563
+--error 7566
 select level,id,name,grade from student connect by lnnvl(prior id = grade);
 select level,id,name,grade from student connect by lnnvl(prior id>0) = grade;
---error 7563
+--error 7566
 select level,id,name,grade from student connect by lnnvl(prior id>0) is null;
 select level,id,name,grade from student connect by lnnvl(prior id>0) is not null;
 select level,id,name,grade from student connect by lnnvl(prior id>0);
@@ -2606,19 +2606,19 @@ select * from account
 offset 2 rows
 fetch next 50 percent rows with ties;
 
---error 7523
+--error 7525
 select * from account
 offset lnnvl(year) rows
 fetch next 50 percent rows with ties;
---error 7523
+--error 7525
 select * from account
 offset lnnvl(year>1) rows
 fetch next 50 percent rows with ties;
---error 7523
+--error 7525
 select * from account
 offset 2 rows
 fetch next lnnvl(year) percent rows with ties;
---error 7523
+--error 7525
 select * from account
 offset 2 rows
 fetch next lnnvl(year>1) percent rows with ties;
@@ -2689,7 +2689,7 @@ select * from t1, t2 where lnnvl(t1.ida(+)>1) = t2.ida;
 select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=2001)>1;
 select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=2001) is null;
 select * from t1 a,t2 b where a.ida(+)=b.ida and lnnvl(a.ida=2001)+1;
---error 7524
+--error 7526
 select * from t1, t2 where lnnvl(t1.ida(+)>1) = t2.ida(+);
 
 drop table t1;

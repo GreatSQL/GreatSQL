@@ -45,7 +45,7 @@ id	name
 update trg set name ='name_1' where id=-1;
 select * from trg;
 id	name
--1	name_1
+-1	-updating_name_1
 -2	-inserting_name2
 -3	-inserting_name3
 delete from trg where id=-1;
@@ -93,7 +93,7 @@ id	name
 update trg set name ='name_1' where id=-1;
 select * from trg;
 id	name
--1	name_1
+-1	-updating_trg1_1_-updating_trg1_3_name_1
 -2	-inserting_trg1_1_-inserting_trg1_2_name2
 -3	-inserting_trg1_1_-inserting_trg1_2_name3
 delete from trg where id=-1;
@@ -124,7 +124,7 @@ id	name
 update trg set name ='name_1' where id=-1;
 select * from trg;
 id	name
--1	name_1
+-1	-updating_trg2_1_name_1
 -2	-inserting_trg2_1_name2
 -3	-inserting_trg2_1_name3
 delete from trg where id=-1;

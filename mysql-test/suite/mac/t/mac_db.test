@@ -1,0 +1,201 @@
+# test mac on db
+--source ../include/mac_create.inc
+
+connect (master,localhost,root,,);
+--connection master
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+
+--disable_warnings
+drop database if exists mac;
+--enable_warnings
+
+--source ../include/mac_db_source.inc
+
+--echo # test only the object have label #
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L1::');
+--source ../include/mac_db_none_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--echo #test only the user have label #
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_user_policy('root','localhost','P1','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+connect (user1,localhost,root,,);
+--connection user1
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+--source ../include/mac_db_all.inc
+--echo #############################################################
+
+--echo #test level#
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L4:C3:G1');
+--source ../include/mac_db_none_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1');
+--source ../include/mac_db_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L2:C3:G1');
+--source ../include/mac_db_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L1:C3:G1');
+--source ../include/mac_db_only_read.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--echo #test compartment#
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1','L3:C2,C3,C4:G1');
+--source ../include/mac_db_none_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3,C4:G1');
+--source ../include/mac_db_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1');
+--source ../include/mac_db_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C4:');
+--source ../include/mac_db_only_read.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3,C4:');
+--source ../include/mac_db_only_read.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:');
+--source ../include/mac_db_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C2:');
+--source ../include/mac_db_none_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--echo #test group#
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G2');
+--source ../include/mac_db_none_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1_1_1');
+--source ../include/mac_db_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1,G2');
+--source ../include/mac_db_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1_1_1,G2_2_1');
+--source ../include/mac_db_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3::G1');
+--source ../include/mac_db_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3::');
+--source ../include/mac_db_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+--echo #############################################################
+
+
+--echo #test tow policy#
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_database_policy('mac', 'P2', 'L3:C3:G1');
+--source ../include/mac_db_none_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+call sys_mac.mac_drop_database_policy('mac', 'P2');
+--echo #############################################################
+--disconnect user1
+
+--connection master
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+call sys_mac.mac_apply_user_policy('root','localhost','P2','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+connect (user1,localhost,root,,);
+--connection user1
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+
+--source ../include/mac_db_source.inc
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_database_policy('mac', 'P2', 'L3:C3:G1');
+--source ../include/mac_db_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+call sys_mac.mac_drop_database_policy('mac', 'P2');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+#the P1 have read the P2 have all
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3,C4:');
+call sys_mac.mac_apply_database_policy('mac', 'P2', 'L3:C3:G1');
+--source ../include/mac_db_only_read.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+call sys_mac.mac_drop_database_policy('mac', 'P2');
+--echo #############################################################
+
+--source ../include/mac_db_source.inc
+#the P1 have read the P2 have none
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3,C4:G1');
+call sys_mac.mac_apply_database_policy('mac', 'P2', 'L3:C2,C3:G1');
+--source ../include/mac_db_none_all.inc
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+call sys_mac.mac_drop_database_policy('mac', 'P2');
+--echo #############################################################
+
+--connection master
+--source ../include/mac_destory.inc
+disconnect user1;
+disconnect master;

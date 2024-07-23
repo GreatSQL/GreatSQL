@@ -3,7 +3,7 @@
 
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -151,6 +151,9 @@ typedef bool(stat_print_fn)(THD *thd, const char *type, size_t type_len,
 class ha_statistics;
 class ha_tablespace_statistics;
 class Unique_on_insert;
+
+class Compress_file;
+enum file_compress_mode_t : unsigned int;
 
 extern ulong savepoint_alloc_size;
 
@@ -688,6 +691,8 @@ enum legacy_db_type {
   /** Performance schema engine. */
   DB_TYPE_PERFORMANCE_SCHEMA,
   DB_TYPE_TEMPTABLE,
+  /** Dblink engine. */
+  DB_TYPE_DBLINK_DB,
   DB_TYPE_TOKUDB = 41,
   DB_TYPE_ROCKSDB = 42,
   DB_TYPE_FIRST_DYNAMIC = 43,
@@ -1056,7 +1061,11 @@ class Ha_clone_cbk {
         m_src_name(),
         m_dest_name(),
         m_state_estimate(),
+        m_clone_start_lsn(0),
+        m_page_track_lsn(0),
+        m_clone_end_lsn(0),
         m_flag(),
+        m_compress_file(nullptr),
         m_enable_encryption(false),
         m_encrypt_mode(my_aes_128_ecb),
         m_encrypt_key(nullptr),
@@ -1087,6 +1096,9 @@ class Ha_clone_cbk {
   @param[out]  len        data length
   @return error code */
   virtual int apply_buffer_cbk(uchar *&to_buffer, uint &len) = 0;
+
+  virtual int encrypt_and_write_cbk(uchar *source, Ha_clone_file to_file,
+                                    size_t length, const char *dest_name) = 0;
 
   /** virtual destructor. */
   virtual ~Ha_clone_cbk() = default;
@@ -1193,11 +1205,20 @@ class Ha_clone_cbk {
     m_state_estimate = estimate;
   }
 
+  void set_clone_lsn(uint64_t clone_start_lsn, uint64_t page_track_lsn,
+                     uint64_t clone_end_lsn) {
+    m_clone_start_lsn = clone_start_lsn;
+    m_page_track_lsn = page_track_lsn;
+    m_clone_end_lsn = clone_end_lsn;
+  }
+
   /** Check if SE notified state change. */
   bool is_state_change(uint64_t &estimate) {
     estimate = m_state_estimate;
     return (m_flag & HA_CLONE_STATE_CHANGE);
   }
+
+  Compress_file *compress_file() { return m_compress_file; }
 
   void enable_encryption(my_aes_opmode encrypt_mode, char *encrypt_key,
                          char *encrypt_iv) {
@@ -1211,6 +1232,16 @@ class Ha_clone_cbk {
   my_aes_opmode encrypt_mode() { return m_encrypt_mode; }
   char *encrypt_key() { return m_encrypt_key; }
   char *encrypt_iv() { return m_encrypt_iv; }
+
+  uint64_t page_start_lsn() { return m_clone_start_lsn; }
+
+  uint64_t page_track_lsn() { return m_page_track_lsn; }
+
+  uint64_t clone_end_lsn() { return m_clone_end_lsn; }
+
+  void set_compress_file(Compress_file *comp_file) {
+    m_compress_file = comp_file;
+  }
 
  private:
   /** Handlerton for the SE */
@@ -1237,12 +1268,23 @@ class Ha_clone_cbk {
   /** Estimated bytes to be transferred. */
   uint64_t m_state_estimate;
 
+  /** clone start lsn to be transferred. */
+  uint64_t m_clone_start_lsn;
+
+  /** page track lsn to be transferred. */
+  uint64_t m_page_track_lsn;
+
+  /** clone end lsn to be transferred. */
+  uint64_t m_clone_end_lsn;
+
   /** Flag storing data related options */
   int m_flag;
 
+  /** If data compress is enabled at recipient*/
+  Compress_file *m_compress_file;
+
   /** If data encryption is enabled at recipient*/
   bool m_enable_encryption;
-
   my_aes_opmode m_encrypt_mode;
   char *m_encrypt_key;
   char *m_encrypt_iv;
@@ -2253,10 +2295,13 @@ using Clone_capability_t = void (*)(Ha_clone_flagset &flags);
 @param[out]     task_id task identifier
 @param[in]      type    clone type
 @param[in]      mode    mode for starting clone
+@param[in]      comp_mode    clone file compress descriptor
 @return error code */
 using Clone_begin_t = int (*)(handlerton *hton, THD *thd, const uchar *&loc,
                               uint &loc_len, uint &task_id, Ha_clone_type type,
-                              Ha_clone_mode mode);
+                              Ha_clone_mode mode, bool enable_page_track,
+                              uint64_t m_start_id,
+                              file_compress_mode_t comp_mode);
 
 /** Copy data from source database in chunks via callback
 @param[in]      hton    handlerton for SE
@@ -2301,11 +2346,20 @@ using Clone_end_t = int (*)(handlerton *hton, THD *thd, const uchar *loc,
 @param[in]      task_id         task identifier
 @param[in]      mode            mode for starting clone
 @param[in]      data_dir        target data directory
+@param[in]      max_concurrency Maximum number of concurrent threads for current
+operation
+@param[in]	    start_id		    start lsn for increment clone (Clone
+Type: HA_CLONE_PAGE)
+@param[in]	    enable_page_track	enable page track when clone end
+@param[in]      comp_mode    clone file compress descriptor
 @return error code */
 using Clone_apply_begin_t = int (*)(handlerton *hton, THD *thd,
                                     const uchar *&loc, uint &loc_len,
                                     uint &task_id, Ha_clone_mode mode,
-                                    const char *data_dir);
+                                    const char *data_dir,
+                                    uint32_t max_concurrency,
+                                    bool enable_page_track, uint64_t m_start_id,
+                                    file_compress_mode_t comp_mode);
 
 /** Apply data to destination database in chunks via callback
 @param[in]      hton    handlerton for SE
@@ -2509,6 +2563,28 @@ using compare_secondary_engine_cost_t = bool (*)(THD *thd, const JOIN &join,
 */
 using secondary_engine_modify_access_path_cost_t = bool (*)(
     THD *thd, const JoinHypergraph &hypergraph, AccessPath *access_path);
+
+class Gtid_set;
+
+using secondary_engine_write_inc_data_t = bool (*)(const char *sql);
+using secondary_engine_append_inc_data_t = bool (*)(
+    const std::string &db_name, const std::string &table_name, TABLE *table,
+    uchar *row_buf, unsigned long n_cols, unsigned long *m_col_offsets);
+using secondary_engine_register_binlog_inc_executor_cbk_t =
+    void *(*)(TABLE *table, const std::string &schema_name,
+              const std::string &table_name, Gtid_set *gtid_set, time_t *time);
+using secondary_engine_read_binlog_inc_gtid_t = int (*)(
+    TABLE *table, const std::string &schema_name, const std::string &table_name,
+    std::string &gtid_value, time_t &time);
+
+struct APPEND_INC_DATA_PARAM {
+  std::string db_name;
+  std::string table_name;
+  TABLE *table;
+  uchar *row_buf;
+  unsigned long n_cols;
+  unsigned long *col_offsets;
+};
 
 // Capabilities (bit flags) for secondary engines.
 using SecondaryEngineFlags = uint64_t;
@@ -2894,6 +2970,10 @@ struct handlerton {
   secondary_engine_modify_access_path_cost_t
       secondary_engine_modify_access_path_cost;
 
+  secondary_engine_register_binlog_inc_executor_cbk_t
+      secondary_engine_register_binlog_inc_executor_cbk;
+  secondary_engine_read_binlog_inc_gtid_t secondary_engine_read_binlog_inc_gtid;
+
   se_before_commit_t se_before_commit;
   se_after_commit_t se_after_commit;
   se_before_rollback_t se_before_rollback;
@@ -3109,7 +3189,9 @@ enum enum_stats_auto_recalc : int {
   HA_STATS_AUTO_RECALC_OFF
 };
 
-/* struct to hold information about the table that should be created */
+/**
+  Struct to hold information about the table that should be created.
+ */
 struct HA_CREATE_INFO {
   const CHARSET_INFO *table_charset{nullptr};
   const CHARSET_INFO *default_table_charset{nullptr};
@@ -3233,6 +3315,11 @@ struct HA_CREATE_INFO {
   bool is_materialized_view{false};
   LEX_STRING create_view_query_block{NULL_STR};
   LEX_STRING create_view_query_block_utf8{NULL_STR};
+
+  /*
+    create source from oracle mode
+  */
+  bool m_from_ora_mode{false};
 };
 
 /**
@@ -7536,6 +7623,7 @@ int ha_finalize_handlerton(st_plugin_int *plugin);
 TYPELIB *ha_known_exts();
 int ha_panic(enum ha_panic_function flag);
 void ha_close_connection(THD *thd);
+void ha_secondary_engine_register_binlog_inc_executor_cbk(TABLE *table);
 void ha_kill_connection(THD *thd);
 /** Invoke handlerton::pre_dd_shutdown() on every storage engine plugin. */
 void ha_pre_dd_shutdown(void);

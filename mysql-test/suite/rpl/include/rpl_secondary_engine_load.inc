@@ -27,6 +27,8 @@ CALL mtr.add_suppression("The slave coordinator and worker threads are stopped")
 --eval INSTALL PLUGIN mock SONAME '$MOCK_PLUGIN'
 SET @@secondary_engine_cost_threshold = 0;
 
+SET @@use_secondary_engine = ON;
+
 --connection slave
 --echo [ Connection Slave ]
 
@@ -34,6 +36,8 @@ SET @@secondary_engine_cost_threshold = 0;
 --replace_regex /\.dll/.so/
 --eval INSTALL PLUGIN mock SONAME '$MOCK_PLUGIN'
 SET @@secondary_engine_cost_threshold = 0;
+
+SET @@use_secondary_engine = ON;
 
 --connection master
 --echo [ Connection Master ]

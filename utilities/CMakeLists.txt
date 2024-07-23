@@ -1,4 +1,5 @@
 # Copyright (c) 2006, 2022, Oracle and/or its affiliates.
+# Copyright (c) 2024, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -137,6 +138,11 @@ MYSQL_ADD_EXECUTABLE(zlib_decompress
   LINK_LIBRARIES ${ZLIB_LIBRARY} mysys
   )
 
+MYSQL_ADD_EXECUTABLE(zstd_decompress
+zstd_decompress.cc
+COMPONENT Server
+LINK_LIBRARIES ${ZLIB_LIBRARY} mysys
+)
 # All targets below belong to COMPONENT Server and depend on InnoDB.
 IF(WITHOUT_SERVER)
   RETURN()

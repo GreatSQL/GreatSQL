@@ -87,6 +87,7 @@ INSERT INTO t1 VALUES (1);
 --let $statement = XA ROLLBACK $xid
 --let $sync_point = before_gtid_externalization
 --source include/execute_to_conditional_timestamp_sync_point.inc
+sleep 2;
 --source include/dbug_crash_safe.inc
 --source extra/xa_crash_safe_tests/cleanup_connection.inc
 

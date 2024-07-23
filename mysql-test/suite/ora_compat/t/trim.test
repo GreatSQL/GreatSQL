@@ -210,7 +210,7 @@ drop procedure pro;
 set character_set_client = 'utf8mb4';
 set character_set_connection = 'utf8mb4';
 
---error 7561
+--error 7564
 select trim(leading 'ab' from 'abcdefg');
 select trim(leading 'a' from 'aaaabcdefg');
 select trim(leading '我' from '我我我我abcdef');
@@ -218,7 +218,7 @@ select trim(leading '😀' from '😀😀😀😀😀abcdef');
 select trim(leading null from 'abcdefg');
 select trim(leading '' from 'abcdefg');
 
---error 7561
+--error 7564
 select trim(trailing 'ab' from 'abcdefg');
 select trim(trailing 'g' from 'abcdefggggg');
 select trim(trailing '我' from '我我我我abcdef我我我');
@@ -226,7 +226,7 @@ select trim(trailing '😀' from '😀😀😀😀😀abcdef😀😀');
 select trim(trailing null from 'abcdefg');
 select trim(trailing '' from 'abcdefg');
 
---error 7561
+--error 7564
 select trim(both 'ab' from 'abcdefg');
 select trim(both 'g' from 'ggggabcdefggggg');
 select trim(both '我' from '我我我我abcdef我我我');
@@ -234,7 +234,7 @@ select trim(both '😀' from '😀😀😀😀😀abcdef😀😀');
 select trim(both null from 'abcdefg');
 select trim(both '' from 'abcdefg');
 
---error 7561
+--error 7564
 select trim('ab' from 'abcdefg');
 select trim('g' from 'ggggabcdefggggg');
 select trim('我' from '我我我我abcdef我我我');
@@ -244,11 +244,11 @@ select trim('' from 'abcdefg');
 
 set character_set_client = 'latin1';
 set character_set_connection = 'latin1';
---error 7561
+--error 7564
 select trim('ab' from 'abcdefg');
---error 7561
+--error 7564
 select trim('我' from '我我我我abcdef我我我');
---error 7561
+--error 7564
 select trim('😀' from '😀😀😀😀😀abcdef😀😀');
 select trim(null from 'abcdefg');
 select trim('' from 'abcdefg');

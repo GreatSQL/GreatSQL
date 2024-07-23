@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -522,7 +523,7 @@ enum ha_base_keytype {
 #define HA_KEYFLAG_MASK                                                       \
   (HA_NOSAME | HA_PACK_KEY | HA_AUTO_KEY | HA_BINARY_PACK_KEY | HA_FULLTEXT | \
    HA_UNIQUE_CHECK | HA_SPATIAL | HA_NULL_ARE_EQUAL | HA_GENERATED_KEY |      \
-   HA_CLUSTERING)
+   HA_FROM_ORA_MODE | HA_CLUSTERING)
 
 /** Fulltext index uses [pre]parser */
 #define HA_USES_PARSER (1 << 14)
@@ -557,6 +558,9 @@ enum ha_base_keytype {
 
 constexpr const ulong HA_INDEX_USES_ENGINE_ATTRIBUTE{1UL << 20};
 constexpr const ulong HA_INDEX_USES_SECONDARY_ENGINE_ATTRIBUTE{1UL << 21};
+
+/** Mark key create from oracle mode */
+#define HA_FROM_ORA_MODE (1 << 22)
 
 /* These flags can be added to key-seg-flag */
 

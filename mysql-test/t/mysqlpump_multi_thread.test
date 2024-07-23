@@ -60,8 +60,8 @@ DROP DATABASE db3;
 --remove_files_wildcard $MYSQLTEST_VARDIR/tmp/  output_file*
 
 # --result-file and --watch-progress
---exec $MYSQL_PUMP --parallel-schemas=1:db1 --exclude-databases=mtr,mysql,sys,test,sys_audit --watch-progress 2>$MYSQLTEST_VARDIR/tmp/watch_progress_1.log  --result-file=$MYSQLTEST_VARDIR/tmp/result_file_1.sql
---exec $MYSQL_PUMP --parallel-schemas=2:db3 --exclude-databases=mtr,mysql,sys,test,sys_audit --watch-progress 2>$MYSQLTEST_VARDIR/tmp/watch_progress_2.log  > $MYSQLTEST_VARDIR/tmp/result_file_2.sql
+--exec $MYSQL_PUMP --parallel-schemas=1:db1 --exclude-databases=mtr,mysql,sys,test --watch-progress 2>$MYSQLTEST_VARDIR/tmp/watch_progress_1.log  --result-file=$MYSQLTEST_VARDIR/tmp/result_file_1.sql
+--exec $MYSQL_PUMP --parallel-schemas=2:db3 --exclude-databases=mtr,mysql,sys,test --watch-progress 2>$MYSQLTEST_VARDIR/tmp/watch_progress_2.log  > $MYSQLTEST_VARDIR/tmp/result_file_2.sql
 
 DROP DATABASE db1;
 DROP DATABASE db2;

@@ -1,5 +1,5 @@
 /* Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -256,6 +256,7 @@ app_data_ptr init_set_event_horizon_msg(app_data *a, uint32_t group_id,
 app_data_ptr init_get_leaders_msg(app_data *a, uint32_t group_id);
 app_data_ptr init_set_cache_size_msg(app_data *a, uint64_t cache_limit);
 app_data_ptr init_set_flp_timeout_msg(app_data *a, uint64_t flp_timeout);
+app_data_ptr init_set_notify_truly_remove_msg(app_data *a, const char *address);
 app_data_ptr init_get_event_horizon_msg(app_data *a, uint32_t group_id);
 app_data_ptr init_app_msg(app_data *a, char *payload, u_int payload_size);
 app_data_ptr init_terminate_command(app_data *a);

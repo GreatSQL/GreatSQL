@@ -1374,3 +1374,188 @@ return;
 end;
 $$
 ERROR 42000: GOTO with no matching label: label2
+#
+# test bug9798
+CREATE TABLE t1 (
+int_field INTEGER UNSIGNED NOT NULL,
+char_field CHAR(10),
+INDEX(`int_field`)
+);
+insert into t1 values(1,'test1');
+insert into t1 values(2,'test2');
+insert into t1 values(3,'test3');
+insert into t1 values(4,'test3');
+insert into t1 values(5,'test3');
+insert into t1 values(6,'test3');
+insert into t1 values(7,'test3');
+insert into t1 values(8,'test3');
+insert into t1 values(9,'test3');
+CREATE OR REPLACE PROCEDURE p1 AS
+CURSOR c1 IS SELECT * FROM t1 where int_field<4 ;
+CURSOR c2 IS SELECT * FROM t1 where int_field>3 and int_field<7 ;
+count int := 0;
+BEGIN
+<<lab1>>
+select 'lab1';
+for a in c1 loop
+select 'for a' || count;
+if count=3 then exit;
+end if;
+count := count+1;
+for b in c2 loop
+select 'for b';
+goto lab1;
+end loop;
+end loop;
+END;
+$$
+call p1;
+lab1
+lab1
+'for a' || count
+for a0
+for b
+for b
+lab1
+lab1
+'for a' || count
+for a1
+for b
+for b
+lab1
+lab1
+'for a' || count
+for a2
+for b
+for b
+lab1
+lab1
+'for a' || count
+for a3
+call p1;
+lab1
+lab1
+'for a' || count
+for a0
+for b
+for b
+lab1
+lab1
+'for a' || count
+for a1
+for b
+for b
+lab1
+lab1
+'for a' || count
+for a2
+for b
+for b
+lab1
+lab1
+'for a' || count
+for a3
+drop procedure p1;
+CREATE OR REPLACE PROCEDURE p1 AS
+CURSOR c1 IS SELECT * FROM t1 where int_field<4 ;
+CURSOR c2 IS SELECT * FROM t1 where int_field>3 and int_field<7 ;
+count int := 0;
+BEGIN
+<<lab1>>
+for a in c1 loop
+select 'for a' || count;
+if count=3 then exit;
+end if;
+count := count+1;
+for b in c2 loop
+select 'for b';
+goto lab1;
+end loop;
+end loop;
+END;
+$$
+call p1;
+'for a' || count
+for a0
+for b
+for b
+ERROR 24000: Cursor is already open
+drop procedure p1;
+CREATE OR REPLACE PROCEDURE p1 AS
+count int := 0;
+BEGIN
+<<lab1>>
+count := count;
+for a in (SELECT * FROM t1 where int_field<4) loop
+select 'for a' || count;
+if count=3 then exit;
+end if;
+count := count+1;
+goto lab1;
+end loop;
+END;
+$$
+call p1;
+'for a' || count
+for a0
+'for a' || count
+for a1
+'for a' || count
+for a2
+'for a' || count
+for a3
+drop procedure p1;
+CREATE OR REPLACE PROCEDURE p1 AS
+count int := 0;
+BEGIN
+<<lab1>>
+for a in (SELECT * FROM t1 where int_field<4) loop
+select 'for a' || count;
+goto lab1;
+end loop;
+END;
+$$
+call p1;
+'for a' || count
+for a0
+ERROR 24000: Cursor is already open
+drop procedure p1;
+# test anonymous block and goto
+BEGIN
+declare
+count int := 0;
+CURSOR c1 IS SELECT * FROM t1 where int_field<4 ;
+begin
+<<lab1>>
+for b in c1 loop
+select 'for b' || count;
+count := count+1;
+if count=3 then exit;
+end if;
+goto lab1;
+end loop;
+end;
+END;
+$$
+'for b' || count
+for b0
+ERROR 24000: Cursor is already open
+# test anonymous block and goto
+BEGIN
+declare count int := 0;
+begin
+<<lab1>>
+for b in (SELECT * FROM t1 where int_field<4) loop
+select 'for b' || count;
+count := count+1;
+if count=3 then exit;
+end if;
+goto lab1;
+end loop;
+end;
+END;
+$$
+'for b' || count
+for b0
+ERROR 24000: Cursor is already open
+drop table t1;

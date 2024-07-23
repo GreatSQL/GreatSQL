@@ -147,6 +147,7 @@ Database: information_schema
 | SCHEMATA                              |
 | SCHEMATA_EXTENSIONS                   |
 | SCHEMA_PRIVILEGES                     |
+| SECONDARY_ENGINE_INCREMENT_LOAD_TASK  |
 | SEQUENCES                             |
 | STATISTICS                            |
 | ST_GEOMETRY_COLUMNS                   |
@@ -242,6 +243,7 @@ Database: INFORMATION_SCHEMA
 | SCHEMATA                              |
 | SCHEMATA_EXTENSIONS                   |
 | SCHEMA_PRIVILEGES                     |
+| SECONDARY_ENGINE_INCREMENT_LOAD_TASK  |
 | SEQUENCES                             |
 | STATISTICS                            |
 | ST_GEOMETRY_COLUMNS                   |

@@ -325,11 +325,11 @@ ERROR 42000: This version of MySQL doesn't yet support 'ref cursor used in table
 select returnacursor() from t1;
 ERROR 42000: This version of MySQL doesn't yet support 'ref cursor used in table'
 create table tt as select returnacursor();
-ERROR 42000: This version of MySQL doesn't yet support 'ref cursor used in table'
+ERROR 42000: This version of MySQL doesn't yet support 'ref cursor column in temporary table'
 select * from t1 where returnacursor() is null;
-ERROR 42000: This version of MySQL doesn't yet support 'udt columns used in function'
+ERROR 42000: This version of MySQL doesn't yet support 'ref cursor used in table'
 select sum(returnacursor()) from t1;
-ERROR HY000: Incorrect arguments to sum
+ERROR 42000: This version of MySQL doesn't yet support 'ref cursor used in table'
 #
 # test of procedure in sys_refcursor
 #
@@ -446,3 +446,42 @@ drop procedure p2;
 drop procedure p1;
 drop function f1;
 drop type t_air;
+#
+# test of bug9327
+#
+CREATE TABLE employees (EMPLOYEE_ID int, FIRST_NAME VARCHAR2(20), LAST_NAME VARCHAR(25), 
+EMAIL VARCHAR2(25), PHONE_NUMBER VARCHAR2(20) DEFAULT NULL, HIRE_DATE DATE DEFAULT NULL, 
+JOB_ID VARCHAR2(10), SALARY NUMBER(8,2) DEFAULT 1000, COMMISSION_PCT DECIMAL(2,2) DEFAULT NULL,
+MANAGER_ID float(6,0), DEPARTMENT_ID NUMBER(4,0),PRIMARY KEY(EMPLOYEE_ID))  partition by hash(EMPLOYEE_ID) partitions 15;
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+CREATE OR REPLACE FUNCTION f1 (p_job VARCHAR2, p_sal number(10,0),p_r int) RETURN SYS_REFCURSOR 
+IS
+v_ref1      SYS_REFCURSOR;
+v_ref2      SYS_REFCURSOR;
+v_ref3      SYS_REFCURSOR;
+v_sql1,v_sql2,v_sql3  varchar2(300);
+BEGIN
+v_sql1 :='SELECT EMPLOYEE_ID, FIRST_NAME FROM employees WHERE JOB_ID = '|| CHR(39)||p_job||CHR(39)|| ' AND SALARY >' || CHR(39)||p_sal||CHR(39)||' AND  PHONE_NUMBER IS NOT NULL ; '; 
+v_sql2 :='SELECT EMPLOYEE_ID, FIRST_NAME FROM employees WHERE EMPLOYEE_ID=150 ORDER BY EMPLOYEE_ID; '; 
+v_sql3 :='SELECT EMPLOYEE_ID, FIRST_NAME FROM employees WHERE EMPLOYEE_ID>=155  ORDER BY EMPLOYEE_ID; '; 
+OPEN v_ref1 FOR  v_sql1;
+OPEN v_ref2 FOR  v_sql2;
+OPEN v_ref3 FOR  v_sql3 ;
+RETURN v_ref1;
+END;
+$$
+CREATE OR REPLACE PROCEDURE p1(p_job VARCHAR2 ,p_sal number(10,0),p_r int) AS
+v_empno         employees.EMPLOYEE_ID%TYPE;
+v_ename         employees.FIRST_NAME%TYPE;
+v_emp_refcur    SYS_REFCURSOR;
+BEGIN
+v_emp_refcur := f1( p_job,p_sal,p_r);
+END;
+$$
+CALL p1('SA_MAN',12000,1);
+CALL p1('SA_MAN',12000,1);
+CALL p1('SA_MAN',12000,1);
+drop table employees;
+drop procedure p1;
+drop function f1;

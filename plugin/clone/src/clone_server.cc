@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -50,6 +51,7 @@ Server::Server(THD *thd, MYSQL_SOCKET socket)
 
   m_copy_buff.init();
   m_res_buff.init();
+  m_file_compress_mode = CLONE_FILE_COMPRESS_NONE;
 }
 
 Server::~Server() {
@@ -171,7 +173,8 @@ int Server::init_storage(Ha_clone_mode mode, uchar *com_buf, size_t com_len) {
 
   /* Get server locators */
   err = hton_clone_begin(get_thd(), get_storage_vector(), m_tasks,
-                         HA_CLONE_HYBRID, mode);
+                         m_start_id ? HA_CLONE_PAGE : HA_CLONE_HYBRID, mode,
+                         m_start_id, m_enable_page_track, m_file_compress_mode);
   if (err != 0) {
     clone_ddl_timeout = saved_donor_timeout;
     return (err);
@@ -361,6 +364,27 @@ int Server::deserialize_init_buffer(const uchar *init_buf, size_t init_len) {
     init_len -= 4;
 
     set_client_timeout(client_ddl_timeout);
+  }
+
+  /* Extract enable page track value */
+  {
+    m_enable_page_track = uint4korr(init_buf);
+    init_buf += 4;
+    init_len -= 4;
+  }
+
+  /* Extract start lsn value */
+  {
+    m_start_id = uint8korr(init_buf);
+    init_buf += 8;
+    init_len -= 8;
+  }
+
+  /* Extract file compress mode */
+  {
+    m_file_compress_mode = (file_compress_mode_t)uint4korr(init_buf);
+    init_buf += 4;
+    init_len -= 4;
   }
 
   /* Initialize locators */
@@ -731,6 +755,15 @@ int Server_Cbk::apply_file_cbk(Ha_clone_file to_file [[maybe_unused]]) {
 
 int Server_Cbk::apply_buffer_cbk(uchar *&to_buffer [[maybe_unused]],
                                  uint &len [[maybe_unused]]) {
+  assert(false);
+  my_error(ER_INTERNAL_ERROR, MYF(0), "Apply callback from Clone Server");
+  return (ER_INTERNAL_ERROR);
+}
+
+int Server_Cbk::encrypt_and_write_cbk(uchar *source [[maybe_unused]],
+                                      Ha_clone_file to_file [[maybe_unused]],
+                                      size_t length [[maybe_unused]],
+                                      const char *dest_name [[maybe_unused]]) {
   assert(false);
   my_error(ER_INTERNAL_ERROR, MYF(0), "Apply callback from Clone Server");
   return (ER_INTERNAL_ERROR);

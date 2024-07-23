@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -192,6 +192,8 @@ bool prepare_default_value(THD *thd, uchar *buf, TABLE *table,
   Field *regfield = make_field(field, table->s, buf + 1, buf, 0 /* null_bit */);
 
   bool retval = true;
+  auto is_not_null_flag = false;
+  bool is_null = false;
   if (!regfield) goto err;
 
   regfield->init(table);
@@ -240,7 +242,18 @@ bool prepare_default_value(THD *thd, uchar *buf, TABLE *table,
   col_obj->set_has_no_default((field.flags & NO_DEFAULT_VALUE_FLAG));
 
   // Save NULL flag, default value and leftover bits.
-  col_obj->set_default_value_null(regfield->is_null());
+  is_null = regfield->is_null();
+
+  // In sqlmode `MODE_EMPTYSTRING_EQUAL_NULL`, the value of m_default_value_null
+  // is set according to the real NOT NULL attr.
+  is_not_null_flag = (field.flags & NOT_NULL_FLAG);
+  if ((thd->variables.sql_mode & MODE_EMPTYSTRING_EQUAL_NULL) && is_null &&
+      is_not_null_flag && regfield->is_empty_string()) {
+    col_obj->set_default_value_null(!is_null);
+  } else {
+    col_obj->set_default_value_null(is_null);
+  }
+
   if (!col_obj->is_default_value_null()) {
     dd::String_type default_value;
     default_value.assign(reinterpret_cast<char *>(buf + 1),

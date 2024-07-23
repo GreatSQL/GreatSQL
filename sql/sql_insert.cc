@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -592,7 +592,18 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
       (*next_field)->reset_warnings();
     }
 
+    if (query_block->sequences_counter) {
+      query_block->sequences_counter->Reset();
+    }
+
     for (const List_item *values : insert_many_values) {
+      if (query_block->sequences_counter) {
+        if (query_block->sequences_counter->Incr()) {
+          has_error = true;
+          break;
+        }
+      }
+
       Autoinc_field_has_explicit_non_null_value_reset_guard after_each_row(
           insert_table);
 
@@ -645,7 +656,6 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
                                                 update_value_list);
       if (error == ENOTSUP)
         error = write_record(thd, insert_table, &info, &update);
-      thd->lex->query_block->reset_rownum_read_flag();
       if (error) {
         has_error = true;
         break;
@@ -1208,10 +1218,6 @@ bool Sql_cmd_insert_base::prepare_inner(THD *thd) {
         validate_gc_assignment(insert_field_list, *values, insert_table))
       return true;
 
-    if (select->setup_sequence_func(
-            thd, const_cast<mem_root_deque<Item *> *>(values))) {
-      return true;
-    }
   }
 
   /*
@@ -1395,14 +1401,14 @@ bool Sql_cmd_insert_base::prepare_inner(THD *thd) {
     // For example:INSERT INTO tab2(type) SELECT t_air1('a');
     // field_count=1,column_count=1,unit->num_visible_fields()=1
     if (field_count == 1 && column_count == 1 &&
-        insert_table->s->udt_name.str && unit->num_visible_fields() == 1 &&
-        insert_field_list.front()->this_item()->is_ora_type() !=
-            unit->first_query_block()
-                ->fields.front()
-                ->this_item()
-                ->is_ora_type()) {
-      my_error(ER_UDT_INCONS_DATATYPES, MYF(0));
-      return true;
+        insert_table->s->udt_name.str && unit->num_visible_fields() == 1) {
+      Item *tmp = unit->first_query_block()->fields.front()->this_item();
+      bool is_udt = tmp->is_ora_type() &&
+                    (tmp->result_type() == ROW_RESULT || tmp->get_udt_table());
+      if (insert_field_list.front()->this_item()->is_ora_type() != is_udt) {
+        my_error(ER_UDT_INCONS_DATATYPES, MYF(0));
+        return true;
+      }
     }
 
     if ((insert_table->has_gcol() || insert_table->gen_def_fields_ptr) &&
@@ -2725,51 +2731,48 @@ static TABLE *create_table_from_items(THD *thd, HA_CREATE_INFO *create_info,
                                       Alter_info *alter_info,
                                       const mem_root_deque<Item *> &items,
                                       handlerton **post_ddl_ht) {
-  TABLE tmp_table;  // Used during 'Create_field()'
-  TABLE_SHARE share;
-  TABLE *table = nullptr;
-  uint select_field_count = CountVisibleFields(items);
-
   DBUG_TRACE;
 
-  handlerton *actual_hton = get_viable_handlerton_for_create(
-      thd, create_table->table_name, *create_info);
-  if (actual_hton == nullptr) return nullptr;
-
-  tmp_table.s = &share;
-  init_tmp_table_share(thd, &share, "", 0, "", "", nullptr);
-
-  tmp_table.s->db_create_options = 0;
-  tmp_table.s->db_low_byte_first = (create_info->db_type == myisam_hton ||
-                                    create_info->db_type == heap_hton);
-  tmp_table.set_not_started();
+  // Check that the specified ENGINE exists and is enabled.
+  if (get_viable_handlerton_for_create(thd, create_table->table_name,
+                                       *create_info) == nullptr) {
+    return nullptr;
+  }
 
   if (!thd->variables.explicit_defaults_for_timestamp)
     promote_first_timestamp_column(&alter_info->create_list);
 
+  TABLE_SHARE share;
+  init_tmp_table_share(thd, &share, "", 0, "", "", nullptr);
+  share.db_create_options = 0;
+  share.db_low_byte_first = (create_info->db_type == myisam_hton ||
+                             create_info->db_type == heap_hton);
+
+  TABLE tmp_table;
+  tmp_table.s = &share;
+  tmp_table.set_not_started();
+
   /* Add selected items to field list */
   for (Item *item : VisibleFields(items)) {
-    Create_field *cr_field = generate_create_field(thd, item, &tmp_table);
-    if (cr_field == nullptr) {
-      return nullptr; /* purecov: deadcode */
-    }
+    Create_field *create_field = generate_create_field(thd, item, &tmp_table);
+    if (create_field == nullptr) return nullptr; /* purecov: deadcode */
 
     // Array columns may be returned if show_hidden_columns is enabled. Raise an
     // error instead of attempting to create array columns in the new table.
     DBUG_EXECUTE("show_hidden_columns", {
-      if (cr_field->is_array) {
+      if (create_field->is_array) {
         my_error(ER_NOT_SUPPORTED_YET, MYF(0),
                  "Creating tables with array columns.");
         return nullptr;
       }
     });
-    assert(!cr_field->is_array);
+    assert(!create_field->is_array);
 
-    alter_info->create_list.push_back(cr_field);
+    alter_info->create_list.push_back(create_field);
   }
 
   /*
-    Acquire SU meta data locks for the tables referenced
+    Acquire SU metadata locks for the tables referenced
     in the FK constraints.
   */
   if (!(create_info->options & HA_LEX_CREATE_TMP_TABLE) &&
@@ -2793,20 +2796,22 @@ static TABLE *create_table_from_items(THD *thd, HA_CREATE_INFO *create_info,
                                      create_table->table_name, alter_info,
                                      create_info->db_type,
                                      0,  // No pre-existing FKs
-                                     &mdl_requests))
-
+                                     &mdl_requests)) {
       return nullptr;
+    }
 
     if (!mdl_requests.is_empty() &&
         thd->mdl_context.acquire_locks(&mdl_requests,
-                                       thd->variables.lock_wait_timeout))
+                                       thd->variables.lock_wait_timeout)) {
       return nullptr;
+    }
   }
 
   // Prepare check constraints.
   if (prepare_check_constraints_for_create(
-          thd, create_table->db, create_table->table_name, alter_info))
+          thd, create_table->db, create_table->table_name, alter_info)) {
     return nullptr;
+  }
 
   /*
     If mode to generate invisible primary key is active then, generate primary
@@ -2824,7 +2829,7 @@ static TABLE *create_table_from_items(THD *thd, HA_CREATE_INFO *create_info,
   /*
     Create and lock table.
 
-    Note that we either creating (or opening existing) temporary table or
+    Note that we are either creating (or opening existing) temporary table or
     creating base table on which name we have exclusive lock. So code below
     should not cause deadlocks or races.
 
@@ -2837,45 +2842,47 @@ static TABLE *create_table_from_items(THD *thd, HA_CREATE_INFO *create_info,
     TABLE, which is a wrong order. So we keep binary logging disabled when we
     open_table().
   */
-  {
-    if (!mysql_create_table_no_lock(
-            thd, create_table->db, create_table->table_name, create_info,
-            alter_info, select_field_count, true, nullptr, post_ddl_ht)) {
-      DEBUG_SYNC(thd, "create_table_select_before_open");
-
-      if (!(create_info->options & HA_LEX_CREATE_TMP_TABLE)) {
-        Open_table_context ot_ctx(thd, MYSQL_OPEN_REOPEN);
-        /*
-          Here we open the destination table, on which we already have
-          an exclusive metadata lock.
-        */
-        if (open_table(thd, create_table, &ot_ctx)) {
-          /* Play safe, remove table share for the table from the cache. */
-          tdc_remove_table(thd, TDC_RT_REMOVE_ALL, create_table->db,
-                           create_table->table_name, false);
-
-          if (!(create_info->db_type->flags & HTON_SUPPORTS_ATOMIC_DDL))
-            quick_rm_table(thd, create_info->db_type, create_table->db,
-                           create_table->table_name, 0);
-        } else
-          table = create_table->table;
-      } else {
-        if (open_temporary_table(thd, create_table)) {
-          /*
-            This shouldn't happen as creation of temporary table should make
-            it preparable for open. Anyway we can't drop temporary table if
-            we are unable to fint it.
-          */
-          assert(0);
-        } else {
-          table = create_table->table;
-        }
-      }
-    }
-    if (!table)  // open failed
-      return nullptr;
+  const size_t select_field_count = CountVisibleFields(items);
+  if (mysql_create_table_no_lock(
+          thd, create_table->db, create_table->table_name, create_info,
+          alter_info, select_field_count, true, nullptr, post_ddl_ht)) {
+    return nullptr;
   }
-  return table;
+
+  DEBUG_SYNC(thd, "create_table_select_before_open");
+
+  if (!(create_info->options & HA_LEX_CREATE_TMP_TABLE)) {
+    Open_table_context ot_ctx(thd, MYSQL_OPEN_REOPEN);
+    /*
+      Here we open the destination table, on which we already have
+      an exclusive metadata lock.
+    */
+    if (open_table(thd, create_table, &ot_ctx)) {
+      /* Play safe, remove table share for the table from the cache. */
+      tdc_remove_table(thd, TDC_RT_REMOVE_ALL, create_table->db,
+                       create_table->table_name, false);
+
+      if (!(create_info->db_type->flags & HTON_SUPPORTS_ATOMIC_DDL)) {
+        quick_rm_table(thd, create_info->db_type, create_table->db,
+                       create_table->table_name, 0);
+      }
+
+      return nullptr;
+    }
+  } else {
+    if (open_temporary_table(thd, create_table)) {
+      /*
+        This shouldn't happen as creation of temporary table should make
+        it preparable for open. Anyway we can't drop temporary table if
+        we are unable to find it.
+      */
+      assert(0);
+
+      return nullptr;
+    }
+  }
+
+  return create_table->table;
 }
 
 Query_result_create::Query_result_create(Table_ref *table_arg,
@@ -3595,10 +3602,10 @@ bool Sql_cmd_insert_all::prepare_inner(THD *thd) {
   thd->want_privilege = saved_privilege;
 
   /* Restore the insert table but not the name resolution context */
-  if (first_query_block_table != select->m_table_list.first) {
+  if (first_query_block_table != select->get_table_list()) {
     // If we have transformation of the top block table list
     // by Query_block::transform_grouped_to_derived, we must update:
-    first_query_block_table = select->m_table_list.first;
+    first_query_block_table = select->get_table_list();
     ctx_state.update_next_local(first_query_block_table);
   }
 

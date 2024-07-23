@@ -214,4 +214,231 @@ UNINSTALL PLUGIN greatdb_ha;
 set global debug = '';
 [connection server1]
 include/stop_group_replication.inc
+######################[Start test ipv6]#######################
+
+############################################################
+# 1. Deploy one group which have 3 members in single primary mode.
+[connection server1]
+INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so';
+set global debug = 'd,test_vip';
+"ready ipv6 variables"
+set global greatdb_ha_mgr_vip_ip = 'fd12:3456:789a:2::7';
+set global greatdb_ha_mgr_read_vip_ips = 'fd12:3456:789a:2::8,fd12:3456:789a:2::9';
+set global greatdb_ha_mgr_vip_mask = '64';
+set global greatdb_ha_mgr_vip_nic = 'eno1';
+include/start_and_bootstrap_group_replication.inc
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7,fd12:3456:789a:2::8,fd12:3456:789a:2::9
+[connection server2]
+INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so';
+set global debug = 'd,test_vip';
+"ready ipv6 variables"
+set global greatdb_ha_mgr_vip_ip = 'fd12:3456:789a:2::7';
+set global greatdb_ha_mgr_read_vip_ips = 'fd12:3456:789a:2::8,fd12:3456:789a:2::9';
+set global greatdb_ha_mgr_vip_mask = '64';
+set global greatdb_ha_mgr_vip_nic = 'eno1';
+include/start_group_replication.inc
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER2_UUID::fd12:3456:789a:2::8,fd12:3456:789a:2::9
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER2_UUID::fd12:3456:789a:2::8,fd12:3456:789a:2::9
+[connection server3]
+INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so';
+set global debug = 'd,test_vip';
+"ready ipv6 variables"
+set global greatdb_ha_mgr_vip_ip = 'fd12:3456:789a:2::7';
+set global greatdb_ha_mgr_read_vip_ips = 'fd12:3456:789a:2::8,fd12:3456:789a:2::9';
+set global greatdb_ha_mgr_vip_mask = '64';
+set global greatdb_ha_mgr_vip_nic = 'eno1';
+include/start_group_replication.inc
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER2_UUID::fd12:3456:789a:2::9;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER2_UUID::fd12:3456:789a:2::9;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER2_UUID::fd12:3456:789a:2::9;MEMBER3_UUID::fd12:3456:789a:2::8
+
+############################################################
+# 2. test MGR status change then check vip_tope status
+[connection server2]
+# test change master to server2
+SELECT group_replication_set_as_primary("MEMBER2_UUID");
+group_replication_set_as_primary("MEMBER2_UUID")
+Primary server switched to: MEMBER2_UUID
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::9;MEMBER2_UUID::fd12:3456:789a:2::7;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::9;MEMBER2_UUID::fd12:3456:789a:2::7;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server3]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::9;MEMBER2_UUID::fd12:3456:789a:2::7;MEMBER3_UUID::fd12:3456:789a:2::8
+# primary server2 stop group_replication, then check vip_tope
+[connection server2]
+include/stop_group_replication.inc
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER3_UUID::fd12:3456:789a:2::8,fd12:3456:789a:2::9
+[connection server3]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER3_UUID::fd12:3456:789a:2::8,fd12:3456:789a:2::9
+[connection server2]
+include/start_group_replication.inc
+# secondary server3, server2 stop group_replication, then check vip_tope
+[connection server3]
+include/stop_group_replication.inc
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER2_UUID::fd12:3456:789a:2::8,fd12:3456:789a:2::9
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER2_UUID::fd12:3456:789a:2::8,fd12:3456:789a:2::9
+[connection server2]
+include/stop_group_replication.inc
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7,fd12:3456:789a:2::8,fd12:3456:789a:2::9
+[connection server2]
+include/start_group_replication.inc
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER2_UUID::fd12:3456:789a:2::8,fd12:3456:789a:2::9
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER2_UUID::fd12:3456:789a:2::8,fd12:3456:789a:2::9
+[connection server3]
+include/start_group_replication.inc
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER2_UUID::fd12:3456:789a:2::9;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER2_UUID::fd12:3456:789a:2::9;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::7;MEMBER2_UUID::fd12:3456:789a:2::9;MEMBER3_UUID::fd12:3456:789a:2::8
+
+############################################################
+# 3. check greatdb_ha variables change then check vip_tope status
+[connection server1]
+set global greatdb_ha_mgr_vip_ip = "fd12:3456::789a:2::a";
+ERROR 42000: vip format is incorrect
+# test set write vip, and check vip_tope changed
+set global greatdb_ha_mgr_vip_ip = "fd12:3456:789a:2::6";
+[connection server2]
+set global greatdb_ha_mgr_vip_ip = "fd12:3456:789a:2::6";
+[connection server3]
+set global greatdb_ha_mgr_vip_ip = "fd12:3456:789a:2::6";
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::6;MEMBER2_UUID::fd12:3456:789a:2::9;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::6;MEMBER2_UUID::fd12:3456:789a:2::9;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server3]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::6;MEMBER2_UUID::fd12:3456:789a:2::9;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server1]
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456::789a:2::a";
+ERROR 42000: read vip format is incorrect
+# test set read vip, and read vip nums larger than secondary_members nums
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456:789a:2::a";
+[connection server2]
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456:789a:2::a";
+[connection server3]
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456:789a:2::a";
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::6;MEMBER2_UUID::fd12:3456:789a:2::9,fd12:3456:789a:2::a;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::6;MEMBER2_UUID::fd12:3456:789a:2::9,fd12:3456:789a:2::a;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server3]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::6;MEMBER2_UUID::fd12:3456:789a:2::9,fd12:3456:789a:2::a;MEMBER3_UUID::fd12:3456:789a:2::8
+# test set read vip, and read vip nums less than secondary_members nums
+[connection server1]
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8";
+[connection server2]
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8";
+[connection server3]
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8";
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::6;MEMBER2_UUID::;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::6;MEMBER2_UUID::;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server3]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::6;MEMBER2_UUID::;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server1]
+# test set read vip, and read vip nums larger than secondary_members nums when greatdb_ha_mgr_read_vip_floating_type is TO_PRIMARY
+set global greatdb_ha_mgr_read_vip_floating_type=TO_PRIMARY;
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456:789a:2::a";
+[connection server1]
+set global greatdb_ha_mgr_read_vip_floating_type=TO_PRIMARY;
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456:789a:2::a";
+[connection server1]
+set global greatdb_ha_mgr_read_vip_floating_type=TO_PRIMARY;
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456:789a:2::a";
+[connection server1]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::6,fd12:3456:789a:2::a;MEMBER2_UUID::fd12:3456:789a:2::9;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server2]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::6,fd12:3456:789a:2::a;MEMBER2_UUID::fd12:3456:789a:2::9;MEMBER3_UUID::fd12:3456:789a:2::8
+[connection server3]
+select @@greatdb_ha_vip_tope;
+@@greatdb_ha_vip_tope
+MEMBER1_UUID::fd12:3456:789a:2::6,fd12:3456:789a:2::a;MEMBER2_UUID::fd12:3456:789a:2::9;MEMBER3_UUID::fd12:3456:789a:2::8
+
+############################################################
+# 4. clean up
+[connection server1]
+UNINSTALL PLUGIN greatdb_ha;
+set global debug = '';
+[connection server3]
+include/stop_group_replication.inc
+UNINSTALL PLUGIN greatdb_ha;
+set global debug = '';
+[connection server2]
+include/stop_group_replication.inc
+UNINSTALL PLUGIN greatdb_ha;
+set global debug = '';
+[connection server1]
+include/stop_group_replication.inc
 include/group_replication_end.inc

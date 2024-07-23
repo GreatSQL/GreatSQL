@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, GreatDB Software Co., Ltd. All rights reserved.
+/* Copyright (c) 2023, 2024, GreatDB Software Co., Ltd. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 class Field;
 class THD;
-struct TABLE_LIST;
+struct Table_ref;
 class Item;
 
 extern struct st_mysql_plugin i_s_innodb_data_file_async_purge;

@@ -1,5 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -264,7 +264,7 @@ struct AccessPath {
     // Access paths that modify tables.
     DELETE_ROWS,
     UPDATE_ROWS,
-    ROWNUM_FILTER,
+    COUNTER,
     CONNECT_BY_SCAN,
     PARALLEL_SCAN,
     PQBLOCK_SCAN
@@ -849,13 +849,13 @@ struct AccessPath {
     assert(type == UPDATE_ROWS);
     return u.update_rows;
   }
-  auto &rownum_filter() {
-    assert(type == ROWNUM_FILTER);
-    return u.rownum_filter;
+  auto &counter() {
+    assert(type == COUNTER);
+    return u.counter;
   }
-  const auto &rownum_filter() const {
-    assert(type == ROWNUM_FILTER);
-    return u.rownum_filter;
+  const auto &counter() const {
+    assert(type == COUNTER);
+    return u.counter;
   }
   auto &connect_by_scan() {
     assert(type == CONNECT_BY_SCAN);
@@ -1279,15 +1279,11 @@ struct AccessPath {
     } update_rows;
     struct {
       AccessPath *child;
-      Item *condition;
-    } rownum_filter;
+      CounterItem *counter;
+    } counter;
     struct {
       AccessPath *src_path;
-      Temp_table_param *temp_table_param;
-      TABLE *table;
-      AccessPath *table_path;
       Connect_by_param *connect_by_param;
-      int ref_slice;
     } connect_by_scan;
     struct {
       QEP_TAB *tab;
@@ -1661,28 +1657,21 @@ inline AccessPath *NewFilterAccessPath(THD *thd, AccessPath *child,
   return path;
 }
 
-inline AccessPath *NewRownumFilterAccessPath(THD *thd, AccessPath *child,
-                                             Item *condition) {
+inline AccessPath *NewCounterAccessPath(THD *thd, AccessPath *child,
+                                        CounterItem *c) {
   AccessPath *path = new (thd->mem_root) AccessPath;
-  path->type = AccessPath::ROWNUM_FILTER;
-  path->rownum_filter().child = child;
-  path->rownum_filter().condition = condition;
+  path->type = AccessPath::COUNTER;
+  path->counter().child = child;
+  path->counter().counter = c;
   return path;
 }
 
 inline AccessPath *NewConnectByAccessPath(THD *thd, AccessPath *src_path,
-                                          Temp_table_param *temp_table_param,
-                                          TABLE *table, AccessPath *table_path,
-                                          Connect_by_param *connect_by_param,
-                                          int ref_slice) {
+                                          Connect_by_param *connect_by_param) {
   AccessPath *path = new (thd->mem_root) AccessPath;
   path->type = AccessPath::CONNECT_BY_SCAN;
   path->connect_by_scan().src_path = src_path;
-  path->connect_by_scan().table_path = table_path;
-  path->connect_by_scan().table = table;
-  path->connect_by_scan().temp_table_param = temp_table_param;
   path->connect_by_scan().connect_by_param = connect_by_param;
-  path->connect_by_scan().ref_slice = ref_slice;
   return path;
 }
 

@@ -2,6 +2,7 @@ set global log_error_verbosity= 1;
 drop table if exists t1,t2;
 show tables where Tables_in_mysql != 'ndb_binlog_index';
 Tables_in_mysql
+clone_history
 columns_priv
 component
 db
@@ -53,6 +54,7 @@ create user test@127.0.0.1 identified by "gambling";
 grant ALL on *.* to test@127.0.0.1;
 show tables where Tables_in_mysql != 'ndb_binlog_index';
 Tables_in_mysql
+clone_history
 columns_priv
 component
 db

@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -34,6 +34,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/hmac.h>
 
 #include "m_string.h"
 #include "my_aes.h"
@@ -57,7 +58,7 @@ const char *my_aes_opmode_names[] = {
     "aes-192-cbc",    "aes-256-cbc",    "aes-128-cfb1",   "aes-192-cfb1",
     "aes-256-cfb1",   "aes-128-cfb8",   "aes-192-cfb8",   "aes-256-cfb8",
     "aes-128-cfb128", "aes-192-cfb128", "aes-256-cfb128", "aes-128-ofb",
-    "aes-192-ofb",    "aes-256-ofb",
+    "aes-192-ofb",    "aes-256-ofb",    "des_ede3_cbc",
 #ifdef SSL_GM
     "sm4_ecb",        "sm4_cbc",        "sm4_cfb",        "sm4_ofb",
 #endif
@@ -67,20 +68,34 @@ const char *my_aes_opmode_names[] = {
 
 /* keep in sync with enum my_aes_opmode in my_aes.h */
 static uint my_aes_opmode_key_sizes_impl[] = {
-    128 /* aes-128-ecb */,    192 /* aes-192-ecb */,
-    256 /* aes-256-ecb */,    128 /* aes-128-cbc */,
-    192 /* aes-192-cbc */,    256 /* aes-256-cbc */,
-    128 /* aes-128-cfb1 */,   192 /* aes-192-cfb1 */,
-    256 /* aes-256-cfb1 */,   128 /* aes-128-cfb8 */,
-    192 /* aes-192-cfb8 */,   256 /* aes-256-cfb8 */,
-    128 /* aes-128-cfb128 */, 192 /* aes-192-cfb128 */,
-    256 /* aes-256-cfb128 */, 128 /* aes-128-ofb */,
+    128 /* aes-128-ecb */,
+    192 /* aes-192-ecb */,
+    256 /* aes-256-ecb */,
+    128 /* aes-128-cbc */,
+    192 /* aes-192-cbc */,
+    256 /* aes-256-cbc */,
+    128 /* aes-128-cfb1 */,
+    192 /* aes-192-cfb1 */,
+    256 /* aes-256-cfb1 */,
+    128 /* aes-128-cfb8 */,
+    192 /* aes-192-cfb8 */,
+    256 /* aes-256-cfb8 */,
+    128 /* aes-128-cfb128 */,
+    192 /* aes-192-cfb128 */,
+    256 /* aes-256-cfb128 */,
+    128 /* aes-128-ofb */,
 #ifdef SSL_GM
-    192 /* aes-192-ofb */,    256 /* aes-256-ofb */,
-    128 /* sm4-ecb*/,         128 /* sm4-cbc*/,
-    128 /* sm4-cfb*/,         128 /*sm4-ofb*/
+    192 /* aes-192-ofb */,
+    256 /* aes-256-ofb */,
+    192 /* des_ede3_cbc */,
+    128 /* sm4-ecb*/,
+    128 /* sm4-cbc*/,
+    128 /* sm4-cfb*/,
+    128 /*sm4-ofb*/
 #else
-    192 /* aes-192-ofb */,    256 /* aes-256-ofb */
+    192 /* aes-192-ofb */,
+    256 /* aes-256-ofb */,
+    192 /* des_ede3_cbc */
 #endif
 };
 
@@ -124,6 +139,8 @@ static const EVP_CIPHER *aes_evp_type(const my_aes_opmode mode) {
       return EVP_aes_256_cfb128();
     case my_aes_256_ofb:
       return EVP_aes_256_ofb();
+    case my_des_ede3_cbc:
+      return EVP_des_ede3_cbc();
 #ifdef SSL_GM
     case my_sm4_ecb:
       return EVP_sm4_ecb();
@@ -173,6 +190,10 @@ int my_aes_encrypt(const unsigned char *source, uint32 source_length,
                    uint32 key_length, enum my_aes_opmode mode,
                    const unsigned char *iv, bool padding,
                    std::vector<std::string> *kdf_options) {
+  if (my_des_is(mode))
+    return my_des_encrypt_decrypt(source, source_length, dest, key, key_length,
+                                  mode, iv, 1, false, kdf_options);
+
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
   EVP_CIPHER_CTX stack_ctx;
   EVP_CIPHER_CTX *ctx = &stack_ctx;
@@ -220,6 +241,10 @@ int my_aes_decrypt(const unsigned char *source, uint32 source_length,
                    uint32 key_length, enum my_aes_opmode mode,
                    const unsigned char *iv, bool padding,
                    std::vector<std::string> *kdf_options) {
+  if (my_des_is(mode))
+    return my_des_encrypt_decrypt(source, source_length, dest, key, key_length,
+                                  mode, iv, 0, false, kdf_options);
+
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
   EVP_CIPHER_CTX stack_ctx;
   EVP_CIPHER_CTX *ctx = &stack_ctx;
@@ -266,6 +291,114 @@ aes_error:
   return MY_AES_BAD_DATA;
 }
 
+int my_des_encrypt_decrypt(const unsigned char *source, uint32 source_length,
+                           unsigned char *dest, const unsigned char *key,
+                           uint32 key_length, enum my_aes_opmode mode,
+                           const unsigned char *iv, int encrypt_decrypt,
+                           bool padding,
+                           std::vector<std::string> *kdf_options) {
+  const unsigned char ivd_default[8] = {0};
+  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+  if (!(ctx)) return MY_AES_BAD_DATA;
+  const EVP_CIPHER *cipher = aes_evp_type(mode);
+  int u_len, f_len;
+  /* The real key to be used for encryption */
+  unsigned char rkey[MAX_DES_KEY_LENGTH / 8];
+
+  if (my_create_key(rkey, key, key_length, mode, kdf_options)) {
+    EVP_CIPHER_CTX_free(ctx);
+    return MY_AES_BAD_DATA;
+  }
+
+  if ((!cipher) && (EVP_CIPHER_iv_length(cipher) > 0 && !iv)) {
+    EVP_CIPHER_CTX_free(ctx);
+    return MY_AES_BAD_DATA;
+  }
+
+  if (!iv || !strlen(reinterpret_cast<const char *>(iv))) iv = ivd_default;
+  if (EVP_CipherInit_ex(ctx, cipher, NULL, rkey, iv, encrypt_decrypt) != 1)
+    goto aes_error;                                              /* Error */
+  if (!EVP_CIPHER_CTX_set_padding(ctx, padding)) goto aes_error; /* Error */
+  if (EVP_CipherUpdate(ctx, dest, &u_len, (const unsigned char *)source,
+                       source_length) != 1)
+    goto aes_error; /* Error */
+
+  if (EVP_CipherFinal_ex(ctx, dest + u_len, &f_len) != 1)
+    goto aes_error; /* Error */
+
+  EVP_CIPHER_CTX_free(ctx);
+  return u_len;
+
+aes_error:
+  /* need to explicitly clean up the error if we want to ignore it */
+  ERR_clear_error();
+  EVP_CIPHER_CTX_free(ctx);
+  return MY_AES_BAD_DATA;
+}
+
+#ifdef SSL_GM
+int sm2_encrypt(const unsigned char *source, uint32 source_length,
+                unsigned char *dest, size_t &dest_len, EVP_PKEY *sm2_key) {
+  EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(sm2_key, NULL);
+  if (pctx == NULL) return 1;
+  if (EVP_PKEY_encrypt_init(pctx) <= 0) goto error;
+  if (EVP_PKEY_encrypt(pctx, NULL, &dest_len, source, source_length) <= 0)
+    goto error;
+  if (EVP_PKEY_encrypt(pctx, dest, &dest_len, source, source_length) <= 0)
+    goto error;
+  EVP_PKEY_CTX_free(pctx);
+  EVP_PKEY_free(sm2_key);
+  return 0;
+error:
+  ERR_clear_error();
+  EVP_PKEY_CTX_free(pctx);
+  EVP_PKEY_free(sm2_key);
+  return 1;
+}
+
+int sm2_decrypt(const unsigned char *source, uint32 source_length,
+                unsigned char *dest, size_t &dest_len, EVP_PKEY *sm2_key) {
+  EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new(sm2_key, NULL);
+  if (pctx == NULL) return 1;
+  if (EVP_PKEY_decrypt_init(pctx) <= 0) goto error;
+  if (EVP_PKEY_decrypt(pctx, NULL, &dest_len, source, source_length) <= 0)
+    goto error;
+  if (EVP_PKEY_decrypt(pctx, dest, &dest_len, source, source_length) <= 0)
+    goto error;
+  EVP_PKEY_CTX_free(pctx);
+  EVP_PKEY_free(sm2_key);
+  return 0;
+error:
+  ERR_clear_error();
+  EVP_PKEY_CTX_free(pctx);
+  EVP_PKEY_free(sm2_key);
+  return 1;
+}
+
+int sm3(const unsigned char *msg, uint32 msg_length, unsigned char *dest) {
+  EVP_MD_CTX *mdctx = NULL;
+  mdctx = EVP_MD_CTX_new();
+  if (mdctx == NULL) return 1;
+  if (!EVP_DigestInit_ex(mdctx, EVP_sm3(), NULL)) return 1;
+  if (!EVP_DigestUpdate(mdctx, msg, msg_length)) return 1;
+  if (!EVP_DigestFinal_ex(mdctx, dest, nullptr)) return 1;
+  EVP_MD_CTX_free(mdctx);
+  return 0;
+}
+
+int hmac_sm3(const unsigned char *source, uint32 source_length,
+             unsigned char *dest, const unsigned char *key, uint32 key_length) {
+  unsigned int digest_len;
+  HMAC_CTX *ctx = HMAC_CTX_new();
+  if (ctx == NULL) return 1;
+  if (!HMAC_Init_ex(ctx, key, key_length, EVP_sm3(), NULL)) return 1;
+  if (!HMAC_Update(ctx, source, source_length)) return 1;
+  if (!HMAC_Final(ctx, dest, &digest_len)) return 1;
+  HMAC_CTX_free(ctx);
+  return 0;
+}
+#endif /* SSL_GM */
+
 longlong my_aes_get_size(uint32 source_length, my_aes_opmode opmode) {
   const EVP_CIPHER *cipher = aes_evp_type(opmode);
   size_t block_size;
@@ -274,14 +407,15 @@ longlong my_aes_get_size(uint32 source_length, my_aes_opmode opmode) {
 
   if (block_size <= 1) return source_length;
   return block_size * (static_cast<ulonglong>(source_length) / block_size) +
-         block_size;
+         (my_des_is(opmode) ? 0 : block_size);
 }
 
 bool my_aes_needs_iv(my_aes_opmode opmode) {
   const EVP_CIPHER *cipher = aes_evp_type(opmode);
   int iv_length;
   iv_length = EVP_CIPHER_iv_length(cipher);
-  assert(iv_length == 0 || iv_length == MY_AES_IV_SIZE);
+  assert(iv_length == 0 || iv_length == MY_AES_IV_SIZE ||
+         iv_length == MY_DES_IV_SIZE);
   return iv_length != 0 ? true : false;
 }
 
@@ -373,4 +507,14 @@ int my_legacy_aes_cbc_nopad_decrypt(const unsigned char *source,
                                     const unsigned char *iv) {
   return my_legacy_aes_cbc_nopad_crypt(false, source, source_length, dest, key,
                                        key_length, iv);
+}
+
+bool my_des_is(my_aes_opmode opmode) {
+  switch (opmode) {
+    case my_des_ede3_cbc:
+      return true;
+    default:
+      return false;
+  }
+  return false;
 }

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2022, Oracle and/or its affiliates. All rights reserved.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 Copyright (c) 2008, 2009 Google Inc.
 Copyright (c) 2009, Percona Inc.
 
@@ -50,6 +50,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <mysqld.h>
 #include <sys/types.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <chrono>
 
@@ -79,6 +80,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0log.h"
 #include "row0mysql.h"
 #include "sql/current_thd.h"
+#include "sql/sched_affinity_manager.h"
 #include "sql_thd_internal_api.h"
 #include "srv0mon.h"
 
@@ -555,6 +557,12 @@ ulint srv_sched_priority_io = 19;
 
 /* The relative scheduling priority of the master thread */
 ulint srv_sched_priority_master = 19;
+
+/* the relative scheduling priority of the page cleaner */
+ulint srv_sched_priority_pc = 19;
+
+/* the relative scheduling priority of percona lru flush thread */
+ulint srv_sched_priority_lru_flush = 19;
 
 /* The relative priority of the current thread.  If 0, low priority; if 1, high
 priority.  */
@@ -3435,6 +3443,18 @@ static void srv_purge_coordinator_suspend(
 
 /** Purge coordinator thread that schedules the purge tasks. */
 void srv_purge_coordinator_thread() {
+  auto sched_affinity_manager =
+      sched_affinity::Sched_affinity_manager::get_instance();
+  bool is_registered_to_sched_affinity = false;
+  auto pid = sched_affinity::gettid();
+  if (sched_affinity_manager != nullptr &&
+      !(is_registered_to_sched_affinity =
+            sched_affinity_manager->register_thread(
+                sched_affinity::Thread_type::PURGE_COORDINATOR, pid))) {
+    ib::error(ER_CANNOT_REGISTER_THREAD_TO_SCHED_AFFINIFY_MANAGER)
+        << "purge_coordinator";
+  }
+
   srv_slot_t *slot;
 
   THD *thd = create_internal_thd();
@@ -3563,6 +3583,12 @@ void srv_purge_coordinator_thread() {
   srv_thread_delay_cleanup_if_needed(false);
 
   destroy_internal_thd(thd);
+
+  if (is_registered_to_sched_affinity &&
+      !sched_affinity_manager->unregister_thread(pid)) {
+    ib::error(ER_CANNOT_UNREGISTER_THREAD_FROM_SCHED_AFFINIFY_MANAGER)
+        << "purge_coordinator";
+  }
 }
 
 /** Enqueues a task to server task queue and releases a worker thread, if there

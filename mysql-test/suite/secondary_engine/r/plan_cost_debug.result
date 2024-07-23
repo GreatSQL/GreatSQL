@@ -1,3 +1,4 @@
+SET @@use_secondary_engine = ON;
 #
 # Bug#29023387: GET PLAN COST FROM SECONDARY ENGINE
 #

@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -206,8 +206,6 @@ extern int connect_tcp(char *server, xcom_port port, int *ret);
  */
 xcom_proto minimum_ipv6_version();
 
-#define IP_MAX_SIZE 512
-
 /**
  * @brief Get the ip and port object from a given address in the authorized
  * input format. For IP v4 is IP (or) NAME:PORT and for IPv6 is [IP (or)
@@ -239,7 +237,7 @@ int get_ip_and_port(char const *address, char ip[IP_MAX_SIZE], xcom_port *port);
 int is_new_node_eligible_for_ipv6(xcom_proto incoming_proto,
                                   const site_def *current_site_def);
 
-void update_zone_id_for_consensus(const char *ip, int zone_id,
+void update_zone_id_for_consensus(const char *address, int zone_id,
                                   bool zone_id_sync_mode);
 
 #define INITIAL_CONNECT_WAIT 0.1

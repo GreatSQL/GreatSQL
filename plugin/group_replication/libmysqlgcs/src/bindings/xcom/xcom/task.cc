@@ -1,5 +1,5 @@
 /* Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -893,6 +893,13 @@ task_env *stack = nullptr;
 
 task_env *wait_io(task_env *t, int fd, int op) {
   t->time = 0.0;
+  t->interrupt = 0;
+  add_fd(deactivate(t), fd, op);
+  return t;
+}
+
+task_env *timed_wait_io(task_env *t, int fd, int op, double timeout) {
+  t->time = task_now() + timeout;
   t->interrupt = 0;
   add_fd(deactivate(t), fd, op);
   return t;

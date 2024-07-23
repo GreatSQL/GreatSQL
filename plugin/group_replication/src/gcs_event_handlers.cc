@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -911,7 +911,10 @@ int Plugin_gcs_events_handler::update_group_info_manager(
         std::string host = (*to_update_it)->get_hostname();
         int zone_id = (*to_update_it)->get_zone_id();
         bool zone_id_sync_mode = (*to_update_it)->get_zone_id_sync_mode();
-        plugin_update_zone_id_for_communication_node(host.c_str(), zone_id,
+        Gcs_member_identifier gcs_member_id =
+            (*to_update_it)->get_gcs_member_id();
+        const std::string &member_id = gcs_member_id.get_member_id();
+        plugin_update_zone_id_for_communication_node(member_id.c_str(), zone_id,
                                                      zone_id_sync_mode);
       }
     }
@@ -1893,13 +1896,18 @@ int Plugin_gcs_events_handler::compare_member_option_compatibility() const {
       }
     }
 
-    if (local_member_info->get_zone_id_sync_mode() !=
-        (*all_members_it)->get_zone_id_sync_mode()) {
-      result = 1;
-      LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_ZONE_ID_SYNC_MODE_NOT_COMPATIBLE,
-                   local_member_info->get_zone_id_sync_mode(),
-                   (*all_members_it)->get_zone_id_sync_mode());
-      goto cleaning;
+    if ((local_member_info->get_role() !=
+         Group_member_info::MEMBER_ROLE_ARBITRATOR) &&
+        ((*all_members_it)->get_role() !=
+         Group_member_info::MEMBER_ROLE_ARBITRATOR)) {
+      if (local_member_info->get_zone_id_sync_mode() !=
+          (*all_members_it)->get_zone_id_sync_mode()) {
+        result = 1;
+        LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_ZONE_ID_SYNC_MODE_NOT_COMPATIBLE,
+                     local_member_info->get_zone_id_sync_mode(),
+                     (*all_members_it)->get_zone_id_sync_mode());
+        goto cleaning;
+      }
     }
 
     if ((*all_members_it)->get_lower_case_table_names() !=

@@ -56,6 +56,7 @@ ORDER BY table_schema,table_name, constraint_name;
 CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_SCHEMA	TABLE_NAME
 def	mtr	PRIMARY	mtr	asserted_test_suppressions
 def	mtr	PRIMARY	mtr	test_ignored_global_suppressions
+def	mysql	PRIMARY	mysql	clone_history
 def	mysql	PRIMARY	mysql	columns_priv
 def	mysql	PRIMARY	mysql	component
 def	mysql	PRIMARY	mysql	db
@@ -63,6 +64,8 @@ def	mysql	PRIMARY	mysql	default_roles
 def	mysql	PRIMARY	mysql	engine_cost
 def	mysql	PRIMARY	mysql	func
 def	mysql	PRIMARY	mysql	global_grants
+def	mysql	PRIMARY	mysql	greatdb_sequences
+def	mysql	PRIMARY	mysql	greatdb_sequences_persist
 def	mysql	PRIMARY	mysql	gtid_executed
 def	mysql	name	mysql	help_category
 def	mysql	PRIMARY	mysql	help_category
@@ -187,7 +190,25 @@ def	performance_schema	PRIMARY	performance_schema	user_defined_functions
 def	performance_schema	PRIMARY	performance_schema	user_variables_by_thread
 def	performance_schema	USER	performance_schema	users
 def	performance_schema	PRIMARY	performance_schema	variables_by_thread
+def	sys	PRIMARY	sys	dbms_alert_info
 def	sys	PRIMARY	sys	sys_config
+def	sys_mac	PRIMARY	sys_mac	mac_column_policy
+def	sys_mac	c_id	sys_mac	mac_compartment
+def	sys_mac	PRIMARY	sys_mac	mac_compartment
+def	sys_mac	PRIMARY	sys_mac	mac_database_policy
+def	sys_mac	g_id	sys_mac	mac_group
+def	sys_mac	PRIMARY	sys_mac	mac_group
+def	sys_mac	p_id	sys_mac	mac_labels
+def	sys_mac	PRIMARY	sys_mac	mac_labels
+def	sys_mac	p_id	sys_mac	mac_level
+def	sys_mac	PRIMARY	sys_mac	mac_level
+def	sys_mac	p_name	sys_mac	mac_policy
+def	sys_mac	PRIMARY	sys_mac	mac_policy
+def	sys_mac	PRIMARY	sys_mac	mac_privileged_users
+def	sys_mac	PRIMARY	sys_mac	mac_row_policy
+def	sys_mac	PRIMARY	sys_mac	mac_table_policy
+def	sys_mac	PRIMARY	sys_mac	mac_user_policy
+def	sys_mac	PRIMARY	sys_mac	mac_user_privs
 #########################################################################################
 # Testcase 3.2.7.2 + 3.2.7.3: INFORMATION_SCHEMA.TABLE_CONSTRAINTS accessible information
 #########################################################################################

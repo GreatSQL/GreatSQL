@@ -1,5 +1,5 @@
 %/* Copyright (c) 2010, 2022, Oracle and/or its affiliates. All rights reserved.
-%   Copyright (c) 2023, GreatDB Software Co., Ltd.
+%   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 %
 %   This program is free software; you can redistribute it and/or modify
 %   it under the terms of the GNU General Public License, version 2.0,
@@ -129,7 +129,8 @@ enum cargo_type {
   set_max_leaders = 25,
   set_leaders_type = 26,
   get_leaders_type = 27,
-  set_flp_timeout = 51
+  set_flp_timeout = 51,
+  set_notify_truly_remove = 52
 };
 
 enum recover_action {
@@ -318,6 +319,8 @@ struct leader{
 
 typedef leader leader_array<NSERVERS>;
 
+#define MAX_IP_PORT_LEN 64
+
 /* Application-specific data */
 union app_u switch(cargo_type c_t){
  case unified_boot_type:
@@ -357,6 +360,8 @@ union app_u switch(cargo_type c_t){
    leader_array leaders;
  case set_flp_timeout:
    uint64_t flp_timeout;
+ case set_notify_truly_remove:
+   char ip_port[MAX_IP_PORT_LEN];
  default:
    void;
 };

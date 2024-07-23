@@ -1,0 +1,223 @@
+RESET MASTER;
+SET sql_log_bin=OFF;
+CREATE TABLE output (id INT PRIMARY KEY AUTO_INCREMENT, type VARCHAR(20), info VARCHAR(256));
+SET sql_log_bin=ON;
+SET SESSION DEBUG='+d,test_ignore_lower_case_check';
+SET GLOBAL DEBUG='+d,test_local_binlog_reader_with_output';
+CREATE TABLE t1 (c1 INT, c2 VARCHAR(20), c3 INT);
+CREATE TABLE t2 (c1 INT, c2 VARCHAR(20), c3 INT);
+INSERT INTO t1 VALUES (1, "aa", 1);
+INSERT INTO t1 VALUES (2, "bb", 2);
+INSERT INTO t1 VALUES (3, "cc", 3);
+INSERT INTO t2 VALUES (10, "aaaa", 10);
+INSERT INTO t2 VALUES (20, "bbbb", 20);
+INSERT INTO t2 VALUES (30, "cccc", 30);
+DO START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1', 'UUID:1-2');
+SELECT type, info FROM output;
+type	info
+GTID	UUID:3
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+ROW_EVENT	db: test, table: t1, op: INSERT, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:4
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: bb
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+ROW_EVENT	db: test, table: t1, op: INSERT, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:5
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 3
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: cc
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 3
+ROW_EVENT	db: test, table: t1, op: INSERT, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:6
+START_TRX	
+COMMIT_TRX	
+GTID	UUID:7
+START_TRX	
+COMMIT_TRX	
+GTID	UUID:8
+START_TRX	
+COMMIT_TRX	
+UPDATE t1 SET c3=c3+100;
+UPDATE t1 SET c3=c3+100 WHERE c1=1;
+UPDATE t2 SET c3=c3+100;
+UPDATE t2 SET c3=c3+100 WHERE c1=1;
+DELETE FROM t1 WHERE c1 != 3;
+DELETE FROM t2 WHERE c1 != 3;
+SELECT type, info FROM output;
+type	info
+GTID	UUID:3
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+ROW_EVENT	db: test, table: t1, op: INSERT, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:4
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: bb
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+ROW_EVENT	db: test, table: t1, op: INSERT, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:5
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 3
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: cc
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 3
+ROW_EVENT	db: test, table: t1, op: INSERT, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:6
+START_TRX	
+COMMIT_TRX	
+GTID	UUID:7
+START_TRX	
+COMMIT_TRX	
+GTID	UUID:8
+START_TRX	
+COMMIT_TRX	
+GTID	UUID:9
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 101
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: bb
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: bb
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 102
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 3
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: cc
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 3
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 3
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: cc
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 103
+ROW_EVENT	db: test, table: t1, op: UPDATE, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:10
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 101
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 201
+ROW_EVENT	db: test, table: t1, op: UPDATE, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:11
+START_TRX	
+COMMIT_TRX	
+GTID	UUID:12
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 201
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: bb
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 102
+ROW_EVENT	db: test, table: t1, op: DELETE, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:13
+START_TRX	
+COMMIT_TRX	
+DO STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1');
+UPDATE t1 SET c3=c3+100;
+UPDATE t2 SET c3=c3+100;
+DELETE FROM t1;
+DELETE FROM t2;
+SELECT type, info FROM output;
+type	info
+GTID	UUID:3
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+ROW_EVENT	db: test, table: t1, op: INSERT, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:4
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: bb
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+ROW_EVENT	db: test, table: t1, op: INSERT, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:5
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 3
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: cc
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 3
+ROW_EVENT	db: test, table: t1, op: INSERT, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:6
+START_TRX	
+COMMIT_TRX	
+GTID	UUID:7
+START_TRX	
+COMMIT_TRX	
+GTID	UUID:8
+START_TRX	
+COMMIT_TRX	
+GTID	UUID:9
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 101
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: bb
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: bb
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 102
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 3
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: cc
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 3
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 3
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: cc
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 103
+ROW_EVENT	db: test, table: t1, op: UPDATE, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:10
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 101
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 201
+ROW_EVENT	db: test, table: t1, op: UPDATE, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:11
+START_TRX	
+COMMIT_TRX	
+GTID	UUID:12
+START_TRX	
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 1
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: aa
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 201
+FIELD	field_no: 0, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 2
+FIELD	field_no: 1, field_type: 15, field_meta: 80, field_size=3, field_in_used: 1, field_null: 0, field_value: bb
+FIELD	field_no: 2, field_type: 3, field_meta: 0, field_size=4, field_in_used: 1, field_null: 0, field_value: 102
+ROW_EVENT	db: test, table: t1, op: DELETE, end_stmt: 1
+COMMIT_TRX	
+GTID	UUID:13
+START_TRX	
+COMMIT_TRX	
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE output;
+SET GLOBAL DEBUG='';
+SET SESSION DEBUG='';

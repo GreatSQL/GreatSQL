@@ -1,0 +1,3 @@
+--let $target_sched_affinity_group_number=2
+--let $target_sched_affinity_group_capacity=24
+--source include/sched_affinity_manager.inc

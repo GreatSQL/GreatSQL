@@ -1,4 +1,5 @@
 /* Copyright (C) 2012 Monty Program Ab
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -19,17 +20,19 @@
 #include <time.h>
 #include "my_sys.h"
 #include "my_systime.h"
+#include "mysql/components/services/log_builtins.h"
 #include "mysql/psi/mysql_socket.h"
 #include "mysql/thread_pool_priv.h"  // thd_is_transaction_active()
 #include "sql/debug_sync.h"
 #include "sql/log.h"
 #include "sql/mysqld.h"
 #include "sql/mysqld_thd_manager.h"
+#include "sql/protocol_classic.h"
+#include "sql/sched_affinity_manager.h"
 #include "sql/sql_class.h"
 #include "sql/sql_connect.h"
 #include "sql/sql_plist.h"
 #include "sql/threadpool.h"
-#include "sql/protocol_classic.h"
 #include "violite.h"
 #ifdef __linux__
 #include <sys/epoll.h>
@@ -1442,6 +1445,18 @@ static void *worker_main(void *param) {
   (NULL, 0, NULL, 0);
 #endif
 
+  auto sched_affinity_manager =
+      sched_affinity::Sched_affinity_manager::get_instance();
+  bool is_registered_to_sched_affinity = false;
+  auto pid = sched_affinity::gettid();
+  if (sched_affinity_manager == nullptr ||
+      !(is_registered_to_sched_affinity =
+            sched_affinity_manager->register_thread(
+                sched_affinity::Thread_type::FOREGROUND, pid))) {
+    LogErr(ERROR_LEVEL, ER_CANNOT_REGISTER_THREAD_TO_SCHED_AFFINIFY_MANAGER,
+           "foreground");
+  }
+
   /* Run event loop */
   for (;;) {
     connection_t *connection;
@@ -1451,6 +1466,12 @@ static void *worker_main(void *param) {
     if (!connection) break;
     this_thread.event_count++;
     handle_event(connection);
+  }
+
+  if (is_registered_to_sched_affinity &&
+      !sched_affinity_manager->unregister_thread(pid)) {
+    LogErr(ERROR_LEVEL, ER_CANNOT_UNREGISTER_THREAD_FROM_SCHED_AFFINIFY_MANAGER,
+           "foreground");
   }
 
   /* Thread shutdown: cleanup per-worker-thread structure. */

@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -136,5 +137,12 @@ extern bool srv_startup_is_before_trx_rollback_phase;
 
 /** true if a raw partition is in use */
 extern bool srv_start_raw_disk_in_use;
+
+/** Open the configured number of undo tablespaces.
+@param[in]  create_new_db true if new db being created
+@param[in]  true disables reading the system tablespace (used in incremnet clone
+restore), false is passed on recovery.
+@return DB_SUCCESS or error code */
+dberr_t srv_undo_tablespaces_init(bool create_new_db, bool backup_mode);
 
 #endif

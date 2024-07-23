@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -108,6 +108,41 @@ bool Ignore_error_handler::handle_condition(
     case ER_CHECK_CONSTRAINT_VIOLATED:
       (*level) = Sql_condition::SL_WARNING;
       break;
+    default:
+      break;
+  }
+  return false;
+}
+
+bool Lock_table_ignore_error_handler::handle_condition(
+    THD *thd, uint sql_errno, const char *,
+    Sql_condition::enum_severity_level *level, const char *) {
+  /*
+    If a statement is executed with IGNORE keyword then this handler
+    gets pushed for the statement. If there is trigger on the table
+    which contains statements without IGNORE then this handler should
+    not convert the errors within trigger to warnings.
+  */
+  if (!thd->lex->is_ignore()) return false;
+  if (thd->lex->sql_command != SQLCOM_LOCK_TABLES) return false;
+  /*
+    Error codes ER_DUP_ENTRY_WITH_KEY_NAME is used while calling my_error
+    to get the proper error messages depending on the use case.
+    The error code used is ER_DUP_ENTRY to call error functions.
+
+    Same case exists for ER_NO_PARTITION_FOR_GIVEN_VALUE_SILENT which uses
+    error code of ER_NO_PARTITION_FOR_GIVEN_VALUE to call error function.
+
+    There error codes are added here to force consistency if these error
+    codes are used in any other case in future.
+  */
+  switch (sql_errno) {
+    case ER_VIEW_INVALID:
+    case ER_NO_SUCH_TABLE: {
+      (*level) = Sql_condition::SL_WARNING;
+      ignore_error = true;
+      break;
+    }
     default:
       break;
   }

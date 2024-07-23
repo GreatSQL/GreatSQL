@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, GreatDB Software Co., Ltd. All rights
+/* Copyright (c) 2023, 2024, GreatDB Software Co., Ltd. All rights
    reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -1236,6 +1236,27 @@ std::shared_ptr<Gdb_sequence_entity> get_sequence_def(const char *db,
     my_error(ER_GDB_READ_SEQUENCE, MYF(0),
              "sequence cache entity not found, maybe dropped!");
   }
+  return res;
+}
+
+std::shared_ptr<Gdb_sequence_entity> find_sequence_def(THD *thd, const char *db,
+                                                       const char *seq_name) {
+  DBUG_TRACE;
+
+  assert(db != nullptr && strlen(db) > 0);
+  if (sequences_cache == nullptr) return nullptr;  // starting up
+  if (seq_name == nullptr || strlen(seq_name) == 0)
+    return nullptr;  // no seq_name
+  auto seq_name_string = normalize_seq_name(seq_name);
+  auto seq_key = calc_seq_key(db, seq_name_string.c_str());
+
+  if (lock_sequence(thd, db, seq_name, false)) return nullptr;
+
+  std::shared_ptr<Gdb_sequence_entity> res(nullptr);
+  mysql_rwlock_rdlock(&THR_LOCK_sequences);
+  auto itr = sequences_cache->find(seq_key);
+  if (itr != sequences_cache->end()) res = itr->second;
+  mysql_rwlock_unlock(&THR_LOCK_sequences);
   return res;
 }
 

@@ -1,5 +1,5 @@
 -- Copyright (c) 2003, 2022, Oracle and/or its affiliates. All rights reserved.
--- Copyright (c) 2023, GreatDB Software Co., Ltd.
+-- Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 --
 -- This program is free software; you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License, version 2.0,
@@ -1654,24 +1654,6 @@ ALTER TABLE user
 
 ALTER TABLE time_zone
   MODIFY Use_leap_seconds enum('Y','N') COLLATE utf8mb3_general_ci DEFAULT 'N' NOT NULL;
-
-CREATE DATABASE IF NOT EXISTS sys_audit DEFAULT CHARACTER SET utf8mb4;
-
-CREATE TABLE IF NOT EXISTS sys_audit.audit_log (
-  name VARCHAR(64) NOT NULL,
-  record VARCHAR(64) NOT NULL,
-  timestamp VARCHAR(64) NOT NULL,
-  command_class VARCHAR(64) NOT NULL,
-  connection_id VARCHAR(64) NOT NULL,
-  status VARCHAR(64) NOT NULL,
-  sqltext MEDIUMTEXT NOT NULL,
-  user VARCHAR(64) NOT NULL,
-  host VARCHAR(64) NOT NULL,
-  os_user VARCHAR(64) NOT NULL,
-  ip VARCHAR(64) NOT NULL,
-  db VARCHAR(64) NOT NULL,
-  PRIMARY KEY record(record)
-) ENGINE=INNODB CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 
 -- grant AUDIT_ABORT_EXEMPT to all current holders of SYSTEM_USER
 SET @hadAuditAbortExempt = (SELECT COUNT(*) FROM global_grants WHERE priv = 'AUDIT_ABORT_EXEMPT');

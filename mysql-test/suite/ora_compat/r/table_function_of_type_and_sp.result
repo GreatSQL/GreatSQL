@@ -450,7 +450,7 @@ $$
 call p1();
 rec1
 NULL
-ERROR HY000: inconsistent datatypes: udt type and non udt type
+ERROR HY000: inconsistent datatypes: expected 'test'.'t_air_table' got 'test'.'t_air'
 drop PROCEDURE p1;
 #
 # test of udt type in sp with default value
@@ -1379,6 +1379,8 @@ BEGIN
 END;
 $$
 ERROR 42000: This version of MySQL doesn't yet support 'the sp variable used like the style e.g: var(a,b..),1=>var()..'
+with recursive cte as (select t_air_table(t_air1(1,1,1))) select * from cte;
+ERROR 42000: This version of MySQL doesn't yet support 'nested table as a column'
 drop table tt_air;
 drop type t_air_table;
 SELECT name,type,options FROM mysql.routines where name='t_air';

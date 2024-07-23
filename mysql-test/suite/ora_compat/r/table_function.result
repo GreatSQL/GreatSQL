@@ -28,7 +28,7 @@ select t_air_table(t_air('b','aa'),t_air(2,'bb'));
 ERROR HY000: Incorrect integer value: 'b' for column 'id' at row 1
 select t_air_table(null);
 t_air_table(null)
-t_air_table(NULL)
+t_air_table(t_air(NULL,NULL))
 select t_air_table(t_air1('b','aa'));
 ERROR 42000: FUNCTION test.t_air1 does not exist
 #
@@ -131,7 +131,7 @@ select t_air_varray(t_air('b','aa'));
 ERROR HY000: Incorrect integer value: 'b' for column 'id' at row 1
 select t_air_varray(null);
 t_air_varray(null)
-t_air_varray(NULL)
+t_air_varray(t_air(NULL,NULL))
 select t_air_varray(t_air1('b','aa'));
 ERROR 42000: FUNCTION test.t_air1 does not exist
 #

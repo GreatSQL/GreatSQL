@@ -15,7 +15,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 # Now drop procedures and make sure re-install is done
 DROP PROCEDURE sys.ps_setup_save;

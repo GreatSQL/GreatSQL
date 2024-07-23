@@ -1,5 +1,5 @@
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -377,6 +377,8 @@ class Sroutine_hash_entry {
   LEX_STRING m_pkg_name{nullptr, 0};
   uint m_key_add_length{0};
   sp_signature *m_sig{nullptr};
+  // where this routine are defined in the with function statement
+  bool m_is_with_function{false};
 };
 
 /*
@@ -402,7 +404,8 @@ bool sp_add_used_routine(Query_tables_list *prelocking_ctx, Query_arena *arena,
                          bool own_routine, Table_ref *belong_to_view,
                          const char *pkg_name = nullptr,
                          size_t pkg_name_length = 0,
-                         sp_signature *sig = nullptr);
+                         sp_signature *sig = nullptr,
+                         bool with_function = false);
 
 /**
   Convenience wrapper around sp_add_used_routine() for most common case -
@@ -426,7 +429,7 @@ inline bool sp_add_own_used_routine(Query_tables_list *prelocking_ctx,
       prelocking_ctx, arena, type, sp_name->m_db.str, sp_name->m_db.length,
       sp_name->m_name.str, sp_name->m_name.length, false,
       Sp_name_normalize_type::UNACCENT_AND_LOWERCASE_NAME, true, nullptr,
-      pkg_name, pkg_name_length, sig);
+      pkg_name, pkg_name_length, sig, sp_name->m_is_with_function);
 }
 
 void sp_remove_not_own_routines(Query_tables_list *prelocking_ctx);
@@ -491,6 +494,7 @@ bool sp_resolve_package_routine(THD *thd, enum_sp_type type, sp_head *caller,
                                 sp_name *name, sp_name *pkgname,
                                 sp_signature *sig);
 bool sp_resolve_type_routine(THD *thd, enum_sp_type type, sp_name *name);
+bool update_udt_object_comment(THD *thd, sp_head *sp);
 ///////////////////////////////////////////////////////////////////////////
 
 #endif /* _SP_H_ */

@@ -1,0 +1,29 @@
+create table t15( id int ,  cc int ,m varchar(8) COLLATE utf8mb4_bin DEFAULT NULL, t text, PRIMARY key(id) ,key(cc), key(m)) 
+PARTITION BY RANGE  COLUMNS(id) (PARTITION p202008 VALUES LESS THAN (5) ENGINE = InnoDB,
+PARTITION p202009 VALUES LESS THAN (10) ENGINE = InnoDB,
+PARTITION p202012 VALUES LESS THAN (100) ENGINE = InnoDB) ;
+create table t2( id int  PRIMARY key , cc int  );
+insert into t2 values ( 1 , 2);
+insert into t2  values (0, 2 );
+INSERT INTO `t15` VALUES (4,1,'123','abcdef'),
+(5,1,'123','abcdef'),
+(8,2,'122','abcdef'),
+(9,2,'122','abcdef');
+explain format=tree  update t15 a,t2 b  set a.t ='test'  where b.id <>  a.id and  a.cc = 1 and a.m = '123';
+EXPLAIN
+-> Update a (immediate)
+    -> Nested loop inner join  (cost=# rows=1)
+        -> Filter: (a.m = '123')  (cost=# rows=1)
+            -> Index lookup on a using cc (cc=1)  (cost=# rows=2)
+        -> Filter: (b.id <> a.id)  (cost=# rows=1)
+            -> Index scan on b using PRIMARY  (cost=# rows=2)
+
+update t15 a,t2 b  set a.t ='test'  where b.id <>  a.id and  a.cc = 1 and a.m = '123';
+select * from t15;
+id	cc	m	t
+4	1	123	test
+5	1	123	test
+8	2	122	abcdef
+9	2	122	abcdef
+drop table t15;
+drop table t2;

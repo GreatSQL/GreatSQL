@@ -1,0 +1,121 @@
+# test mac on db
+--source ../include/mac_row_policy_create.inc
+
+
+connect (master,localhost,root,,);
+--connection master
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+create database db;
+use db;
+create table t1(c1 int primary key, c2 int);
+insert into t1 values(1, 1),(2, 2),(3, 3),(4, 4);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3:G1', 1);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 0);
+
+select * from t1;
+
+call sys_mac.mac_disable_policy('P1');
+
+select * from t1;
+
+call sys_mac.mac_disable_policy('P2');
+
+select * from t1;
+
+insert into t1 values(5, 5, 5, 5);
+insert into t1(c1, c2) values(6, 6);
+
+select * from t1;
+
+update t1 set _gdb_mac_policy_1 = 1, _gdb_mac_policy_2 = 2 where c1 = 5;
+
+select * from t1;
+
+delete from t1 where c1 > 4;
+
+select * from t1;
+
+call sys_mac.mac_enable_policy('P1');
+call sys_mac.mac_enable_policy('P2');
+
+
+select * from t1;
+
+
+call sys_mac.mac_disable_row_policy('db', 't1', 'P1');
+
+select * from t1;
+
+call sys_mac.mac_disable_row_policy('db', 't1', 'P2');
+
+select * from t1;
+
+insert into t1 values(5, 5, 5, 5);
+insert into t1(c1, c2) values(6, 6);
+
+select * from t1;
+
+update t1 set _gdb_mac_policy_1 = 1, _gdb_mac_policy_2 = 2 where c1 = 5;
+
+select * from t1;
+
+--error ER_MAC_CROSS_ERROR
+alter table t1 drop column _gdb_mac_policy_1;
+
+--error ER_MAC_CROSS_ERROR
+alter table t1 change column _gdb_mac_policy_1 c3 int;
+
+--error ER_MAC_CROSS_ERROR
+alter table t1 modify column _gdb_mac_policy_1 long;
+
+--error ER_MAC_CROSS_ERROR
+alter table t1 drop column _gdb_mac_policy_2;
+
+--error ER_MAC_CROSS_ERROR
+alter table t1 change column _gdb_mac_policy_2 c3 int;
+
+--error ER_MAC_CROSS_ERROR
+alter table t1 modify column _gdb_mac_policy_2 long;
+
+call sys_mac.mac_drop_row_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_row_policy('db', 't1', 'P2');
+
+drop database db;
+ 
+create database mac;
+use mac;
+create table t1(c1 int primary key, c2 int);
+insert into t1 values(1, 1);
+
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1');
+
+--error ER_DATABASEMAC_DEINED_ERROR
+select * from t1;
+
+--error ER_DATABASEMAC_DEINED_ERROR
+insert into t1 values(2, 2);
+
+call sys_mac.mac_disable_policy('P1');
+
+select * from t1;
+insert into t1 values(2, 2);
+
+call sys_mac.mac_enable_policy('P1');
+
+--error ER_DATABASEMAC_DEINED_ERROR
+select * from t1;
+
+--error ER_DATABASEMAC_DEINED_ERROR
+insert into t1 values(3, 3);
+
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+
+drop database mac;
+
+--source ../include/mac_destory.inc
+disconnect master;
+

@@ -2,6 +2,7 @@
 
 Copyright (c) 1995, 2022, Oracle and/or its affiliates.
 Copyright (c) 2016, Percona Inc. All Rights Reserved.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -74,7 +75,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sys/time.h>
 #include <unistd.h>
 
-static const int buf_flush_page_cleaner_priority = -20;
 #endif /* UNIV_LINUX */
 
 /** Number of pages flushed through non flush_list flushes. */
@@ -3208,9 +3208,11 @@ static void buf_flush_page_coordinator_thread() {
 #ifdef UNIV_LINUX
   /* linux might be able to set different setting for each thread.
   worth to try to set high priority for page cleaner threads */
-  if (buf_flush_page_cleaner_set_priority(buf_flush_page_cleaner_priority)) {
-    ib::info(ER_IB_MSG_126) << "page_cleaner coordinator priority: "
-                            << buf_flush_page_cleaner_priority;
+  int pc_priority = 19 - srv_sched_priority_pc;
+  if (buf_flush_page_cleaner_set_priority(pc_priority)) {
+    if (0 != pc_priority)
+      ib::info(ER_IB_MSG_126)
+          << "page_cleaner coordinator priority: " << srv_sched_priority_pc;
   } else {
     ib::info(ER_IB_MSG_127) << "If the mysqld execution user is authorized,"
                                " page cleaner and LRU manager thread priority"
@@ -3450,6 +3452,7 @@ static void buf_flush_page_coordinator_thread() {
 
     } else {
       /* no activity, but woken up by event */
+      n_flushed = 0;
     }
 
     ut_d(buf_flush_page_cleaner_disabled_loop());
@@ -3602,9 +3605,11 @@ static void buf_flush_page_cleaner_thread() {
 #ifdef UNIV_LINUX
   /* linux might be able to set different setting for each thread
   worth to try to set high priority for page cleaner threads */
-  if (buf_flush_page_cleaner_set_priority(buf_flush_page_cleaner_priority)) {
-    ib::info(ER_IB_MSG_129)
-        << "page_cleaner worker priority: " << buf_flush_page_cleaner_priority;
+  int pc_priority = 19 - srv_sched_priority_pc;
+  if (buf_flush_page_cleaner_set_priority(pc_priority)) {
+    if (0 != pc_priority)
+      ib::info(ER_IB_MSG_129)
+          << "page_cleaner worker priority: " << srv_sched_priority_pc;
   }
 #endif /* UNIV_LINUX */
 
@@ -3732,9 +3737,11 @@ static void buf_lru_manager_thread(size_t buf_pool_instance) {
 #ifdef UNIV_LINUX
   /* linux might be able to set different setting for each thread
   worth to try to set high priority for page cleaner threads */
-  if (buf_flush_page_cleaner_set_priority(buf_flush_page_cleaner_priority)) {
-    ib::info() << "lru_manager worker priority: "
-               << buf_flush_page_cleaner_priority;
+  int lru_manager_priority = 19 - srv_sched_priority_lru_flush;
+  if (buf_flush_page_cleaner_set_priority(lru_manager_priority)) {
+    if (0 != lru_manager_priority)
+      ib::info() << "lru_manager worker priority: "
+                 << srv_sched_priority_lru_flush;
   }
 #endif /* UNIV_LINUX */
 

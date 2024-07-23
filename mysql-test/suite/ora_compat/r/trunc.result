@@ -330,21 +330,7 @@ insert into t1 values
 ('2021-01-02 10:11:12', 'H24'),
 ('2021-01-02 10:11:12', 'MIC');
 select c_date,format, trunc(c_date, format) as result from t1;
-c_date	format	result
-2021-01-02 10:11:12	YEAR  	NULL
-2021-01-02 10:11:12	  YYYY	NULL
-2021-01-02 10:11:12	YYYD	NULL
-2021-01-02 10:11:12	EYYY	NULL
-2021-01-02 10:11:12	MONTA	NULL
-2021-01-02 10:11:12	MONAB	NULL
-2021-01-02 10:11:12	MINUTE	NULL
-2021-01-02 10:11:12	DDDD	NULL
-2021-01-02 10:11:12	DC	NULL
-2021-01-02 10:11:12	DAZ	NULL
-2021-01-02 10:11:12	HA	NULL
-2021-01-02 10:11:12	H12	NULL
-2021-01-02 10:11:12	H24	NULL
-2021-01-02 10:11:12	MIC	NULL
+ERROR HY000: Incorrect arguments to trunc
 drop table t1;
 select trunc(to_date('2021-05-06','yyyy-mm-dd')) from dual;
 trunc(to_date('2021-05-06','yyyy-mm-dd'))
@@ -371,8 +357,7 @@ select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY') from
 trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY')
 1929-12-29 00:00:00
 select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg') from dual;
-trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg')
-NULL
+ERROR HY000: Incorrect arguments to trunc
 select trunc('-1.4', '-1') from dual;
 trunc('-1.4', '-1')
 0
@@ -398,11 +383,9 @@ select trunc(@a, 5) from dual;
 trunc(@a, 5)
 -123.456
 select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH24:MI:SS'),'') from dual;
-trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH24:MI:SS'),'')
-NULL
+ERROR HY000: Incorrect arguments to trunc
 select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH24:MI:SS'),null) from dual;
-trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH24:MI:SS'),null)
-NULL
+ERROR HY000: Incorrect arguments to trunc
 select trunc(null, 'aaa') from dual;
 trunc(null, 'aaa')
 NULL
@@ -482,8 +465,7 @@ trunc(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q')
 1998-01-01 00:00:00
 trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY')
 1929-12-29 00:00:00
-trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg')
-NULL
+ERROR HY000: Incorrect arguments to trunc
 drop procedure p_trunc//
 set sql_mode=oracle;
 SELECT trunc(123.456, 1) FROM dual;
@@ -547,8 +529,7 @@ select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY') from
 trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY')
 1929-12-29 00:00:00
 select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg') from dual;
-trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg')
-NULL
+ERROR HY000: Incorrect arguments to trunc
 testcases for  Bug#2758
 set timestamp to '2021-12-01 10:00:00'
 set timestamp = 1638324000;
@@ -961,3 +942,22 @@ trunc_date
 NULL
 Warnings:
 Warning	1441	Datetime function: trunc field overflow
+set sql_mode=oracle;
+set timestamp=1681438146;
+select now() from dual;
+now()
+2023-04-14 05:09:06
+select trunc(current_timestamp,'year') from dual;
+trunc(current_timestamp,'year')
+2023-01-01 00:00:00
+select trunc(current_timestamp,'mm') from dual;
+trunc(current_timestamp,'mm')
+2023-04-01 00:00:00
+select trunc(current_timestamp) from dual;
+trunc(current_timestamp)
+2023-04-14 00:00:00
+test bug#9586
+select trunc(timestamp'2024-05-11 04:06:30',1);
+ERROR HY000: Incorrect arguments to trunc
+select trunc(timestamp'2024-05-11 04:06:30','dddd');
+ERROR HY000: Incorrect arguments to trunc

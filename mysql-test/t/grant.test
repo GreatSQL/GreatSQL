@@ -2364,7 +2364,7 @@ SELECT (SELECT password_last_changed FROM mysql.user where user='wl7131') IS NOT
 DROP USER 'wl7131'@'localhost';
 
 --disable_query_log
---eval UPDATE mysql.user SET password_last_changed= '$date_to_restore_root'
+--eval UPDATE mysql.user SET password_last_changed= '$date_to_restore_root' WHERE USER= 'root'
 --eval UPDATE mysql.user SET password_last_changed= '$date_to_restore_sys' WHERE USER= 'mysql.sys'
 --eval UPDATE mysql.user SET password_last_changed= '$date_to_restore_session_user' WHERE USER= 'mysql.session'
 --eval UPDATE mysql.user SET password_last_changed= '$date_to_restore_inf_schema_user' WHERE USER= 'mysql.infoschema'

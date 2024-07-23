@@ -1,0 +1,526 @@
+use sys_mac;
+#test policy procedure#
+call mac_create_policy('P1');
+call mac_create_policy('P2');
+call mac_create_policy('P1');
+ERROR HY000: the policy already exits
+call mac_create_policy('');
+ERROR HY000: the policy name should not be empty
+call mac_alter_policy('P1', 'P2');
+ERROR HY000: the policy already exits
+call mac_alter_policy('P1', 'P3');
+call mac_alter_policy('P1', 'P4');
+ERROR HY000: the policy not exits
+call mac_disable_policy('P1');
+ERROR HY000: the policy not exits
+call mac_disable_policy('P2');
+select * from mac_policy;
+p_id	p_name	enable
+1	P3	1
+2	P2	0
+call mac_enable_policy('P1');
+ERROR HY000: the policy not exits
+call mac_enable_policy('P2');
+select * from mac_policy;
+p_id	p_name	enable
+1	P3	1
+2	P2	1
+call mac_drop_policy('P1');
+ERROR HY000: the policy not exits
+call mac_drop_policy('P2');
+call mac_drop_policy('P3');
+select * from mac_policy;
+p_id	p_name	enable
+call mac_create_policy('P1');
+call mac_create_policy('P2');
+#test level procedure#
+call mac_create_level('P1', 'L1', 1);
+call mac_create_level('P1', 'L1', 1);
+ERROR HY000: the level name or num already exits
+call mac_create_level('P1', 'L1', 2);
+ERROR HY000: the level name or num already exits
+call mac_create_level('P1', 'L2', 1);
+ERROR HY000: the level name or num already exits
+call mac_create_level('P1', 'L2', 2);
+call mac_alter_level('P1', 'L1', 'L2');
+ERROR HY000: the level name already exits
+call mac_alter_level('P1', 'L3', 'L2');
+ERROR HY000: the level not exits
+call mac_alter_level('P1', 'L1', 'L3');
+call mac_alter_level('P2', 'L1', 'L2');
+ERROR HY000: the level not exits
+call mac_drop_level('P1', 'L2');
+call mac_drop_level('P1', 'L3');
+call mac_drop_level('P1', 'L1');
+ERROR HY000: the level not exits
+call mac_drop_level('P2', 'L1');
+ERROR HY000: the level not exits
+call mac_drop_level('P3', 'L1');
+ERROR HY000: the level not exits
+select * from mac_level;
+p_id	l_num	l_name
+#test compartment procedure#
+call mac_create_compartment('P1', 'C1');
+call mac_create_compartment('P1', 'C2');
+call mac_create_compartment('P1', 'C2');
+ERROR HY000: the compartment already exits
+call mac_create_compartment('P3', 'C1');
+ERROR HY000: the policy not exits
+call mac_alter_compartment('P1', 'C1', 'C2');
+ERROR HY000: the compartment already exits
+call mac_alter_compartment('P2', 'C1', 'C2');
+ERROR HY000: the compartment not exits
+call mac_alter_compartment('P1', 'C1', 'C3');
+call mac_drop_compartment('P1', 'C2');
+call mac_drop_compartment('P1', 'C3');
+call mac_drop_compartment('P1', 'C1');
+ERROR HY000: the compartment not exits
+call mac_drop_compartment('P2', 'C1');
+ERROR HY000: the compartment not exits
+call mac_drop_compartment('P3', 'C1');
+ERROR HY000: the compartment not exits
+select * from mac_level;
+p_id	l_num	l_name
+#test compartment procedure#
+call mac_create_group('P1', 'G1', NULL);
+call mac_create_group('P1', 'G2', 'G1');
+call mac_create_group('P3', 'G1', NULL);
+ERROR HY000: the policy not exits
+call mac_create_group('P1', 'G1', 'G1');
+ERROR HY000: the group already exits
+call mac_create_group('P1', 'G3', 'G3');
+ERROR HY000: the parent group not exits
+call mac_create_group('P1', 'G3', 'G2');
+call mac_create_group('P1', 'G4', 'G3');
+call mac_alter_group('P1', 'G1', 'G2');
+ERROR HY000: the group already exits
+call mac_alter_group('P3', 'G1', 'G2');
+ERROR HY000: the group not exits
+call mac_alter_group('P1', 'G5', 'G6');
+ERROR HY000: the group not exits
+call mac_alter_group('P1', 'G4', 'G5');
+call mac_alter_group_parent('P1', 'G1', 'G1');
+ERROR HY000: the group have closed loop
+call mac_alter_group_parent('P1', 'G1', 'G2');
+ERROR HY000: the group have closed loop
+call mac_alter_group_parent('P1', 'G6', 'G1');
+ERROR HY000: the group not exits
+call mac_alter_group_parent('P1', 'G5', 'G1');
+call mac_drop_group('P1', 'G1');
+ERROR HY000: the group has child, connot be deleted
+call mac_drop_group('P2', 'G1');
+ERROR HY000: the group not exits
+call mac_drop_group('P1', 'G5');
+call mac_drop_group('P1', 'G3');
+call mac_drop_group('P1', 'G2');
+call mac_drop_group('P1', 'G1');
+select * from mac_group;
+p_id	g_id	g_name	parent_id
+call mac_create_level('P1', 'L1', 1);
+call mac_create_level('P1', 'L2', 2);
+call mac_create_level('P1', 'L3', 3);
+call mac_create_level('P1', 'L4', 4);
+call mac_create_compartment('P1', 'C1');
+call mac_create_compartment('P1', 'C2');
+call mac_create_compartment('P1', 'C3');
+call mac_create_compartment('P1', 'C4');
+call mac_create_group('P1', 'G1', NULL);
+call mac_create_group('P1', 'G1_1', 'G1');
+call mac_create_group('P1', 'G1_2', 'G1_1');
+call mac_create_group('P1', 'G1_3', 'G1_2');
+#test label procedure#
+call mac_create_label('P1', '::');
+ERROR HY000: the label :: not meet the format requirements
+call mac_create_label('P1', ':C2:G1');
+ERROR HY000: the label :C2:G1 not meet the format requirements
+call mac_create_label('P1', 'L5::');
+ERROR HY000: the level L5 not exits
+call mac_create_label('P1', 'L1,L1::');
+ERROR HY000: the level L1,L1 not exits
+call mac_create_label('P1', 'L1:C7:');
+ERROR HY000: the commpartment C7 not exits
+call mac_create_label('P1', 'L1::G2');
+ERROR HY000: the group G2 not exits
+call mac_create_label('P1', 'L1:C1,C2,:G1');
+ERROR HY000: the label L1:C1,C2,:G1 not meet the format requirements
+call mac_create_label('P1', 'L1:C1,C2:G1,');
+ERROR HY000: the label L1:C1,C2:G1, not meet the format requirements
+call mac_create_label('P1', 'L1:C1,C2:G1:');
+ERROR HY000: the label L1:C1,C2:G1: not meet the format requirements
+call mac_create_label('P1', 'L1:C1,C1:');
+ERROR HY000: there exits same compartment in L1:C1,C1:
+call mac_create_label('P1', 'L1::G1,G1');
+ERROR HY000: there exits same group in L1::G1,G1
+call mac_create_label('P2', 'L1::');
+ERROR HY000: the level L1 not exits
+call mac_create_label('P3', 'L1::');
+ERROR HY000: the policy not exits
+call mac_create_label('P1', 'L1::');
+call mac_create_label('P1', 'L1::');
+ERROR HY000: the label already exits
+call mac_create_label('P1', 'L1:C1:');
+call mac_create_label('P1', 'L1:C1,C2:');
+call mac_create_label('P1', 'L1::G1');
+call mac_create_label('P1', 'L1::G1,G1_2');
+call mac_create_label('P1', 'L1:C1,C2:G1,G1_3');
+call mac_alter_label('P1', 'L1::G2', 'L1::G3');
+ERROR HY000: the group G2 not exits
+call mac_alter_label('P1', 'L1:C3:G1', 'L2:C3:G1');
+ERROR HY000: the old label not exit
+call mac_alter_label('P1', 'L1:C1:', 'L1:C1,G2:');
+ERROR HY000: the commpartment G2 not exits
+call mac_alter_label('P1', 'L1:C1:', 'L1:C1,:');
+ERROR HY000: the label L1:C1,: not meet the format requirements
+call mac_alter_label('P2', 'L1:C1:', 'L1:C2');
+ERROR HY000: the level L1 not exits
+call mac_alter_label('P1', 'L1:C1:', 'L1:C1,C2:');
+ERROR HY000: the label already exits
+call mac_alter_label('P1', 'L1:C1:', 'L1:C1,C3:G1');
+call mac_alter_label('P1', 'L1:C1,C3:G1', 'L1:C1:');
+call mac_drop_label('P1', '::');
+ERROR HY000: the label :: not meet the format requirements
+call mac_drop_label('P1', 'L1:C8:');
+ERROR HY000: the commpartment C8 not exits
+call mac_drop_label('P1', 'L1::G2');
+ERROR HY000: the group G2 not exits
+call mac_drop_label('P1', 'L1::G1,G1_1');
+ERROR HY000: the label not exit
+call mac_drop_policy('P1');
+ERROR HY000: the policy is being used, connot be deleted
+call mac_drop_level('P1','L1');
+ERROR HY000: the level is being used, connot be deleted
+call mac_drop_compartment('P1','C1');
+ERROR HY000: the compartment is being used, connot be deleted
+call mac_drop_group('P1', 'G1_3');
+ERROR HY000: the group is being used, connot be deleted
+call mac_drop_label('P1', 'L1::');
+call mac_drop_label('P1', 'L1:C1:');
+call mac_drop_label('P1', 'L1:C1,C2:');
+call mac_drop_label('P1', 'L1::G1');
+call mac_drop_label('P1', 'L1::G1,G1_2');
+call mac_drop_label('P1', 'L1:C1,C2:G1,G1_3');
+#test database policy procedure#
+create database db;
+create table db.t1(c1 int, c2 int);
+call mac_create_label('P1', 'L1::');
+call mac_create_label('P1', 'L1:C1:');
+call mac_create_label('P1', 'L1::G1');
+call mac_create_level('P2', 'L1', 1);
+call mac_create_label('P2', 'L1::');
+call mac_apply_database_policy('db', 'P1', 'L6::');
+ERROR HY000: the level L6 not exits
+call mac_apply_database_policy('db', 'P1', 'L1:C7:');
+ERROR HY000: the commpartment C7 not exits
+call mac_apply_database_policy('db', 'P1', 'L1::G8');
+ERROR HY000: the group G8 not exits
+call mac_apply_database_policy('mysql', 'P1', 'L2::');
+ERROR HY000: the database connot be system database
+call mac_apply_database_policy('db', 'P1', 'L2::');
+ERROR HY000: the label not exits
+call mac_apply_database_policy('db', 'P3', 'L1::');
+ERROR HY000: the policy not exits
+call mac_apply_database_policy('db', 'P1', 'L1::');
+call mac_apply_database_policy('db', 'P2', 'L1::');
+call mac_apply_database_policy('db', 'P1', 'L1:C1:');
+ERROR HY000: the database just allow only one label with same policy
+call mac_alter_database_policy('db', 'P1', 'L6::');
+ERROR HY000: the level L6 not exits
+call mac_alter_database_policy('db', 'P1', 'L1:C7:');
+ERROR HY000: the commpartment C7 not exits
+call mac_alter_database_policy('db', 'P1', 'L1::G8');
+ERROR HY000: the group G8 not exits
+call mac_alter_database_policy('db', 'P3', 'L1::');
+ERROR HY000: the policy not exits
+call mac_alter_database_policy('db', 'P1', 'L1:C1:');
+call mac_drop_database_policy('db', 'P3');
+ERROR HY000: the policy not exits
+call mac_drop_database_policy('db', 'P2');
+call mac_drop_database_policy('db', 'P2');
+ERROR HY000: the database not apply this policy
+call mac_alter_database_policy('db', 'P2', 'L1::');
+ERROR HY000: the database not apply this policy
+call mac_drop_database_policy('db', 'P1');
+call mac_drop_database_policy('db', 'P1');
+ERROR HY000: the database not exits policy
+select * from mac_database_policy;
+db_name	p_id	l_id
+#test table policy procedure#
+call mac_apply_table_policy('db', 't1', 'P3', 'L1::');
+ERROR HY000: the policy not exits
+call mac_apply_table_policy('db1', 't1', 'P1', 'L1::');
+ERROR HY000: the database not exits
+call mac_apply_table_policy('db', 't2', 'P1', 'L1::');
+ERROR HY000: the table not exits
+call mac_apply_table_policy('mysql', 'user', 'P1', 'L1::');
+ERROR HY000: the table connot be system table
+call mac_apply_table_policy('db', 't1', 'P1', 'L1::');
+call mac_apply_table_policy('db', 't1', 'P1', 'L1::');
+ERROR HY000: the table just allow only one label with same policy
+call mac_alter_table_policy('db1', 't1', 'P1', 'L1::');
+ERROR HY000: the table not exits policy
+call mac_alter_table_policy('db', 't2', 'P1', 'L1::');
+ERROR HY000: the table not exits policy
+call mac_alter_table_policy('mysql', 'user', 'P1', 'L1::');
+ERROR HY000: the table not exits policy
+call mac_alter_table_policy('db', 't1', 'P1', 'L1:C8:');
+ERROR HY000: the commpartment C8 not exits
+call mac_alter_table_policy('db', 't1', 'P1', 'L1:C1:');
+call mac_drop_table_policy('db1', 't1', 'P1');
+ERROR HY000: the table not exits policy
+call mac_drop_table_policy('db', 't2', 'P1');
+ERROR HY000: the table not exits policy
+call mac_drop_table_policy('mysql', 'user', 'P1');
+ERROR HY000: the table not exits policy
+call mac_drop_table_policy('db', 't1', 'P2');
+ERROR HY000: the table not apply this policy
+call mac_drop_table_policy('db', 't1', 'P1');
+select * from mac_table_policy;
+db_name	table_name	p_id	l_id
+#test column policy procedure#
+call mac_apply_column_policy('db', 't1', 'c1', 'P3', 'L1::');
+ERROR HY000: the policy not exits
+call mac_apply_column_policy('db1', 't1', 'c1', 'P1', 'L1::');
+ERROR HY000: the database not exits
+call mac_apply_column_policy('db', 't2', 'c1', 'P1', 'L1::');
+ERROR HY000: the table not exits
+call mac_apply_column_policy('db', 't1', 'c3', 'P1', 'L1::');
+ERROR HY000: the column not exits
+call mac_apply_column_policy('mysql', 'user', 'Host', 'P1', 'L1::');
+ERROR HY000: the table connot be system table
+call mac_apply_column_policy('db', 't1', 'c1', 'P1', 'L1::');
+call mac_apply_column_policy('db', 't1', 'c1', 'P1', 'L1::');
+ERROR HY000: the column just allow only one label with same policy
+call mac_alter_column_policy('db', 't1', 'c1', 'P3', 'L1::');
+ERROR HY000: the policy not exits
+call mac_alter_column_policy('db1', 't1', 'c1', 'P1', 'L1::');
+ERROR HY000: the column not exits policy
+call mac_alter_column_policy('db', 't2', 'c1', 'P1', 'L1::');
+ERROR HY000: the column not exits policy
+call mac_alter_column_policy('db', 't1', 'c3', 'P1', 'L1::');
+ERROR HY000: the column not exits policy
+call mac_alter_column_policy('mysql', 'user', 'Host', 'P1', 'L1::');
+ERROR HY000: the column not exits policy
+call mac_alter_column_policy('db', 't1', 'c1', 'P1', 'L1:C8:');
+ERROR HY000: the commpartment C8 not exits
+call mac_alter_column_policy('db', 't1', 'c1', 'P1', 'L1:C1:');
+call mac_drop_column_policy('db', 't1', 'c1', 'P3');
+ERROR HY000: the policy not exits
+call mac_drop_column_policy('db1', 't1', 'c1', 'P1');
+ERROR HY000: the column not exits policy
+call mac_drop_column_policy('db', 't2', 'c1', 'P1');
+ERROR HY000: the column not exits policy
+call mac_drop_column_policy('db', 't1', 'c3', 'P1');
+ERROR HY000: the column not exits policy
+call mac_drop_column_policy('db', 't1', 'c1', 'P2');
+ERROR HY000: the column not apply this policy
+call mac_drop_column_policy('mysql', 'user', 'Host', 'P1');
+ERROR HY000: the column not exits policy
+call mac_drop_column_policy('db', 't1', 'c1', 'P1');
+select * from mac_column_policy;
+db_name	table_name	column_name	p_id	l_id
+#test user policy procedure#
+call mac_apply_user_policy('root', 'localhost', 'P3', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1');
+ERROR HY000: the policy not exits
+call mac_apply_user_policy('root1', 'localhost', 'P1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1');
+ERROR HY000: the user not exits
+call mac_apply_user_policy('root', 'localhost', 'P1', '::', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1');
+ERROR HY000: the label :: not meet the format requirements
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L1:C8:G1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1');
+ERROR HY000: the commpartment C8 not exits
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L1:C1:G1', 'L1:C8:G1', 'L1:C1:G1', 'L1:C1:G1');
+ERROR HY000: the commpartment C8 not exits
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C8:G1', 'L1:C1:G1');
+ERROR HY000: the commpartment C8 not exits
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C8:G1');
+ERROR HY000: the commpartment C8 not exits
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L1::', 'L2::', 'L1::', 'L1::');
+ERROR HY000: the write_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L1:C2:', 'L1:C2,C3:', 'L1::', 'L1::');
+ERROR HY000: the write_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L1:C2:', 'L1:C3:', 'L1::', 'L1::');
+ERROR HY000: the write_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L1::G1', 'L1::G1,G1_1', 'L1::', 'L1::');
+ERROR HY000: the write_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L1::G1', 'L1::G1_1', 'L1::', 'L1::');
+ERROR HY000: the write_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L3::', 'L1::', 'L4::', 'L1::');
+ERROR HY000: the def_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L3::', 'L2::', 'L1::', 'L1::');
+ERROR HY000: the def_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L3::', 'L1::', 'L2:C1:', 'L1::');
+ERROR HY000: the def_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L3:C1,C2:', 'L1:C1:', 'L2:C3:', 'L1::');
+ERROR HY000: the def_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L3::', 'L1::', 'L2::G1', 'L1::');
+ERROR HY000: the def_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L3::G1', 'L1::G1', 'L2::G1,G1_1', 'L1::');
+ERROR HY000: the def_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L4::', 'L2::', 'L3::', 'L1::');
+ERROR HY000: the row_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L4::', 'L1::', 'L2::', 'L3::');
+ERROR HY000: the row_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L4:C1,C2:', 'L1:C1,C2:', 'L3:C1,C2:', 'L3:C1,C2,C3:');
+ERROR HY000: the row_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L4:C1,C2:', 'L1:C1:', 'L3:C2:', 'L3:C2:');
+ERROR HY000: the row_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L4::', 'L2::', 'L3::', 'L3::G1');
+ERROR HY000: the row_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L4::G1,G1_1', 'L2::G1_1', 'L3::G1_1', 'L3::G1_2');
+ERROR HY000: the row_label is invalid
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L4::G1,G1_1', 'L2::G1_1', 'L3::G1_1', 'L3::G1_1');
+call mac_apply_user_policy('root', 'localhost', 'P1', 'L4::G1,G1_1', 'L2::G1_1', 'L3::G1_1', 'L3::G1_1');
+ERROR HY000: the user just allow only one label with same policy
+call mac_alter_user_policy('root', 'localhost', 'P3', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1');
+ERROR HY000: the policy not exits
+call mac_alter_user_policy('root', 'localhost', 'P2', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1');
+ERROR HY000: the user not apply this policy
+call mac_alter_user_policy('root1', 'localhost', 'P1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1');
+ERROR HY000: the user not exits
+call mac_alter_user_policy('root', 'localhost', 'P1', '::', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1');
+ERROR HY000: the label :: not meet the format requirements
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L1:C8:G1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1');
+ERROR HY000: the commpartment C8 not exits
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L1:C1:G1', 'L1:C8:G1', 'L1:C1:G1', 'L1:C1:G1');
+ERROR HY000: the commpartment C8 not exits
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C8:G1', 'L1:C1:G1');
+ERROR HY000: the commpartment C8 not exits
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C1:G1', 'L1:C8:G1');
+ERROR HY000: the commpartment C8 not exits
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L1::', 'L2::', 'L1::', 'L1::');
+ERROR HY000: the write_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L1:C2:', 'L1:C2,C3:', 'L1::', 'L1::');
+ERROR HY000: the write_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L1:C2:', 'L1:C3:', 'L1::', 'L1::');
+ERROR HY000: the write_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L1::G1', 'L1::G1,G1_1', 'L1::', 'L1::');
+ERROR HY000: the write_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L1::G1', 'L1::G1_1', 'L1::', 'L1::');
+ERROR HY000: the write_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L3::', 'L1::', 'L4::', 'L1::');
+ERROR HY000: the def_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L3::', 'L2::', 'L1::', 'L1::');
+ERROR HY000: the def_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L3::', 'L1::', 'L2:C1:', 'L1::');
+ERROR HY000: the def_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L3:C1,C2:', 'L1:C1:', 'L2:C3:', 'L1::');
+ERROR HY000: the def_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L3::', 'L1::', 'L2::G1', 'L1::');
+ERROR HY000: the def_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L3::G1', 'L1::G1', 'L2::G1,G1_1', 'L1::');
+ERROR HY000: the def_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L4::', 'L2::', 'L3::', 'L1::');
+ERROR HY000: the row_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L4::', 'L1::', 'L2::', 'L3::');
+ERROR HY000: the row_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L4:C1,C2:', 'L1:C1,C2:', 'L3:C1,C2:', 'L3:C1,C2,C3:');
+ERROR HY000: the row_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L4:C1,C2:', 'L1:C1:', 'L3:C2:', 'L3:C2:');
+ERROR HY000: the row_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L4::', 'L2::', 'L3::', 'L3::G1');
+ERROR HY000: the row_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L4::G1,G1_1', 'L2::G1_1', 'L3::G1_1', 'L3::G1_2');
+ERROR HY000: the row_label is invalid
+call mac_alter_user_policy('root', 'localhost', 'P1', 'L4::G1,G1_1', 'L2::G1_1', 'L3::G1_1', 'L3::');
+call mac_drop_user_policy('root', 'localhost', 'P3');
+ERROR HY000: the policy not exits
+call mac_drop_user_policy('root1', 'localhost', 'P1');
+ERROR HY000: the user not exits
+call mac_drop_user_policy('root', 'localhost', 'P2');
+ERROR HY000: the user not apply this policy
+call mac_drop_user_policy('root', 'localhost', 'P1');
+select * from mac_user_policy;
+user	host	p_id	read_label	write_label	def_read_label	def_write_label	def_row_label
+call mac_set_user_priv('root', 'localhost', 'P3', 'read');
+ERROR HY000: the policy not exits
+call mac_set_user_priv('root1', 'localhost', 'P1', 'read');
+ERROR HY000: the user not exits
+call mac_set_user_priv('root', 'localhost', 'P1', 'read');
+select * from mac_user_privs;
+user	host	p_id	privs
+root	localhost	4	read
+call mac_set_user_priv('root', 'localhost', 'P1', 'full');
+select * from mac_user_privs;
+user	host	p_id	privs
+root	localhost	4	full
+call mac_grant_user_all_privs('root1', 'localhost');
+ERROR HY000: the user not exits
+call mac_grant_user_all_privs('root', 'localhost');
+select * from mac_privileged_users;
+user	host
+root	localhost
+call mac_revoke_user_all_privs('root1', 'localhost');
+ERROR HY000: the user not exits
+call mac_revoke_user_all_privs('root', 'localhost');
+select * from mac_privileged_users;
+user	host
+delete from mac_labels;
+call mac_create_label('P1', 'L1::');
+call mac_create_label('P1', 'L1:C1:');
+call mac_create_label('P1', 'L1::G1');
+call mac_create_label('P2', 'L1::');
+#test row policy procedure#
+call mac_apply_row_policy('db', 't1', 'P3', 'L1::', 1);
+ERROR HY000: the policy not exits
+call mac_apply_row_policy('db1', 't1', 'P1', 'L1::', 1);
+ERROR HY000: the database not exits
+call mac_apply_row_policy('db', 't2', 'P1', 'L1::', 1);
+ERROR HY000: the table not exits
+call mac_apply_row_policy('db', 't1', 'P1', 'L1:C9:', 1);
+ERROR HY000: the commpartment C9 not exits
+call mac_apply_row_policy('db', 't1', 'P1', 'L1::', 2);
+ERROR HY000: the disable option only allow 0 or 1
+call mac_apply_row_policy('db', 't1', 'P1', 'L1::', 1);
+call mac_apply_row_policy('db', 't1', 'P1', 'L1::', 1);
+ERROR HY000: the table row just allow only one label with same policy
+call mac_apply_row_policy('db', 't1', 'P2', 'L1::', 0);
+show create table db.t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int DEFAULT NULL,
+  `c2` int DEFAULT NULL,
+  `_gdb_mac_policy_4` int NOT NULL DEFAULT '25',
+  `_gdb_mac_policy_5` int NOT NULL DEFAULT '28'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+call mac_drop_row_policy('db', 't1', 'P2');
+call mac_disable_row_policy('db', 't1', 'P3');
+ERROR HY000: the policy not exits
+call mac_disable_row_policy('db1', 't1', 'P1');
+ERROR HY000: the database not exits
+call mac_disable_row_policy('db', 't2', 'P1');
+ERROR HY000: the table not exits
+call mac_disable_row_policy('db', 't1', 'P2');
+ERROR HY000: the table row not apply this policy
+call mac_disable_row_policy('db', 't1', 'P1');
+select * from mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+db	t1	_gdb_mac_policy_4	4	25	1	0
+call mac_enable_row_policy('db', 't1', 'P3');
+ERROR HY000: the policy not exits
+call mac_enable_row_policy('db1', 't1', 'P1');
+ERROR HY000: the database not exits
+call mac_enable_row_policy('db', 't2', 'P1');
+ERROR HY000: the table not exits
+call mac_enable_row_policy('db', 't1', 'P2');
+ERROR HY000: the table row not apply this policy
+call mac_enable_row_policy('db', 't1', 'P1');
+select * from mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+db	t1	_gdb_mac_policy_4	4	25	1	1
+call mac_drop_row_policy('db', 't1', 'P3');
+ERROR HY000: the policy not exits
+call mac_drop_row_policy('db1', 't1', 'P1');
+ERROR HY000: the database not exits
+call mac_drop_row_policy('db', 't2', 'P1');
+ERROR HY000: the table not exits
+call mac_drop_row_policy('db', 't1', 'P2');
+ERROR HY000: the table row not apply this policy
+call mac_drop_row_policy('db', 't1', 'P1');
+call mac_drop_row_policy('db', 't1', 'P1');
+ERROR HY000: the table row not exits policy
+show create table db.t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int DEFAULT NULL,
+  `c2` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop database db;

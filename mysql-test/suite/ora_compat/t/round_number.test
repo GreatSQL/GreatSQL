@@ -1,0 +1,47 @@
+
+create table t1(c1 double, c2 varchar(80), c3 int, c4 decimal, c5 int);
+
+insert into t1 values(100.4, '100.4', 100.4, 100, 1);
+insert into t1 values(100.5, '100.5', 100.5, 100, 1);
+insert into t1 values(1.2346E+10,'1.2346E+10', 123, 123, 123);
+insert into t1 values(null, null, null, null, null);
+insert into t1 values(null, null, null, null, 1);
+insert into t1 values(null, '', null, null, 0);
+
+set sql_mode=oracle;
+--echo
+--echo ROUND(number) under ORACLE mode:
+select round(296625000/power(10,4)) from dual;
+select round(c1, c5) from t1;
+select round(c2, c5) from t1;
+select round(c3, c5) from t1;
+select round(c4, c5) from t1;
+select round(c1, c2) from t1;
+select round(1.234, 1.3) from dual;
+select round(1.234, 1.5) from dual;
+SELECT ROUND(2.5), ROUND(25E-1) FROM dual;
+SELECT round(to_number('1.66e-10','9.99EEEE'),20) FROM dual;
+
+--echo TODO:correct the result
+SELECT ROUND(25E-50,25E+10) FROM dual;
+
+select ROUND(25E+10,25E+10) FROM dual;
+select round(1.2346E+10,1.2346E+10) from dual;
+select round(1.2346E+10,'1.2346E+10') from dual;
+select ROUND(2512345E+100,-25000000000) FROM dual;
+select ROUND(2512345E+100,25000000000) FROM dual;
+SELECT round(to_number('1.66e-10','9.99EEEE'),10) FROM dual;
+SELECT round(to_number('1.66e-10','9.99EEEE'),11) FROM dual;
+
+set sql_mode=default;
+--echo
+--echo ROUND(number) under DEFAULT mode:
+select round(296625000/power(10,4)) from dual;
+select round(c1, c5) from t1;
+select round(c2, c5) from t1;
+select round(c3, c5) from t1;
+select round(c4, c5) from t1;
+select round(1.234, 1.3) from dual;
+select round(1.234, 1.5) from dual;
+SELECT ROUND(2.5), ROUND(25E-1) FROM dual;
+drop table t1;

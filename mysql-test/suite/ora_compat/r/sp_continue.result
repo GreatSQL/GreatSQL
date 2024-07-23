@@ -1,0 +1,1125 @@
+set sql_mode=oracle;
+set @@udt_format_result='DBA';
+#
+# CONTINUE statement
+#
+#
+# create table
+#
+create table tt_air(id int,name1 varchar(100));
+insert into tt_air values(1,null);
+insert into tt_air values(2,'aabb');
+insert into tt_air values(3,'qwed');
+create table t1 (a int, b varchar(100));
+insert into t1 values(1,'aaaaa'),(2,'bbbbb'),(3,'ccccc') ;
+#
+# continue in for cursor loop
+# it should pop cursors and handlers
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a<3;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+begin
+for i in cc loop
+select i;
+for j in cc1 loop
+select j;
+continue;
+select 'after continue';
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+a:1 | b:aaaaa
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+call p1;
+i
+a:1 | b:aaaaa
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue in for select_stmt loop
+# it should pop cursors and handlers
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1;
+CURSOR cc1 IS SELECT * FROM t1;
+begin
+for i in (select * from t1 where a>1) loop
+select i;
+for j in (select * from tt_air where id<3) loop
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select j;
+continue;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+i
+a:3 | b:ccccc
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+call p1;
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+i
+a:3 | b:ccccc
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue label in for select_stmt loop
+# it should pop cursors and handlers but not close static cursor
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1;
+CURSOR cc1 IS SELECT * FROM t1;
+begin
+<<lab1>>
+for i in (select * from t1 where a>1) loop
+select i;
+for j in (select * from tt_air where id<3) loop
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+open cc;
+select j;
+continue lab1;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+i
+a:3 | b:ccccc
+ERROR 24000: Cursor is already open
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue label in for select_stmt loop
+# it should pop cursors and handlers
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1;
+CURSOR cc1 IS SELECT * FROM t1;
+begin
+<<lab1>>
+for i in (select * from t1 where a>1) loop
+select i;
+for j in (select * from tt_air where id<3) loop
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select j;
+continue lab1;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+i
+a:3 | b:ccccc
+j
+id:1 | name1:NULL
+call p1;
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+i
+a:3 | b:ccccc
+j
+id:1 | name1:NULL
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue when in for select_stmt loop
+# it should pop cursors and handlers
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1;
+CURSOR cc1 IS SELECT * FROM t1;
+begin
+for j in (select * from tt_air) loop
+select j;
+continue when j.id=2;
+select 'after continue';
+end loop;
+end;
+$$
+call p1;
+j
+id:1 | name1:NULL
+after continue
+after continue
+j
+id:2 | name1:aabb
+j
+id:3 | name1:qwed
+after continue
+after continue
+call p1;
+j
+id:1 | name1:NULL
+after continue
+after continue
+j
+id:2 | name1:aabb
+j
+id:3 | name1:qwed
+after continue
+after continue
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue label when in for select_stmt loop
+# it should pop cursors and handlers
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1;
+CURSOR cc1 IS SELECT * FROM t1;
+begin
+<<lab1>>
+for i in (select * from t1 where a>1) loop
+select i;
+for j in (select * from tt_air where id<3) loop
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select j;
+continue lab1 when j.id=2;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+after continue
+after continue
+j
+id:2 | name1:aabb
+i
+a:3 | b:ccccc
+j
+id:1 | name1:NULL
+after continue
+after continue
+j
+id:2 | name1:aabb
+call p1;
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+after continue
+after continue
+j
+id:2 | name1:aabb
+i
+a:3 | b:ccccc
+j
+id:1 | name1:NULL
+after continue
+after continue
+j
+id:2 | name1:aabb
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue label when in for cursor loop
+# it should pop cursors and handlers
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a>1;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+begin
+<<lab1>>
+for i in cc1 loop
+select i;
+for j in cc loop
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select j;
+continue lab1 when j.a>1;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+id:1 | name1:NULL
+j
+a:2 | b:bbbbb
+i
+id:2 | name1:aabb
+j
+a:2 | b:bbbbb
+call p1;
+i
+id:1 | name1:NULL
+j
+a:2 | b:bbbbb
+i
+id:2 | name1:aabb
+j
+a:2 | b:bbbbb
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue label when in for cursor loop
+# error when label is not sp_label::ITERATION
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a>1;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+begin
+<<lab1>>
+ret := 1;
+for i in cc1 loop
+select i;
+<<lab2>>
+for j in cc loop
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select j;
+continue lab1 when j.a>1;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+ERROR 42000: CONTINUE with no matching label: lab1
+# Test in PROCEDURE
+# continue label when in for cursor loop
+# it should continue right label when multiple labels
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a>1;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+begin
+<<lab1>>
+for i in cc1 loop
+select i;
+<<lab2>>
+for j in cc loop
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select j;
+continue lab1 when j.a>1;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+id:1 | name1:NULL
+j
+a:2 | b:bbbbb
+i
+id:2 | name1:aabb
+j
+a:2 | b:bbbbb
+call p1;
+i
+id:1 | name1:NULL
+j
+a:2 | b:bbbbb
+i
+id:2 | name1:aabb
+j
+a:2 | b:bbbbb
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue label when in for cursor loop
+# it should continue right label when multiple labels
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a>1;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+begin
+<<lab1>>
+for i in cc1 loop
+select i;
+<<lab2>>
+for j in cc loop
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select j;
+continue lab2 when j.a=2;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+id:1 | name1:NULL
+j
+a:2 | b:bbbbb
+j
+a:3 | b:ccccc
+after continue
+after continue
+i
+id:2 | name1:aabb
+j
+a:2 | b:bbbbb
+j
+a:3 | b:ccccc
+after continue
+after continue
+call p1;
+i
+id:1 | name1:NULL
+j
+a:2 | b:bbbbb
+j
+a:3 | b:ccccc
+after continue
+after continue
+i
+id:2 | name1:aabb
+j
+a:2 | b:bbbbb
+j
+a:3 | b:ccccc
+after continue
+after continue
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue label in for cursor loop and select_stmt loop
+# it should continue right label when multiple labels
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a>1;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+begin
+<<lab1>>
+for i in cc1 loop
+select i;
+<<lab2>>
+for j in (SELECT * FROM t1 where a>1) loop
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select j;
+continue lab1;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+id:1 | name1:NULL
+j
+a:2 | b:bbbbb
+i
+id:2 | name1:aabb
+j
+a:2 | b:bbbbb
+call p1;
+i
+id:1 | name1:NULL
+j
+a:2 | b:bbbbb
+i
+id:2 | name1:aabb
+j
+a:2 | b:bbbbb
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue label in for .. loop
+# it should continue right label when multiple labels
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a>1;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+begin
+<<lab1>>
+for i in 1 .. 2 loop
+select i;
+<<lab2>>
+for j in 10 .. 12 loop
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select j;
+continue lab1;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+1
+j
+10
+i
+2
+j
+10
+call p1;
+i
+1
+j
+10
+i
+2
+j
+10
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue when in for .. loop
+# it should continue when multiple labels
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a>1;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+begin
+<<lab1>>
+for i in 1 .. 2 loop
+select i;
+<<lab2>>
+for j in 10 .. 11 loop
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select j;
+continue when i=2;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+1
+j
+10
+after continue
+after continue
+j
+11
+after continue
+after continue
+i
+2
+j
+10
+j
+11
+call p1;
+i
+1
+j
+10
+after continue
+after continue
+j
+11
+after continue
+after continue
+i
+2
+j
+10
+j
+11
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue when in loop end loop
+# it should continue when multiple labels
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a>1;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+count int := 0;
+count1 int := 0;
+begin
+<<lab1>>
+loop
+count := count + 1;
+select count;
+exit when count=2;
+<<lab2>>
+loop
+count1 := count1+1;
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select count1;
+exit when count1=3;
+continue lab2 when count1=2;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+count
+1
+count1
+1
+after continue
+after continue
+count1
+2
+count1
+3
+count
+2
+call p1;
+count
+1
+count1
+1
+after continue
+after continue
+count1
+2
+count1
+3
+count
+2
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue when in loop end loop
+# it should continue when multiple labels
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a>1;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+count int := 0;
+count1 int := 0;
+begin
+<<lab1>>
+loop
+count := count + 1;
+select count;
+exit when count=2;
+<<lab2>>
+loop
+count1 := count1+1;
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select count1;
+exit when count1=3;
+continue lab1 when count1=2;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+count
+1
+count1
+1
+after continue
+after continue
+count1
+2
+count
+2
+call p1;
+count
+1
+count1
+1
+after continue
+after continue
+count1
+2
+count
+2
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue when in while loop end loop
+# it should continue when multiple labels
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a>1;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+count int := 0;
+count1 int := 0;
+begin
+<<lab1>>
+while count<2 loop
+count := count + 1;
+select count;
+<<lab2>>
+while count1<4 loop
+count1 := count1+1;
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select count1;
+continue when count1=2;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+count
+1
+count1
+1
+after continue
+after continue
+count1
+2
+count1
+3
+after continue
+after continue
+count1
+4
+after continue
+after continue
+count
+2
+call p1;
+count
+1
+count1
+1
+after continue
+after continue
+count1
+2
+count1
+3
+after continue
+after continue
+count1
+4
+after continue
+after continue
+count
+2
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue when in while loop end loop
+# it should continue when multiple labels
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a>1;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+count int := 0;
+count1 int := 0;
+begin
+<<lab1>>
+while count<2 loop
+count := count + 1;
+select count;
+<<lab2>>
+while count1<4 loop
+count1 := count1+1;
+declare CURSOR cc2 IS SELECT * FROM t1;
+continue handler for SQLSTATE '02001' set ret=1;
+begin
+select count1;
+continue lab1 when count1=2;
+select 'after continue';
+end;
+end loop;
+end loop;
+end;
+$$
+call p1;
+count
+1
+count1
+1
+after continue
+after continue
+count1
+2
+count
+2
+count1
+3
+after continue
+after continue
+count1
+4
+after continue
+after continue
+call p1;
+count
+1
+count1
+1
+after continue
+after continue
+count1
+2
+count
+2
+count1
+3
+after continue
+after continue
+count1
+4
+after continue
+after continue
+DROP PROCEDURE p1;
+#
+# wrong use of continue
+CREATE or replace procedure f12(lim INT, res OUT VARCHAR)
+AS
+a INT;
+BEGIN
+<<lab12>>
+continue;
+END;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'CONTINUE clause without loop statement'
+#
+# continue prev label
+CREATE or replace PROCEDURE p1() as
+a INT;
+BEGIN
+<<lab1>>
+for i in 1 .. 2 loop
+select i;
+end loop;
+<<lab2>>
+for i in 1 .. 2 loop
+select i;
+continue lab1;
+end loop;
+END;
+$$
+ERROR 42000: CONTINUE with no matching label: lab1
+# Test in PROCEDURE
+# continue label in for select_stmt loop with refcursor
+# it should reopen refcursor
+CREATE or replace PROCEDURE p1() as
+crf sys_refcursor;
+CURSOR cc IS SELECT * FROM t1;
+CURSOR cc1 IS SELECT * FROM t1;
+mm t1%rowtype;
+begin
+<<lab1>>
+for i in (select * from t1 where a>1) loop
+select i;
+for j in (select * from tt_air where id<3) loop
+select j;
+open crf for select * from t1 where a=1;
+fetch crf into mm;
+select mm;
+continue lab1;
+select 'after continue';
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+mm
+a:1 | b:aaaaa
+i
+a:3 | b:ccccc
+j
+id:1 | name1:NULL
+mm
+a:1 | b:aaaaa
+call p1;
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+mm
+a:1 | b:aaaaa
+i
+a:3 | b:ccccc
+j
+id:1 | name1:NULL
+mm
+a:1 | b:aaaaa
+DROP PROCEDURE p1;
+# Test in PROCEDURE
+# continue label in for select_stmt loop with if
+# it should jump right if condition
+CREATE or replace PROCEDURE p1() as
+crf sys_refcursor;
+CURSOR cc IS SELECT * FROM t1;
+CURSOR cc1 IS SELECT * FROM t1;
+mm t1%rowtype;
+begin
+<<lab1>>
+for i in (select * from t1 where a>1) loop
+select i;
+<<lab2>>
+for j in (select * from tt_air where id<3) loop
+select j;
+if j.id=2 then
+continue lab1;
+elsif j.id=1 then
+continue lab2;
+end if;
+select 'after continue';
+end loop;
+end loop;
+end;
+$$
+call p1;
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+i
+a:3 | b:ccccc
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+call p1;
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+i
+a:3 | b:ccccc
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+DROP PROCEDURE p1;
+# ----------------------
+# -- TEST IN FUNCTION --
+# ----------------------
+#
+# FUNCTION : continue with loop and if
+#
+CREATE or replace function func1()
+return varchar
+AS
+p2 varchar(10);
+BEGIN 
+p2:='a';
+<<lab1>>
+for i in 1 .. 3 loop
+if (p2='a') then
+p2:=p2||i;
+continue lab1;
+end if; 
+if (p2='a1') then
+p2:=p2||i;
+continue lab1;
+p2:='fail!';
+end if;
+end loop;
+return p2;
+END;
+$$
+select 'func1',func1();
+func1	func1()
+func1	a12
+select 'func1',func1();
+func1	func1()
+func1	a12
+DROP function func1;
+#
+# A continue statement with CASE statement WHEN clause
+CREATE or replace procedure p1()
+AS
+a INT;
+BEGIN
+for i in 1 .. 4 loop
+case
+when i=1 then
+continue;
+when i=3 then
+continue;
+else
+select i;
+end case;
+select 'after continue';
+end loop;
+END;
+$$
+call p1;
+i
+2
+after continue
+after continue
+i
+4
+after continue
+after continue
+call p1;
+i
+2
+after continue
+after continue
+i
+4
+after continue
+after continue
+DROP PROCEDURE p1;
+CREATE TRIGGER SumOfSalary
+BEFORE INSERT ON t
+FOR EACH ROW
+continue;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'CONTINUE clause without loop statement'
+#
+# test
+BEGIN
+continue;
+select 1;
+END;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'CONTINUE clause without loop statement'
+#
+# test statement_digest_text
+select statement_digest_text('CREATE or replace PROCEDURE p1() as
+begin
+  for i in 1 .. 2 loop
+   continue when i=1;
+  end loop;
+end;');
+statement_digest_text('CREATE or replace PROCEDURE p1() as
+begin
+  for i in 1 .. 2 loop
+   continue when i=1;
+  end loop;
+end;')
+CREATE OR REPLACE PROCEDURE `p1` ( ) AS BEGIN FOR `i` IN ? .. ? LOOP CONTINUE WHEN `i` = ? ; END LOOP ; END ;
+#
+# A continue statement with EXCEPTION statement
+alter table t1 add PRIMARY KEY (a);
+CREATE or replace procedure p1()
+AS
+a INT;
+BEGIN
+<<lab1>>
+for i in 1 .. 5 loop
+begin
+INSERT INTO t1 VALUES (i,null);
+EXCEPTION 
+WHEN DUP_VAL_ON_INDEX THEN
+continue lab1;
+end;
+end loop;
+END;
+$$
+call p1;
+table t1;
+a	b
+1	aaaaa
+2	bbbbb
+3	ccccc
+4	NULL
+5	NULL
+DROP PROCEDURE p1;
+#
+# A continue when statement with EXCEPTION statement
+delete from t1 where a>3;
+CREATE or replace procedure p1()
+AS
+a INT;
+BEGIN
+<<lab1>>
+for i in 1 .. 5 loop
+begin
+INSERT INTO t1 VALUES (i,null);
+EXCEPTION 
+WHEN DUP_VAL_ON_INDEX THEN
+continue when i=3;
+end;
+end loop;
+END;
+$$
+call p1;
+table t1;
+a	b
+1	aaaaa
+2	bbbbb
+3	ccccc
+4	NULL
+5	NULL
+DROP PROCEDURE p1;
+drop table tt_air;
+drop table t1;

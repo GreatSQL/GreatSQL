@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -467,11 +467,27 @@ int Clone_Snapshot::create_desc(const char *data_dir,
   std::string file_path;
 
   auto err = build_file_path(data_dir, file_meta, file_path);
+
+  if (err != 0) {
+    return (err);
+  }
+
+  if ((m_snapshot_type == HA_CLONE_PAGE ||
+       (m_snapshot_state == CLONE_SNAPSHOT_PAGE_COPY &&
+        m_file_compress_mode)) &&
+      file_meta->m_space_id != dict_sys_t::s_log_space_id) {
+    file_path.append(".delta");
+  }
+
   if (m_enable_encryption) {
     file_path.append(".xbcrypt");
   }
-  if (err != 0) {
-    return (err);
+
+  // auto comp_mode = file_compress_mode();
+  if (m_file_compress_mode == CLONE_FILE_COMPRESS_ZSTD) {
+    file_path.append(".zstd");
+  } else if (m_file_compress_mode == CLONE_FILE_COMPRESS_LZ4) {
+    file_path.append(".lz4");
   }
 
   auto extn = Clone_file_ctx::Extension::NONE;
@@ -656,6 +672,15 @@ int Clone_Handle::apply_state_metadata(Clone_Task *task,
     return (err);
   }
 
+  auto snapshot = get_snapshot();
+  if ((snapshot->is_clone_page_type() || snapshot->file_compress_mode()) &&
+      snapshot->get_state() == CLONE_SNAPSHOT_PAGE_COPY) {
+    err = clone_incremental_finalize(task, callback);
+    if (err != 0) {
+      return (err);
+    }
+  }
+
   /* It is the end of current state. Close active file. */
   err = close_file(task);
 
@@ -705,6 +730,10 @@ void Clone_Handle::notify_state_change(Clone_Task *task, Ha_clone_cbk *callback,
     return;
   }
   callback->mark_state_change(state_desc->m_estimate);
+
+  callback->set_clone_lsn(state_desc->m_start_lsn, state_desc->m_page_track_lsn,
+                          state_desc->m_end_lsn);
+
   callback->buffer_cbk(nullptr, 0);
   callback->clear_flags();
 }
@@ -832,6 +861,22 @@ int Clone_Handle::apply_ddl(const Clone_File_Meta *new_meta,
     mesg.append(std::to_string(new_meta->m_space_id));
 
     ib::info(ER_IB_MSG_CLONE_DDL_APPLY) << mesg;
+
+    if (get_snapshot()->is_clone_page_type() &&
+        get_snapshot()->get_state() == CLONE_SNAPSHOT_PAGE_COPY) {
+      assert(old_file.find_last_of("delta") != std::string::npos);
+      old_file.replace(old_file.find_last_of("delta") - 4, 5, "meta");
+
+      if (!os_file_delete(innodb_clone_file_key, old_file.c_str())) {
+        /* purecov: begin inspected */
+        mesg.append("Innodb Clone Apply Failed to delete file: ");
+        mesg.append(old_file);
+        my_error(ER_INTERNAL_ERROR, MYF(0), mesg.c_str());
+        return ER_INTERNAL_ERROR;
+        /* purecov: end */
+      }
+    }
+
     return 0;
   }
 
@@ -904,6 +949,7 @@ int Clone_Handle::apply_ddl(const Clone_File_Meta *new_meta,
 
   std::string rename_mesg("RENAME FILE WITH EXTN: ");
 
+  bool need_rename = false;
   if (old_file.compare(new_file) == 0) {
     rename_mesg.append(" IGNORE : ");
 
@@ -920,6 +966,7 @@ int Clone_Handle::apply_ddl(const Clone_File_Meta *new_meta,
                errno, my_strerror(errbuf, sizeof(errbuf), errno));
       /* purecov: end */
     }
+    need_rename = true;
   }
 
   rename_mesg.append(old_file);
@@ -929,6 +976,34 @@ int Clone_Handle::apply_ddl(const Clone_File_Meta *new_meta,
   rename_mesg.append(std::to_string(new_meta->m_space_id));
 
   ib::info(ER_IB_MSG_CLONE_DDL_APPLY) << rename_mesg;
+
+  if (get_snapshot()->is_clone_page_type() &&
+      get_snapshot()->get_state() == CLONE_SNAPSHOT_PAGE_COPY && need_rename &&
+      err == 0) {
+    assert(old_file.find_last_of("delta") != std::string::npos);
+    assert(new_file.find_last_of("delta") != std::string::npos);
+    old_file.replace(old_file.find_last_of("delta") - 4, 5, "meta");
+    new_file.replace(new_file.find_last_of("delta") - 4, 5, "meta");
+
+    bool success =
+        os_file_rename(OS_CLONE_DATA_FILE, old_file.c_str(), new_file.c_str());
+    if (!success) {
+      /* purecov: begin inspected */
+      char errbuf[MYSYS_STRERROR_SIZE];
+      err = ER_ERROR_ON_RENAME;
+
+      my_error(ER_ERROR_ON_RENAME, MYF(0), old_file.c_str(), new_file.c_str(),
+               errno, my_strerror(errbuf, sizeof(errbuf), errno));
+      /* purecov: end */
+    }
+
+    std::string mesg("RENAMED FILE REMOVED EXTN : ");
+    mesg.append(old_file);
+    mesg.append(" to ");
+    mesg.append(new_file);
+
+    ib::info(ER_IB_MSG_CLONE_DDL_APPLY) << mesg;
+  }
 
   if (err == 0) {
     err = set_compression(new_ctx);
@@ -992,6 +1067,34 @@ int Clone_Handle::fix_all_renamed(const Clone_Task *task) {
     mesg.append(std::to_string(file_meta->m_space_id));
 
     ib::info(ER_IB_MSG_CLONE_DDL_APPLY) << mesg;
+
+    if (get_snapshot()->is_clone_page_type() &&
+        get_snapshot()->get_state() == CLONE_SNAPSHOT_PAGE_COPY) {
+      assert(old_file.find_last_of("delta") != std::string::npos);
+      assert(new_file.find_last_of("delta") != std::string::npos);
+      old_file.replace(old_file.find_last_of("delta") - 4, 5, "meta");
+      new_file.replace(new_file.find_last_of("delta") - 4, 5, "meta");
+
+      bool success = os_file_rename(OS_CLONE_DATA_FILE, old_file.c_str(),
+                                    new_file.c_str());
+      if (!success) {
+        /* purecov: begin inspected */
+        char errbuf[MYSYS_STRERROR_SIZE];
+        err = ER_ERROR_ON_RENAME;
+
+        my_error(ER_ERROR_ON_RENAME, MYF(0), old_file.c_str(), new_file.c_str(),
+                 errno, my_strerror(errbuf, sizeof(errbuf), errno));
+        /* purecov: end */
+      }
+
+      std::string mesg("RENAMED FILE REMOVED EXTN : ");
+      mesg.append(old_file);
+      mesg.append(" to ");
+      mesg.append(new_file);
+
+      ib::info(ER_IB_MSG_CLONE_DDL_APPLY) << mesg;
+    }
+
     return err;
   };
 
@@ -1154,6 +1257,7 @@ int Clone_Handle::apply_file_metadata(Clone_Task *task,
   if (callback->encryption()) {
     snapshot->set_enable_encryption();
   }
+
   /* Check file metadata entry based on the descriptor. */
   auto err = snapshot->get_file_from_desc(file_desc_meta, m_clone_dir, false,
                                           desc_exists, file_ctx);
@@ -1194,7 +1298,6 @@ int Clone_Handle::apply_file_metadata(Clone_Task *task,
   bool is_page_copy = snapshot->get_state() == CLONE_SNAPSHOT_PAGE_COPY;
 
   if (is_file_copy || is_page_copy) {
-    ut_ad(is_file_copy || ddl_desc);
 
     auto file_type = OS_CLONE_DATA_FILE;
 
@@ -1229,6 +1332,12 @@ int Clone_Handle::apply_file_metadata(Clone_Task *task,
 
     if (err == 0 && file_type == OS_CLONE_DATA_FILE) {
       err = set_compression(file_ctx);
+    }
+
+    if (err == 0 &&
+        (snapshot->is_clone_page_type() || snapshot->file_compress_mode()) &&
+        snapshot->get_state() == CLONE_SNAPSHOT_PAGE_COPY) {
+      err = write_delta_metadata(m_clone_dir, file_desc_meta);
     }
     return err;
   }
@@ -1441,7 +1550,8 @@ int Clone_Handle::receive_data(Clone_Task *task, uint64_t offset,
 
   if (is_log_file || is_page_copy ||
       file_meta->m_space_id == dict_sys_t::s_invalid_space_id ||
-      file_meta->m_punch_hole || callback->encryption()) {
+      file_meta->m_punch_hole || callback->encryption() ||
+      callback->compress_file()) {
     file_type = OS_CLONE_LOG_FILE;
   }
 
@@ -1466,17 +1576,20 @@ int Clone_Handle::receive_data(Clone_Task *task, uint64_t offset,
   /* Copy data to current destination file using callback. */
   char errbuf[MYSYS_STRERROR_SIZE];
 
-  auto file_hdl = task->m_current_file_des.m_file;
-  auto success = os_file_seek(nullptr, file_hdl, offset);
+  /* clone with compression should not set offset.*/
+  if (!snapshot->file_compress_mode()) {
+    auto file_hdl = task->m_current_file_des.m_file;
+    auto success = os_file_seek(nullptr, file_hdl, offset);
 
-  if (!success) {
-    /* purecov: begin inspected */
-    my_error(ER_ERROR_ON_READ, MYF(0), file_name.c_str(), errno,
-             my_strerror(errbuf, sizeof(errbuf), errno));
-    /* Save error with file name. */
-    m_clone_task_manager.set_error(ER_ERROR_ON_READ, file_name.c_str());
-    return (ER_ERROR_ON_READ);
-    /* purecov: end */
+    if (!success) {
+      /* purecov: begin inspected */
+      my_error(ER_ERROR_ON_READ, MYF(0), file_name.c_str(), errno,
+               my_strerror(errbuf, sizeof(errbuf), errno));
+      /* Save error with file name. */
+      m_clone_task_manager.set_error(ER_ERROR_ON_READ, file_name.c_str());
+      return (ER_ERROR_ON_READ);
+      /* purecov: end */
+    }
   }
 
   if (task->m_file_cache) {
@@ -1490,6 +1603,10 @@ int Clone_Handle::receive_data(Clone_Task *task, uint64_t offset,
   callback->set_dest_name(file_meta->m_file_name);
 
   bool modify_buffer = false;
+
+  if (snapshot->file_compress_mode() && is_page_copy) {
+    modify_buffer = true;
+  }
 
   /* In case of page compression we need to punch hole. */
   if (file_meta->m_punch_hole) {
@@ -1519,6 +1636,220 @@ int Clone_Handle::receive_data(Clone_Task *task, uint64_t offset,
   return (err);
 }
 
+int Clone_Handle::clone_incremental_init() {
+  assert(m_clone_task_manager.get_snapshot());
+
+  auto file_compress =
+      m_clone_task_manager.get_snapshot()->file_compress_mode();
+  uint32_t alloc_len =
+      file_compress
+          ? (UNIV_PAGE_SIZE / 4 + 1) * UNIV_PAGE_SIZE + CLONE_ALIGN_DIRECT_IO
+          : UNIV_PAGE_SIZE + CLONE_ALIGN_DIRECT_IO;
+
+  auto heap = m_clone_task_manager.get_snapshot()->lock_heap();
+
+  for (uint i = 0; i < m_max_concurrency; i++) {
+    m_clone_incremental_ctxt[i].delta_buf_base =
+        static_cast<byte *>(mem_heap_zalloc(heap, alloc_len));
+
+    if (m_clone_incremental_ctxt[i].delta_buf_base == nullptr) {
+      my_error(ER_OUTOFMEMORY, MYF(0), alloc_len);
+      return (ER_OUTOFMEMORY);
+    }
+  }
+
+  m_clone_task_manager.get_snapshot()->release_heap(heap);
+
+  for (uint i = 0; i < m_max_concurrency; i++) {
+    m_clone_incremental_ctxt[i].delta_buf = static_cast<byte *>(ut_align(
+        m_clone_incremental_ctxt[i].delta_buf_base, CLONE_ALIGN_DIRECT_IO));
+
+    mach_write_to_4(m_clone_incremental_ctxt[i].delta_buf,
+                    INIT_FLAG); /*"clon"*/
+    m_clone_incremental_ctxt[i].npages = 1;
+    m_clone_incremental_ctxt[i].nseg = 0;
+  }
+
+  return (false);
+}
+
+int Clone_Handle::clone_incremental_process(Clone_Task *task,
+                                            Clone_Desc_Data &data_desc,
+                                            Ha_clone_cbk *callback) {
+  // suppose increment clone get one page once
+  assert(data_desc.m_data_len == UNIV_PAGE_SIZE);
+
+  Ha_clone_file file;
+
+  file.type = Ha_clone_file::FILE_DESC;
+  file.file_desc = task->m_current_file_des.m_file;
+
+  if (m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages ==
+      UNIV_PAGE_SIZE / 4) {
+    // It's certainly not the first time use delta_buf
+    assert(task->m_current_file_des.m_file != OS_FILE_CLOSED);
+    auto comp_file = callback->compress_file();
+    int err = 0;
+
+    if (comp_file == nullptr) {
+      err = os_file_seek(
+          nullptr, task->m_current_file_des.m_file,
+          m_clone_incremental_ctxt[task->m_task_meta.m_task_index].nseg *
+              m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages *
+              UNIV_PAGE_SIZE);
+      if (!err) {
+        return (!err);
+      }
+    }
+
+    if (callback->encryption()) {
+      err = callback->encrypt_and_write_cbk(
+          (uchar *)m_clone_incremental_ctxt[task->m_task_meta.m_task_index]
+              .delta_buf,
+          file, UNIV_PAGE_SIZE, "fush page ID");
+    } else if (comp_file != nullptr) {
+      err = comp_file->compress_and_write(
+          (char *)m_clone_incremental_ctxt[task->m_task_meta.m_task_index]
+              .delta_buf,
+          file.file_desc,
+          UNIV_PAGE_SIZE *
+              m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages,
+          "fush page ID");
+    } else {
+      /* flush buffer */
+      err = clone_os_copy_buf_to_file(
+          (uchar *)m_clone_incremental_ctxt[task->m_task_meta.m_task_index]
+              .delta_buf,
+          file.file_desc, UNIV_PAGE_SIZE, "fush page ID");
+    }
+
+    if (err) {
+      return (err);
+    }
+
+    /* clear buffer */
+    memset(m_clone_incremental_ctxt[task->m_task_meta.m_task_index].delta_buf,
+           0, UNIV_PAGE_SIZE);
+    /*"clon"*/
+    mach_write_to_4(
+        m_clone_incremental_ctxt[task->m_task_meta.m_task_index].delta_buf,
+        INIT_FLAG);
+    m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages = 1;
+    m_clone_incremental_ctxt[task->m_task_meta.m_task_index].nseg++;
+  }
+  mach_write_to_4(
+      m_clone_incremental_ctxt[task->m_task_meta.m_task_index].delta_buf +
+          (m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages * 4),
+      data_desc.m_file_offset / UNIV_PAGE_SIZE);
+
+  // change to the offset in .delta file
+  data_desc.m_file_offset =
+      (m_clone_incremental_ctxt[task->m_task_meta.m_task_index].nseg *
+       UNIV_PAGE_SIZE * UNIV_PAGE_SIZE / 4) +
+      m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages *
+          UNIV_PAGE_SIZE;
+
+  ++m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages;
+  return (false);
+}
+
+int Clone_Handle::clone_incremental_write(Clone_Task *task,
+                                          unsigned char *buffer, uint32_t len) {
+  memcpy(m_clone_incremental_ctxt[task->m_task_meta.m_task_index].delta_buf +
+             (m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages -
+              1) *
+                 UNIV_PAGE_SIZE,
+         buffer, len);
+
+  return (false);
+}
+
+/************************************************************************
+Flush the incremental page write
+
+@return false on success, true on error. */
+int Clone_Handle::clone_incremental_finalize(Clone_Task *task,
+                                             Ha_clone_cbk *callback) {
+  if (m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages == 1 ||
+      task->m_current_file_des.m_file == OS_FILE_CLOSED) {
+    return false;
+  }
+
+  Ha_clone_file file;
+
+  file.type = Ha_clone_file::FILE_DESC;
+  file.file_desc = task->m_current_file_des.m_file;
+  auto err = 0;
+  auto comp_file = callback->compress_file();
+
+  if (!comp_file) {
+    err = os_file_seek(
+        nullptr, task->m_current_file_des.m_file,
+        (m_clone_incremental_ctxt[task->m_task_meta.m_task_index].nseg *
+         UNIV_PAGE_SIZE * UNIV_PAGE_SIZE / 4));
+
+    if (!err) {
+      return (!err);
+    }
+  }
+
+  /* Mark the block end */
+  if (m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages !=
+      UNIV_PAGE_SIZE / 4) {
+    mach_write_to_4(
+        m_clone_incremental_ctxt[task->m_task_meta.m_task_index].delta_buf +
+            (m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages *
+             4),
+        0xFFFFFFFFUL);
+  }
+  /* Mark the final block */
+  mach_write_to_4(
+      m_clone_incremental_ctxt[task->m_task_meta.m_task_index].delta_buf,
+      END_FLAG);
+
+  if (callback->encryption()) {
+    err = callback->encrypt_and_write_cbk(
+        (uchar *)m_clone_incremental_ctxt[task->m_task_meta.m_task_index]
+            .delta_buf,
+        file,
+        comp_file
+            ? (UNIV_PAGE_SIZE *
+               m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages)
+            : UNIV_PAGE_SIZE,
+        "fush page ID");
+  } else if (comp_file != nullptr) {
+    err = comp_file->compress_and_write(
+        (char *)m_clone_incremental_ctxt[task->m_task_meta.m_task_index]
+            .delta_buf,
+        file.file_desc,
+        UNIV_PAGE_SIZE *
+            m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages,
+        "fush page ID");
+  } else {
+    /* flush buffer */
+    err = clone_os_copy_buf_to_file(
+        (uchar *)m_clone_incremental_ctxt[task->m_task_meta.m_task_index]
+            .delta_buf,
+        file.file_desc, UNIV_PAGE_SIZE, "fush page ID");
+  }
+
+  if (err) {
+    return (err);
+  }
+
+  /* clear buffer */
+  memset(m_clone_incremental_ctxt[task->m_task_meta.m_task_index].delta_buf, 0,
+         UNIV_PAGE_SIZE);
+
+  mach_write_to_4(
+      m_clone_incremental_ctxt[task->m_task_meta.m_task_index].delta_buf,
+      INIT_FLAG); /*"clon"*/
+
+  m_clone_incremental_ctxt[task->m_task_meta.m_task_index].npages = 1;
+  m_clone_incremental_ctxt[task->m_task_meta.m_task_index].nseg = 0;
+  return (false);
+}
+
 int Clone_Handle::apply_data(Clone_Task *task, Ha_clone_cbk *callback) {
   ut_ad(m_clone_handle_type == CLONE_HDL_APPLY);
 
@@ -1535,17 +1866,35 @@ int Clone_Handle::apply_data(Clone_Task *task, Ha_clone_cbk *callback) {
     ut_d(ut_error);
     ut_o(return (err));
   }
+
+  auto snapshot = get_snapshot();
   /* Identify the task for the current block of data. */
   int err = 0;
   auto task_meta = &data_desc.m_task_meta;
 
   /* The data is from a different file. Close the current one. */
   if (task->m_current_file_index != data_desc.m_file_index) {
+    if ((snapshot->is_clone_page_type() || snapshot->file_compress_mode()) &&
+        snapshot->get_state() == CLONE_SNAPSHOT_PAGE_COPY) {
+      err = clone_incremental_finalize(task, callback);
+      if (err != 0) {
+        return (err);
+      }
+    }
+
     err = close_file(task);
     if (err != 0) {
       return (err);
     }
     task->m_current_file_index = data_desc.m_file_index;
+  }
+
+  if ((snapshot->is_clone_page_type() || snapshot->file_compress_mode()) &&
+      snapshot->get_state() == CLONE_SNAPSHOT_PAGE_COPY) {
+    auto err = clone_incremental_process(task, data_desc, callback);
+    if (err != 0) {
+      return (err);
+    }
   }
 
   /* Receive data from callback and apply. */
@@ -1681,13 +2030,27 @@ int Clone_Snapshot::init_apply_state(Clone_Desc_State *state_desc) {
 
   set_state_info(state_desc);
   int err = 0;
-
+  m_file_compress_mode = state_desc->m_file_compress_mode;
   switch (m_snapshot_state) {
     case CLONE_SNAPSHOT_FILE_COPY:
       ib::info(ER_IB_CLONE_OPERATION) << "Clone Apply State FILE COPY: ";
       break;
 
     case CLONE_SNAPSHOT_PAGE_COPY:
+      if (m_file_compress_mode && m_snapshot_type == HA_CLONE_HYBRID) {
+        /* Extend and flush data files. */
+        ib::info(ER_IB_CLONE_OPERATION)
+            << "Compress Clone Apply State FLUSH DATA: ";
+        err = extend_and_flush_files(false);
+        if (err != 0) {
+          ib::info(ER_IB_CLONE_OPERATION)
+              << "Clone Apply FLUSH DATA failed code: " << err;
+          break;
+        }
+
+        m_num_pages = state_desc->m_num_files;
+        m_data_file_vector.resize(state_desc->m_clone_page_num_files, nullptr);
+      }
       ib::info(ER_IB_CLONE_OPERATION) << "Clone Apply State PAGE COPY: ";
       break;
 
@@ -1704,6 +2067,7 @@ int Clone_Snapshot::init_apply_state(Clone_Desc_State *state_desc) {
             << "Clone Apply FLUSH DATA failed code: " << err;
         break;
       }
+
       /* Flush redo files. */
       ib::info(ER_IB_CLONE_OPERATION) << "Clone Apply State FLUSH REDO: ";
       err = extend_and_flush_files(true);
@@ -1755,27 +2119,31 @@ int Clone_Snapshot::extend_and_flush_files(bool flush_redo) {
       /* purecov: end */
     }
 
-    auto file_size = os_file_get_size(file);
-
-    size_t aligned_size = 0;
-    /* If file size is not aligned to extent size, recovery handling has
-    some issues. This work around eliminates dependency with that. */
-    if (file_meta->m_fsp_flags != UINT32_UNDEFINED) {
-      page_size_t page_size(file_meta->m_fsp_flags);
-      auto extent_size = page_size.physical() * FSP_EXTENT_SIZE;
-      /* Skip extending files smaller than one extent. */
-      if (file_size > extent_size) {
-        aligned_size = ut_uint64_align_up(file_size, extent_size);
-      }
-    }
-    if (file_size < file_meta->m_file_size && !m_enable_encryption) {
-      success = os_file_set_size(file_name.c_str(), file, file_size,
-                                 file_meta->m_file_size, true);
-    } else if (file_size < aligned_size && !m_enable_encryption) {
-      success = os_file_set_size(file_name.c_str(), file, file_size,
-                                 aligned_size, true);
-    } else {
+    if (m_snapshot_type == HA_CLONE_PAGE || m_file_compress_mode) {
       success = os_file_flush(file);
+    } else {
+      auto file_size = os_file_get_size(file);
+
+      size_t aligned_size = 0;
+      /* If file size is not aligned to extent size, recovery handling has
+      some issues. This work around eliminates dependency with that. */
+      if (file_meta->m_fsp_flags != UINT32_UNDEFINED) {
+        page_size_t page_size(file_meta->m_fsp_flags);
+        auto extent_size = page_size.physical() * FSP_EXTENT_SIZE;
+        /* Skip extending files smaller than one extent. */
+        if (file_size > extent_size) {
+          aligned_size = ut_uint64_align_up(file_size, extent_size);
+        }
+      }
+      if (file_size < file_meta->m_file_size && !m_enable_encryption) {
+        success = os_file_set_size(file_name.c_str(), file, file_size,
+                                   file_meta->m_file_size, true);
+      } else if (file_size < aligned_size && !m_enable_encryption) {
+        success = os_file_set_size(file_name.c_str(), file, file_size,
+                                   aligned_size, true);
+      } else {
+        success = os_file_flush(file);
+      }
     }
 
     os_file_close(file);
@@ -1788,6 +2156,9 @@ int Clone_Snapshot::extend_and_flush_files(bool flush_redo) {
       return (ER_ERROR_ON_WRITE);
       /* purecov: end */
     }
+  }
+  if (m_file_compress_mode) {
+    file_vector.clear();
   }
   return (0);
 }

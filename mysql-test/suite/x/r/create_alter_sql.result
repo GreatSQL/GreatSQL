@@ -137,7 +137,7 @@ While executing CREATE TABLE t1 ( col1 INT , col2 DOUBLE(7,4), col3 DECIMAL(7,4)
 Got expected error: Table 't1' already exists (code 1050)
 RUN CREATE TABLE t1 ( col1 INVALID_DATA_TYPE , col2 JSON) 
 While executing CREATE TABLE t1 ( col1 INVALID_DATA_TYPE , col2 JSON) :
-Got expected error: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INVALID_DATA_TYPE , col2 JSON)' at line 1 (code 1064)
+Got expected error: TYPE INVALID_DATA_TYPE does not exist (code 1305)
 RUN CREATE TABLE t1_ ( col1 INT NULL PRIMARY KEY , col2 JSON) 
 While executing CREATE TABLE t1_ ( col1 INT NULL PRIMARY KEY , col2 JSON) :
 Got expected error: All parts of a PRIMARY KEY must be NOT NULL; if you need NULL in a key, use UNIQUE instead (code 1171)

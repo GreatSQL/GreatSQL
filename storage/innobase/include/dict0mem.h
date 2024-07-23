@@ -2,6 +2,7 @@
 
 Copyright (c) 1996, 2022, Oracle and/or its affiliates.
 Copyright (c) 2012, Facebook Inc.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -1088,6 +1089,9 @@ struct dict_index_t {
 
   /** if true, SQL NULL == SQL NULL */
   unsigned nulls_equal : 1;
+
+  /** if true, from oracle mode */
+  unsigned ora_mode : 1;
 
   /** if true, then disable AHI. Currently limited to intrinsic temporary table
   and SDI table as index id is not unique for such table which is one of the

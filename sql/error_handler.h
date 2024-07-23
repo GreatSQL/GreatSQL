@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -257,6 +258,22 @@ class Ignore_error_handler : public Internal_error_handler {
   bool handle_condition(THD *thd, uint sql_errno, const char *sqlstate,
                         Sql_condition::enum_severity_level *level,
                         const char *msg) override;
+};
+
+/**
+  This internal handler implements downgrade from SL_ERROR to SL_WARNING
+  for statements which support lock table force view failure IGNORE.
+*/
+
+class Lock_table_ignore_error_handler : public Internal_error_handler {
+ private:
+  bool ignore_error{false};
+
+ public:
+  bool handle_condition(THD *thd, uint sql_errno, const char *sqlstate,
+                        Sql_condition::enum_severity_level *level,
+                        const char *msg) override;
+  bool get_ignore_error() const { return ignore_error; }
 };
 
 /**

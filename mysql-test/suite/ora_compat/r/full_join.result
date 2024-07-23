@@ -54,21 +54,21 @@ EXPLAIN
   "query_block": {
     "select_id": 1,
     "cost_info": {
-      "query_cost": "1.30"
+      "query_cost": "#"
     },
     "nested_loop": [
       {
         "table": {
           "table_name": "t1",
           "access_type": "ALL",
-          "rows_examined_per_scan": 2,
-          "rows_produced_per_join": 2,
+          "rows_examined_per_scan": "#",
+          "rows_produced_per_join": "#",
           "filtered": "100.00",
           "cost_info": {
-            "read_cost": "0.25",
-            "eval_cost": "0.20",
-            "prefix_cost": "0.45",
-            "data_read_per_join": "96"
+            "read_cost": "#",
+            "eval_cost": "#",
+            "prefix_cost": "#",
+            "data_read_per_join": "#"
           },
           "used_columns": [
             "c1",
@@ -80,15 +80,15 @@ EXPLAIN
         "table": {
           "table_name": "t2",
           "access_type": "ALL",
-          "rows_examined_per_scan": 3,
-          "rows_produced_per_join": 6,
+          "rows_examined_per_scan": "#",
+          "rows_produced_per_join": "#",
           "filtered": "100.00",
           "using_join_buffer": "hash join",
           "cost_info": {
-            "read_cost": "0.25",
-            "eval_cost": "0.60",
-            "prefix_cost": "1.30",
-            "data_read_per_join": "288"
+            "read_cost": "#",
+            "eval_cost": "#",
+            "prefix_cost": "#",
+            "data_read_per_join": "#"
           },
           "used_columns": [
             "c1",
@@ -377,9 +377,13 @@ insert into t5 values (11,4);
 insert into t6 values (2, 3);
 create algorithm=merge view v2a as
 select t1.c, t1.b, t2.a from t1 full join (t2 full join t4 on b + 1 = y) on t1.c = t4.c;
+Warnings:
+Warning	1354	View merge algorithm can't be used here for now (assumed undefined algorithm)
 create algorithm=merge view v2b as
 select t1.c as b, t1.b as a, t2.a as c
 from t1 join (t2 full join t4 on b + 1 = y) on t1.c = t4.c;
+Warnings:
+Warning	1354	View merge algorithm can't be used here for now (assumed undefined algorithm)
 select * from v2a;
 c	b	a
 10	1	NULL
@@ -388,6 +392,19 @@ c	b	a
 3	2	2
 3	2	NULL
 select * from v2b;
+b	a	c
+3	1	2
+3	1	NULL
+3	2	2
+3	2	NULL
+select t1.c, t1.b, t2.a from t1 full join (t2 full join t4 on b + 1 = y) on t1.c = t4.c;
+c	b	a
+10	1	NULL
+3	1	2
+3	1	NULL
+3	2	2
+3	2	NULL
+select t1.c as b, t1.b as a, t2.a as c from t1 join (t2 full join t4 on b + 1 = y) on t1.c = t4.c;
 b	a	c
 3	1	2
 3	1	NULL
@@ -552,18 +569,21 @@ test.t2	analyze	status	OK
 CREATE VIEW v_foj AS SELECT t2.* FROM t1 full join t2 on t1.c1=t2.pk;
 EXPLAIN FORMAT=TREE SELECT * FROM v_foj;
 EXPLAIN
--> Full hash join (t2.pk = t1.c1)  (cost=* rows=*)
-    -> Table scan on t1  (cost=* rows=*)
-    -> Hash
-        -> Table scan on t2  (cost=* rows=*)
+-> Table scan on v_foj  (cost=3.08..4.77 rows=3)
+    -> Materialize  (cost=2.23..2.23 rows=3)
+        -> Full hash join (t1.c1 = t2.pk)  (cost=* rows=*)
+            -> Table scan on t1  (cost=* rows=*)
+            -> Hash
+                -> Table scan on t2  (cost=* rows=*)
 
 EXPLAIN SELECT * FROM v_foj join t1 on v_foj.pk = t1.c1 WHERE v_foj.pk = t1.c1 AND v_foj.pk >= 2;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
-1	SIMPLE	t2	NULL	ALL	PRIMARY	NULL	NULL	NULL	3	33.33	Using where; Using join buffer (hash join)
-1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	33.33	Using where; Using join buffer (hash join)
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using where
+1	PRIMARY	<derived2>	NULL	ref	<auto_key0>	<auto_key0>	5	test.t1.c1	2	100.00	NULL
+2	DERIVED	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	NULL
+2	DERIVED	t2	NULL	ALL	PRIMARY	NULL	NULL	NULL	3	33.33	Using where; Using join buffer (hash join)
 Warnings:
-Note	1003	/* select#1 */ select "test"."t2"."pk" AS "pk","test"."t2"."c1" AS "c1","test"."t1"."c1" AS "c1" from "test"."t1" full join "test"."t2" on(("test"."t2"."pk" = "test"."t1"."c1")) join "test"."t1" where (("test"."t1"."c1" = "test"."t2"."pk") and ("test"."t2"."pk" >= 2))
+Note	1003	/* select#1 */ select "test"."v_foj"."pk" AS "pk","test"."v_foj"."c1" AS "c1","test"."t1"."c1" AS "c1" from "test"."v_foj" join "test"."t1" where (("test"."v_foj"."pk" = "test"."t1"."c1") and ("test"."t1"."c1" >= 2))
 SELECT * FROM v_foj join t1 on v_foj.pk = t1.c1 WHERE v_foj.pk = t1.c1 AND v_foj.pk >= 2;
 pk	c1	c1
 2	6	2
@@ -712,14 +732,14 @@ FULL JOIN t2
 ON t1.c1=t2.c1
 WHERE t1.c1 IS NOT NULL;
 EXPLAIN
--> Filter: (t1.c1 is not null)  (cost=0.75 rows=2)
-    -> Full hash join (t1.c1 = t2.c1)  (cost=0.75 rows=2)
+-> Filter: (t1.c1 is not null)  (cost=* rows=*)
+    -> Full hash join (t1.c1 = t2.c1)  (cost=* rows=*)
         -> Table scan on t1  (cost=2.38..3.21 rows=2)
             -> Materialize  (cost=0.70..0.70 rows=2)
-                -> Filter: (t1.c1 in (146,150,151))  (cost=0.55 rows=2)
-                    -> Table scan on t1  (cost=0.55 rows=3)
+                -> Filter: (t1.c1 in (146,150,151))  (cost=* rows=*)
+                    -> Table scan on t1  (cost=* rows=*)
         -> Hash
-            -> Table scan on t2  (cost=0.35 rows=1)
+            -> Table scan on t2  (cost=* rows=*)
 
 SELECT * FROM (SELECT * FROM t1 WHERE c1 IN (146,150,151)) t1
 FULL JOIN t2
@@ -735,14 +755,14 @@ FULL JOIN t2
 ON t1.c1=t2.c1
 WHERE t1.c1 IS NOT NULL;
 EXPLAIN
--> Filter: (t1.c1 is not null)  (cost=0.73 rows=3)
-    -> Full hash join (t1.c1 = t2.c1)  (cost=0.73 rows=3)
+-> Filter: (t1.c1 is not null)  (cost=* rows=*)
+    -> Full hash join (t1.c1 = t2.c1)  (cost=* rows=*)
         -> Table scan on t1  (cost=1.70..3.39 rows=3)
             -> Materialize  (cost=0.85..0.85 rows=3)
-                -> Filter: (t1.c1 in (146,150,151))  (cost=0.55 rows=3)
-                    -> Table scan on t1  (cost=0.55 rows=3)
+                -> Filter: (t1.c1 in (146,150,151))  (cost=* rows=*)
+                    -> Table scan on t1  (cost=* rows=*)
         -> Hash
-            -> Table scan on t2  (cost=0.18 rows=1)
+            -> Table scan on t2  (cost=* rows=*)
 
 SELECT * FROM (SELECT * FROM t1 WHERE c1 IN (146,150,151)) t1
 FULL JOIN t2
@@ -799,3 +819,9 @@ NULL	NULL	20130121
 NULL	NULL	20150921
 NULL	NULL	20160901
 DROP TABLE employees;
+select STATEMENT_DIGEST_TEXT('SELECT * FROM t1 full join t2 on true');
+STATEMENT_DIGEST_TEXT('SELECT * FROM t1 full join t2 on true')
+SELECT * FROM `t1` FULL JOIN `t2` ON TRUE
+select STATEMENT_DIGEST_TEXT('SELECT * FROM t1 full outer join t2 on true');
+STATEMENT_DIGEST_TEXT('SELECT * FROM t1 full outer join t2 on true')
+SELECT * FROM `t1` FULL OUTER JOIN `t2` ON TRUE

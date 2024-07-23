@@ -18,16 +18,12 @@ SET GLOBAL audit_log_include_databases='mysql';
 # restart: --audit_log_exclude_accounts=user@localhost --audit_log_include_accounts=user@localhost
 SHOW VARIABLES LIKE 'audit_log%';
 Variable_name	Value
-audit_log_max_rows	2147483647
 # restart: --audit_log_exclude_commands=delete --audit_log_include_commands=delete
 SHOW VARIABLES LIKE 'audit_log%';
 Variable_name	Value
-audit_log_max_rows	2147483647
 # restart: --audit_log_exclude_databases=test --audit_log_include_databases=test
 SHOW VARIABLES LIKE 'audit_log%';
 Variable_name	Value
-audit_log_max_rows	2147483647
 # restart: --audit_log_exclude_accounts=user@localhost --audit_log_file=./directory/file
 SHOW VARIABLES LIKE 'audit_log%';
 Variable_name	Value
-audit_log_max_rows	2147483647

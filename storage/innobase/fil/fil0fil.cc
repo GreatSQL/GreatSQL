@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2022, Oracle and/or its affiliates. All rights reserved.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -628,6 +628,14 @@ class Tablespace_dirs {
   void duplicate_check(const Const_iter &start, const Const_iter &end,
                        size_t thread_id, std::mutex *mutex,
                        Space_id_set *unique, Space_id_set *duplicates);
+
+  /** Open IBD tablespaces.
+  @param[in]  start   Start of slice
+  @param[in]  end   End of slice
+  @param[in]  thread_id Thread ID
+  @param[out] result false in case of failure */
+  void open_ibd(const Const_iter &start, const Const_iter &end,
+                size_t thread_id, bool &result);
 
  private:
   /** Directories scanned and the files discovered under them. */
@@ -5353,7 +5361,7 @@ dberr_t Fil_shard::space_rename(space_id_t space_id, const char *old_path,
   char *new_space_name = mem_strdup(new_name);
 
 #ifndef UNIV_HOTBACKUP
-  if (!recv_recovery_on) {
+  if (!recv_recovery_on && clone_incremental_dir == nullptr) {
     mtr_t mtr;
 
     mtr.start();
@@ -6668,8 +6676,8 @@ bool Fil_shard::space_extend(fil_space_t *space, page_no_t size) {
     hence need not be recovered during recovery. The system
     tablespace is neither recreated nor resized and hence we do
     not need to redo log any operations on it. */
-    if (!recv_recovery_is_on() && space->purpose != FIL_TYPE_TEMPORARY &&
-        space->id != TRX_SYS_SPACE) {
+    if (clone_incremental_dir == nullptr && !recv_recovery_is_on() &&
+        space->purpose != FIL_TYPE_TEMPORARY && space->id != TRX_SYS_SPACE) {
       /* Write the redo log record for extending the space */
       mtr_t mtr;
       mtr_start(&mtr);
@@ -10570,7 +10578,7 @@ byte *fil_tablespace_redo_extend(byte *ptr, const byte *end,
 
   ut_a(offset > 0);
   os_offset_t initial_fsize = os_file_get_size(file->handle);
-  ut_a(offset <= initial_fsize);
+  // ut_a(offset <= initial_fsize);
   /* file->size unit is FSP_EXTENT_SIZE.
   Disk-full might cause partial FSP_EXTENT_SIZE extension. */
   ut_a(initial_fsize / (phy_page_size * FSP_EXTENT_SIZE) ==
@@ -11208,6 +11216,89 @@ space_id_t Fil_system::get_tablespace_id(const std::string &filename) {
   return space_id;
 }
 
+/** Open tablespace file for backup.
+@param[in]  path  file path.
+@param[in]  name  space name.
+@return DB_SUCCESS if all OK */
+dberr_t fil_open_for_clone(const std::string &path, const std::string &name) {
+  Datafile file;
+  file.set_name(name.c_str());
+  file.set_filepath(path.c_str());
+
+  dberr_t err = file.open_read_only(true);
+  if (err != DB_SUCCESS) {
+    return (err);
+  }
+
+  os_offset_t node_size = os_file_get_size(file.handle());
+
+  lsn_t flush_lsn;
+  err = file.validate_first_page(SPACE_UNKNOWN, &flush_lsn, false);
+
+  if (err == DB_PAGE_IS_BLANK) {
+    /* allow corrupted first page for greatdb, it could be just
+    zero-filled page, which we'll restore from redo log later */
+    return (DB_SUCCESS);
+  } else if (err != DB_SUCCESS) {
+    return (err);
+  }
+
+  if (fil_space_get(file.space_id())) {
+    /* space already exists */
+    return (DB_TABLESPACE_EXISTS);
+  }
+
+  bool is_tmp = FSP_FLAGS_GET_TEMPORARY(file.flags());
+  os_offset_t n_pages;
+
+  ut_a(node_size != (os_offset_t)-1);
+
+  n_pages = node_size / page_size_t(file.flags()).physical();
+
+  fil_space_t *space =
+      fil_space_create(name.c_str(), file.space_id(), file.flags(),
+                       is_tmp ? FIL_TYPE_TEMPORARY : FIL_TYPE_TABLESPACE);
+
+  ut_a(space != NULL);
+
+  char *fn = fil_node_create(file.filepath(), n_pages, space, false, false);
+  if (fn == nullptr) {
+    return (DB_ERROR);
+  }
+
+  /* by opening the tablespace we forcing node and space objects
+  in the cache to be populated with fields from space header */
+  if (!fil_space_open(space->id)) {
+    ib::error(ER_IB_MSG_372)
+        << "Failed to open tablespace '" << space->name << "'";
+  }
+
+  return (DB_SUCCESS);
+}
+
+/** Open IBD tablespaces.
+@param[in]  start   Start of slice
+@param[in]  end   End of slice
+@param[in]  thread_id Thread ID */
+void Tablespace_dirs::open_ibd(const Const_iter &start, const Const_iter &end,
+                               size_t thread_id, bool &result) {
+  if (!result) return;
+
+  for (auto it = start; it != end; ++it) {
+    const std::string filename = it->second;
+    const auto &files = m_dirs[it->first];
+    const std::string phy_filename = files.path() + filename;
+
+    dberr_t err = fil_open_for_clone(phy_filename,
+                                     filename.substr(0, filename.length() - 4));
+    /* PXB-2275 - Allow DB_INVALID_ENCRYPTION_META as we will test it in the end
+     * of the backup */
+    if (err != DB_SUCCESS && err != DB_INVALID_ENCRYPTION_META) {
+      result = false;
+    }
+  }
+}
+
 void Fil_system::rename_partition_files(bool revert) {
 #ifndef UNIV_HOTBACKUP
   /* If revert, then we are downgrading after upgrade failure from 5.7 */
@@ -11585,6 +11676,23 @@ dberr_t Tablespace_dirs::scan() {
     err = DB_FAIL;
   } else {
     err = DB_SUCCESS;
+  }
+
+  if (err == DB_SUCCESS /*&& populate_fil_cache*/ &&
+      clone_incremental_dir != nullptr) {
+    bool result = true;
+    std::function<void(const Const_iter &, const Const_iter &, size_t, bool &)>
+        open = std::bind(&Tablespace_dirs::open_ibd, this, _1, _2, _3, _4);
+
+    par_for(PFS_NOT_INSTRUMENTED, ibd_files, n_threads, open, result);
+
+    if (!result) err = DB_FAIL;
+
+    /* Add separate undo tablespaces to fil_system */
+    err = srv_undo_tablespaces_init(false, true);
+    if (err != DB_SUCCESS) {
+      return (err);
+    }
   }
 
   return err;

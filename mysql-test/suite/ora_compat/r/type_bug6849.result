@@ -102,14 +102,108 @@ end;
 $$
 call p2();
 Pos	Instruction
-0	set stu_record.id@0[0] 1
-1	set stu_record.name_d@0[1] "test"."f1"(1)
-2	set stu_record.score@0[2] "test"."f1"(2)
-3	set stu_record_val@1 stu_record@0
-4	set stu_record_val.id@1[id] 10
-5	stmt "select stu_record_val"
+0	setup_row_field stu_record@0
+1	set stu_record.id@0[0] 1
+2	set stu_record.name_d@0[1] "test"."f1"(1)
+3	set stu_record.score@0[2] "test"."f1"(2)
+4	setup_row_field stu_record_val@1
+5	set stu_record_val@1 stu_record@0
+6	set stu_record_val.id@1[id] 10
+7	stmt "select stu_record_val"
 stu_record_val
 id:10 | name_d:1y | score:2y
 drop PROCEDURE p2;
 drop database db1;
 drop function f1;
+#
+# test of bug9509
+#
+create or replace type t_air as object(id int,type varchar(20));
+create table tt_air(id int,name1 t_air);
+insert into tt_air values(1,t_air(10,'aabb'));
+insert into tt_air values(2,t_air(20,'qwed'));
+select * from (select t_air(null,null)=t_air(null,null));
+t_air(null,null)=t_air(null,null)
+1
+insert into tt_air values (1,t_air(1,1)=t_air(1,1));
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+insert into tt_air(name1) values (t_air(1,1)=t_air(1,1));
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+insert into tt_air(name1) select t_air(1,1)=t_air(1,1);
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+insert into tt_air(id) select t_air(1,1);
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+insert into tt_air(id) select t_air(1,1)=t_air(1,1);
+table tt_air;
+id	name1
+1	id:10 | type:aabb
+2	id:20 | type:qwed
+1	NULL
+SELECT * from tt_air where lnnvl(name1)+lnnvl(name1);
+id	name1
+create table aas as select t_air(1,1)=t_air(1,1);
+table aas;
+t_air(1,1)=t_air(1,1)
+1
+drop table aas;
+create table table_of of t_air ENGINE=innodb DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+insert into table_of select t_air(10,'05');
+insert into table_of select t_air(100,'asdf');
+insert into table_of select t_air(100,'asdf')=t_air(1,1);
+ERROR 21S01: Column count doesn't match value count at row 1
+drop table table_of;
+#
+# test of bug9503
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist:=tklist(1,2,3,4);
+begin
+select stu_record_val(1) bulk collect into stu_record_val from sequence_table(2) a;
+for i in stu_record_val.first .. stu_record_val.last loop
+select stu_record_val(i);
+end loop;
+end;
+$$
+call p1;
+stu_record_val(i)
+1
+stu_record_val(i)
+1
+call p1;
+stu_record_val(i)
+1
+stu_record_val(i)
+1
+drop PROCEDURE p1;
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist:=tklist(1,2,3,4);
+begin
+stu_record_val := tklist(stu_record_val(1),stu_record_val(2),30,40);
+for i in stu_record_val.first .. stu_record_val.last loop
+select stu_record_val(i);
+end loop;
+end;
+$$
+call p1;
+stu_record_val(i)
+1
+stu_record_val(i)
+2
+stu_record_val(i)
+30
+stu_record_val(i)
+40
+call p1;
+stu_record_val(i)
+1
+stu_record_val(i)
+2
+stu_record_val(i)
+30
+stu_record_val(i)
+40
+drop PROCEDURE p1;
+drop table tt_air;
+drop type t_air;

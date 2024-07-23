@@ -1,5 +1,5 @@
 /* Copyright (c) 2021, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -340,8 +340,7 @@ static void dumpAccessPath(int level, AccessPath *p, std::ostringstream &buf) {
         p = p->temptable_aggregate().subquery_path;
         break;
       case AccessPath::CONNECT_BY_SCAN:
-        str.append("AccessPath::CONNECT_BY ");
-        str.append(p->connect_by_scan().table->alias);
+        str.append("AccessPath::CONNECT_BY");
         p = p->connect_by_scan().src_path;
         break;
       case AccessPath::STREAM:

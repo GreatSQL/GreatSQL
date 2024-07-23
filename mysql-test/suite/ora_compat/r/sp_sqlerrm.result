@@ -1,0 +1,50 @@
+set sql_mode=oracle;
+[# bugfix 7448:http://zbox.greatdb.com/zentao/bug-view-9027.html]
+select sqlerrm(1023);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+select sqlerrm;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use
+SET serveroutput=1;
+[# bugfix 7448:http://zbox.greatdb.com/zentao/bug-view-9027.html]
+CREATE OR REPLACE PROCEDURE p1()
+as
+v_err_msg VARCHAR2(4000);
+BEGIN
+SELECT * FROM t1;
+EXCEPTION
+WHEN OTHERS THEN
+v_err_msg := SQLERRM;
+SELECT 'Error: ' || v_err_msg;
+END;
+//
+CALL p1;
+'Error: ' || v_err_msg
+Error: 1146 : Table 'test.t1' doesn't exist
+drop procedure p1;
+begin
+select * from t1;
+exception
+when others then
+select 'errcode:' || sqlcode ||' msg:' || sqlerrm as res;
+end;
+//
+res
+errcode:1146 msg:1146 : Table 'test.t1' doesn't exist
+begin
+select * from t1;
+exception
+when others then
+select ' msg:' || sqlerrm(sqlcode) as res;
+end;
+//
+res
+ msg:1146 : Table 'test.t1' doesn't exist
+begin
+select vv  from t2;
+exception
+when others then
+select 'errcode:' || sqlcode ||' msg:' || sqlerrm(1054) as res;
+end;
+//
+res
+errcode:1146 msg:1054 : Unknown column '%-.192s' in '%-.192s'

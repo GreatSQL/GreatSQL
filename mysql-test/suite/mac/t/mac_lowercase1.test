@@ -1,0 +1,92 @@
+# test with lower_case_table_names=1
+
+--source include/have_lowercase1.inc
+
+--source ../include/mac_row_policy_create.inc
+
+connect (master,localhost,root,,);
+--connection master
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+
+create database db;
+use db;
+create table t1(C1 int primary key, c2 int);
+insert into t1 values(1, 1),(2, 2),(3, 3),(4, 4);
+--echo ##########################test database#############################
+
+call sys_mac.mac_apply_database_policy('DB','P1', 'L3:C3:G1');
+
+--error ER_DATABASEMAC_DEINED_ERROR
+select * from db.t1;
+
+--error ER_DATABASEMAC_DEINED_ERROR
+select * from db.T1;
+
+--error ER_DATABASEMAC_DEINED_ERROR
+select * from DB.t1;
+
+--error ER_DATABASEMAC_DEINED_ERROR
+select * from DB.T1;
+
+call sys_mac.mac_drop_database_policy('db', 'P1');
+
+select * from db.t1;
+select * from DB.T1;
+
+
+--echo ##########################test table#############################
+
+call sys_mac.mac_apply_table_policy('db', 'T1', 'P1', 'L3:C3:G1');
+
+--error ER_TABLEMAC_DEINED_ERROR
+select * from db.T1;
+
+--error ER_TABLEMAC_DEINED_ERROR
+select * from DB.t1;
+
+call sys_mac.mac_drop_table_policy('DB', 't1', 'P1');
+
+select * from db.t1;
+
+--echo ##########################test column#############################
+
+call sys_mac.mac_apply_column_policy('DB', 'T1', 'c1', 'P1', 'L3:C3:G1');
+
+--error ER_COLUMNMAC_DEINED_ERROR
+select * from db.t1;
+
+--error ER_COLUMNMAC_DEINED_ERROR
+select C1 from db.t1;
+
+--error ER_COLUMNMAC_DEINED_ERROR
+select * from DB.t1;
+
+--error ER_COLUMNMAC_DEINED_ERROR
+select c1 from DB.t1;
+
+call sys_mac.mac_drop_column_policy('db', 't1', 'C1', 'P1');
+
+select * from db.t1;
+select * from DB.t1; 
+
+--echo ##########################test row#############################
+
+
+call sys_mac.mac_apply_row_policy('db', 'T1', 'P1', 'L3:C3:G1', 0);
+
+select * from db.t1;
+select * from db.T1;
+select * from DB.t1;
+select * from DB.T1;
+
+call sys_mac.mac_drop_row_policy('db', 'T1', 'P1');
+
+drop database db;
+
+--source ../include/mac_destory.inc
+disconnect master;
+

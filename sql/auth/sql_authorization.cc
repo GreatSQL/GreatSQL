@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -557,7 +557,8 @@ static bool mysql_table_revoke_cascade(THD *thd, Table_ref *table_list,
                                        List<LEX_COLUMN> &columns, ulong rights);
 
 static bool mysql_routine_revoke_cascade(THD *thd, Table_ref *priv_tables,
-                                         Table_ref *table_list, bool is_proc,
+                                         Table_ref *table_list,
+                                         enum_sp_type sp_type,
                                          List<LEX_USER> &user_list,
                                          ulong rights, bool write_to_binlog);
 
@@ -3180,7 +3181,7 @@ bool mysql_routine_grant(THD *thd, Table_ref *table_list, enum_sp_type sp_type,
     thd->mem_root = old_root;
 #ifdef CASCADE_REVOKE
     if (revoke_grant && !result &&
-        (result = mysql_routine_revoke_cascade(thd, tables, table_list, is_proc,
+        (result = mysql_routine_revoke_cascade(thd, tables, table_list, sp_type,
                                                user_list, rights,
                                                write_to_binlog)) &&
         !thd->is_error())
@@ -8092,7 +8093,8 @@ static bool mysql_revoke_table_priv(THD *thd, Table_ref *table_list,
 }
 
 static bool mysql_revoke_rountine_priv(THD *thd, Table_ref *priv_tables,
-                                       Table_ref *table_list, bool is_proc,
+                                       Table_ref *table_list,
+                                       enum_sp_type sp_type,
                                        List<LEX_USER> &user_list, ulong rights,
                                        bool write_to_binlog) {
   List_iterator<LEX_USER> str_list(user_list);
@@ -8140,11 +8142,11 @@ static bool mysql_revoke_rountine_priv(THD *thd, Table_ref *priv_tables,
       table_name = table_list->table_name;
       grant_name =
           routine_hash_search(Str->host.str, NullS, db_name, Str->user.str,
-                              table_name, is_proc, true);
+                              table_name, sp_type, true);
       if (!grant_name) continue;
 
       if ((error = replace_routine_table(thd, grant_name, priv_tables[4].table,
-                                         *Str, db_name, table_name, is_proc,
+                                         *Str, db_name, table_name, sp_type,
                                          rights, true))) {
         result = true;  // Remember error
         if (error < 0) break;
@@ -8400,14 +8402,15 @@ static bool mysql_table_revoke_cascade(THD *thd, Table_ref *table_list,
 }
 
 static bool mysql_routine_revoke_cascade(THD *thd, Table_ref *priv_tables,
-                                         Table_ref *table_list, bool is_proc,
+                                         Table_ref *table_list,
+                                         enum_sp_type sp_type,
                                          List<LEX_USER> &user_list,
                                          ulong rights, bool write_to_binlog) {
   List<LEX_USER> grantee_list;
   /*get all grantee*/
   get_all_grantee_user_list(thd, user_list, grantee_list);
   if (rights & PROC_ACLS)
-    return mysql_revoke_rountine_priv(thd, priv_tables, table_list, is_proc,
+    return mysql_revoke_rountine_priv(thd, priv_tables, table_list, sp_type,
                                       grantee_list, rights,
                                       write_to_binlog & PROC_ACLS);
   return false;

@@ -35,7 +35,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 # Shutdown daemon
 # Wait until daemon is gone

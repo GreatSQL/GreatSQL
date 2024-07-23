@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, GreatDB Software Co., Ltd. All rights
+/* Copyright (c) 2023, 2024, GreatDB Software Co., Ltd. All rights
    reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -186,6 +186,14 @@ std::string calc_seq_key(const char *db_name, const char *seq_name);
 /* used for parser, check whether a Item_field refers to a sequence.
    @return  metadata version */
 uint64_t has_sequence_def(THD *thd, const char *db, const char *seq_name);
+
+/*
+  used for parser, check whether a Item_field refers to a sequence.
+  @return   Gdb_sequence_entity*
+*/
+std::shared_ptr<Gdb_sequence_entity> find_sequence_def(THD *thd, const char *db,
+                                                       const char *seq_name);
+
 /* acquire MDL lock on sequence, called in "setup_sequence_func()" */
 bool lock_sequence(THD *thd, const char *db, const char *name, bool ddl);
 std::shared_ptr<Gdb_sequence_entity> get_sequence_def(const char *db,

@@ -1,5 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -4390,8 +4390,8 @@ string PrintAccessPath(const AccessPath &path, const JoinHypergraph &graph,
     case AccessPath::UPDATE_ROWS:
       str += "UPDATE_ROWS";
       break;
-    case AccessPath::ROWNUM_FILTER:
-      str += "ROWNUM_FILTER";
+    case AccessPath::COUNTER:
+      str += "COUNT";
       break;
     case AccessPath::CONNECT_BY_SCAN:
       str += "CONNECT BY";

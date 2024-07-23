@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -137,7 +137,6 @@ bool DeleteCurrentRowAndProcessTriggers(THD *thd, TABLE *table,
   }
 
   ++*deleted_rows;
-  thd->lex->query_block->reset_rownum_read_flag();
 
   if (invoke_after_triggers) {
     if (table->triggers->process_triggers(thd, TRG_EVENT_DELETE,
@@ -531,6 +530,9 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
       if (conds != nullptr) {
         path = NewFilterAccessPath(thd, path, conds);
       }
+      if (query_block->counter) {
+        path = NewCounterAccessPath(thd, path, query_block->counter);
+      }
 
       fsort.reset(new (thd->mem_root) Filesort(
           thd, {table}, /*keep_buffers=*/false, order, HA_POS_ERROR,
@@ -552,6 +554,10 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
       */
       conds = nullptr;
     } else {
+      if (query_block->counter) {
+        path = NewCounterAccessPath(thd, path, query_block->counter);
+      }
+
       iterator = CreateIteratorFromAccessPath(thd, path, &join,
                                               /*eligible_for_batch_mode=*/true);
       // Prevent cleanup in JOIN::destroy() and in the cleanup condition guard,

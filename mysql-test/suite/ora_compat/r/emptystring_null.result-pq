@@ -4817,6 +4817,7 @@ INSERT INTO t_bug9197 VALUES (1, '', '', '', 'empty string');
 INSERT INTO t_bug9197 VALUES (-1, NULL, NULL, NULL, 'null');
 INSERT INTO t_bug9197 VALUES (2, '', '', '', 'empty string 2');
 INSERT INTO t_bug9197 VALUES (-2, NULL, NULL, NULL, 'null 2');
+insert into t_bug9197 values (3, '22', '22', '22', '22');
 set sql_mode=emptystring_equal_null;
 select * from t_bug9197 where c2 is null;
 i1	c2	c3	c4	descr
@@ -4842,6 +4843,362 @@ i1	c2	c3	c4	descr
 2	NULL	NULL	NULL	empty string 2
 -1	NULL	NULL	NULL	null
 -2	NULL	NULL	NULL	null 2
+bug
+select * from t_bug9197 where c2 = '';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c2 >= '';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c2 <= '';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c2 = '\0';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c2 >= '\0';
+i1	c2	c3	c4	descr
+3	22	22	22	22
+select * from t_bug9197 where c2 <= '\0';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c2 != '\0';
+i1	c2	c3	c4	descr
+3	22	22	22	22
+select * from t_bug9197 where c2 != '0';
+i1	c2	c3	c4	descr
+3	22	22	22	22
+select * from t_bug9197 where c2 is null or (c2 >='' and c2 <= 'aa');
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+select * from t_bug9197 where c2 is null or c2 = '22';
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+3	22	22	22	22
+select * from t_bug9197 where c2 is null or (c2 >='' or c2 >= '22');
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+3	22	22	22	22
+select * from t_bug9197 where c2 >='' or c2 >= '22';
+i1	c2	c3	c4	descr
+3	22	22	22	22
+select * from t_bug9197 where c2 >='' or c2 <= '22';
+i1	c2	c3	c4	descr
+3	22	22	22	22
+select * from t_bug9197 where c3 = '';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c3 >= '';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c3 <= '';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c3 = '\0';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c3 >= '\0';
+i1	c2	c3	c4	descr
+3	22	22	22	22
+select * from t_bug9197 where c3 <= '\0';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c3 != '\0';
+i1	c2	c3	c4	descr
+3	22	22	22	22
+select * from t_bug9197 where c3 != '0';
+i1	c2	c3	c4	descr
+3	22	22	22	22
+select * from t_bug9197 where c3 is null or (c3 >='' and c3 <= 'aa');
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+select * from t_bug9197 where c3 is null or c3 = '22';
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+3	22	22	22	22
+select * from t_bug9197 where c3 is null or (c3 >='' or c3 >= '22');
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+3	22	22	22	22
+select * from t_bug9197 where c3 >='' or c3 >= '22';
+i1	c2	c3	c4	descr
+3	22	22	22	22
+select * from t_bug9197 where c3 >='' or c3 <= '22';
+i1	c2	c3	c4	descr
+3	22	22	22	22
+select * from t_bug9197 where c3 ='\0' or c3 is null or c2 = '22';
+i1	c2	c3	c4	descr
+1	NULL	NULL	NULL	empty string
+-1	NULL	NULL	NULL	null
+2	NULL	NULL	NULL	empty string 2
+-2	NULL	NULL	NULL	null 2
+3	22	22	22	22
+select * from t_bug9197 where c2 is null or c2='22';
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+3	22	22	22	22
+select * from t_bug9197 where c3 is null or c3='22';
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+3	22	22	22	22
+select * from t_bug9197 where c2 is null or c3='22';
+i1	c2	c3	c4	descr
+1	NULL	NULL	NULL	empty string
+-1	NULL	NULL	NULL	null
+2	NULL	NULL	NULL	empty string 2
+-2	NULL	NULL	NULL	null 2
+3	22	22	22	22
+select * from t_bug9197 where c3 is null or c2='22';
+i1	c2	c3	c4	descr
+1	NULL	NULL	NULL	empty string
+-1	NULL	NULL	NULL	null
+2	NULL	NULL	NULL	empty string 2
+-2	NULL	NULL	NULL	null 2
+3	22	22	22	22
+select /*+ no_index(a) */ * from t_bug9197 a where c2 is null or c2='22';
+i1	c2	c3	c4	descr
+1	NULL	NULL	NULL	empty string
+-1	NULL	NULL	NULL	null
+2	NULL	NULL	NULL	empty string 2
+-2	NULL	NULL	NULL	null 2
+3	22	22	22	22
+select /*+ no_index(a) */ * from t_bug9197 a where c3 is null or c3='22';
+i1	c2	c3	c4	descr
+1	NULL	NULL	NULL	empty string
+-1	NULL	NULL	NULL	null
+2	NULL	NULL	NULL	empty string 2
+-2	NULL	NULL	NULL	null 2
+3	22	22	22	22
+select /*+ no_index(a) */ * from t_bug9197 a where c2 is null or c3='22';
+i1	c2	c3	c4	descr
+1	NULL	NULL	NULL	empty string
+-1	NULL	NULL	NULL	null
+2	NULL	NULL	NULL	empty string 2
+-2	NULL	NULL	NULL	null 2
+3	22	22	22	22
+select /*+ no_index(a) */ * from t_bug9197 a where c3 is null or c2='22';
+i1	c2	c3	c4	descr
+1	NULL	NULL	NULL	empty string
+-1	NULL	NULL	NULL	null
+2	NULL	NULL	NULL	empty string 2
+-2	NULL	NULL	NULL	null 2
+3	22	22	22	22
+select * from t_bug9197 where c2 is null or c2='22' intersect select * from t_bug9197 where c2 is null or c2='22';
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+3	22	22	22	22
+select * from t_bug9197 where c3 is null or c3='22' intersect select * from t_bug9197 where c3 is null or c3='22';
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+3	22	22	22	22
+select * from t_bug9197 where c2 is null or c2='22' intersect select * from t_bug9197 where c3 is null or c3='22';
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+3	22	22	22	22
+select * from t_bug9197 where c2 is null or c2='22' minus select * from t_bug9197 where c2 is null or c2='22';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c3 is null or c3='22' minus select * from t_bug9197 where c3 is null or c3='22';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c2 is null or c2='22' minus select * from t_bug9197 where c3 is null or c3='22';
+i1	c2	c3	c4	descr
+select * from t_bug9197 where c2 is null or c2='' or c2='22';
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+3	22	22	22	22
+select * from t_bug9197 where c2 is null or c2='\0' or c2='22';
+i1	c2	c3	c4	descr
+-1	NULL	NULL	NULL	null
+-2	NULL	NULL	NULL	null 2
+1	NULL	NULL	NULL	empty string
+2	NULL	NULL	NULL	empty string 2
+3	22	22	22	22
+set sql_mode=default;
+create table t_range (
+pk int primary key,
+c1 varchar(8),
+c2 varchar(8),
+c3 varchar(8),
+key(c1,c2,c3)
+);
+insert into t_range values (11,'','','');
+insert into t_range values (12,'','',NULL);
+insert into t_range values (13,'',NULL,'');
+insert into t_range values (14,'',NULL,NULL);
+insert into t_range values (15,NULL,'','');
+insert into t_range values (16,NULL,'',NULL);
+insert into t_range values (17,NULL,NULL,'');
+insert into t_range values (18,NULL,NULL,NULL);
+insert into t_range values (19,'','aa','');
+insert into t_range values (20,NULL,'aa',NULL);
+insert into t_range values (21,'','bb','');
+insert into t_range values (22,NULL,'bb',NULL);
+set sql_mode=emptystring_equal_null;
+select * from t_range where c1 is null and  (c2 >= 'bb') and c3 is null;
+pk	c1	c2	c3
+22	NULL	bb	NULL
+21	NULL	bb	NULL
+select * from t_range where c1 is null and  (c2 between 'aa' and 'bb') and c3 is null;
+pk	c1	c2	c3
+20	NULL	aa	NULL
+22	NULL	bb	NULL
+19	NULL	aa	NULL
+21	NULL	bb	NULL
+select * from t_range where c1 is null and  (c2 <= 'bb') and c3 is null;
+pk	c1	c2	c3
+20	NULL	aa	NULL
+22	NULL	bb	NULL
+19	NULL	aa	NULL
+21	NULL	bb	NULL
+select * from t_range where c1 is null and  (c2 = 'aa' and c2 <='bb') and c3 is null;
+pk	c1	c2	c3
+20	NULL	aa	NULL
+19	NULL	aa	NULL
+select * from t_range where c1 is null and  (c2 > 'aa' and c2 <='bb') and c3 is null;
+pk	c1	c2	c3
+22	NULL	bb	NULL
+21	NULL	bb	NULL
+select * from t_range where c1 is null and  (c2 in (null,'aa','bb')) and c3 is null;
+pk	c1	c2	c3
+20	NULL	aa	NULL
+22	NULL	bb	NULL
+19	NULL	aa	NULL
+21	NULL	bb	NULL
+select * from t_range where (c1 ='\0' or c1 is null) and (c2 >= 'bb') and (c3 ='\0' or c3 is null) ;
+pk	c1	c2	c3
+22	NULL	bb	NULL
+21	NULL	bb	NULL
+select * from t_range where (c1 ='\0' or c1 is null) and (c2 <= 'bb') and (c3 ='\0' or c3 is null) ;
+pk	c1	c2	c3
+20	NULL	aa	NULL
+22	NULL	bb	NULL
+19	NULL	aa	NULL
+21	NULL	bb	NULL
+set sql_mode='oracle,emptystring_equal_null';
+CREATE GLOBAL TEMPORARY TABLE gt_employee (
+id int PRIMARY KEY AUTO_INCREMENT,
+name VARCHAR(16),
+deptId int,
+i int INVISIBLE,
+`SHAPE` geometry NOT NULL,
+`sidec` INT(11) GENERATED ALWAYS AS (SQRT(((`i` * `deptId`) + (`i` * `deptId`)))) VIRTUAL
+) on commit delete rows ENGINE=innodb AUTO_INCREMENT=10;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+CREATE TABLE employee (
+`id1` geometry NOT NULL,
+`id2` geometry,
+`id3` blob NOT NULL,
+`id4` blob
+);
+CREATE TEMPORARY TABLE t_employee (
+`id1` geometry NOT NULL,
+`id2` geometry,
+`id3` blob NOT NULL,
+`id4` blob
+);
+drop table gt_employee;
+drop table employee;
+drop table t_employee;
+set sql_mode='emptystring_equal_null';
+CREATE TABLE employee (
+`id1` geometry NOT NULL,
+`id2` geometry,
+`id3` blob NOT NULL,
+`id4` blob
+);
+CREATE TEMPORARY TABLE t_employee (
+`id1` geometry NOT NULL,
+`id2` geometry,
+`id3` blob NOT NULL,
+`id4` blob
+);
+drop table employee;
+drop table t_employee;
+CREATE TABLE employee ( `id` geometry NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` blob NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` varchar(32) NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` char(32) NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` set('a', 'b') NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` int NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` enum('N', 'Y') NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` geometry  );
+drop table employee;
+CREATE TABLE employee ( `id` blob  );
+drop table employee;
+CREATE TABLE employee ( `id` varchar(32)  );
+drop table employee;
+CREATE TABLE employee ( `id` char(32)  );
+drop table employee;
+CREATE TABLE employee ( `id` set('a', 'b')  );
+drop table employee;
+CREATE TABLE employee ( `id` int );
+drop table employee;
+CREATE TABLE employee ( `id` enum('N', 'Y') );
+drop table employee;
+set sql_mode=default;
+drop table t1;
+create table t1 (
+pk int primary key,
+c1 varchar(8),
+c2 varchar(8),
+c3 varchar(8),
+key(c1,c2,c3)
+);
+insert into t1 select * from t_range order by pk;
+set sql_mode=emptystring_equal_null;
+select pk,c1,c2,c3 from t1 where c1 is null and  (c2 between 'aa' and 'bb') and c3 is null;
+pk	c1	c2	c3
+20	NULL	aa	NULL
+22	NULL	bb	NULL
+19	NULL	aa	NULL
+21	NULL	bb	NULL
+alter table t1 add column hidden_pk bigint not null unique  auto_increment first;
+select pk,c1,c2,c3,hidden_pk from t1 where c1 is null and  (c2 between 'aa' and 'bb') and c3 is null;
+pk	c1	c2	c3	hidden_pk
+20	NULL	aa	NULL	10
+22	NULL	bb	NULL	12
+19	NULL	aa	NULL	9
+21	NULL	bb	NULL	11
+alter table t1 drop column hidden_pk;
+select pk,c1,c2,c3 from t1 where c1 is null and  (c2 between 'aa' and 'bb') and c3 is null;
+pk	c1	c2	c3
+20	NULL	aa	NULL
+22	NULL	bb	NULL
+19	NULL	aa	NULL
+21	NULL	bb	NULL
 drop procedure if exists test_oracle_cursor_loop;
 drop procedure if exists p2;
 drop function  if exists f1;
@@ -4854,3 +5211,328 @@ drop table t1;
 drop table t2;
 drop table t3;
 drop table t_bug9197;
+###test bug 9699###
+set sql_mode=default;
+CREATE TABLE `t1` (
+`c1` int NOT NULL AUTO_INCREMENT,
+`c2` datetime DEFAULT CURRENT_TIMESTAMP,
+PRIMARY KEY (`c1`)
+);
+CREATE TABLE `t2` (
+`c1` int AUTO_INCREMENT PRIMARY KEY,
+`c2` varchar(100)
+);
+insert into t2 values(1, '2020-01-01 00:00:00'), (2, ''), (3, null),(4, '\0');
+select * from t2 into outfile 'MYSQLTEST_VARDIR/tmp/t1' FIELDS TERMINATED BY ',';
+drop table t2;
+delete from t1;
+set sql_mode=emptystring_equal_null;
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/t1' INTO TABLE t1 FIELDS TERMINATED BY ',';
+Warnings:
+Warning	1265	Data truncated for column 'c2' at row 4
+set sql_mode=default;
+select * from t1;
+c1	c2
+1	2020-01-01 00:00:00
+2	NULL
+3	NULL
+4	0000-00-00 00:00:00
+delete from t1;
+alter table t1 add column c3 varchar(100);
+[test set = '']
+set sql_mode=emptystring_equal_null;
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/t1' INTO TABLE t1 FIELDS TERMINATED BY ','(c1, c2) set c3 = '';
+Warnings:
+Warning	1265	Data truncated for column 'c2' at row 4
+set sql_mode=default;
+select * from t1;
+c1	c2	c3
+1	2020-01-01 00:00:00	NULL
+2	NULL	NULL
+3	NULL	NULL
+4	0000-00-00 00:00:00	NULL
+delete from t1;
+[test set with func contains '']
+set sql_mode=emptystring_equal_null;
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/t1' INTO TABLE t1 FIELDS TERMINATED BY ','(c1, c2) set c3 = concat('', 'aaaa');
+Warnings:
+Warning	1265	Data truncated for column 'c2' at row 4
+set sql_mode=default;
+select * from t1;
+c1	c2	c3
+1	2020-01-01 00:00:00	NULL
+2	NULL	NULL
+3	NULL	NULL
+4	0000-00-00 00:00:00	NULL
+delete from t1;
+[test load with user_var]
+set sql_mode=emptystring_equal_null;
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/t1' INTO TABLE t1 FIELDS TERMINATED BY ','(c1, @var1) set c2 = @var1, c3 = concat(@var1, 'aaaa');
+Warnings:
+Warning	1265	Data truncated for column 'c2' at row 4
+set sql_mode=default;
+select * from t1;
+c1	c2	c3
+1	2020-01-01 00:00:00	2020-01-01 00:00:00aaaa
+2	NULL	NULL
+3	NULL	NULL
+4	0000-00-00 00:00:00	 aaaa
+drop table t1;
+set sql_mode=default;
+create table t1 (
+pk int primary key,
+c1 varchar(8),
+c2 varchar(8),
+c3 varchar(8),
+key(c1)
+) character set utf8mb4 collate utf8mb4_0900_ai_ci;
+create table t2 (
+pk int primary key,
+c1 varchar(8),
+c2 varchar(8),
+c3 varchar(8),
+key(c1(1))
+) character set utf8mb4 collate utf8mb4_0900_ai_ci;
+create table t3 (
+pk int primary key,
+c1 varchar(8),
+c2 varchar(8),
+c3 varchar(8),
+key(c1)
+) character set utf8mb4 collate utf8mb4_unicode_ci;
+create table t4 (
+pk int primary key,
+c1 varchar(8),
+c2 varchar(8),
+c3 varchar(8),
+key key1(c1(1)),
+key key2(c1)
+) character set utf8mb4 collate utf8mb4_unicode_ci;
+insert into t1 select * from t_range order by pk;
+insert into t1 values (23,NULL,'bb','');
+insert into t1 values (24,'\0','bb','');
+insert into t1 values (25,'c','bb','c');
+insert into t1 values (26,'aa','bb',NULL);
+insert into t1 values (27,'bb','bb','');
+insert into t1 values (28,'\0a','bb','');
+insert into t2 select * from t1;
+insert into t3 select * from t1;
+insert into t4 select * from t1;
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t1 where c1 = '\0 \0 ';
+pk	hex(c1)	hex('\0 \0 ')	c2	c3
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t2 where c1 = '\0 \0 ';
+pk	hex(c1)	hex('\0 \0 ')	c2	c3
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t3 where c1 = '\0 \0 ';
+pk	hex(c1)	hex('\0 \0 ')	c2	c3
+11		00200020		
+12		00200020		NULL
+13		00200020	NULL	
+14		00200020	NULL	NULL
+19		00200020	aa	
+21		00200020	bb	
+24	00	00200020	bb	
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t4 where c1 = '\0 \0 ';
+pk	hex(c1)	hex('\0 \0 ')	c2	c3
+11		00200020		
+12		00200020		NULL
+13		00200020	NULL	
+14		00200020	NULL	NULL
+19		00200020	aa	
+21		00200020	bb	
+24	00	00200020	bb	
+select pk,hex(c1),hex('\0 '),c2,c3 from t1 where c1 = '\0 ';
+pk	hex(c1)	hex('\0 ')	c2	c3
+select pk,hex(c1),hex('\0 '),c2,c3 from t2 where c1 = '\0 ';
+pk	hex(c1)	hex('\0 ')	c2	c3
+select pk,hex(c1),hex('\0 '),c2,c3 from t3 where c1 = '\0 ';
+pk	hex(c1)	hex('\0 ')	c2	c3
+11		0020		
+12		0020		NULL
+13		0020	NULL	
+14		0020	NULL	NULL
+19		0020	aa	
+21		0020	bb	
+24	00	0020	bb	
+select pk,hex(c1),hex('\0 '),c2,c3 from t4 where c1 = '\0 ';
+pk	hex(c1)	hex('\0 ')	c2	c3
+11		0020		
+12		0020		NULL
+13		0020	NULL	
+14		0020	NULL	NULL
+19		0020	aa	
+21		0020	bb	
+24	00	0020	bb	
+select pk,hex(c1),hex('\0'),c2,c3 from t1 where c1 = '\0';
+pk	hex(c1)	hex('\0')	c2	c3
+11		00		
+12		00		NULL
+13		00	NULL	
+14		00	NULL	NULL
+19		00	aa	
+21		00	bb	
+24	00	00	bb	
+select pk,hex(c1),hex('\0'),c2,c3 from t2 where c1 = '\0';
+pk	hex(c1)	hex('\0')	c2	c3
+11		00		
+12		00		NULL
+13		00	NULL	
+14		00	NULL	NULL
+19		00	aa	
+21		00	bb	
+24	00	00	bb	
+select pk,hex(c1),hex('\0'),c2,c3 from t3 where c1 = '\0';
+pk	hex(c1)	hex('\0')	c2	c3
+11		00		
+12		00		NULL
+13		00	NULL	
+14		00	NULL	NULL
+19		00	aa	
+21		00	bb	
+24	00	00	bb	
+select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = '\0';
+pk	hex(c1)	hex('\0')	c2	c3
+11		00		
+12		00		NULL
+13		00	NULL	
+14		00	NULL	NULL
+19		00	aa	
+21		00	bb	
+24	00	00	bb	
+select pk,hex(c1),hex('a      '),c2,c3 from t4 force index(key1) where c1 = 'a      ';
+pk	hex(c1)	hex('a      ')	c2	c3
+select pk,hex(c1),hex('a      '),c2,c3 from t4 force index(key2) where c1 = 'a      ';
+pk	hex(c1)	hex('a      ')	c2	c3
+28	0061	61202020202020	bb	
+select pk,hex(c1),hex('      a'),c2,c3 from t4 force index(key1) where c1 = '      a';
+pk	hex(c1)	hex('      a')	c2	c3
+select pk,hex(c1),hex('      a'),c2,c3 from t4 force index(key2) where c1 = '      a';
+pk	hex(c1)	hex('      a')	c2	c3
+select pk,hex(c1),hex('      a    '),c2,c3 from t4 force index(key1) where c1 = '      a    ';
+pk	hex(c1)	hex('      a    ')	c2	c3
+select pk,hex(c1),hex('      a    '),c2,c3 from t4 force index(key2) where c1 = '      a    ';
+pk	hex(c1)	hex('      a    ')	c2	c3
+select pk,hex(c1),hex('      \0'),c2,c3 from t4 force index(key1) where c1 = '      \0';
+pk	hex(c1)	hex('      \0')	c2	c3
+11		20202020202000		
+12		20202020202000		NULL
+13		20202020202000	NULL	
+14		20202020202000	NULL	NULL
+19		20202020202000	aa	
+21		20202020202000	bb	
+24	00	20202020202000	bb	
+select pk,hex(c1),hex('      \0'),c2,c3 from t4 force index(key2) where c1 = '      \0';
+pk	hex(c1)	hex('      \0')	c2	c3
+11		20202020202000		
+12		20202020202000		NULL
+13		20202020202000	NULL	
+14		20202020202000	NULL	NULL
+19		20202020202000	aa	
+21		20202020202000	bb	
+24	00	20202020202000	bb	
+select pk,hex(c1),hex('      \0    '),c2,c3 from t4 force index(key1) where c1 = '      \0    ';
+pk	hex(c1)	hex('      \0    ')	c2	c3
+11		2020202020200020202020		
+12		2020202020200020202020		NULL
+13		2020202020200020202020	NULL	
+14		2020202020200020202020	NULL	NULL
+19		2020202020200020202020	aa	
+21		2020202020200020202020	bb	
+24	00	2020202020200020202020	bb	
+select pk,hex(c1),hex('      \0    '),c2,c3 from t4 force index(key2) where c1 = '      \0    ';
+pk	hex(c1)	hex('      \0    ')	c2	c3
+11		2020202020200020202020		
+12		2020202020200020202020		NULL
+13		2020202020200020202020	NULL	
+14		2020202020200020202020	NULL	NULL
+19		2020202020200020202020	aa	
+21		2020202020200020202020	bb	
+24	00	2020202020200020202020	bb	
+set sql_mode=emptystring_equal_null;
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t1 where c1 = '\0 \0 ';
+pk	hex(c1)	hex('\0 \0 ')	c2	c3
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t2 where c1 = '\0 \0 ';
+pk	hex(c1)	hex('\0 \0 ')	c2	c3
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t3 where c1 = '\0 \0 ';
+pk	hex(c1)	hex('\0 \0 ')	c2	c3
+24	00	00200020	bb	NULL
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t4 where c1 = '\0 \0 ';
+pk	hex(c1)	hex('\0 \0 ')	c2	c3
+24	00	00200020	bb	NULL
+select pk,hex(c1),hex('\0 '),c2,c3 from t1 where c1 = '\0 ';
+pk	hex(c1)	hex('\0 ')	c2	c3
+select pk,hex(c1),hex('\0 '),c2,c3 from t2 where c1 = '\0 ';
+pk	hex(c1)	hex('\0 ')	c2	c3
+select pk,hex(c1),hex('\0 '),c2,c3 from t3 where c1 = '\0 ';
+pk	hex(c1)	hex('\0 ')	c2	c3
+24	00	0020	bb	NULL
+select pk,hex(c1),hex('\0 '),c2,c3 from t4 where c1 = '\0 ';
+pk	hex(c1)	hex('\0 ')	c2	c3
+24	00	0020	bb	NULL
+select pk,hex(c1),hex('\0'),c2,c3 from t1 where c1 = '\0';
+pk	hex(c1)	hex('\0')	c2	c3
+24	00	00	bb	NULL
+select pk,hex(c1),hex('\0'),c2,c3 from t2 where c1 = '\0';
+pk	hex(c1)	hex('\0')	c2	c3
+24	00	00	bb	NULL
+select pk,hex(c1),hex('\0'),c2,c3 from t3 where c1 = '\0';
+pk	hex(c1)	hex('\0')	c2	c3
+24	00	00	bb	NULL
+select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = '\0';
+pk	hex(c1)	hex('\0')	c2	c3
+24	00	00	bb	NULL
+select pk,hex(c1),hex('a      '),c2,c3 from t4 force index(key1) where c1 = 'a      ';
+pk	hex(c1)	hex('a      ')	c2	c3
+select pk,hex(c1),hex('a      '),c2,c3 from t4 force index(key2) where c1 = 'a      ';
+pk	hex(c1)	hex('a      ')	c2	c3
+28	0061	61202020202020	bb	NULL
+select pk,hex(c1),hex('      a'),c2,c3 from t4 force index(key1) where c1 = '      a';
+pk	hex(c1)	hex('      a')	c2	c3
+select pk,hex(c1),hex('      a'),c2,c3 from t4 force index(key2) where c1 = '      a';
+pk	hex(c1)	hex('      a')	c2	c3
+select pk,hex(c1),hex('      a    '),c2,c3 from t4 force index(key1) where c1 = '      a    ';
+pk	hex(c1)	hex('      a    ')	c2	c3
+select pk,hex(c1),hex('      a    '),c2,c3 from t4 force index(key2) where c1 = '      a    ';
+pk	hex(c1)	hex('      a    ')	c2	c3
+select pk,hex(c1),hex('      \0'),c2,c3 from t4 force index(key1) where c1 = '      \0';
+pk	hex(c1)	hex('      \0')	c2	c3
+24	00	20202020202000	bb	NULL
+select pk,hex(c1),hex('      \0'),c2,c3 from t4 force index(key2) where c1 = '      \0';
+pk	hex(c1)	hex('      \0')	c2	c3
+24	00	20202020202000	bb	NULL
+select pk,hex(c1),hex('      \0    '),c2,c3 from t4 force index(key1) where c1 = '      \0    ';
+pk	hex(c1)	hex('      \0    ')	c2	c3
+24	00	2020202020200020202020	bb	NULL
+select pk,hex(c1),hex('      \0    '),c2,c3 from t4 force index(key2) where c1 = '      \0    ';
+pk	hex(c1)	hex('      \0    ')	c2	c3
+24	00	2020202020200020202020	bb	NULL
+select pk,hex(c1),c2,c3 from t1 where c1 =to_char('\0');
+pk	hex(c1)	c2	c3
+24	00	bb	NULL
+explain select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = '\0';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t4	NULL	ref	key1,key2	key2	35	const	7	100.00	Using where; Full scan on NULL key
+explain select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = ' ';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t4	NULL	ref	key1,key2	key2	35	const	7	100.00	Using where; Full scan on NULL key
+explain select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = '\0 ';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t4	NULL	ref	key1,key2	key2	35	const	7	100.00	Using where; Full scan on NULL key
+explain select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = ' a';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t4	NULL	ref	key1,key2	key2	35	const	1	100.00	NULL
+explain select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t4	NULL	ALL	key1,key2	NULL	NULL	NULL	18	10.00	Using where
+explain select pk,c1,c2,c3 from t1 where c1 =to_char('\0');
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	c1	c1	35	const	7	100.00	Using where; Full scan on NULL key
+set sql_mode=default;
+explain select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	18	10.00	Parallel execute (1 workers)
+2	SIMPLE	t4	NULL	ALL	key1,key2	NULL	NULL	NULL	18	10.00	Using where
+explain select pk,hex(c1),c2,c3 from t1 where c1 =to_char('\0');
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	7	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ref	c1	c1	35	const	7	100.00	NULL
+drop table t_range,t1,t2,t3,t4;

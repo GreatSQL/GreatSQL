@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -5272,7 +5272,6 @@ static EVP_PKEY *evp_pkey_generate(RSA *rsa) {
   return nullptr;
 }
 #endif /* OPENSSL_VERSION_NUMBER < 0x30000000L */
-
 /**
   Write private key in a string buffer
 
@@ -5403,7 +5402,6 @@ class X509_gen {
 
     /** Sign using SHA256 */
     if (!X509_sign(x509, self_sign ? pkey : ca_pkey, EVP_sha256())) goto err;
-
     return x509;
   err:
     if (x509) X509_free(x509);

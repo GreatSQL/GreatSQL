@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2722,6 +2722,11 @@ class Rows_log_event : public virtual binary_log::Rows_event, public Log_event {
   MY_BITMAP const *get_cols_ai() const { return &m_cols_ai; }
   size_t get_width() const { return m_width; }
   const Table_id &get_table_id() const { return m_table_id; }
+  MY_BITMAP *get_cols_for_update() { return &m_cols; }
+  MY_BITMAP *get_cols_ai_for_update() { return &m_cols_ai; }
+  uchar *get_rows_buf() { return m_rows_buf; }
+  uchar *get_rows_end() { return m_rows_end; }
+  size_t get_rows_size() { return (uint)(m_rows_cur - m_rows_buf); }
 
 #if defined(MYSQL_SERVER)
   /**
@@ -3820,6 +3825,7 @@ class Gtid_log_event : public binary_log::Gtid_event, public Log_event {
 
 #ifdef MYSQL_SERVER
   int pack_info(Protocol *) override;
+  std::string get_gtid();
 #endif
   Gtid_log_event(const char *buffer,
                  const Format_description_event *description_event);

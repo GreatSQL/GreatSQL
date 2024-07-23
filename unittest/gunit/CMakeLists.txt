@@ -1,5 +1,5 @@
 # Copyright (c) 2010, 2022, Oracle and/or its affiliates.
-# Copyright (c) 2023, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -493,6 +493,7 @@ MYSQL_ADD_EXECUTABLE(charset_gb18030_2022-t charset_gb18030_2022-t.cc
   SKIP_INSTALL
 )
 target_include_directories(charset_gb18030_2022-t PRIVATE  ${CMAKE_CURRENT_BINARY_DIR})
+
 ADD_SUBDIRECTORY(ddl_rewriter)
 ADD_SUBDIRECTORY(innodb)
 ADD_SUBDIRECTORY(keyring)

@@ -22,14 +22,15 @@ $$
 show procedure code p1;
 Pos	Instruction
 0	set rSql@1 NULL
-1	set dr_type@2 NULL
-2	set rSql@1 'select * from t1'
-3	open_for cSendCursor@0 rSql@1
-4	cfetch cSendCursor@0 dr_type@2
-5	jump_if_not 7(0) "cSendCursor"%NOTFOUND
-6	jump 11
-7	stmt "select dr_type.a,dr_type.b"
-8	jump 4
+1	setup_row_field dr_type@2
+2	set dr_type@2 NULL
+3	set rSql@1 'select * from t1'
+4	open_for cSendCursor@0 rSql@1
+5	cfetch cSendCursor@0 dr_type@2
+6	jump_if_not 8(0) "cSendCursor"%NOTFOUND
+7	jump 12
+8	stmt "select dr_type.a,dr_type.b"
+9	jump 5
 call p1;
 dr_type.a	dr_type.b
 1	aa
@@ -634,23 +635,25 @@ $$
 show procedure code p1;
 Pos	Instruction
 0	set rsql@1 NULL
-1	set dr_type@2 NULL
-2	set dr_type1@3 NULL
-3	set rsql@1 'select * from t1'
-4	open_for ccur@0 rsql@1
-5	jump_if_not 7(0) "ccur"%NOTFOUND
-6	jump 10
-7	cfetch ccur@0 dr_type@2
-8	stmt "select dr_type.a, dr_type.b"
-9	jump 5
-10	set rsql@1 'select * from t2'
-11	open_for ccur@0 rsql@1
-12	jump_if_not 14(0) "ccur"%NOTFOUND
-13	jump 17
-14	cfetch ccur@0 dr_type1@3
-15	stmt "select dr_type1.a, dr_type1.b, dr_typ..."
-16	jump 12
-17	cclose ccur@0
+1	setup_row_field dr_type@2
+2	set dr_type@2 NULL
+3	setup_row_field dr_type1@3
+4	set dr_type1@3 NULL
+5	set rsql@1 'select * from t1'
+6	open_for ccur@0 rsql@1
+7	jump_if_not 9(0) "ccur"%NOTFOUND
+8	jump 12
+9	cfetch ccur@0 dr_type@2
+10	stmt "select dr_type.a, dr_type.b"
+11	jump 7
+12	set rsql@1 'select * from t2'
+13	open_for ccur@0 rsql@1
+14	jump_if_not 16(0) "ccur"%NOTFOUND
+15	jump 19
+16	cfetch ccur@0 dr_type1@3
+17	stmt "select dr_type1.a, dr_type1.b, dr_typ..."
+18	jump 14
+19	cclose ccur@0
 call p1;
 dr_type.a	dr_type.b
 1	aa
@@ -712,26 +715,28 @@ $$
 show procedure code p1;
 Pos	Instruction
 0	set rsql@1 NULL
-1	set dr_type@2 NULL
-2	set dr_type1@3 NULL
-3	set rsql@1 'select * from t1'
-4	open_for ccur@0 rsql@1
-5	jump_if_not 7(0) "ccur"%NOTFOUND
-6	jump 10
-7	cfetch ccur@0 dr_type@2
-8	stmt "select dr_type.a, dr_type.b"
-9	jump 5
-10	set rsql@1 'select * from t2'
-11	open_for ccur@0 rsql@1
-12	jump_if_not 14(0) "ccur"%NOTFOUND
-13	jump 17
-14	cfetch ccur@0 dr_type1@3
-15	stmt "select dr_type1.a, dr_type1.b, dr_typ..."
-16	jump 12
-17	cclose ccur@0
-18	open_for ccur@0 rsql@1
-19	cfetch ccur@0 dr_type1@3
-20	stmt "select dr_type1.a, dr_type1.b, dr_typ..."
+1	setup_row_field dr_type@2
+2	set dr_type@2 NULL
+3	setup_row_field dr_type1@3
+4	set dr_type1@3 NULL
+5	set rsql@1 'select * from t1'
+6	open_for ccur@0 rsql@1
+7	jump_if_not 9(0) "ccur"%NOTFOUND
+8	jump 12
+9	cfetch ccur@0 dr_type@2
+10	stmt "select dr_type.a, dr_type.b"
+11	jump 7
+12	set rsql@1 'select * from t2'
+13	open_for ccur@0 rsql@1
+14	jump_if_not 16(0) "ccur"%NOTFOUND
+15	jump 19
+16	cfetch ccur@0 dr_type1@3
+17	stmt "select dr_type1.a, dr_type1.b, dr_typ..."
+18	jump 14
+19	cclose ccur@0
+20	open_for ccur@0 rsql@1
+21	cfetch ccur@0 dr_type1@3
+22	stmt "select dr_type1.a, dr_type1.b, dr_typ..."
 call p1;
 dr_type.a	dr_type.b
 1	aa
@@ -1021,7 +1026,7 @@ type tklist is table of stu_record INDEX BY pls_integer;
 stu_record_val tklist;
 begin
  select * bulk
-CREATE OR REPLACE PROCEDURE `p1` ( ) AS TYPE `stu_record` IS RECORD ( `id` INTEGER := ? , `name_d` VARCHARACTER (?) := ? , `score` FLOAT4 := ? ) ; TYPE `tklist` IS TABLE OF `stu_record` INDEX BY INTEGER ; `stu_record_val` `tklist` ; SELECT BEGIN * BULK COLLECT INTO `stu_record_val` FROM `t1` ; END ;
+CREATE OR REPLACE PROCEDURE `p1` ( ) AS TYPE `stu_record` IS RECORD ( `id` INTEGER := ? , `name_d` VARCHARACTER (?) := ? , `score` FLOAT4 := ? ) ; TYPE `tklist` IS TABLE OF `stu_record` INDEX BY INTEGER ; `stu_record_val` `tklist` ; BEGIN SELECT * BULK COLLECT INTO `stu_record_val` FROM `t1` ; END ;
 DROP TABLE t1;
 drop table t2;
 #
@@ -1238,3 +1243,105 @@ s1:1 | s2:2
 i
 s1:1 | s2:2
 drop PROCEDURE p1;
+#
+# Bugfix#9202
+#
+CREATE TABLE employees (EMPLOYEE_ID int, FIRST_NAME VARCHAR2(20), LAST_NAME VARCHAR(25), 
+EMAIL VARCHAR2(25), PHONE_NUMBER VARCHAR2(20) DEFAULT NULL, HIRE_DATE DATE DEFAULT NULL, 
+JOB_ID VARCHAR2(10), SALARY NUMBER(8,2) DEFAULT 1000, COMMISSION_PCT DECIMAL(2,2) DEFAULT NULL,
+MANAGER_ID float(6,0), DEPARTMENT_ID NUMBER(4,0),PRIMARY KEY(EMPLOYEE_ID))  
+partition by hash(EMPLOYEE_ID) partitions 15;
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Insert into employees values (145,'John','Russell','JRUSSEL','011.44.1344.429268','2020-3-1','SA_MAN',14000,0.4,100,80);
+Insert into employees values (146,'Karen','Partners','KPARTNER','011.44.1344.467268','2020-4-1','SA_MAN',13500,0.3,100,80);
+Insert into employees values (147,'Alberto','Errazuriz','AERRAZUR','011.44.1344.429278','2020-5-1','SA_MAN',12000,0.3,145,80);
+Insert into employees values (148,'Gerald','Cambrault','GCAMBRAU',NULL,'2020-6-1','SA_MAN',11000,0.3,145,80);
+Insert into employees values (149,'Eleni','Zlotkey','EZLOTKEY','011.44.1344.429018','2020-7-1','SA_MAN',10500,0.2,145,90);
+Insert into employees values (150,'Peter','Tucker','PTUCKER','011.44.1344.129268','2020-8-1','SA_REP',10000,0.3,146,90);
+Insert into employees values (151,'David','Bernstein','DBERNSTE',NULL,'2020-9-1','SA_REP',9500,0.25,146,90);
+Insert into employees values (152,'Peter','Hall','PHALL','011.44.1344.478968','2020-10-1','SA_REP',9000,0.25,147,90);
+Insert into employees values (153,'Christopher','Olsen','COLSEN','011.44.1344.498718','2020-11-1','SA_REP',8000,0.2,147,90);
+Insert into employees values (154,'Nanette','Cambrault','NCAMBRAU','011.44.1344.987668','2020-12-1','SA_REP',7500,0.2,148,90);
+Insert into employees values (155,'Oliver','Tuvault','OTUVAULT','011.44.1344.486508','2021-1-1','SA_REP',7000,0.15,152,50);
+Insert into employees values (156,'Janette','King','JKING','011.44.1345.429268','2021-1-1','SA_REP',15000,0.35,155,50);
+CREATE OR REPLACE  PROCEDURE p1() as
+CURSOR c return employees%ROWTYPE IS SELECT * FROM employees WHERE employee_id IN (145,146);
+CURSOR sc1 RETURN c%rowtype IS SELECT * FROM employees WHERE employee_id IN (147,148);
+CURSOR sc2 RETURN sc1%rowtype IS SELECT * FROM employees WHERE employee_id IN (149,150);
+CURSOR sc3 RETURN sc2%rowtype IS SELECT * FROM employees WHERE employee_id IN (151,153);
+TYPE ref_rs1 IS REF CURSOR RETURN sc1%rowtype;
+TYPE ref_rs2 IS REF CURSOR RETURN sc3%rowtype;
+c1 ref_rs1;
+c2 ref_rs2;
+v_employee employees%ROWTYPE;
+a1 int;
+b1 varchar(20);
+BEGIN
+open c1 for  SELECT * FROM employees  WHERE employee_id IN (151,153) ORDER BY employee_id;
+LOOP
+FETCH c1 INTO v_employee;
+EXIT WHEN c1%NOTFOUND;
+select 'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name;
+END LOOP;
+CLOSE c1; 
+END;
+$$
+call p1();
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  151: David Bernstein
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  153: Christopher Olsen
+call p1();
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  151: David Bernstein
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  153: Christopher Olsen
+call p1();
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  151: David Bernstein
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  153: Christopher Olsen
+call p1();
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  151: David Bernstein
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  153: Christopher Olsen
+drop PROCEDURE p1;
+CREATE OR REPLACE  PROCEDURE p1() as
+CURSOR c return employees%ROWTYPE IS SELECT * FROM employees WHERE employee_id IN (145,146);  
+TYPE ref_rs1 IS REF CURSOR RETURN c%rowtype;
+c1 ref_rs1;
+v_employee employees%ROWTYPE;
+BEGIN
+OPEN c1 FOR SELECT * FROM employees WHERE employee_id IN (145,146) ;
+LOOP
+FETCH c1 INTO v_employee;
+EXIT WHEN c1%NOTFOUND;
+select 'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name;
+END LOOP;
+CLOSE c1; 
+END;
+$$
+call p1();
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  145: John Russell
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  146: Karen Partners
+call p1();
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  145: John Russell
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  146: Karen Partners
+call p1();
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  145: John Russell
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  146: Karen Partners
+call p1();
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  145: John Russell
+'Employee id:  ' || v_employee.employee_id || ': ' || v_employee.first_name || ' ' || v_employee.last_name
+Employee id:  146: Karen Partners
+drop PROCEDURE p1;
+drop TABLE employees;

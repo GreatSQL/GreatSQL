@@ -403,3 +403,23 @@ DELIMITER ;/
 drop function IF EXISTS f_del;
 drop function IF EXISTS f_del1;
 drop function IF EXISTS f_del2;
+
+--echo # with function without global EXECUTE privilege
+SET SQL_MODE=oracle;
+CREATE TABLE t1(a int, b int, c int);
+INSERT INTO t1 VALUES(1, 1, 1), (2, 2, 2), (3, 3, 3);
+DELIMITER |;
+WITH FUNCTION f() RETURN INT AS BEGIN RETURN (SELECT b FROM t1 WHERE a=2); END; SELECT f();|
+DELIMITER ;|
+CREATE USER 'user_test' IDENTIFIED BY '123';
+GRANT SELECT,INSERT,UPDATE,DELETE,EXECUTE ON test.* TO user_test;
+FLUSH PRIVILEGES;
+
+--connect(conn1,localhost,user_test,123,test)
+SET SQL_MODE=oracle;
+DELIMITER |;
+WITH FUNCTION f() RETURN INT AS BEGIN RETURN (SELECT b FROM t1 WHERE a=2); END; SELECT f();|
+DELIMITER ;|
+change_user root,,test;
+DROP TABLE t1;
+DROP USER user_test;

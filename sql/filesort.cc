@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
    Copyright (c) 2018, Percona and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -513,7 +513,6 @@ bool filesort(THD *thd, Filesort *filesort, RowIterator *source_iterator,
     if (num_rows_found == HA_POS_ERROR) goto err;
   }
   DEBUG_SYNC(thd, "after_find_all_keys");
-  thd->lex->reset_rownum_func();
   size_t num_chunks, num_initial_chunks;
   if (my_b_inited(&chunk_file)) {
     num_chunks =
@@ -1015,8 +1014,6 @@ static ha_rows read_all_rows(
 
     ++(*found_rows);
     num_total_records++;
-    // reset rownum;
-    thd->lex->current_query_block()->reset_rownum_read_flag();
     if (pq)
       pq->push(tables);
     else {

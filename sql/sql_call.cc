@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -273,8 +273,8 @@ bool Sql_cmd_call::prepare_inner(THD *thd) {
       }
     } else {
       if (arg->data_type() == MYSQL_TYPE_INVALID) {
-        if (spvar->field_def.ora_record.is_row() ||
-            spvar->field_def.ora_record.is_row_table()) {
+        if (spvar->field_def.ora_record.row_field_definitions() ||
+            spvar->field_def.ora_record.row_field_table_definitions()) {
           my_error(ER_NOT_SUPPORTED_YET, MYF(0),
                    "user variable as procedure parameter");
           return true;

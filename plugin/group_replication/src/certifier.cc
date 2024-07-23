@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,6 +27,7 @@
 #include <map>
 
 #include <mysql/components/services/log_builtins.h>
+#include "base64.h"
 #include "my_dbug.h"
 #include "my_systime.h"
 #include "plugin/group_replication/include/certifier.h"
@@ -373,6 +374,7 @@ Certifier::Certifier()
           Malloc_allocator<
               std::pair<const uint32_t, Last_xa_prepare_writeset_info *>>(
               key_certification_info)),
+      base_parallel_applier_sequence_number(0),
       positive_cert(0),
       negative_cert(0),
       parallel_applier_last_committed_global(1),
@@ -808,6 +810,7 @@ rpl_gno Certifier::certify(Gtid_set *snapshot_version,
   DBUG_TRACE;
   rpl_gno result = 0;
   bool has_write_set = !write_set->empty();
+  int has_to_flush_last_commited = 0;
 
   if (!is_initialized()) {
     LogPluginErr(INFORMATION_LEVEL, ER_GRP_RPL_CERTIFY_IS_INITIALIZED);
@@ -1014,25 +1017,40 @@ rpl_gno Certifier::certify(Gtid_set *snapshot_version,
       // Only consider remote transactions for parallel applier indexes.
       int64 transaction_sequence_number =
           local_transaction ? -1 : parallel_applier_sequence_number;
-      Gtid_set_ref *snapshot_version_value = new Gtid_set_ref(
-          certification_info_sid_map, transaction_sequence_number);
-      if (snapshot_version_value->add_gtid_set(snapshot_version) !=
-          RETURN_STATUS_OK) {
-        result = 0;                    /* purecov: inspected */
-        delete snapshot_version_value; /* purecov: inspected */
-        LogPluginErr(
-            ERROR_LEVEL,
-            ER_GRP_RPL_UPDATE_TRANS_SNAPSHOT_REF_VER_ERROR); /* purecov:
-                                                              * inspected
-                                                              */
-        goto end; /* purecov: inspected */
+      Gtid_set_ref *snapshot_version_value = nullptr;
+      if (!single_primary_fast_mode) {
+        snapshot_version_value = new Gtid_set_ref(certification_info_sid_map,
+                                                  transaction_sequence_number);
+        if (snapshot_version_value->add_gtid_set(snapshot_version) !=
+            RETURN_STATUS_OK) {
+          result = 0;                    /* purecov: inspected */
+          delete snapshot_version_value; /* purecov: inspected */
+          LogPluginErr(
+              ERROR_LEVEL,
+              ER_GRP_RPL_UPDATE_TRANS_SNAPSHOT_REF_VER_ERROR); /* purecov:
+                                                                * inspected
+                                                                */
+          goto end; /* purecov: inspected */
+        }
       }
 
       for (std::list<const char *>::iterator it = write_set->begin();
            it != write_set->end(); ++it) {
         int64 item_previous_sequence_number = -1;
 
-        add_item(*it, snapshot_version_value, &item_previous_sequence_number);
+        if (single_primary_fast_mode) {
+          bool error = quick_add_item(*it, transaction_sequence_number,
+                                      &item_previous_sequence_number);
+          if (error) {
+            clear_replay_cal_info();
+            transaction_last_committed = transaction_sequence_number - 1;
+            has_to_flush_last_commited = 1;
+            base_parallel_applier_sequence_number = transaction_sequence_number;
+            break;
+          }
+        } else {
+          add_item(*it, snapshot_version_value, &item_previous_sequence_number);
+        }
 
         if (thread_id & 0xC0000000) {
           if (!local_transaction && !conflict_detection_enable) {
@@ -1067,8 +1085,9 @@ rpl_gno Certifier::certify(Gtid_set *snapshot_version,
             transaction_last_committed = item_previous_sequence_number;
           }
         }
-        if (add_item_for_xa_commit(trimmed_thread_id, snapshot_version) ==
-            false) {
+        if (add_item_for_xa_commit(trimmed_thread_id, snapshot_version,
+                                   &has_to_flush_last_commited,
+                                   &transaction_last_committed) == false) {
           result = 0;
           goto end;
         }
@@ -1092,6 +1111,8 @@ rpl_gno Certifier::certify(Gtid_set *snapshot_version,
       update_parallel_applier_last_committed_global = true;
     } else if (single_primary_fast_mode ==
                MGR_FAST_MODE_WITHOUT_PARALLEL_REPLAY) {
+      update_parallel_applier_last_committed_global = true;
+    } else if (has_to_flush_last_commited) {
       update_parallel_applier_last_committed_global = true;
     }
 
@@ -1332,7 +1353,9 @@ void Certifier::add_xa_prepare_writeset_item_to_map(int32_t thread_id,
 }
 
 bool Certifier::add_item_for_xa_commit(int32_t thread_id,
-                                       Gtid_set *snapshot_version) {
+                                       Gtid_set *snapshot_version,
+                                       int *has_to_flush_last_commited,
+                                       int64 *transaction_last_committed) {
   DBUG_TRACE;
   bool ret = true;
   Last_xa_prepare_writeset_map::iterator prepare_it =
@@ -1341,16 +1364,20 @@ bool Certifier::add_item_for_xa_commit(int32_t thread_id,
   if (prepare_it != xa_prepare_writeset_map.end()) {
     Last_xa_prepare_writeset_info *info = prepare_it->second;
     int64 transaction_sequence_number = parallel_applier_sequence_number;
-    Gtid_set_ref *snapshot_version_value = new Gtid_set_ref(
-        certification_info_sid_map, transaction_sequence_number);
-    if (snapshot_version_value->add_gtid_set(snapshot_version) !=
-        RETURN_STATUS_OK) {
-      delete snapshot_version_value; /* purecov: inspected */
-      LogPluginErr(ERROR_LEVEL,
-                   ER_GRP_RPL_UPDATE_TRANS_SNAPSHOT_REF_VER_ERROR); /* purecov:
-                                                                     * inspected
-                                                                     */
-      ret = false;
+    Gtid_set_ref *snapshot_version_value = nullptr;
+    if (!single_primary_fast_mode) {
+      snapshot_version_value = new Gtid_set_ref(certification_info_sid_map,
+                                                transaction_sequence_number);
+      if (snapshot_version_value->add_gtid_set(snapshot_version) !=
+          RETURN_STATUS_OK) {
+        delete snapshot_version_value; /* purecov: inspected */
+        LogPluginErr(
+            ERROR_LEVEL,
+            ER_GRP_RPL_UPDATE_TRANS_SNAPSHOT_REF_VER_ERROR); /* purecov:
+                                                              * inspected
+                                                              */
+        ret = false;
+      }
     }
 
     if (ret) {
@@ -1358,8 +1385,21 @@ bool Certifier::add_item_for_xa_commit(int32_t thread_id,
       for (std::list<std::string>::iterator it = list->begin();
            it != list->end(); ++it) {
         int64 item_previous_sequence_number = -1;
-        add_item((*it).c_str(), snapshot_version_value,
-                 &item_previous_sequence_number);
+        if (single_primary_fast_mode == MGR_FAST_MODE_WITH_PARALLEL_REPLAY) {
+          bool error =
+              quick_add_item((*it).c_str(), transaction_sequence_number,
+                             &item_previous_sequence_number);
+          if (error) {
+            clear_replay_cal_info();
+            *transaction_last_committed = transaction_sequence_number - 1;
+            *has_to_flush_last_commited = 1;
+            base_parallel_applier_sequence_number = transaction_sequence_number;
+            break;
+          }
+        } else {
+          add_item((*it).c_str(), snapshot_version_value,
+                   &item_previous_sequence_number);
+        }
       }
     }
     delete info;
@@ -1450,6 +1490,86 @@ bool Certifier::add_item(const char *item, Gtid_set_ref *snapshot_version,
         "signal.group_replication_certifier_after_add_item_continue";
     assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
   });
+
+  return error;
+}
+
+void Certifier::clear_replay_cal_info() {
+  DBUG_TRACE;
+  mysql_mutex_assert_owner(&LOCK_certification_info);
+
+  for (int i = 0; i < REPLAY_CAL_ARRAY; i++) {
+    replay_cal_hash_item *hash_item = &(replayed_cal_array[i]);
+    hash_item->number = 0;
+  }
+}
+
+bool Certifier::quick_add_item(const char *item,
+                               int64 transaction_sequence_number,
+                               int64 *item_previous_sequence_number) {
+  DBUG_TRACE;
+  mysql_mutex_assert_owner(&LOCK_certification_info);
+  bool found = false;
+  int error = false;
+  size_t base_len = strlen(item);
+  size_t decoded_len = base64_needed_decoded_length(base_len);
+  unsigned char dst[64];
+  size_t dst_len = base64_decode(item, base_len, dst, nullptr, 0);
+  if (dst_len != 8) {
+    LogPluginErrMsg(WARNING_LEVEL, ER_LOG_PRINTF_MSG,
+                    "dst len:%lu not expected, decoded_len:%lu", dst_len,
+                    decoded_len);
+  }
+
+  int index = (((unsigned char)dst[0]) << 8) + (((unsigned char)dst[1]));
+
+  unsigned char *remainder = dst + 2;
+  replay_cal_hash_item *hash_item = &(replayed_cal_array[index]);
+  unsigned char *found_pos = nullptr;
+  int64 relative_sequence =
+      transaction_sequence_number - base_parallel_applier_sequence_number;
+
+  if (relative_sequence > MAX_RELATIVE_SEQUENCE_NUMBER) {
+    return true;
+  }
+
+  if (hash_item->number > 0) {
+    for (int i = 0; i < hash_item->number; i++) {
+      unsigned char *p = hash_item->values + (i << 3);
+      bool is_equal = true;
+      for (int j = 0; j < 6; j++) {
+        if (remainder[j] != p[j]) {
+          is_equal = false;
+          break;
+        }
+      }
+      if (is_equal) {
+        found_pos = p;
+        found = true;
+        break;
+      }
+    }
+  }
+
+  if (found) {
+    int64 old_relative_sequence = (found_pos[6] << 8) + found_pos[7];
+    *item_previous_sequence_number =
+        base_parallel_applier_sequence_number + old_relative_sequence;
+    found_pos[6] = (relative_sequence & 0xFF00) >> 8;
+    found_pos[7] = (relative_sequence & 0x00FF);
+  } else {
+    if (hash_item->number >= REPLAY_CAL_HASH_ITEMS) {
+      error = true;
+    } else {
+      found_pos = hash_item->values + (hash_item->number << 3);
+      hash_item->number++;
+      for (int j = 0; j < 6; j++) {
+        found_pos[j] = remainder[j];
+      }
+      found_pos[6] = (relative_sequence & 0xFF00) >> 8;
+      found_pos[7] = (relative_sequence & 0x00FF);
+    }
+  }
 
   return error;
 }
@@ -1638,16 +1758,18 @@ void Certifier::garbage_collect(int *multiplied_sleep_times) {
 
   stable_gtid_set_lock->unlock();
 
-  /*
-    We need to update parallel applier indexes since we do not know
-    what write sets were purged, which may cause transactions
-    last committed to be incorrectly computed.
-  */
-  if (deleted > 0 || parallel_applier_sequence_number_updated) {
-    /* Not friendly for large transactions */
-    increment_parallel_applier_sequence_number(true);
-    xa_replay_map.clear();
-    clear_old_xa_prepare_map();
+  if (!single_primary_fast_mode) {
+    /*
+      We need to update parallel applier indexes since we do not know
+      what write sets were purged, which may cause transactions
+      last committed to be incorrectly computed.
+    */
+    if (deleted > 0 || parallel_applier_sequence_number_updated) {
+      /* Not friendly for large transactions */
+      increment_parallel_applier_sequence_number(true);
+      xa_replay_map.clear();
+      clear_old_xa_prepare_map();
+    }
   }
 
   last_cert_size = get_certification_info_size();

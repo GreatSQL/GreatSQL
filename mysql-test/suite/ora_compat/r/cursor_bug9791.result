@@ -1,0 +1,147 @@
+SET sql_mode=ORACLE;
+show variables like '%udt_format_result%';
+Variable_name	Value
+udt_format_result	BINARY
+set @@udt_format_result='DBA';
+CREATE SEQUENCE id_seq START WITH 1 INCREMENT BY 2 CACHE 1;
+select id_seq.NEXTVAL;
+NEXTVAL
+1
+#
+# test of bug9791 with cursor
+#
+CREATE OR REPLACE PROCEDURE p1
+IS
+cursor cc is select id_seq.NEXTVAL from dual;
+BEGIN
+for i in cc loop
+select i;
+end loop;
+end;
+$$
+call p1();
+i
+NEXTVAL:3
+call p1();
+i
+NEXTVAL:5
+drop SEQUENCE id_seq;
+call p1();
+ERROR 42S02: Unknown table 'id_seq' in field list
+CREATE SEQUENCE id_seq START WITH 1 INCREMENT BY 2 CACHE 1;
+call p1();
+i
+NEXTVAL:1
+drop PROCEDURE p1;
+#
+# test of bug9791 with refcursor cursor
+#
+CREATE OR REPLACE PROCEDURE p1
+IS
+c1 sys_refcursor;
+count int;
+BEGIN
+open c1 for select id_seq.NEXTVAL from dual;
+fetch c1 into count;
+select count;
+end;
+$$
+call p1();
+count
+3
+call p1();
+count
+5
+drop SEQUENCE id_seq;
+call p1();
+ERROR 42S02: Unknown table 'id_seq' in field list
+CREATE SEQUENCE id_seq START WITH 1 INCREMENT BY 2 CACHE 1;
+call p1();
+count
+1
+drop PROCEDURE p1;
+#
+# test of bug9791 with refcursor cursor
+#
+CREATE OR REPLACE PROCEDURE p1
+IS
+c1 sys_refcursor;
+str varchar(100) := 'select id_seq.NEXTVAL from dual';
+count int;
+BEGIN
+open c1 for str;
+fetch c1 into count;
+select count;
+end;
+$$
+call p1();
+count
+3
+call p1();
+count
+5
+drop SEQUENCE id_seq;
+call p1();
+ERROR 42S02: Unknown table 'id_seq' in field list
+CREATE SEQUENCE id_seq START WITH 1 INCREMENT BY 2 CACHE 1;
+call p1();
+count
+1
+drop PROCEDURE p1;
+#
+# test of bug9791 with refcursor cursor
+#
+CREATE OR REPLACE PROCEDURE p1
+IS
+count int;
+BEGIN
+for i in (select id_seq.NEXTVAL from dual) loop
+select i;
+end loop;
+end;
+$$
+call p1();
+i
+NEXTVAL:3
+call p1();
+i
+NEXTVAL:5
+drop SEQUENCE id_seq;
+call p1();
+ERROR 42S02: Unknown table 'id_seq' in field list
+CREATE SEQUENCE id_seq START WITH 1 INCREMENT BY 2 CACHE 1;
+call p1();
+i
+NEXTVAL:1
+drop PROCEDURE p1;
+#
+# test of bug9791 with default mode
+#
+SET sql_mode=default;
+CREATE PROCEDURE p1()
+begin
+DECLARE q int;
+DECLARE qcur CURSOR FOR SELECT id_seq.NEXTVAL;
+OPEN qcur;
+FETCH qcur INTO q;
+select q;
+end;
+$$
+call p1();
+q
+3
+call p1();
+q
+5
+drop SEQUENCE id_seq;
+call p1();
+ERROR 42S02: Unknown table 'id_seq' in field list
+CREATE SEQUENCE id_seq START WITH 1 INCREMENT BY 2 CACHE 1;
+call p1();
+q
+1
+call p1();
+q
+3
+drop PROCEDURE p1;
+drop SEQUENCE id_seq;

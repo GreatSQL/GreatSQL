@@ -1,0 +1,47 @@
+--source include/not_group_replication_plugin.inc
+--source include/have_binlog_format_statement.inc
+--source include/master-slave.inc
+
+--disable_query_log
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+--enable_query_log
+
+connection master1;
+set @old_sql_mode=@@sql_mode;
+set sql_mode=oracle;
+create global temporary table gt_t_t2 (
+  id int PRIMARY KEY,
+  name VARCHAR(16),
+  deptId int
+);
+create private temporary table ora$ptt_t1 (id int) on commit preserve definition;
+drop table gt_t_t2;
+drop table ora$ptt_t1;
+
+create global temporary table gt_t_t1(id int, name varchar(16), deptId int)
+  on commit delete rows;
+delimiter //;
+create or replace procedure p1() as
+salary varchar(20);
+begin
+  start transaction;
+  insert into gt_t_t1 values (1, 'bb', 1);
+  select name into salary from gt_t_t1 limit 1;
+  select salary;
+  commit;
+  select * from gt_t_t1;
+end; //
+delimiter ;//
+call p1;
+call p1;
+call p1;
+drop procedure p1;
+drop table gt_t_t1;
+set sql_mode=@old_sql_mode;
+
+save_master_pos;
+disconnect master;
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_end.inc
+

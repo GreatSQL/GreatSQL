@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -35,6 +36,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <chrono>
 #include "db0err.h"
 #include "mysql/plugin.h"  // thd_killed()
+#include "sql/clone_compress.h"
+#include "sql/clone_handler.h"
 #include "sql/handler.h"
 #include "univ.i"
 #include "ut0mutex.h"
@@ -45,6 +48,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "clone0snapshot.h"
 
 #include <tuple>
+
+/** mark .delta file init("clon") and finish("CLON")*/
+#define INIT_FLAG 0x636c6F6EUL
+#define END_FLAG 0x434C4F4EUL
 
 /** Directory under data directory for all clone status files. */
 #define CLONE_FILES_DIR OS_FILE_PREFIX "clone" OS_PATH_SEPARATOR_STR
@@ -133,10 +140,10 @@ enum Clone_Handle_State {
 enum Clone_Task_State { CLONE_TASK_INACTIVE = 1, CLONE_TASK_ACTIVE };
 
 /** Maximum number of concurrent snapshots */
-const int MAX_SNAPSHOTS = 1;
+const int MAX_SNAPSHOTS = MAX_CLONE_COURRENCY_NUM;
 
 /** Maximum number of concurrent clones */
-const int MAX_CLONES = 1;
+const int MAX_CLONES = MAX_CLONE_COURRENCY_NUM;
 
 /** Clone system array size */
 const int CLONE_ARR_SIZE = 2 * MAX_CLONES;
@@ -204,6 +211,9 @@ class Clone_Task_Manager {
   /** Initialize task manager for clone handle
   @param[in]    snapshot        snapshot */
   void init(Clone_Snapshot *snapshot);
+
+  void finish_send_file();
+  void wait_finish_send_file();
 
   /** Get task state mutex
   @return state mutex */
@@ -439,6 +449,8 @@ class Clone_Task_Manager {
   @return error code */
   int alloc_buffer(Clone_Task *task);
 
+  Snapshot_State get_ack_state() { return m_ack_state; }
+
 #ifdef UNIV_DEBUG
   /** Check if needs to wait for debug sync point
   @param[in]    chunk_num       chunk number to process
@@ -569,7 +581,16 @@ class Clone_Task_Manager {
 
   /** Attached snapshot handle */
   Clone_Snapshot *m_clone_snapshot;
+
+  bool m_finish_send_file;
 };
+
+typedef struct {
+  byte *delta_buf_base;
+  byte *delta_buf;
+  ulint npages;
+  ulint nseg;
+} clone_incremental_ctxt_t;
 
 /** Clone Handle for copying or applying data */
 class Clone_Handle {
@@ -579,7 +600,7 @@ class Clone_Handle {
   @param[in]    clone_version   clone version
   @param[in]    clone_index     index in clone array */
   Clone_Handle(Clone_Handle_Type handle_type, uint clone_version,
-               uint clone_index);
+               uint clone_index, uint32_t max_concurrency);
 
   /** Destructor: Detach from snapshot */
   ~Clone_Handle();
@@ -591,7 +612,9 @@ class Clone_Handle {
   @param[in]    data_dir        data directory for apply
   @return error code */
   int init(const byte *ref_loc, uint ref_len, Ha_clone_type type,
-           const char *data_dir);
+           const char *data_dir, bool enable_page_track = false,
+           uint64_t start_id = 0,
+           file_compress_mode_t comp_mode = CLONE_FILE_COMPRESS_NONE);
 
   /** Attach to the clone handle */
   void attach() { ++m_ref_count; }
@@ -791,6 +814,8 @@ class Clone_Handle {
   @return error code */
   int open_file(Clone_Task *task, const Clone_file_ctx *file_ctx,
                 ulint file_type, bool create_file, File_init_cbk &init_cbk);
+
+  bool write_delta_metadata(const char *data_dir, const Clone_File_Meta *info);
 
   /** Close file for the task
   @param[in]    task    clone task
@@ -1003,6 +1028,28 @@ class Clone_Handle {
   int modify_and_write(const Clone_Task *task, uint64_t offset,
                        unsigned char *buffer, uint32_t buf_len);
 
+  /** init increment clone buffer to store pageid after the snapshot was
+  initialized
+  @return error code */
+  int clone_incremental_init();
+
+  /** Receive data from server, add page id to the buffer, flush to the file
+  when the number of pagid is UNIV_PAGE_SIZE / 4 and recalculate the offset of
+  data in .delta file
+  @param[in]    task            task that is receiving the information
+  @param[in]    data_desc          Descriptor for data
+  @return error code */
+  int clone_incremental_process(Clone_Task *task, Clone_Desc_Data &data_desc,
+                                Ha_clone_cbk *callback);
+
+  int clone_incremental_write(Clone_Task *task, unsigned char *buffer,
+                              uint32_t len);
+
+  /**
+  Flush the incremental page write before close the .delta file
+  @return false on success, true on error. */
+  int clone_incremental_finalize(Clone_Task *task, Ha_clone_cbk *callback);
+
  private:
   /** Clone handle type: Copy, Apply */
   Clone_Handle_Type m_clone_handle_type;
@@ -1031,6 +1078,12 @@ class Clone_Handle {
   /** Index in global array */
   uint m_clone_arr_index;
 
+  /** max_concurrency Maximum number of concurrent threads for current
+   * operation, only used for HA_CLONE_PAGE*/
+  uint32_t m_max_concurrency;
+
+  char m_uuid[UUID_LENGTH + 1];
+
   /** Unique clone identifier */
   uint64_t m_clone_id;
 
@@ -1045,6 +1098,9 @@ class Clone_Handle {
 
   /** Clone data directory */
   const char *m_clone_dir;
+
+  /** used to store arch tablespaceID+pageID*/
+  clone_incremental_ctxt_t m_clone_incremental_ctxt[CLONE_MAX_TASKS];
 
   /** Clone task manager */
   Clone_Task_Manager m_clone_task_manager;
@@ -1094,9 +1150,11 @@ class Clone_Sys {
   @param[in]    loc             locator
   @param[in]    hdl_type        handle type
   @param[out]   clone_hdl       clone handle
+  @param[in]    max_concurrency Maximum number of concurrent threads for current
+  operation
   @return error code */
   int add_clone(const byte *loc, Clone_Handle_Type hdl_type,
-                Clone_Handle *&clone_hdl);
+                Clone_Handle *&clone_hdl, uint32_t max_concurrency);
 
   /** drop a clone handle from clone system
   @param[in]    clone_handle    Clone handle */
@@ -1125,6 +1183,8 @@ class Clone_Sys {
   @return error code */
   int attach_snapshot(Clone_Handle_Type hdl_type, Ha_clone_type clone_type,
                       uint64_t snapshot_id, bool is_pfs_monitor,
+                      bool enable_page_track, uint64_t start_id,
+                      file_compress_mode_t comp_mode,
                       Clone_Snapshot *&snapshot);
 
   /** Detach clone handle from snapshot

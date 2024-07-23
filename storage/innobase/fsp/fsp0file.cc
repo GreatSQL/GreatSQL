@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2013, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -559,6 +560,8 @@ dberr_t Datafile::validate_first_page(space_id_t space_id, lsn_t *flush_lsn,
 
     if (nonzero_bytes == 0) {
       error_txt = "Header page consists of zero bytes";
+      free_first_page();
+      return (DB_PAGE_IS_BLANK);
     }
   }
 
@@ -589,7 +592,8 @@ dberr_t Datafile::validate_first_page(space_id_t space_id, lsn_t *flush_lsn,
     /* The space_id can be most anything, except -1. */
     error_txt = "A bad Space ID was found";
 
-  } else if (m_space_id != 0 && space_id != m_space_id) {
+  } else if (m_space_id != 0 && space_id != m_space_id &&
+             space_id != SPACE_UNKNOWN) {
     /* Tablespace ID mismatch. The file could be in use
     by another tablespace. */
 

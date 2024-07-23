@@ -1,5 +1,5 @@
 # Copyright (c) 2006, 2022, Oracle and/or its affiliates.
-# Copyright (c) 2023, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -46,7 +46,10 @@ ENDIF()
 INCLUDE_DIRECTORIES(
   ${CMAKE_SOURCE_DIR}/sql
   ${CMAKE_SOURCE_DIR}/sql/auth
+  ${GMOCK_INCLUDE_DIRS}
 )
+
+INCLUDE_DIRECTORIES(${GMOCK_INCLUDE_DIRS})
 
 # Conflicting YYSTYPE, because we have multiple Bison grammars.
 # WL#11100 Migrate to Bison 3.x should fix this.
@@ -72,6 +75,7 @@ SET(INNOBASE_ZIP_DECOMPRESS_SOURCES
 SET(INNOBASE_SOURCES
   api/api0api.cc
   api/api0misc.cc
+  arch/arch0apply.cc
   arch/arch0arch.cc
   arch/arch0page.cc
   arch/arch0log.cc

@@ -1,0 +1,227 @@
+# test mac on db
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+--source ../include/mac_row_policy_create.inc
+
+connect (master,localhost,root,,);
+--connection master
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+call sys_mac.mac_apply_user_policy('root','localhost','P1','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+
+--error ER_MAC_USER_NOT_APPLY_POLICY
+select mac_reset_session_labels('P1');
+
+connect (user1,localhost,root,,);
+--connection user1
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+select mac_get_session_labels('P1');
+
+#test error level
+
+--error ER_MAC_SET_DEF_SESSION_LABEL_INVALID
+select mac_set_def_label('P1', 'L5::');
+
+--error ER_MAC_SET_DEF_SESSION_LABEL_INVALID
+select mac_set_def_label('P1', 'L1::');
+
+#test error compartment
+
+--error ER_MAC_SET_DEF_SESSION_LABEL_INVALID
+select mac_set_def_label('P1', 'L3:C1:');
+
+--error ER_MAC_SET_DEF_SESSION_LABEL_INVALID
+select mac_set_def_label('P1', 'L3:C5:');
+
+#test error group
+
+--error ER_MAC_SET_DEF_SESSION_LABEL_INVALID
+select mac_set_def_label('P1', 'L3::G2');
+
+
+#test set def label
+
+#test compartment
+
+select mac_set_def_label('P1', 'L2:C2:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L2:C3:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L2:C4:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L2:C2,C3:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L2:C2,C4:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L2:C3,C4:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L2:C2,C3,C4:G1');
+select mac_get_session_labels('P1');
+
+###########################################################################
+
+select mac_set_def_label('P1', 'L3:C2:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L3:C3:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L3:C4:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L3:C2,C3:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L3:C2,C4:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L3:C3,C4:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L3:C2,C3,C4:G1');
+select mac_get_session_labels('P1');
+
+###########################################################################
+
+select mac_reset_session_labels('P1');
+select mac_get_session_labels('P1');
+
+###########################################################################
+
+select mac_set_def_label('P1', 'L4:C2:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L4:C3:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L4:C4:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L4:C2,C3:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L4:C2,C4:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L4:C3,C4:G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L4:C2,C3,C4:G1');
+select mac_get_session_labels('P1');
+
+###########################################################################
+
+#test group
+
+select mac_set_def_label('P1', 'L4::');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L4::G1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L4::G1_1');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L4::G1_2');
+select mac_get_session_labels('P1');
+
+select mac_set_def_label('P1', 'L4::G1_1_1');
+select mac_get_session_labels('P1');
+
+select mac_reset_session_labels('P1');
+select mac_get_session_labels('P1');
+
+#**********************************************************************#
+#test set row label 
+
+select mac_get_session_labels('P1');
+#test level
+
+--error ER_MAC_SET_ROW_SESSION_LABEL_INVALID
+select mac_set_row_label('P1', 'L4::');
+
+--error ER_MAC_SET_ROW_SESSION_LABEL_INVALID
+select mac_set_row_label('P1', 'L1::');
+
+select mac_set_row_label('P1', 'L2::');
+select mac_get_session_labels('P1');
+
+select mac_set_row_label('P1', 'L2::');
+select mac_get_session_labels('P1');
+
+select mac_reset_session_labels('P1');
+select mac_get_session_labels('P1');
+
+###########################################################################
+
+#test compartment
+
+--error ER_MAC_SET_ROW_SESSION_LABEL_INVALID
+select mac_set_row_label('P1', 'L3:C1:');
+
+--error ER_MAC_SET_ROW_SESSION_LABEL_INVALID
+select mac_set_row_label('P1', 'L3:C2:');
+
+select mac_set_row_label('P1', 'L3:C3:');
+select mac_get_session_labels('P1');
+
+--error ER_MAC_SET_ROW_SESSION_LABEL_INVALID
+select mac_set_row_label('P1', 'L3:C4:');
+
+--error ER_MAC_SET_ROW_SESSION_LABEL_INVALID
+select mac_set_row_label('P1', 'L3:C2,C4:');
+
+--error ER_MAC_SET_ROW_SESSION_LABEL_INVALID
+select mac_set_row_label('P1', 'L3:C1,C4:');
+
+--error ER_MAC_SET_ROW_SESSION_LABEL_INVALID
+select mac_set_row_label('P1', 'L3:C1,C2,C4:');
+
+--error ER_MAC_SET_ROW_SESSION_LABEL_INVALID
+select mac_set_row_label('P1', 'L3:C2,C3:');
+
+select mac_set_row_label('P1', 'L3::');
+select mac_get_session_labels('P1');
+
+select mac_reset_session_labels('P1');
+select mac_get_session_labels('P1');
+
+#test group
+
+select mac_set_row_label('P1', 'L3::G1');
+select mac_get_session_labels('P1');
+
+select mac_set_row_label('P1', 'L3::G1_1');
+select mac_get_session_labels('P1');
+
+select mac_set_row_label('P1', 'L3::G1_1_1');
+select mac_get_session_labels('P1');
+
+select mac_set_row_label('P1', 'L3::G1_2');
+select mac_get_session_labels('P1');
+
+select mac_set_row_label('P1', 'L3::G1_2');
+select mac_get_session_labels('P1');
+
+--error ER_MAC_SET_ROW_SESSION_LABEL_INVALID
+select mac_set_row_label('P1', 'L3::G2');
+
+--connection master
+--source ../include/mac_destory.inc
+disconnect user1;
+disconnect master;

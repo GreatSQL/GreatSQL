@@ -65,7 +65,7 @@
 
 --write_file $MYSQLTEST_VARDIR/tmp/bug83144.cnf
 [mysqlpump]
-exclude_databases=db1,mysql,mtr,sys_audit
+exclude_databases=db1,mysql,mtr
 EOF
 
 CREATE DATABASE db1;

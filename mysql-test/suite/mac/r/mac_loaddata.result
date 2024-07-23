@@ -1,0 +1,83 @@
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+create database db;
+use db;
+create table t1(c1 int, c2 int);
+create table t2(c1 int, c2 int);
+create table t3(c1 int, c2 int, c3 int);
+create table t4(c1 int, c2 int, c3 int, c4 int);
+insert into t2 values(1, 1),(2, 2);
+insert into t3 values(1, 1, 1),(2, 2, 2);
+insert into t4 values(1, 1, 1, 1),(2, 2, 2, 2);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3:G1', 0);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 1);
+set @mac_data2='tmp_dir/data2.txt';
+set @mac_data3='tmp_dir/data3.txt';
+set @mac_data4='tmp_dir/data4.txt';
+SELECT * INTO OUTFILE 'tmp_dir/data2.txt' FROM t2;
+SELECT * INTO OUTFILE 'tmp_dir/data3.txt' FROM t3;
+SELECT * INTO OUTFILE 'tmp_dir/data4.txt' FROM t4;
+[there is no policy on user]
+load data infile 'tmp_dir/data3.txt' into table t1;
+ERROR HY000: mac row write denied to user 'root'@'localhost' for table 't1'
+call sys_mac.mac_set_user_priv('root', 'localhost', 'P1', 'full');
+call sys_mac.mac_set_user_priv('root', 'localhost', 'P2', 'full');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+[have write]
+use db;
+load data infile 'tmp_dir/data2.txt' into table t1;
+ERROR 01000: Row 1 doesn't contain data for all columns
+load data infile 'tmp_dir/data2.txt' into table t1(c1, c2);
+select * from t1 order by c1;
+c1	c2	_gdb_mac_policy_2
+1	1	2
+2	2	2
+truncate table t1;
+load data infile 'tmp_dir/data3.txt' into table t1;
+select * from t1 order by c1;
+c1	c2	_gdb_mac_policy_2
+1	1	1
+2	2	2
+load data infile 'tmp_dir/data4.txt' into table t1;
+ERROR 01000: Row 1 was truncated; it contained more data than there were input columns
+truncate table t1;
+call sys_mac.mac_drop_user_policy('root','localhost', 'P1');
+call sys_mac.mac_drop_user_policy('root','localhost', 'P2');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+call sys_mac.mac_apply_user_policy('root','localhost','P1','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+call sys_mac.mac_apply_user_policy('root','localhost','P2','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+use db;
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+select mac_get_session_labels('P2');
+mac_get_session_labels('P2')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+load data infile 'tmp_dir/data2.txt' into table t1(c1, c2);
+select c1, c2, mac_label_to_char(_gdb_mac_policy_1), mac_label_to_char(_gdb_mac_policy_2) from t1;
+c1	c2	mac_label_to_char(_gdb_mac_policy_1)	mac_label_to_char(_gdb_mac_policy_2)
+1	1	L3:C3:G1	L3:C3:G1
+2	2	L3:C3:G1	L3:C3:G1
+call sys_mac.mac_drop_row_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_row_policy('db', 't1', 'P2');
+drop database db;

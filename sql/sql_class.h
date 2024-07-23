@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
    as published by the Free Software Foundation.
@@ -727,9 +727,9 @@ class Open_tables_state {
   */
   uint state_flags;
 
-  /* if true , use in dbms_sql will change open tables for new lex and lock
-   * status */
-  bool use_in_dbms_sql;
+  /* if true ,func use in dynamic sql will change open tables for new lex and
+   * lock status */
+  bool use_in_dyn_sql;
 
   /**
      This constructor initializes Open_tables_state instance which can only
@@ -740,7 +740,7 @@ class Open_tables_state {
   Open_tables_state()
       : m_reprepare_observers(PSI_INSTRUMENT_ME),
         state_flags(0U),
-        use_in_dbms_sql{false} {}
+        use_in_dyn_sql{false} {}
 
   void set_open_tables_state(Open_tables_state *state);
 
@@ -1445,6 +1445,8 @@ class THD : public MDL_context_owner,
   */
   bool is_engine_ha_data_detached() const;
 
+  unsigned int strictly_convert : 1;
+
   void reset_for_next_command();
   /*
     Constant for THD::where initialization in the beginning of every query.
@@ -1934,6 +1936,8 @@ class THD : public MDL_context_owner,
     Query start time, expressed in microseconds.
   */
   ulonglong start_utime;
+  /* Connection start time */
+  ulonglong conn_start_time;
 
  private:
   /**
@@ -3885,6 +3889,8 @@ class THD : public MDL_context_owner,
   void reset_n_backup_open_tables_state(Open_tables_backup *backup,
                                         uint add_state_flags);
   void restore_backup_open_tables_state(Open_tables_backup *backup);
+
+  void merge_backup_open_tables_state(Open_tables_backup *backup);
   void reset_sub_statement_state(Sub_statement_state *backup, uint new_state);
   void restore_sub_statement_state(Sub_statement_state *backup);
 
@@ -5284,9 +5290,6 @@ class THD : public MDL_context_owner,
   struct seq_currval_cache_entity {
     seq_currval_cache_entity(uint64_t id) : volatile_id(id), valid(false) {}
 
-    seq_currval_cache_entity(uint64_t id, my_decimal &cval)
-        : volatile_id(id), currval(cval), valid(false) {}
-
     void update(uint64_t id, my_decimal &cval) {
       this->volatile_id = id;
       this->currval = cval;
@@ -5303,10 +5306,8 @@ class THD : public MDL_context_owner,
   thd_sequence_cache_t sequence_cache;
 
  public:
-  const my_decimal *get_cached_seq_currval(const char *db, const char *name,
-                                           const Gdb_sequence_entity *seq);
-  void update_seq_cache_entity(const char *db, const char *name, uint64_t id,
-                               my_decimal &cval);
+  const my_decimal *get_cached_seq_currval(Gdb_sequence_entity *seq);
+  void update_seq_cache_entity(Gdb_sequence_entity *seq, my_decimal &cval);
   /**  @} GreatDB Sequence cache (for compatibility with Oracle) */
 
  public:
@@ -5346,6 +5347,11 @@ class THD : public MDL_context_owner,
 
   bool m_ora_create_global_temp_instance{false};
 
+ public:
+  /* Row id interval info to be used to optimize load data into no pk table. */
+  uint64 left_of_interval;
+  uint64 right_of_interval;
+  uint64 next_interval_size;
 };
 /**
    Return lock_tables_mode for secondary engine.

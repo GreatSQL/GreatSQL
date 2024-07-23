@@ -3532,6 +3532,11 @@ sub environment_setup {
     mtr_exe_exists("$path_client_bindir/mysql_tzinfo_to_sql");
   $ENV{'MYSQL_TZINFO_TO_SQL'} = native_path($exe_mysql_tzinfo_to_sql);
 
+  # zstd_decompress
+  my $exe_zstd_decompress =
+    mtr_exe_maybe_exists("$path_client_bindir/zstd_decompress");
+  $ENV{'ZSTD_DECOMPRESS'} = native_path($exe_zstd_decompress);
+
   # lz4_decompress
   my $exe_lz4_decompress =
     mtr_exe_maybe_exists("$path_client_bindir/lz4_decompress");

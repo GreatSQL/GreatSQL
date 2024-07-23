@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2006, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -477,3 +478,9 @@ ulong thd_parallel_read_threads(THD *thd);
 [[nodiscard]] size_t thd_ddl_threads(THD *thd) noexcept;
 
 #endif /* HA_INNODB_PROTOTYPES_H */
+
+/** Return the maximum buffer size to use for DDL.
+@param[in]      thd       Session instance, or nullptr to query the global
+                          innodb_parallel_read_threads value.
+@return optimize_no_pk_parallel_load. */
+[[nodiscard]] bool thd_optimize_no_pk_parallel_load(THD *thd);

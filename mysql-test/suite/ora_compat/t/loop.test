@@ -522,5 +522,64 @@ BEGIN
   for rec in to_char('1') loop
   end loop;
 
+--echo #
+--echo # test of 1 ..2
+--echo #
+delimiter //;
+CREATE or replace PROCEDURE p1(i float,j float) as
+BEGIN
+  for x IN reverse i ..j LOOP
+    select x;
+  END LOOP;
+  for x IN 1. ..2. LOOP
+    select x;
+  END LOOP;
+  for x IN 1 ..2 LOOP
+    select x;
+  END LOOP;
+  for x IN -1.. .2 LOOP
+    select x;
+  END LOOP;
+  for x IN -1. .. .2 LOOP
+    select x;
+  END LOOP;
+END//
+delimiter ;//
+CALL p1(1.4,2.5);
+DROP PROCEDURE IF EXISTS p1;
+
+--echo #
+--echo # test of 1..2
+--echo #
+delimiter //;
+CREATE or replace PROCEDURE p1(i float,j float) as
+BEGIN
+  for x IN reverse i..j LOOP
+    select x;
+  END LOOP;
+  for x IN 1..2 LOOP
+    select x;
+  END LOOP;
+  for x IN -.1.. 2. LOOP
+    select x;
+  END LOOP;
+  for x IN -.1..2. LOOP
+    select x;
+  END LOOP;
+END//
+delimiter ;//
+CALL p1(1.4,2.5);
+DROP PROCEDURE IF EXISTS p1;
+
+--echo #
+--echo # test of statement_digest_text
+--echo #
+select statement_digest_text('CREATE or replace PROCEDURE p1() as
+begin
+  for i in 1..2 loop
+   exit when i=1;
+  end loop;
+end;');
+
 
 

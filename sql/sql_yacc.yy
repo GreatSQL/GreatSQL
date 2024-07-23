@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -363,11 +363,14 @@ static bool allow_type_without_len_in_sp_decl(THD *thd) {
   sp_head *sp = thd->lex->sphead;
   if (sp) {
     /**
-      Use sphead->m_parser_data.m_parameter_{start|end}_ptr to determine
+      Use sphead->m_parser_data.m_parameter_{start|end}_ptr or 
+      sphead->m_parser_data.m_cursor_parameter_{start|end}_ptr to determine
       whether the current parsing context is a parameter list
     */
-    if (sp->m_parser_data.get_parameter_start_ptr()
-          && !sp->m_parser_data.get_parameter_end_ptr()) {
+    if ((sp->m_parser_data.get_parameter_start_ptr()
+         && !sp->m_parser_data.get_parameter_end_ptr()) || 
+         (sp->m_parser_data.get_cursor_parameter_start_ptr()
+         && !sp->m_parser_data.get_cursor_parameter_end_ptr()) ) {
       return true;
     }
 
@@ -1582,7 +1585,7 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
 %token<lexer.keyword> SYS_REFCURSOR_SYM 1453
 %token<lexer.keyword> REF_SYM 1454
 %token<lexer.keyword> RAW_SYM 1455
-%token FOJ_SYM 1456
+%token OBSOLETE_TOKEN_1456 1456            /* was: FOJ_SYM */
 %token RATIO_TO_REPORT_SYM 1457
 %token KEEP_SYM 1458
 %token <lexer.keyword> MATERIALIZED_SYM 1459
@@ -1612,9 +1615,12 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
 %token<lexer.keyword> NO_ORDER_SYM 1507
 %token<lexer.keyword> SEQUENCES 1508
 %token<lexer.keyword> PIVOT_SYM 1509
+%token<lexer.keyword> TRACK_SYM 1510
+%token<lexer.keyword> START_LSN_SYM 1511
 %token<lexer.keyword> INSERTING 1512
 %token<lexer.keyword> UPDATING 1513
 %token<lexer.keyword> DELETING 1514
+%token<lexer.keyword> BASED_SYM 1515
 
 
 /*
@@ -1647,7 +1653,7 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
 %left UNION_SYM EXCEPT_SYM MINUS_SYM
 %left INTERSECT_SYM
 %left CONDITIONLESS_JOIN
-%left   JOIN_SYM INNER_SYM CROSS STRAIGHT_JOIN NATURAL LEFT RIGHT ON_SYM USING FOJ_SYM
+%left   JOIN_SYM INNER_SYM CROSS STRAIGHT_JOIN NATURAL LEFT RIGHT ON_SYM USING FULL
 %left   SET_VAR
 %left   OR_SYM OR2_SYM
 %left   XOR
@@ -1657,10 +1663,16 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
 %left   '|'
 %left   '&'
 %left   SHIFT_LEFT SHIFT_RIGHT
+%ifdef SQL_MODE_ORACLE
+%left   '-' '+'  OR_OR_SYM
+%else
 %left   '-' '+'
+%endif
 %left   '*' '/' '%' DIV_SYM MOD_SYM
 %left   '^'
+%ifndef SQL_MODE_ORACLE
 %left   OR_OR_SYM
+%endif
 %left   NEG '~'
 %right  NOT_SYM NOT2_SYM
 %right  BINARY_SYM COLLATE_SYM
@@ -1683,7 +1695,7 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
         opt_constraint_name
         ts_datafile lg_undofile /*lg_redofile*/ opt_logfile_group_name opt_ts_datafile_name
         opt_describe_column
-        opt_datadir_ssl default_encryption
+        opt_datadir_ssl opt_enable_page_track_and_start_lsn default_encryption
         lvalue_ident
         schema
         engine_or_all
@@ -2202,6 +2214,7 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
         simple_statement
         truncate_stmt
         update_stmt
+        show_type_status_stmt
 
 %type <table_ident> table_ident_opt_wild
 
@@ -2462,6 +2475,7 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
 
 %type <connect_by> opt_connect_clause connect_by_clause
 %type <num> connect_by_opt
+%type <qualified_column_ident> ora_udt_ident
 
 %ifndef SQL_MODE_ORACLE
 /* types only used in default mode are declared here */
@@ -2500,12 +2514,13 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
 %type <oracle_sp_for_loop_index_and_bounds> sp_for_loop_index_and_bounds
 %type <item> explicit_cursor_attr implicit_cursor_attr opt_bulk_limit_ora
   udf_expr_record_table_row_ora pivot_sum_expr pivot_for_clause pivot_in_expr simple_ident_without_q
-  opt_trigger_even_column
-%type <top_level_node> show_create_type_stmt show_type_status_stmt
+  opt_trigger_even_column udt_index_expr
+%type <top_level_node>
+        show_create_type_stmt
 
 %type <qualified_column_ident>
         opt_qualified_column_ident
-        ora_udt_ident
+
 %type <qualified_column_ident_list> column_ref_list column_locking_list
 %type <item_list2> opt_parenthesized_cursor_actual_parameters
       udf_expr_record_table_param_ora udf_expr_record_table_list_ora
@@ -2782,9 +2797,7 @@ simple_statement:
         | show_open_tables_stmt
         | show_plugins_stmt
         | show_privileges_stmt
-%ifdef SQL_MODE_ORACLE
         | show_type_status_stmt
-%endif
         | show_procedure_code_stmt
         | show_procedure_status_stmt
         | show_processlist_stmt
@@ -4858,7 +4871,7 @@ sp_fdparam:
 
                 spvar->default_value= dflt_value_item;
               } else {
-                my_error(ER_SYNTAX_ERROR, MYF(0));
+                YYTHD->syntax_error_at(@4);
                 MYSQL_YYABORT;
               }
             }
@@ -4896,6 +4909,7 @@ sp_fdparam:
               spvar->field_def.nested_table_udt = row_type->m_nested_table_udt_tmp;
               spvar->field_def.ora_record.set_row_field_definitions(row_type->m_row_def);
               spvar->field_def.ora_record.set_row_field_table_definitions(row_type->m_row_def_table);
+              spvar->field_def.ora_record.m_is_sp_param = true;
             }
 %endif
             if (prepare_sp_create_field(thd,
@@ -5019,6 +5033,7 @@ sp_pdparam:
               spvar->field_def.nested_table_udt = row_type->m_nested_table_udt_tmp;
               spvar->field_def.ora_record.set_row_field_definitions(row_type->m_row_def);
               spvar->field_def.ora_record.set_row_field_table_definitions(row_type->m_row_def_table);
+              spvar->field_def.ora_record.m_is_sp_param = true;
             }
 %endif
             if (prepare_sp_create_field(thd,
@@ -5037,7 +5052,8 @@ sp_type_ora:
         | SYS_REFCURSOR_SYM   { $$= NEW_PTN PT_sys_refcursor_type(); }
         | IDENT_sys
           {
-            auto udt_ident = NEW_PTN Qualified_column_ident(YYTHD->db(), to_lex_cstring($1));
+            sp_head *sp= YYTHD->lex->sphead;
+            auto udt_ident = NEW_PTN Qualified_column_ident(to_lex_cstring(sp->m_db), to_lex_cstring($1));
             $$= NEW_PTN PT_row_type(udt_ident);
           }
 %endif
@@ -5331,16 +5347,14 @@ sp_decl:
 
             LEX_CSTRING cursor_query= EMPTY_CSTR;
 
-            if (cursor_lex->is_metadata_used())
-            {
-              cursor_query=
+            // Save the cursor_query to parse stmt includes SEQUENCE sql.
+            cursor_query=
                 make_string(thd,
                             sp->m_parser_data.get_current_stmt_start_ptr(),
                             @6.raw.end);
 
-              if (!cursor_query.str)
-                MYSQL_YYABORT;
-            }
+            if (!cursor_query.str)
+              MYSQL_YYABORT;
 
             sp_instr_cpush *i=
               NEW_PTN sp_instr_cpush(sp->instructions(), pctx,
@@ -8080,7 +8094,6 @@ column_def:
           {
             $$= NEW_PTN PT_column_def($1, $2, $3);
           }
-%ifdef SQL_MODE_ORACLE
         | ident ora_udt_ident udt_default
           {
             PT_udt_type *udt_type= NEW_PTN PT_udt_type(Char_type::VARCHAR, $2, &my_charset_bin);
@@ -8108,7 +8121,6 @@ ora_udt_ident:
               MYSQL_YYABORT;
           }
         ;
-%endif
 
 opt_references:
           /* empty */      { $$= NULL; }
@@ -8325,7 +8337,7 @@ type:
               ullstr(max_char_length, buf);
               $$= NEW_PTN PT_char_type(Char_type::VARCHAR, buf, cs, $2.force_binary);
             } else {
-              my_error(ER_SYNTAX_ERROR, MYF(0));
+              YYTHD->syntax_error_at(@1);
               MYSQL_YYABORT;
             }
           }
@@ -8343,7 +8355,7 @@ type:
               $$= NEW_PTN PT_char_type(Char_type::VARCHAR, buf, cs);
               warn_about_deprecated_national(YYTHD);
             } else {
-              my_error(ER_SYNTAX_ERROR, MYF(0));
+              YYTHD->syntax_error_at(@1);
               MYSQL_YYABORT;
             }
           }
@@ -8356,7 +8368,7 @@ type:
               ullstr(max_char_length, buf);
               $$= NEW_PTN PT_char_type(Char_type::VARCHAR, buf, &my_charset_bin);
             } else {
-              my_error(ER_SYNTAX_ERROR, MYF(0));
+              YYTHD->syntax_error_at(@1);
               MYSQL_YYABORT;
             }
           }
@@ -11824,6 +11836,27 @@ predicate:
               MYSQL_YYABORT;
             $$= NEW_PTN Item_func_eq(@$, item1, item4);
           }
+%ifdef SQL_MODE_ORACLE
+        | bit_expr LIKE bit_expr
+          {
+            $$ = NEW_PTN Item_func_like(@$, $1, $3);
+          }
+        | bit_expr LIKE bit_expr ESCAPE_SYM bit_expr %prec LIKE
+          {
+            $$ = NEW_PTN Item_func_like(@$, $1, $3, $5);
+          }
+        | bit_expr not LIKE bit_expr
+          {
+            auto item = NEW_PTN Item_func_like(@$, $1, $4);
+            $$ = NEW_PTN Item_func_not(@$, item);
+          }
+        | bit_expr not LIKE bit_expr ESCAPE_SYM bit_expr %prec LIKE
+          {
+            auto item = NEW_PTN Item_func_like(@$, $1, $4, $6);
+            $$ = NEW_PTN Item_func_not(@$, item);
+          }
+
+%else
         | bit_expr LIKE simple_expr
           {
             $$ = NEW_PTN Item_func_like(@$, $1, $3);
@@ -11842,6 +11875,7 @@ predicate:
             auto item = NEW_PTN Item_func_like(@$, $1, $4, $6);
             $$ = NEW_PTN Item_func_not(@$, item);
           }
+%endif
         | bit_expr REGEXP bit_expr
           {
             auto args= NEW_PTN PT_item_list;
@@ -11883,6 +11917,12 @@ bit_expr:
           {
             $$= NEW_PTN Item_func_shift_right(@$, $1, $3);
           }
+%ifdef SQL_MODE_ORACLE
+        | bit_expr OR_OR_SYM bit_expr  %prec OR_OR_SYM
+          {
+            $$= NEW_PTN Item_func_concat(@$, $1, $3, true);
+          }
+%endif
         | bit_expr '+' bit_expr %prec '+'
           {
             $$= NEW_PTN Item_func_plus(@$, $1, $3);
@@ -11981,10 +12021,12 @@ simple_expr:
         | in_expression_user_variable_assignment
         | set_function_specification
         | window_func_call
+%ifndef SQL_MODE_ORACLE
         | simple_expr OR_OR_SYM simple_expr
           {
             $$= NEW_PTN Item_func_concat(@$, $1, $3, true);
           }
+%endif
         | PRIOR_SYM simple_expr  %prec NEG
           {
             $$= NEW_PTN Item_func_prior(@$,$2);
@@ -12656,7 +12698,7 @@ function_call_generic:
               my_error(ER_SP_UNDECLARED_VAR, MYF(0), $1.str);
               MYSQL_YYABORT;
             }
-            if(!spvar->field_def.ora_record.is_row_table() ||
+            if(!spvar->field_def.ora_record.row_field_table_definitions() ||
             spvar->field_def.ora_record.is_record_table_define)
             {
               my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), $1.str);
@@ -14208,19 +14250,15 @@ joined_table:
           {
             $$= NEW_PTN PT_joined_table_on($1, @2, $2, $3, $5);
           }
-        | table_reference FOJ_SYM table_reference ON_SYM expr
-          {
-            $$= NEW_PTN PT_joined_table_on($1, @2, JTT_FULL, $3, $5);
-          }
         | table_reference outer_join_type table_reference USING '(' using_list ')'
           {
-            $$= NEW_PTN PT_joined_table_using($1, @2, $2, $3, $6);
-          }
-        | table_reference FOJ_SYM table_reference USING '(' using_list ')'
-          {
+            if($2 == JTT_FULL) {
               my_error(ER_NOT_SUPPORTED_YET, MYF(0),
                         "FULL JOIN with USING clause");
               MYSQL_YYABORT;
+            }
+
+            $$= NEW_PTN PT_joined_table_using($1, @2, $2, $3, $6);
           }
         | table_reference inner_join_type table_reference
           %prec CONDITIONLESS_JOIN
@@ -14253,6 +14291,7 @@ inner_join_type:
 outer_join_type:
           LEFT opt_outer JOIN_SYM          { $$= JTT_LEFT; }
         | RIGHT opt_outer JOIN_SYM         { $$= JTT_RIGHT; }
+        | FULL opt_outer JOIN_SYM          { $$= JTT_FULL; }
         ;
 
 opt_inner:
@@ -16106,7 +16145,7 @@ insert_record_query_expression:
               MYSQL_YYABORT;
             }
             sp_variable *spvar_table= pctx->find_variable($1.str, $1.length, false);
-            if(!spvar_table || !spvar_table->field_def.ora_record.is_row_table() ||
+            if(!spvar_table || !spvar_table->field_def.ora_record.row_field_table_definitions() ||
             spvar_table->field_def.ora_record.is_record_table_define)
             {
               my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), $1.str);
@@ -16939,6 +16978,11 @@ show_create_view_stmt:
           {
             $$ = NEW_PTN PT_show_create_view(@$, $4);
           }
+        |  SHOW CREATE VIEW_SYM ATTRIBUTE_SYM table_ident
+          {
+            $$ = NEW_PTN PT_show_create_view(@$, $5);
+            Lex->create_force_view_mode = true;
+          }
         ;
 
 show_master_status_stmt:
@@ -17023,14 +17067,12 @@ show_function_status_stmt:
           }
         ;
 
-%ifdef SQL_MODE_ORACLE
 show_type_status_stmt:
           SHOW TYPE_SYM STATUS_SYM opt_wild_or_where
           {
             $$ = NEW_PTN PT_show_status_type(@$, $4.wild, $4.where);
           }
         ;
-%endif
 
 show_procedure_code_stmt:
 %ifdef SQL_MODE_ORACLE
@@ -18102,7 +18144,12 @@ simple_ident_q:
           {
             LEX *lex= Lex;
             sp_head *sp= lex->sphead;
-            if (sp && (sp->m_type != enum_sp_type::TRIGGER))
+            if (!sp)
+            {
+              my_error(ER_SP_BAD_USE_PROC, MYF(0));
+              MYSQL_YYABORT;
+            }
+            else if (sp->m_type != enum_sp_type::TRIGGER)
             {
               my_error(ER_SP_BADSTATEMENT, MYF(0), YYTHD->strmake(@1.raw.start, @4.raw.end - @1.raw.start));
               MYSQL_YYABORT;
@@ -18620,6 +18667,7 @@ ident_keywords_unambiguous:
         | AVG_ROW_LENGTH
         | AVG_SYM
         | BACKUP_SYM
+        | BASED_SYM
         | BINARY_INTEGER_SYM
         | BINLOG_SYM
         | BIT_SYM %prec KEYWORD_USED_AS_IDENT
@@ -18726,13 +18774,6 @@ ident_keywords_unambiguous:
         | FORMAT_SYM
         | FORALL_SYM
         | FOUND_SYM
-        | FULL
-          {
-            THD *thd= YYTHD;
-            push_warning_printf(thd, Sql_condition::SL_WARNING,
-                                ER_WARN_DEPRECATED_IDENT,
-                                ER_THD(thd, ER_WARN_DEPRECATED_IDENT), "FULL");
-          }
         | GENERAL
         | GENERATE_SYM
         | GEOMETRYCOLLECTION_SYM
@@ -19007,6 +19048,7 @@ ident_keywords_unambiguous:
         | SQL_THREAD
         | SRID_SYM
         | STACKED_SYM
+        | START_LSN_SYM
         | STARTS_SYM
         | STATS_AUTO_RECALC_SYM
         | STATS_PERSISTENT_SYM
@@ -19041,6 +19083,7 @@ ident_keywords_unambiguous:
         | TIMESTAMP_SYM %prec KEYWORD_USED_AS_IDENT
         | TIME_SYM %prec KEYWORD_USED_AS_IDENT
         | TLS_SYM
+        | TRACK_SYM
         | TRANSACTION_SYM
         | TRIGGERS_SYM
         | TYPES_SYM
@@ -19166,6 +19209,7 @@ table_alias_keyword:
 
 ident_keywords_ambiguous_6_not_table_alias:
           OFFSET_SYM
+        | FULL
         ;
 
 /*
@@ -20851,6 +20895,15 @@ view_or_trigger_or_sp_or_event:
           { Lex->create_view_mode= enum_view_create_mode::VIEW_CREATE_OR_REPLACE;
             Lex->create_force_view_mode = true;
           }
+        | or_replace definer_opt init_lex_create_info trigger_tail
+          {
+            if(Lex->create_info->options & HA_LEX_CREATE_IF_NOT_EXISTS)
+            {
+              my_error(ER_NOT_SUPPORTED_YET,MYF(0),"USING 'OR REPLACE' together with 'IF NOT EXISTS'");
+              MYSQL_YYABORT;
+            }
+            Lex->create_sp_mode= enum_sp_create_mode::SP_CREATE_OR_REPLACE;
+          }
         ;
 
 definer_tail:
@@ -21192,6 +21245,10 @@ type_object:
             LEX *lex= thd->lex;
             sp_head *sp= lex->sphead;
             sp->m_chistics= &Lex->sp_chistics;
+            if(sp->m_chistics && sp->m_chistics->comment.str) {
+              my_error(ER_NOT_SUPPORTED_YET, MYF(0),"create type with comment");
+              MYSQL_YYABORT;
+            }
             sp->m_parser_data.set_parameter_end_ptr(@5.cpp.start);
             sp->set_body_start(thd, yylloc.cpp.end);
             sp_finish_parsing(thd);
@@ -21850,8 +21907,8 @@ clone_stmt:
             Lex->m_sql_cmd= NEW_PTN Sql_cmd_clone(to_lex_cstring($6));
             if (Lex->m_sql_cmd == nullptr)
               MYSQL_YYABORT;
-          }
-
+            
+          } opt_enable_page_track_and_start_lsn;
         | CLONE_SYM INSTANCE_SYM FROM user ':' ulong_num
           IDENTIFIED_SYM BY TEXT_STRING_sys
           opt_datadir_ssl
@@ -21870,6 +21927,66 @@ clone_stmt:
 
             if (Lex->m_sql_cmd == nullptr)
               MYSQL_YYABORT;
+          } opt_enable_page_track_and_start_lsn
+          ;
+
+opt_enable_page_track_and_start_lsn:
+          /* empty */
+          {
+            ((Sql_cmd_clone*)Lex->m_sql_cmd)->set_based_lsn(0);
+          }
+        | ENABLE_SYM PAGE_SYM TRACK_SYM
+          {
+            ((Sql_cmd_clone*)Lex->m_sql_cmd)->set_enable_page_track();
+            ((Sql_cmd_clone*)Lex->m_sql_cmd)->set_based_lsn(0);
+            if((((Sql_cmd_clone*)Lex->m_sql_cmd)->data_dir()).length == 0){
+              YYTHD->syntax_error_at(@1);
+              MYSQL_YYABORT;
+            }
+          }
+        | START_LSN_SYM opt_equal ulonglong_num
+          {
+            ((Sql_cmd_clone*)Lex->m_sql_cmd)->set_based_lsn($3);
+            if((((Sql_cmd_clone*)Lex->m_sql_cmd)->data_dir()).length == 0){
+              YYTHD->syntax_error_at(@1);
+              MYSQL_YYABORT;
+            }
+          }
+        | ENABLE_SYM PAGE_SYM TRACK_SYM START_LSN_SYM opt_equal ulonglong_num
+          {
+            ((Sql_cmd_clone*)Lex->m_sql_cmd)->set_enable_page_track();
+            ((Sql_cmd_clone*)Lex->m_sql_cmd)->set_based_lsn($6);
+            if((((Sql_cmd_clone*)Lex->m_sql_cmd)->data_dir()).length == 0){
+              YYTHD->syntax_error_at(@1);
+              MYSQL_YYABORT;
+            }
+          }
+        | START_LSN_SYM opt_equal ulonglong_num ENABLE_SYM PAGE_SYM TRACK_SYM
+          {
+            ((Sql_cmd_clone*)Lex->m_sql_cmd)->set_based_lsn($3);
+            ((Sql_cmd_clone*)Lex->m_sql_cmd)->set_enable_page_track();
+            if((((Sql_cmd_clone*)Lex->m_sql_cmd)->data_dir()).length == 0){
+              YYTHD->syntax_error_at(@1);
+              MYSQL_YYABORT;
+            }
+          }
+        | INCREMENT_SYM BASED_SYM DIRECTORY_SYM opt_equal TEXT_STRING_filesystem ENABLE_SYM PAGE_SYM TRACK_SYM
+          {
+            ((Sql_cmd_clone*)Lex->m_sql_cmd)->set_based_dir(to_lex_cstring($5));
+            ((Sql_cmd_clone*)Lex->m_sql_cmd)->set_enable_page_track();
+            if((((Sql_cmd_clone*)Lex->m_sql_cmd)->data_dir()).length == 0){
+              YYTHD->syntax_error_at(@1);
+              MYSQL_YYABORT;
+            }
+          }
+        | ENABLE_SYM PAGE_SYM TRACK_SYM INCREMENT_SYM BASED_SYM DIRECTORY_SYM opt_equal TEXT_STRING_filesystem
+          {
+            ((Sql_cmd_clone*)Lex->m_sql_cmd)->set_based_dir(to_lex_cstring($8));
+            ((Sql_cmd_clone*)Lex->m_sql_cmd)->set_enable_page_track();
+            if((((Sql_cmd_clone*)Lex->m_sql_cmd)->data_dir()).length == 0){
+              YYTHD->syntax_error_at(@1);
+              MYSQL_YYABORT;
+            }
           }
         ;
 
@@ -22080,7 +22197,7 @@ sp_for_loop_bounds:
                 MYSQL_YYABORT;
               name_result= cursor_ident;
             }
-            $$= NEW_PTN Oracle_sp_for_loop_bounds(offset,name_result,true,0,$2,nullptr);
+            $$= NEW_PTN Oracle_sp_for_loop_bounds(offset,name_result,true,0,$2,nullptr,subselect ? true:false);
             if (!$$)
               MYSQL_YYABORT_ERROR(ER_DA_OOM, MYF(0));
           }
@@ -22164,7 +22281,7 @@ for_loop_bound_expr:
             $$= $1;
             $$->sp_lex_in_use= true;
             Item *i0= NEW_PTN Item_int_0(@$);
-            Item *round2= NEW_PTN Item_func_round(@$, $3, i0, false);
+            Item *round2= NEW_PTN Item_func_ora_round(@$, $3, i0, false);
             $$->set_item(round2);
             $$->set_value_query(@3.raw.start, @3.raw.end);
             if (unlikely($$->sphead->restore_lex(YYTHD)))
@@ -22216,6 +22333,8 @@ sp_unlabeled_control_ora:
                 MYSQL_YYABORT;
             }
 
+            pctx->set_for_loop_to_label($3, sp->instructions());
+
             sp_instr_jump_if_not *i=
               NEW_PTN sp_instr_jump_if_not(sp->instructions(),
               lex, expr,EMPTY_CSTR);
@@ -22238,46 +22357,15 @@ sp_unlabeled_control_ora:
 
             sp_pcontext *pctx= lex->get_sp_current_parsing_ctx();
             uint offset= 0;
-            sp_variable *spv= pctx->find_variable($3->cursor_var.str, $3->cursor_var.length, false);
+            if(lex->sp_continue_loop(thd, &offset, pctx->find_label_current_loop_start()))
+              MYSQL_YYABORT;
 
+            $$.init();
             if($3->is_cursor){
-              // cfetch once more
-              if (! pctx->find_cursor($3->cursor_name, &offset, false))
-              {
-                my_error(ER_SP_CURSOR_MISMATCH, MYF(0), $3->cursor_name.str);
-                MYSQL_YYABORT;
-              }
-              sp_instr_cfetch *i_fetch= NEW_PTN sp_instr_cfetch(sp->instructions(),pctx, offset);
-              if (!i_fetch || sp->add_instr(thd, i_fetch))
-                MYSQL_YYABORT;
-
-              i_fetch->add_to_varlist(spv);
-              $$.init();
               $$.curs= 1;
               $$.vars= offset;
-            } else {
-              /*set i=i+1 or i=i-1*/
-              sp->reset_lex(thd);
-              lex= thd->lex;
-              sp= lex->sphead;
-              uint var_idx= $3->var_index;
-
-              Item *expr= pctx->make_item_plsql_plus_one(thd,@$,$3->direction,$3->cursor_var_item);
-              sp_instr_set *is= NEW_PTN sp_instr_set(sp->instructions(),
-                                                     lex,
-                                                     var_idx,
-                                                     expr,
-                                                     EMPTY_CSTR,
-                                                     true,
-                                                     pctx,
-                                                     &sp_rcontext_handler_local);
-
-              if (!is || sp->add_instr(thd, is))
-                MYSQL_YYABORT;
-              sp->restore_lex(thd);
-              $$.init();
             }
-            sp_label *lab=pctx->pop_label();
+            sp_label *lab= pctx->pop_label();
 
             sp_instr_jump *i_jump= NEW_PTN sp_instr_jump(sp->instructions(), pctx,lab->ip);
             if (!i_jump || sp->add_instr(thd, i_jump))
@@ -22358,7 +22446,7 @@ sp_block_ora:
             if (Lex->sp_block_init(YYTHD))
               MYSQL_YYABORT;
           }
-          sp_decl_body_list         /* $3 */
+          opt_sp_decl_body_list     /* $3 */
           BEGIN_SYM                 /* $4 */
           {                         /* $5 */
             if (Lex->sp_exception_declarations(YYTHD))
@@ -22428,9 +22516,9 @@ sp_block_ora:
             if (Lex->sp_block_init(YYTHD))
               MYSQL_YYABORT;
           }
-          sp_decl_body_list  /* 5 */
-          BEGIN_SYM          /* 6 */
-          {                  /* 7 */
+          opt_sp_decl_body_list  /* 5 */
+          BEGIN_SYM              /* 6 */
+          {                      /* 7 */
             if (Lex->sp_exception_declarations(YYTHD))
               MYSQL_YYABORT;
           }
@@ -22581,6 +22669,7 @@ sp_label_stmt:
         | sp_proc_stmt_exit_oracle
         | ora_sp_forall_loop_ora
         | sp_proc_stmt_goto_oracle
+        | sp_proc_stmt_continue_oracle
         ;
 
 sp_proc_stmt_goto_oracle:
@@ -23095,7 +23184,15 @@ sp_decl_handler:
 
 opt_parenthesized_cursor_formal_parameters:
           /* Empty */
-        | '(' sp_fdparams ')'
+        | '('
+           {
+             Lex->sphead->m_parser_data.set_cursor_parameter_start_ptr(@1.cpp.end);
+           }
+           sp_fdparams
+          ')'
+           {
+             Lex->sphead->m_parser_data.set_cursor_parameter_end_ptr(@4.cpp.start);
+           }
         ;
 
 sp_decl_cursor_return:
@@ -23146,19 +23243,23 @@ sp_decl_non_handler:
               MYSQL_YYABORT;
           }
           opt_parenthesized_cursor_formal_parameters  /*$4*/
-          sp_decl_cursor_return  /*$5*/
-          IS   /*$6*/
-          {     /*$7*/
+          {/*$5*/
+            Lex->sphead->m_parser_data.set_cursor_parameter_start_ptr(nullptr);
+            Lex->sphead->m_parser_data.set_cursor_parameter_end_ptr(nullptr);
+          }
+          sp_decl_cursor_return  /*$6*/
+          IS   /*$7*/
+          {     /*$8*/
             THD *thd= YYTHD;
             LEX *lex= Lex;
             sp_head *sp= lex->sphead;
 
             sp->reset_lex(thd);
-            sp->m_parser_data.set_current_stmt_start_ptr(@6.raw.end);
+            sp->m_parser_data.set_current_stmt_start_ptr(@7.raw.end);
           }
-          select_stmt   /*$8*/
+          select_stmt   /*$9*/
           {
-            MAKE_CMD($8);
+            MAKE_CMD($9);
 
             THD *thd= YYTHD;
             LEX *cursor_lex= Lex;
@@ -23195,20 +23296,17 @@ sp_decl_non_handler:
 
             LEX_CSTRING cursor_query= EMPTY_CSTR;
 
-            if (cursor_lex->is_metadata_used())
-            {
-              cursor_query=
-                make_string(thd,
+            cursor_query=
+              make_string(thd,
                             sp->m_parser_data.get_current_stmt_start_ptr(),
-                            @8.raw.end);
+                            @9.raw.end);
 
-              if (!cursor_query.str)
-                MYSQL_YYABORT;
-            }
+            if (!cursor_query.str)
+              MYSQL_YYABORT;
 
             uint off= 0;
             sp_instr_cpush_rowtype *i=
-              NEW_PTN sp_instr_cpush_rowtype(sp->instructions(), pctx_new,
+              NEW_PTN sp_instr_cpush_rowtype(sp->instructions(), pctx,
                                      cursor_lex, cursor_query,
                                      pctx_new->current_cursor_count());
 
@@ -23218,7 +23316,7 @@ sp_decl_non_handler:
             {
               MYSQL_YYABORT;
             }
-            if($5 && Lex->set_static_cursor_with_return_type(thd, $5, off, $2)) {
+            if($6 && Lex->set_static_cursor_with_return_type(thd, $6, off, $2)) {
               MYSQL_YYABORT;
             }
             $$.vars= $$.conds= $$.hndlrs= 0;
@@ -23428,7 +23526,6 @@ sp_decl_variable_list:
             LEX_CSTRING dflt_value_query= EMPTY_CSTR;
             if (dflt_value_item)
             {
-              ITEMIZE(dflt_value_item, &dflt_value_item);
               const char *expr_start_ptr= $3.expr_start;
               if (Lex->is_metadata_used())
               {
@@ -23580,8 +23677,13 @@ ora_simple_ident:
                 "empty parameter or more than one parameter with table type");
               MYSQL_YYABORT;
             }
+            THD *thd= YYTHD;
+            LEX *lex= thd->lex;
+            sp_head *sp= lex->sphead;
+            sp->reset_lex(thd);
             Item *item_int = $3->value.front();
             ITEMIZE(item_int, &item_int);
+            if(sp->restore_lex(thd)) MYSQL_YYABORT;
             $$= new (YYMEM_ROOT) ora_simple_ident_def($1, item_int);
           }
         ;
@@ -23645,6 +23747,18 @@ ora_value:
           }
         ;
 
+udt_index_expr:
+          {
+            YYTHD->lex->sphead->reset_lex(YYTHD);
+          }
+          expr
+          {
+            ITEMIZE($2, &$2);
+            if(YYTHD->lex->sphead->restore_lex(YYTHD)) MYSQL_YYABORT;
+            $$= $2;
+          }
+        ;
+
 ora_internal_variable_name:
           ora_value_ident
           {
@@ -23684,21 +23798,17 @@ ora_internal_variable_name:
             Bipartite_name bipartite_name{to_lex_cstring($2), to_lex_cstring($4)};
             $$ = NEW_PTN Bipartite_name_ora(bipartite_name, nullptr);
           }
-        | ora_value_ident '(' expr ')'
+        | ora_value_ident '(' udt_index_expr ')'
           {
-            Item *item_int = $3;
-            ITEMIZE(item_int, &item_int);
-            ora_simple_ident_def *def= NEW_PTN ora_simple_ident_def($1, item_int);
+            ora_simple_ident_def *def= NEW_PTN ora_simple_ident_def($1, $3);
             List<ora_simple_ident_def> *def_list= new (YYMEM_ROOT) List<ora_simple_ident_def>;
             if(def_list->push_front(def)) MYSQL_YYABORT;
             Bipartite_name bipartite_name{{}, {}};
             $$ = NEW_PTN Bipartite_name_ora(bipartite_name, def_list);
           }
-        | ora_value_ident '(' expr ')' '.' ident
+        | ora_value_ident '(' udt_index_expr ')' '.' ident
           {
-            Item *item_int = $3;
-            ITEMIZE(item_int, &item_int);
-            ora_simple_ident_def *def= NEW_PTN ora_simple_ident_def($1, item_int);
+            ora_simple_ident_def *def= NEW_PTN ora_simple_ident_def($1, $3);
             List<ora_simple_ident_def> *def_list= new (YYMEM_ROOT) List<ora_simple_ident_def>;
             if(def_list->push_front(def)) MYSQL_YYABORT;
             Bipartite_name bipartite_name{{}, to_lex_cstring($6)};
@@ -23711,11 +23821,9 @@ ora_internal_variable_name:
             Bipartite_name bipartite_name{{}, to_lex_cstring($4)};
             $$ = NEW_PTN Bipartite_name_ora(bipartite_name, $3);
           }
-        | ora_value_ident '(' expr ')' '.' ora_simple_ident_list ident
+        | ora_value_ident '(' udt_index_expr ')' '.' ora_simple_ident_list ident
           {
-            Item *item_int = $3;
-            ITEMIZE(item_int, &item_int);
-            ora_simple_ident_def *def= NEW_PTN ora_simple_ident_def($1, item_int);
+            ora_simple_ident_def *def= NEW_PTN ora_simple_ident_def($1, $3);
             if($6->push_front(def)) MYSQL_YYABORT;
             Bipartite_name bipartite_name{{}, to_lex_cstring($7)};
             $$ = NEW_PTN Bipartite_name_ora(bipartite_name, $6);
@@ -23914,6 +24022,47 @@ sp_proc_stmt_exit_oracle:
               MYSQL_YYABORT;
 
             sp->m_parser_data.do_backpatch(pctx->pop_label(), sp->instructions());
+          }
+        ;
+
+sp_proc_stmt_continue_oracle:
+          CONTINUE_SYM
+          {
+            if (unlikely(Lex->sp_continue_statement(YYTHD, NULL_CSTR)))
+              MYSQL_YYABORT;
+          }
+        | CONTINUE_SYM label_ident
+          {
+            if (unlikely(Lex->sp_continue_statement(YYTHD, $2)))
+              MYSQL_YYABORT;
+          }
+        | CONTINUE_SYM WHEN_SYM
+          {
+            THD *thd= YYTHD;
+            LEX *lex= thd->lex;
+            sp_head *sp= lex->sphead;
+
+            sp->reset_lex(thd);
+          }
+          expr
+          {
+            ITEMIZE($4, &$4);
+            if (unlikely(Lex->sp_continue_when_statement(YYTHD, NULL_CSTR, $4, @3.raw.end, @4.raw.end)))
+              MYSQL_YYABORT;
+          }
+        | CONTINUE_SYM label_ident WHEN_SYM
+          {
+            THD *thd= YYTHD;
+            LEX *lex= thd->lex;
+            sp_head *sp= lex->sphead;
+
+            sp->reset_lex(thd);
+          }
+          expr /*5*/
+          {
+            ITEMIZE($5, &$5);
+            if (unlikely(Lex->sp_continue_when_statement(YYTHD, $2, $5, @4.raw.end, @5.raw.end)))
+              MYSQL_YYABORT;
           }
         ;
 
@@ -24170,7 +24319,7 @@ sp_proc_stmt_fetch_ora:
               my_error(ER_SP_UNDECLARED_VAR, MYF(0), $6.str);
               MYSQL_YYABORT;
             }
-            if (!spv->field_def.ora_record.is_row_table() ||
+            if (!spv->field_def.ora_record.row_field_table_definitions() ||
             spv->field_def.ora_record.is_record_define) {
               my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0), $6.str);
               MYSQL_YYABORT;
@@ -24180,7 +24329,8 @@ sp_proc_stmt_fetch_ora:
                 "the type of variable used in 'into list'");
               MYSQL_YYABORT;
             }
-            if (!spv->field_def.ora_record.is_row_table() || spv->field_def.ora_record.is_record_define) {
+            if (!spv->field_def.ora_record.row_field_table_definitions() ||
+            spv->field_def.ora_record.is_record_define) {
               my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0), $6.str);
               MYSQL_YYABORT;
             }
@@ -24365,7 +24515,7 @@ ora_sp_forall_loop_ora:
             if(lex->m_sql_cmd != nullptr)
               lex->m_sql_cmd->set_as_part_of_sp();
             if (unlikely(Lex->ora_sp_forall_loop_insert_value(thd,
-              $1->query,$1->ident_i,$1->start,$1->end,@$)))
+              $1->query,$1->ident_i,$1->start,$1->end)))
                 MYSQL_YYABORT;
             sp_pcontext *pctx= lex->get_sp_current_parsing_ctx();
             Lex->set_sp_current_parsing_ctx(pctx->pop_context());

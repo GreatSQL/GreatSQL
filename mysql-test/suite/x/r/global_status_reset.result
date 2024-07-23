@@ -6,6 +6,7 @@ mtr
 mysql
 performance_schema
 sys
+sys_mac
 test
 0 rows affected
 Mysqlx.Ok {

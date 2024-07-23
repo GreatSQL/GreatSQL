@@ -1,5 +1,5 @@
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -469,6 +469,12 @@ bool Item_in_subselect::finalize_materialization_transform(THD *thd,
   if (join->where_cond)
     join->where_cond =
         remove_in2exists_conds(thd, join->where_cond, /*copy=*/false);
+
+  if (join->connect_by_cond && join->after_connect_by_cond) {
+    join->after_connect_by_cond = remove_in2exists_conds(
+        thd, join->after_connect_by_cond, /*copy=*/false);
+  }
+
   if (join->having_cond)
     join->having_cond =
         remove_in2exists_conds(thd, join->having_cond, /*copy=*/false);
@@ -572,6 +578,12 @@ bool Item_subselect::fix_fields(THD *thd, Item **ref) {
   assert(subquery->get_item() == this);
 #endif
 
+  /// TODO: delete future
+  if (m_is_udt_table_index) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "subquery as record table's index");
+    return true;
+  }
+
   if (check_stack_overrun(thd, STACK_MIN_SIZE, (uchar *)&res)) return true;
 
   if (!(res = subquery->prepare(thd))) {
@@ -602,6 +614,12 @@ bool Item_subselect::fix_fields(THD *thd, Item **ref) {
       thd->where = "checking transformed subquery";
       if (!(*ref)->fixed) ret = (*ref)->fix_fields(thd, ref);
       thd->where = save_where;
+      if (!ret && (*ref)->is_ora_udt_type() &&
+          thd->lex->check_udt_type_field()) {
+        (*ref)->fixed = false;
+        return true;
+      }
+
       return ret;
     }
     // Is it one field subselect?
@@ -624,6 +642,10 @@ bool Item_subselect::fix_fields(THD *thd, Item **ref) {
   assert(!has_wf());
 
   fixed = true;
+  if (is_ora_udt_type() && thd->lex->check_udt_type_field()) {
+    fixed = false;
+    return true;
+  }
 
 err:
   thd->where = save_where;
@@ -882,7 +904,6 @@ bool Query_result_scalar_subquery::send_data(
   if (thd->is_error()) return true;
 
   it->assigned(true);
-  reset_rownum_ref();
   return false;
 }
 
@@ -986,7 +1007,6 @@ bool Query_result_max_min_subquery::send_data(
     it->store(0, cache);
   }
   it->assigned(true);
-  reset_rownum_ref();
   return false;
 }
 
@@ -1323,6 +1343,17 @@ bool Item_singlerow_subselect::val_bool() {
   } else {
     reset();
     return false;
+  }
+}
+
+TABLE *Item_singlerow_subselect::val_udt() {
+  assert(fixed);
+  if (!no_rows && !exec(current_thd) && !value->null_value) {
+    null_value = false;
+    return value->val_udt();
+  } else {
+    reset();
+    return nullptr;
   }
 }
 
@@ -2703,6 +2734,12 @@ bool Item_subselect::clean_up_after_removal(uchar *arg) {
   // Check whether this item should be removed
   if (ctx->is_stopped(this)) return false;
 
+  if (reference_count() > 1) {
+    (void)decrement_ref_count();
+    ctx->stop_at(this);
+    return false;
+  }
+
   // Remove item on upward traversal, not downward:
   if (marker == MARKER_NONE) {
     marker = MARKER_TRAVERSAL;
@@ -2811,32 +2848,9 @@ LEX_STRING Item_singlerow_subselect::get_udt_db_name() const {
   return value->get_udt_db_name();
 }
 
-type_conversion_status Item_singlerow_subselect::save_in_field_inner(
-    Field *field, bool no_conversions) {
-  if (is_ora_type() || is_ora_table()) {
-    assert(unit_cols() == 1);
-    if (!field->get_udt_db_name() || !field->udt_name().str) {
-      my_error(ER_UDT_INCONS_DATATYPES, myf(0));
-      return TYPE_ERR_BAD_VALUE;
-    }
-
-    if (my_strcasecmp(system_charset_info, get_udt_db_name().str,
-                      field->get_udt_db_name()) != 0 ||
-        my_strcasecmp(system_charset_info, get_udt_name().str,
-                      field->udt_name().str) != 0) {
-      my_error(ER_WRONG_UDT_DATA_TYPE, myf(0), field->get_udt_db_name(),
-               field->udt_name().str, get_udt_db_name().str,
-               get_udt_name().str);
-      return TYPE_ERR_BAD_VALUE;
-    }
-
-    String tmp;
-    val_str(&tmp);
-
-    return value->save_in_field(field, no_conversions);
-  }
-
-  return Item::save_in_field_inner(field, no_conversions);
+List<Create_field> *Item_singlerow_subselect::get_field_create_field_list() {
+  if (value == nullptr) return nullptr;
+  return value->get_field_create_field_list();
 }
 
 /**

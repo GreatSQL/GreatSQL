@@ -188,3 +188,55 @@ select @@sql_mode;
 select @@sql_mode;
 
 drop table t1;
+
+DELIMITER //;
+
+declare
+begin
+select 1 from dual;
+end;
+//
+
+<<lab1>>
+declare 
+begin 
+select 1 from dual;
+end;
+//
+
+DELIMITER ;//
+
+create table t1 (id int, xx varchar(200));
+create table t2(id int, xx varchar(200));
+
+insert into t1 values(1, 'test');
+
+DELIMITER //;
+
+CREATE TRIGGER  tr1
+   BEFORE DELETE
+   ON t1
+   FOR EACH ROW
+DECLARE
+BEGIN
+  insert into t2 values(:OLD.id  , 'deleted');
+ 
+END;
+//
+
+DELIMITER ;//
+select * from t1;
+select * from t2;
+
+delete from t1;
+
+select * from t2;
+drop trigger tr1;
+drop table t1;
+drop table t2;
+
+set sql_mode=default;
+select STATEMENT_DIGEST_TEXT("CREATE PROCEDURE p1() BEGIN SELECT * FROM t12; END ");
+
+set sql_mode=oracle;
+select STATEMENT_DIGEST_TEXT(' BEGIN SELECT * FROM t12; END');

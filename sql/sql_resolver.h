@@ -2,7 +2,7 @@
 #define SQL_RESOLVER_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -60,8 +60,6 @@ bool find_order_in_list(THD *thd, Ref_item_array ref_item_array,
                         mem_root_deque<Item *> *fields, bool is_group_field,
                         bool is_window_order);
 
-bool has_rownum_func(Item *item, THD *thd);
-
 struct ReplaceResult {
   enum {
     // Immediately return with an error.
@@ -107,6 +105,4 @@ bool WalkAndReplace(
     const std::function<ReplaceResult(Item *item, Item *parent,
                                       unsigned argument_idx)> &get_new_item);
 
-class Item_subselect;
-bool check_rownum_validate(Item_subselect *sub_select);
 #endif /* SQL_RESOLVER_INCLUDED */

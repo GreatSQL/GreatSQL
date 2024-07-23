@@ -1,0 +1,116 @@
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+create database db;
+use db;
+create table t1(c1 int primary key, c2 int);
+insert into t1 values(1, 1),(2, 2),(3, 3),(4, 4);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3:G1', 1);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 0);
+select * from t1;
+c1	c2	_gdb_mac_policy_1
+call sys_mac.mac_disable_policy('P1');
+select * from t1;
+c1	c2	_gdb_mac_policy_1
+call sys_mac.mac_disable_policy('P2');
+select * from t1;
+c1	c2	_gdb_mac_policy_1	_gdb_mac_policy_2
+1	1	1	2
+2	2	1	2
+3	3	1	2
+4	4	1	2
+insert into t1 values(5, 5, 5, 5);
+insert into t1(c1, c2) values(6, 6);
+select * from t1;
+c1	c2	_gdb_mac_policy_1	_gdb_mac_policy_2
+1	1	1	2
+2	2	1	2
+3	3	1	2
+4	4	1	2
+5	5	5	5
+6	6	1	2
+update t1 set _gdb_mac_policy_1 = 1, _gdb_mac_policy_2 = 2 where c1 = 5;
+select * from t1;
+c1	c2	_gdb_mac_policy_1	_gdb_mac_policy_2
+1	1	1	2
+2	2	1	2
+3	3	1	2
+4	4	1	2
+5	5	1	2
+6	6	1	2
+delete from t1 where c1 > 4;
+select * from t1;
+c1	c2	_gdb_mac_policy_1	_gdb_mac_policy_2
+1	1	1	2
+2	2	1	2
+3	3	1	2
+4	4	1	2
+call sys_mac.mac_enable_policy('P1');
+call sys_mac.mac_enable_policy('P2');
+select * from t1;
+c1	c2	_gdb_mac_policy_1
+call sys_mac.mac_disable_row_policy('db', 't1', 'P1');
+select * from t1;
+c1	c2	_gdb_mac_policy_1
+call sys_mac.mac_disable_row_policy('db', 't1', 'P2');
+select * from t1;
+c1	c2	_gdb_mac_policy_1	_gdb_mac_policy_2
+1	1	1	2
+2	2	1	2
+3	3	1	2
+4	4	1	2
+insert into t1 values(5, 5, 5, 5);
+insert into t1(c1, c2) values(6, 6);
+select * from t1;
+c1	c2	_gdb_mac_policy_1	_gdb_mac_policy_2
+1	1	1	2
+2	2	1	2
+3	3	1	2
+4	4	1	2
+5	5	5	5
+6	6	1	2
+update t1 set _gdb_mac_policy_1 = 1, _gdb_mac_policy_2 = 2 where c1 = 5;
+select * from t1;
+c1	c2	_gdb_mac_policy_1	_gdb_mac_policy_2
+1	1	1	2
+2	2	1	2
+3	3	1	2
+4	4	1	2
+5	5	1	2
+6	6	1	2
+alter table t1 drop column _gdb_mac_policy_1;
+ERROR HY000: mac denied to change the label column.
+alter table t1 change column _gdb_mac_policy_1 c3 int;
+ERROR HY000: mac denied to change the label column.
+alter table t1 modify column _gdb_mac_policy_1 long;
+ERROR HY000: mac denied to change the label column.
+alter table t1 drop column _gdb_mac_policy_2;
+ERROR HY000: mac denied to change the label column.
+alter table t1 change column _gdb_mac_policy_2 c3 int;
+ERROR HY000: mac denied to change the label column.
+alter table t1 modify column _gdb_mac_policy_2 long;
+ERROR HY000: mac denied to change the label column.
+call sys_mac.mac_drop_row_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_row_policy('db', 't1', 'P2');
+drop database db;
+create database mac;
+use mac;
+create table t1(c1 int primary key, c2 int);
+insert into t1 values(1, 1);
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1');
+select * from t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+insert into t1 values(2, 2);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+call sys_mac.mac_disable_policy('P1');
+select * from t1;
+c1	c2
+1	1
+insert into t1 values(2, 2);
+call sys_mac.mac_enable_policy('P1');
+select * from t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+insert into t1 values(3, 3);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+drop database mac;

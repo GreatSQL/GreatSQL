@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -28,12 +28,23 @@
 #include "xcom/xcom_common.h"
 #include "xcom/xcom_limits.h"
 
+#define IP_MAX_SIZE 512
+
 struct srv_buf {
   u_int start;
   u_int n;
   char buf[0x10000];
 };
 typedef struct srv_buf srv_buf;
+
+struct server_timewait_info {
+  double last_removed_time;
+  char ip[IP_MAX_SIZE];
+  int timeout;
+  xcom_port port;
+  unsigned int occupied : 1;
+};
+typedef struct server_timewait_info server_timewait_info;
 
 /* Server definition */
 struct server {

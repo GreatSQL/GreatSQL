@@ -48,8 +48,6 @@ The following options may be given as the first argument:
  library, for example exit() from libc.so
  -a, --ansi          Use ANSI SQL syntax instead of MySQL syntax. This mode
  will also set transaction isolation level 'serializable'.
- --audit-log-max-rows=# 
- The max row num of audit table
  --authentication-policy=name 
  Defines policies around how user account can be
  configured with Multi Factor authentication methods
@@ -284,6 +282,9 @@ The following options may be given as the first argument:
  proxy user mapping should be done according to GRANT
  PROXY privilege definition.
  -r, --chroot=name   Chroot mysqld daemon during startup.
+ --clone-incremental-dir=name 
+ apply .delta files in the specified directory to the full
+ clone data directory.
  --collation-server=name 
  Set the default collation.
  --completion-type=name 
@@ -313,6 +314,8 @@ The following options may be given as the first argument:
  than this number of iterations.
  -D, --daemonize     Run mysqld as sysv daemon
  -h, --datadir=name  Path to the database root directory
+ --dblink-maxreturn-rows=# 
+ Dblink don't return max rows than that
  --dbms-profiler-max-data-size[=#] 
  The maximum number of lines can be profiled in a
  function,trigger,procedure
@@ -375,6 +378,8 @@ The following options may be given as the first argument:
  before storage engine initialization, where each plugin
  is identified as name=library, where name is the plugin
  name and library is the plugin library in plugin_dir.
+ --enable-data-masking 
+ Enable Data Mask
  --encrypt-tmp-files Encrypt temporary files (created for filesort, Group
  Replication, etc)
  --end-markers-in-json 
@@ -1210,6 +1215,9 @@ The following options may be given as the first argument:
  networks and must the only directive on the line.
  --query-alloc-block-size=# 
  Allocation block size for query parsing and execution
+ --query-prealloc-reuse-size[=#] 
+ Reuse persistent buffer for query parsing and execution
+ if allocated memory no more than this
  --query-prealloc-size=# 
  Persistent buffer for query parsing and execution
  --range-alloc-block-size=# 
@@ -1454,6 +1462,9 @@ The following options may be given as the first argument:
  When this option is enabled, connections attempted using
  insecure transport will be rejected.  Secure transports
  are SSL/TLS, Unix socket or Shared Memory (on Windows).
+ --rpl-read-binlog-speed-limit=# 
+ Maximum speed(KB/s) to read binlog from master (0 = no
+ limit)
  --rpl-read-size=#   The size for reads done from the binlog and relay log. It
  must be a multiple of 4kb. Making it larger might help
  with IO stalls while reading these files when they are
@@ -1466,6 +1477,26 @@ The following options may be given as the first argument:
  instead.
  --safe-user-create  Don't allow new user creation by the user who has no
  write privileges to the mysql.user table.
+ --sched-affinity-foreground-thread=name 
+ The set of cpus which foreground threads will run on.
+ --sched-affinity-log-checkpointer=name 
+ The set of cpus which log checkpointer thread will run
+ on.
+ --sched-affinity-log-flush-notifier=name 
+ The set of cpus which log flush notifier thread will run
+ on.
+ --sched-affinity-log-flusher=name 
+ The set of cpus which log flusher thread will run on.
+ --sched-affinity-log-write-notifier=name 
+ The set of cpus which log write notifier thread will run
+ on.
+ --sched-affinity-log-writer=name 
+ The set of cpus which log writer thread will run on.
+ --sched-affinity-numa-aware 
+ Schedule threads with numa information
+ --sched-affinity-purge-coordinator=name 
+ The set of cpus which purge coordinator thread will run
+ on.
  --schema-definition-cache=# 
  The number of cached schema definitions
  --secondary-engine-cost-threshold[=#] 
@@ -1473,6 +1504,25 @@ The following options may be given as the first argument:
  secondary storage engine. Only statements that have a
  cost estimate higher than this value will be attempted
  executed in a secondary storage engine.
+ --secondary-engine-parallel-load-workers[=#] 
+ parallel write workers when paralell load data in a
+ secondary storage engine.
+ --secondary-engine-parallel-read-workers[=#] 
+ parallel read workers when paralell load data in a
+ secondary storage engine.
+ --secondary-engine-read-delay-gtid-threshold[=#] 
+ max allowed transaction delay by gtid. If 0, means not
+ allow any deday
+ --secondary-engine-read-delay-level[=name] 
+ possible values: ALL_TABLES, TABLE_START_INC_TASK
+ --secondary-engine-read-delay-time-threshold[=#] 
+ max allowed time delay in second. If 0, means not allow
+ any delay
+ --secondary-engine-read-delay-wait-mode[=name] 
+ possible values: WAIT_FOR_DB, WAIT_FOR_TRX
+ --secondary-engine-read-delay-wait-timeout[=#] 
+ wait until secondary engine suitable to read in allowed
+ delay
  --secure-file-priv=name 
  Limit LOAD DATA, SELECT ... OUTFILE, and LOAD_FILE() to
  files within specified directory
@@ -1843,7 +1893,6 @@ admin-ssl-crlpath (No default value)
 admin-ssl-key (No default value)
 admin-tls-ciphersuites (No default value)
 allow-suspicious-udfs FALSE
-audit-log-max-rows 2147483647
 authentication-policy *,,
 auto-increment-increment 1
 auto-increment-offset 1
@@ -1893,6 +1942,7 @@ character-set-server utf8mb4
 character-sets-dir MYSQL_CHARSETSDIR/
 check-proxy-users FALSE
 chroot (No default value)
+clone-incremental-dir (No default value)
 collation-server utf8mb4_0900_ai_ci
 completion-type NO_CHAIN
 concurrent-insert AUTO
@@ -1904,6 +1954,7 @@ coredumper (No default value)
 create-admin-listener-thread FALSE
 cte-max-recursion-depth 1000
 daemonize FALSE
+dblink-maxreturn-rows 20000
 dbms-profiler-max-data-size 1000
 dbms-profiler-max-units-size 100
 default-authentication-plugin caching_sha2_password
@@ -1921,6 +1972,7 @@ disabled-storage-engines
 disconnect-on-expired-password TRUE
 disconnect-slave-event-count 0
 div-precision-increment 4
+enable-data-masking FALSE
 encrypt-tmp-files FALSE
 end-markers-in-json FALSE
 enforce-gtid-consistency FALSE
@@ -2138,7 +2190,7 @@ performance-schema-max-socket-classes 10
 performance-schema-max-socket-instances -1
 performance-schema-max-sql-text-length 1024
 performance-schema-max-stage-classes 175
-performance-schema-max-statement-classes 258
+performance-schema-max-statement-classes 259
 performance-schema-max-statement-stack 10
 performance-schema-max-table-handles -1
 performance-schema-max-table-instances -1
@@ -2162,6 +2214,7 @@ profiling-history-size 15
 protocol-compression-algorithms zlib,zstd,uncompressed
 proxy-protocol-networks 
 query-alloc-block-size 8192
+query-prealloc-reuse-size 40960
 query-prealloc-size 8192
 range-alloc-block-size 4096
 range-optimizer-max-mem-size 8388608
@@ -2201,12 +2254,28 @@ report-password (No default value)
 report-port 0
 report-user (No default value)
 require-secure-transport FALSE
+rpl-read-binlog-speed-limit 0
 rpl-read-size 8192
 rpl-stop-replica-timeout 31536000
 rpl-stop-slave-timeout 31536000
 safe-user-create FALSE
+sched-affinity-foreground-thread (No default value)
+sched-affinity-log-checkpointer (No default value)
+sched-affinity-log-flush-notifier (No default value)
+sched-affinity-log-flusher (No default value)
+sched-affinity-log-write-notifier (No default value)
+sched-affinity-log-writer (No default value)
+sched-affinity-numa-aware FALSE
+sched-affinity-purge-coordinator (No default value)
 schema-definition-cache 256
 secondary-engine-cost-threshold 100000
+secondary-engine-parallel-load-workers 4
+secondary-engine-parallel-read-workers 4
+secondary-engine-read-delay-gtid-threshold 100
+secondary-engine-read-delay-level TABLE_START_INC_TASK
+secondary-engine-read-delay-time-threshold 60
+secondary-engine-read-delay-wait-mode WAIT_FOR_TRX
+secondary-engine-read-delay-wait-timeout 60
 secure-log-path 
 select-bulk-into-batch 10000
 select-into-buffer-size 131072

@@ -3,7 +3,7 @@
 
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -541,7 +541,9 @@ class JOIN {
   Item *start_with_cond;
   Item *connect_by_cond;
   Item *after_connect_by_cond;
+  Connect_by_param *connect_by_param{nullptr};
 
+  CounterItem *counter{nullptr};
   /**
     Optimized HAVING clause item tree (valid for one single execution).
     Used in JOIN execution, as last "row filtering" step. With one exception:
@@ -1358,7 +1360,7 @@ bool ref_lookup_subsumes_comparison(THD *thd, Field *field, Item *right_item,
   @param[out] idx_field_list  get item_list if Item_field = Item_Connect_by_func
   @param[out] connect_by_list get include idx_field_list item list
   @param[out] other_list
-  @param[out] rownum_list  if item include rownum
+  @param[out] other_list2
 
   @returns false if success, true if error
 */

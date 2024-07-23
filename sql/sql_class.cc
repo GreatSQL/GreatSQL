@@ -1,7 +1,7 @@
 /*
    Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -660,7 +660,7 @@ void Open_tables_state::set_open_tables_state(Open_tables_state *state) {
 
   this->m_reprepare_observers = state->m_reprepare_observers;
 
-  this->use_in_dbms_sql = state->use_in_dbms_sql;
+  this->use_in_dyn_sql = state->use_in_dyn_sql;
 }
 
 void Open_tables_state::reset_open_tables_state() {
@@ -670,7 +670,7 @@ void Open_tables_state::reset_open_tables_state() {
   extra_lock = nullptr;
   locked_tables_mode = LTM_NONE;
   state_flags = 0U;
-  use_in_dbms_sql = false;
+  use_in_dyn_sql = false;
   reset_reprepare_observers();
 }
 
@@ -914,6 +914,8 @@ THD::THD(bool enable_plugins)
   timer = nullptr;
   timer_cache = nullptr;
 
+  strictly_convert = 0;
+
   m_token_array = nullptr;
   if (max_digest_length > 0) {
     m_token_array = (unsigned char *)my_malloc(PSI_INSTRUMENT_ME,
@@ -928,6 +930,11 @@ THD::THD(bool enable_plugins)
   sp_rcontext_layers.clear();
   set_connection_admin(false);
   m_mem_cnt.set_thd(this);
+
+  /* Init row id interval info. */
+  left_of_interval = 0;
+  right_of_interval = 0;
+  next_interval_size = 1;
 }
 
 void THD::copy_table_access_properties(THD *thd) {
@@ -2104,6 +2111,9 @@ void THD::cleanup_after_query() {
     if (killed == THD::KILL_PQ_QUERY)
       killed.store(THD::NOT_KILLED);  // restore killed for next query
   }
+
+  /* Reset size of row_id interval. */
+  next_interval_size = 1;
 }
 
 /*
@@ -2137,6 +2147,28 @@ bool THD::convert_string(LEX_STRING *to, const CHARSET_INFO *to_cs,
   to->length = copy_and_convert(to->str, new_length, to_cs, from, from_length,
                                 from_cs, &errors);
   to->str[to->length] = 0;  // Safety
+
+  /*
+   * mainly for greatdb
+   * charset conversion should be reversible for network storage
+   * engines
+   */
+  if (strictly_convert && errors == 0) {
+    char buf[256];
+    String reverse_string(buf, sizeof(buf), from_cs);
+    reverse_string.length(0);
+    reverse_string.append(to->str, to->length, to_cs);
+
+    /* check charset conversion is reversible */
+    if (from_length != reverse_string.length()) {
+      errors = 1;
+    } else {
+      if (memcmp(from, reverse_string.ptr(), from_length)) {
+        errors = 1;
+      }
+    }
+  }
+
   if (errors != 0) {
     char printable_buff[32];
     convert_to_printable(printable_buff, sizeof(printable_buff), from,
@@ -2522,6 +2554,42 @@ void THD::restore_backup_open_tables_state(Open_tables_backup *backup) {
          get_reprepare_observer() == nullptr);
 
   set_open_tables_state(backup);
+}
+
+void THD::merge_backup_open_tables_state(Open_tables_backup *backup) {
+  if (backup->lock) {
+    if (lock) {
+      auto merged_lock = mysql_lock_merge(backup->lock, lock);
+      backup->lock = merged_lock;
+    }
+  } else {
+    if (lock) {
+      backup->lock = lock;
+    }
+  }
+  this->lock = nullptr;
+  if (this->open_tables) {
+    // set all mdl_ticket to nullptr, has already free in prepare trans
+    auto table_ptr = open_tables;
+    while (table_ptr) {
+      table_ptr->mdl_ticket = nullptr;
+      table_ptr = table_ptr->next;
+    }
+  }
+
+  auto next = backup->open_tables;
+  auto last = next;
+  while (next) {
+    last = next;
+    next = next->next;
+  }
+  if (last) {
+    last->next = open_tables;
+  } else {
+    backup->open_tables = open_tables;
+  }
+
+  open_tables = nullptr;
 }
 
 void THD::begin_attachable_ro_transaction() {
@@ -3515,6 +3583,9 @@ bool THD::sql_parser() {
   if (root != nullptr && lex->make_sql_cmd(root)) {
     return true;
   }
+
+  lex->root = root;
+
   return false;
 }
 
@@ -3731,14 +3802,9 @@ void THD::update_slow_query_status() {
     server_status |= SERVER_QUERY_WAS_SLOW;
 }
 
-const my_decimal *THD::get_cached_seq_currval(const char *db, const char *name,
-                                              const Gdb_sequence_entity *seq) {
+const my_decimal *THD::get_cached_seq_currval(Gdb_sequence_entity *seq) {
   DBUG_TRACE;
-  assert(db != nullptr && strlen(db) > 0);
-  assert(name != nullptr && strlen(name) > 0);
-
-  std::string seq_name_string = normalize_seq_name(name);
-  std::string seq_key = calc_seq_key(db, seq_name_string.c_str());
+  auto seq_key = seq->key();
   auto it = this->sequence_cache.find(seq_key);
 
   if (it == this->sequence_cache.end()) {
@@ -3761,16 +3827,12 @@ const my_decimal *THD::get_cached_seq_currval(const char *db, const char *name,
   return &(it->second->currval);
 }
 
-void THD::update_seq_cache_entity(const char *db, const char *name, uint64_t id,
-                                  my_decimal &cval) {
+void THD::update_seq_cache_entity(Gdb_sequence_entity *seq, my_decimal &cval) {
   DBUG_TRACE;
-  assert(db != nullptr && strlen(db) > 0);
-  assert(name != nullptr && strlen(name) > 0);
+  auto seq_key = seq->key();
+  auto id = seq->volatile_id();
 
-  std::string seq_name_string = normalize_seq_name(name);
-  std::string seq_key = calc_seq_key(db, seq_name_string.c_str());
   auto it = this->sequence_cache.find(seq_key);
-
   if (it == this->sequence_cache.end()) {
     auto entity = std::make_unique<seq_currval_cache_entity>(id);
     entity->update(id, cval);

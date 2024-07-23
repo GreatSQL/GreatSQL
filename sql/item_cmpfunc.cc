@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -54,6 +54,7 @@
 #include "mysql_com.h"
 #include "mysql_time.h"
 #include "mysqld_error.h"
+#include "scope_guard.h"
 #include "sql-common/json_dom.h"  // Json_scalar_holder
 #include "sql/aggregate_check.h"  // Distinct_check
 #include "sql/check_stack.h"
@@ -137,8 +138,8 @@ static bool row_types_are_compatible(Item *item1, Item *item2) {
   }
   if ((item1->is_ora_type() && item2->is_ora_type()) ||
       (item1->is_ora_table() && item2->is_ora_table())) {
-    Item *real_left = item1->element_index(0)->real_item();
-    Item *real_right = item2->element_index(0)->real_item();
+    Item *real_left = item1->real_item();
+    Item *real_right = item2->real_item();
     if (!real_left->get_udt_name().str || !real_right->get_udt_name().str) {
       my_error(ER_UDT_INCONS_DATATYPES, myf(0));
       return true;
@@ -644,13 +645,7 @@ static bool convert_constant_item(THD *thd, Item_field *field_item, Item **item,
 bool Item_bool_func2::convert_constant_arg(THD *thd, Item *field, Item **item,
                                            bool *converted) {
   *converted = false;
-  if (thd->sp_runtime_ctx && (field->this_item()->is_ora_udt_type() ||
-                              (*item)->this_item()->is_ora_udt_type())) {
-    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "compare with user define type");
-    return true;
-  }
-  if (field->real_item()->type() != FIELD_ITEM || field->is_sequence_field())
-    return false;
+  if (field->real_item()->type() != FIELD_ITEM) return false;
 
   Item_field *field_item = (Item_field *)(field->real_item());
   if (field_item->field->can_be_compared_as_longlong() &&
@@ -1287,8 +1282,8 @@ bool Arg_comparator::set_cmp_func(Item_result_field *owner_arg, Item **left_arg,
     select * from t1 a where a.f1 in (select b.f1 from t1 b).
     Item_row::cols() > 1,so it cannot go into the if condition.*/
     if ((*left)->cols() == 1 && (*right)->cols() == 1) {
-      Item *real_left = (*left)->element_index(0)->real_item();
-      Item *real_right = (*right)->element_index(0)->real_item();
+      Item *real_left = (*left)->this_item();
+      Item *real_right = (*right)->this_item();
       if ((real_left->is_ora_type() && real_right->is_ora_type()) ||
           (real_left->is_ora_table() && real_right->is_ora_table())) {
         /* If it's derived table,it may doesn't have db name,so must set default
@@ -1810,6 +1805,13 @@ int Arg_comparator::compare_json() {
 }
 
 int Arg_comparator::compare_string() {
+  current_thd->lex->is_cmp_udt_table = true;
+  ulong udt_format_result = current_thd->variables.udt_format_result;
+  current_thd->variables.udt_format_result = UDT_FORMAT_RESULT_BINARY;
+  const auto x_guard = create_scope_guard([&]() {
+    current_thd->lex->is_cmp_udt_table = false;
+    current_thd->variables.udt_format_result = udt_format_result;
+  });
   const CHARSET_INFO *cs = cmp_collation.collation;
   String *res1 = eval_string_arg(cs, *left, &value1);
   if (res1 == nullptr) {
@@ -1842,10 +1844,14 @@ int Arg_comparator::compare_string() {
 */
 
 int Arg_comparator::compare_binary_string() {
-  String *res1, *res2;
+  current_thd->lex->is_cmp_udt_table = true;
   ulong udt_format_result = current_thd->variables.udt_format_result;
-  if ((*left)->is_ora_type() || (*right)->is_ora_type())
-    current_thd->variables.udt_format_result = UDT_FORMAT_RESULT_BINARY;
+  current_thd->variables.udt_format_result = UDT_FORMAT_RESULT_BINARY;
+  const auto x_guard = create_scope_guard([&]() {
+    current_thd->lex->is_cmp_udt_table = false;
+    current_thd->variables.udt_format_result = udt_format_result;
+  });
+  String *res1, *res2;
   if ((res1 = (*left)->val_str(&value1))) {
     if ((res2 = (*right)->val_str(&value2))) {
       if (set_null) owner->null_value = false;
@@ -1855,18 +1861,9 @@ int Arg_comparator::compare_binary_string() {
       int cmp =
           min_length == 0 ? 0 : memcmp(res1->ptr(), res2->ptr(), min_length);
       auto rc = cmp ? cmp : (int)(len1 - len2);
-      if ((*left)->is_ora_type() || (*right)->is_ora_type())
-        current_thd->variables.udt_format_result = udt_format_result;
       return rc;
     }
-  } else if (current_thd->variables.sql_mode & MODE_EMPTYSTRING_EQUAL_NULL) {
-    // Add blob is null and empty string comparison
-    if ((res2 = (*right)->val_str(&value2)) && res2->is_empty()) {
-      return 0;
-    }
   }
-  if ((*left)->is_ora_type() || (*right)->is_ora_type())
-    current_thd->variables.udt_format_result = udt_format_result;
 
   if (set_null) owner->null_value = true;
   return -1;
@@ -2136,6 +2133,21 @@ bool Arg_comparator::compare_null_values() {
   bool result;
   (void)compare_pair_for_nulls(*left, *right, &result);
   return result;
+}
+
+void Item_bool_func::set_created_by_in2exists() {
+  m_created_by_in2exists = true;
+  // When a condition is created by IN to EXISTS transformation,
+  // it re-uses the expressions that are part of the query. As a
+  // result we need to increment the reference count
+  // for these expressions.
+  WalkItem(this, enum_walk::PREFIX | enum_walk::SUBQUERY, [](Item *inner_item) {
+    // Reference counting matters only for referenced items.
+    if (inner_item->type() == REF_ITEM) {
+      down_cast<Item_ref *>(inner_item)->ref_item()->increment_ref_count();
+    }
+    return false;
+  });
 }
 
 const char *Item_bool_func::bool_transform_names[10] = {"is true",
@@ -5716,11 +5728,13 @@ bool Item_func_in::populate_bisection(THD *) {
 
 void Item_func_in::cleanup_arrays() {
   m_populated = false;
-  destroy(m_const_array);
+  if (m_const_array) destroy(m_const_array);
   m_const_array = nullptr;
   for (uint i = 0; i <= (uint)DECIMAL_RESULT + 1; i++) {
-    destroy(cmp_items[i]);
-    cmp_items[i] = nullptr;
+    if (cmp_items[i]) {
+      destroy(cmp_items[i]);
+      cmp_items[i] = nullptr;
+    }
   }
 }
 
@@ -6471,8 +6485,8 @@ bool Item_func_isnull::fix_fields(THD *thd, Item **ref) {
       auto_increment_column = '';
     */
     if (used_in_where_only &&
-        thd->lex->current_query_block()->condition_context ==
-            enum_condition_context::ANDS &&
+        thd->lex->current_query_block()->condition_context !=
+            enum_condition_context::NEITHER &&
         thd->variables.sql_mode & MODE_EMPTYSTRING_EQUAL_NULL &&
         is_string_type(field->type())) {
       Prepared_stmt_arena_holder ps_arena_holder(thd);
@@ -6853,6 +6867,33 @@ void Item_func_like::print(const THD *thd, String *str,
     args[2]->print(thd, str, query_type);
   }
   str->append(')');
+}
+
+/* print like func's extra info, for example "`a` like 'abc*%%' escape '*'"
+     NOTE: as cond_push in GreatDB requires the same charset between left
+     and right charset of function, so don't need to concern about the charset
+     of escape string */
+void Item_func_like::print_op_extra(const THD *thd, String *str,
+                                    enum_query_type query_type) const {
+  assert(str != nullptr);
+
+  /* add escape sytax if when not using default value */
+  if (query_type & QT_PRINT_ESCAPE_IDENTIFIER && m_escape != '\\') {
+    String buf;
+    if (thd->is_error()) assert(0);
+    if (arg_count > 2) {
+      Item *escape_item = args[2];
+      String *escape_str = escape_item->val_str(&buf);
+      if (escape_str) {
+        str->append(STRING_WITH_LEN(" ESCAPE '"));
+        /* if escape identifier is '\', add an extra '\' */
+        if (escape_str->length() == 1 && *escape_str->ptr() == '\\')
+          str->append(STRING_WITH_LEN("\\"));
+        str->append(escape_str->ptr(), escape_str->length());
+        str->append(STRING_WITH_LEN("'"));
+      }
+    }
+  }
 }
 
 bool Item_func_xor::itemize(Parse_context *pc, Item **res) {
@@ -8403,6 +8444,20 @@ longlong Item_func_cursor_isopen::val_int() {
   return c ? c->is_open() : 0;
 }
 
+bool Item_func_dbms_sql_is_open::val_bool() {
+  auto stmt_id = args[0]->val_int();
+  if (args[0]->null_value) {
+    return false;
+  }
+  auto stmt = current_thd->stmt_map.find(stmt_id);
+  if (!stmt) {
+    return false;
+  }
+  return true;
+}
+
+longlong Item_func_dbms_sql_is_open::val_int() { return val_bool() ? 1 : 0; }
+
 void Item_func_record_table_forall_bool::print(const THD *, String *str,
                                                enum_query_type) const {
   Item_splocal *item_sp = dynamic_cast<Item_splocal *>(m_item);
@@ -8429,9 +8484,10 @@ longlong Item_func_record_table_forall_bool::val_int() { return val_bool(); }
 bool Item_func_trigger_event_is::val_bool() {
   bool res = (current_thd->sp_runtime_ctx->sp->m_trg_list->in_event ==
               (enum enum_trigger_event_type)(args[0]->val_int()));
-  if (res && (current_thd->sp_runtime_ctx->sp->m_trg_list->in_event ==
-                  TRG_EVENT_UPDATE &&
-              (res = !args[1]->null_value))) {
+  if (res && !m_is_NULL &&
+      (current_thd->sp_runtime_ctx->sp->m_trg_list->in_event ==
+           TRG_EVENT_UPDATE &&
+       (res = !args[1]->null_value))) {
     StringBuffer<STRING_BUFFER_USUAL_SIZE> original;
     String *field_name = args[1]->val_str(&original);
     if (field_name != nullptr &&

@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -530,10 +530,11 @@ bool plugin_get_group_members(
   return get_group_members_info(index, callbacks, channel_name);
 }
 
-void plugin_update_zone_id_for_communication_node(const char *ip, int zone_id,
+void plugin_update_zone_id_for_communication_node(const char *address,
+                                                  int zone_id,
                                                   bool zone_id_sync_mode) {
   if (gcs_module) {
-    gcs_module->update_zone_id_through_gcs(ip, zone_id, zone_id_sync_mode);
+    gcs_module->update_zone_id_through_gcs(address, zone_id, zone_id_sync_mode);
   }
 }
 
@@ -1438,7 +1439,8 @@ int initialize_plugin_modules(gr_modules::mask modules_to_init) {
   */
   if (modules_to_init[gr_modules::REMOTE_CLONE_HANDLER]) {
     remote_clone_handler = new Remote_clone_handler(
-        ov.clone_threshold_var, ov.components_stop_timeout_var);
+        ov.clone_threshold_var, ov.components_stop_timeout_var,
+        ov.donor_threshold_var);
   }
 
   /*
@@ -4683,6 +4685,10 @@ static void update_donor_threshold(MYSQL_THD, SYS_VAR *, void *var_ptr,
 
   if (recovery_module != nullptr) {
     recovery_module->set_donor_threshold((longlong)in_val);
+  }
+
+  if (remote_clone_handler != nullptr) {
+    remote_clone_handler->set_donor_threshold((longlong)in_val);
   }
 
   return;

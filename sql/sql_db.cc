@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -869,7 +869,6 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
       */
       trans_rollback_implicit(thd);
     }
-
     /*
       Call post-DDL handlerton hook. For engines supporting atomic DDL
       tables' files are removed from disk on this step.
@@ -1442,7 +1441,6 @@ bool mysql_change_db(THD *thd, const LEX_CSTRING &new_db_name,
     db_access = sctx->db_acl(new_db_file_name_cstr) |
                 sctx->master_access(new_db_file_name.str);
   }
-
   if (!force_switch && !(db_access & DB_OP_ACLS) &&
       check_grant_db(thd, new_db_file_name.str, true)) {
     my_error(ER_DBACCESS_DENIED_ERROR, MYF(0), sctx->priv_user().str,

@@ -172,6 +172,11 @@ if (!$clone_remote_replace) {
 --force-rmdir $CLONE_DATADIR
 }
 
+INSTALL COMPONENT "file://component_mysqlbackup";
+--replace_column 1 XXXX
+SELECT mysqlbackup_page_track_set(false);
+UNINSTALL COMPONENT "file://component_mysqlbackup";
+
 # Clean recipient by cloning the cleaned up donor
 --source ../include/clone_connection_end.inc
 

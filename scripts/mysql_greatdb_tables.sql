@@ -1,4 +1,4 @@
--- Copyright (c) 2023, GreatDB Software Co., Ltd.
+-- Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 --
 -- This program is free software; you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License, version 2.0,
@@ -23,6 +23,18 @@
 --
 -- The system tables of MySQL Server
 --
+
+-- Create an user that is used by greatdb command service.
+CREATE USER 'greatdb.sys'@localhost IDENTIFIED WITH caching_sha2_password
+ AS '$A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED'
+ ACCOUNT LOCK;
+GRANT ALL ON *.* TO 'greatdb.sys'@localhost WITH GRANT OPTION;
+
+-- this is a plugin priv that might not be registered
+INSERT IGNORE INTO mysql.global_grants VALUES ('greatdb.sys', 'localhost', 'AUDIT_ABORT_EXEMPT', 'Y');
+
+-- this is a plugin priv that might not be registered
+INSERT IGNORE INTO mysql.global_grants VALUES ('greatdb.sys', 'localhost', 'FIREWALL_EXEMPT', 'Y');
 
 set @have_innodb= (select count(engine) from information_schema.engines where engine='INNODB' and support != 'NO');
 
@@ -58,6 +70,27 @@ CREATE TABLE IF NOT EXISTS `mysql`.`greatdb_sequences_persist`
   PRIMARY KEY(`db`, `name`)
 )
 ENGINE=InnoDB STATS_PERSISTENT=0 CHARACTER SET utf8mb4 COMMENT='greatdb sequence persist user data';
+
+CREATE TABLE IF NOT EXISTS `mysql`.`clone_history`
+(
+  `ID` int auto_increment PRIMARY KEY,
+  `PID` int DEFAULT 0,
+  `CLONE_TYPE` varchar(50) DEFAULT NULL,
+  `STATE` char(16) DEFAULT NULL,
+  `BEGIN_TIME` timestamp(3) DEFAULT NULL,
+  `END_TIME` timestamp(3) DEFAULT NULL,
+  `SOURCE` varchar(512) DEFAULT NULL,
+  `DESTINATION` varchar(512) DEFAULT NULL,
+  `ERROR_NO` int DEFAULT NULL,
+  `ERROR_MESSAGE` varchar(512) DEFAULT NULL,
+  `BINLOG_FILE` varchar(512) DEFAULT NULL,
+  `BINLOG_POSITION` bigint DEFAULT NULL,
+  `GTID_EXECUTED` varchar(4096) DEFAULT NULL,
+  `START_LSN` bigint DEFAULT NULL,
+  `PAGE_TRACK_LSN` bigint DEFAULT NULL,
+  `END_LSN` bigint DEFAULT NULL
+) ENGINE=INNODB STATS_PERSISTENT=0 CHARACTER SET utf8mb4 COMMENT='Clone history';
+
 
 -- should always at the end of this file
 SET @@session.sql_mode = @old_sql_mode;

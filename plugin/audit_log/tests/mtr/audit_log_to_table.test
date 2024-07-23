@@ -1,0 +1,134 @@
+--source install.inc
+
+set global audit_log_to_table = 1;
+
+create user u1@localhost identified by 'aa';
+create user u2@localhost identified by 'aa';
+
+disable_query_log;
+--error ER_ACCESS_DENIED_ERROR
+connect(errcon,localhost,u1,,test);
+enable_query_log;
+
+--replace_regex /[0-9]+/x/
+select * from sys_audit.audit_log;
+
+disable_query_log;
+--error ER_ACCESS_DENIED_ERROR
+connect(errcon,localhost,u1,,test);
+enable_query_log;
+
+connect(con1,localhost,u1,aa,test);
+connection con1;
+--replace_regex /[0-9]+/x/
+select audit_login_messages(5);
+disconnect con1;
+
+connect(con2,localhost,u1,aa,test);
+connection con2;
+--replace_regex /[0-9]+/x/
+select audit_login_messages(5);
+disconnect con2;
+
+disable_query_log;
+--error ER_ACCESS_DENIED_ERROR
+connect(errcon,localhost,u1,,test);
+enable_query_log;
+
+disable_query_log;
+--error ER_ACCESS_DENIED_ERROR
+connect(errcon,localhost,u1,,test);
+enable_query_log;
+
+connect(con3,localhost,u1,aa,test);
+connection con3;
+--replace_regex /[0-9]+/x/
+select audit_login_messages(5);
+disconnect con3;
+
+connect(con4,localhost,u2,aa,test);
+connection con4;
+select audit_login_messages(5);
+disconnect con4;
+
+disable_query_log;
+--error ER_ACCESS_DENIED_ERROR
+connect(errcon,localhost,u1,,test);
+--error ER_ACCESS_DENIED_ERROR
+connect(errcon,localhost,u1,,test);
+--error ER_ACCESS_DENIED_ERROR
+connect(errcon,localhost,u1,,test);
+enable_query_log;
+connect(con5,localhost,u1,aa,test);
+connection con5;
+--replace_regex /[0-9]+/x/
+select audit_login_messages(2);
+disconnect con5;
+
+disable_query_log;
+--error ER_ACCESS_DENIED_ERROR
+connect(errcon,localhost,u1,,test);
+--error ER_ACCESS_DENIED_ERROR
+connect(errcon,localhost,u1,,test);
+--error ER_ACCESS_DENIED_ERROR
+connect(errcon,localhost,u1,,test);
+enable_query_log;
+connect(con6,localhost,u1,aa,test);
+connection con6;
+--replace_regex /[0-9]+/x/
+select audit_login_messages(5);
+--error ER_CANT_INITIALIZE_UDF
+select audit_login_messages();
+--error ER_CANT_INITIALIZE_UDF
+select audit_login_messages(0);
+--error ER_CANT_INITIALIZE_UDF
+select audit_login_messages(10001);
+disconnect con6;
+
+--connection default
+drop user u1@localhost;
+drop user u2@localhost;
+
+SET GLOBAL audit_log_to_table = 0;
+
+set sql_log_bin = on;
+
+--error ER_AUDIT_UPDATE_DENIED_ERROR
+delete from sys_audit.audit_log;
+
+--error ER_AUDIT_UPDATE_DENIED_ERROR
+insert into sys_audit.audit_log select * from sys_audit.audit_log;
+
+--error ER_AUDIT_UPDATE_DENIED_ERROR
+update sys_audit.audit_log set command_class='update';
+
+--error ER_AUDIT_UPDATE_DENIED_ERROR
+drop table sys_audit.audit_log;
+
+delimiter $$;
+create procedure p1()
+begin
+  declare v_name varchar(64);
+  declare done boolean default false;
+  declare cur1 cursor for
+    select name from sys_audit.audit_log order by timestamp desc limit 2;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = true;
+  create temporary table sys_audit.t1(c1 varchar(64));
+  open cur1;
+  read_loop: loop
+    fetch cur1 into v_name;
+    if done then
+      leave read_loop;
+    end if;
+    insert into sys_audit.t1 values(v_name);
+  end loop read_loop;
+  select * from sys_audit.t1;
+  drop table sys_audit.t1;
+end$$
+delimiter ;$$
+call p1();
+drop procedure p1;
+
+set sql_log_bin = off;
+
+--source uninstall.inc

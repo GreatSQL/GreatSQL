@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -52,11 +53,11 @@ class Xcom_network_provider_library {
   static int allowlist_socket_accept(int fd, site_def const *xcom_config);
   static result gcs_shut_close_socket(int *sock);
   static result announce_tcp(xcom_port port);
+  static result xcom_checked_socket(int domain, int type, int protocol);
 
  private:
   static void init_server_addr(struct sockaddr **sock_addr, socklen_t *sock_len,
                                xcom_port port, int family);
-  static result xcom_checked_socket(int domain, int type, int protocol);
   static result create_server_socket();
   static result create_server_socket_v4();
   static void gcs_shutdown_socket(int *sock);

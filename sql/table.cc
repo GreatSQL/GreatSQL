@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -159,6 +159,10 @@ LEX_CSTRING GTID_EXECUTED_NAME = {STRING_WITH_LEN("gtid_executed")};
 
 /* Keyword for parsing generated column functions */
 LEX_CSTRING PARSE_GCOL_KEYWORD = {STRING_WITH_LEN("parse_gcol_expr")};
+
+/* Audit log table */
+LEX_CSTRING AUDIT_LOG_DB = {STRING_WITH_LEN("sys_audit")};
+LEX_CSTRING AUDIT_LOG_TABLE = {STRING_WITH_LEN("audit_log")};
 
 /* Functions defined in this file */
 
@@ -574,7 +578,7 @@ void TABLE_SHARE::destroy() {
   if (field) {
     for (Field **ptr = field; *ptr; ptr++) {
       if ((*ptr)->udt_name().str) {
-        free_blobs((*ptr)->virtual_tmp_table_addr()[0]);
+        free_blobs((*ptr)->m_udt_table);
       }
     }
   }
@@ -4503,6 +4507,15 @@ Table_ref *Table_ref::new_nested_join(MEM_ROOT *allocator, const char *alias,
   join_nest->nested_join->first_nested = NO_PLAN_IDX;
 
   join_nest->nested_join->m_tables.clear();
+  for (Table_ref *tbl : *belongs_to) {
+    // both foj_inner and foj_outer flag is ok to identify a foj nest
+    // since foj_inner table always comes first, foj_inner is
+    // used here for faster judgement.
+    if (tbl->foj_inner) {
+      join_nest->foj_nest = true;
+      break;
+    }
+  }
 
   return join_nest;
 }
@@ -8232,8 +8245,8 @@ bool TABLE::export_structure(THD *thd, List<Create_field> *defs) {
                               ? LEX_CSTRING{(*field)->orig_db_name,
                                             strlen((*field)->orig_db_name)}
                               : thd->db();
-    LEX_STRING db_name = s->db.length ? to_lex_string(thd->strmake(s->db))
-                                      : to_lex_string(db_cstr);
+    LEX_STRING db_name =
+        def->udt_db_name.length ? def->udt_db_name : to_lex_string(db_cstr);
     def->set_udt_db_name(db_name);
     def->flags &= (uint)~NOT_NULL_FLAG;
     if (prepare_sp_create_field(thd, def)) return true;

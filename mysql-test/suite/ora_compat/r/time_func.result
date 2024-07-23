@@ -341,3 +341,14 @@ SELECT add_months('2022-02-28', '1.2  a') FROM dual;
 ERROR HY000: Incorrect arguments to add_months
 SELECT add_months('2022-02-28', '  a1.2') FROM dual;
 ERROR HY000: Incorrect arguments to add_months
+SELECT add_months('2024-05-01',1e40);
+add_months('2024-05-01',1e40)
+NULL
+Warnings:
+Warning	1441	Datetime function: add_months field overflow
+set sql_mode=oracle;
+SELECT SYSDATE - 30000000000000000000000000000000000000000000;
+SYSDATE - 30000000000000000000000000000000000000000000
+NULL
+Warnings:
+Warning	1441	Datetime function: datetime field overflow

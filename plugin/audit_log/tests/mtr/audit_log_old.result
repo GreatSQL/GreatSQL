@@ -36,7 +36,6 @@ audit_log_handler	FILE
 audit_log_include_accounts	
 audit_log_include_commands	
 audit_log_include_databases	
-audit_log_max_rows	2147483647
 audit_log_policy	ALL
 audit_log_rotate_on_size	0
 audit_log_rotations	0
@@ -75,7 +74,6 @@ audit_log_handler	FILE
 audit_log_include_accounts	
 audit_log_include_commands	
 audit_log_include_databases	
-audit_log_max_rows	2147483647
 audit_log_policy	ALL
 audit_log_rotate_on_size	0
 audit_log_rotations	0

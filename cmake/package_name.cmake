@@ -1,5 +1,5 @@
 # Copyright (c) 2010, 2022, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2023, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -160,7 +160,7 @@ IF(NOT CPACK_SOURCE_PACKAGE_FILE_NAME)
   ENDIF()
 ENDIF()
 SET(CPACK_PACKAGE_CONTACT "GreatOpenSource Engineering <support@greatopensource.com>")
-SET(CPACK_PACKAGE_VENDOR "GreatOpenSource")
+SET(CPACK_PACKAGE_VENDOR "GreatOpenSource")  
 SET(CPACK_SOURCE_GENERATOR "TGZ")
 INCLUDE(cpack_source_ignore_files)
 

@@ -5,7 +5,7 @@ Copyright (c) 2008, 2009 Google Inc.
 Copyright (c) 2009, Percona Inc.
 Copyright (c) 2012, Facebook Inc.
 Copyright (c) 2022, Huawei Technologies Co., Ltd.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -1033,6 +1033,9 @@ static ib_cb_t innodb_api_cb[] = {
 static int innodb_check_session_admin(THD *thd, SYS_VAR *self, void *save,
                                       struct st_mysql_value *value);
 
+static int innodb_reset_interval_of_row_id(THD *thd, SYS_VAR *var, void *save,
+                                           struct st_mysql_value *value);
+
 /**Check whether valid argument given to innobase_*_stopword_table.
 This function is registered as a callback with MySQL.
 @param[in]      thd             thread handle
@@ -1210,6 +1213,11 @@ static MYSQL_THDVAR_ULONG(ddl_threads, PLUGIN_VAR_RQCMDARG,
                           nullptr, 4, /* Default. */
                           1,          /* Minimum. */
                           64, 0);     /* Maximum. */
+
+static MYSQL_THDVAR_BOOL(optimize_no_pk_parallel_load, PLUGIN_VAR_OPCMDARG,
+                         "Enable or Disable optimization of parallelly loading"
+                         "data into a table hasing no unique clustered index.",
+                         innodb_reset_interval_of_row_id, nullptr, false);
 
 static SHOW_VAR innodb_status_variables[] = {
     {"background_log_sync", (char *)&export_vars.innodb_background_log_sync,
@@ -2253,6 +2261,10 @@ ulong thd_parallel_read_threads(THD *thd) {
 ulong thd_ddl_buffer_size(THD *thd) { return THDVAR(thd, ddl_buffer_size); }
 
 size_t thd_ddl_threads(THD *thd) noexcept { return THDVAR(thd, ddl_threads); }
+
+bool thd_optimize_no_pk_parallel_load(THD *thd) {
+  return THDVAR(thd, optimize_no_pk_parallel_load);
+}
 
 /** Check if statement is of type INSERT .... SELECT that involves
 use of intrinsic tables.
@@ -12631,7 +12643,8 @@ inline int create_index(
   if (ind_type != 0) {
     index = dict_mem_index_create(table_name, key->name, 0, ind_type,
                                   key->user_defined_key_parts);
-    index->nulls_equal = ((key->flags & HA_NULL_ARE_EQUAL));
+    index->nulls_equal = index->ora_mode =
+        ((key->flags & HA_FROM_ORA_MODE) ? true : false);
 
     for (ulint i = 0; i < key->user_defined_key_parts; i++) {
       KEY_PART_INFO *key_part = key->key_part + i;
@@ -12685,7 +12698,8 @@ inline int create_index(
   /* This setting will enforce SQL NULL == SQL NULL.
   For now this is turned-on for intrinsic tables
   only but can be turned on for other tables if needed arises. */
-  index->nulls_equal = (key->flags & HA_NULL_ARE_EQUAL) ? true : false;
+  index->nulls_equal = index->ora_mode =
+      ((key->flags & HA_FROM_ORA_MODE) ? true : false);
 
   if (handler != nullptr) {
     /* Disable use of AHI for intrinsic table indexes as AHI
@@ -21229,6 +21243,25 @@ static int innodb_check_session_admin(THD *thd, SYS_VAR *var, void *save,
   return check_func_bool(thd, var, save, value);
 }
 
+/**
+  Reset interval info of row id
+
+  @param thd the session context
+  @param var the system variable to set value for
+  @param save set the updated value
+  @param value A struct that reads us the values from mysqld
+
+  @retval   1   failure
+  @retval   0   success
+ */
+static int innodb_reset_interval_of_row_id(THD *thd, SYS_VAR *var, void *save,
+                                           struct st_mysql_value *value) {
+  thd->left_of_interval = 0;
+  thd->right_of_interval = 0;
+  thd->next_interval_size = 1;
+  return check_func_bool(thd, var, save, value);
+}
+
 static void innodb_srv_buffer_pool_in_core_file_update(THD *, SYS_VAR *, void *,
                                                        const void *save) {
   srv_buffer_pool_in_core_file = *(bool *)save;
@@ -24330,6 +24363,19 @@ static MYSQL_SYSVAR_BOOL(print_data_file_async_purge_process,
                          "Print all data file purge process to MySQL error log",
                          NULL, NULL, true);
 
+#ifdef UNIV_LINUX
+static MYSQL_SYSVAR_ULONG(sched_priority_pc, srv_sched_priority_pc,
+                          PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
+                          "Nice value for the page cleaner thread scheduling",
+                          NULL, NULL, 19, 0, 39, 0);
+
+static MYSQL_SYSVAR_ULONG(sched_priority_lru_flush,
+                          srv_sched_priority_lru_flush,
+                          PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
+                          "Nice value for the lru manager thread scheduling",
+                          NULL, NULL, 19, 0, 39, 0);
+#endif
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -24581,6 +24627,11 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(data_force_async_purge_file_size),
     MYSQL_SYSVAR(data_file_async_purge_max_size),
     MYSQL_SYSVAR(print_data_file_async_purge_process),
+    MYSQL_SYSVAR(optimize_no_pk_parallel_load),
+#ifdef UNIV_LINUX
+    MYSQL_SYSVAR(sched_priority_pc),
+    MYSQL_SYSVAR(sched_priority_lru_flush),
+#endif
     nullptr};
 
 mysql_declare_plugin(innobase){

@@ -3,7 +3,7 @@
 
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -156,6 +156,9 @@ bool assert_invalid_stats_is_locked(const TABLE *);
 #define tmp_file_prefix_length 4
 #define TMP_TABLE_KEY_EXTRA 8
 #define PLACEHOLDER_TABLE_ROW_ESTIMATE 2
+
+#define dblink_trigger_table \
+  "dblink_trigger_%dtable"  // Default trigger table name
 
 /**
   Enumerate possible types of a table from re-execution
@@ -784,6 +787,7 @@ struct TABLE_SHARE {
   LEX_CSTRING table_cache_key{nullptr, 0};
   LEX_CSTRING db{nullptr, 0};         /* Pointer to db */
   LEX_CSTRING table_name{nullptr, 0}; /* Table name (for open) */
+  LEX_CSTRING dblink_name{nullptr, 0}; /* Dblink name */
   LEX_STRING path{nullptr, 0};        /* Path to .frm file (from datadir) */
   LEX_CSTRING normalized_path{nullptr, 0}; /* unpack_filename(path) */
   LEX_STRING connect_string{nullptr, 0};
@@ -1650,6 +1654,7 @@ struct TABLE {
   Table_ref *pos_in_locked_tables{nullptr};
   ORDER *group{nullptr};
   const char *alias{nullptr};  ///< alias or table name
+  const char *dblink_name{nullptr};  ///< dblink name
   uchar *null_flags{nullptr};  ///< Pointer to the null flags of record[0]
   uchar *null_flags_saved{
       nullptr};  ///< Saved null_flags while null_row is true
@@ -3600,7 +3605,8 @@ class Table_ref {
   Table_ref *next_local{nullptr};
   /* link in a global list of all queries tables */
   Table_ref *next_global{nullptr}, **prev_global{nullptr};
-  const char *db{nullptr}, *table_name{nullptr}, *alias{nullptr};
+  const char *db{nullptr}, *table_name{nullptr}, *alias{nullptr},
+      *dblink_name{nullptr};
   /*
     Target tablespace name: When creating or altering tables, this
     member points to the tablespace_name in the HA_CREATE_INFO struct.
@@ -3837,6 +3843,8 @@ class Table_ref {
   /// tr2 ---> foj_inner = true , foj_outer = false
   bool foj_inner{false};
   bool foj_outer{false};
+  // true only when this table reference is a nested FULL join
+  bool foj_nest{false};
   /// True if was originally the left argument of a RIGHT JOIN, before we
   /// made it the right argument of a LEFT JOIN.
   bool join_order_swapped{false};
@@ -3958,6 +3966,8 @@ class Table_ref {
 
   /*is force view */
   bool is_force_view{false};
+  // Specify which force view this Table_ref belongs to.
+  Table_ref *belong_to_force_view{nullptr};
 
   /*
     View definition (SELECT-statement) in the UTF-form.
@@ -4371,6 +4381,17 @@ static const uint MYSQL_TABLESPACE_DD_ID = 1;
 extern LEX_CSTRING RLI_INFO_NAME;
 extern LEX_CSTRING MI_INFO_NAME;
 extern LEX_CSTRING WORKER_INFO_NAME;
+
+extern LEX_CSTRING AUDIT_LOG_DB;
+extern LEX_CSTRING AUDIT_LOG_TABLE;
+
+inline bool is_audit_log(const char *db, size_t db_len, const char *table,
+                         size_t table_len) {
+  return (AUDIT_LOG_DB.length == db_len &&
+          AUDIT_LOG_TABLE.length == table_len &&
+          !my_strcasecmp(system_charset_info, AUDIT_LOG_DB.str, db) &&
+          !my_strcasecmp(system_charset_info, AUDIT_LOG_TABLE.str, table));
+}
 
 inline bool is_infoschema_db(const char *name, size_t len) {
   return (

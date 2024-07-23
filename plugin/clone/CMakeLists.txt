@@ -1,5 +1,5 @@
 # Copyright (c) 2018, 2022, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2023, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -36,6 +36,7 @@ MYSQL_ADD_PLUGIN(clone
   src/clone_os.cc
   src/clone_hton.cc
   ../../sql/encrypt.cc
+  ../../sql/clone_compress.cc
   MODULE_ONLY
   MODULE_OUTPUT_NAME "mysql_clone"
   )

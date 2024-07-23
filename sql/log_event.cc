@@ -2,7 +2,7 @@
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
    Copyright (c) 2018, Percona and/or its affiliates.
    Copyright (c) 2009, 2016, MariaDB
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -4280,8 +4280,19 @@ void Query_log_event::print_query_header(
       binlogs. Therefore, we generate this version-conditioned expression that
       masks out the removed modes in case this is executed on 8.0.5 or later.
     */
+    /* from greatdb 8.0.25, we resue oracle_mode. so if version larger
+     * than 8.0.25, it should not remove 0x1003ff00, but 0x1003fd00 is ok. while
+     * since offical mysql will not use any mode in 0x1003fd00 at all, so,
+     * remove nothing is ok.
+     */
     const char *mask = "";
-    if (sql_mode & 0x1003ff00) mask = "/*!80005 &~0x1003ff00*/";
+    if (print_event_info->immediate_server_version !=
+            UNDEFINED_SERVER_VERSION &&
+        print_event_info->immediate_server_version >= 80025) {
+      if (sql_mode & 0x1003fd00) mask = "/*!80005 &~0x1003fd00*/";
+    } else {
+      if (sql_mode & 0x1003ff00) mask = "/*!80005 &~0x1003ff00*/";
+    }
     my_b_printf(file, "SET @@session.sql_mode=%lu%s%s\n", (ulong)sql_mode, mask,
                 print_event_info->delimiter);
     print_event_info->sql_mode = sql_mode;
@@ -4634,7 +4645,12 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
                    sql_mode & ~(MODE_ALLOWED_MASK | MODE_IGNORED_MASK));
           goto compare_errors;
         }
-        sql_mode &= MODE_ALLOWED_MASK;
+        if (thd->variables.immediate_server_version !=
+                UNDEFINED_SERVER_VERSION &&
+            thd->variables.immediate_server_version >= 80025)
+          sql_mode &= MODE_ALLOWED_MASK;
+        else
+          sql_mode &= (MODE_ALLOWED_MASK & ~(ulonglong)MODE_ORACLE);
         thd->variables.sql_mode =
             (sql_mode_t)((thd->variables.sql_mode & MODE_NO_DIR_IN_CREATE) |
                          (sql_mode & ~(ulonglong)MODE_NO_DIR_IN_CREATE));
@@ -13109,6 +13125,14 @@ int Gtid_log_event::pack_info(Protocol *protocol) {
   size_t len = to_string(buffer);
   protocol->store_string(buffer, len, &my_charset_bin);
   return 0;
+}
+
+std::string Gtid_log_event::get_gtid() {
+  char buffer[MAX_SET_STRING_LENGTH + 1];
+  char *p = buffer;
+  p += spec.to_string(&sid, p);
+  *p = '\0';
+  return std::string(buffer);
 }
 #endif  // MYSQL_SERVER
 

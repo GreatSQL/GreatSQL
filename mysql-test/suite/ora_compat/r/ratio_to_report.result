@@ -263,9 +263,9 @@ ERROR HY000: Incorrect arguments to ratio_to_report
 # test of definate type
 #
 SELECT  name1, c1, ratio_to_report(name1) over (partition by c1) c from test_type;
-ERROR HY000: Incorrect arguments to ratio_to_report
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 SELECT  name1, c1, ratio_to_report(name1) over () c from test_type;
-ERROR HY000: Incorrect arguments to ratio_to_report
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
 #
 # test of engine=myIsam
 #

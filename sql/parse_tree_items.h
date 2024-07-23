@@ -1,6 +1,6 @@
 /* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -233,6 +233,7 @@ class PTI_function_call_nonkeyword_trigger_event_is : public Parse_tree_item {
   typedef Parse_tree_item super;
   Item *m_event_type;
   Item *m_column;
+  bool is_NULL = false;
 
  public:
   explicit PTI_function_call_nonkeyword_trigger_event_is(const POS &pos,
@@ -257,11 +258,7 @@ class PTI_udf_expr : public Parse_tree_item {
       : super(pos),
         expr(expr_arg),
         select_alias(select_alias_arg),
-        expr_loc(expr_loc_arg) {
-    if (expr_arg->has_rownum_expr()) {
-      set_rownum();
-    }
-  }
+        expr_loc(expr_loc_arg) {}
 
   bool itemize(Parse_context *pc, Item **res) override;
 };

@@ -716,3 +716,60 @@ select *,'1 row' from zgh2;
 
 drop table zgh1;
 drop table zgh2;
+
+--echo # test MYSQL_DUMP
+set sql_mode=oracle;
+create table bonuses (employee_id number(10,0), bonus number(10,2) default 100);
+insert into bonuses values(111,111);
+insert into bonuses values(222,222);
+select * from bonuses;
+create global temporary table tmp_bonuses(employee_id int,bonus decimal(10,2) ) on commit preserve rows ;
+insert into tmp_bonuses select employee_id,bonus from bonuses;
+select * from tmp_bonuses;
+create temporary table t_t1 (select * from bonuses);
+select * from t_t1;
+
+--exec $MYSQL_DUMP --databases test --triggers --events --routines > $MYSQLTEST_VARDIR/tmp/create_global_temp_table_dump.sql
+drop table bonuses;
+drop table tmp_bonuses;
+drop table t_t1;
+show tables;
+
+--exec $MYSQL test < $MYSQLTEST_VARDIR/tmp/create_global_temp_table_dump.sql
+show tables;
+select * from bonuses;
+select * from tmp_bonuses;
+insert into tmp_bonuses select employee_id,bonus from bonuses;
+select * from tmp_bonuses;
+--error 1146
+select * from t_t1;
+
+--remove_file $MYSQLTEST_VARDIR/tmp/create_global_temp_table_dump.sql
+drop table bonuses;
+drop table tmp_bonuses;
+
+--echo # global temp table in insert statement without CREATE TEMPORARY TABLES privilege
+SET SQL_MODE=oracle;
+CREATE GLOBAL TEMPORARY TABLE gt_t(a int, b int, c int) ON COMMIT PRESERVE ROWS;
+
+CREATE USER 'user_test' IDENTIFIED BY '123';
+GRANT SELECT,INSERT,UPDATE,DELETE,EXECUTE,DROP,CREATE,CREATE ROUTINE,CREATE VIEW ON test.* TO user_test;
+FLUSH PRIVILEGES;
+
+--connect(conn1,localhost,user_test,123,test)
+SET SQL_MODE=oracle;
+--error 1044
+INSERT INTO gt_t VALUES(1, 1, 1), (2, 1, 2), (3, 2, 1), (4, 2, 2), (5, 3, 1), (6, 3, 2);
+
+change_user root,,test;
+GRANT CREATE TEMPORARY TABLES ON test.* TO user_test;
+FLUSH PRIVILEGES;
+
+change_user user_test,123,test;
+SET SQL_MODE=oracle;
+INSERT INTO gt_t VALUES(1, 1, 1), (2, 1, 2), (3, 2, 1), (4, 2, 2), (5, 3, 1), (6, 3, 2);
+SELECT * FROM gt_t;
+
+change_user root,,test;
+DROP TABLE gt_t;
+DROP USER user_test;

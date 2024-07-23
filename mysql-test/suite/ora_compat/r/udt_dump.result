@@ -1,0 +1,77 @@
+set @@udt_format_result='DBA';
+SET sql_mode=ORACLE;
+CREATE or replace TYPE `t_air` AS OBJECT(id int,type varchar(20)) COMMENT '123';
+ERROR 42000: This version of MySQL doesn't yet support 'create type with comment'
+CREATE or replace TYPE `t_air` AS OBJECT(id int,type varchar(20)) ;
+CREATE or replace TYPE `t_air_table` AS TABLE OF t_air ;
+CREATE or replace TYPE `t_air3` AS OBJECT(id int,type varchar(20),bb bit(64)) ;
+select specific_name from information_schema.routines where
+routine_type='TYPE' order by ROUTINE_COMMENT;
+SPECIFIC_NAME
+t_air
+t_air_table
+t_air3
+create table tt_air(id int,name1 t_air);
+insert into tt_air values(1,t_air(10,'aabb'));
+insert into tt_air values(2,t_air(20,'qwed'));
+insert into tt_air values(3,t_air(200,null));
+CREATE TABLE `tt_air3` (
+`id` int DEFAULT NULL,
+`name1` t_air3 DEFAULT NULL
+) ;
+INSERT INTO `tt_air3` VALUES (1,t_air3('10' , 'aabb' , 0x3132));
+INSERT INTO `tt_air3` VALUES (2,t_air3('100' , 'aabb1' , 0x3132008700));
+INSERT INTO `tt_air3` VALUES (3,t_air3('10' , null , null));
+INSERT INTO `tt_air3` VALUES (4,null);
+CREATE or replace PROCEDURE p1() as
+stu_record_val t_air_table := t_air_table(t_air(1,'bb'));
+begin
+select stu_record_val(1),stu_record_val(1).id,stu_record_val(1).type;
+stu_record_val(1) := null;
+select stu_record_val(1),stu_record_val(1).id,stu_record_val(1).type;
+end;
+$$
+CREATE or replace PROCEDURE p2() as
+type dr_type is table of tt_air%ROWTYPE index by VARCHAR2(30);
+dr_table dr_type;
+begin
+dr_table('id').id := 1;
+dr_table('id').name1 := t_air(1,'aa');
+dr_table('id1').id := 2;
+dr_table('id2').name1 := t_air(2,'bb');
+select dr_table('id'),dr_table('id1'),dr_table('id2');
+end;
+$$
+drop PROCEDURE p2;
+drop PROCEDURE p1;
+DROP TABLE tt_air;
+DROP TABLE tt_air3;
+DROP type t_air_table;
+DROP type t_air;
+DROP type t_air3;
+table tt_air;
+id	name1
+1	id:10 | type:aabb
+2	id:20 | type:qwed
+3	id:200 | type:NULL
+table tt_air3;
+id	name1
+1	id:10 | type:aabb | bb:0x3132
+2	id:100 | type:aabb1 | bb:0x3132008700
+3	id:10 | type:NULL | bb:NULL
+4	NULL
+call p1;
+stu_record_val(1)	stu_record_val(1).id	stu_record_val(1).type
+id:1 | type:bb	1	bb
+stu_record_val(1)	stu_record_val(1).id	stu_record_val(1).type
+id:NULL | type:NULL	NULL	NULL
+call p2;
+dr_table('id')	dr_table('id1')	dr_table('id2')
+id:1 | name1:id:1 | type:aa	id:2 | name1:NULL	id:NULL | name1:id:2 | type:bb
+drop PROCEDURE p2;
+drop PROCEDURE p1;
+DROP TABLE tt_air;
+DROP TABLE tt_air3;
+DROP type t_air_table;
+DROP type t_air;
+DROP type t_air3;

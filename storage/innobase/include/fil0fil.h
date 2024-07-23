@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2022, Oracle and/or its affiliates.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -2146,6 +2146,15 @@ or MLOG_FILE_RENAME record. These could not be recovered
 @return true if there were some filenames missing for which we had to
 ignore redo log records during the apply phase */
 [[nodiscard]] bool fil_check_missing_tablespaces();
+
+/** Open tablespace file for backup.
+@param[in]  path  file path.
+@param[in]  name  space name.
+@return DB_SUCCESS if all OK */
+dberr_t fil_open_for_clone(const std::string &path, const std::string &name);
+
+/** Open all known tablespaces. */
+void fil_open_ibds();
 
 /** Normalize and save a directory to scan for datafiles.
 @param[in]  directory    directory to scan for ibd and ibu files

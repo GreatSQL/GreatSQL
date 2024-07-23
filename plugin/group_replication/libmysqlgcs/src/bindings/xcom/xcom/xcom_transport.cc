@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -91,6 +91,7 @@ xcom_proto const my_xcom_version =
 static int const NAGLE = 0;
 
 extern int xcom_shutdown;
+extern int ask_for_reconnect_if_ok(server *s);
 
 static void shut_srv(server *s);
 
@@ -130,6 +131,125 @@ connection_descriptor *open_new_local_connection(const char *server,
   return retval;
 }
 /* purecov: end */
+
+int connect_tcp(char *server, xcom_port port, int *ret) {
+  DECL_ENV
+  int fd;
+  struct addrinfo *addr, *from_ns;
+  ENV_INIT
+  END_ENV_INIT
+  END_ENV;
+  TASK_BEGIN
+
+  ep->addr = NULL;
+  ep->from_ns = NULL;
+
+  checked_getaddrinfo_port(server, port, NULL, &ep->from_ns);
+
+  if (ep->from_ns == NULL) {
+    TASK_FAIL;
+  }
+
+  ep->addr =
+      Xcom_network_provider_library::does_node_have_v4_address(ep->from_ns);
+
+  /* Create socket */
+  if ((ep->fd = Xcom_network_provider_library::xcom_checked_socket(
+                    ep->addr->ai_family, SOCK_STREAM, IPPROTO_TCP)
+                    .val) < 0) {
+    IFDBG(D_TRANSPORT, FN; NDBG(ep->fd, d));
+    TASK_FAIL;
+  }
+
+  /* Make it non-blocking */
+  unblock_fd(ep->fd);
+
+  /* Connect socket to address */
+  {
+    result sock = {0, 0};
+    SET_OS_ERR(0);
+    sock.val =
+        connect(ep->fd, ep->addr->ai_addr, (socklen_t)ep->addr->ai_addrlen);
+    sock.funerr = to_errno(GET_OS_ERR);
+
+    if (sock.val < 0) {
+      if (hard_connect_err(sock.funerr)) {
+        /* purecov: begin inspected */
+        task_dump_err(sock.funerr);
+        IFDBG(D_TRANSPORT, FN; NDBG(ep->fd, d););
+        xcom_close_socket(&ep->fd);
+        TASK_FAIL;
+        /* purecov: end */
+      }
+    }
+  }
+
+/* Wait until connect has finished */
+retry:
+  timed_wait_io(stack, ep->fd, 'w', 10.0);
+  TASK_YIELD;
+  /* See if we timed out here. If we did, connect may or may not be active.
+     If closing fails with EINPROGRESS, we need to retry the select.
+     If close does not fail, we know that connect has indeed failed, and
+     we exit from here and return -1 as socket fd */
+  if (stack->interrupt) {
+    result shut = {0, 0};
+    stack->interrupt = 0;
+
+    /* Try to close socket on timeout */
+    shut = xcom_shut_close_socket(&ep->fd);
+    IFDBG(D_TRANSPORT, FN; NDBG(ep->fd, d););
+    task_dump_err(shut.funerr);
+    if (from_errno(shut.funerr) == SOCK_EINPROGRESS)
+      goto retry; /* Connect is still active */
+    TASK_FAIL;    /* Connect has failed */
+  }
+
+  {
+    int peer = 0;
+    result sock = {0, 0};
+    struct sockaddr_storage sock_addr;
+    socklen_t sock_size = sizeof(sock_addr);
+    memset((void *)&sock_addr, 0, sizeof(sock_addr));
+
+    /* Sanity check before return */
+    SET_OS_ERR(0);
+    sock.val = peer =
+        xcom_getpeername(ep->fd, (struct sockaddr *)&sock_addr, &sock_size);
+    sock.funerr = to_errno(GET_OS_ERR);
+    if (peer >= 0) {
+      TASK_RETURN(ep->fd);
+    } else {
+      /* Something is wrong */
+      socklen_t errlen = sizeof(sock.funerr);
+
+      IFDBG(D_TRANSPORT, FN; CONSTPTREXP(&sock_addr);
+            STRLIT("Something is wrong "); NDBG(ep->fd, d); NDBG(sock.val, d);
+            NDBG(sock.funerr, d));
+      if (sock.funerr == 0) { /* Try to extract error code another way */
+        /* purecov: begin inspected */
+        getsockopt(ep->fd, SOL_SOCKET, SO_ERROR, (xcom_buf *)&sock.funerr,
+                   &errlen);
+        IFDBG(D_TRANSPORT, FN; CONSTPTREXP(&sock_addr);
+              STRLIT("Something is wrong "); NDBG(ep->fd, d); NDBG(sock.val, d);
+              NDBG(sock.funerr, d));
+        /* purecov: end */
+      }
+      if (sock.funerr == 0) { /* Still 0? Assign generic "connection refused */
+        /* purecov: begin inspected */
+        sock.funerr = to_errno(SOCK_ECONNREFUSED);
+        /* purecov: end */
+      }
+
+      xcom_shut_close_socket(&ep->fd);
+      TASK_FAIL;
+    }
+  }
+
+  FINALLY
+  if (ep->from_ns) freeaddrinfo(ep->from_ns);
+  TASK_END;
+}
 
 result set_nodelay(int fd) {
   int n = 1;
@@ -839,6 +959,8 @@ static int dial(server *s) {
   ENV_INIT
   END_ENV_INIT
   int same_ip;
+  int use_ssl;
+  int comm_protocol;
   double utime;
   END_ENV;
 
@@ -849,14 +971,22 @@ static int dial(server *s) {
   // Delete old connection
   reset_connection(s->con);
   X_FREE(s->con);
-  s->con = nullptr;
 
   ep->utime = get_micro_time();
-  s->con = open_new_connection(s->srv, s->port, 1000);
-  if (!s->con) {
+  ep->use_ssl = Network_provider_manager::getInstance().is_xcom_using_ssl();
+  ep->comm_protocol = Network_provider_manager::getInstance()
+                          .get_incoming_connections_protocol();
+
+  if ((!ep->use_ssl) && (ep->comm_protocol == XCOM_PROTOCOL)) {
     s->con = new_connection(-1, nullptr);
+    TASK_CALL(connect_tcp(s->srv, s->port, &s->con->fd));
+  } else {
+    s->con = nullptr;
+    s->con = open_new_connection(s->srv, s->port, 1000);
+    if (!s->con) {
+      s->con = new_connection(-1, nullptr);
+    }
   }
-  s->conn_rtt = ((double)get_micro_time() - ep->utime) / 1000000;
 
   if (s->con->fd < 0) {
     IFDBG(D_NONE, FN; STRLIT("could not dial "); STRLIT(s->srv);
@@ -864,6 +994,7 @@ static int dial(server *s) {
   } else if (!check_tcp_connection_valid(s->con->fd, &ep->same_ip)) {
     xcom_shut_close_socket(&(s->con->fd));
   } else {
+    s->conn_rtt = ((double)get_micro_time() - ep->utime) / 1000000;
     if (NAGLE == 0) {
       set_nodelay(s->con->fd);
     }
@@ -1541,6 +1672,10 @@ int sender_task(task_arg arg) {
     /* Loop until connected */
     G_MESSAGE("Connecting to %s:%d", ep->s->srv, ep->s->port);
     for (;;) {
+      if (!ask_for_reconnect_if_ok(ep->s)) {
+        TIMED_TASK_WAIT(&connect_wait, 2.0);
+        continue;
+      }
 #if defined(_WIN32)
       if (!ep->was_connected) {
 #endif
@@ -1555,7 +1690,12 @@ int sender_task(task_arg arg) {
         ep->s->fast_skip_allowed_for_kill = 0;
         break;
       }
-      ep->s->unreachable++;
+
+      if (ep->s->unreachable < 0) {
+        ep->s->unreachable = 1;
+      } else {
+        ep->s->unreachable++;
+      }
 
       if (ep->dtime < MAX_CONNECT_WAIT) {
         G_MESSAGE("Connection to %s:%d failed", ep->s->srv, ep->s->port);
@@ -2088,17 +2228,41 @@ static int match_address(parse_buf *p) {
     return match_ipv4_or_name(p);
 }
 
-void update_zone_id_for_consensus(const char *ip, int zone_id,
+void update_zone_id_for_consensus(const char *address, int zone_id,
                                   bool zone_id_sync_mode) {
   int i;
+  bool found = false;
+
   for (i = 0; i < maxservers; i++) {
-    if (strcmp(all_servers[i]->srv, ip) == 0) {
+    size_t len = strlen(all_servers[i]->srv);
+    if (strncmp(all_servers[i]->srv, address, len) == 0) {
+      /* IPv4 */
+      if (strlen(address) > (len + 1)) {
+        const char *port_str = address + len + 1;
+        xcom_port port = atoi(port_str);
+        if (all_servers[i]->port == port) {
+          found = true;
+        }
+      }
+    } else if (strncmp(all_servers[i]->srv, address + 1, len) == 0) {
+      /* IPv6 */
+      if (strlen(address) > (len + 3)) {
+        const char *port_str = address + len + 3;
+        xcom_port port = atoi(port_str);
+        if (all_servers[i]->port == port) {
+          found = true;
+        }
+      }
+    }
+
+    if (found) {
       /*
        * Update server zone id when updated.
        *
        */
       all_servers[i]->zone_id = zone_id;
       all_servers[i]->zone_id_sync_mode = zone_id_sync_mode;
+      break;
     }
   }
 }

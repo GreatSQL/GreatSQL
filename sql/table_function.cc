@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -944,8 +944,53 @@ bool Table_function_record::fill_result_table() {
   return false;
 }
 
+bool Table_function_record::check_count_and_fields(uint count) {
+  if (count >= table->s->fields) {
+    my_error(ER_UDT_INCONS_DATATYPES, MYF(0));
+    return true;
+  }
+  return false;
+}
+
+bool Table_function_record::fill_result_table_with_table(TABLE *table_from) {
+  if (table_from->file->ha_rnd_init(true)) return true;
+
+  THD *thd = current_thd;
+  init_table();
+  bool rc = true;
+  do {
+    int res = table_from->file->ha_rnd_next(table_from->record[0]);
+    if (res == 0) {
+      Item *item_index = new (thd->mem_root) Item_field(table_from->field[0]);
+      if (sp_eval_expr(thd, table->field[0], &item_index)) goto done;
+      for (uint i = 1; i < table_from->s->fields; i++) {
+        Field_row *field_row = dynamic_cast<Field_row *>(table_from->field[i]);
+        if (field_row) field_row->is_tmp_field = true;
+        Item *item = new (thd->mem_root) Item_field(table_from->field[i]);
+        if (sp_eval_expr(thd, table->field[i], &item)) goto done;
+      }
+      if (write_row_and_cmp_index(item_index)) {
+        goto done;
+      }
+    } else if (res == HA_ERR_END_OF_FILE) {
+      rc = false;
+      break;
+    } else {
+      table_from->file->print_error(res, MYF(0));
+      break;
+    }
+  } while (true);
+
+done:
+  table_from->file->ha_rnd_end();
+
+  return rc;
+}
+
 bool Table_function_record::fill_result_table_all_col(
-    THD *thd, const mem_root_deque<Item *> &items, Item *item_index) {
+    THD *thd, const mem_root_deque<Item *> &items, Item *item_index,
+    bool is_bulk_into) {
+  Item *item_str_index = make_item_index(thd, item_index);
   auto item_iter = VisibleFields(items).begin();
   int count = 0;
   int size = CountVisibleFields(items);
@@ -955,40 +1000,60 @@ bool Table_function_record::fill_result_table_all_col(
     /* e.g: stu_record_val(1) := stu_record_val1;
        stu_record_val(1) := stu_record_val(2)
     */
-    if (item->type() == Item::ORACLE_ROWTYPE_ITEM) {
+    if (item->type() == Item::ORACLE_ROWTYPE_ITEM &&
+        (!is_bulk_into || size == 1)) {
       bool is_field_table = item->get_arg_count() == table->s->fields;
-      for (uint i = 0; i < item->get_arg_count(); i++) {
-        if (sp_eval_expr(thd, get_field(i + 1 - is_field_table), item->addr(i)))
+      for (uint i = 1; i < table->s->fields; i++) {
+        if (check_count_and_fields(i - 1 + is_field_table) ||
+            sp_eval_expr(thd, get_field(i), item->addr(i - 1 + is_field_table)))
           return true;
       }
     } else if (item->result_type() == ROW_RESULT &&
-               item->type() == Item::FUNC_ITEM) {
+               item->type() == Item::FUNC_ITEM &&
+               (!is_bulk_into || size == 1)) {
       // e.g: stu_record_val(1) := stu_record('a','aa10');
       Item_func *udt = dynamic_cast<Item_func *>(item);
       for (uint i = 0; i < udt->argument_count(); i++) {
-        if (sp_eval_expr(thd, get_field(i + 1), udt->arguments() + i))
+        if (check_count_and_fields(i + 1) ||
+            sp_eval_expr(thd, get_field(i + 1), udt->arguments() + i))
           return true;
       }
     } else if (item->type() == Item::ORACLE_ROWTYPE_TABLE_ITEM) {
       my_error(ER_NOT_SUPPORTED_YET, MYF(0),
                "table object saves to non-table object.");
       return true;
-    } else if (item->type() == Item::NULL_ITEM && size == 1 &&
-               (int)table->s->fields > size) {
-      // for stu_record_val(3) := null;
-      for (uint i = 1; i < table->s->fields; i++)
-        if (sp_eval_expr(thd, get_field(i), &item)) return true;
-    } else if (sp_eval_expr(thd, get_field(count + 1), &item))
+    } else if ((item->type() == Item::NULL_ITEM ||
+                item->type() == Item::FIELD_ITEM ||
+                item->type() == Item::SUBSELECT_ITEM) &&
+               size == 1) {
+      // for stu_record_val(3) := null; or
+      // e.g: select name1 BULK COLLECT INTO param_array from tt_air;
+      StringBuffer<STRING_BUFFER_USUAL_SIZE> buf;
+      item->val_str(&buf);
+      Item *item_real = item->type() == Item::SUBSELECT_ITEM
+                            ? dynamic_cast<Item_cache *>(item->element_index(0))
+                                  ->get_example()
+                            : item;
+      for (uint i = 1; i < table->s->fields; i++) {
+        Item *item_ele = item_real->element_index(i - 1);
+        if (sp_eval_expr(thd, get_field(i), &item_ele)) return true;
+      }
+    } else if (check_count_and_fields(count + 1) ||
+               sp_eval_expr(thd, get_field(count + 1), &item))
       return true;
     count++;
   }
-  if (sp_eval_expr(thd, get_field(0), &item_index)) return true;
-  if (write_row_and_cmp_index(item_index)) return true;
+  if (sp_eval_expr(thd, get_field(0), &item_str_index)) return true;
+  if (write_row_and_cmp_index(item_str_index)) return true;
   return false;
 }
 
 bool Table_function_record::table_index_read_map(Item *item_index,
                                                  uint record_offset) {
+  if (item_index->result_type() == ROW_RESULT) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "row result item as index.");
+    return true;
+  }
   Index_lookup ref;
   if (prepare_index_lookup_part(item_index, &ref)) return true;
   int error = 0;
@@ -1010,15 +1075,21 @@ bool Table_function_record::update_result_table_one_col(Item **value,
                                                         Item *item_index,
                                                         Field *field_udt) {
   bool rc = true;
-  if (table_index_read_map(item_index, 1)) {
+  Item *item_str_index = make_item_index(current_thd, item_index);
+  if (!item_str_index || table_index_read_map(item_str_index, 1)) {
     my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0), table->alias);
     return true;
   }
+  uchar *record1 =
+      (uchar *)current_thd->alloc(sizeof(uchar) * table->s->reclength);
+  memcpy(record1, table->record[1], table->s->reclength);
 
+  if (check_count_and_fields(field_idx)) return true;
   if (!field_udt) {
     if (sp_eval_expr(current_thd, get_field(field_idx), value)) goto error;
   } else {
-    TABLE *table_udt = field_udt->virtual_tmp_table_addr()[0];
+    // Field_udt_type::val_udt doesn't need copy_data_to_table().
+    TABLE *table_udt = field_udt->m_udt_table;
     get_field(field_idx)->set_notnull();
     if (get_field(field_idx)->store((const char *)table_udt->record[0],
                                     table_udt->s->reclength,
@@ -1030,12 +1101,13 @@ bool Table_function_record::update_result_table_one_col(Item **value,
      handler::NONE.
   */
   if (table->file->inited == handler::NONE) {
-    if (table_index_read_map(item_index, 1)) {
+    if (table_index_read_map(item_str_index, 1)) {
       my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0), table->alias);
       return true;
     }
   }
-  if (sp_eval_expr(current_thd, get_field(0), &item_index)) goto error;
+  if (sp_eval_expr(current_thd, get_field(0), &item_str_index)) goto error;
+  memcpy(table->record[1], record1, table->s->reclength);
   if (table->file->ha_update_row(table->record[1], table->record[0])) {
     my_error(ER_UPDATING_DD_TABLE, MYF(0), table->alias);
     goto error;
@@ -1050,74 +1122,33 @@ error:
 bool Table_function_record::update_result_table_all_cols(Item **value,
                                                          Item *item_index) {
   bool rc = true;
-  Item_func_udt_constructor *item_func =
-      dynamic_cast<Item_func_udt_constructor *>((*value)->this_item());
-  Item_func_sp *item_func_sp = dynamic_cast<Item_func_sp *>((*value));
-  Item **item_value = nullptr;
-  if (table_index_read_map(item_index, 1)) {
+  Item *item_str_index = make_item_index(current_thd, item_index);
+  if (!item_str_index || table_index_read_map(item_str_index, 1)) {
     my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0), table->alias);
     return true;
   }
 
   /*The get_field(0) is index column,so do sp_eval_expr from i=1.*/
-  if ((*value)->type() == Item::NULL_ITEM) {
+  TABLE *udt_table = (*value)->val_udt();
+  if ((*value)->null_value) {
     for (uint i = 1; i < table->s->fields; i++)
-      if (sp_eval_expr(current_thd, get_field(i), value)) goto error;
-  } else if (item_func_sp) {
-    Query_arena backup_arena;
-    current_thd->swap_query_arena(*current_thd->stmt_arena, &backup_arena);
-    String tmp;
-    item_func_sp->val_str(&tmp);
-    current_thd->swap_query_arena(backup_arena, current_thd->stmt_arena);
-
-    if (item_func_sp->null_value) {
-      for (uint i = 1; i < table->s->fields; i++) {
-        type_conversion_status ret =
-            set_field_to_null_with_conversions(get_field(i), false);
-        if (ret != TYPE_OK) goto error;
-      }
-
-    } else {
-      Field_udt_type *field_udt_type =
-          dynamic_cast<Field_udt_type *>(item_func_sp->get_sp_result_field());
-
-      if (field_udt_type) {
-        TABLE *from_table = field_udt_type->virtual_tmp_table_addr()[0];
-        for (uint i = 1; i < table->s->fields; i++) {
-          Item *item_filed =
-              new (current_thd->mem_root) Item_field(from_table->field[i - 1]);
-          if (sp_eval_expr(current_thd, get_field(i), &item_filed)) goto error;
-        }
-      } else {
-        Item *item_filed = new (current_thd->mem_root)
-            Item_field(item_func_sp->get_sp_result_field());
-        if (sp_eval_expr(current_thd, get_field(1), &item_filed)) goto error;
-      }
-    }
+      set_field_to_null_with_conversions(get_field(i), false);
   } else {
-    Item_field_row *item_tmp =
-        dynamic_cast<Item_field_row *>((*value)->this_item());
-    int include_index_column = 0;
-    if (item_tmp) {
-      include_index_column =
-          item_tmp->get_udt_table()->s->fields == table->s->fields ? 1 : 0;
-    }
+    int off = table->s->fields - udt_table->s->fields;
     for (uint i = 1; i < table->s->fields; i++) {
-      item_value =
-          item_func ? item_func->arguments() + i - 1
-                    : (*value)->this_item()->addr(i - 1 + include_index_column);
-      // item_value = nullptr, single type case
-      if (item_value == nullptr) item_value = value;
-      if (sp_eval_expr(current_thd, get_field(i), item_value)) goto error;
+      Item *item_field =
+          new (current_thd->mem_root) Item_field(udt_table->field[i - off]);
+      if (sp_eval_expr(current_thd, get_field(i), &item_field)) goto error;
     }
   }
-  if (sp_eval_expr(current_thd, get_field(0), &item_index)) goto error;
+
+  if (sp_eval_expr(current_thd, get_field(0), &item_str_index)) goto error;
   /*  e.g: table(3) := table(2);
       sp_eval_expr() did table->file->ha_rnd_end(),make table->file->inited ==
      handler::NONE.
   */
   if (!table->file->inited) {
-    if (table_index_read_map(item_index, 1)) {
+    if (table_index_read_map(item_str_index, 1)) {
       my_error(ER_SP_NOT_EXIST_OF_RECORD_TABLE, MYF(0), table->alias);
       return true;
     }
@@ -1164,6 +1195,11 @@ static bool cmp_index_int_key(String *key1, String *key2) {
 
 bool Table_function_record::write_row_and_cmp_index(Item *item_index) {
   m_row_count++;
+  /*this_item() next may change the table->record[0].so it needs to restore the
+   * record[0]*/
+  uchar *from =
+      (uchar *)current_thd->alloc(sizeof(uchar) * table->s->reclength);
+  memcpy(from, table->record[0], table->s->reclength);
   // sort index asc
   if (item_index) {
     String tmp;
@@ -1180,9 +1216,8 @@ bool Table_function_record::write_row_and_cmp_index(Item *item_index) {
     String *value_result =
         new (thd->mem_root) String(chr, result->length(), &my_charset_bin);
     m_first_last_str_list.push_back(value_result);
-    if (m_first_last_str_list.size() < 2) {
-      return Table_function::write_row();
-    }
+    if (m_first_last_str_list.size() < 2) goto finish;
+
     if (m_is_str_index)
       m_first_last_str_list.sort(cmp_index_str_key);
     else
@@ -1204,6 +1239,9 @@ bool Table_function_record::write_row_and_cmp_index(Item *item_index) {
       m_first_last_str_list.push_back(str_last);
     }
   }
+
+finish:
+  memcpy(table->record[0], from, table->s->reclength);
   return Table_function::write_row();
 }
 
@@ -1224,7 +1262,8 @@ bool Table_function_record::prepare_index_lookup_part(Item *item_index,
   uchar *key_buff = ref->key_buff;
   if (init_ref_part(current_thd, 0, item_index, nullptr,
                     /*null_rejecting*/ true, /*join->const_table_map*/ 1,
-                    /*used_tables*/ 0, /*nullable*/ true,
+                    /*used_tables*/ 0,
+                    /*nullable*/ table->key_info->key_part->null_bit,
                     table->key_info->key_part, key_buff, ref)) {
     return true;
   }
@@ -1275,54 +1314,21 @@ bool Table_function_record::create_result_table(THD *thd, ulonglong options,
   return table == nullptr;
 }
 
-bool Table_function_record::copy_to_other_table(
-    Table_function_record *dst_table) {
-  dst_table->init_table();
-  if (table->file->ha_rnd_init(true)) return true;
-  bool rc = true;
-  do {
-    int res = table->file->ha_rnd_next(table->record[0]);
-    if (res == 0) {
-      memcpy(dst_table->table->record[0], table->record[0],
-             table->s->reclength);
-      Item *item_index = nullptr;
-      Query_arena backup_arena;
-      if (current_thd->sp_runtime_ctx)
-        current_thd->swap_query_arena(
-            *current_thd->sp_runtime_ctx->callers_arena, &backup_arena);
-      const auto x_guard = create_scope_guard([&]() {
-        if (current_thd->sp_runtime_ctx)
-          current_thd->swap_query_arena(
-              backup_arena, current_thd->sp_runtime_ctx->callers_arena);
-      });
-      item_index = new (current_thd->mem_root)
-          Item_field(table->field[0]->clone(current_thd->mem_root));
-      if (dst_table->write_row_and_cmp_index(item_index)) {
-        break;
-      }
-    } else if (res == HA_ERR_END_OF_FILE) {
-      rc = false;
-      break;
-    } else {
-      table->file->print_error(res, MYF(0));
-      break;
-    }
-  } while (true);
-
-  table->file->ha_rnd_end();
-
-  return rc;
-}
-
 bool Table_function_udt::init() {
-  Item *dummy = m_source;
-  if (m_source->fix_fields(current_thd, &dummy)) return true;
+  if (m_source->fix_fields(current_thd, &m_source)) return true;
   if (!m_source->this_item()->is_ora_table() &&
       !m_source->this_item()->result_type_table()) {
     my_error(ER_UDT_NONTESTED_TABLE_ITEM, myf(0));
     return true;
   }
-  m_vt_list = *m_source->this_item()->get_field_create_field_list();
+  List<Create_field> *field_lists =
+      m_source->this_item()->get_field_create_field_list();
+  if (field_lists == nullptr) {
+    my_error(ER_UDT_NONTESTED_TABLE_ITEM, myf(0));
+    return true;
+  }
+
+  m_vt_list = *field_lists;
   return false;
 }
 
@@ -1331,72 +1337,49 @@ List<Create_field> *Table_function_udt::get_field_list() { return &m_vt_list; }
 bool Table_function_udt::fill_result_table() {
   // reset table
   empty_table();
-  ulonglong upper_bound;
-  if (m_upper_bound_precalculated) {
-    upper_bound = m_precalculated_upper_bound;
-  } else {
-    upper_bound = calculate_upper_bound();
-    if (m_source->const_item()) m_upper_bound_precalculated = true;
+
+  TABLE *udt = m_source->val_udt();
+  if (m_source->null_value) {
+    my_error(ER_UDT_NONTESTED_TABLE_ITEM, myf(0));
+    return true;
   }
 
+  ulonglong upper_bound = udt->file->estimate_rows_upper_bound();
   if (upper_bound > tf_udt_table_max_rows) {
     my_error(ER_UDT_TABLE_SIZE_LIMIT, MYF(0), tf_sequence_table_max_upper_bound,
              upper_bound);
     return true;
   }
 
-  Item_func_udt_table *item_udt = dynamic_cast<Item_func_udt_table *>(m_source);
-  if (item_udt) {
-    for (uint i = 0; i < item_udt->arg_count; i++) {
-      if (item_udt->arguments()[i]->this_item()->udt_table_store_to_table(
-              table))
-        return true;
-      if (write_row()) return true;
-    }
-  }
-  Item_func_udt_single_type_table *udt_single =
-      dynamic_cast<Item_func_udt_single_type_table *>(m_source);
-  if (udt_single) {
-    for (uint i = 0; i < udt_single->arg_count; i++) {
-      udt_single->arguments()[i]->save_in_field(get_field(0), false);
-      if (write_row()) return true;
-    }
+  int res = 0;
+  if ((res = udt->file->ha_rnd_init(true))) {
+    udt->file->print_error(13, MYF(0));
+    return true;
   }
 
-  Item_splocal *item_splocal = dynamic_cast<Item_splocal *>(m_source);
-  if (item_splocal) {
-    Item_field_row_table *item_field_row_table =
-        dynamic_cast<Item_field_row_table *>(item_splocal->this_item());
-    if (item_field_row_table == nullptr) return true;
-    Field_row_table *field = item_field_row_table->get_row_table_field();
-    if (field == nullptr) return true;
-    TABLE *table_record = field->table_record->table;
-    if (table_record->file->ha_rnd_init(true)) return true;
-
-    do {
-      int res = table_record->file->ha_rnd_next(table->record[0]);
-      if (res == 0) {
-        if (write_row()) return true;
-      } else if (res == HA_ERR_END_OF_FILE) {
-        break;
-      } else {
-        table_record->file->print_error(res, MYF(0));
-        return true;
+  THD *thd = current_thd;
+  bool rc = true;
+  do {
+    res = udt->file->ha_rnd_next(udt->record[0]);
+    if (res == 0) {
+      int off = udt->s->fields - table->s->fields;
+      for (uint i = 0; i < table->s->fields; i++) {
+        Item *item = new (thd->mem_root) Item_field(udt->field[i + off]);
+        if (sp_eval_expr(thd, get_field(i), &item)) goto done;
       }
-    } while (true);
+      if (write_row()) goto done;
+    } else if (res == HA_ERR_END_OF_FILE) {
+      rc = false;
+      break;
+    } else {
+      udt->file->print_error(res, MYF(0));
+      goto done;
+    }
+  } while (true);
 
-    table_record->file->ha_rnd_end();
-  }
-  return false;
-}
-
-ulonglong Table_function_udt::calculate_upper_bound() const {
-  ulonglong res = 0;
-  if (m_source->is_ora_table()) {
-    Item_func *item_udt = dynamic_cast<Item_func *>(m_source);
-    res = item_udt->argument_count();
-  }
-  return res;
+done:
+  udt->file->ha_rnd_end();
+  return rc;
 }
 
 table_map Table_function_udt::used_tables() { return m_source->used_tables(); }
@@ -1416,16 +1399,10 @@ bool Table_function_udt::walk(Item_processor processor, enum_walk walk,
 }
 
 bool Table_function_udt::do_init_args() {
-  if (m_source->const_item()) {
-    m_precalculated_upper_bound = calculate_upper_bound();
-    m_upper_bound_precalculated = true;
-  }
   return false;
 }
 
 void Table_function_udt::do_cleanup() {
   m_source->cleanup();
   m_vt_list.clear();
-  m_upper_bound_precalculated = false;
-  m_precalculated_upper_bound = 0;
 }

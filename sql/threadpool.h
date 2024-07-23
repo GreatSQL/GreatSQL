@@ -1,4 +1,5 @@
 /* Copyright (C) 2012 Monty Program Ab
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -22,7 +23,7 @@
 
 struct SHOW_VAR;
 
-#define MAX_THREAD_GROUPS 128
+#define MAX_THREAD_GROUPS 2048
 
 enum tp_high_prio_mode_t {
   TP_HIGH_PRIO_MODE_TRANSACTIONS,

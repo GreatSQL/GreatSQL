@@ -2,6 +2,7 @@
 
 
 Copyright (c) 2018, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -401,7 +402,7 @@ dberr_t Arch_Page_Sys::Recovery::recover() {
 
     Arch_Group *group = ut::new_withkey<Arch_Group>(
         ut::make_psi_memory_key(mem_key_archive), group_info.m_start_lsn,
-        ARCH_PAGE_FILE_HDR_SIZE, m_page_sys->get_mutex());
+        ARCH_PAGE_FILE_HDR_SIZE, m_page_sys->get_mutex(), true);
 
     if (group == nullptr) {
       return DB_OUT_OF_MEMORY;

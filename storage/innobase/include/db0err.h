@@ -1,7 +1,7 @@
 /*****************************************************************************
 Copyright (c) 1996, 2021, Oracle and/or its affiliates.
 Copyright (c) 2022, Huawei Technologies Co., Ltd.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -152,6 +152,8 @@ enum dberr_t {
   DB_SERVER_VERSION_LOW,
   /** The path is too long for the OS */
   DB_TOO_LONG_PATH,
+  /** Page is blank */
+  DB_PAGE_IS_BLANK,
   /** Generic IO error */
   DB_IO_ERROR = 100,
   /** Failure to decompress a page after reading it from disk */

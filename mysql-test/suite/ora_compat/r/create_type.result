@@ -82,19 +82,8 @@ ERROR 42000: TYPE t_air already exists
 SELECT t_air(1,'aa') a FROM dual union select 1;
 ERROR 42000: This version of MySQL doesn't yet support 'udt value in join sql'
 #
-# test of duplicate name
-#
-drop type t_air;
-create or replace function t_air (v int) return int deterministic as begin return 1; end;$$
-#
-# test of duplicate name
-#
-create or replace type t_air as object(id int, name varchar(20));
-ERROR 42000: FUNCTION t_air already exists
-#
 # test of bug7354
 #
-drop function t_air;
 create or replace type t_air as object(id int, name varchar(20));
 CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
 create view zgh1 as SELECT t_air_table(t_air(1,'aa'),t_air(2,'bb')) from dual;
@@ -106,11 +95,13 @@ id:1 | name:aa
 #
 # test of bug8849
 #
-select t_air_table(name1) from zgh1 connect by level<2;
-ERROR 42000: This version of MySQL doesn't yet support 'connect by used with udt table'
+select t_air_table(null) from zgh1 connect by level<2;
+t_air_table(null)
+t_air_table(t_air(NULL,NULL))
 CREATE OR REPLACE TYPE int_table AS table OF int;
 select int_table(1,2) from zgh1 connect by level<2;
-ERROR 42000: This version of MySQL doesn't yet support 'connect by used with udt table'
+int_table(1,2)
+int_table(1,2)
 drop type t_air_table;
 drop type int_table;
 #

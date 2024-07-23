@@ -1,5 +1,5 @@
 # Copyright (c) 2019, 2022, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2023, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +26,7 @@ IF(WITH_CASCADE_REVOKE)
 ELSE()
   SET(INIT_PRIV_SQL init_priv.sql)
 ENDIF()
+
 
 SET(SYS_SCHEMA_SOURCES
   before_setup.sql

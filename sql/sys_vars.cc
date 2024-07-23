@@ -1,6 +1,6 @@
 /* Copyright (c) 2009, 2021, Oracle and/or its affiliates.
    Copyright (c) 2021, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -100,7 +100,8 @@
 #include "sql/conn_handler/connection_handler_impl.h"  // Per_thread_connection_handler
 #include "sql/conn_handler/connection_handler_manager.h"  // Connection_handler_manager
 #include "sql/conn_handler/socket_connection.h"  // MY_BIND_ALL_ADDRESSES
-#include "sql/derror.h"                          // read_texts
+#include "sql/data_mask/data_masking.h"
+#include "sql/derror.h"  // read_texts
 #include "sql/discrete_interval.h"
 #include "sql/events.h"          // Events
 #include "sql/hostname_cache.h"  // host_cache_resize
@@ -124,15 +125,16 @@
 #include "sql/rpl_replica.h"            // SLAVE_THD_TYPE
 #include "sql/rpl_rli.h"                // Relay_log_info
 #include "sql/rpl_write_set_handler.h"  // transaction_write_set_hashing_algorithms
+#include "sql/sched_affinity_manager.h"
 #include "sql/server_component/log_builtins_filter_imp.h"  // until we have pluggable variables
 #include "sql/server_component/log_builtins_imp.h"
 #include "sql/session_tracker.h"
 #include "sql/sp_head.h"          // SP_PSI_STATEMENT_INFO_COUNT
 #include "sql/sql_backup_lock.h"  // is_instance_backup_locked
 #include "sql/sql_lex.h"
-#include "sql/sql_locale.h"            // my_locale_by_number
+#include "sql/sql_locale.h"  // my_locale_by_number
 #include "sql/sql_parallel.h"
-#include "sql/sql_parse.h"             // killall_non_super_threads
+#include "sql/sql_parse.h"  // killall_non_super_threads
 #include "sql/sql_profile.h"
 #include "sql/sql_show_processlist.h"  // pfs_processlist_enabled
 #include "sql/sql_tmp_table.h"         // internal_tmp_mem_storage_engine_names
@@ -158,6 +160,8 @@
 #include "storage/perfschema/pfs_server.h"
 #include "storage/perfschema/terminology_use_previous.h"
 #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
+
+#include "sql/secondary_engine_inc_load_task.h"
 
 #define MAX_CONNECTIONS 100000
 
@@ -198,6 +202,7 @@ static constexpr const unsigned long DELAYED_WAIT_TIMEOUT{5 * 60};
 
 static constexpr const unsigned long QUERY_ALLOC_BLOCK_SIZE{8192};
 static constexpr const unsigned long QUERY_ALLOC_PREALLOC_SIZE{8192};
+static constexpr const unsigned long QUERY_ALLOC_PREALLOC_REUSE_SIZE{40960};
 static constexpr const unsigned long TRANS_ALLOC_PREALLOC_SIZE{4096};
 static constexpr const unsigned long RANGE_ALLOC_BLOCK_SIZE{4096};
 
@@ -1572,6 +1577,211 @@ static bool check_binlog_trx_compression(sys_var *self [[maybe_unused]],
   return false;
 }
 
+bool sched_affinity_numa_aware = false;
+
+static bool on_sched_affinity_numa_aware_update(sys_var *, THD *,
+                                                enum_var_type) {
+  if (sched_affinity::Sched_affinity_manager::get_instance() != nullptr &&
+      !sched_affinity::Sched_affinity_manager::get_instance()
+           ->update_numa_aware(sched_affinity_numa_aware)) {
+    my_error(ER_CANNOT_UPDATE_SCHED_AFFINITY_NUMA_AWARE, MYF(0));
+    return true;
+  }
+  return false;
+}
+
+Sys_var_bool Sys_sched_affinity_numa_aware(
+    "sched_affinity_numa_aware", "Schedule threads with numa information",
+    GLOBAL_VAR(sched_affinity_numa_aware), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
+    ON_UPDATE(on_sched_affinity_numa_aware_update));
+
+std::map<sched_affinity::Thread_type, const char *> sched_affinity_parameter = {
+    {sched_affinity::Thread_type::FOREGROUND, nullptr},
+    {sched_affinity::Thread_type::LOG_WRITER, nullptr},
+    {sched_affinity::Thread_type::LOG_FLUSHER, nullptr},
+    {sched_affinity::Thread_type::LOG_WRITE_NOTIFIER, nullptr},
+    {sched_affinity::Thread_type::LOG_FLUSH_NOTIFIER, nullptr},
+    {sched_affinity::Thread_type::LOG_CHECKPOINTER, nullptr},
+    {sched_affinity::Thread_type::PURGE_COORDINATOR, nullptr}};
+
+static bool check_sched_affinity_parameter(sys_var *, THD *, set_var *var) {
+  char *c = var->save_result.string_value.str;
+  if (sched_affinity::Sched_affinity_manager::get_instance() != nullptr &&
+      c != nullptr &&
+      !sched_affinity::Sched_affinity_manager::get_instance()->check_cpu_string(
+          std::string(c))) {
+    my_error(ER_INVALID_CPU_STRING, MYF(0), c);
+    return true;
+  }
+  return false;
+}
+
+static bool on_sched_affinity_foreground_thread_update(sys_var *, THD *,
+                                                       enum_var_type) {
+  if (!sched_affinity::Sched_affinity_manager::get_instance()->rebalance_group(
+          sched_affinity_parameter[sched_affinity::Thread_type::FOREGROUND],
+          sched_affinity::Thread_type::FOREGROUND)) {
+    my_error(ER_CANNOT_UPDATE_SCHED_AFFINITY_PARAMETER, MYF(0),
+             sched_affinity::thread_type_names
+                 .at(sched_affinity::Thread_type::FOREGROUND)
+                 .c_str());
+    return true;
+  }
+  return false;
+}
+
+static Sys_var_charptr Sys_sched_affinity_foreground_thread(
+    "sched_affinity_foreground_thread",
+    "The set of cpus which foreground threads will run on.",
+    GLOBAL_VAR(
+        sched_affinity_parameter[sched_affinity::Thread_type::FOREGROUND]),
+    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(nullptr), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(check_sched_affinity_parameter),
+    ON_UPDATE(on_sched_affinity_foreground_thread_update));
+
+static bool on_sched_affinity_log_writer_update(sys_var *, THD *,
+                                                enum_var_type) {
+  if (!sched_affinity::Sched_affinity_manager::get_instance()->rebalance_group(
+          sched_affinity_parameter[sched_affinity::Thread_type::LOG_WRITER],
+          sched_affinity::Thread_type::LOG_WRITER)) {
+    my_error(ER_CANNOT_UPDATE_SCHED_AFFINITY_PARAMETER, MYF(0),
+             sched_affinity::thread_type_names
+                 .at(sched_affinity::Thread_type::LOG_WRITER)
+                 .c_str());
+    return true;
+  }
+  return false;
+}
+
+static Sys_var_charptr Sys_sched_affinity_log_writer(
+    "sched_affinity_log_writer",
+    "The set of cpus which log writer thread will run on.",
+    GLOBAL_VAR(
+        sched_affinity_parameter[sched_affinity::Thread_type::LOG_WRITER]),
+    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(nullptr), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(check_sched_affinity_parameter),
+    ON_UPDATE(on_sched_affinity_log_writer_update));
+
+static bool on_sched_affinity_log_flusher_update(sys_var *, THD *,
+                                                 enum_var_type) {
+  if (!sched_affinity::Sched_affinity_manager::get_instance()->rebalance_group(
+          sched_affinity_parameter[sched_affinity::Thread_type::LOG_FLUSHER],
+          sched_affinity::Thread_type::LOG_FLUSHER)) {
+    my_error(ER_CANNOT_UPDATE_SCHED_AFFINITY_PARAMETER, MYF(0),
+             sched_affinity::thread_type_names
+                 .at(sched_affinity::Thread_type::LOG_FLUSHER)
+                 .c_str());
+    return true;
+  }
+  return false;
+}
+
+static Sys_var_charptr Sys_sched_affinity_log_flusher(
+    "sched_affinity_log_flusher",
+    "The set of cpus which log flusher thread will run on.",
+    GLOBAL_VAR(
+        sched_affinity_parameter[sched_affinity::Thread_type::LOG_FLUSHER]),
+    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(nullptr), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(check_sched_affinity_parameter),
+    ON_UPDATE(on_sched_affinity_log_flusher_update));
+
+static bool on_sched_affinity_log_write_notifier_update(sys_var *, THD *,
+                                                        enum_var_type) {
+  if (!sched_affinity::Sched_affinity_manager::get_instance()->rebalance_group(
+          sched_affinity_parameter
+              [sched_affinity::Thread_type::LOG_WRITE_NOTIFIER],
+          sched_affinity::Thread_type::LOG_WRITE_NOTIFIER)) {
+    my_error(ER_CANNOT_UPDATE_SCHED_AFFINITY_PARAMETER, MYF(0),
+             sched_affinity::thread_type_names
+                 .at(sched_affinity::Thread_type::LOG_WRITE_NOTIFIER)
+                 .c_str());
+    return true;
+  }
+  return false;
+}
+
+static Sys_var_charptr Sys_sched_affinity_log_write_notifier(
+    "sched_affinity_log_write_notifier",
+    "The set of cpus which log write notifier thread will run on.",
+    GLOBAL_VAR(sched_affinity_parameter
+                   [sched_affinity::Thread_type::LOG_WRITE_NOTIFIER]),
+    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(nullptr), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(check_sched_affinity_parameter),
+    ON_UPDATE(on_sched_affinity_log_write_notifier_update));
+
+static bool on_sched_affinity_log_flush_notifier_update(sys_var *, THD *,
+                                                        enum_var_type) {
+  if (!sched_affinity::Sched_affinity_manager::get_instance()->rebalance_group(
+          sched_affinity_parameter
+              [sched_affinity::Thread_type::LOG_FLUSH_NOTIFIER],
+          sched_affinity::Thread_type::LOG_FLUSH_NOTIFIER)) {
+    my_error(ER_CANNOT_UPDATE_SCHED_AFFINITY_PARAMETER, MYF(0),
+             sched_affinity::thread_type_names
+                 .at(sched_affinity::Thread_type::LOG_FLUSH_NOTIFIER)
+                 .c_str());
+    return true;
+  }
+  return false;
+}
+
+static Sys_var_charptr Sys_sched_affinity_log_flush_notifier(
+    "sched_affinity_log_flush_notifier",
+    "The set of cpus which log flush notifier thread will run on.",
+    GLOBAL_VAR(sched_affinity_parameter
+                   [sched_affinity::Thread_type::LOG_FLUSH_NOTIFIER]),
+    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(nullptr), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(check_sched_affinity_parameter),
+    ON_UPDATE(on_sched_affinity_log_flush_notifier_update));
+
+static bool on_sched_affinity_log_checkpointer_update(sys_var *, THD *,
+                                                      enum_var_type) {
+  if (!sched_affinity::Sched_affinity_manager::get_instance()->rebalance_group(
+          sched_affinity_parameter
+              [sched_affinity::Thread_type::LOG_CHECKPOINTER],
+          sched_affinity::Thread_type::LOG_CHECKPOINTER)) {
+    my_error(ER_CANNOT_UPDATE_SCHED_AFFINITY_PARAMETER, MYF(0),
+             sched_affinity::thread_type_names
+                 .at(sched_affinity::Thread_type::LOG_CHECKPOINTER)
+                 .c_str());
+    return true;
+  }
+  return false;
+}
+
+static Sys_var_charptr Sys_sched_affinity_log_checkpointer(
+    "sched_affinity_log_checkpointer",
+    "The set of cpus which log checkpointer thread will run on.",
+    GLOBAL_VAR(sched_affinity_parameter
+                   [sched_affinity::Thread_type::LOG_CHECKPOINTER]),
+    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(nullptr), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(check_sched_affinity_parameter),
+    ON_UPDATE(on_sched_affinity_log_checkpointer_update));
+
+static bool on_sched_affinity_purge_coordinator_update(sys_var *, THD *,
+                                                       enum_var_type) {
+  if (!sched_affinity::Sched_affinity_manager::get_instance()->rebalance_group(
+          sched_affinity_parameter
+              [sched_affinity::Thread_type::PURGE_COORDINATOR],
+          sched_affinity::Thread_type::PURGE_COORDINATOR)) {
+    my_error(ER_CANNOT_UPDATE_SCHED_AFFINITY_PARAMETER, MYF(0),
+             sched_affinity::thread_type_names
+                 .at(sched_affinity::Thread_type::PURGE_COORDINATOR)
+                 .c_str());
+    return true;
+  }
+  return false;
+}
+
+static Sys_var_charptr Sys_sched_affinity_purge_coordinator(
+    "sched_affinity_purge_coordinator",
+    "The set of cpus which purge coordinator thread will run on.",
+    GLOBAL_VAR(sched_affinity_parameter
+                   [sched_affinity::Thread_type::PURGE_COORDINATOR]),
+    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(nullptr), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(check_sched_affinity_parameter),
+    ON_UPDATE(on_sched_affinity_purge_coordinator_update));
+
 static Sys_var_bool Sys_binlog_trx_compression(
     "binlog_transaction_compression",
     "Whether to compress transactions or not. Transactions are compressed "
@@ -1848,6 +2058,11 @@ static Sys_var_uint Sys_select_into_disk_sync_delay(
     HINT_UPDATEABLE SESSION_VAR(select_into_disk_sync_delay), CMD_LINE(OPT_ARG),
     VALID_RANGE(0, LONG_TIMEOUT), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(check_session_admin_no_super));
+
+static Sys_var_harows Sys_dblink_return_rows(
+    "dblink_maxreturn_rows", "Dblink don't return max rows than that",
+    SESSION_VAR(dblink_maxreturn_rows), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, HA_POS_ERROR), DEFAULT(20000), BLOCK_SIZE(1));
 
 static Sys_var_uint Sys_select_bulk_into_batch(
     "select_bulk_into_batch", "Batch size for SELECT BULK COLLECT INTO VAR.",
@@ -2144,7 +2359,8 @@ static Sys_var_enum Sys_udt_format_result(
     "udt_format_result",
     "Controls what character style the server will send to the client: "
     "either BINARY (default) for binary style, DBA for utf8mb4 style.",
-    SESSION_ONLY(udt_format_result), NO_CMD_LINE, udt_format_result_names,
+    HINT_UPDATEABLE SESSION_ONLY(udt_format_result), NO_CMD_LINE,
+    udt_format_result_names,
     DEFAULT(static_cast<ulong>(UDT_FORMAT_RESULT_BINARY)));
 
 char *ora_private_temp_table_prefix;
@@ -3189,13 +3405,6 @@ static Sys_var_ulong Sys_max_connections(
     /* max_connections is used as a sizing hint by the performance schema. */
     sys_var::PARSE_EARLY);
 
-static Sys_var_ulong Sys_audit_row("audit_log_max_rows",
-                                   "The max row num of audit table",
-                                   GLOBAL_VAR(audit_log_max_rows),
-                                   CMD_LINE(REQUIRED_ARG),
-                                   VALID_RANGE(100, INT_MAX), DEFAULT(INT_MAX),
-                                   BLOCK_SIZE(1));
-
 static Sys_var_ulong Sys_max_connect_errors(
     "max_connect_errors",
     "If there is more than this number of interrupted connections from "
@@ -4195,6 +4404,15 @@ static Sys_var_ulong Sys_query_prealloc_size(
     SESSION_VAR(query_prealloc_size), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(QUERY_ALLOC_PREALLOC_SIZE, ULONG_MAX),
     DEFAULT(QUERY_ALLOC_PREALLOC_SIZE), BLOCK_SIZE(1024), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr), DEPRECATED_VAR(""));
+
+static Sys_var_ulong Sys_query_prealloc_reuse_size(
+    "query_prealloc_reuse_size",
+    "Reuse persistent buffer for query parsing and execution if allocated "
+    "memory no more than this",
+    SESSION_VAR(query_prealloc_reuse_size), CMD_LINE(OPT_ARG),
+    VALID_RANGE(QUERY_ALLOC_PREALLOC_SIZE, ULONG_MAX),
+    DEFAULT(QUERY_ALLOC_PREALLOC_REUSE_SIZE), BLOCK_SIZE(1024), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr), DEPRECATED_VAR(""));
 
 #if defined(_WIN32)
@@ -5209,11 +5427,12 @@ export sql_mode_t expand_sql_mode(sql_mode_t sql_mode, THD *thd) {
   return sql_mode;
 }
 
-sql_mode_t shrink_sql_mode(sql_mode_t sql_mode, sql_mode_t shrink_mode) {
+sql_mode_t shrink_sql_mode(THD *thd, sql_mode_t sql_mode,
+                           sql_mode_t shrink_mode) {
   if ((sql_mode & MODE_ORACLE) || (sql_mode & MODE_ANSI) ||
       (sql_mode & MODE_TRADITIONAL)) {
-    auto new_sql_mode = expand_sql_mode(sql_mode, nullptr);
-    new_sql_mode ^= shrink_mode;
+    auto new_sql_mode = expand_sql_mode(sql_mode, thd);
+    new_sql_mode &= ~shrink_mode;
     return new_sql_mode;
   }
   return sql_mode;
@@ -5222,8 +5441,27 @@ sql_mode_t shrink_sql_mode(sql_mode_t sql_mode, sql_mode_t shrink_mode) {
 static bool check_candidate_mode(sys_var *, THD *thd, set_var *var,
                                  bool expand) {
   sql_mode_t candidate_mode = var->save_result.ulonglong_value;
-  if (expand) {
+  if (expand) {  // SQL_MODE
     candidate_mode = expand_sql_mode(var->save_result.ulonglong_value, thd);
+  } else {  // SHRINK_SQL_MODE
+    if (candidate_mode & MODE_ANSI) {
+      my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), "shrink_sql_mode", "ANSI");
+      return true;
+    }
+    if (candidate_mode & MODE_ORACLE) {
+      my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), "shrink_sql_mode", "oracle");
+      return true;
+    }
+    if (candidate_mode & MODE_TRADITIONAL) {
+      my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), "shrink_sql_mode",
+               "traditional");
+      return true;
+    }
+    if (candidate_mode & MODE_PIPES_AS_CONCAT) {
+      my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), "shrink_sql_mode",
+               "PIPES_AS_CONCAT");
+      return true;
+    }
   }
 
   if (candidate_mode & ~(MODE_ALLOWED_MASK | MODE_IGNORED_MASK)) {
@@ -5274,7 +5512,7 @@ static bool check_shrink_sql_mode(sys_var *s_var, THD *thd, set_var *var) {
 
 static bool fix_sql_mode(sys_var *self, THD *thd, enum_var_type type) {
   if (!self->is_global_persist(type)) {
-    thd->variables.sql_mode = shrink_sql_mode(thd->variables.sql_mode,
+    thd->variables.sql_mode = shrink_sql_mode(thd, thd->variables.sql_mode,
                                               thd->variables.shrink_sql_mode);
     if (thd->variables.sql_mode & MODE_NO_BACKSLASH_ESCAPES)
       thd->server_status |= SERVER_STATUS_NO_BACKSLASH_ESCAPES;
@@ -5282,7 +5520,7 @@ static bool fix_sql_mode(sys_var *self, THD *thd, enum_var_type type) {
       thd->server_status &= ~SERVER_STATUS_NO_BACKSLASH_ESCAPES;
   } else {
     global_system_variables.sql_mode =
-        shrink_sql_mode(global_system_variables.sql_mode,
+        shrink_sql_mode(thd, global_system_variables.sql_mode,
                         global_system_variables.shrink_sql_mode);
   }
 
@@ -5291,11 +5529,11 @@ static bool fix_sql_mode(sys_var *self, THD *thd, enum_var_type type) {
 
 static bool fix_shrink_sql_mode(sys_var *self, THD *thd, enum_var_type type) {
   if (!self->is_global_persist(type)) {
-    thd->variables.sql_mode = shrink_sql_mode(thd->variables.sql_mode,
+    thd->variables.sql_mode = shrink_sql_mode(thd, thd->variables.sql_mode,
                                               thd->variables.shrink_sql_mode);
   } else {
     global_system_variables.sql_mode =
-        shrink_sql_mode(global_system_variables.sql_mode,
+        shrink_sql_mode(thd, global_system_variables.sql_mode,
                         global_system_variables.shrink_sql_mode);
   }
 
@@ -7121,6 +7359,14 @@ static Sys_var_ulonglong Sys_relay_log_space_limit(
     READ_ONLY GLOBAL_VAR(relay_log_space_limit), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(0, ULLONG_MAX), DEFAULT(0), BLOCK_SIZE(1));
 
+static Sys_var_ulonglong Sys_rpl_read_binlog_speed_limit(
+    "rpl_read_binlog_speed_limit",
+    "Maximum speed(KB/s) to read binlog from"
+    " master (0 = no limit)",
+    GLOBAL_VAR(opt_rpl_read_binlog_speed_limit), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, std::numeric_limits<uint32_t>::max()), DEFAULT(0),
+    BLOCK_SIZE(1));
+
 static Sys_var_uint Sys_sync_relaylog_period(
     "sync_relay_log",
     "Synchronously flush relay log to disk after "
@@ -7654,6 +7900,13 @@ static Sys_var_enum Sys_block_encryption_mode(
     HINT_UPDATEABLE SESSION_VAR(my_aes_mode), CMD_LINE(REQUIRED_ARG),
     my_aes_opmode_names, DEFAULT(my_aes_128_ecb));
 
+#ifdef SSL_GM
+static Sys_var_enum Sys_sm4_encryption_mode(
+    "sm4_encryption_mode", "mode for SM4_ENCRYPT/SM4_DECRYPT",
+    HINT_UPDATEABLE SESSION_VAR(my_sm4_mode), CMD_LINE(REQUIRED_ARG),
+    my_aes_opmode_names, DEFAULT(my_sm4_ecb));
+#endif
+
 static bool check_track_session_sys_vars(sys_var *, THD *thd, set_var *var) {
   DBUG_TRACE;
   return thd->session_tracker.get_tracker(SESSION_SYSVARS_TRACKER)
@@ -8059,7 +8312,7 @@ static Sys_var_enum Sys_use_secondary_engine(
     "SELECT statements referencing one or more base tables only against "
     "secondary storage engine.",
     HINT_UPDATEABLE SESSION_ONLY(use_secondary_engine), NO_CMD_LINE,
-    use_secondary_engine_values, DEFAULT(SECONDARY_ENGINE_ON), NO_MUTEX_GUARD,
+    use_secondary_engine_values, DEFAULT(SECONDARY_ENGINE_OFF), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
 
 /**
@@ -8087,6 +8340,58 @@ static Sys_var_double Sys_secondary_engine_cost_threshold(
     HINT_UPDATEABLE SESSION_VAR(secondary_engine_cost_threshold),
     CMD_LINE(OPT_ARG), VALID_RANGE(0, DBL_MAX), DEFAULT(100000), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
+static Sys_var_uint Sys_secondary_engine_parallel_load_workers(
+    "secondary_engine_parallel_load_workers",
+    "parallel write workers when paralell load data in a secondary storage "
+    "engine.",
+    HINT_UPDATEABLE SESSION_VAR(secondary_engine_parallel_load_workers),
+    CMD_LINE(OPT_ARG), VALID_RANGE(1, 32), DEFAULT(4), BLOCK_SIZE(1));
+
+static Sys_var_uint Sys_secondary_engine_parallel_read_workers(
+    "secondary_engine_parallel_read_workers",
+    "parallel read workers when paralell load data in a secondary storage "
+    "engine.",
+    READ_ONLY NOT_VISIBLE SESSION_VAR(secondary_engine_parallel_read_workers),
+    CMD_LINE(OPT_ARG), VALID_RANGE(1, 32), DEFAULT(4), BLOCK_SIZE(1));
+
+static const char *secondary_engine_wait_mode_names[] = {"WAIT_FOR_DB",
+                                                         "WAIT_FOR_TRX", NullS};
+static Sys_var_enum Sys_secondary_engine_wait_mode(
+    "secondary_engine_read_delay_wait_mode",
+    "possible values: WAIT_FOR_DB, WAIT_FOR_TRX",
+    HINT_UPDATEABLE SESSION_VAR(secondary_engine_read_delay_level),
+    CMD_LINE(OPT_ARG), secondary_engine_wait_mode_names,
+    DEFAULT(SECONDARY_ENGINE_WAIT_FOR_TRX), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
+static const char *secondary_engine_read_delay_level_names[] = {
+    "ALL_TABLES", "TABLE_START_INC_TASK", NullS};
+static Sys_var_enum Sys_secondary_egine_read_delay_level(
+    "secondary_engine_read_delay_level",
+    "possible values: ALL_TABLES, TABLE_START_INC_TASK",
+    HINT_UPDATEABLE SESSION_VAR(secondary_engine_read_delay_level),
+    CMD_LINE(OPT_ARG), secondary_engine_read_delay_level_names,
+    DEFAULT(SECONDARY_ENGINE_READ_DELAY_FOR_TABLE_START_INC_TASK),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
+static Sys_var_ulong Sys_secondary_engine_delay_time_threshold(
+    "secondary_engine_read_delay_time_threshold",
+    "max allowed time delay in second. If 0, means not allow any delay",
+    HINT_UPDATEABLE SESSION_VAR(secondary_engine_read_delay_time_threshold),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, ULONG_MAX), DEFAULT(60), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_secondary_engine_delay_gtid_threshold(
+    "secondary_engine_read_delay_gtid_threshold",
+    "max allowed transaction delay by gtid. If 0, means not allow any deday",
+    HINT_UPDATEABLE SESSION_VAR(secondary_engine_read_delay_gtid_threshold),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, ULONG_MAX), DEFAULT(100), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_secondary_engine_read_delay_wait_timeout(
+    "secondary_engine_read_delay_wait_timeout",
+    "wait until secondary engine suitable to read in allowed delay",
+    HINT_UPDATEABLE SESSION_VAR(secondary_engine_read_delay_wait_timeout),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, ULONG_MAX), DEFAULT(60), BLOCK_SIZE(1));
 
 static Sys_var_bool Sys_sql_require_primary_key{
     "sql_require_primary_key",
@@ -8608,3 +8913,8 @@ static Sys_var_uint Dbms_profiler_max_data_size(
     "function,trigger,procedure",
     HINT_UPDATEABLE SESSION_VAR(dbms_profiler_max_data_size), CMD_LINE(OPT_ARG),
     VALID_RANGE(1, 10000), DEFAULT(1000), BLOCK_SIZE(1));
+
+static Sys_var_bool Sys_data_mask_enabled(
+    "enable_data_masking", "Enable Data Mask",
+    HINT_UPDATEABLE GLOBAL_VAR(enable_data_masking), CMD_LINE(OPT_ARG),
+    DEFAULT(false));

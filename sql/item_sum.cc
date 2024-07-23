@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -251,13 +251,8 @@ bool Item_sum::init_sum_func_check(THD *thd) {
 bool Item_sum::check_sum_func(THD *thd, Item **ref) {
   DBUG_TRACE;
   for (uint i = 0; i < arg_count; i++) {
-    if (args[i]->this_item()->is_ora_udt_type()) {
-      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "udt value in aggregate function");
-      return true;
-    }
-    // this commit only fix the window func with sequnce
-    if (m_is_window_function && args[i]->this_item()->is_sequence_field()) {
-      my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), "");
+    if (args[i]->has_sequence()) {
+      my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), func_name());
       return true;
     }
   }
@@ -534,6 +529,12 @@ bool Item_sum::clean_up_after_removal(uchar *arg) {
       pointer_cast<Cleanup_after_removal_context *>(arg);
 
   if (ctx->is_stopped(this)) return false;
+
+  if (reference_count() > 1) {
+    (void)decrement_ref_count();
+    ctx->stop_at(this);
+    return false;
+  }
 
   // Remove item on upward traversal, not downward:
   if (marker == MARKER_NONE) {
@@ -895,12 +896,6 @@ bool Item_sum::fix_fields(THD *thd, Item **ref [[maybe_unused]]) {
     if (Window::resolve_reference(thd, this, &m_window)) return true;
 
     m_window_resolved = true;
-  }
-  for (uint i = 0; i < arg_count; i++) {
-    if (args[i]->this_item()->is_ora_udt_type()) {
-      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "udt value in aggregate function");
-      return true;
-    }
   }
   return false;
 }
@@ -6622,6 +6617,7 @@ bool Item_func_grouping::fix_fields(THD *thd, Item **ref) {
 
   if (select->olap == UNSPECIFIED_OLAP_TYPE ||
       select->resolve_place == Query_block::RESOLVE_JOIN_NEST ||
+      select->resolve_place == Query_block::RESOLVE_START_WITH ||
       select->resolve_place == Query_block::RESOLVE_CONNECT_BY ||
       select->resolve_place == Query_block::RESOLVE_CONDITION) {
     my_error(ER_INVALID_GROUP_FUNC_USE, MYF(0));
@@ -7467,8 +7463,6 @@ bool Item_connect_by_func_sys_path::reset() {
 bool Item_connect_by_func_sys_path::update_value(longlong l) {
   auto thd = current_thd;
   int err = 0;
-
-  l--;
   level = l;
   if (!const_value && table) {
     if (l == 1) {

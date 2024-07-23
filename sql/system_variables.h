@@ -1,6 +1,6 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -459,6 +459,7 @@ struct System_variables {
   ulong range_alloc_block_size;
   ulong query_alloc_block_size;
   ulong query_prealloc_size;
+  ulong query_prealloc_reuse_size;
   ulong trans_alloc_block_size;
   ulong trans_prealloc_size;
   ulong group_concat_max_len;
@@ -478,6 +479,9 @@ struct System_variables {
   ulong updatable_views_with_limit;
   uint max_user_connections;
   ulong my_aes_mode;
+#ifdef SSL_GM
+  ulong my_sm4_mode;
+#endif
   ulong ssl_fips_mode;
   /**
     Controls what resultset metadata will be sent to the client.
@@ -614,6 +618,16 @@ struct System_variables {
   */
   double secondary_engine_cost_threshold;
 
+  uint secondary_engine_parallel_load_workers;
+
+  uint secondary_engine_parallel_read_workers;
+
+  ulong secondary_engine_read_delay_wait_mode;
+  ulong secondary_engine_read_delay_time_threshold;
+  ulong secondary_engine_read_delay_gtid_threshold;
+  ulong secondary_engine_read_delay_wait_timeout;
+  ulong secondary_engine_read_delay_level;
+
   /** Used for controlling Group Replication consistency guarantees */
   ulong group_replication_consistency;
 
@@ -679,6 +693,10 @@ struct System_variables {
   */
   uint select_into_disk_sync_delay;
 
+  /**
+    @sa dblink_max_return_rows
+  */
+  ha_rows dblink_maxreturn_rows;
   /**
     use for select bulk collect into
   */

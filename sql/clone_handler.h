@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -41,6 +42,14 @@ struct Mysql_clone;
 struct MYSQL_SOCKET;
 
 /**
+  Max Number record of Performance Schema Clone
+  Tables: clone_progress and clone_status
+*/
+#define MAX_CLONE_NUM 10
+
+#define MAX_CLONE_COURRENCY_NUM 5
+
+/**
   Number of PSI_statement_info instruments
   for clone statements.
 */
@@ -65,7 +74,8 @@ class Clone_handler {
   @param[in]	thd		server thread handle
   @param[in]	data_dir	cloned data directory
   @return error code */
-  int clone_local(THD *thd, const char *data_dir);
+  int clone_local(THD *thd, const char *data_dir, uint64_t start_id,
+                  bool enable_page_track, const char *based_dir);
 
   /** Clone handler interface for remote clone client.
   @param[in]	thd		server thread handle
@@ -75,10 +85,14 @@ class Clone_handler {
   @param[in]	remote_passwd	remote user's password
   @param[in]	data_dir	cloned data directory
   @param[in]	ssl_mode	remote connection ssl mode
+  @param[in]	start_id	used for increment clone
+  @param[in]	enable_page_track	enable page track after the clone end
   @return error code */
   int clone_remote_client(THD *thd, const char *remote_host, uint remote_port,
                           const char *remote_user, const char *remote_passwd,
-                          const char *data_dir, enum mysql_ssl_mode ssl_mode);
+                          const char *data_dir, enum mysql_ssl_mode ssl_mode,
+                          bool enable_page_track, uint64_t start_id,
+                          const char *based_dir);
 
   /** Clone handler interface for remote clone server.
   @param[in]	thd	server thread handle
@@ -199,6 +213,9 @@ class Clone_handler {
 
   /** Clone plugin handle */
   Mysql_clone *m_plugin_handle;
+
+  /** Clone increment backup start lsn */
+  uint64_t m_start_id;
 };
 
 /** Check if the clone plugin is installed and lock. If the plugin is ready,
@@ -212,5 +229,15 @@ Clone_handler *clone_plugin_lock(THD *thd, plugin_ref *plugin);
 @param[in]	thd	server thread handle
 @param[out]	plugin	plugin reference */
 void clone_plugin_unlock(THD *thd, plugin_ref plugin);
+
+/** Copy data from buffer to file. File descriptor should be positioned
+by caller.
+@param[in]	from_buffer	source buffer
+@param[in]	to_file		destination file descriptor
+@param[in]	length		length of data in bytes to copy
+@param[in]	dest_name	destination file name
+@return error code */
+int clone_os_copy_buf_to_file(uchar *from_buffer, int to_file, uint length,
+                              const char *dest_name);
 
 #endif /* CLONE_HANDLER_INCLUDED */

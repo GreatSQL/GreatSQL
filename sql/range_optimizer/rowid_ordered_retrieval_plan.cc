@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -792,6 +793,12 @@ AccessPath *get_best_ror_intersect(
       trace_ror.add_alnum("cause", "too_few_roworder_scans");
     else
       trace_ror.add("need_tracing", true);
+    return nullptr;
+  }
+
+  if (table && table->no_keyread && table->part_info) {
+    trace_ror.add("usable", false);
+    trace_ror.add_alnum("cause", "partition_table_with_no_keyread");
     return nullptr;
   }
 

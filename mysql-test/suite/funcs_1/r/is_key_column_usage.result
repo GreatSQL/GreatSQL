@@ -71,6 +71,7 @@ def	mysql	name	def	mysql	help_category	name
 def	mysql	name	def	mysql	help_keyword	name
 def	mysql	name	def	mysql	help_topic	name
 def	mysql	name_idx	def	mysql	compression_dictionary	name
+def	mysql	PRIMARY	def	mysql	clone_history	ID
 def	mysql	PRIMARY	def	mysql	columns_priv	Column_name
 def	mysql	PRIMARY	def	mysql	columns_priv	Db
 def	mysql	PRIMARY	def	mysql	columns_priv	Host
@@ -92,6 +93,10 @@ def	mysql	PRIMARY	def	mysql	func	name
 def	mysql	PRIMARY	def	mysql	global_grants	HOST
 def	mysql	PRIMARY	def	mysql	global_grants	PRIV
 def	mysql	PRIMARY	def	mysql	global_grants	USER
+def	mysql	PRIMARY	def	mysql	greatdb_sequences	db
+def	mysql	PRIMARY	def	mysql	greatdb_sequences	name
+def	mysql	PRIMARY	def	mysql	greatdb_sequences_persist	db
+def	mysql	PRIMARY	def	mysql	greatdb_sequences_persist	name
 def	mysql	PRIMARY	def	mysql	gtid_executed	interval_start
 def	mysql	PRIMARY	def	mysql	gtid_executed	source_uuid
 def	mysql	PRIMARY	def	mysql	help_category	help_category_id
@@ -315,7 +320,44 @@ def	performance_schema	USER	def	performance_schema	memory_summary_by_user_by_eve
 def	performance_schema	USER	def	performance_schema	status_by_user	USER
 def	performance_schema	USER	def	performance_schema	status_by_user	VARIABLE_NAME
 def	performance_schema	USER	def	performance_schema	users	USER
+def	sys	PRIMARY	def	sys	dbms_alert_info	name
+def	sys	PRIMARY	def	sys	dbms_alert_info	sid
 def	sys	PRIMARY	def	sys	sys_config	variable
+def	sys_mac	c_id	def	sys_mac	mac_compartment	c_id
+def	sys_mac	g_id	def	sys_mac	mac_group	g_id
+def	sys_mac	p_id	def	sys_mac	mac_labels	label
+def	sys_mac	p_id	def	sys_mac	mac_labels	p_id
+def	sys_mac	p_id	def	sys_mac	mac_level	l_name
+def	sys_mac	p_id	def	sys_mac	mac_level	p_id
+def	sys_mac	p_name	def	sys_mac	mac_policy	p_name
+def	sys_mac	PRIMARY	def	sys_mac	mac_column_policy	column_name
+def	sys_mac	PRIMARY	def	sys_mac	mac_column_policy	db_name
+def	sys_mac	PRIMARY	def	sys_mac	mac_column_policy	p_id
+def	sys_mac	PRIMARY	def	sys_mac	mac_column_policy	table_name
+def	sys_mac	PRIMARY	def	sys_mac	mac_compartment	c_name
+def	sys_mac	PRIMARY	def	sys_mac	mac_compartment	p_id
+def	sys_mac	PRIMARY	def	sys_mac	mac_database_policy	db_name
+def	sys_mac	PRIMARY	def	sys_mac	mac_database_policy	p_id
+def	sys_mac	PRIMARY	def	sys_mac	mac_group	g_name
+def	sys_mac	PRIMARY	def	sys_mac	mac_group	p_id
+def	sys_mac	PRIMARY	def	sys_mac	mac_labels	l_id
+def	sys_mac	PRIMARY	def	sys_mac	mac_level	l_num
+def	sys_mac	PRIMARY	def	sys_mac	mac_level	p_id
+def	sys_mac	PRIMARY	def	sys_mac	mac_policy	p_id
+def	sys_mac	PRIMARY	def	sys_mac	mac_privileged_users	host
+def	sys_mac	PRIMARY	def	sys_mac	mac_privileged_users	user
+def	sys_mac	PRIMARY	def	sys_mac	mac_row_policy	db_name
+def	sys_mac	PRIMARY	def	sys_mac	mac_row_policy	p_id
+def	sys_mac	PRIMARY	def	sys_mac	mac_row_policy	table_name
+def	sys_mac	PRIMARY	def	sys_mac	mac_table_policy	db_name
+def	sys_mac	PRIMARY	def	sys_mac	mac_table_policy	p_id
+def	sys_mac	PRIMARY	def	sys_mac	mac_table_policy	table_name
+def	sys_mac	PRIMARY	def	sys_mac	mac_user_policy	host
+def	sys_mac	PRIMARY	def	sys_mac	mac_user_policy	p_id
+def	sys_mac	PRIMARY	def	sys_mac	mac_user_policy	user
+def	sys_mac	PRIMARY	def	sys_mac	mac_user_privs	host
+def	sys_mac	PRIMARY	def	sys_mac	mac_user_privs	p_id
+def	sys_mac	PRIMARY	def	sys_mac	mac_user_privs	user
 ########################################################################################
 # Testcase 3.2.7.2 + 3.2.7.3: INFORMATION_SCHEMA.KEY_COLUMN_USAGE accessible information
 ########################################################################################

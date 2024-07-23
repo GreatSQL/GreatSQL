@@ -141,6 +141,33 @@ drop PROCEDURE p1;
 
 drop table t;
 
+--echo #
+--echo # test of bug9483
+--echo #
+create or replace type type1 as object(id int,type varchar(20));
+create or replace type type2 is object(id2 int,name2 varchar(20));
+create table t1(id int AUTO_INCREMENT,f1 type1 default null,f2 type2,primary key (id));
+insert into t1 select 4,null,null;
+insert into t1 select 5,type1(null,'awed'),type2(22,null);
+insert into t1 select 6,type1(NULL,'null'),type2(null,'fffff');
+insert into t1 select 7,type1(1,'null'),type2(22,'fffff');
+insert into t1 select 8,type1(1,'ssss'),type2(33,'wwqq');
+insert into t1 select 9,type1(null,null),type2(null,null);
+insert into t1 select 10,type1(2,null),type2(null,null);
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  stu_record_val type1 := type1(1,'ssss');
+BEGIN
+ select * from t1 where stu_record_val=f1;
+END;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+drop table t1;
+drop type type1;
+drop type type2;
 
 
 

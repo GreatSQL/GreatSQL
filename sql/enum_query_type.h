@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -97,8 +97,42 @@ enum enum_query_type {
     Items we insert, since they are inserted during resolving and not
     optimization. Used when getting the canonical representation of a view.
    */
-  QT_HIDE_ROLLUP_FUNCTIONS = (1 << 14)
+  QT_HIDE_ROLLUP_FUNCTIONS = (1 << 14),
 
+  /**
+    When printing Item_view_ref, print the reference (i.e. column name of the
+    derived table), not the referenced (underlying) expression.
+  */
+  QT_DERIVED_TABLE_ORIG_FIELD_NAMES = (1 << 15),
+  /**
+    Don't print <cache>
+  */
+  QT_NO_CACHE = (1 << 16),
+
+  /**
+    Don't print alias
+  */
+  QT_NO_ALIAS = (1 << 17),
+
+  /**
+    Don't print partition names
+   */
+  QT_NO_PARTITION_NAMES = (1 << 18),
+
+  /**
+    Print sp value
+  */
+  QT_SP_PRINT_VALUE = (1 << 19),
+
+  /**
+    Print value strictly
+  */
+  QT_PRINT_VALUE_STRICTLY = (1 << 20),
+
+  /**
+     Print escape identifier for "like 'xx' escape 'x'"
+  */
+  QT_PRINT_ESCAPE_IDENTIFIER = (1 << 21)
 };
 
 #endif  // ENUM_QUERY_TYPE_INCLUDED

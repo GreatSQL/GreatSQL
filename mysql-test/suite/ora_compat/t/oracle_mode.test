@@ -125,3 +125,40 @@ delimiter ;$$
 
 set shrink_sql_mode='';
 set sql_mode=oracle;
+
+set shrink_sql_mode='SYSDATE_IS_NOW';
+
+set sql_mode=oracle;
+
+select @@sql_mode;
+
+--error ER_WRONG_VALUE_FOR_VAR
+set shrink_sql_mode=oracle;
+--error ER_WRONG_VALUE_FOR_VAR
+set shrink_sql_mode=ansi;
+--error ER_WRONG_VALUE_FOR_VAR
+set shrink_sql_mode=traditional;
+
+set shrink_sql_mode='';
+set sql_mode=default;
+select 'aa'|| 1*2;
+set sql_mode=oracle;
+select 'aa'|| 1*2;
+
+select TABLE_NAME from information_schema.tables where TABLE_NAME like 'innodb'|| '_redo' || '_log%';
+
+--let $db= `SELECT DATABASE()`
+create table t1 (id int);
+eval select TABLE_NAME  from information_schema.tables where TABLE_SCHEMA = '$db' and  TABLE_NAME NOT like 'innodb'|| '_redo' || '_log%' ;
+
+drop table t1;
+
+--error ER_WRONG_VALUE_FOR_VAR
+set shrink_sql_mode='PIPES_AS_CONCAT';
+
+
+set shrink_sql_mode='ANSI_QUOTES';
+set sql_mode = 'ansi,error_for_division_by_zero';
+
+select @@sql_mode;
+

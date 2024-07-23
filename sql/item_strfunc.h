@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -49,6 +49,7 @@
 #include "sql/item_func.h"       // Item_func
 #include "sql/parse_location.h"  // POS
 #include "sql/parse_tree_helpers.h"
+#include "sql/regexp/regexp_engine.h"
 #include "sql/sql_const.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_parse.h"
@@ -329,6 +330,91 @@ class Item_func_aes_decrypt : public Item_str_func {
   Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
+#ifdef SSL_GM
+class Item_func_sm4_encrypt final : public Item_str_func {
+  String tmp_value;
+  typedef Item_str_func super;
+
+ public:
+  Item_func_sm4_encrypt(const POS &pos, Item *a, Item *b)
+      : Item_str_func(pos, a, b) {}
+  Item_func_sm4_encrypt(const POS &pos, Item *a, Item *b, Item *c)
+      : Item_str_func(pos, a, b, c) {}
+
+  bool itemize(Parse_context *pc, Item **res) override;
+  String *val_str(String *) override;
+  bool resolve_type(THD *) override;
+  const char *func_name() const override { return "sm4_encrypt"; }
+};
+
+class Item_func_sm4_decrypt : public Item_str_func {
+  typedef Item_str_func super;
+
+ public:
+  Item_func_sm4_decrypt(const POS &pos, Item *a, Item *b)
+      : Item_str_func(pos, a, b) {}
+  Item_func_sm4_decrypt(const POS &pos, Item *a, Item *b, Item *c)
+      : Item_str_func(pos, a, b, c) {}
+
+  bool itemize(Parse_context *pc, Item **res) override;
+  String *val_str(String *) override;
+  bool resolve_type(THD *thd) override;
+  const char *func_name() const override { return "sm4_decrypt"; }
+};
+
+class Item_func_sm2_encrypt final : public Item_str_func {
+  String tmp_value;
+  typedef Item_str_func super;
+
+ public:
+  Item_func_sm2_encrypt(const POS &pos, Item *a, Item *b)
+      : Item_str_func(pos, a, b) {}
+
+  bool itemize(Parse_context *pc, Item **res) override;
+  String *val_str(String *) override;
+  bool resolve_type(THD *) override;
+  const char *func_name() const override { return "sm2_encrypt"; }
+};
+
+class Item_func_sm2_decrypt : public Item_str_func {
+  typedef Item_str_func super;
+
+ public:
+  Item_func_sm2_decrypt(const POS &pos, Item *a, Item *b)
+      : Item_str_func(pos, a, b) {}
+
+  bool itemize(Parse_context *pc, Item **res) override;
+  String *val_str(String *) override;
+  bool resolve_type(THD *thd) override;
+  const char *func_name() const override { return "sm2_decrypt"; }
+};
+
+class Item_func_sm3 : public Item_str_func {
+  typedef Item_str_func super;
+
+ public:
+  Item_func_sm3(const POS &pos, Item *a) : Item_str_func(pos, a) {}
+
+  bool itemize(Parse_context *pc, Item **res) override;
+  String *val_str(String *) override;
+  bool resolve_type(THD *thd) override;
+  const char *func_name() const override { return "sm3"; }
+};
+
+class Item_func_hmac_sm3 : public Item_str_func {
+  typedef Item_str_func super;
+
+ public:
+  Item_func_hmac_sm3(const POS &pos, Item *a, Item *b)
+      : Item_str_func(pos, a, b) {}
+
+  bool itemize(Parse_context *pc, Item **res) override;
+  String *val_str(String *) override;
+  bool resolve_type(THD *thd) override;
+  const char *func_name() const override { return "hmac_sm3"; }
+};
+#endif
+
 class Item_func_random_bytes : public Item_str_func {
   typedef Item_str_func super;
 
@@ -495,6 +581,7 @@ class Item_func_substr : public Item_str_func {
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "substr"; }
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return SUBSTR_FUNC; }
 };
 
 class Item_func_dump : public Item_str_func {
@@ -1505,6 +1592,56 @@ class Item_func_sys_guid final : public Item_str_func {
   }
 };
 
+class Item_func_start_secondary_engine_increment_load_task final
+    : public Item_str_ascii_func {
+  String buf1, buf2, buf3;
+
+ public:
+  Item_func_start_secondary_engine_increment_load_task(const POS &pos, Item *a,
+                                                       Item *b)
+      : Item_str_ascii_func(pos, a, b), auto_position(true) {}
+  Item_func_start_secondary_engine_increment_load_task(const POS &pos, Item *a,
+                                                       Item *b, Item *c)
+      : Item_str_ascii_func(pos, a, b, c), auto_position(false) {}
+  bool resolve_type(THD *) override;
+  const char *func_name() const override {
+    return "Item_func_start_secondary_engine_increment_load_task";
+  }
+  String *val_str_ascii(String *) override;
+
+ private:
+  bool auto_position;
+};
+
+class Item_func_stop_secondary_engine_increment_load_task final
+    : public Item_str_ascii_func {
+  String buf1, buf2;
+
+ public:
+  Item_func_stop_secondary_engine_increment_load_task(const POS &pos, Item *a,
+                                                      Item *b)
+      : Item_str_ascii_func(pos, a, b) {}
+  bool resolve_type(THD *) override;
+  const char *func_name() const override {
+    return "Item_func_stop_secondary_engine_increment_load_task";
+  }
+  String *val_str_ascii(String *) override;
+};
+
+class Item_func_read_secondary_engine_load_gtid final
+    : public Item_str_ascii_func {
+  String buf1, buf2;
+
+ public:
+  Item_func_read_secondary_engine_load_gtid(const POS &pos, Item *a, Item *b)
+      : Item_str_ascii_func(pos, a, b) {}
+  bool resolve_type(THD *) override;
+  const char *func_name() const override {
+    return "Item_func_read_secondary_engine_load_gtid";
+  }
+  String *val_str_ascii(String *) override;
+};
+
 class Item_func_current_role final : public Item_func_sysconst {
   typedef Item_func_sysconst super;
 
@@ -2407,7 +2544,7 @@ class Item_func_sqlerrm : public Item_str_func {
   Item_func_sqlerrm(const POS &pos, Item *arg)
       : Item_str_func(pos, arg), local_thd(nullptr) {}
   const char *func_name() const override { return "sqlerrm"; }
-  bool resolve_type_inner(THD *thd) override;
+  bool resolve_type(THD *thd) override;
   String *val_str(String *) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override {
@@ -2482,6 +2619,49 @@ class Item_func_utl_url_unescape final : public Item_str_func {
   const char *func_name() const override { return "utl_url_unescape"; }
 };
 
+
+class Item_func_dbms_utility_call_stack final : public Item_str_func {
+ public:
+  Item_func_dbms_utility_call_stack(const POS &pos) : Item_str_func(pos) {}
+  String *val_str(String *) override;
+  bool resolve_type(THD *thd) override;
+  const char *func_name() const override { return "dbms_utility_call_stack"; }
+};
+
+class Item_func_dbms_lob_create_temporary : public Item_str_func {
+ public:
+  explicit Item_func_dbms_lob_create_temporary(const POS &pos, Item *a)
+      : Item_str_func(pos, a) {}
+  String *val_str(String *) override;
+  bool resolve_type(THD *thd) override;
+  const char *func_name() const override { return "dbms_lob_create_temporary"; }
+};
+
+class Item_func_dbms_alert_get_all_sids final : public Item_str_func {
+ public:
+  Item_func_dbms_alert_get_all_sids(const POS &pos) : Item_str_func(pos) {}
+  String *val_str(String *) override;
+  bool resolve_type(THD *thd) override;
+  const char *func_name() const override { return "dbms_alert_get_all_sids"; }
+};
+
+class Item_func_dbms_alert_get_sid final : public Item_str_func {
+ public:
+  explicit Item_func_dbms_alert_get_sid(const POS &pos) : Item_str_func(pos) {}
+  String *val_str(String *) override;
+  bool resolve_type(THD *thd) override;
+  const char *func_name() const override { return "dbms_alert_get_sid"; }
+};
+
+class Item_func_dbms_pipe_unpack_message : public Item_str_func {
+ public:
+  Item_func_dbms_pipe_unpack_message(const POS &pos, Item *a)
+      : Item_str_func(pos, a) {}
+  bool resolve_type(THD *thd) override;
+  String *val_str(String *str) override;
+  const char *func_name() const override { return "dbms_pipe_unpack_message"; }
+};
+
 class Item_func_rawtohex : public Item_func_hex {
  public:
   Item_func_rawtohex(const POS &pos, Item *a) : Item_func_hex(pos, a) {}
@@ -2490,4 +2670,108 @@ class Item_func_rawtohex : public Item_func_hex {
   const char *func_name() const override { return "rawtohex"; }
   Item *pq_clone(THD *thd, Query_block *select) override;
 };
+
+class Item_func_dbms_profiler_serialize : public Item_str_func {
+ public:
+  Item_func_dbms_profiler_serialize(const POS &pos) : Item_str_func(pos) {}
+  const char *func_name() const override { return "dbms_profiler_serialize"; }
+
+  bool resolve_type(THD *thd) override;
+  String *val_str(String *str) override;
+};
+
+class Item_func_maskall : public Item_str_func {
+  typedef Item_str_func super;
+  bool masking;
+  bool fix_mask;
+  String result_buffer;
+  String mask_char;
+
+ public:
+  Item_func_maskall(const POS &pos, Item *a)
+      : Item_str_func(pos, a),
+        masking(false),
+        fix_mask(false),
+        mask_char("x", 1, &my_charset_bin) {}
+  Item_func_maskall(const POS &pos, Item *a, Item *b)
+      : Item_str_func(pos, a, b),
+        masking(false),
+        fix_mask(false),
+        mask_char("x", 1, &my_charset_bin) {}
+  Item_func_maskall(Item *a, String *mask_char_arg)
+      : Item_str_func(a),
+        masking(true),
+        fix_mask(true),
+        mask_char("x", 1, &my_charset_bin) {
+    if (mask_char_arg)
+      mask_char.copy(mask_char_arg->ptr(), mask_char_arg->length(),
+                     mask_char_arg->charset());
+  }
+
+  String *val_str(String *str) override;
+
+  bool resolve_type(THD *) override;
+  const char *func_name() const override { return "maskall"; }
+  void print(const THD *thd, String *str,
+             enum_query_type query_type) const override {
+    if (masking) {
+      args[0]->print(thd, str, query_type);
+    } else {
+      super::print(thd, str, query_type);
+    }
+  }
+};
+
+class Item_func_mask_inside : public Item_str_func {
+  typedef Item_str_func super;
+  bool masking;
+  size_t start_pos{0};
+  bool start_pos_fix;
+  size_t end_pos{INT_MAX32};
+  bool end_pos_fix;
+
+  bool fix_mask;
+  String result_buffer;
+  String mask_char;
+
+ public:
+  Item_func_mask_inside(const POS &pos, PT_item_list *a)
+      : Item_str_func(pos, a),
+        masking(false),
+        start_pos_fix(false),
+        end_pos_fix(false),
+        fix_mask(false),
+        mask_char("x", 1, &my_charset_bin) {}
+
+  Item_func_mask_inside(Item *a, size_t start_arg, size_t end_arg,
+                        String *mask_char_arg)
+      : Item_str_func(a),
+        masking(true),
+        start_pos(start_arg),
+        start_pos_fix(true),
+        end_pos(end_arg),
+        end_pos_fix(true),
+        fix_mask(true),
+        mask_char("x", 1, &my_charset_bin) {
+    if (mask_char_arg) {
+      mask_char.copy(mask_char_arg->ptr(), mask_char_arg->length(),
+                     mask_char_arg->charset());
+    }
+  }
+
+  String *val_str(String *str) override;
+
+  bool resolve_type(THD *) override;
+
+  const char *func_name() const override { return "mask_inside"; }
+  void print(const THD *thd, String *str,
+             enum_query_type query_type) const override {
+    if (masking) {
+      args[0]->print(thd, str, query_type);
+    } else {
+      super::print(thd, str, query_type);
+    }
+  }
+};
+
 #endif /* ITEM_STRFUNC_INCLUDED */

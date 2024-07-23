@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -138,6 +138,7 @@ struct PSI_digest_locker;
 struct sql_digest_state;
 union Lexer_yystype;
 struct Lifted_fields_map;
+class sp_label;
 
 const size_t INITIAL_LEX_PLUGIN_LIST_SIZE = 16;
 constexpr const int MAX_SELECT_NESTING{sizeof(nesting_map) * 8 - 1};
@@ -310,7 +311,9 @@ struct ora_simple_ident_def {
   LEX_STRING ident;
   Item *number;
   ora_simple_ident_def(LEX_STRING m_ident, Item *m_number)
-      : ident(m_ident), number(m_number) {}
+      : ident(m_ident), number(m_number) {
+    if (number) number->m_is_udt_table_index = true;
+  }
 };
 
 /* Options to add_table_to_list() */
@@ -324,6 +327,7 @@ class Table_function;
 
 class Table_ident {
  public:
+  LEX_CSTRING dblink = NULL_CSTR;
   LEX_CSTRING db;
   LEX_CSTRING table;
   Query_expression *sel;
@@ -337,6 +341,17 @@ class Table_ident {
       : table(table_arg), sel(nullptr), table_function(nullptr) {
     db = NULL_CSTR;
   }
+  /**
+   dblink engine call
+   */
+  Table_ident(const LEX_CSTRING &dblink_arg, const LEX_CSTRING &db_arg,
+              const LEX_CSTRING &table_arg)
+      : dblink(dblink_arg),
+        db(db_arg),
+        table(table_arg),
+        sel(nullptr),
+        table_function(nullptr) {}
+
   /**
     This constructor is used only for the case when we create a derived
     table. A derived table has no name and doesn't belong to any database.
@@ -2146,6 +2161,7 @@ class Query_block : public Query_term {
     RESOLVE_JOIN_NEST,
     RESOLVE_CONDITION,
     RESOLVE_HAVING,
+    RESOLVE_START_WITH,
     RESOLVE_CONNECT_BY,
     RESOLVE_SELECT_LIST
   };
@@ -2264,6 +2280,9 @@ class Query_block : public Query_term {
   bool having_fix_field{false};
   /// true when GROUP BY fix field called in processing of this query block
   bool group_fix_field{false};
+  /// true when PARTITION BY/ORDER BY fix field called in processing of this
+  /// query block
+  bool window_order_field{false};
 
   /**
     True if contains or aggregates set functions.
@@ -2296,9 +2315,12 @@ class Query_block : public Query_term {
   /// Hidden items added during optimization
   /// @note that using this means we modify resolved data during optimization
   uint hidden_items_from_optimization{0};
+
   bool has_rownum{false};
-  bool has_rownum_in_select{false};
-  bool has_rownum_in_cond{false};
+
+  RownumCounter *counter{nullptr};
+  // start with counter if rownum in start with
+  RownumCounter *start_with_counter{nullptr};
   // check lnnvl function exists in queryblock
   bool has_lnnvl_func{false};
 
@@ -2345,12 +2367,17 @@ class Query_block : public Query_term {
                                      Item *lifted_where_cond);
   bool transform_table_subquery_to_join_with_derived(
       THD *thd, Item_exists_subselect *subq_pred);
+  bool setup_counts_over_partitions(THD *thd, Table_ref *derived,
+                                    Lifted_fields_map *lifted_fields,
+                                    std::deque<Item_field *> &added_to_group_by,
+                                    uint hidden_fields);
   bool decorrelate_derived_scalar_subquery_pre(
       THD *thd, Table_ref *derived, Item *lifted_where,
       Lifted_fields_map *lifted_where_fields, bool *added_card_check);
   bool decorrelate_derived_scalar_subquery_post(
       THD *thd, Table_ref *derived, Lifted_fields_map *lifted_where_fields,
       bool added_card_check);
+  void replace_referenced_item(Item *const old_item, Item *const new_item);
   void remap_tables(THD *thd);
   bool resolve_subquery(THD *thd);
   void mark_item_as_maybe_null_if_rollup_item(Item *item);
@@ -2580,23 +2607,13 @@ class Query_block : public Query_term {
       *type_str[static_cast<int>(enum_explain_type::EXPLAIN_total)];
 
  public:
-  bool setup_sequence_func(THD *thd, mem_root_deque<Item *> *input);
-  void reset_sequence_read_flag();
-
- public:
   /**
    * Oracle (+) syntax. set true when parsing ident with (+) sign.
    * it don't need to transform (+) to outer join in sql resolver phase.
    */
   bool has_joined_item{false};
-  mem_root_deque<Item_func *> sequence_funcs;
-  bool has_sequence{false};
-  bool need_to_reset_flag{true};
 
-  Item_func_rownum *rownum_func{nullptr};
-  void reset_rownum_read_flag();
-  bool rewrite_all_rownum(THD *thd);
-  bool rewrite_rownum_ref(Item *&cond, Item_func_rownum **rownum_ref);
+  SequenceCounter *sequences_counter{nullptr};
 };
 
 inline bool Query_expression::is_union() const {
@@ -3889,6 +3906,10 @@ class Lex_input_stream {
   const int grammar_selector_token;
 
   bool text_string_is_7bit() const { return !(tok_bitmap & 0x80); }
+
+  /** DBLINK. */
+  bool dblink;
+  int dblink_count;
 };
 
 class LEX_COLUMN {
@@ -3979,6 +4000,8 @@ struct LEX : public Query_tables_list {
   Query_block *m_current_query_block;
 
  public:
+  Parse_tree_root *root;  // parse tree
+
   inline Query_block *current_query_block() const {
     return m_current_query_block;
   }
@@ -4009,8 +4032,6 @@ struct LEX : public Query_tables_list {
     does not properly understand yet.
    */
   bool using_hypergraph_optimizer = false;
-  bool m_end_of_rownum = false;
-  List<Item_func_rownum> m_cmd_rownums;
   LEX_STRING name;
   char *help_arg;
   char *to_log; /* For PURGE MASTER LOGS TO */
@@ -4114,15 +4135,6 @@ struct LEX : public Query_tables_list {
   }
   std::map<Item_field *, Field *>::iterator end_values_map() {
     return insert_update_values_map->end();
-  }
-
-  void reset_rownum_func() {
-    List_iterator<Item_func_rownum> li(m_cmd_rownums);
-    Item_func_rownum *item;
-    while ((item = li++)) {
-      item->reset_read_flag();
-      item->reset_value();
-    }
   }
 
  private:
@@ -4271,6 +4283,13 @@ struct LEX : public Query_tables_list {
     expression is usable for partitioning.
   */
   bool safe_to_cache_query;
+  bool is_cursor_get_structure;
+  /// when compare udt table,it should return index of table,this will delete
+  /// future
+  bool is_cmp_udt_table;
+  // for Item_splocal_row_field_table in loop stmt,it needs fix_field every loop
+  // because the data of udt table maybe null.
+  bool is_include_udt_table_item;
 
  private:
   /// True if statement references UDF functions
@@ -4283,6 +4302,7 @@ struct LEX : public Query_tables_list {
   void set_ignore(bool ignore_param) { ignore = ignore_param; }
   void set_has_udf() { m_has_udf = true; }
   bool has_udf() const { return m_has_udf; }
+  bool has_udt_table() const { return is_include_udt_table_item; }
   st_parsing_options parsing_options;
   Alter_info *alter_info;
   bool in_execute_ps{false};
@@ -4307,6 +4327,12 @@ struct LEX : public Query_tables_list {
   bool is_materialized_view() const { return m_materialized_view; }
   void set_is_materialized_view(bool materialized_param) {
     m_materialized_view = materialized_param;
+  }
+  bool use_rapid_exec{false};
+  mem_root_deque<Item *> *rapid_fields{nullptr};
+
+  bool is_sp_create_or_replace() const {
+    return create_sp_mode == enum_sp_create_mode::SP_CREATE_OR_REPLACE;
   }
 
  private:
@@ -4376,6 +4402,8 @@ struct LEX : public Query_tables_list {
 
   bool check_preparation_invalid(THD *thd);
 
+  bool check_udt_type_field();
+
   void cleanup(bool full) {
     unit->cleanup(full);
     if (full) {
@@ -4411,7 +4439,7 @@ struct LEX : public Query_tables_list {
   /// Check if the current statement uses meta-data (uses a table or a stored
   /// routine).
   bool is_metadata_used() const {
-    return query_tables != nullptr || has_udf() ||
+    return query_tables != nullptr || has_udf() || has_udt_table() ||
            (sroutines != nullptr && !sroutines->empty());
   }
 
@@ -4870,7 +4898,7 @@ struct LEX : public Query_tables_list {
 
   bool ora_sp_forall_loop_insert_value(THD *thd, LEX_CSTRING query,
                                        LEX_STRING ident_i, const char *start,
-                                       const char *end, POS &pos);
+                                       const char *end);
 
   bool ora_sp_for_loop_index_and_bounds(
       THD *thd, LEX_STRING ident, Oracle_sp_for_loop_bounds *sp_for_loop_bounds,
@@ -4892,6 +4920,15 @@ struct LEX : public Query_tables_list {
   void sp_if_sp_block_finalize(THD *thd);
 
   bool close_ref_cursor(THD *thd, uint cursor_offset);
+
+  bool sp_change_context(THD *thd, sp_label *lab, bool is_goto = false);
+
+  bool sp_continue_loop(THD *thd, uint *offset, sp_label *lab);
+
+  bool sp_continue_statement(THD *thd, LEX_CSTRING name);
+
+  bool sp_continue_when_statement(THD *thd, LEX_CSTRING name, Item *expr,
+                                  const char *loc_start, const char *loc_end);
   /**oracle sp end **/
   PT_set *dbmsotpt_set_serveroutput(THD *thd, bool enabled, YYLTYPE pos_set,
                                     YYLTYPE pos_val);

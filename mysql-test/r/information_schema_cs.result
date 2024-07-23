@@ -24,7 +24,6 @@ def	mtr	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	mysql	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	performance_schema	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	sys	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
-def	sys_audit	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 def	test	utf8mb4	utf8mb4_0900_ai_ci	NULL	NO
 select schema_name from information_schema.schemata ORDER BY schema_name;
 SCHEMA_NAME
@@ -33,7 +32,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 show databases like 't%';
 Database (t%)
@@ -45,7 +43,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 show databases where `database` = 't%';
 Database
@@ -99,6 +96,7 @@ ROUTINES
 SCHEMATA
 SCHEMATA_EXTENSIONS
 SCHEMA_PRIVILEGES
+SECONDARY_ENGINE_INCREMENT_LOAD_TASK
 SEQUENCES
 STATISTICS
 ST_GEOMETRY_COLUMNS
@@ -121,6 +119,7 @@ USER_STATISTICS
 VIEWS
 VIEW_ROUTINE_USAGE
 VIEW_TABLE_USAGE
+clone_history
 columns_priv
 component
 db
@@ -397,7 +396,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 explain select * from v0;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
@@ -903,6 +901,7 @@ PARTITIONS	TABLE_NAME	select
 REFERENTIAL_CONSTRAINTS	TABLE_NAME	select
 ROLE_COLUMN_GRANTS	TABLE_NAME	select
 ROLE_TABLE_GRANTS	TABLE_NAME	select
+SECONDARY_ENGINE_INCREMENT_LOAD_TASK	TABLE_NAME	select
 STATISTICS	TABLE_NAME	select
 ST_GEOMETRY_COLUMNS	TABLE_NAME	select
 TABLES	TABLE_NAME	select
@@ -923,8 +922,8 @@ table_schema IN ('mysql', 'information_schema', 'test', 'mysqltest')
 AND table_name not like 'ndb%' AND table_name COLLATE utf8_general_ci not like 'innodb_%'
 GROUP BY TABLE_SCHEMA;
 TABLE_SCHEMA	count(*)
-information_schema	58
-mysql	37
+information_schema	59
+mysql	38
 create table t1 (i int, j int);
 create trigger trg1 before insert on t1 for each row
 begin
@@ -1065,7 +1064,6 @@ create procedure p2 () set @a = 5;
 select sql_data_access from information_schema.routines
 where specific_name like 'p%' and ROUTINE_SCHEMA != 'sys';
 SQL_DATA_ACCESS
-CONTAINS SQL
 CONTAINS SQL
 MODIFIES SQL DATA
 drop procedure p1;
@@ -1409,6 +1407,7 @@ ROUTINES	information_schema.ROUTINES	1
 SCHEMATA	information_schema.SCHEMATA	1
 SCHEMATA_EXTENSIONS	information_schema.SCHEMATA_EXTENSIONS	1
 SCHEMA_PRIVILEGES	information_schema.SCHEMA_PRIVILEGES	1
+SECONDARY_ENGINE_INCREMENT_LOAD_TASK	information_schema.SECONDARY_ENGINE_INCREMENT_LOAD_TASK	1
 SEQUENCES	information_schema.SEQUENCES	1
 STATISTICS	information_schema.STATISTICS	1
 ST_GEOMETRY_COLUMNS	information_schema.ST_GEOMETRY_COLUMNS	1
@@ -2554,6 +2553,7 @@ ROUTINES	ROUTINE_SCHEMA
 SCHEMATA	SCHEMA_NAME
 SCHEMATA_EXTENSIONS	SCHEMA_NAME
 SCHEMA_PRIVILEGES	TABLE_SCHEMA
+SECONDARY_ENGINE_INCREMENT_LOAD_TASK	DB_NAME
 SEQUENCES	DB
 STATISTICS	TABLE_SCHEMA
 ST_GEOMETRY_COLUMNS	TABLE_SCHEMA
@@ -2631,6 +2631,7 @@ ROUTINES	ROUTINE_SCHEMA
 SCHEMATA	SCHEMA_NAME
 SCHEMATA_EXTENSIONS	SCHEMA_NAME
 SCHEMA_PRIVILEGES	TABLE_SCHEMA
+SECONDARY_ENGINE_INCREMENT_LOAD_TASK	DB_NAME
 SEQUENCES	DB
 STATISTICS	TABLE_SCHEMA
 ST_GEOMETRY_COLUMNS	TABLE_SCHEMA
@@ -2706,7 +2707,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 RENAME USER master@localhost TO root@localhost;
 Warnings:

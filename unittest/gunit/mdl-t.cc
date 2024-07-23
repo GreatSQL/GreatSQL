@@ -1,4 +1,5 @@
 /* Copyright (c) 2009, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -3872,7 +3873,8 @@ TEST_F(MDLHtonNotifyTest, NotifyNamespaces) {
       false,  // RESOURCE_GROUPS
       false,  // FOREIGN_KEY
       false,  // CHECK_CONSTRAINT
-      false   // BACKUP_TABLES
+      false,  // BACKUP_TABLES
+      false,  // DATA_MASK_CACHE
   };
   static_assert(
       sizeof(notify_or_not) == MDL_key::NAMESPACE_END,

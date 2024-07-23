@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -649,6 +649,8 @@ void Gcs_xcom_interface::make_gcs_leave_group_on_error() {
     group_identifier = (*xcom_configured_groups_it).second;
     Gcs_xcom_control *control_if = static_cast<Gcs_xcom_control *>(
         intf->get_control_session(*group_identifier));
+    MYSQL_GCS_LOG_INFO(
+        "make_gcs_leave_group_on_error calls do_remove_node_from_group");
     control_if->do_remove_node_from_group();
     control_if->do_leave_view();
   }
@@ -1367,10 +1369,11 @@ Gcs_ip_allowlist &Gcs_xcom_interface::get_ip_allowlist() {
   return m_ip_allowlist;
 }
 
-void Gcs_xcom_interface::update_zone_id_for_xcom_node(const char *ip,
+void Gcs_xcom_interface::update_zone_id_for_xcom_node(const char *address,
                                                       int zone_id,
                                                       bool zone_id_sync_mode) {
-  Gcs_xcom_utils::update_zone_id_for_paxos_node(ip, zone_id, zone_id_sync_mode);
+  Gcs_xcom_utils::update_zone_id_for_paxos_node(address, zone_id,
+                                                zone_id_sync_mode);
 }
 
 void Gcs_xcom_interface::update_xcom_cache_mode(int new_mode) {
@@ -1609,6 +1612,12 @@ void cb_xcom_receive_global_view(synode_no config_id, synode_no message_id,
   const site_def *site = find_site_def(message_id);
   const synode_no max_synode = get_max_synode();
 
+  if (!site) {
+    free_node_set(&nodes);
+    MYSQL_GCS_LOG_INFO("Rejecting this view. site is nillptr.");
+    return;
+  }
+
   if (site->nodeno == VOID_NODE_NO) {
     free_node_set(&nodes);
     MYSQL_GCS_LOG_INFO("Rejecting this view. Invalid site definition.");
@@ -1761,8 +1770,15 @@ void cb_xcom_receive_local_view(synode_no config_id, node_set nodes) {
   const site_def *site = find_site_def(config_id);
   const synode_no max_synode = get_max_synode();
 
+  if (!site) {
+    free_node_set(&nodes);
+    MYSQL_GCS_LOG_INFO("Rejecting this local view. site is nillptr.");
+    return;
+  }
+
   if (site->nodeno == VOID_NODE_NO) {
     free_node_set(&nodes);
+    MYSQL_GCS_LOG_INFO("Rejecting this local view. Invalid site definition.");
     return;
   }
 
@@ -1850,6 +1866,7 @@ void cb_xcom_exit(int status [[maybe_unused]]) {
   because of a `die_op` or a view where the node does not belong to.
  */
 void cb_xcom_expel(int status [[maybe_unused]]) {
+  MYSQL_GCS_LOG_INFO("cb_xcom_expel is called");
   Gcs_xcom_notification *notification =
       new Expel_notification(do_cb_xcom_expel);
   bool scheduled = gcs_engine->push(notification);

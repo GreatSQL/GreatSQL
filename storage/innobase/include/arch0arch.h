@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -858,12 +859,14 @@ class Arch_Group {
   @param[in]    start_lsn       start LSN for the group
   @param[in]    header_len      length of header for archived files
   @param[in]    mutex           archive system mutex from caller */
-  Arch_Group(lsn_t start_lsn, uint header_len, ib_mutex_t *mutex)
+  Arch_Group(lsn_t start_lsn, uint header_len, ib_mutex_t *mutex,
+             bool is_page_tracking = false)
       : m_begin_lsn(start_lsn),
         m_header_len(header_len) IF_DEBUG(, m_arch_mutex(mutex)) {
     m_active_file.m_file = OS_FILE_CLOSED;
     m_durable_file.m_file = OS_FILE_CLOSED;
     m_stop_pos.init();
+    m_page_tracking = is_page_tracking;
   }
 
   /** Destructor: Delete all files for non-durable archiving. */
@@ -1298,6 +1301,8 @@ class Arch_Group {
   used for assert checks. */
   ib_mutex_t *m_arch_mutex;
 #endif /* UNIV_DEBUG */
+
+  bool m_page_tracking;
 };
 
 /** A list of archive groups */
@@ -1770,6 +1775,8 @@ class Arch_Page_Sys {
 
   /** Disable assignment */
   Arch_Page_Sys &operator=(Arch_Page_Sys const &) = delete;
+
+  Arch_Page_Pos write_pos() { return m_write_pos; }
 
  private:
   class Recovery;

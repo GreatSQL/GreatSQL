@@ -1,6 +1,6 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -364,7 +364,6 @@ class Query_result_subquery : public Query_result_interceptor {
       : Query_result_interceptor(), item(item_arg) {}
   bool send_data(THD *thd, const mem_root_deque<Item *> &items) override = 0;
   bool send_eof(THD *) override { return false; }
-  void reset_rownum_ref();
 };
 
 #endif  // QUERY_RESULT_INCLUDED

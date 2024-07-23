@@ -4,7 +4,7 @@
 --echo # Test that histograms are used for optimizing queries that are
 --echo # offloaded to a secondary storage engine.
 --echo #
-
+SET @@use_secondary_engine = ON;
 --disable_query_log
 eval INSTALL PLUGIN mock SONAME '$MOCK_PLUGIN';
 --enable_query_log

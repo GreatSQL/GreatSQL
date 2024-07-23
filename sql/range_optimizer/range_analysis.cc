@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1566,6 +1566,17 @@ static SEL_ROOT *get_mm_leaf(THD *thd, RANGE_OPT_PARAM *param, Item *cond_func,
     }
 
     if (always_true_or_false) goto end;
+  }
+
+  /*
+    In MODE_EMPTYSTRING_EQUAL_NULL mode, primary key field when the condition
+    is an empty string, save_value_and_handle_conversion will set
+    field->is_real_null()is true, causing the condition = '' to be merged with
+    is null, and set the field to be non-empty when the string is empty.
+  */
+  if (thd->variables.sql_mode & MODE_EMPTYSTRING_EQUAL_NULL &&
+      field->is_real_null() && field->is_empty_string()) {
+    field->set_notnull();
   }
 
   /*

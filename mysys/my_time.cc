@@ -1,5 +1,5 @@
 /* Copyright (c) 2004, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -3132,4 +3132,101 @@ int date_to_ISO_year(int n_year, int n_month, int n_day) {
   }
 
   return n_year;
+}
+
+/**
+  A simple wrapper for native_strncasecmp(), which adds length comparing between
+  format string and pattern string.
+  native_strcasecmp() used to be considered, but it is not applicable in the
+  following case:
+
+  create table t1 (date char(60), format varchar(10) not null);
+  insert into t1 values
+  ('2003-01-02 10:11:12', 'YEAR'),
+  ('2003-01-02 02:11:12 AM', 'DAY');
+  select trunc(date, format) as trunc_2 from t1;
+
+  when dealing with 'DAY', the string buffer for format stays as 'DAYR',
+  which leads to no match for any format mask and null value is returned from
+  trunc().
+
+  @param format trunc unit format
+  @param pattern trunc unit type
+  @retval         1 on error, 0 of success.
+*/
+int strncasecmpwrap(const String *format, const char *pattern) {
+  const char *ptr = format->ptr();
+  size_t format_length = format->length();
+
+  if (format_length != strlen(pattern)) return 1;
+  return native_strncasecmp(ptr, pattern, format_length);
+}
+
+/**
+  used for oracle trunc()/round()
+
+  @param format trunc unit format
+  @param unit_type[out] trunc unit type
+  @retval         1 on error, 0 of success.
+*/
+bool get_trunc_unit_type(const String *format, uint16 *unit_type) {
+  if (!format) return true;
+
+  if (strncasecmpwrap(format, "CC") == 0 ||
+      strncasecmpwrap(format, "SCC") == 0) {
+    *unit_type = FMT_CC;
+    return false;
+  } else if (strncasecmpwrap(format, "IYYY") == 0 ||
+             strncasecmpwrap(format, "IYY") == 0 ||
+             strncasecmpwrap(format, "IY") == 0 ||
+             strncasecmpwrap(format, "I") == 0) {
+    *unit_type = FMT_IYYY;
+    return false;
+  } else if (strncasecmpwrap(format, "SYEAR") == 0 ||
+             strncasecmpwrap(format, "SYYYY") == 0 ||
+             strncasecmpwrap(format, "YYYY") == 0 ||
+             strncasecmpwrap(format, "YYY") == 0 ||
+             strncasecmpwrap(format, "YY") == 0 ||
+             strncasecmpwrap(format, "Y") == 0 ||
+             strncasecmpwrap(format, "YEAR") == 0) {
+    *unit_type = FMT_YEAR;
+    return false;
+  } else if (strncasecmpwrap(format, "Q") == 0) {
+    *unit_type = FMT_Q;
+    return false;
+  } else if (strncasecmpwrap(format, "MONTH") == 0 ||
+             strncasecmpwrap(format, "MON") == 0 ||
+             strncasecmpwrap(format, "MM") == 0 ||
+             strncasecmpwrap(format, "RM") == 0) {
+    *unit_type = FMT_MON;
+    return false;
+  } else if (strncasecmpwrap(format, "IW") == 0) {
+    *unit_type = FMT_IW;
+    return false;
+  } else if (strncasecmpwrap(format, "WW") == 0) {
+    *unit_type = FMT_WW;
+    return false;
+  } else if (strncasecmpwrap(format, "W") == 0) {
+    *unit_type = FMT_W;
+    return false;
+  } else if (strncasecmpwrap(format, "DDD") == 0 ||
+             strncasecmpwrap(format, "DD") == 0 ||
+             strncasecmpwrap(format, "J") == 0) {
+    *unit_type = FMT_DDD;
+    return false;
+  } else if (strncasecmpwrap(format, "DAY") == 0 ||
+             strncasecmpwrap(format, "DY") == 0 ||
+             strncasecmpwrap(format, "D") == 0) {
+    *unit_type = FMT_DAY;
+    return false;
+  } else if (strncasecmpwrap(format, "HH") == 0 ||
+             strncasecmpwrap(format, "HH12") == 0 ||
+             strncasecmpwrap(format, "HH24") == 0) {
+    *unit_type = FMT_HH;
+    return false;
+  } else if (strncasecmpwrap(format, "MI") == 0) {
+    *unit_type = FMT_MI;
+    return false;
+  }
+  return true;
 }

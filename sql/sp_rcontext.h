@@ -1,5 +1,5 @@
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -201,6 +201,10 @@ class sp_rcontext {
                                                   Item *index_item);
 
   void cleanup_record_variable_row_table(uint var_idx);
+
+  void cleanup_record_variable_tmp_row_table(uint var_idx);
+
+  bool fill_bulk_table_with_tmp_table(uint var_idx);
 
   TABLE *virtual_tmp_table_for_row(uint var_idx);
 
@@ -440,6 +444,9 @@ class sp_rcontext {
   bool add_udt_to_sp_var_list(THD *thd, List<Create_field> field_def_lst);
 
   void reset_refcursor(const Field_refcursor *field_from);
+
+  /// used for udt_table(id_seq.NEXTVAL) or udt_table(rownum)
+  Item *fix_index_and_check(THD *thd, Item *index);
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -520,9 +527,11 @@ class sp_cursor {
 
   virtual bool is_defined() { return true; }
 
-  bool make_return_table(THD *thd, List<Create_field> *list);
+  bool make_return_table(THD *thd, List<Create_field> *list,
+                         List<Create_field> *list_c);
 
-  void set_return_table_from_cursor(sp_cursor *from_cursor);
+  bool set_return_table_from_cursor(sp_cursor *from_cursor,
+                                    List<Create_field> *list_c);
 
   bool set_return_table_from_pcursor(THD *thd, LEX_CSTRING *from_cursor);
 
@@ -568,4 +577,5 @@ class sp_refcursor : public sp_cursor {
   Prepared_statement *stmt;
 };  // class sp_refcursor
 
+Item *make_item_index(THD *thd, Item *item_index);
 #endif /* _SP_RCONTEXT_H_ */

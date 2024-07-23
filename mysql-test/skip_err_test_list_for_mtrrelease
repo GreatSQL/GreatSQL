@@ -13,3 +13,4 @@ sys_vars.binlog_checksum_basic   : WL#000 TODO recheck.
 sys_vars.enforce_gtid_consistency_basic   : WL#000 subquery consequences.
 main.ssl_cache            : WL#000 ignore 
 main.ssl_cache_tls13      : WL#000 ignore 
+main.func_gm              : WL#000 skip need babassl

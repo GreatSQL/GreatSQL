@@ -1,3 +1,4 @@
+SET @@use_secondary_engine = ON;
 #
 # Load into and unload from secondary engine.
 #

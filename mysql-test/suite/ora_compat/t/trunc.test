@@ -189,6 +189,7 @@ insert into t1 values
 ('2021-01-02 10:11:12', 'H24'),
 ('2021-01-02 10:11:12', 'MIC');
 
+--error ER_WRONG_ARGUMENTS
 select c_date,format, trunc(c_date, format) as result from t1;
 
 drop table t1;
@@ -202,6 +203,7 @@ select trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'HH
 select trunc(to_date('2003-01-02 23:11:12','yyyy-mm-dd HH24:MI:SS'), 'HH12') from dual;
 select trunc(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q') from dual;
 select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY') from dual;
+--error ER_WRONG_ARGUMENTS
 select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg') from dual;
 select trunc('-1.4', '-1') from dual;
 select trunc('-1.4', '-2') from dual;
@@ -216,7 +218,9 @@ select trunc(@a, 5) from dual;
 
 
 # null value tests
+--error ER_WRONG_ARGUMENTS
 select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH24:MI:SS'),'') from dual;
+--error ER_WRONG_ARGUMENTS
 select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH24:MI:SS'),null) from dual;
 select trunc(null, 'aaa') from dual;
 select trunc(null, null) from dual;
@@ -249,6 +253,7 @@ select trunc(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q') from d
 select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY') from dual;
 select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg') from dual;
 end;//
+--error ER_WRONG_ARGUMENTS
 call p_trunc//
 drop procedure p_trunc//
 delimiter ;//
@@ -275,6 +280,7 @@ select trunc(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'HH
 select trunc(to_date('2003-01-02 23:11:12','yyyy-mm-dd HH24:MI:SS'), 'HH12') from dual;
 select trunc(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q') from dual;
 select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY') from dual;
+--error ER_WRONG_ARGUMENTS
 select trunc(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg') from dual;
 
 --echo testcases for  Bug#2758
@@ -462,3 +468,19 @@ select trunc(date('0000-01-10'),'day') as trunc_date from dual;
 select trunc(date('0000-01-10'),'dd') as trunc_date from dual;
 select trunc(date('0000-01-10'),'hh') as trunc_date from dual;
 select trunc(date('0000-01-10'),'mi') as trunc_date from dual;
+
+## bug 9088
+set sql_mode=oracle;
+
+# set timestamp to '2023-04-14 10:09:06'
+set timestamp=1681438146;
+select now() from dual;
+select trunc(current_timestamp,'year') from dual;
+select trunc(current_timestamp,'mm') from dual;
+select trunc(current_timestamp) from dual;
+
+--echo test bug#9586
+--error ER_WRONG_ARGUMENTS
+select trunc(timestamp'2024-05-11 04:06:30',1);
+--error ER_WRONG_ARGUMENTS
+select trunc(timestamp'2024-05-11 04:06:30','dddd');

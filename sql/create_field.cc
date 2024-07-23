@@ -1,5 +1,5 @@
 /* Copyright (c) 2018, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -939,10 +939,25 @@ bool Row_definition_list::make_new_create_field_to_store_index(
   cdf->offset = 0;
   List_iterator_fast<Create_field> it(*list);
   Create_field *def;
-  *list_new = Row_definition_list::make(thd->mem_root, cdf);
+  if (!(*list_new))
+    *list_new = Row_definition_list::make(thd->mem_root, cdf);
+  else if ((*list_new)->append_uniq(thd->mem_root, cdf))
+    return true;
   for (uint i = 1; (def = it++); i++) {
     def->offset = i;
     if ((*list_new)->append_uniq(thd->mem_root, def)) return true;
+  }
+  return false;
+}
+
+bool Row_definition_list::make_from_defs(MEM_ROOT *mem_root,
+                                         List<Create_field> *defs,
+                                         bool is_need_index_column) {
+  List_iterator_fast<Create_field> it(*defs);
+  Create_field *def;
+  for (uint j = 0; (def = it++); j++) {
+    if (j == 0 && !is_need_index_column) continue;
+    if (append_uniq(mem_root, def)) return true;
   }
   return false;
 }

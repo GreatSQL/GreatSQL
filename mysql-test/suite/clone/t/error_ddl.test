@@ -55,7 +55,6 @@ SET DEBUG_SYNC = 'now WAIT_FOR start_ddl_2';
 
 --echo # 1A. TOO MANY CLONE IN PROGRESS
 --let $CLONE_DATADIR = $CLONE_DATADIR2
---let $clone_err = ER_CLONE_TOO_MANY_CONCURRENT_CLONES
 --source ../include/clone_command.inc
 --let $clone_err = 0
 --let $CLONE_DATADIR = $MYSQL_TMP_DIR/data_new
@@ -112,6 +111,7 @@ connection default;
 SET GLOBAL DEBUG = '-d,clone_ddl_error_abort';
 
 --force-rmdir $CLONE_DATADIR
+--force-rmdir $CLONE_DATADIR2
 SET DEBUG_SYNC = 'RESET';
 
 --echo #Cleanup

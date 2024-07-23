@@ -13,6 +13,7 @@ call mtr.add_suppression("Cannot delete or update a parent row: a foreign key co
 call mtr.add_suppression("Cannot add or update a child row: a foreign key constraint fails .* Error_code: MY-001452");
 call mtr.add_suppression("Duplicate entry '1' for key 'ti1.PRIMARY'.* Error_code: MY-001062.*");
 call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+call mtr.add_suppression("worker thread retried referenced transaction");
 set @saved_slave_rows_search_algorithms= @@global.slave_rows_search_algorithms;
 
 SET GLOBAL slave_rows_search_algorithms= 'INDEX_SCAN,TABLE_SCAN';

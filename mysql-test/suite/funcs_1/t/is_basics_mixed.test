@@ -318,7 +318,8 @@ CREATE USER 'testuser1'@'localhost';
 # Initial privileges on the INFORMATION_SCHEMA tables (empty result sets)
 let $my_select1 = SELECT 'empty result set was expected' AS my_col
 FROM information_schema.schema_privileges
-WHERE table_schema = 'information_schema';
+WHERE table_schema = 'information_schema' AND
+    GRANTEE NOT IN ("'SYSTEM_DAA'@'%'", "'SYSTEM_DBA'@'%'", "'SYSTEM_DSA'@'%'");
 let $my_select2 = SELECT 'empty result set was expected' AS my_col
 FROM information_schema.table_privileges
 WHERE table_schema = 'information_schema';

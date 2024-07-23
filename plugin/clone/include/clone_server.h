@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -241,6 +242,14 @@ class Server {
 
   /** If backup lock should be acquired */
   bool m_backup_lock;
+
+  /** if enable page track after the clone finish */
+  bool m_enable_page_track;
+
+  /** start lsn for increment clone */
+  uint64_t m_start_id;
+
+  file_compress_mode_t m_file_compress_mode;
 };
 
 /** Clone server interface to handle callback from Storage Engine */
@@ -279,6 +288,9 @@ class Server_Cbk : public Ha_clone_cbk {
   @param[out]  len        data length
   @return error code */
   int apply_buffer_cbk(uchar *&to_buffer, uint &len) override;
+
+  int encrypt_and_write_cbk(uchar *source, Ha_clone_file to_file, size_t length,
+                            const char *dest_name) override;
 
  private:
   /** Clone server object */

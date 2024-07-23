@@ -1,4 +1,5 @@
 /* Copyright (c) 2019, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,7 +31,8 @@ void *Remote_clone_handler::launch_thread(void *arg) {
 }
 
 Remote_clone_handler::Remote_clone_handler(ulonglong threshold,
-                                           ulong components_stop_timeout)
+                                           ulong components_stop_timeout,
+                                           ulonglong donor_threshold)
     : m_group_name(""),
       m_view_id(""),
       m_clone_thd(nullptr),
@@ -38,6 +40,7 @@ Remote_clone_handler::Remote_clone_handler(ulonglong threshold,
       m_clone_query_status(CLONE_QUERY_NOT_EXECUTING),
       m_clone_query_session_id(0),
       m_clone_activation_threshold(threshold),
+      m_clone_donor_threshold(donor_threshold),
       m_current_donor_address(nullptr),
       m_stop_wait_timeout(components_stop_timeout) {
   mysql_mutex_init(key_GR_LOCK_clone_handler_run, &m_run_lock,
@@ -349,6 +352,7 @@ void Remote_clone_handler::get_clone_donors(
     vector_random_shuffle(all_members_info);
   }
 
+  std::list<Group_member_info *> valid_donors;
   for (Group_member_info *member : *all_members_info) {
     std::string m_uuid = member->get_uuid();
     bool is_online =
@@ -359,15 +363,95 @@ void Remote_clone_handler::get_clone_donors(
             CLONE_GR_SUPPORT_VERSION &&
         member->get_member_version().get_version() ==
             local_member_info->get_member_version().get_version();
+    bool arbitrator_role =
+        (member->get_role() == Group_member_info::MEMBER_ROLE_ARBITRATOR);
 
-    if (is_online && not_self && supports_clone) {
-      suitable_donors.push_back(member);
+    if (is_online && not_self && supports_clone && !arbitrator_role) {
+      valid_donors.push_back(member);
     } else {
       delete member;
     }
   }
-
   delete all_members_info;
+
+  bool gtid_error = false;
+  Sid_map group_sid_map(nullptr);
+  Gtid_set group_set(&group_sid_map, nullptr);
+  for (Group_member_info *member : valid_donors) {
+    std::string member_exec_set_str = member->get_gtid_executed();
+    if (group_set.add_gtid_text(member_exec_set_str.c_str()) !=
+        RETURN_STATUS_OK) {
+      LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_LOCAL_GTID_SETS_PROCESS_ERROR);
+      gtid_error = true;
+      break;
+    }
+  }
+
+  if (gtid_error) {
+    LogPluginErrMsg(INFORMATION_LEVEL, 0,
+                    "there has gtid error when check donor_threshold, so chose "
+                    "all valid server as suitable donor");
+    suitable_donors.insert(suitable_donors.begin(), valid_donors.begin(),
+                           valid_donors.end());
+    return;
+  }
+
+  std::list<Group_member_info *> non_suitable_donors;
+  for (Group_member_info *member : valid_donors) {
+    Gtid_set remote_member_set(&group_sid_map, nullptr);
+    std::string remote_executed_gtid = member->get_gtid_executed();
+
+    if (remote_member_set.add_gtid_text(remote_executed_gtid.c_str()) !=
+        RETURN_STATUS_OK) {
+      LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_LOCAL_GTID_SETS_PROCESS_ERROR);
+      gtid_error = true;
+      break;
+    }
+
+    group_set.remove_gtid_set(&remote_member_set);
+    bool activation_threshold_breach =
+        group_set.is_size_greater_than_or_equal(m_clone_donor_threshold);
+    if (!activation_threshold_breach) {
+      suitable_donors.push_back(member);
+      LogPluginErrMsg(INFORMATION_LEVEL, 0,
+                      "server with host:%s, port:%d is suitable for clone "
+                      "donor, server's gtid is :%s",
+                      member->get_hostname().c_str(), member->get_port(),
+                      remote_executed_gtid.c_str());
+    } else {
+      non_suitable_donors.push_back(member);
+      LogPluginErrMsg(
+          INFORMATION_LEVEL, 0,
+          "server with host:%s, port:%d is not suitable for clone donor, "
+          "because server delay too much than donor_threshold, server's "
+          "gtid is: %s",
+          member->get_hostname().c_str(), member->get_port(),
+          remote_executed_gtid.c_str());
+    }
+    group_set.add_gtid_set(&remote_member_set);
+  }
+
+  if (gtid_error) {
+    LogPluginErrMsg(INFORMATION_LEVEL, 0,
+                    "there has gtid error when check donor_threshold, so chose "
+                    "all valid server as suitable donor");
+    non_suitable_donors.clear();
+    suitable_donors.clear();
+    suitable_donors.insert(suitable_donors.begin(), valid_donors.begin(),
+                           valid_donors.end());
+  } else if (suitable_donors.empty()) {
+    LogPluginErrMsg(INFORMATION_LEVEL, 0,
+                    "no suitable donor server for clone, so chose all valid "
+                    "server as suitable donor");
+    non_suitable_donors.clear();
+    suitable_donors.insert(suitable_donors.begin(), valid_donors.begin(),
+                           valid_donors.end());
+  } else {
+    for (Group_member_info *member : non_suitable_donors) {
+      delete member;
+    }
+    non_suitable_donors.clear();
+  }
 }
 
 int Remote_clone_handler::set_clone_ssl_options(

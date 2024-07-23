@@ -1,5 +1,5 @@
 /* Copyright (c) 2008, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -249,12 +249,13 @@ enum enum_object_type : char {
   OBJECT_TYPE_RESOURCE_GROUPS = 20,
   OBJECT_TYPE_FOREIGN_KEY = 21,
   OBJECT_TYPE_CHECK_CONSTRAINT = 22,
-  OBJECT_TYPE_BACKUP_TABLES = 23
+  OBJECT_TYPE_BACKUP_TABLES = 23,
+  OBJECT_TYPE_DATA_MASK = 24
 };
 /** Integer, first value of @sa enum_object_type. */
 #define FIRST_OBJECT_TYPE (static_cast<int>(OBJECT_TYPE_EVENT))
 /** Integer, last value of @sa enum_object_type. */
-#define LAST_OBJECT_TYPE (static_cast<int>(OBJECT_TYPE_BACKUP_TABLES))
+#define LAST_OBJECT_TYPE (static_cast<int>(OBJECT_TYPE_DATA_MASK))
 /** Integer, number of values of @sa enum_object_type. */
 #define COUNT_OBJECT_TYPE (LAST_OBJECT_TYPE - FIRST_OBJECT_TYPE + 1)
 

@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -62,6 +62,7 @@ static s_object_type_map object_type_map[] = {
     {OBJECT_TYPE_FOREIGN_KEY, {STRING_WITH_LEN("FOREIGN KEY")}},
     {OBJECT_TYPE_CHECK_CONSTRAINT, {STRING_WITH_LEN("CHECK CONSTRAINT")}},
     {OBJECT_TYPE_BACKUP_TABLES, {STRING_WITH_LEN("BACKUP TABLES")}},
+    {OBJECT_TYPE_DATA_MASK, {STRING_WITH_LEN("DATA MASK")}},
     {NO_OBJECT_TYPE, {STRING_WITH_LEN("")}}};
 
 void object_type_to_string(enum_object_type object_type, const char **string,

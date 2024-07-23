@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -362,6 +362,7 @@ extern bool opt_skip_replica_start;
 extern bool opt_log_replica_updates;
 extern char *opt_replica_skip_errors;
 extern ulonglong relay_log_space_limit;
+extern std::atomic<uint64_t> opt_rpl_read_binlog_speed_limit;
 
 extern const char *relay_log_index;
 extern const char *relay_log_basename;

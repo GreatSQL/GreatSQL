@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1101,12 +1101,21 @@ class Round_instantiator {
     switch (args->elements()) {
       case 1: {
         Item *i0 = new (thd->mem_root) Item_int_0(POS());
-        return new (thd->mem_root)
-            Item_func_round(POS(), (*args)[0], i0, false);
+        if (thd->variables.sql_mode & MODE_ORACLE)
+          return new (thd->mem_root)
+              Item_func_ora_round(POS(), (*args)[0], i0, false);
+        else
+          return new (thd->mem_root)
+              Item_func_round(POS(), (*args)[0], i0, false);
       }
-      case 2:
-        return new (thd->mem_root)
-            Item_func_round(POS(), (*args)[0], (*args)[1], false);
+      case 2: {
+        if (thd->variables.sql_mode & MODE_ORACLE)
+          return new (thd->mem_root)
+              Item_func_ora_round(POS(), (*args)[0], (*args)[1], false);
+        else
+          return new (thd->mem_root)
+              Item_func_round(POS(), (*args)[0], (*args)[1], false);
+      }
       default:
         assert(false);
         return nullptr;
@@ -1701,11 +1710,30 @@ Item *Create_sp_func::create(THD *thd, LEX_STRING db, LEX_STRING name,
         enum_table_type = enum_udt_table_of_type::TYPE_TABLE;
       else
         enum_table_type = enum_udt_table_of_type::TYPE_INVALID;
+      Row_definition_list *def_lists = nullptr;
+      if (field_def_list && !field_def_list->is_empty() &&
+          enum_table_type != enum_udt_table_of_type::TYPE_INVALID) {
+        Row_definition_list *rdl = nullptr;
+        List_iterator_fast<Create_field> iter(*field_def_list);
+        Create_field *def = nullptr;
+
+        while ((def = iter++)) {
+          if (rdl == nullptr) {
+            rdl = Row_definition_list::make(thd->mem_root, def);
+            if (rdl == nullptr) return nullptr;
+          } else {
+            rdl->append_uniq(thd->mem_root, def);
+          }
+        }
+        if (rdl->make_new_create_field_to_store_index(thd, 0, false,
+                                                      &def_lists))
+          return nullptr;
+      }
       if (!nested_table_udt.str) {
         if (enum_table_type != enum_udt_table_of_type::TYPE_INVALID)
           return new (thd->mem_root) Item_func_udt_single_type_table(
               POS(), db, name, enum_table_type, varray_limit, item_list,
-              field_def_list, reclength, sql_mode);
+              def_lists, reclength, sql_mode);
         else {
           return new (thd->mem_root) Item_func_udt_constructor(
               POS(), db, name, use_explicit_name, item_list, field_def_list,
@@ -1714,7 +1742,7 @@ Item *Create_sp_func::create(THD *thd, LEX_STRING db, LEX_STRING name,
       } else
         return new (thd->mem_root) Item_func_udt_table(
             POS(), db, name, nested_table_udt, reclength, enum_table_type,
-            varray_limit, item_list, field_def_list);
+            varray_limit, item_list, def_lists);
     }
     thd->mdl_context.rollback_to_savepoint(mdl_savepoint);
     // 2. is it a type
@@ -1727,8 +1755,8 @@ Item *Create_sp_func::create(THD *thd, LEX_STRING db, LEX_STRING name,
             POS(), db, name, use_explicit_name, item_list,
             spv->field_def.ora_record.row_field_definitions(), 0,
             thd->variables.sql_mode);
-      } else if (spv->field_def.ora_record.is_row_table() && !db.str &&
-                 !spv->field_def.ora_record.is_record_table_define &&
+      } else if (spv->field_def.ora_record.row_field_table_definitions() &&
+                 !db.str && !spv->field_def.ora_record.is_record_table_define &&
                  item_list && item_list->value.size() == 1 &&
                  !item_list->m_has_assignment_list) {
         return create_item_table_by_index_for_sp_var(
@@ -1940,6 +1968,14 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"ADDTIME", SQL_FN(Item_func_add_time, 2)},
     {"AES_DECRYPT", SQL_FN_V(Item_func_aes_decrypt, 2, 6)},
     {"AES_ENCRYPT", SQL_FN_V(Item_func_aes_encrypt, 2, 6)},
+#ifdef SSL_GM
+    {"SM4_DECRYPT", SQL_FN_V(Item_func_sm4_decrypt, 2, 3)},
+    {"SM4_ENCRYPT", SQL_FN_V(Item_func_sm4_encrypt, 2, 3)},
+    {"SM2_DECRYPT", SQL_FN(Item_func_sm2_decrypt, 2)},
+    {"SM2_ENCRYPT", SQL_FN(Item_func_sm2_encrypt, 2)},
+    {"SM3", SQL_FN(Item_func_sm3, 1)},
+    {"HMAC_SM3", SQL_FN(Item_func_hmac_sm3, 2)},
+#endif
     {"ANY_VALUE", SQL_FN(Item_func_any_value, 1)},
     {"ASIN", SQL_FN(Item_func_asin, 1)},
     {"ATAN", SQL_FN_V(Item_func_atan, 1, 2)},
@@ -2071,6 +2107,8 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"MAKETIME", SQL_FN(Item_func_maketime, 3)},
     {"MAKE_SET", SQL_FACTORY(Make_set_instantiator)},
     {"MASTER_POS_WAIT", SQL_FN_V(Item_master_pos_wait, 2, 4)},
+    {"MASKALL", SQL_FN_V(Item_func_maskall, 1, 2)},
+    {"MASK_INSIDE", SQL_FN_V(Item_func_mask_inside, 3, 4)},
     {"MBRCONTAINS", SQL_FN(Item_func_mbrcontains, 2)},
     {"MBRCOVEREDBY", SQL_FN(Item_func_mbrcoveredby, 2)},
     {"MBRCOVERS", SQL_FN(Item_func_mbrcovers, 2)},
@@ -2099,6 +2137,8 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"RAND", SQL_FN_V(Item_func_rand, 0, 1)},
     {"RANDOM_BYTES", SQL_FN(Item_func_random_bytes, 1)},
     {"RAWTOHEX", SQL_FN(Item_func_rawtohex, 1)},
+    {"READ_SECONDARY_ENGINE_TABLE_LOAD_GTID",
+     SQL_FN(Item_func_read_secondary_engine_load_gtid, 2)},
     {"REGEXP_INSTR", SQL_FN_V_LIST(Item_func_regexp_instr, 2, 6)},
     {"REGEXP_LIKE", SQL_FN_V_LIST(Item_func_regexp_like, 2, 3)},
     {"REGEXP_REPLACE", SQL_FN_V_LIST(Item_func_regexp_replace, 2, 6)},
@@ -2123,8 +2163,12 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"SOUNDEX", SQL_FN(Item_func_soundex, 1)},
     {"SOURCE_POS_WAIT", SQL_FN_V(Item_source_pos_wait, 2, 4)},
     {"SPACE", SQL_FN(Item_func_space, 1)},
+    {"START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK",
+     SQL_FN_V(Item_func_start_secondary_engine_increment_load_task, 2, 3)},
     {"STATEMENT_DIGEST", SQL_FN(Item_func_statement_digest, 1)},
     {"STATEMENT_DIGEST_TEXT", SQL_FN(Item_func_statement_digest_text, 1)},
+    {"STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK",
+     SQL_FN(Item_func_stop_secondary_engine_increment_load_task, 2)},
     {"WAIT_FOR_EXECUTED_GTID_SET",
      SQL_FN_V(Item_wait_for_executed_gtid_set, 1, 2)},
     {"WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS",

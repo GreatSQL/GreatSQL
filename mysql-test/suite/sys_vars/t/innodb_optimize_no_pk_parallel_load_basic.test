@@ -1,0 +1,96 @@
+
+
+# 2024-01-09 - Added
+#
+
+
+SET @start_global_value = @@global.innodb_optimize_no_pk_parallel_load;
+SELECT @start_global_value;
+
+#
+# exists as global and session
+#
+--echo Valid values are 'ON' and 'OFF'
+select @@global.innodb_optimize_no_pk_parallel_load in (0, 1);
+select @@global.innodb_optimize_no_pk_parallel_load;
+select @@session.innodb_optimize_no_pk_parallel_load in (0, 1);
+select @@session.innodb_optimize_no_pk_parallel_load;
+show global variables like 'innodb_optimize_no_pk_parallel_load';
+show session variables like 'innodb_optimize_no_pk_parallel_load';
+--disable_warnings
+select * from performance_schema.global_variables where variable_name='innodb_optimize_no_pk_parallel_load';
+select * from performance_schema.session_variables where variable_name='innodb_optimize_no_pk_parallel_load';
+--enable_warnings
+
+#
+# show that it's writable
+#
+set global innodb_optimize_no_pk_parallel_load='OFF';
+set session innodb_optimize_no_pk_parallel_load='OFF';
+select @@global.innodb_optimize_no_pk_parallel_load;
+select @@session.innodb_optimize_no_pk_parallel_load;
+--disable_warnings
+select * from performance_schema.global_variables where variable_name='innodb_optimize_no_pk_parallel_load';
+select * from performance_schema.session_variables where variable_name='innodb_optimize_no_pk_parallel_load';
+--enable_warnings
+set @@global.innodb_optimize_no_pk_parallel_load=1;
+set @@session.innodb_optimize_no_pk_parallel_load=1;
+select @@global.innodb_optimize_no_pk_parallel_load;
+select @@session.innodb_optimize_no_pk_parallel_load;
+--disable_warnings
+select * from performance_schema.global_variables where variable_name='innodb_optimize_no_pk_parallel_load';
+select * from performance_schema.session_variables where variable_name='innodb_optimize_no_pk_parallel_load';
+--enable_warnings
+set global innodb_optimize_no_pk_parallel_load=0;
+set session innodb_optimize_no_pk_parallel_load=0;
+select @@global.innodb_optimize_no_pk_parallel_load;
+select @@session.innodb_optimize_no_pk_parallel_load;
+--disable_warnings
+select * from performance_schema.global_variables where variable_name='innodb_optimize_no_pk_parallel_load';
+select * from performance_schema.session_variables where variable_name='innodb_optimize_no_pk_parallel_load';
+--enable_warnings
+set @@global.innodb_optimize_no_pk_parallel_load='ON';
+set @@session.innodb_optimize_no_pk_parallel_load='ON';
+select @@global.innodb_optimize_no_pk_parallel_load;
+select @@session.innodb_optimize_no_pk_parallel_load;
+--disable_warnings
+select * from performance_schema.global_variables where variable_name='innodb_optimize_no_pk_parallel_load';
+select * from performance_schema.session_variables where variable_name='innodb_optimize_no_pk_parallel_load';
+--enable_warnings
+
+#
+# incorrect types
+#
+--error ER_WRONG_TYPE_FOR_VAR
+set global innodb_optimize_no_pk_parallel_load=1.1;
+--error ER_WRONG_TYPE_FOR_VAR
+set session innodb_optimize_no_pk_parallel_load=1.1;
+--error ER_WRONG_TYPE_FOR_VAR
+set global innodb_optimize_no_pk_parallel_load=1e1;
+--error ER_WRONG_TYPE_FOR_VAR
+set session innodb_optimize_no_pk_parallel_load=1e1;
+--error ER_WRONG_VALUE_FOR_VAR
+set global innodb_optimize_no_pk_parallel_load=2;
+--error ER_WRONG_VALUE_FOR_VAR
+set session innodb_optimize_no_pk_parallel_load=2;
+--error ER_WRONG_VALUE_FOR_VAR
+set global innodb_optimize_no_pk_parallel_load='AUTO';
+--error ER_WRONG_VALUE_FOR_VAR
+set session innodb_optimize_no_pk_parallel_load='AUTO';
+--error ER_WRONG_VALUE_FOR_VAR
+set global innodb_optimize_no_pk_parallel_load=-3;
+--error ER_WRONG_VALUE_FOR_VAR
+set session innodb_optimize_no_pk_parallel_load=-7;
+select @@global.innodb_optimize_no_pk_parallel_load;
+select @@session.innodb_optimize_no_pk_parallel_load;
+--disable_warnings
+select * from performance_schema.global_variables where variable_name='innodb_optimize_no_pk_parallel_load';
+select * from performance_schema.session_variables where variable_name='innodb_optimize_no_pk_parallel_load';
+--enable_warnings
+
+#
+# Cleanup
+#
+
+SET @@global.innodb_optimize_no_pk_parallel_load = @start_global_value;
+SELECT @@global.innodb_optimize_no_pk_parallel_load;

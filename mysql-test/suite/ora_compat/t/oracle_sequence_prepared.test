@@ -26,6 +26,7 @@ delimiter ;$$
 prepare prep_seq1 from 'select seq.nextval from t1';
 prepare prep_seq2 from 'select seq.nextval';
 
+--echo
 --echo [# test sequence works well]
 call sp_seq1();
 call sp_seq1();
@@ -40,6 +41,7 @@ execute prep_seq2;
 execute prep_seq2;
 execute prep_seq2;
 
+--echo
 --echo [# test drop sequence in other session]
 --connection conn1_2
 --echo [connect conn1_2]
@@ -55,6 +57,7 @@ execute prep_seq1;
 --error ER_UNKNOWN_TABLE
 execute prep_seq2;
 
+--echo
 --echo [# test re-create sequence in other session]
 --connection conn1_2
 --echo [connect conn1_2]
@@ -66,6 +69,7 @@ call sp_seq2();
 execute prep_seq1;
 execute prep_seq2;
 
+--echo
 --echo [# test alter sequence in other session]
 --connection conn1_2
 --echo [connect conn1_2]
@@ -86,13 +90,92 @@ execute prep_seq2;
 execute prep_seq2;
 
 --echo
---echo [# clean up]
+--echo [# clean up for above]
 drop procedure sp_seq1;
 drop procedure sp_seq2;
 drop prepare prep_seq1;
 drop prepare prep_seq2;
 drop sequence seq;
 drop table t1;
+
+--echo
+--echo [# bug9793: test sequence re-prepare for sp_instr_set]
+--connection conn1
+--echo [connect conn1]
+set sql_mode=oracle;
+CREATE SEQUENCE id_seq START WITH 1 INCREMENT BY 1 NOCACHE;
+delimiter $$;
+CREATE OR REPLACE PROCEDURE p1
+IS
+  v_id int;
+BEGIN
+  v_id:=1+id_seq.NEXTVAL;
+  select v_id;
+END;$$
+CREATE OR REPLACE PROCEDURE p2
+IS
+  v_id int;
+BEGIN
+  v_id:=1+id_seq.CURRVAL;
+  select v_id;
+END;$$
+delimiter ;$$
+call p1();
+call p1();
+call p2();
+select id_seq.currval;
+call p2();
+--connection conn1_2
+--echo [connect conn1_2]
+drop sequence id_seq;
+--connection conn1
+--echo [connect conn1]
+--error ER_GDB_READ_SEQUENCE
+call p1();
+--error ER_GDB_READ_SEQUENCE
+call p2();
+--connection conn1_2
+--echo [connect conn1_2]
+CREATE SEQUENCE id_seq START WITH 100 INCREMENT BY 2 NOCACHE;
+--connection conn1
+--echo [connect conn1]
+call p1();
+call p1();
+call p2();
+select id_seq.currval;
+call p2();
+--connection conn1_2
+--echo [connect conn1_2]
+alter sequence id_seq cycle;
+--connection conn1
+--echo [connect conn1]
+select id_seq.currval;
+call p2();
+call p1();
+call p1();
+call p2();
+--echo [# testcase from wuyy]
+delimiter $$;
+CREATE or replace PROCEDURE p3() as
+  count int;
+begin
+  for i in 1 .. 4 loop
+    count:=id_seq.NEXTVAL;
+    drop SEQUENCE id_seq;
+  end loop;
+end;$$
+delimiter ;$$
+--error ER_GDB_READ_SEQUENCE
+call p3();
+CREATE SEQUENCE id_seq START WITH 1 INCREMENT BY 1 NOCACHE;
+--error ER_GDB_READ_SEQUENCE
+call p3();
+drop procedure p1;
+drop procedure p2;
+drop procedure p3;
+set sql_mode=default;
+
+
 
 --disconnect conn1
 --disconnect conn1_2

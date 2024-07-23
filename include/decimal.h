@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -112,6 +113,10 @@ int decimal_round(const decimal_t *from, decimal_t *to, int new_scale,
 int decimal_is_zero(const decimal_t *from);
 void max_decimal(int precision, int frac, decimal_t *to);
 int decimal_shift(decimal_t *dec, int shift);
+
+decimal_digit_t div_by_pow10_extern(decimal_digit_t x, int p);
+decimal_digit_t *remove_leading_zeroes_extern(const decimal_t *from,
+                                              int *intg_result);
 
 /* set a decimal_t to zero */
 static inline void decimal_make_zero(decimal_t *dec) {

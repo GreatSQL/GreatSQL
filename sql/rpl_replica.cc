@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -188,6 +188,7 @@ char *replica_load_tmpdir = nullptr;
 bool replicate_same_server_id;
 bool replicate_server_id_mode;
 ulonglong relay_log_space_limit = 0;
+std::atomic<uint64_t> opt_rpl_read_binlog_speed_limit = 0;
 
 const char *relay_log_index = nullptr;
 const char *relay_log_basename = nullptr;
@@ -5330,6 +5331,61 @@ static int try_to_reconnect(THD *thd, MYSQL *mysql, Master_info *mi,
   return 0;
 }
 
+class Speed_controller {
+ public:
+  Speed_controller() {}
+  ~Speed_controller() {}
+
+  void check_and_throttle(ulong event_len) {
+    /**
+      Control the binlog read speed of master when rpl_read_binlog_speed_limit
+      is non-zero
+    */
+    uint64_t rpl_read_binlog_speed_limit =
+        opt_rpl_read_binlog_speed_limit * 1024;
+    if (rpl_read_binlog_speed_limit) {
+      /**
+        prevent the m_token_amount become a large value, for example, the IO
+        thread doesn't work for a long time
+      */
+      if (m_token_amount > rpl_read_binlog_speed_limit * 2) {
+        m_last_check_time = my_micro_time() / 1000;
+        m_token_amount = rpl_read_binlog_speed_limit * 2;
+      }
+
+      do {
+        uint64_t current_time = my_micro_time() / 1000;
+        // Safe multiplication check before adding tokens
+        uint64_t safe_elapsed_time =
+            std::min(current_time - m_last_check_time,
+                     UINT64_MAX / rpl_read_binlog_speed_limit);
+        uint64_t tokens_2_add =
+            safe_elapsed_time * rpl_read_binlog_speed_limit / 1000;
+        // Overflow check before updating m_token_amount
+        m_token_amount =
+            std::numeric_limits<uint64_t>::max() - tokens_2_add > m_token_amount
+                ? m_token_amount + tokens_2_add
+                : std::numeric_limits<uint64_t>::max();
+        m_last_check_time = current_time;
+        if (m_token_amount < event_len) {
+          uint64_t micro_sleeptime =
+              std::ceil(1000 * 1000 * (event_len - m_token_amount) /
+                        rpl_read_binlog_speed_limit);
+          my_sleep(micro_sleeptime > 1000
+                       ? micro_sleeptime
+                       : 1000);  // at least sleep 1000 micro second
+        }
+      } while (m_token_amount < event_len);
+      m_token_amount -= event_len;
+    }
+  }
+
+ private:
+  // Use for speed limit.
+  uint64_t m_last_check_time = my_micro_time() / 1000;
+  uint64_t m_token_amount = 0;
+};
+
 /**
   Slave IO thread entry point.
 
@@ -5531,6 +5587,7 @@ extern "C" void *handle_slave_io(void *arg) {
       const char *event_buf;
 
       assert(mi->last_error().number == 0);
+      Speed_controller speed_ctrl;
       while (!io_slave_killed(thd, mi)) {
         ulong event_len;
         /*
@@ -5606,6 +5663,9 @@ extern "C" void *handle_slave_io(void *arg) {
                      "Failed to run 'after_read_event' hook");
           goto err;
         }
+
+        /* Check limits and throttle if needed and update data speed. */
+        speed_ctrl.check_and_throttle(event_len);
 
         /* XXX: 'synced' should be updated by queue_event to indicate
            whether event has been synced to disk */
@@ -8367,7 +8427,15 @@ int connect_to_master(THD *thd, MYSQL *mysql, Master_info *mi, bool reconnect,
   /* Always reset public key to remove cached copy */
   mysql_reset_server_public_key();
 
-  mysql_options(mysql, MYSQL_OPT_CONNECT_TIMEOUT, (char *)&replica_net_timeout);
+  if (is_io_thread) {
+    mysql_options(mysql, MYSQL_OPT_CONNECT_TIMEOUT,
+                  (char *)&replica_net_timeout);
+  } else {
+    // rpl_io_monitor thread
+    uint monitor_net_timeout = 3;
+    mysql_options(mysql, MYSQL_OPT_CONNECT_TIMEOUT,
+                  (char *)&monitor_net_timeout);
+  }
   mysql_options(mysql, MYSQL_OPT_READ_TIMEOUT, (char *)&replica_net_timeout);
 
   if (mi->bind_addr[0]) {
@@ -8481,6 +8549,11 @@ int connect_to_master(THD *thd, MYSQL *mysql, Master_info *mi, bool reconnect,
   bool replica_was_killed{false};
   bool connected{false};
 
+  ulong retry_count = mi->retry_count;
+  // rpl_io_monitor thread has its own outside retry loop
+  if (!is_io_thread) {
+    retry_count = 1;
+  }
   while (!connected) {
     replica_was_killed = is_io_thread ? io_slave_killed(thd, mi)
                                       : monitor_io_replica_killed(thd, mi);
@@ -8519,7 +8592,7 @@ int connect_to_master(THD *thd, MYSQL *mysql, Master_info *mi, bool reconnect,
       do not want to have election triggered on the first failure to
       connect
     */
-    if (++err_count == mi->retry_count) {
+    if (++err_count == retry_count) {
       if (is_network_error(last_errno) && is_io_thread) mi->set_network_error();
       replica_was_killed = true;
       break;

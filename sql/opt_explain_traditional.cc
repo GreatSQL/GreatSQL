@@ -1,6 +1,6 @@
 /* Copyright (c) 2011, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -82,6 +82,7 @@ static const char *traditional_extra_tags[ET_total] = {
     "Index dive skipped due to FORCE",  // ET_SKIP_RECORDS_IN_RANGE
     "Using secondary engine",           // ET_USING_SECONDARY_ENGINE
     "Rematerialize",                    // ET_REMATERIALIZE
+    "Connect By",                       // ET_CONNECT_BY
     "Parallel execute"                  // ET_PARALLEL_SCAN
 };
 

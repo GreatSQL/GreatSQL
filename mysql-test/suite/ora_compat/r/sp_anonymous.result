@@ -209,3 +209,50 @@ select @@sql_mode;
 @@sql_mode
 PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
 drop table t1;
+declare
+begin
+select 1 from dual;
+end;
+//
+1
+1
+<<lab1>>
+declare 
+begin 
+select 1 from dual;
+end;
+//
+1
+1
+create table t1 (id int, xx varchar(200));
+create table t2(id int, xx varchar(200));
+insert into t1 values(1, 'test');
+CREATE TRIGGER  tr1
+BEFORE DELETE
+ON t1
+FOR EACH ROW
+DECLARE
+BEGIN
+insert into t2 values(:OLD.id  , 'deleted');
+END;
+//
+select * from t1;
+id	xx
+1	test
+select * from t2;
+id	xx
+delete from t1;
+select * from t2;
+id	xx
+1	deleted
+drop trigger tr1;
+drop table t1;
+drop table t2;
+set sql_mode=default;
+select STATEMENT_DIGEST_TEXT("CREATE PROCEDURE p1() BEGIN SELECT * FROM t12; END ");
+STATEMENT_DIGEST_TEXT("CREATE PROCEDURE p1() BEGIN SELECT * FROM t12; END ")
+CREATE PROCEDURE `p1` ( ) BEGIN SELECT * FROM `t12` ; END
+set sql_mode=oracle;
+select STATEMENT_DIGEST_TEXT(' BEGIN SELECT * FROM t12; END');
+STATEMENT_DIGEST_TEXT(' BEGIN SELECT * FROM t12; END')
+BEGIN SELECT * FROM `t12` ; END

@@ -177,3 +177,8 @@ SELECT add_months('2022-02-28', sysdate()) FROM dual;
 SELECT add_months('2022-02-28', '1.2  a') FROM dual;
 --error ER_WRONG_ARGUMENTS
 SELECT add_months('2022-02-28', '  a1.2') FROM dual;
+
+#bugfix 9815/9821
+SELECT add_months('2024-05-01',1e40);
+set sql_mode=oracle;
+SELECT SYSDATE - 30000000000000000000000000000000000000000000;

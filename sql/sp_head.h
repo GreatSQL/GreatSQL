@@ -1,5 +1,5 @@
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -77,7 +77,7 @@ class sp_instr_jump;
   Number of PSI_statement_info instruments
   for internal stored programs statements.
 */
-#define SP_PSI_STATEMENT_INFO_COUNT 26
+#define SP_PSI_STATEMENT_INFO_COUNT 27
 
 #ifdef HAVE_PSI_INTERFACE
 void init_sp_psi_keys(void);
@@ -131,6 +131,8 @@ class sp_name {
 
   // whether this routine is loaded as (fake version) synonym
   bool m_fake_synonym{false};
+  // where this routine are defined in the with function statement
+  bool m_is_with_function{false};
 
   sp_name(const LEX_CSTRING &db, const LEX_STRING &name, bool use_explicit_name)
       : m_db(db), m_name(name), m_explicit_name(use_explicit_name) {
@@ -207,6 +209,8 @@ class sp_parser_data {
         m_param_start_ptr(nullptr),
         m_param_end_ptr(nullptr),
         m_body_start_ptr(nullptr),
+        m_cursor_param_start_ptr(nullptr),
+        m_cursor_param_end_ptr(nullptr),
         m_cont_level(0),
         m_saved_memroot(nullptr),
         m_saved_item_list(nullptr),
@@ -285,6 +289,20 @@ class sp_parser_data {
   const char *get_body_start_ptr() const { return m_body_start_ptr; }
 
   void set_body_start_ptr(const char *ptr) { m_body_start_ptr = ptr; }
+
+  ///////////////////////////////////////////////////////////////////////
+  /*cursor parameter */
+  const char *get_cursor_parameter_start_ptr() const {
+    return m_cursor_param_start_ptr;
+  }
+
+  void set_cursor_parameter_start_ptr(const char *ptr);
+
+  const char *get_cursor_parameter_end_ptr() const {
+    return m_cursor_param_end_ptr;
+  }
+
+  void set_cursor_parameter_end_ptr(const char *ptr);
 
   ///////////////////////////////////////////////////////////////////////
 
@@ -421,6 +439,20 @@ class sp_parser_data {
     corresponding to the start of the first SQL-statement.
   */
   const char *m_body_start_ptr;
+
+  /**
+    Position in the cursor-statement's query
+    string corresponding to the start of parameter declarations (stored
+    procedure or stored function parameters).
+  */
+  const char *m_cursor_param_start_ptr;
+
+  /**
+    Position in the cursor-statement's query
+    string corresponding to the end of parameter declarations (stored
+    procedure or stored function parameters).
+  */
+  const char *m_cursor_param_end_ptr;
 
   /// Instructions needing backpatching
   List<Backpatch_info> m_backpatch;

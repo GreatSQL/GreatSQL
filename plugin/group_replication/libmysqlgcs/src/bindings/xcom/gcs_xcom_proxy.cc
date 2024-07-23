@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -197,9 +197,27 @@ bool Gcs_xcom_proxy_impl::xcom_client_set_cache_size(uint64_t size) {
   bool const successful = xcom_input_try_push(data);
   if (!successful) {
     MYSQL_GCS_LOG_DEBUG(
-        "xcom_client_set_cache_size: Failed to push into XCom.");
+        "xcom_client_set_flp_timeout: Failed to push into XCom.");
   }
   return successful;
+}
+
+bool Gcs_xcom_proxy_impl::xcom_client_notify_truly_remove(const char *address) {
+  if (strlen(address) < MAX_IP_PORT_LEN) {
+    app_data_ptr data = new_app_data();
+    data = init_set_notify_truly_remove_msg(data, address);
+    /* Takes ownership of data. */
+    bool const successful = xcom_input_try_push(data);
+    if (!successful) {
+      MYSQL_GCS_LOG_DEBUG(
+          "xcom_client_notify_truly_remove: Failed to push into XCom.");
+    }
+    return successful;
+  } else {
+    MYSQL_GCS_LOG_INFO(
+        "in xcom_client_notify_truly_remove, address is too long.");
+    return false;
+  }
 }
 
 bool Gcs_xcom_proxy_impl::xcom_client_set_flp_timeout(uint64_t timeout) {
@@ -209,7 +227,7 @@ bool Gcs_xcom_proxy_impl::xcom_client_set_flp_timeout(uint64_t timeout) {
   bool const successful = xcom_input_try_push(data);
   if (!successful) {
     MYSQL_GCS_LOG_DEBUG(
-        "xcom_client_set_cache_size: Failed to push into XCom.");
+        "xcom_client_set_flp_timeout: Failed to push into XCom.");
   }
   return successful;
 }
@@ -826,6 +844,10 @@ bool Gcs_xcom_proxy_base::xcom_set_cache_size(uint64_t size) {
 
 bool Gcs_xcom_proxy_base::xcom_set_flp_timeout(uint64_t timeout) {
   return xcom_client_set_flp_timeout(timeout);
+}
+
+bool Gcs_xcom_proxy_base::notify_xcom_truly_remove(const char *address) {
+  return xcom_client_notify_truly_remove(address);
 }
 
 bool Gcs_xcom_proxy_base::xcom_force_nodes(Gcs_xcom_nodes &nodes,

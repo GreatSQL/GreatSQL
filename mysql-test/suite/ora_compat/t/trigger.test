@@ -605,6 +605,11 @@ delete from alt_tri_tab_1 where id = 3;
 select * from alt_tri_tab_1;
 select * from alt_tri_tab_2;
 
+--echo "bugfix 9220"
+set sql_mode=oracle;
+--error ER_SP_BAD_USE_PROC
+select to_char(:a.id);
+
 drop TRIGGER alter_trigger_01;
 drop TRIGGER alter_trigger_02;
 drop table alt_tri_tab_1;
@@ -620,3 +625,67 @@ drop trigger if exists e_trg;
 drop table if exists trg;
 drop table if exists trg_0;
 --enable_warnings
+
+create table t1(i int);
+create table t2(i int);
+insert into t1 values(1),(2),(3);
+insert into t2 values(1),(2),(3);
+
+--echo create [or replace] trigger testcases, default mode
+create trigger trg before insert on t1 for each row set @a:=1;
+create or replace trigger trg before insert on t1 for each row set @a:=2;
+select EVENT_MANIPULATION,EVENT_OBJECT_TABLE,ACTION_STATEMENT,ACTION_TIMING from information_schema.triggers where trigger_schema=database() and trigger_name='trg';
+create or replace trigger trg before update on t1 for each row set @a=3;
+select EVENT_MANIPULATION,EVENT_OBJECT_TABLE,ACTION_STATEMENT,ACTION_TIMING from information_schema.triggers where trigger_schema=database() and trigger_name='trg';
+create or replace trigger trg before delete on t1 for each row set @a=4;
+select EVENT_MANIPULATION,EVENT_OBJECT_TABLE,ACTION_STATEMENT,ACTION_TIMING from information_schema.triggers where trigger_schema=database() and trigger_name='trg';
+--error ER_CREATE_OR_REPLACE_TRG_EXISTS_ON_DIFFERENT_TABLE
+create or replace trigger trg before insert on t2 for each row set @a:=1;
+
+--error ER_NOT_SUPPORTED_YET
+create or replace trigger if not exists trg before insert on t2 for each row set @a:=1;
+
+drop trigger if exists trg;
+drop table t1;
+drop table t2;
+
+
+--echo create [or replace] trigger， oracle mode
+CREATE TABLE `t1` (
+  `id` int DEFAULT NULL,
+  `name` varchar(200) DEFAULT NULL
+);
+
+set sql_mode=oracle;
+delimiter //;
+CREATE  TRIGGER trg1 BEFORE insert
+ON t1 FOR EACH ROW
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.name:=  '-insert'||:NEW.name;
+    END IF;
+END //
+do sleep(0.01) //
+
+select EVENT_MANIPULATION,EVENT_OBJECT_TABLE,ACTION_STATEMENT,ACTION_TIMING from information_schema.triggers where trigger_schema=database() and trigger_name='trg1' //
+
+CREATE OR REPLACE TRIGGER trg1 BEFORE insert
+ON t1 FOR EACH ROW
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.name:=  '-insert'||:NEW.name||' (create-or-replace)';
+    END IF;
+END //
+do sleep(0.01) //
+select EVENT_MANIPULATION,EVENT_OBJECT_TABLE,ACTION_STATEMENT,ACTION_TIMING from information_schema.triggers where trigger_schema=database() and trigger_name='trg1' //
+
+delimiter ;//
+
+insert into t1 values(-1,'name1'),(-2,'name2'),(-3,'name3');
+
+select * from t1;
+
+drop trigger if exists trg1;
+drop table t1;
+
+

@@ -1,4 +1,5 @@
 /* Copyright (c) 2019, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,6 +34,7 @@ Clone Plugin: Client Status Interface
 #include <array>
 #include "my_systime.h"
 #include "plugin/clone/include/clone.h"
+#include "sql/clone_handler.h"
 
 THD *thd_get_current_thd();
 
@@ -73,6 +75,7 @@ class Table_pfs {
   void init_position(uint32_t id) {
     m_position = 0;
     m_empty = (id == 0);
+    m_rows = id;
   }
 
   /** Set cursor to next record.
@@ -197,7 +200,32 @@ class Status_pfs : public Table_pfs {
   int rnd_init() override;
 
   /** Number of rows in status table. Currently we keep last clone status. */
-  static const uint32_t S_NUM_ROWS = 1;
+  static const uint32_t S_NUM_ROWS = MAX_CLONE_NUM;
+
+  void read(uint32_t id) { m_data[id % MAX_CLONE_NUM].read(); }
+
+  void recover(uint32_t id) { m_data[id % MAX_CLONE_NUM].recover(); }
+
+  /** Write data to status file.
+  @param[in]	write_error	write error information. */
+  void write(uint32_t id, bool write_error) {
+    m_data[id % MAX_CLONE_NUM].write(write_error);
+  }
+
+  void begin(uint32_t id, THD *thd, const char *host, uint32_t port,
+             const char *destination) {
+    m_data[id % MAX_CLONE_NUM].begin(id, thd, host, port, destination);
+  }
+
+  void end(uint32_t id, uint32_t err_num, const char *err_mesg,
+           bool provisioning) {
+    m_data[id % MAX_CLONE_NUM].end(err_num, err_mesg, provisioning);
+  }
+
+  void update_lsn(uint32_t id, uint64_t start_lsn, uint64_t page_track_lsn,
+                  uint64_t end_lsn) {
+    m_data[id % MAX_CLONE_NUM].update_lsn(start_lsn, page_track_lsn, end_lsn);
+  }
 
   /** POD for the progress data. */
   struct Data {
@@ -246,6 +274,8 @@ class Status_pfs : public Table_pfs {
       m_start_time = my_micro_time();
       m_end_time = 0;
       m_state = STATE_STARTED;
+      m_page_track_lsn = 0;
+      m_end_lsn = 0;
       write(false);
     }
 
@@ -275,6 +305,13 @@ class Status_pfs : public Table_pfs {
     void update_binlog_position(const char *binlog_file, uint64_t position) {
       m_binlog_pos = position;
       strncpy(m_binlog_file, binlog_file, sizeof(m_binlog_file) - 1);
+    }
+
+    void update_lsn(uint64_t start_lsn, uint64_t page_track_lsn,
+                    uint64_t end_lsn) {
+      m_start_lsn = start_lsn;
+      m_page_track_lsn = page_track_lsn;
+      m_end_lsn = end_lsn;
     }
 
     /** Length of variable length character columns. */
@@ -315,11 +352,22 @@ class Status_pfs : public Table_pfs {
 
     /** Clone GTID set */
     std::string m_gtid_string;
+
+    /** clone start lsn */
+    uint64_t m_start_lsn{};
+
+    /** enable page track lsn which is the start lsn for next inc-clone */
+    uint64_t m_page_track_lsn{};
+
+    /** clone end lsn */
+    uint64_t m_end_lsn{};
   };
+
+  Data &get_data(uint32_t id) { return m_data[id]; }
 
  private:
   /** Current status data. */
-  Data m_data;
+  Data m_data[MAX_CLONE_NUM];
 };
 
 class Progress_pfs : public Table_pfs {
@@ -339,6 +387,29 @@ class Progress_pfs : public Table_pfs {
 
   /** Number of rows in progress table. Therea is one row for each stage. */
   static const uint32_t S_NUM_ROWS = NUM_STAGES - 1;
+
+  void read(uint32_t id) { m_data[id % MAX_CLONE_NUM].read(); }
+
+  void init_stage(uint32_t id, const char *data_dir) {
+    m_data[id % MAX_CLONE_NUM].init_stage(data_dir);
+  }
+
+  void begin_stage(uint32_t id, const char *data_dir, uint64_t threads,
+                   uint64_t estimate, bool is_inc_clone) {
+    m_data[id % MAX_CLONE_NUM].begin_stage(id, data_dir, threads, estimate,
+                                           is_inc_clone);
+  }
+
+  void end_stage(uint32_t id, bool failed, const char *data_dir) {
+    m_data[id % MAX_CLONE_NUM].end_stage(failed, data_dir);
+  }
+
+  void update_data(uint32_t id, uint64_t data, uint64_t network,
+                   uint32_t data_speed, uint32_t net_speed,
+                   uint32_t num_workers) {
+    m_data[id % MAX_CLONE_NUM].update_data(data, network, data_speed, net_speed,
+                                           num_workers);
+  }
 
   /** POD for the progress data. */
   struct Data {
@@ -394,10 +465,31 @@ class Progress_pfs : public Table_pfs {
     @param[in]	id		clone ID
     @@param[in]	data_dir	data directory for write.
     @param[in]	threads		current number of concurrent threads
-    @param[in]	estimate	estimated data bytes for stage */
+    @param[in]	estimate	estimated data bytes for stage
+    @param[in]	is_inc_clone	is incremnet clone */
     void begin_stage(uint32_t id, const char *data_dir, uint64_t threads,
-                     uint64_t estimate) {
+                     uint64_t estimate, bool is_inc_clone) {
       next_stage(m_current_stage);
+
+      if (is_inc_clone && m_current_stage == STAGE_FILE_COPY) {
+        m_states[m_current_stage] = STATE_SUCCESS;
+        m_id = id;
+        m_threads[m_current_stage] = threads;
+
+        /* Set time at beginning. */
+        m_start_time[m_current_stage] = my_micro_time();
+        m_end_time[m_current_stage] = my_micro_time();
+
+        /* Reset progress data at the beginning of stage. */
+        m_estimate[m_current_stage] = 0;
+        m_complete[m_current_stage] = STATE_SUCCESS;
+        m_network[m_current_stage] = 0;
+        m_data_speed = 0;
+        m_network_speed = 0;
+        write(data_dir);
+        next_stage(m_current_stage);
+      }
+
       if (m_current_stage == STAGE_NONE) {
         assert(false); /* purecov: inspected */
         return;
@@ -478,7 +570,7 @@ class Progress_pfs : public Table_pfs {
 
  private:
   /** Current progress data. */
-  Data m_data;
+  Data m_data[MAX_CLONE_NUM];
 };
 }  // namespace myclone
 

@@ -1511,7 +1511,7 @@ call p1;
 ERROR 42S02: Table 'test.stu_record' doesn't exist
 drop procedure p1;
 #
-# test of error ER_SP_MISMATCH_RECORD_VAR
+# test of error ER_UDT_INCONS_DATATYPES
 #
 CREATE or replace PROCEDURE p1() as
 type stu_record is record(
@@ -1530,10 +1530,10 @@ stu_record_val.stu_record_val1 := result;
 end;
 $$
 call p1;
-ERROR HY000: The variable: result is not record type.
+ERROR HY000: inconsistent datatypes: udt type and non udt type
 drop procedure p1;
 #
-# test of error ER_SP_MISMATCH_RECORD_VAR
+# test of error ER_UDT_INCONS_DATATYPES
 #
 CREATE or replace PROCEDURE p1() as
 type stu_record is record(
@@ -1552,7 +1552,7 @@ stu_record_val.stu_record_val1 := result;
 end;
 $$
 call p1;
-ERROR HY000: The variable: result is not record type.
+ERROR HY000: inconsistent datatypes: udt type and non udt type
 drop procedure p1;
 #
 # test of set record table
@@ -1654,7 +1654,7 @@ $$
 call p1;
 stu_record_val.stu_record_val1(0).name1	stu_record_val.stu_record_val1(1).name1	stu_record_val.stu_record_val2(0).name1	stu_record_val.stu_record_val2(1).name1
 aaa1	aaa2	bbb1	bbb2
-ERROR HY000: inconsistent datatypes: udt type and non udt type
+ERROR HY000: inconsistent datatypes: expected 'test'.'tklist' got 'test'.'stu_record'
 drop procedure p1;
 #
 # test of exception NO_DATA_FOUND

@@ -1,7 +1,7 @@
 # Prepare for creating Encrypted Table
 # create bootstrap file
 # Create and start mysqld with keyring plugin.
-# restart: --datadir=ENCRYPT_DATADIR --early-plugin-load=keyring_file=KEYRING_PLUGIN --keyring_file_data=MYSQL_TMP_DIR/mysecret_keyring
+# restart: --datadir=ENCRYPT_DATADIR --lower_case_table_names=CASE_TABLE_NAME --early-plugin-load=keyring_file=KEYRING_PLUGIN --keyring_file_data=MYSQL_TMP_DIR/mysecret_keyring
 ## Install plugin
 INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
 CREATE TABLE t1(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB);
@@ -148,16 +148,16 @@ SET GLOBAL clone_max_concurrency = 8;
 CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Completed	0
+0	Completed	0
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
-1	DROP DATA	Completed
-1	FILE COPY	Completed
-1	PAGE COPY	Completed
-1	REDO COPY	Completed
-1	FILE SYNC	Completed
-1	RESTART	Not Started
-1	RECOVERY	Not Started
+0	DROP DATA	Completed
+0	FILE COPY	Completed
+0	PAGE COPY	Completed
+0	REDO COPY	Completed
+0	FILE SYNC	Completed
+0	RESTART	Not Started
+0	RECOVERY	Not Started
 # Restart cloned database
 # restart: --datadir=CLONE_DATADIR --early-plugin-load=keyring_file=KEYRING_PLUGIN --keyring_file_data=MYSQL_TMP_DIR/mysecret_keyring
 SHOW CREATE TABLE t1;

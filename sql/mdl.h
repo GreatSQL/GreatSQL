@@ -1,7 +1,7 @@
 #ifndef MDL_H
 #define MDL_H
 /* Copyright (c) 2009, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -397,6 +397,8 @@ struct MDL_key {
      - RESOURCE_GROUPS is for resource groups.
      - FOREIGN_KEY is for foreign key names.
      - CHECK_CONSTRAINT is for check constraint names.
+
+     - MASKING_CACHE is for check mask fieled
     Note that requests waiting for user-level locks get special
     treatment - waiting is aborted if connection to client is lost.
   */
@@ -422,6 +424,7 @@ struct MDL_key {
     FOREIGN_KEY,
     CHECK_CONSTRAINT,
     BACKUP_TABLES, /* Percona LOCK TABLES FOR BACKUP */
+    MASKING_CACHE,
     /* This should be the last ! */
     NAMESPACE_END
   };

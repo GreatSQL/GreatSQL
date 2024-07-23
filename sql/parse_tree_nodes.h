@@ -1,5 +1,5 @@
 /* Copyright (c) 2013, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -152,6 +152,19 @@ bool contextualize_nodes(Mem_root_array_YY<Node_type *> nodes,
   return false;
 }
 
+enum PT_root_type { ROOT_DEFAULT = 0, ROOT_SELECT_STMT, ROOT_EXPLAIN_STMT };
+
+enum PT_qe_body_type {
+  PT_QE_BODY_DEFAULT = 0,
+  PT_QUERY_SPEC,
+  PT_TABLE_VALUE,
+  PT_QUERY_EXPRESSION,
+  PT_LOCKING,
+  PT_SET_OP
+};
+
+enum PT_setop_type { PT_UNION = 0, PT_EXCEPT, PT_INTERSECT };
+
 /**
   Base class for all top-level nodes of SQL statements
 
@@ -167,6 +180,7 @@ class Parse_tree_root {
 
  public:
   virtual Sql_cmd *make_cmd(THD *thd) = 0;
+  virtual PT_root_type type() { return ROOT_DEFAULT; }
 };
 
 class PT_table_ddl_stmt_base : public Parse_tree_root {
@@ -396,12 +410,29 @@ class PT_limit_clause : public Parse_tree_node {
   PT_limit_clause(const Limit_options &limit_options_arg)
       : limit_options(limit_options_arg) {}
 
+  Limit_options get_limit_options() { return limit_options; }
   bool contextualize(Parse_context *pc) override;
   friend class PT_query_expression;
 };
 
 class PT_cross_join;
 class PT_joined_table;
+
+enum PT_table_reference_type {
+  PT_REF_DEFAULT,
+  PT_FACTOR_TABLE,
+  PT_FACTOR_FUNCTION,
+  PT_REF_LIST_PARENS,
+  PT_DERIVED,
+  PT_FACTOR_JOINED,
+  PT_JOINED,
+  PT_JOINED_TABLE_ON,
+  PT_CROSS_JOIN,
+  PT_JOIN_TABLE_USING,
+  PT_SEQUENCE,
+  PT_RECORD,
+  PT_UDT
+};
 
 class PT_table_reference : public Parse_tree_node {
  public:
@@ -420,6 +451,7 @@ class PT_table_reference : public Parse_tree_node {
     @return The new top-level join.
   */
   virtual PT_joined_table *add_cross_join(PT_cross_join *cj);
+  virtual PT_table_reference_type type() const = 0;
 };
 
 class PT_table_factor_table_ident : public PT_table_reference {
@@ -441,6 +473,9 @@ class PT_table_factor_table_ident : public PT_table_reference {
         opt_key_definition(opt_key_definition_arg) {}
 
   bool contextualize(Parse_context *pc) override;
+  PT_table_reference_type type() const override { return PT_FACTOR_TABLE; }
+  Table_ident *get_table_ident() { return table_ident; }
+  const char *get_table_alias() { return opt_table_alias; }
 };
 
 class PT_json_table_column : public Parse_tree_node {
@@ -461,6 +496,7 @@ class PT_table_factor_function : public PT_table_reference {
         m_table_alias(table_alias) {}
 
   bool contextualize(Parse_context *pc) override;
+  PT_table_reference_type type() const override { return PT_FACTOR_FUNCTION; }
 
  private:
   Item *m_expr;
@@ -477,6 +513,7 @@ class PT_table_sequence_function : public PT_table_reference {
       : m_expr(expr), m_table_alias(table_alias) {}
 
   bool contextualize(Parse_context *pc) override;
+  PT_table_reference_type type() const override { return PT_SEQUENCE; }
 
  private:
   Item *m_expr;
@@ -492,6 +529,7 @@ class PT_table_record_function : public PT_table_reference {
       : m_table_alias(table_alias), m_forall_i(forall_i) {}
 
   bool contextualize(Parse_context *pc) override;
+  PT_table_reference_type type() const override { return PT_RECORD; }
 
  private:
   LEX_STRING m_table_alias;
@@ -506,6 +544,7 @@ class PT_table_udt_function : public PT_table_reference {
       : m_expr(expr), m_table_alias(table_alias) {}
 
   bool contextualize(Parse_context *pc) override;
+  PT_table_reference_type type() const override { return PT_UDT; }
 
  private:
   Item *m_expr;
@@ -523,6 +562,7 @@ class PT_table_reference_list_parens : public PT_table_reference {
       : table_list(table_list) {}
 
   bool contextualize(Parse_context *pc) override;
+  PT_table_reference_type type() const override { return PT_REF_LIST_PARENS; }
 };
 
 class PT_derived_table : public PT_table_reference {
@@ -534,6 +574,10 @@ class PT_derived_table : public PT_table_reference {
                    Create_col_name_list *column_names);
 
   bool contextualize(Parse_context *pc) override;
+  PT_table_reference_type type() const override { return PT_DERIVED; }
+  PT_subquery *get_subquery() { return m_subquery; }
+  const char *get_table_alias() { return m_table_alias; }
+  const Create_col_name_list get_column_names() { return column_names; }
 
  private:
   bool m_lateral;
@@ -551,6 +595,7 @@ class PT_table_factor_joined_table : public PT_table_reference {
       : m_joined_table(joined_table) {}
 
   bool contextualize(Parse_context *pc) override;
+  PT_table_reference_type type() const override { return PT_FACTOR_JOINED; }
 
  private:
   PT_joined_table *m_joined_table;
@@ -559,11 +604,14 @@ class PT_table_factor_joined_table : public PT_table_reference {
 class PT_joined_table : public PT_table_reference {
   typedef PT_table_reference super;
 
- protected:
+ public:
+  bool swapped{false};
   PT_table_reference *m_left_pt_table;
-  POS m_join_pos;
   PT_joined_table_type m_type;
   PT_table_reference *m_right_pt_table;
+
+ protected:
+  POS m_join_pos;
 
   Table_ref *m_left_table_ref{nullptr};
   Table_ref *m_right_table_ref{nullptr};
@@ -572,9 +620,9 @@ class PT_joined_table : public PT_table_reference {
   PT_joined_table(PT_table_reference *tab1_node_arg, const POS &join_pos_arg,
                   PT_joined_table_type type, PT_table_reference *tab2_node_arg)
       : m_left_pt_table(tab1_node_arg),
-        m_join_pos(join_pos_arg),
         m_type(type),
-        m_right_pt_table(tab2_node_arg) {
+        m_right_pt_table(tab2_node_arg),
+        m_join_pos(join_pos_arg) {
     static_assert(is_single_bit(JTT_INNER), "not a single bit");
     static_assert(is_single_bit(JTT_STRAIGHT), "not a single bit");
     static_assert(is_single_bit(JTT_NATURAL), "not a single bit");
@@ -604,6 +652,10 @@ class PT_joined_table : public PT_table_reference {
   }
 
   bool contextualize(Parse_context *pc) override;
+  PT_table_reference_type type() const override { return PT_JOINED; }
+  PT_joined_table_type join_type() { return m_type; }
+  PT_table_reference *get_tab1() { return m_left_pt_table; }
+  PT_table_reference *get_tab2() { return m_right_pt_table; }
 
   /// This class is being inherited, it should thus be abstract.
   ~PT_joined_table() override = 0;
@@ -623,6 +675,7 @@ class PT_cross_join : public PT_joined_table {
                 PT_table_reference *tab2_node_arg)
       : PT_joined_table(tab1_node_arg, join_pos_arg, Type_arg, tab2_node_arg) {}
 
+  PT_table_reference_type type() const override { return PT_CROSS_JOIN; }
   bool contextualize(Parse_context *pc) override;
 };
 
@@ -639,7 +692,9 @@ class PT_joined_table_on : public PT_joined_table {
     m_full_join = type & JTT_FULL;
   }
 
+  PT_table_reference_type type() const override { return PT_JOINED_TABLE_ON; }
   bool contextualize(Parse_context *pc) override;
+  Item *on_condition() const { return on; }
 };
 
 class PT_joined_table_using : public PT_joined_table {
@@ -661,7 +716,9 @@ class PT_joined_table_using : public PT_joined_table {
       : PT_joined_table_using(tab1_node_arg, join_pos_arg, type, tab2_node_arg,
                               nullptr) {}
 
+  PT_table_reference_type type() const override { return PT_JOIN_TABLE_USING; }
   bool contextualize(Parse_context *pc) override;
+  List<String> *get_using_list() { return using_fields; }
 };
 
 class PT_group : public Parse_tree_node {
@@ -675,6 +732,8 @@ class PT_group : public Parse_tree_node {
       : group_list(group_list_arg), olap(olap_arg) {}
 
   bool contextualize(Parse_context *pc) override;
+  PT_order_list *get_group_list() { return group_list; }
+  olap_type get_olap_type() { return olap; }
 };
 
 class PT_order : public Parse_tree_node {
@@ -858,6 +917,8 @@ class PT_query_expression_body : public Parse_tree_node {
 
   virtual bool is_table_value_constructor() const = 0;
   virtual PT_insert_values_list *get_row_value_list() const = 0;
+
+  virtual PT_qe_body_type type() const = 0;
 };
 
 class PT_set_scoped_system_variable : public Parse_tree_node {
@@ -1549,6 +1610,16 @@ class PT_query_specification : public PT_query_primary {
 
   bool is_table_value_constructor() const override { return false; }
   PT_insert_values_list *get_row_value_list() const override { return nullptr; }
+  PT_item_list *get_item_list() { return item_list; }
+  Mem_root_array_YY<PT_table_reference *> get_from_clause() {
+    return from_clause;
+  }
+  Item *get_where_clause() { return opt_where_clause; }
+  PT_group *get_group_clause() { return opt_group_clause; }
+  Item *get_having_clause() { return opt_having_clause; }
+  Query_options get_options() { return options; }
+
+  PT_qe_body_type type() const override { return PT_QUERY_SPEC; }
 
  private:
   bool is_implicit_from_clause() const { return m_is_from_clause_implicit; }
@@ -1577,6 +1648,8 @@ class PT_table_value_constructor : public PT_query_primary {
   PT_insert_values_list *get_row_value_list() const override {
     return row_value_list;
   }
+
+  PT_qe_body_type type() const override { return PT_TABLE_VALUE; }
 };
 
 class PT_explicit_table : public PT_query_specification {
@@ -1672,6 +1745,11 @@ class PT_query_expression final : public PT_query_expression_body {
     return m_body->get_row_value_list();
   }
 
+  PT_qe_body_type type() const override { return PT_QUERY_EXPRESSION; }
+  PT_query_expression_body *get_body() { return m_body; }
+  PT_order *get_order() { return m_order; }
+  PT_limit_clause *get_limit() { return m_limit; }
+
  private:
   /**
     Contextualizes the order and limit clauses, re-interpreting them according
@@ -1728,6 +1806,8 @@ class PT_locking final : public PT_query_expression_body {
     return m_query_expression->get_row_value_list();
   }
 
+  PT_qe_body_type type() const override { return PT_LOCKING; }
+
  private:
   PT_query_expression_body *const m_query_expression;
   PT_locking_clause_list *const m_locking_clauses;
@@ -1783,6 +1863,14 @@ class PT_set_operation : public PT_query_expression_body {
   bool is_table_value_constructor() const override { return false; }
   PT_insert_values_list *get_row_value_list() const override { return nullptr; }
 
+  PT_query_expression_body *get_m_lhs() { return m_lhs; }
+  PT_query_expression_body *get_m_rhs() { return m_rhs; }
+  bool get_is_distinct() { return m_is_distinct; }
+
+  PT_qe_body_type type() const override { return PT_SET_OP; }
+
+  virtual PT_setop_type optype() const = 0;
+
  protected:
   bool contextualize_setop(Parse_context *pc, Query_term_type setop_type,
                            Surrounding_context context);
@@ -1799,6 +1887,7 @@ class PT_union : public PT_set_operation {
  public:
   using PT_set_operation::PT_set_operation;
   bool contextualize(Parse_context *pc) override;
+  PT_setop_type optype() const override { return PT_UNION; }
 };
 
 class PT_except : public PT_set_operation {
@@ -1807,6 +1896,7 @@ class PT_except : public PT_set_operation {
  public:
   using PT_set_operation::PT_set_operation;
   bool contextualize(Parse_context *pc) override;
+  PT_setop_type optype() const override { return PT_EXCEPT; }
 };
 
 class PT_intersect : public PT_set_operation {
@@ -1815,6 +1905,7 @@ class PT_intersect : public PT_set_operation {
  public:
   using PT_set_operation::PT_set_operation;
   bool contextualize(Parse_context *pc) override;
+  PT_setop_type optype() const override { return PT_INTERSECT; }
 };
 
 class PT_select_stmt : public Parse_tree_root {
@@ -1855,6 +1946,12 @@ class PT_select_stmt : public Parse_tree_root {
   PT_query_expression_body *m_qe;
   PT_into_destination *m_into;
   const bool m_has_trailing_locking_clauses;
+
+ public:
+  PT_root_type type() override { return ROOT_SELECT_STMT; }
+  PT_query_expression_body *get_qe() { return m_qe; }
+  PT_into_destination *get_into_destination() { return m_into; }
+  bool has_trailing_locking_clauses() { return m_has_trailing_locking_clauses; }
 };
 
 /**
@@ -3143,7 +3240,13 @@ class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
         opt_query_expression(opt_query_expression),
         opt_like_clause(nullptr),
         m_udt_ident(nullptr),
-        m_column_names() {}
+        m_column_names() {
+    /*
+      dblink unsupport create xxx table xx@xx
+    */
+    if (table_name->dblink.length)
+      my_error(ER_DBLINK_NOT_SUPPORTED_YET, MYF(0));
+  }
 
   PT_create_table_stmt(
       MEM_ROOT *mem_root, PT_hint_list *opt_hints, bool is_temporary,
@@ -5741,6 +5844,8 @@ class PT_explain final : public Parse_tree_root {
         m_explainable_stmt(explainable_stmt) {}
 
   Sql_cmd *make_cmd(THD *thd) override;
+  PT_root_type type() override { return ROOT_EXPLAIN_STMT; }
+  Parse_tree_root *get_stmt() { return m_explainable_stmt; }
 
  private:
   const Explain_format_type m_format;

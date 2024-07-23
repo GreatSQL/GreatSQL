@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -65,6 +66,23 @@ void dict_hdr_flush_row_id(void);
 /** Returns a new row id.
  @return the new id */
 static inline row_id_t dict_sys_get_new_row_id(void);
+
+/** Allocate a new interval of row ids and return a new row id.
+When size of current interval is zero, allocate a new interval of row ids and
+return min row id in the new interval;
+When size of current interval is greater than zero, return min row id in current
+interval.
+Calling this function in parallel loading case, can isolate row ids of different
+threads to decrease cost of modifying BTree.
+The format of interval is [left, right).
+@param[in, out]     size      size of interval
+@param[in, out]     left      min of interval
+@param[in, out]     right     max of interval
+@return the new id */
+static inline row_id_t dict_sys_get_new_row_id_with_interval(uint64 &size,
+                                                             uint64 &left,
+                                                             uint64 &right);
+
 /** Reads a row id from a record or other 6-byte stored form.
  @return row id */
 static inline row_id_t dict_sys_read_row_id(
@@ -363,6 +381,8 @@ constexpr uint32_t DICT_FLD_LEN_FLAGS = 4;
 two) is assigned, the field DICT_HDR_ROW_ID on the dictionary header page is
 updated */
 constexpr uint32_t DICT_HDR_ROW_ID_WRITE_MARGIN = 256;
+
+constexpr uint32_t INTERVAL_OF_ROW_ID_MAX_SIZE = 1 << 12;
 
 #ifndef UNIV_HOTBACKUP
 #include "dict0boot.ic"

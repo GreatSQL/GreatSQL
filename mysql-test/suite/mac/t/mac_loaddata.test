@@ -1,0 +1,120 @@
+--source ../include/mac_row_policy_create.inc
+
+connect (master,localhost,root,,);
+--connection master
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+create database db;
+use db;
+
+create table t1(c1 int, c2 int);
+create table t2(c1 int, c2 int);
+create table t3(c1 int, c2 int, c3 int);
+create table t4(c1 int, c2 int, c3 int, c4 int);
+
+insert into t2 values(1, 1),(2, 2);
+insert into t3 values(1, 1, 1),(2, 2, 2);
+insert into t4 values(1, 1, 1, 1),(2, 2, 2, 2);
+
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3:G1', 0);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 1);
+
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval set @mac_data2='$MYSQLTEST_VARDIR/data2.txt';
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval set @mac_data3='$MYSQLTEST_VARDIR/data3.txt';
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval set @mac_data4='$MYSQLTEST_VARDIR/data4.txt';
+
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/data2.txt' FROM t2;
+
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/data3.txt' FROM t3;
+
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval SELECT * INTO OUTFILE '$MYSQLTEST_VARDIR/data4.txt' FROM t4;
+
+--echo [there is no policy on user]
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--error ER_MAC_ROW_WRITE_DEINED_ERROR
+eval load data infile '$MYSQLTEST_VARDIR/data3.txt' into table t1;
+
+
+call sys_mac.mac_set_user_priv('root', 'localhost', 'P1', 'full');
+call sys_mac.mac_set_user_priv('root', 'localhost', 'P2', 'full');
+
+
+connect (conn1,localhost,root,,);
+--connection conn1
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+--echo [have write]
+use db;
+
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--error ER_WARN_TOO_FEW_RECORDS
+eval load data infile '$MYSQLTEST_VARDIR/data2.txt' into table t1;
+
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval load data infile '$MYSQLTEST_VARDIR/data2.txt' into table t1(c1, c2);
+select * from t1 order by c1;
+truncate table t1;
+
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval load data infile '$MYSQLTEST_VARDIR/data3.txt' into table t1;
+
+select * from t1 order by c1;
+
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+--error ER_WARN_TOO_MANY_RECORDS
+eval load data infile '$MYSQLTEST_VARDIR/data4.txt' into table t1;
+
+truncate table t1;
+call sys_mac.mac_drop_user_policy('root','localhost', 'P1');
+call sys_mac.mac_drop_user_policy('root','localhost', 'P2');
+
+--disconnect conn1
+--connection master
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+call sys_mac.mac_apply_user_policy('root','localhost','P1','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+call sys_mac.mac_apply_user_policy('root','localhost','P2','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+
+connect (conn2,localhost,root,,);
+--connection conn2
+
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+
+use db;
+select mac_get_session_labels('P1');
+select mac_get_session_labels('P2');
+--replace_result $MYSQLTEST_VARDIR tmp_dir
+eval load data infile '$MYSQLTEST_VARDIR/data2.txt' into table t1(c1, c2);
+select c1, c2, mac_label_to_char(_gdb_mac_policy_1), mac_label_to_char(_gdb_mac_policy_2) from t1;
+
+--exec rm $MYSQLTEST_VARDIR/data2.txt
+--exec rm $MYSQLTEST_VARDIR/data3.txt
+--exec rm $MYSQLTEST_VARDIR/data4.txt
+
+call sys_mac.mac_drop_row_policy('db', 't1', 'P1');
+call sys_mac.mac_drop_row_policy('db', 't1', 'P2');
+
+--disconnect conn2
+--connection master
+
+drop database db;
+--source ../include/mac_destory.inc
+disconnect master;
+

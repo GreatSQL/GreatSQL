@@ -1,4 +1,5 @@
 /* Copyright (c) 2007, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -163,6 +164,8 @@ struct mysql_event_connection {
   MYSQL_LEX_CSTRING user;
   /** Priv user name. */
   MYSQL_LEX_CSTRING priv_user;
+  /** Priv host. */
+  MYSQL_LEX_CSTRING priv_host;
   /** External user name. */
   MYSQL_LEX_CSTRING external_user;
   /** Proxy user used for this connection. */

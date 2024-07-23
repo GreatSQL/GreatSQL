@@ -1,0 +1,374 @@
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+drop database if exists mac;
+# test only the object have label #
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L1::');
+select * from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+insert into mac.t1 values(2, 2);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 2 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 3;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+#test only the user have label #
+call sys_mac.mac_apply_user_policy('root','localhost','P1','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+update mac.t1 set c2 = 2 where c1 = 1;
+update mac.t1 set c2 = 3;
+delete from mac.t1 where c1 = 1;
+delete from mac.t1;
+drop table mac.t1;
+drop database mac;
+#############################################################
+#test level#
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L4:C3:G1');
+select * from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+insert into mac.t1 values(2, 2);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 2 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 3;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+update mac.t1 set c2 = 2 where c1 = 1;
+update mac.t1 set c2 = 3;
+delete from mac.t1 where c1 = 1;
+delete from mac.t1;
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L2:C3:G1');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+update mac.t1 set c2 = 2 where c1 = 1;
+update mac.t1 set c2 = 3;
+delete from mac.t1 where c1 = 1;
+delete from mac.t1;
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L1:C3:G1');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 2 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 3;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+#test compartment#
+call sys_mac.mac_apply_database_policy('mac', 'P1','L3:C2,C3,C4:G1');
+select * from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+insert into mac.t1 values(2, 2);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 2 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 3;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3,C4:G1');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+update mac.t1 set c2 = 2 where c1 = 1;
+update mac.t1 set c2 = 3;
+delete from mac.t1 where c1 = 1;
+delete from mac.t1;
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+update mac.t1 set c2 = 2 where c1 = 1;
+update mac.t1 set c2 = 3;
+delete from mac.t1 where c1 = 1;
+delete from mac.t1;
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C4:');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 2 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 3;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3,C4:');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 2 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 3;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+update mac.t1 set c2 = 2 where c1 = 1;
+update mac.t1 set c2 = 3;
+delete from mac.t1 where c1 = 1;
+delete from mac.t1;
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C2:');
+select * from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+insert into mac.t1 values(2, 2);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 2 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 3;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+#test group#
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G2');
+select * from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+insert into mac.t1 values(2, 2);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 2 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 3;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1_1_1');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+update mac.t1 set c2 = 2 where c1 = 1;
+update mac.t1 set c2 = 3;
+delete from mac.t1 where c1 = 1;
+delete from mac.t1;
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1,G2');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+update mac.t1 set c2 = 2 where c1 = 1;
+update mac.t1 set c2 = 3;
+delete from mac.t1 where c1 = 1;
+delete from mac.t1;
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1_1_1,G2_2_1');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+update mac.t1 set c2 = 2 where c1 = 1;
+update mac.t1 set c2 = 3;
+delete from mac.t1 where c1 = 1;
+delete from mac.t1;
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3::G1');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+update mac.t1 set c2 = 2 where c1 = 1;
+update mac.t1 set c2 = 3;
+delete from mac.t1 where c1 = 1;
+delete from mac.t1;
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3::');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+update mac.t1 set c2 = 2 where c1 = 1;
+update mac.t1 set c2 = 3;
+delete from mac.t1 where c1 = 1;
+delete from mac.t1;
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+#############################################################
+#test tow policy#
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_database_policy('mac', 'P2', 'L3:C3:G1');
+select * from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+insert into mac.t1 values(2, 2);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 2 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 3;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+call sys_mac.mac_drop_database_policy('mac', 'P2');
+#############################################################
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+call sys_mac.mac_apply_user_policy('root','localhost','P2','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3:G1');
+call sys_mac.mac_apply_database_policy('mac', 'P2', 'L3:C3:G1');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+update mac.t1 set c2 = 2 where c1 = 1;
+update mac.t1 set c2 = 3;
+delete from mac.t1 where c1 = 1;
+delete from mac.t1;
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+call sys_mac.mac_drop_database_policy('mac', 'P2');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3,C4:');
+call sys_mac.mac_apply_database_policy('mac', 'P2', 'L3:C3:G1');
+select * from mac.t1;
+c1	c2
+1	1
+insert into mac.t1 values(2, 2);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 2 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 3;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+call sys_mac.mac_drop_database_policy('mac', 'P2');
+#############################################################
+call sys_mac.mac_apply_database_policy('mac', 'P1', 'L3:C3,C4:G1');
+call sys_mac.mac_apply_database_policy('mac', 'P2', 'L3:C2,C3:G1');
+select * from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+insert into mac.t1 values(2, 2);
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 2 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+update mac.t1 set c2 = 3;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1 where c1 = 1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+delete from mac.t1;
+ERROR HY000: Mac denied for user 'root'@'localhost' to database 'mac'
+drop table mac.t1;
+drop database mac;
+call sys_mac.mac_drop_database_policy('mac', 'P1');
+call sys_mac.mac_drop_database_policy('mac', 'P2');
+#############################################################

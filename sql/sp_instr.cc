@@ -1,5 +1,5 @@
 /* Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -459,11 +459,13 @@ bool sp_lex_instr::reset_lex_and_exec_core(THD *thd, uint *nextp,
     } else {
       DEBUG_SYNC(thd, "sp_lex_instr_before_exec_core");
       error = exec_core(thd, nextp);
-
-      thd->lex->reset_rownum_func();
-
       DBUG_PRINT("info", ("exec_core returned: %d", error));
     }
+  }
+
+  if (m_lex->current_query_block() &&
+      m_lex->current_query_block()->sequences_counter) {
+    m_lex->current_query_block()->sequences_counter->Clear();
   }
 
   // Pop SP_instr_error_handler error handler.
@@ -706,7 +708,8 @@ bool sp_lex_instr::validate_lex_and_execute_core(THD *thd, uint *nextp,
 
   while (true) {
     DBUG_EXECUTE_IF("simulate_bug18831513", { invalidate(); });
-    if (is_invalid() || (m_lex->has_udf() && !m_first_execution)) {
+    if (is_invalid() ||
+        ((m_lex->has_udf() || m_lex->has_udt_table()) && !m_first_execution)) {
       free_lex();
       LEX *lex = parse_expr(thd, thd->sp_runtime_ctx->sp);
 
@@ -1075,12 +1078,6 @@ void sp_instr_set::print(const THD *thd, String *str) {
 ///////////////////////////////////////////////////////////////////////////
 // sp_instr_set_row_field implementation.
 ///////////////////////////////////////////////////////////////////////////
-
-#ifdef HAVE_PSI_INTERFACE
-PSI_statement_info sp_instr_set_row_field::psi_info = {0, "set_row_field", 0,
-                                                       PSI_DOCUMENT_ME};
-#endif
-
 bool sp_instr_set_row_field::exec_core(THD *thd, uint *nextp) {
   sp_rcontext *ctx = get_rcontext(thd);
   *nextp = get_ip() + 1;
@@ -1116,6 +1113,46 @@ void sp_instr_set_row_field::print(const THD *thd, String *str) {
   qs_append(']', str);
   qs_append(' ', str);
   m_value_item->print(thd, str, QT_TO_ARGUMENT_CHARSET);
+}
+
+///////////////////////////////////////////////////////////////////////////
+// sp_instr_setup_row_field implementation.
+///////////////////////////////////////////////////////////////////////////
+
+#ifdef HAVE_PSI_INTERFACE
+PSI_statement_info sp_instr_setup_row_field::psi_info = {0, "setup_row_field",
+                                                         0, PSI_DOCUMENT_ME};
+#endif
+
+bool sp_instr_setup_row_field::execute(THD *thd, uint *nextp) {
+  sp_rcontext *ctx = thd->sp_runtime_ctx;
+  *nextp = get_ip() + 1;
+  Query_arena old_arena;
+  thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
+  Item *item = ctx->get_item(m_spv->offset);
+  sp_variable *spv_last =
+      ctx->search_variable(m_spv->name.str, m_spv->name.length);
+  bool rc = true;
+  Item_field_row_table *item_table = dynamic_cast<Item_field_row_table *>(item);
+  if (item_table) {
+    rc = item_table->row_table_create_items(
+        thd, spv_last->field_def.ora_record.row_field_table_definitions());
+  } else {
+    rc = item->row_create_items(
+        thd, spv_last->field_def.ora_record.row_field_definitions());
+  }
+  thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+  return rc;
+}
+
+void sp_instr_setup_row_field::print(const THD *, String *str) {
+  /* set name@offset ... */
+  size_t rsrv = SP_INSTR_UINT_MAXLEN + m_spv->name.length + 18;
+  if (str->reserve(rsrv)) return;
+  qs_append(STRING_WITH_LEN("setup_row_field "), str);
+  qs_append(m_spv->name.str, m_spv->name.length, str);
+  qs_append('@', str);
+  qs_append(m_spv->offset, str);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1683,6 +1720,15 @@ bool sp_instr_goto::execute(THD *thd, uint *nextp) {
 }
 
 ///////////////////////////////////////////////////////////////////////////
+// sp_instr_continue implementation.
+///////////////////////////////////////////////////////////////////////////
+
+#ifdef HAVE_PSI_INTERFACE
+PSI_statement_info sp_instr_continue::psi_info = {0, "continue", 0,
+                                                  PSI_DOCUMENT_ME};
+#endif
+
+///////////////////////////////////////////////////////////////////////////
 // sp_instr_hreturn implementation.
 ///////////////////////////////////////////////////////////////////////////
 
@@ -1776,83 +1822,19 @@ bool sp_instr_cpush::execute(THD *thd, uint *nextp) {
   if (!(thd->variables.sql_mode & MODE_ORACLE)) return rc;
 
   // for cursor return type save the structure.
-  return copy_structure(thd, c, nextp);
-}
-
-bool sp_instr_cpush::copy_structure(THD *thd, sp_cursor *c, uint *nextp) {
   sp_pcursor *pcursor = m_parsing_ctx->find_cursor_parameters(m_cursor_idx);
   if (!pcursor) {
     my_error(ER_SP_CURSOR_MISMATCH, MYF(0), "cursor");
     return true;
   }
-  Query_arena old_arena;
   /// for cursor return type
   if (c->m_result.get_return_table()) return false;
-
-  if (pcursor->get_table_ref() || pcursor->get_row_definition_list() ||
-      pcursor->get_cursor_rowtype_offset() != -1) {
-    thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
-
-    if (pcursor->get_table_ref()) {
-      List<Create_field> defs;
-      if (pcursor->get_table_ref()->resolve_table_rowtype_ref(thd, defs))
-        goto error;
-      if (c->make_return_table(thd, &defs)) goto error;
-      thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
-    } else if (pcursor->get_row_definition_list()) {
-      List<Create_field> *defs_tmp = dynamic_cast<List<Create_field> *>(
-          pcursor->get_row_definition_list());
-      if (c->make_return_table(thd, defs_tmp)) goto error;
-      thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
-    } else if (pcursor->get_cursor_rowtype_offset() != -1) {
-      sp_cursor *c_return =
-          thd->sp_runtime_ctx->get_cursor(pcursor->get_cursor_rowtype_offset());
-      if (c_return) {
-        thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
-        if (c_return->m_result.get_return_table()) {
-          c->set_return_table_from_cursor(c_return);
-          return false;
-        } else {
-          // it needs to open the static cursor to get the structure.
-          if (copy_structure_from_other_cursor(thd, nextp, c_return, c))
-            return true;
-        }
-      } else {  // it's type is ref cursor
-        thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
-        sp_pcursor *pcursor_def = m_parsing_ctx->find_cursor_parameters(
-            pcursor->get_cursor_rowtype_offset());
-        if (c->set_return_table_from_pcursor(thd, pcursor_def)) goto error;
-        return false;
-      }
-    }
-  }
-  return false;
-error:
-  thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
-  return true;
-}
-// open static cursor to get the structure.
-bool sp_instr_cpush::copy_structure_from_other_cursor(THD *thd, uint *nextp,
-                                                      sp_cursor *c_return,
-                                                      sp_cursor *c) {
-  sp_instr_cpush *push_instr = c_return->get_push_instr();
-  sp_instr_cpush_rowtype *push_instr_rowtype =
-      dynamic_cast<sp_instr_cpush_rowtype *>(push_instr);
-  Query_arena *stmt_arena_saved = thd->stmt_arena;
-  thd->stmt_arena = &push_instr_rowtype->m_arena;
-  push_instr_rowtype->is_copy_struct = true;
-  int var_save = push_instr_rowtype->get_var();
-  push_instr_rowtype->set_var(-1);
-  bool rc =
-      push_instr_rowtype->validate_lex_and_execute_core(thd, nextp, false);
-  push_instr_rowtype->is_copy_struct = false;
-  cleanup_items(push_instr_rowtype->m_arena.item_list());
-  thd->stmt_arena = stmt_arena_saved;
-  if (rc) return true;
-
-  c->set_return_table_from_cursor(c_return);
-  push_instr_rowtype->set_var(var_save);
-  return false;
+  // For static cursor,it needs the table's column name not return columns's
+  // name.
+  is_copy_struct = true;
+  rc = validate_lex_and_execute_core(thd, nextp, false);
+  is_copy_struct = false;
+  return rc;
 }
 
 bool sp_instr_cpush::exec_core(THD *thd, uint *) {
@@ -1903,8 +1885,16 @@ bool sp_instr_cpush_rowtype::exec_core(THD *thd, uint *) {
     return false;
   }
 
+  bool rc = true;
+  List<Create_field> defs;
+  // Used to avoid sequence add.
+  m_lex->is_cursor_get_structure = true;
   Query_arena old_arena;
-  if (c && !c->open(thd)) {
+  thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
+  if (c && c->open(thd)) {
+    my_error(ER_SP_CURSOR_FAILED, MYF(0));
+    goto finish;
+  }
     /*
       Create row elements on the caller arena.
       It's the same arena that was used during sp_rcontext::create().
@@ -1915,31 +1905,58 @@ bool sp_instr_cpush_rowtype::exec_core(THD *thd, uint *) {
       - row->row_create_items() creates new Item_field instances.
       They all are created on the same mem_root.
     */
-    List<Create_field> defs;
-    thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
+  if (c->export_structure(thd, &defs) ||
+      thd->sp_runtime_ctx->add_udt_to_sp_var_list(thd, defs))
+    goto finish;
 
-    if (c->export_structure(thd, &defs) ||
-        thd->sp_runtime_ctx->add_udt_to_sp_var_list(thd, defs))
-      goto finish;
+  rc = copy_structure_from_return(thd, c, &defs);
 
-    if (!c->m_result.get_return_table()) {
-      if (c->make_return_table(thd, &defs)) goto finish;
-    }
-    if (m_var != -1) {
-      Item *row = thd->sp_runtime_ctx->get_item(m_var);
-      if (!row->get_arg_count() && row->row_create_items(thd, &defs))
-        goto finish;
-    }
-    thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
-    return c->close();
-  } else {
-    my_error(ER_SP_CURSOR_FAILED, MYF(0));
+finish:
+  m_lex->is_cursor_get_structure = false;
+  if (c->is_open()) rc = rc || c->close();
+  thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+  return rc;
+}
+
+bool sp_instr_cpush_rowtype::copy_structure_from_return(
+    THD *thd, sp_cursor *c, List<Create_field> *defs_c) {
+  sp_pcursor *pcursor = m_parsing_ctx->find_cursor_parameters(m_cursor_idx);
+  if (!pcursor) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), "cursor");
     return true;
   }
 
-finish:
-  thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
-  return true;
+  if (!(pcursor->get_table_ref() || pcursor->get_row_definition_list() ||
+        pcursor->get_cursor_rowtype_offset() != -1)) {
+    if (c->make_return_table(thd, defs_c, defs_c)) return true;
+  } else {
+    if (pcursor->get_table_ref()) {
+      List<Create_field> defs;
+      if (pcursor->get_table_ref()->resolve_table_rowtype_ref(thd, defs))
+        return true;
+      if (c->make_return_table(thd, &defs, defs_c)) return true;
+    } else if (pcursor->get_row_definition_list()) {
+      List<Create_field> *defs_tmp = dynamic_cast<List<Create_field> *>(
+          pcursor->get_row_definition_list());
+      if (c->make_return_table(thd, defs_tmp, defs_c)) return true;
+    } else if (pcursor->get_cursor_rowtype_offset() != -1) {
+      sp_cursor *c_return =
+          thd->sp_runtime_ctx->get_cursor(pcursor->get_cursor_rowtype_offset());
+      if (c_return) {
+        if (c_return->m_result.get_return_table()) {
+          if (c->set_return_table_from_cursor(c_return, defs_c)) return true;
+        } else {
+          my_error(ER_OUT_OF_RESOURCES, MYF(ME_FATALERROR));  // unreachable
+          return true;
+        }
+      } else {  // it's type is ref cursor
+        sp_pcursor *pcursor_def = m_parsing_ctx->find_cursor_parameters(
+            pcursor->get_cursor_rowtype_offset());
+        if (c->set_return_table_from_pcursor(thd, pcursor_def)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 void sp_instr_cpush_rowtype::print(const THD *, String *str) {
@@ -1989,16 +2006,11 @@ bool sp_instr_copen_for_sql::exec_core(THD *thd, uint *) {
   field_ref->set_cursor_return_type();
   bool rc = field_ref->m_cursor->open_for_sql(thd);
   /*
-  1.item_func_sp:
+  1.item:
     the item's m_arena is same as
-    sp_instr_copen_for_sql->m_arena, but for item_func_sp->sp_result_field,its
+    sp_instr_copen_for_sql->m_arena, but for item->xx,its
     m_arena is field_ref->m_cursor's m_arena, so it needs to cleanup here.
-  2.Item_rank:
-    the Item_rank->m_previous m_arena is same as
-    sp_instr_copen_for_sql->m_arena, but for Cached_item of m_previous,its
-    m_arena is field_ref->m_cursor's m_arena, so it needs to destroy(ci) here.
-    e.g:select RANK() OVER (PARTITION BY a ORDER BY b DESC) from t1;
-  3.m_lex->unit->master:
+  2.m_lex->unit->master:
     the m_lex->unit->master->window->m_partition_items/m_order_by_items
     m_arena is same as
     sp_instr_copen_for_sql->m_arena, but for Cached_item of m_partition_items
@@ -2011,10 +2023,7 @@ bool sp_instr_copen_for_sql::exec_core(THD *thd, uint *) {
   Item *next;
   for (; item_arena; item_arena = next) {
     next = item_arena->next_free;
-    Item_func_sp *item_sp = dynamic_cast<Item_func_sp *>(item_arena);
-    if (item_sp) item_sp->cleanup_udt();
-    Item_rank *item_rank = dynamic_cast<Item_rank *>(item_arena);
-    if (item_rank) item_rank->clear_previous();
+    item_arena->cleanup_for_refcursor();
   }
   m_lex->unit->destroy();
   m_lex->unit = nullptr;
@@ -2130,19 +2139,6 @@ bool sp_instr_copen::execute(THD *thd, uint *nextp) {
 
   sp_instr_cpush *push_instr = c->get_push_instr();
 
-  sp_instr_cpush_rowtype *push_instr_rowtype =
-      dynamic_cast<sp_instr_cpush_rowtype *>(push_instr);
-  if (push_instr_rowtype) {
-    Query_arena *stmt_arena_saved = thd->stmt_arena;
-    thd->stmt_arena = &push_instr_rowtype->m_arena;
-
-    push_instr_rowtype->is_copy_struct = false;
-    bool rc =
-        push_instr_rowtype->validate_lex_and_execute_core(thd, nextp, false);
-    cleanup_items(push_instr_rowtype->m_arena.item_list());
-    thd->stmt_arena = stmt_arena_saved;
-    return rc;
-  }
   // Switch Statement Arena to the sp_instr_cpush object. It contains the
   // item list of the query, so new items (if any) are stored in the right
   // item list, and we can cleanup after each open.
@@ -2222,53 +2218,26 @@ bool sp_instr_cursor_copy_struct::execute(THD *thd, uint *nextp) {
   }
 
   // TYPE ref_rs1 IS REF CURSOR RETURN cursor%rowtype;
-  if (c->m_result.get_return_table()) {
-    bool ret = false;
-    Item *item = thd->sp_runtime_ctx->get_item(m_var);
-
-    Query_arena old_arena;
-    thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
-    List<Create_field> defs;
-    if (!c->m_result.get_return_table()->export_structure(thd, &defs)) {
-      ret = item->row_create_items(thd, &defs);
-    } else
-      ret = true;
-    thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
-    return ret;
+  if (!c->m_result.get_return_table()) {
+    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), pcursor->str);
+    return true;
   }
-
-  // Retrieve sp_instr_cpush instance.
-
-  sp_instr_cpush *push_instr = c->get_push_instr();
-  sp_instr_cpush_rowtype *push_instr_rowtype =
-      dynamic_cast<sp_instr_cpush_rowtype *>(push_instr);
-
-  // Switch Statement Arena to the sp_instr_cpush object. It contains the
-  // item list of the query, so new items (if any) are stored in the right
-  // item list, and we can cleanup after each open.
-
-  Query_arena *stmt_arena_saved = thd->stmt_arena;
-  thd->stmt_arena = &push_instr_rowtype->m_arena;
-
-  // Switch to the cursor's lex and execute sp_instr_cpush::exec_core().
-  // sp_instr_cpush::exec_core() is *not* executed during
-  // sp_instr_cpush::execute(). sp_instr_cpush::exec_core() is intended to be
-  // executed on cursor opening.
-  push_instr_rowtype->is_copy_struct = true;
-  push_instr_rowtype->set_var(m_var);
-
-  bool rc =
-      push_instr_rowtype->validate_lex_and_execute_core(thd, nextp, false);
-
-  // Cleanup the query's items.
-
-  cleanup_items(push_instr_rowtype->m_arena.item_list());
-
-  // Restore Statement Arena.
-
-  thd->stmt_arena = stmt_arena_saved;
-
-  return rc;
+  bool ret = false;
+  Item *item = thd->sp_runtime_ctx->get_item(m_var);
+  Query_arena old_arena;
+  thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
+  List<Create_field> defs;
+  if (c->m_result.get_return_table()->export_structure(thd, &defs)) {
+    thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+    return true;
+  }
+  Item_field_row_table *row_table = dynamic_cast<Item_field_row_table *>(item);
+  if (row_table) {
+    if (row_table->modify_row_field_table_definitions(thd, &defs)) ret = true;
+  } else if (!item->get_arg_count() && item->row_create_items(thd, &defs))
+    ret = true;
+  thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+  return ret;
 }
 
 void sp_instr_cursor_copy_struct::print(const THD *, String *str) {

@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -273,6 +273,8 @@ class Gcs_xcom_proxy {
   virtual bool xcom_client_set_cache_size(uint64_t size) = 0;
 
   virtual bool xcom_client_set_flp_timeout(uint64_t timeout) = 0;
+
+  virtual bool xcom_client_notify_truly_remove(const char *address) = 0;
 
   /**
     This member function is responsible for pushing data into consensus on
@@ -711,6 +713,8 @@ class Gcs_xcom_proxy {
 
   virtual bool xcom_set_flp_timeout(uint64_t timeout) = 0;
 
+  virtual bool notify_xcom_truly_remove(const char *address) = 0;
+
   /**
     Function to force the set of nodes in XCOM's configuration.
 
@@ -869,6 +873,7 @@ class Gcs_xcom_proxy_base : public Gcs_xcom_proxy {
       synode_app_data_array &reply) override;
   bool xcom_set_cache_size(uint64_t size) override;
   bool xcom_set_flp_timeout(uint64_t timeout) override;
+  bool notify_xcom_truly_remove(const char *address) override;
   bool xcom_force_nodes(Gcs_xcom_nodes &nodes, uint32_t group_id_hash) override;
 
   bool initialize_network_manager() override;
@@ -923,6 +928,7 @@ class Gcs_xcom_proxy_impl : public Gcs_xcom_proxy_base {
 
   bool xcom_client_set_cache_size(uint64_t size) override;
   bool xcom_client_set_flp_timeout(uint64_t timeout) override;
+  bool xcom_client_notify_truly_remove(const char *address) override;
   bool xcom_client_boot(node_list *nl, uint32_t group_id) override;
   connection_descriptor *xcom_client_open_connection(std::string,
                                                      xcom_port port) override;

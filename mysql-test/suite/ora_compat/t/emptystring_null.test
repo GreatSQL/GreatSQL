@@ -993,11 +993,188 @@ INSERT INTO t_bug9197 VALUES (1, '', '', '', 'empty string');
 INSERT INTO t_bug9197 VALUES (-1, NULL, NULL, NULL, 'null');
 INSERT INTO t_bug9197 VALUES (2, '', '', '', 'empty string 2');
 INSERT INTO t_bug9197 VALUES (-2, NULL, NULL, NULL, 'null 2');
+insert into t_bug9197 values (3, '22', '22', '22', '22');
 set sql_mode=emptystring_equal_null;
 select * from t_bug9197 where c2 is null;
 select * from t_bug9197 where c3 is null;
 select /*+ no_index(a) */ * from t_bug9197 a where c3 is null; 
 select * from t_bug9197 where c4 is null;
+
+--echo bug
+select * from t_bug9197 where c2 = '';
+select * from t_bug9197 where c2 >= '';
+select * from t_bug9197 where c2 <= '';
+select * from t_bug9197 where c2 = '\0';
+select * from t_bug9197 where c2 >= '\0';
+select * from t_bug9197 where c2 <= '\0';
+select * from t_bug9197 where c2 != '\0';
+select * from t_bug9197 where c2 != '0';
+select * from t_bug9197 where c2 is null or (c2 >='' and c2 <= 'aa');
+select * from t_bug9197 where c2 is null or c2 = '22'; 
+select * from t_bug9197 where c2 is null or (c2 >='' or c2 >= '22');
+select * from t_bug9197 where c2 >='' or c2 >= '22';
+select * from t_bug9197 where c2 >='' or c2 <= '22';
+
+select * from t_bug9197 where c3 = '';
+select * from t_bug9197 where c3 >= '';
+select * from t_bug9197 where c3 <= '';
+select * from t_bug9197 where c3 = '\0';
+select * from t_bug9197 where c3 >= '\0';
+select * from t_bug9197 where c3 <= '\0';
+select * from t_bug9197 where c3 != '\0';
+select * from t_bug9197 where c3 != '0';
+select * from t_bug9197 where c3 is null or (c3 >='' and c3 <= 'aa');
+select * from t_bug9197 where c3 is null or c3 = '22'; 
+select * from t_bug9197 where c3 is null or (c3 >='' or c3 >= '22');
+select * from t_bug9197 where c3 >='' or c3 >= '22';
+select * from t_bug9197 where c3 >='' or c3 <= '22';
+select * from t_bug9197 where c3 ='\0' or c3 is null or c2 = '22';
+
+select * from t_bug9197 where c2 is null or c2='22';
+select * from t_bug9197 where c3 is null or c3='22';
+select * from t_bug9197 where c2 is null or c3='22';
+select * from t_bug9197 where c3 is null or c2='22';
+select /*+ no_index(a) */ * from t_bug9197 a where c2 is null or c2='22';
+select /*+ no_index(a) */ * from t_bug9197 a where c3 is null or c3='22';
+select /*+ no_index(a) */ * from t_bug9197 a where c2 is null or c3='22';
+select /*+ no_index(a) */ * from t_bug9197 a where c3 is null or c2='22';
+
+select * from t_bug9197 where c2 is null or c2='22' intersect select * from t_bug9197 where c2 is null or c2='22';
+select * from t_bug9197 where c3 is null or c3='22' intersect select * from t_bug9197 where c3 is null or c3='22';
+select * from t_bug9197 where c2 is null or c2='22' intersect select * from t_bug9197 where c3 is null or c3='22';
+
+select * from t_bug9197 where c2 is null or c2='22' minus select * from t_bug9197 where c2 is null or c2='22';
+select * from t_bug9197 where c3 is null or c3='22' minus select * from t_bug9197 where c3 is null or c3='22';
+select * from t_bug9197 where c2 is null or c2='22' minus select * from t_bug9197 where c3 is null or c3='22';
+
+select * from t_bug9197 where c2 is null or c2='' or c2='22';
+select * from t_bug9197 where c2 is null or c2='\0' or c2='22';
+
+
+set sql_mode=default;
+create table t_range (
+  pk int primary key,
+  c1 varchar(8),
+  c2 varchar(8),
+  c3 varchar(8),
+  key(c1,c2,c3)
+);
+insert into t_range values (11,'','','');
+insert into t_range values (12,'','',NULL);
+insert into t_range values (13,'',NULL,'');
+insert into t_range values (14,'',NULL,NULL);
+insert into t_range values (15,NULL,'','');
+insert into t_range values (16,NULL,'',NULL);
+insert into t_range values (17,NULL,NULL,'');
+insert into t_range values (18,NULL,NULL,NULL);
+insert into t_range values (19,'','aa','');
+insert into t_range values (20,NULL,'aa',NULL);
+insert into t_range values (21,'','bb','');
+insert into t_range values (22,NULL,'bb',NULL);
+set sql_mode=emptystring_equal_null;
+select * from t_range where c1 is null and  (c2 >= 'bb') and c3 is null;
+select * from t_range where c1 is null and  (c2 between 'aa' and 'bb') and c3 is null;
+select * from t_range where c1 is null and  (c2 <= 'bb') and c3 is null;
+select * from t_range where c1 is null and  (c2 = 'aa' and c2 <='bb') and c3 is null;
+select * from t_range where c1 is null and  (c2 > 'aa' and c2 <='bb') and c3 is null;
+select * from t_range where c1 is null and  (c2 in (null,'aa','bb')) and c3 is null;
+select * from t_range where (c1 ='\0' or c1 is null) and (c2 >= 'bb') and (c3 ='\0' or c3 is null) ;
+select * from t_range where (c1 ='\0' or c1 is null) and (c2 <= 'bb') and (c3 ='\0' or c3 is null) ;
+
+#bugfix 16975
+set sql_mode='oracle,emptystring_equal_null';
+CREATE GLOBAL TEMPORARY TABLE gt_employee (
+  id int PRIMARY KEY AUTO_INCREMENT,
+   name VARCHAR(16),
+   deptId int,
+   i int INVISIBLE,
+   `SHAPE` geometry NOT NULL,
+   `sidec` INT(11) GENERATED ALWAYS AS (SQRT(((`i` * `deptId`) + (`i` * `deptId`)))) VIRTUAL
+) on commit delete rows ENGINE=innodb AUTO_INCREMENT=10;
+
+CREATE TABLE employee (
+   `id1` geometry NOT NULL,
+   `id2` geometry,
+   `id3` blob NOT NULL,
+   `id4` blob
+);
+
+CREATE TEMPORARY TABLE t_employee (
+   `id1` geometry NOT NULL,
+   `id2` geometry,
+   `id3` blob NOT NULL,
+   `id4` blob
+);
+
+drop table gt_employee;
+drop table employee;
+drop table t_employee;
+
+set sql_mode='emptystring_equal_null';
+CREATE TABLE employee (
+   `id1` geometry NOT NULL,
+   `id2` geometry,
+   `id3` blob NOT NULL,
+   `id4` blob
+);
+
+CREATE TEMPORARY TABLE t_employee (
+   `id1` geometry NOT NULL,
+   `id2` geometry,
+   `id3` blob NOT NULL,
+   `id4` blob
+);
+
+drop table employee;
+drop table t_employee;
+
+CREATE TABLE employee ( `id` geometry NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` blob NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` varchar(32) NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` char(32) NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` set('a', 'b') NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` int NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` enum('N', 'Y') NOT NULL );
+drop table employee;
+CREATE TABLE employee ( `id` geometry  );
+drop table employee;
+CREATE TABLE employee ( `id` blob  );
+drop table employee;
+CREATE TABLE employee ( `id` varchar(32)  );
+drop table employee;
+CREATE TABLE employee ( `id` char(32)  );
+drop table employee;
+CREATE TABLE employee ( `id` set('a', 'b')  );
+drop table employee;
+CREATE TABLE employee ( `id` int );
+drop table employee;
+CREATE TABLE employee ( `id` enum('N', 'Y') );
+drop table employee;
+
+#bugfix 9515
+set sql_mode=default;
+drop table t1;
+create table t1 (
+  pk int primary key,
+  c1 varchar(8),
+  c2 varchar(8),
+  c3 varchar(8),
+  key(c1,c2,c3)
+);
+insert into t1 select * from t_range order by pk;
+set sql_mode=emptystring_equal_null;
+
+select pk,c1,c2,c3 from t1 where c1 is null and  (c2 between 'aa' and 'bb') and c3 is null;
+alter table t1 add column hidden_pk bigint not null unique  auto_increment first;
+select pk,c1,c2,c3,hidden_pk from t1 where c1 is null and  (c2 between 'aa' and 'bb') and c3 is null; 
+alter table t1 drop column hidden_pk;
+select pk,c1,c2,c3 from t1 where c1 is null and  (c2 between 'aa' and 'bb') and c3 is null;
 
 drop procedure if exists test_oracle_cursor_loop;
 drop procedure if exists p2;
@@ -1011,3 +1188,173 @@ drop table t1;
 drop table t2;
 drop table t3;
 drop table t_bug9197;
+
+--echo ###test bug 9699###
+set sql_mode=default;
+CREATE TABLE `t1` (
+  `c1` int NOT NULL AUTO_INCREMENT,
+  `c2` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`c1`)
+);
+
+CREATE TABLE `t2` (
+  `c1` int AUTO_INCREMENT PRIMARY KEY,
+  `c2` varchar(100)
+);
+
+insert into t2 values(1, '2020-01-01 00:00:00'), (2, ''), (3, null),(4, '\0');
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR 
+eval select * from t2 into outfile '$MYSQLTEST_VARDIR/tmp/t1' FIELDS TERMINATED BY ',';
+drop table t2;
+delete from t1;
+
+set sql_mode=emptystring_equal_null;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/t1' INTO TABLE t1 FIELDS TERMINATED BY ',';
+
+set sql_mode=default;
+select * from t1;
+
+delete from t1;
+alter table t1 add column c3 varchar(100);
+
+--echo [test set = '']
+set sql_mode=emptystring_equal_null;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/t1' INTO TABLE t1 FIELDS TERMINATED BY ','(c1, c2) set c3 = '';
+
+set sql_mode=default;
+select * from t1;
+delete from t1;
+
+--echo [test set with func contains '']
+set sql_mode=emptystring_equal_null;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/t1' INTO TABLE t1 FIELDS TERMINATED BY ','(c1, c2) set c3 = concat('', 'aaaa');
+
+set sql_mode=default;
+select * from t1;
+delete from t1;
+
+--echo [test load with user_var]
+set sql_mode=emptystring_equal_null;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/t1' INTO TABLE t1 FIELDS TERMINATED BY ','(c1, @var1) set c2 = @var1, c3 = concat(@var1, 'aaaa');
+
+set sql_mode=default;
+select * from t1;
+
+remove_file $MYSQLTEST_VARDIR/tmp/t1;
+drop table t1;
+# bug9792
+
+set sql_mode=default;
+create table t1 (
+  pk int primary key,
+  c1 varchar(8),
+  c2 varchar(8),
+  c3 varchar(8),
+  key(c1)
+) character set utf8mb4 collate utf8mb4_0900_ai_ci;
+create table t2 (
+  pk int primary key,
+  c1 varchar(8),
+  c2 varchar(8),
+  c3 varchar(8),
+  key(c1(1))
+) character set utf8mb4 collate utf8mb4_0900_ai_ci;
+create table t3 (
+  pk int primary key,
+  c1 varchar(8),
+  c2 varchar(8),
+  c3 varchar(8),
+  key(c1)
+) character set utf8mb4 collate utf8mb4_unicode_ci;
+create table t4 (
+  pk int primary key,
+  c1 varchar(8),
+  c2 varchar(8),
+  c3 varchar(8),
+  key key1(c1(1)),
+  key key2(c1)
+) character set utf8mb4 collate utf8mb4_unicode_ci;
+insert into t1 select * from t_range order by pk;
+insert into t1 values (23,NULL,'bb','');
+insert into t1 values (24,'\0','bb','');
+insert into t1 values (25,'c','bb','c');
+insert into t1 values (26,'aa','bb',NULL);
+insert into t1 values (27,'bb','bb','');
+insert into t1 values (28,'\0a','bb','');
+insert into t2 select * from t1;
+insert into t3 select * from t1;
+insert into t4 select * from t1;
+
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t1 where c1 = '\0 \0 ';
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t2 where c1 = '\0 \0 ';
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t3 where c1 = '\0 \0 ';
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t4 where c1 = '\0 \0 ';
+
+select pk,hex(c1),hex('\0 '),c2,c3 from t1 where c1 = '\0 ';
+select pk,hex(c1),hex('\0 '),c2,c3 from t2 where c1 = '\0 ';
+select pk,hex(c1),hex('\0 '),c2,c3 from t3 where c1 = '\0 ';
+select pk,hex(c1),hex('\0 '),c2,c3 from t4 where c1 = '\0 ';
+
+select pk,hex(c1),hex('\0'),c2,c3 from t1 where c1 = '\0';
+select pk,hex(c1),hex('\0'),c2,c3 from t2 where c1 = '\0';
+select pk,hex(c1),hex('\0'),c2,c3 from t3 where c1 = '\0';
+select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = '\0';
+select pk,hex(c1),hex('a      '),c2,c3 from t4 force index(key1) where c1 = 'a      ';
+select pk,hex(c1),hex('a      '),c2,c3 from t4 force index(key2) where c1 = 'a      ';
+select pk,hex(c1),hex('      a'),c2,c3 from t4 force index(key1) where c1 = '      a';
+select pk,hex(c1),hex('      a'),c2,c3 from t4 force index(key2) where c1 = '      a';
+select pk,hex(c1),hex('      a    '),c2,c3 from t4 force index(key1) where c1 = '      a    ';
+select pk,hex(c1),hex('      a    '),c2,c3 from t4 force index(key2) where c1 = '      a    ';
+select pk,hex(c1),hex('      \0'),c2,c3 from t4 force index(key1) where c1 = '      \0';
+select pk,hex(c1),hex('      \0'),c2,c3 from t4 force index(key2) where c1 = '      \0';
+select pk,hex(c1),hex('      \0    '),c2,c3 from t4 force index(key1) where c1 = '      \0    ';
+select pk,hex(c1),hex('      \0    '),c2,c3 from t4 force index(key2) where c1 = '      \0    ';
+
+
+set sql_mode=emptystring_equal_null;
+
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t1 where c1 = '\0 \0 ';
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t2 where c1 = '\0 \0 ';
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t3 where c1 = '\0 \0 ';
+select pk,hex(c1),hex('\0 \0 '),c2,c3 from t4 where c1 = '\0 \0 ';
+
+select pk,hex(c1),hex('\0 '),c2,c3 from t1 where c1 = '\0 ';
+select pk,hex(c1),hex('\0 '),c2,c3 from t2 where c1 = '\0 ';
+select pk,hex(c1),hex('\0 '),c2,c3 from t3 where c1 = '\0 ';
+select pk,hex(c1),hex('\0 '),c2,c3 from t4 where c1 = '\0 ';
+
+select pk,hex(c1),hex('\0'),c2,c3 from t1 where c1 = '\0';
+select pk,hex(c1),hex('\0'),c2,c3 from t2 where c1 = '\0';
+select pk,hex(c1),hex('\0'),c2,c3 from t3 where c1 = '\0';
+select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = '\0';
+
+select pk,hex(c1),hex('a      '),c2,c3 from t4 force index(key1) where c1 = 'a      ';
+select pk,hex(c1),hex('a      '),c2,c3 from t4 force index(key2) where c1 = 'a      ';
+select pk,hex(c1),hex('      a'),c2,c3 from t4 force index(key1) where c1 = '      a';
+select pk,hex(c1),hex('      a'),c2,c3 from t4 force index(key2) where c1 = '      a';
+select pk,hex(c1),hex('      a    '),c2,c3 from t4 force index(key1) where c1 = '      a    ';
+select pk,hex(c1),hex('      a    '),c2,c3 from t4 force index(key2) where c1 = '      a    ';
+select pk,hex(c1),hex('      \0'),c2,c3 from t4 force index(key1) where c1 = '      \0';
+select pk,hex(c1),hex('      \0'),c2,c3 from t4 force index(key2) where c1 = '      \0';
+select pk,hex(c1),hex('      \0    '),c2,c3 from t4 force index(key1) where c1 = '      \0    ';
+select pk,hex(c1),hex('      \0    '),c2,c3 from t4 force index(key2) where c1 = '      \0    ';
+
+select pk,hex(c1),c2,c3 from t1 where c1 =to_char('\0');
+
+--disable_warnings
+explain select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = '\0';
+explain select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = ' ';
+explain select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = '\0 ';
+explain select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = ' a';
+explain select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = 1;
+explain select pk,c1,c2,c3 from t1 where c1 =to_char('\0');
+set sql_mode=default;
+explain select pk,hex(c1),hex('\0'),c2,c3 from t4 where c1 = 1;
+explain select pk,hex(c1),c2,c3 from t1 where c1 =to_char('\0');
+--enable_warnings
+
+drop table t_range,t1,t2,t3,t4;

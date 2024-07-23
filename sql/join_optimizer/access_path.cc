@@ -1,5 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -265,12 +265,13 @@ bool ShouldEnableBatchMode(AccessPath *path) {
     case AccessPath::DYNAMIC_INDEX_RANGE_SCAN:
       return true;
     case AccessPath::FILTER:
-    case AccessPath::ROWNUM_FILTER:
       if (path->filter().condition->has_subquery()) {
         return false;
       } else {
         return ShouldEnableBatchMode(path->filter().child);
       }
+    case AccessPath::COUNTER:
+      return ShouldEnableBatchMode(path->counter().child);
     case AccessPath::SORT:
       return ShouldEnableBatchMode(path->sort().child);
     case AccessPath::EQ_REF:
@@ -920,27 +921,12 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
       case AccessPath::CONNECT_BY_SCAN: {
         const auto &param = path->connect_by_scan();
         if (job.children.is_null()) {
-          job.AllocChildren(mem_root, 2);
-          todo.push_back(job);
-          todo.push_back({param.src_path,
-                          join,
-                          /*eligible_for_batch_mode=*/true,
-                          &job.children[0],
-                          {}});
-
-          todo.push_back({param.table_path,
-                          join,
-                          eligible_for_batch_mode,
-                          &job.children[1],
-                          {}});
+          SetupJobsForChildren(mem_root, param.src_path, join,
+                               eligible_for_batch_mode, &job, &todo);
           continue;
         }
-
-        iterator = unique_ptr_destroy_only<RowIterator>(
-            connect_by_iterator::CreateIterator(
-                thd, join, param.table, param.temp_table_param,
-                move(job.children[0]), move(job.children[1]),
-                param.connect_by_param, param.ref_slice));
+        iterator = connect_by_iterator::CreateIterator(
+            thd, join, move(job.children[0]), param.connect_by_param);
 
         break;
       }
@@ -1217,16 +1203,15 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
                                             std::move(job.children[0]));
         break;
       }
-      case AccessPath::ROWNUM_FILTER: {
-        const auto &param = path->rownum_filter();
+      case AccessPath::COUNTER: {
+        const auto &param = path->counter();
         if (job.children.is_null()) {
           SetupJobsForChildren(mem_root, param.child, join,
                                eligible_for_batch_mode, &job, &todo);
           continue;
         }
-        iterator = NewIterator<RownumFilterIterator>(
-            thd, mem_root, move(job.children[0]), param.condition,
-            join->query_block->rownum_func);
+        iterator = NewIterator<CounterIterator>(
+            thd, mem_root, move(job.children[0]), param.counter);
         break;
       }
       case AccessPath::PARALLEL_SCAN: {

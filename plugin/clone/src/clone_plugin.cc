@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -76,6 +76,19 @@ static char *clone_ssl_key;
 
 /** Clone system variable: path name of the encrypt clone key file */
 static char *clone_encrypt_key_path;
+
+/** Clone system variable: file compress algorithm */
+ulong clone_file_compress_mode;
+
+/** Clone system variable: Number of threads for parallel data compression */
+uint clone_file_compress_threads;
+
+/** Clone system variable: Zstandard compression level */
+uint clone_file_compress_zstd_level;
+
+/** Clone system variable: Size of working buffer(s) for compression threads in
+ * bytes */
+ulonglong clone_file_compress_chunk_size;
 
 /** Clone system variable: SSL Certificate */
 static char *clone_ssl_cert;
@@ -269,7 +282,8 @@ static int match_valid_donor_address(MYSQL_THD thd, const char *host,
                    transform_lower);
 
     /* Check if input matches with configured host and port. */
-    if (0 == valid_host.compare(host) && port == valid_port) {
+    if ((valid_host.compare("0.0.0.0") == 0) ||
+        (0 == valid_host.compare(host) && port == valid_port)) {
       found = true;
     }
     return (found);
@@ -445,13 +459,29 @@ static int plugin_clone_deinit(MYSQL_PLUGIN plugin_info [[maybe_unused]]) {
 @param[in,out]	thd		server thread handle
 @param[in]	data_dir	cloned data directory
 @return error code */
-static int plugin_clone_local(THD *thd, const char *data_dir) {
-  myclone::Client_Share client_share(nullptr, 0, nullptr, nullptr, data_dir, 0);
+static int plugin_clone_local(THD *thd, const char *data_dir, uint64_t start_id,
+                              bool enable_page_track, const char *based_dir) {
+  myclone::Client_Share client_share(nullptr, 0, nullptr, nullptr, data_dir, 0,
+                                     enable_page_track, start_id, based_dir);
+  if (clone_encrypt_key_path && clone_file_compress_mode) {
+    char err_buf[MYSYS_ERRMSG_SIZE];
+    snprintf(err_buf, sizeof(err_buf),
+             "Currently, not supported enable compress and encrypt at the same "
+             "time.\n");
+    my_error(ER_CLONE_SYS_CONFIG, MYF(0), err_buf);
+    return ER_CLONE_SYS_CONFIG;
+  }
+
   if (data_dir != nullptr && clone_encrypt_key_path) {
     if (client_share.read_encrypt_key(clone_encrypt_key_path)) {
       return ER_CLONE_SYS_CONFIG;
     }
   }
+
+  if (data_dir != nullptr && clone_file_compress_mode) {
+    client_share.set_compress_mode(clone_file_compress_mode);
+  }
+
   myclone::Server server(thd, MYSQL_INVALID_SOCKET);
 
   /* Update session and statement PFS keys */
@@ -459,13 +489,15 @@ static int plugin_clone_local(THD *thd, const char *data_dir) {
   mysql_service_clone_protocol->mysql_clone_start_statement(
       thd, PSI_NOT_INSTRUMENTED, clone_stmt_local_key);
 
-  myclone::Local clone_inst(thd, &server, &client_share, 0, true);
+  myclone::Local clone_inst(thd, &server, &client_share, 0, true, start_id,
+                            enable_page_track);
 
   auto error = clone_inst.clone();
 
   if (client_share.m_encrypt_key || client_share.m_encrypt_iv) {
     client_share.free_key();
   }
+
   return (error);
 }
 
@@ -481,7 +513,9 @@ static int plugin_clone_local(THD *thd, const char *data_dir) {
 static int plugin_clone_remote_client(THD *thd, const char *remote_host,
                                       uint remote_port, const char *remote_user,
                                       const char *remote_passwd,
-                                      const char *data_dir, int ssl_mode) {
+                                      const char *data_dir, int ssl_mode,
+                                      bool enable_page_track, uint64_t start_id,
+                                      const char *based_dir) {
   /* Validate that donor address matches with preconfigured value. */
   auto error = match_valid_donor_address(thd, remote_host, remote_port);
   if (error != 0) {
@@ -489,12 +523,22 @@ static int plugin_clone_remote_client(THD *thd, const char *remote_host,
   }
 
   myclone::Client_Share client_share(remote_host, remote_port, remote_user,
-                                     remote_passwd, data_dir, ssl_mode);
+                                     remote_passwd, data_dir, ssl_mode,
+                                     enable_page_track, start_id, based_dir);
+
+  if (clone_encrypt_key_path && clone_file_compress_mode) {
+    return ER_CLONE_SYS_CONFIG;
+  }
+
   if (data_dir != nullptr && clone_encrypt_key_path) {
     error = client_share.read_encrypt_key(clone_encrypt_key_path);
     if (error != 0) {
       return ER_CLONE_SYS_CONFIG;
     }
+  }
+
+  if (data_dir != nullptr && clone_file_compress_mode) {
+    client_share.set_compress_mode(clone_file_compress_mode);
   }
 
   /* Update session and statement PFS keys */
@@ -505,11 +549,28 @@ static int plugin_clone_remote_client(THD *thd, const char *remote_host,
 
   myclone::Client clone_inst(thd, &client_share, 0, true);
 
+  if (strlen(based_dir)) {
+    assert(client_share.m_start_id == 0);
+    error = clone_inst.read_metadata(client_share.m_start_id);
+    if (error != 0) {
+      return ER_CLONE_SYS_CONFIG;
+    }
+  }
+
+  if (client_share.m_compress_mode) {
+    clone_inst.compress_init();
+  }
+
   error = clone_inst.clone();
+
+  if (client_share.m_compress_mode) {
+    clone_inst.compress_deinit();
+  }
 
   if (client_share.m_encrypt_key || client_share.m_encrypt_iv) {
     client_share.free_key();
   }
+
   return (error);
 }
 
@@ -601,6 +662,50 @@ static MYSQL_SYSVAR_STR(encrypt_key_path, clone_encrypt_key_path,
                         "path name of the encrypt clone key file", nullptr,
                         nullptr, nullptr);
 
+/** If data is compressed in file layer. */
+static const char *clone_file_compress_str[] = {
+    "CLONE_FILE_COMPRESS_NONE", "CLONE_FILE_COMPRESS_LZ4",
+    "CLONE_FILE_COMPRESS_ZSTD", nullptr};
+
+static TYPELIB clone_file_compress_typelib = {
+    array_elements(clone_file_compress_str) - 1, "clone_file_compress_typelib",
+    clone_file_compress_str, nullptr};
+
+static MYSQL_SYSVAR_ENUM(file_compress, clone_file_compress_mode,
+                         PLUGIN_VAR_RQCMDARG, "file compress algorithm.", NULL,
+                         NULL, file_compress_mode_t::CLONE_FILE_COMPRESS_NONE,
+                         &clone_file_compress_typelib);
+
+/** number of file compress threads for clone */
+static MYSQL_SYSVAR_UINT(
+    file_compress_threads, clone_file_compress_threads, PLUGIN_VAR_RQCMDARG,
+    "Number of threads for parallel data compression. The default value is 4.",
+    nullptr, nullptr, 4, /* Default =   4 threads */
+    1,                   /* Minimum =   1 thread */
+    128,                 /* Maximum = 128 threads */
+    1);                  /* Step    =   1 thread */
+
+/** Zstandard compression level for clone */
+static MYSQL_SYSVAR_UINT(
+    file_compress_zstd_level, clone_file_compress_zstd_level,
+    PLUGIN_VAR_RQCMDARG,
+    "Zstandard compression level. from 1 - 19. The default value is 1.",
+    nullptr, nullptr, 1, /* Default =   4  */
+    1,                   /* Minimum =   1  */
+    19,                  /* Maximum =  19  */
+    1);                  /* Step    =   1  */
+
+/** Size of working buffer(s) for compression threads for clone */
+static MYSQL_SYSVAR_ULONGLONG(
+    file_compress_chunk_size, clone_file_compress_chunk_size,
+    PLUGIN_VAR_RQCMDARG,
+    "Size of working buffer(s) for compression threads in "
+    "bytes. The default value is 64K.",
+    nullptr, nullptr, (1 << 16), /* Default =   64K */
+    1024,                        /* Minimum =   1024 */
+    ULLONG_MAX,                  /* Maximum = ULLONG_MAX */
+    1024);                       /* Step    =   1024 */
+
 /** List of valid donor addresses allowed to clone from. */
 static MYSQL_SYSVAR_STR(valid_donor_list, clone_valid_donor_list,
                         PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_MEMALLOC,
@@ -658,6 +763,10 @@ static MYSQL_SYSVAR_UINT(delay_after_data_drop, clone_delay_after_data_drop,
 static SYS_VAR *clone_system_variables[] = {
     MYSQL_SYSVAR(buffer_size),
     MYSQL_SYSVAR(block_ddl),
+    MYSQL_SYSVAR(file_compress),
+    MYSQL_SYSVAR(file_compress_threads),
+    MYSQL_SYSVAR(file_compress_zstd_level),
+    MYSQL_SYSVAR(file_compress_chunk_size),
     MYSQL_SYSVAR(ddl_timeout),
     MYSQL_SYSVAR(max_concurrency),
     MYSQL_SYSVAR(max_network_bandwidth),

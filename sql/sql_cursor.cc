@@ -1,5 +1,5 @@
 /* Copyright (c) 2005, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -271,7 +271,7 @@ bool mysql_open_cursor(THD *thd, Query_result *result,
     network, bypassing Query_result mechanism. An example of
     such command is SHOW PRIVILEGES.
   */
-  if (cursor != nullptr) {
+  if (cursor != nullptr && !lex->is_cursor_get_structure) {
     /*
       NOTE: close_thread_tables() has been called in
       mysql_execute_command(), so all tables except from the cursor

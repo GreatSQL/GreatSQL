@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -133,6 +133,44 @@ const std::u16string &Regexp_engine::Replace(const std::u16string &replacement,
   }
 
   // ... put the part after the matches back.
+  AppendTail();
+
+  check_icu_status(m_error_code);
+  m_replace_buffer.resize(m_replace_buffer_pos);
+  return m_replace_buffer;
+}
+
+const std::u16string &Regexp_engine::Replace(
+    std::function<bool(std::u16string &)> gen_replacement, int start,
+    int occurrence) {
+  if ((current_thd->variables.sql_mode & MODE_ORACLE) &&
+      (std::u16string::value_type)start > m_current_subject.length()) {
+    m_replace_buffer.assign(m_current_subject);
+    return m_replace_buffer;
+  }
+  bool found = uregex_find(m_re, start, &m_error_code);
+
+  int end_of_previous_match = 0;
+  for (int i = 1; i < occurrence && found; ++i) {
+    end_of_previous_match = uregex_end(m_re, 0, &m_error_code);
+    found = uregex_findNext(m_re, &m_error_code);
+  }
+
+  if (!found && U_SUCCESS(m_error_code)) return m_current_subject;
+
+  m_replace_buffer.resize(std::min(m_current_subject.size(), HardLimit()));
+  AppendHead(std::max(end_of_previous_match, start));
+  if (found) {
+    do {
+      std::u16string replacement;
+      if (gen_replacement(replacement)) {
+        m_replace_buffer.clear();
+        return m_replace_buffer;
+      }
+      AppendReplacement(replacement);
+    } while (occurrence == 0 && uregex_findNext(m_re, &m_error_code));
+  }
+
   AppendTail();
 
   check_icu_status(m_error_code);
@@ -276,8 +314,8 @@ bool Regexp_engine::ReplaceReplacementORA(int32_t group_count,
               length = uregex_group(m_re, *next - u'0',
                                     pointer_cast<UChar *>(&subexpr_str.at(0)),
                                     subexpr_str.size(), &m_error_code);
-              if (check_icu_status(m_error_code)) return true;
             }
+            if (check_icu_status(m_error_code)) return true;
             subexpr_str.resize(length);
             /**
               Since the icu library just put out escape characters for backslash

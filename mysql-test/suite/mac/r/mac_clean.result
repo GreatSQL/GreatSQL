@@ -1,0 +1,648 @@
+call sys_mac.mac_apply_user_policy('root','localhost','P1','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+call sys_mac.mac_apply_user_policy('root','localhost','P2','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT=utf8mb4;
+SET COLLATION_CONNECTION=utf8mb4_bin;
+create user 'user1'@'LOCALHOST' IDENTIFIED with mysql_native_password;
+create user 'USER1'@'localhost' IDENTIFIED with mysql_native_password;
+call sys_mac.mac_apply_user_policy('user1','LOCALHOST','P1','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+call sys_mac.mac_apply_user_policy('user1','localhost','P2','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+call sys_mac.mac_set_user_priv('user1', 'LOCALHOST', 'P1', 'read');
+call sys_mac.mac_set_user_priv('user1', 'localhost', 'P2', 'full');
+call sys_mac.mac_grant_user_all_privs('user1', 'LOCALHOST');
+call sys_mac.mac_apply_user_policy('USER1','LOCALHOST','P1','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+call sys_mac.mac_apply_user_policy('USER1','localhost','P2','L4:C2,C3,C4:G1', 'L2:C2,C3:G1', 'L3:C3,C4:G1','L3:C3:G1');
+call sys_mac.mac_set_user_priv('USER1', 'LOCALHOST', 'P1', 'read');
+call sys_mac.mac_set_user_priv('USER1', 'localhost', 'P2', 'full');
+call sys_mac.mac_grant_user_all_privs('USER1', 'localhost');
+select * from sys_mac.mac_user_policy;
+user	host	p_id	read_label	write_label	def_read_label	def_write_label	def_row_label
+USER1	LOCALHOST	1	4:2,3,4:1	2:2,3:1	3:3,4:1	2:3:1	3:3:1
+USER1	localhost	2	4:7,8,9:9	2:7,8:9	3:8,9:9	2:8:9	3:8:9
+root	localhost	1	4:2,3,4:1	2:2,3:1	3:3,4:1	2:3:1	3:3:1
+root	localhost	2	4:7,8,9:9	2:7,8:9	3:8,9:9	2:8:9	3:8:9
+user1	LOCALHOST	1	4:2,3,4:1	2:2,3:1	3:3,4:1	2:3:1	3:3:1
+user1	localhost	2	4:7,8,9:9	2:7,8:9	3:8,9:9	2:8:9	3:8:9
+select * from sys_mac.mac_user_privs;
+user	host	p_id	privs
+USER1	LOCALHOST	1	read
+USER1	localhost	2	full
+user1	LOCALHOST	1	read
+user1	localhost	2	full
+select * from sys_mac.mac_privileged_users;
+user	host
+USER1	localhost
+user1	LOCALHOST
+rename user user1@localhost to user2@localhost;
+rename user USER1@LOCALHOST to USER2@LOCALHOST;
+select * from sys_mac.mac_user_policy;
+user	host	p_id	read_label	write_label	def_read_label	def_write_label	def_row_label
+USER2	localhost	1	4:2,3,4:1	2:2,3:1	3:3,4:1	2:3:1	3:3:1
+USER2	localhost	2	4:7,8,9:9	2:7,8:9	3:8,9:9	2:8:9	3:8:9
+root	localhost	1	4:2,3,4:1	2:2,3:1	3:3,4:1	2:3:1	3:3:1
+root	localhost	2	4:7,8,9:9	2:7,8:9	3:8,9:9	2:8:9	3:8:9
+user2	localhost	1	4:2,3,4:1	2:2,3:1	3:3,4:1	2:3:1	3:3:1
+user2	localhost	2	4:7,8,9:9	2:7,8:9	3:8,9:9	2:8:9	3:8:9
+select * from sys_mac.mac_user_privs;
+user	host	p_id	privs
+USER2	localhost	1	read
+USER2	localhost	2	full
+user2	localhost	1	read
+user2	localhost	2	full
+select * from sys_mac.mac_privileged_users;
+user	host
+USER2	localhost
+user2	localhost
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+select mac_get_session_labels('P2');
+mac_get_session_labels('P2')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+select mac_get_session_labels('P1');
+mac_get_session_labels('P1')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+select mac_get_session_labels('P2');
+mac_get_session_labels('P2')
+
+READ_LABEL : L4:C2,C3,C4:G1,G1_1,G1_2,G1_1_1
+WRITE_LABEL : L2:C2,C3:G1,G1_1,G1_2,G1_1_1
+DEF_READ_LABEL : L3:C3,C4:G1,G1_1,G1_2,G1_1_1
+DEF_WRITE_LABEL : L2:C3:G1,G1_1,G1_2,G1_1_1
+DEF_ROW_LABEL : L3:C3:G1
+
+drop user user2@localhost;
+drop user USER2@localhost;
+select * from sys_mac.mac_user_policy;
+user	host	p_id	read_label	write_label	def_read_label	def_write_label	def_row_label
+root	localhost	1	4:2,3,4:1	2:2,3:1	3:3,4:1	2:3:1	3:3:1
+root	localhost	2	4:7,8,9:9	2:7,8:9	3:8,9:9	2:8:9	3:8:9
+select * from sys_mac.mac_user_privs;
+user	host	p_id	privs
+select * from sys_mac.mac_privileged_users;
+user	host
+##########################test database#############################
+create database db;
+use db;
+create table t1(c1 int primary key, c2 int);
+create table t2(c1 int primary key, c2 int);
+insert into t1 values(1, 1),(2, 2),(3, 3),(4, 4);
+insert into t2 values(1, 1),(2, 2),(3, 3),(4, 4);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3,C4:G1', 0);
+call sys_mac.mac_apply_row_policy('db', 't2', 'P1', 'L3:C3,C4:G1', 0);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 0);
+call sys_mac.mac_apply_row_policy('db', 't2', 'P2', 'L3:C3:G1', 0);
+create database DB;
+use DB;
+create table t1(c1 int primary key, c2 int);
+create table t2(c1 int primary key, c2 int);
+insert into t1 values(1, 1),(2, 2),(3, 3),(4, 4);
+insert into t2 values(1, 1),(2, 2),(3, 3),(4, 4);
+call sys_mac.mac_apply_row_policy('DB', 't1', 'P1', 'L3:C3,C4:G1', 0);
+call sys_mac.mac_apply_row_policy('DB', 't2', 'P1', 'L3:C3,C4:G1', 0);
+call sys_mac.mac_apply_row_policy('DB', 't1', 'P2', 'L3:C3:G1', 0);
+call sys_mac.mac_apply_row_policy('DB', 't2', 'P2', 'L3:C3:G1', 0);
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+DB	t2	_gdb_mac_policy_1	1	8	0	1
+DB	t2	_gdb_mac_policy_2	2	2	0	1
+db	t1	_gdb_mac_policy_1	1	8	0	1
+db	t1	_gdb_mac_policy_2	2	2	0	1
+db	t2	_gdb_mac_policy_1	1	8	0	1
+db	t2	_gdb_mac_policy_2	2	2	0	1
+drop database db;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+DB	t2	_gdb_mac_policy_1	1	8	0	1
+DB	t2	_gdb_mac_policy_2	2	2	0	1
+drop database DB;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+select @@lower_case_table_names;
+@@lower_case_table_names
+0
+##########################test table#############################
+create database db;
+use db;
+create table t1(c1 int primary key, c2 int);
+create table T1(c1 int primary key, c2 int);
+insert into t1 values(1, 1),(2, 2),(3, 3),(4, 4);
+insert into T1 values(1, 1),(2, 2),(3, 3),(4, 4);
+create database DB;
+use DB;
+create table t1(c1 int primary key, c2 int);
+create table T1(c1 int primary key, c2 int);
+insert into t1 values(1, 1),(2, 2),(3, 3),(4, 4);
+insert into T1 values(1, 1),(2, 2),(3, 3),(4, 4);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P1', 'L3:C3,C4:G1', 0);
+call sys_mac.mac_apply_row_policy('db', 't1', 'P2', 'L3:C3:G1', 0);
+call sys_mac.mac_apply_row_policy('db', 'T1', 'P1', 'L3:C3,C4:G1', 0);
+call sys_mac.mac_apply_row_policy('db', 'T1', 'P2', 'L3:C3:G1', 0);
+call sys_mac.mac_apply_row_policy('DB', 't1', 'P1', 'L3:C3,C4:G1', 0);
+call sys_mac.mac_apply_row_policy('DB', 't1', 'P2', 'L3:C3:G1', 0);
+call sys_mac.mac_apply_row_policy('DB', 'T1', 'P1', 'L3:C3,C4:G1', 0);
+call sys_mac.mac_apply_row_policy('DB', 'T1', 'P2', 'L3:C3:G1', 0);
+use db;
+alter table t1 rename to t2, ALGORITHM = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t2	_gdb_mac_policy_1	1	8	0	1
+db	t2	_gdb_mac_policy_2	2	2	0	1
+alter table t2 rename to t1, ALGORITHM = INSTANT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t1	_gdb_mac_policy_1	1	8	0	1
+db	t1	_gdb_mac_policy_2	2	2	0	1
+alter table t1 rename to t2, ALGORITHM = INPLACE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t2	_gdb_mac_policy_1	1	8	0	1
+db	t2	_gdb_mac_policy_2	2	2	0	1
+alter table t2 rename to t1, ALGORITHM = COPY;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t1	_gdb_mac_policy_1	1	8	0	1
+db	t1	_gdb_mac_policy_2	2	2	0	1
+alter table t1 rename to t2, ALGORITHM = DEFAULT, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t2	_gdb_mac_policy_1	1	8	0	1
+db	t2	_gdb_mac_policy_2	2	2	0	1
+alter table t2 rename to t1, ALGORITHM = DEFAULT, LOCK = EXCLUSIVE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t1	_gdb_mac_policy_1	1	8	0	1
+db	t1	_gdb_mac_policy_2	2	2	0	1
+alter table t1 rename to t2, ALGORITHM = INSTANT, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t2	_gdb_mac_policy_1	1	8	0	1
+db	t2	_gdb_mac_policy_2	2	2	0	1
+alter table t2 rename to t1, ALGORITHM = INPLACE, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t1	_gdb_mac_policy_1	1	8	0	1
+db	t1	_gdb_mac_policy_2	2	2	0	1
+alter table t1 rename to t2, ALGORITHM = INPLACE, LOCK = EXCLUSIVE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t2	_gdb_mac_policy_1	1	8	0	1
+db	t2	_gdb_mac_policy_2	2	2	0	1
+alter table t2 rename to t1, ALGORITHM = COPY, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t1	_gdb_mac_policy_1	1	8	0	1
+db	t1	_gdb_mac_policy_2	2	2	0	1
+alter table t1 rename to t2, ALGORITHM = COPY, LOCK = SHARED;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t2	_gdb_mac_policy_1	1	8	0	1
+db	t2	_gdb_mac_policy_2	2	2	0	1
+alter table t2 rename to t1, ALGORITHM = COPY, LOCK = EXCLUSIVE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t1	_gdb_mac_policy_1	1	8	0	1
+db	t1	_gdb_mac_policy_2	2	2	0	1
+rename table t1 to t2;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t2	_gdb_mac_policy_1	1	8	0	1
+db	t2	_gdb_mac_policy_2	2	2	0	1
+rename table t2 to t1;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+db	t1	_gdb_mac_policy_1	1	8	0	1
+db	t1	_gdb_mac_policy_2	2	2	0	1
+drop table t1;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+alter table T1 rename to T2, ALGORITHM = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T2	_gdb_mac_policy_1	1	8	0	1
+db	T2	_gdb_mac_policy_2	2	2	0	1
+alter table T2 rename to T1, ALGORITHM = INSTANT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+alter table T1 rename to T2, ALGORITHM = INPLACE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T2	_gdb_mac_policy_1	1	8	0	1
+db	T2	_gdb_mac_policy_2	2	2	0	1
+alter table T2 rename to T1, ALGORITHM = COPY;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+alter table T1 rename to T2, ALGORITHM = DEFAULT, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T2	_gdb_mac_policy_1	1	8	0	1
+db	T2	_gdb_mac_policy_2	2	2	0	1
+alter table T2 rename to T1, ALGORITHM = DEFAULT, LOCK = EXCLUSIVE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+alter table T1 rename to T2, ALGORITHM = INSTANT, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T2	_gdb_mac_policy_1	1	8	0	1
+db	T2	_gdb_mac_policy_2	2	2	0	1
+alter table T2 rename to T1, ALGORITHM = INPLACE, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+alter table T1 rename to T2, ALGORITHM = INPLACE, LOCK = EXCLUSIVE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T2	_gdb_mac_policy_1	1	8	0	1
+db	T2	_gdb_mac_policy_2	2	2	0	1
+alter table T2 rename to T1, ALGORITHM = COPY, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+alter table T1 rename to T2, ALGORITHM = COPY, LOCK = SHARED;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T2	_gdb_mac_policy_1	1	8	0	1
+db	T2	_gdb_mac_policy_2	2	2	0	1
+alter table T2 rename to T1, ALGORITHM = COPY, LOCK = EXCLUSIVE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+rename table T1 to T2;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T2	_gdb_mac_policy_1	1	8	0	1
+db	T2	_gdb_mac_policy_2	2	2	0	1
+rename table T2 to T1;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+db	T1	_gdb_mac_policy_1	1	8	0	1
+db	T1	_gdb_mac_policy_2	2	2	0	1
+drop table T1;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+drop database db;
+use DB;
+alter table t1 rename to t2, ALGORITHM = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t2	_gdb_mac_policy_1	1	8	0	1
+DB	t2	_gdb_mac_policy_2	2	2	0	1
+alter table t2 rename to t1, ALGORITHM = INSTANT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+alter table t1 rename to t2, ALGORITHM = INPLACE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t2	_gdb_mac_policy_1	1	8	0	1
+DB	t2	_gdb_mac_policy_2	2	2	0	1
+alter table t2 rename to t1, ALGORITHM = COPY;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+alter table t1 rename to t2, ALGORITHM = DEFAULT, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t2	_gdb_mac_policy_1	1	8	0	1
+DB	t2	_gdb_mac_policy_2	2	2	0	1
+alter table t2 rename to t1, ALGORITHM = DEFAULT, LOCK = EXCLUSIVE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+alter table t1 rename to t2, ALGORITHM = INSTANT, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t2	_gdb_mac_policy_1	1	8	0	1
+DB	t2	_gdb_mac_policy_2	2	2	0	1
+alter table t2 rename to t1, ALGORITHM = INPLACE, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+alter table t1 rename to t2, ALGORITHM = INPLACE, LOCK = EXCLUSIVE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t2	_gdb_mac_policy_1	1	8	0	1
+DB	t2	_gdb_mac_policy_2	2	2	0	1
+alter table t2 rename to t1, ALGORITHM = COPY, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+alter table t1 rename to t2, ALGORITHM = COPY, LOCK = SHARED;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t2	_gdb_mac_policy_1	1	8	0	1
+DB	t2	_gdb_mac_policy_2	2	2	0	1
+alter table t2 rename to t1, ALGORITHM = COPY, LOCK = EXCLUSIVE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+rename table t1 to t2;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t2	_gdb_mac_policy_1	1	8	0	1
+DB	t2	_gdb_mac_policy_2	2	2	0	1
+rename table t2 to t1;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+DB	t1	_gdb_mac_policy_1	1	8	0	1
+DB	t1	_gdb_mac_policy_2	2	2	0	1
+drop table t1;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+lock table T1 write;
+alter table T1 rename to T2, ALGORITHM = DEFAULT;
+unlock tables;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T2	_gdb_mac_policy_1	1	8	0	1
+DB	T2	_gdb_mac_policy_2	2	2	0	1
+alter table T2 rename to T1, ALGORITHM = INSTANT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+alter table T1 rename to T2, ALGORITHM = INPLACE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T2	_gdb_mac_policy_1	1	8	0	1
+DB	T2	_gdb_mac_policy_2	2	2	0	1
+lock table T2 write;
+alter table T2 rename to T1, ALGORITHM = COPY;
+unlock tables;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+alter table T1 rename to T2, ALGORITHM = DEFAULT, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T2	_gdb_mac_policy_1	1	8	0	1
+DB	T2	_gdb_mac_policy_2	2	2	0	1
+alter table T2 rename to T1, ALGORITHM = DEFAULT, LOCK = EXCLUSIVE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+alter table T1 rename to T2, ALGORITHM = INSTANT, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T2	_gdb_mac_policy_1	1	8	0	1
+DB	T2	_gdb_mac_policy_2	2	2	0	1
+alter table T2 rename to T1, ALGORITHM = INPLACE, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+alter table T1 rename to T2, ALGORITHM = INPLACE, LOCK = EXCLUSIVE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T2	_gdb_mac_policy_1	1	8	0	1
+DB	T2	_gdb_mac_policy_2	2	2	0	1
+alter table T2 rename to T1, ALGORITHM = COPY, LOCK = DEFAULT;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+alter table T1 rename to T2, ALGORITHM = COPY, LOCK = SHARED;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T2	_gdb_mac_policy_1	1	8	0	1
+DB	T2	_gdb_mac_policy_2	2	2	0	1
+alter table T2 rename to T1, ALGORITHM = COPY, LOCK = EXCLUSIVE;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+lock table T1 write;
+rename table T1 to T2;
+unlock tables;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T2	_gdb_mac_policy_1	1	8	0	1
+DB	T2	_gdb_mac_policy_2	2	2	0	1
+rename table T2 to T1;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+DB	T1	_gdb_mac_policy_1	1	8	0	1
+DB	T1	_gdb_mac_policy_2	2	2	0	1
+drop table T1;
+select * from sys_mac.mac_row_policy;
+db_name	table_name	column_name	p_id	l_id	visible_option	enable
+drop database DB;

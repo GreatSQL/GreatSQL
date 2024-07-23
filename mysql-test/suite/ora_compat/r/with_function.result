@@ -399,3 +399,19 @@ f_del(300)
 drop function IF EXISTS f_del;
 drop function IF EXISTS f_del1;
 drop function IF EXISTS f_del2;
+# with function without global EXECUTE privilege
+SET SQL_MODE=oracle;
+CREATE TABLE t1(a int, b int, c int);
+INSERT INTO t1 VALUES(1, 1, 1), (2, 2, 2), (3, 3, 3);
+WITH FUNCTION f() RETURN INT AS BEGIN RETURN (SELECT b FROM t1 WHERE a=2); END; SELECT f();|
+f()
+2
+CREATE USER 'user_test' IDENTIFIED BY '123';
+GRANT SELECT,INSERT,UPDATE,DELETE,EXECUTE ON test.* TO user_test;
+FLUSH PRIVILEGES;
+SET SQL_MODE=oracle;
+WITH FUNCTION f() RETURN INT AS BEGIN RETURN (SELECT b FROM t1 WHERE a=2); END; SELECT f();|
+f()
+2
+DROP TABLE t1;
+DROP USER user_test;

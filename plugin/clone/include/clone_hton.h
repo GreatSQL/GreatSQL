@@ -1,4 +1,5 @@
 /* Copyright (c) 2018, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -114,10 +115,14 @@ using myclone::Task_Vector;
 @param[out]	task_vec		vector of task identifiers
 @param[in]	clone_type		clone type
 @param[in]	clone_mode		clone begin mode
+@param[in]	start_id		start lsn for increment clone
+(Clone Type: HA_CLONE_PAGE)
+@param[in]	enable_page_track	enable page track when clone end
 @return error code */
 int hton_clone_begin(THD *thd, Storage_Vector &clone_loc_vec,
                      Task_Vector &task_vec, Ha_clone_type clone_type,
-                     Ha_clone_mode clone_mode);
+                     Ha_clone_mode clone_mode, uint64_t start_id,
+                     bool enable_page_track, file_compress_mode_t comp_mode);
 
 /** Clone copy for all storage engines supporting clone
 @param[in,out]	thd		server thread handle
@@ -143,10 +148,17 @@ int hton_clone_end(THD *thd, Storage_Vector &clone_loc_vec,
 @param[in,out]	clone_loc_vec		vector of locators from SEs
 @param[out]	task_vec		vector of task identifiers
 @param[in]	clone_mode		clone begin mode
+@param[in]	max_concurrency		Maximum number of concurrent threads for
+current operation
+@param[in]	start_id		start lsn for increment clone (Clone
+Type: HA_CLONE_PAGE)
+@param[in]	enable_page_track	enable page track when clone end
 @return error code */
 int hton_clone_apply_begin(THD *thd, const char *clone_data_dir,
                            Storage_Vector &clone_loc_vec, Task_Vector &task_vec,
-                           Ha_clone_mode clone_mode);
+                           Ha_clone_mode clone_mode, uint32_t max_concurrency,
+                           uint64_t start_id, bool enable_page_track,
+                           file_compress_mode_t comp_mode);
 
 /** Clone apply error for all storage engines supporting clone
 @param[in,out]	thd		server thread handle

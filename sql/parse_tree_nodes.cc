@@ -1,6 +1,6 @@
 /* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -622,7 +622,6 @@ bool PT_set_variable::contextualize(Parse_context *pc) {
     List_iterator_fast<ora_simple_ident_def> it(*m_def_list);
     ora_simple_ident_def *def, *def_before = nullptr;
     sp_variable *spv = nullptr;
-    LEX_CSTRING expr_query_local = EMPTY_CSTR;
     for (uint offset = 0; (def = it++); offset++) {
       if (offset == 0) {
         if (!(spv = lex->find_variable(def->ident.str, def->ident.length, &pctx,
@@ -637,13 +636,13 @@ bool PT_set_variable::contextualize(Parse_context *pc) {
       sp_instr_set_row_field_table_by_name *is =
           new (thd->mem_root) sp_instr_set_row_field_table_by_name(
               sp_local->instructions(), lex, spv->offset, m_opt_expr,
-              expr_query_local, true, pctx, rh, m_def_list, m_name);
+              expr_query, true, pctx, rh, m_def_list, m_name);
       if (!is || sp_local->add_instr(thd, is)) return true;
     } else {
       sp_instr_set_row_field_table_by_index *is =
           new (thd->mem_root) sp_instr_set_row_field_table_by_index(
-              sp->instructions(), lex, spv->offset, m_opt_expr,
-              expr_query_local, true, pctx, rh, def_before->number);
+              sp->instructions(), lex, spv->offset, m_opt_expr, expr_query,
+              true, pctx, rh, def_before->number);
       if (!is || sp->add_instr(thd, is)) return true;
     }
     return false;
@@ -800,11 +799,11 @@ bool PT_select_sp_var::contextualize(Parse_context *pc) {
     return true;
   }
   offset = spv->offset;
-  is_row_table = spv->field_def.ora_record.is_row_table();
+  is_row_table = spv->field_def.ora_record.row_field_table_definitions();
   is_rowtype =
       !is_row_table && (spv->field_def.ora_record.is_cursor_rowtype_ref() ||
-                        spv->field_def.ora_record.is_table_rowtype_ref() ||
-                        spv->field_def.ora_record.is_row());
+                        spv->field_def.ora_record.table_rowtype_ref() ||
+                        spv->field_def.ora_record.row_field_definitions());
   is_record_define_type = spv->field_def.ora_record.is_record_define;
 
   is_record_table_define_type =

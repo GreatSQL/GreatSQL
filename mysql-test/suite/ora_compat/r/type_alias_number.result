@@ -1280,3 +1280,29 @@ Note	1051	Unknown table 'test.test2'
 DROP TABLE IF EXISTS `test3`;
 DROP TABLE IF EXISTS `test_number`;
 DROP TABLE IF EXISTS `test_count`;
+set sql_mode=default;
+select to_number('1.666e+30','9.999EEEE') from dual;
+to_number('1.666e+30','9.999EEEE')
+1.666e30
+select to_number('1.26E+50','9.999EEEE') from dual;
+to_number('1.26E+50','9.999EEEE')
+1.26e50
+select to_number('1.26E+51','9.999EEEE') from dual;
+to_number('1.26E+51','9.999EEEE')
+1.26e51
+select to_number('1.66e-20','9.99EEEE') from dual;
+to_number('1.66e-20','9.99EEEE')
+1.66e-20
+set sql_mode=oracle;
+select to_number('1.666e+30','9.999EEEE') from dual;
+to_number('1.666e+30','9.999EEEE')
+1.666e30
+select to_number('1.26E+50','9.999EEEE') from dual;
+to_number('1.26E+50','9.999EEEE')
+1.26e50
+select to_number('1.26E+51','9.999EEEE') from dual;
+to_number('1.26E+51','9.999EEEE')
+1.26e51
+select to_number('1.66e-20','9.99EEEE') from dual;
+to_number('1.66e-20','9.99EEEE')
+1.66e-20

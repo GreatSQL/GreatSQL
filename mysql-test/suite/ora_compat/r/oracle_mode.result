@@ -124,3 +124,44 @@ set sql_mode=oracle $$
 set shrink_sql_mode='STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY' $$
 set shrink_sql_mode='';
 set sql_mode=oracle;
+set shrink_sql_mode='SYSDATE_IS_NOW';
+set sql_mode=oracle;
+select @@sql_mode;
+@@sql_mode
+PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+set shrink_sql_mode=oracle;
+ERROR 42000: Variable 'shrink_sql_mode' can't be set to the value of 'oracle'
+set shrink_sql_mode=ansi;
+ERROR 42000: Variable 'shrink_sql_mode' can't be set to the value of 'ANSI'
+set shrink_sql_mode=traditional;
+ERROR 42000: Variable 'shrink_sql_mode' can't be set to the value of 'traditional'
+set shrink_sql_mode='';
+set sql_mode=default;
+select 'aa'|| 1*2;
+'aa'|| 1*2
+1
+Warnings:
+Warning	1287	'|| as a synonym for OR' is deprecated and will be removed in a future release. Please use OR instead
+Warning	1292	Truncated incorrect DOUBLE value: 'aa'
+set sql_mode=oracle;
+select 'aa'|| 1*2;
+'aa'|| 1*2
+aa2
+select TABLE_NAME from information_schema.tables where TABLE_NAME like 'innodb'|| '_redo' || '_log%';
+TABLE_NAME
+innodb_redo_log_files
+create table t1 (id int);
+select TABLE_NAME  from information_schema.tables where TABLE_SCHEMA = 'test' and  TABLE_NAME NOT like 'innodb'|| '_redo' || '_log%' ;
+TABLE_NAME
+t1
+drop table t1;
+set shrink_sql_mode='PIPES_AS_CONCAT';
+ERROR 42000: Variable 'shrink_sql_mode' can't be set to the value of 'PIPES_AS_CONCAT'
+set shrink_sql_mode='ANSI_QUOTES';
+set sql_mode = 'ansi,error_for_division_by_zero';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+select @@sql_mode;
+@@sql_mode
+REAL_AS_FLOAT,PIPES_AS_CONCAT,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI,ERROR_FOR_DIVISION_BY_ZERO

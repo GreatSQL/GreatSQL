@@ -7,7 +7,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 Database
 information_schema
@@ -15,5 +14,4 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test

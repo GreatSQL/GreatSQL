@@ -32,9 +32,16 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 1205 : Lock wait timeout exceeded; try restarting transaction.
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Failed	3862
+0	Failed	3862
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
 SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
 # In connection CON1
 # In connection DEFAULT
@@ -86,9 +93,40 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 1205 : Lock wait timeout exceeded; try restarting transaction.
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Failed	3862
+0	Failed	3862
+1	Completed	0
+2	Completed	0
+3	Failed	3862
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+2	DROP DATA	Completed
+2	FILE COPY	Completed
+2	PAGE COPY	Completed
+2	REDO COPY	Completed
+2	FILE SYNC	Completed
+2	RESTART	Not Started
+2	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
 SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
 # In connection CON1
 # In connection DEFAULT
@@ -115,9 +153,48 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 1205 : Lock wait timeout exceeded; try restarting transaction.
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Failed	3862
+0	Failed	3862
+1	Completed	0
+2	Completed	0
+3	Failed	3862
+4	Failed	3862
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+2	DROP DATA	Completed
+2	FILE COPY	Completed
+2	PAGE COPY	Completed
+2	REDO COPY	Completed
+2	FILE SYNC	Completed
+2	RESTART	Not Started
+2	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
 SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
 # In connection CON1
 # In connection DEFAULT
@@ -165,9 +242,64 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 1205 : Lock wait timeout exceeded; try restarting transaction.
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Failed	3862
+0	Failed	3862
+1	Completed	0
+2	Completed	0
+3	Failed	3862
+4	Failed	3862
+5	Completed	0
+6	Failed	3862
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+2	DROP DATA	Completed
+2	FILE COPY	Completed
+2	PAGE COPY	Completed
+2	REDO COPY	Completed
+2	FILE SYNC	Completed
+2	RESTART	Not Started
+2	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+5	DROP DATA	Completed
+5	FILE COPY	Completed
+5	PAGE COPY	Completed
+5	REDO COPY	Completed
+5	FILE SYNC	Completed
+5	RESTART	Not Started
+5	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
 SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
 # In connection CON1
 # In connection DEFAULT
@@ -219,9 +351,80 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 1205 : Lock wait timeout exceeded; try restarting transaction.
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Failed	3862
+0	Failed	3862
+1	Completed	0
+2	Completed	0
+3	Failed	3862
+4	Failed	3862
+5	Completed	0
+6	Failed	3862
+7	Completed	0
+8	Failed	3862
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+2	DROP DATA	Completed
+2	FILE COPY	Completed
+2	PAGE COPY	Completed
+2	REDO COPY	Completed
+2	FILE SYNC	Completed
+2	RESTART	Not Started
+2	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+5	DROP DATA	Completed
+5	FILE COPY	Completed
+5	PAGE COPY	Completed
+5	REDO COPY	Completed
+5	FILE SYNC	Completed
+5	RESTART	Not Started
+5	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+7	DROP DATA	Completed
+7	FILE COPY	Completed
+7	PAGE COPY	Completed
+7	REDO COPY	Completed
+7	FILE SYNC	Completed
+7	RESTART	Not Started
+7	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
 SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
 # In connection CON1
 # In connection DEFAULT
@@ -269,9 +472,88 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 1205 : Lock wait timeout exceeded; try restarting transaction.
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Failed	3862
+10	Failed	3862
+1	Completed	0
+2	Completed	0
+3	Failed	3862
+4	Failed	3862
+5	Completed	0
+6	Failed	3862
+7	Completed	0
+8	Failed	3862
+9	Completed	0
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+2	DROP DATA	Completed
+2	FILE COPY	Completed
+2	PAGE COPY	Completed
+2	REDO COPY	Completed
+2	FILE SYNC	Completed
+2	RESTART	Not Started
+2	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+5	DROP DATA	Completed
+5	FILE COPY	Completed
+5	PAGE COPY	Completed
+5	REDO COPY	Completed
+5	FILE SYNC	Completed
+5	RESTART	Not Started
+5	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+7	DROP DATA	Completed
+7	FILE COPY	Completed
+7	PAGE COPY	Completed
+7	REDO COPY	Completed
+7	FILE SYNC	Completed
+7	RESTART	Not Started
+7	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+9	DROP DATA	Completed
+9	FILE COPY	Completed
+9	PAGE COPY	Completed
+9	REDO COPY	Completed
+9	FILE SYNC	Completed
+9	RESTART	Not Started
+9	RECOVERY	Not Started
 SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
 # In connection CON1
 # In connection DEFAULT
@@ -334,9 +616,88 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 1205 : Lock wait timeout exceeded; try restarting transaction.
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Failed	3862
+10	Failed	3862
+11	Completed	0
+12	Completed	0
+13	Failed	3862
+4	Failed	3862
+5	Completed	0
+6	Failed	3862
+7	Completed	0
+8	Failed	3862
+9	Completed	0
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+11	DROP DATA	Completed
+11	FILE COPY	Completed
+11	PAGE COPY	Completed
+11	REDO COPY	Completed
+11	FILE SYNC	Completed
+11	RESTART	Not Started
+11	RECOVERY	Not Started
+12	DROP DATA	Completed
+12	FILE COPY	Completed
+12	PAGE COPY	Completed
+12	REDO COPY	Completed
+12	FILE SYNC	Completed
+12	RESTART	Not Started
+12	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+5	DROP DATA	Completed
+5	FILE COPY	Completed
+5	PAGE COPY	Completed
+5	REDO COPY	Completed
+5	FILE SYNC	Completed
+5	RESTART	Not Started
+5	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+7	DROP DATA	Completed
+7	FILE COPY	Completed
+7	PAGE COPY	Completed
+7	REDO COPY	Completed
+7	FILE SYNC	Completed
+7	RESTART	Not Started
+7	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+9	DROP DATA	Completed
+9	FILE COPY	Completed
+9	PAGE COPY	Completed
+9	REDO COPY	Completed
+9	FILE SYNC	Completed
+9	RESTART	Not Started
+9	RECOVERY	Not Started
 SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
 # In connection CON1
 # In connection DEFAULT
@@ -384,9 +745,88 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 1205 : Lock wait timeout exceeded; try restarting transaction.
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Failed	3862
+10	Failed	3862
+11	Completed	0
+12	Completed	0
+13	Failed	3862
+14	Completed	0
+15	Failed	3862
+6	Failed	3862
+7	Completed	0
+8	Failed	3862
+9	Completed	0
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+11	DROP DATA	Completed
+11	FILE COPY	Completed
+11	PAGE COPY	Completed
+11	REDO COPY	Completed
+11	FILE SYNC	Completed
+11	RESTART	Not Started
+11	RECOVERY	Not Started
+12	DROP DATA	Completed
+12	FILE COPY	Completed
+12	PAGE COPY	Completed
+12	REDO COPY	Completed
+12	FILE SYNC	Completed
+12	RESTART	Not Started
+12	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+14	DROP DATA	Completed
+14	FILE COPY	Completed
+14	PAGE COPY	Completed
+14	REDO COPY	Completed
+14	FILE SYNC	Completed
+14	RESTART	Not Started
+14	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+7	DROP DATA	Completed
+7	FILE COPY	Completed
+7	PAGE COPY	Completed
+7	REDO COPY	Completed
+7	FILE SYNC	Completed
+7	RESTART	Not Started
+7	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+9	DROP DATA	Completed
+9	FILE COPY	Completed
+9	PAGE COPY	Completed
+9	REDO COPY	Completed
+9	FILE SYNC	Completed
+9	RESTART	Not Started
+9	RECOVERY	Not Started
 SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
 # In connection CON1
 # In connection DEFAULT
@@ -429,9 +869,88 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 1205 : Lock wait timeout exceeded; try restarting transaction.
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Failed	3862
+10	Failed	3862
+11	Completed	0
+12	Completed	0
+13	Failed	3862
+14	Completed	0
+15	Failed	3862
+16	Completed	0
+17	Failed	3862
+8	Failed	3862
+9	Completed	0
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+11	DROP DATA	Completed
+11	FILE COPY	Completed
+11	PAGE COPY	Completed
+11	REDO COPY	Completed
+11	FILE SYNC	Completed
+11	RESTART	Not Started
+11	RECOVERY	Not Started
+12	DROP DATA	Completed
+12	FILE COPY	Completed
+12	PAGE COPY	Completed
+12	REDO COPY	Completed
+12	FILE SYNC	Completed
+12	RESTART	Not Started
+12	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+14	DROP DATA	Completed
+14	FILE COPY	Completed
+14	PAGE COPY	Completed
+14	REDO COPY	Completed
+14	FILE SYNC	Completed
+14	RESTART	Not Started
+14	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+16	DROP DATA	Completed
+16	FILE COPY	Completed
+16	PAGE COPY	Completed
+16	REDO COPY	Completed
+16	FILE SYNC	Completed
+16	RESTART	Not Started
+16	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+9	DROP DATA	Completed
+9	FILE COPY	Completed
+9	PAGE COPY	Completed
+9	REDO COPY	Completed
+9	FILE SYNC	Completed
+9	RESTART	Not Started
+9	RECOVERY	Not Started
 SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
 # In connection CON1
 # In connection DEFAULT
@@ -471,9 +990,88 @@ CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATA
 ERROR HY000: Clone Donor Error: 1205 : Lock wait timeout exceeded; try restarting transaction.
 select ID, STATE, ERROR_NO from performance_schema.clone_status;
 ID	STATE	ERROR_NO
-1	Failed	3862
+10	Failed	3862
+11	Completed	0
+12	Completed	0
+13	Failed	3862
+14	Completed	0
+15	Failed	3862
+16	Completed	0
+17	Failed	3862
+18	Completed	0
+19	Failed	3862
 select ID, STAGE, STATE from performance_schema.clone_progress;
 ID	STAGE	STATE
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+11	DROP DATA	Completed
+11	FILE COPY	Completed
+11	PAGE COPY	Completed
+11	REDO COPY	Completed
+11	FILE SYNC	Completed
+11	RESTART	Not Started
+11	RECOVERY	Not Started
+12	DROP DATA	Completed
+12	FILE COPY	Completed
+12	PAGE COPY	Completed
+12	REDO COPY	Completed
+12	FILE SYNC	Completed
+12	RESTART	Not Started
+12	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+14	DROP DATA	Completed
+14	FILE COPY	Completed
+14	PAGE COPY	Completed
+14	REDO COPY	Completed
+14	FILE SYNC	Completed
+14	RESTART	Not Started
+14	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+16	DROP DATA	Completed
+16	FILE COPY	Completed
+16	PAGE COPY	Completed
+16	REDO COPY	Completed
+16	FILE SYNC	Completed
+16	RESTART	Not Started
+16	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+18	DROP DATA	Completed
+18	FILE COPY	Completed
+18	PAGE COPY	Completed
+18	REDO COPY	Completed
+18	FILE SYNC	Completed
+18	RESTART	Not Started
+18	RECOVERY	Not Started
+0	DROP DATA	Not Started
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
 SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
 # In connection CON1
 # In connection DEFAULT

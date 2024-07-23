@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -458,7 +458,7 @@ class Gcs_operations {
   */
   bool is_initialized();
 
-  void update_zone_id_through_gcs(const char *ip, int zone_id,
+  void update_zone_id_through_gcs(const char *address, int zone_id,
                                   bool zone_id_sync_mode);
 
   void update_xcom_cache_mode_through_gcs(int new_mode);

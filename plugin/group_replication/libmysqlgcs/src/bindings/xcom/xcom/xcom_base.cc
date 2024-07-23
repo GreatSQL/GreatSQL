@@ -1,5 +1,5 @@
 /* Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -376,9 +376,12 @@ static int sweeper_task(task_arg arg);
 extern int alive_task(task_arg arg);
 extern int cache_manager_task(task_arg arg);
 extern int detector_task(task_arg arg);
-extern void notify_detector_when_removed();
-extern void notify_detector_when_actually_removed();
-extern int ask_for_detector_if_added_ok();
+extern void notify_detector_when_needed(const char *ip, xcom_port port,
+                                        int timeout);
+extern void notify_detector_when_forced();
+extern void notify_detector_when_removed(u_int n, node_address *names,
+                                         int timeout);
+extern int ask_for_detector_if_added_ok(u_int n, node_address *names);
 
 static int finished(pax_machine *p);
 static int accepted(pax_machine *p);
@@ -871,11 +874,16 @@ static inline int majority(bit_set const *nodeset, site_def const *s, int all,
                         s->servers[i]->unreachable)) {
           continue;
         }
-        if (zone_hit[s->servers[i]->zone_id]) {
-          zone_num++;
-        }
-        if (zone_ack_hit[s->servers[i]->zone_id]) {
-          zone_ack_num++;
+
+        bool zone_sync_mode = s->servers[i]->zone_id_sync_mode;
+
+        if (zone_sync_mode) {
+          if (zone_hit[s->servers[i]->zone_id]) {
+            zone_num++;
+          }
+          if (zone_ack_hit[s->servers[i]->zone_id]) {
+            zone_ack_num++;
+          }
         }
       }
 
@@ -1703,6 +1711,12 @@ static void brand_app_data(pax_msg *p) {
 static synode_no my_unique_id(synode_no synode) {
   assert(my_id != 0);
   site_def const *site = find_site_def(synode);
+  if (!site) {
+    G_WARNING(
+        "my_unique_id, find_site_def is nillptr, synode msgno:%lu, "
+        "node:%d",
+        synode.msgno, synode.node);
+  }
   /* Random number derived from node number and timestamp which uniquely defines
    * this instance */
   synode.group_id = my_id;
@@ -2834,7 +2848,6 @@ void execute_msg(site_def *site, pax_machine *pma, pax_msg *p) {
             }
             G_INFO("before deliver_global_view_msg is called");
             deliver_global_view_msg(site, a->body.app_u_u.present, p->synode);
-            notify_detector_when_actually_removed();
             G_INFO("after deliver_global_view_msg is called");
             ADD_DBG(D_BASE,
                     add_event(EVENT_DUMP_PAD,
@@ -3596,6 +3609,20 @@ site_def *handle_add_node(app_data_ptr a) {
   if (unsafe_leaders(a)) {
     return nullptr;
   }
+
+  {
+    u_int nr_nodes_to_add = a->body.app_u_u.nodes.node_list_len;
+    node_address *nodes_to_change = a->body.app_u_u.nodes.node_list_val;
+
+    G_INFO("handle_add_node check ask_for_detector_if_added_ok");
+    if (!ask_for_detector_if_added_ok(nr_nodes_to_add, nodes_to_change)) {
+      G_INFO(
+          "Old incarnation has not been removed while trying to add a new "
+          "node in handle_add_node");
+      return nullptr;
+    }
+  }
+
   {
     for (u_int node = 0; node < a->body.app_u_u.nodes.node_list_len; node++) {
       G_INFO("Adding new node to the configuration: %s",
@@ -3925,6 +3952,7 @@ void terminate_and_exit() {
   ADD_DBG(D_FSM, add_event(EVENT_DUMP_PAD, string_arg("terminating"));)
   XCOM_FSM(x_fsm_terminate, int_arg(0)); /* Tell xcom to stop */
   XCOM_FSM(x_fsm_exit, int_arg(0));      /* Tell xcom to exit */
+  G_INFO("terminate_and_exit calls here");
   if (xcom_expel_cb) xcom_expel_cb(0);
 }
 
@@ -3949,9 +3977,12 @@ site_def *handle_remove_node(app_data_ptr a) {
     recompute_timestamps(old_site->detected, &old_site->nodes, site->detected,
                          &site->nodes);
   }
-  G_INFO("handle_remove_node calls site_install_action");
+  G_INFO(
+      "handle_remove_node calls site_install_action, nodes:%d, node number:%d",
+      a->body.app_u_u.nodes.node_list_len, get_nodeno(site));
   site_install_action(site, a->body.c_t);
-  notify_detector_when_removed();
+  notify_detector_when_removed(a->body.app_u_u.nodes.node_list_len,
+                               a->body.app_u_u.nodes.node_list_val, 10);
   return site;
 }
 
@@ -4004,6 +4035,7 @@ static void log_ignored_forced_config(app_data_ptr a,
     case reset_type:
     case set_cache_limit:
     case set_flp_timeout:
+    case set_notify_truly_remove:
     case view_msg:
     case x_terminate_and_exit:
     case xcom_boot_type:
@@ -5009,6 +5041,7 @@ static pax_msg *create_ack_prepare_msg(pax_machine *p, pax_msg *pm,
     reply->msg_type = p->acceptor.msg->msg_type;
     IFDBG(D_NONE, FN; STRLIT(" already accepted value "); SYCEXP(synode));
     reply->op = ack_prepare_op;
+
     safe_app_data_copy(&reply, p->acceptor.msg->a);
   } else {
     IFDBG(D_NONE, FN; STRLIT(" no value synode "); SYCEXP(synode));
@@ -5231,7 +5264,7 @@ static void handle_accept(site_def const *site, pax_machine *p,
     bool skip_flag = false;
     bool over_skip = false;
     if (m->synode.msgno > MAX_PROPOSER_ONLINE) {
-      if (site->nodeno != m->synode.node && m->synode.node == m->from &&
+      if (site && site->nodeno != m->synode.node && m->synode.node == m->from &&
           all_nodes_valid) {
         if (participate_paxos[m->synode.msgno % MAX_ARRAY_LEN] == 0) {
           if (link_empty(&(prop_input_queue.data))) {
@@ -5549,6 +5582,7 @@ static inline void handle_boot(site_def const *site, linkage *reply_queue,
     return;
   }
 
+  G_INFO("handle_boot call should_handle_need_boot");
   if (ALWAYS_HANDLE_NEED_BOOT || should_handle_need_boot(site, p)) {
     handle_need_snapshot(reply_queue, p);
   } else {
@@ -5564,6 +5598,8 @@ bool_t should_handle_need_boot(site_def const *site, pax_msg *p) {
   bool_t const sender_advertises_identity =
       (p->a != nullptr && p->a->body.c_t == xcom_boot_type);
 
+  G_INFO("in should_handle_need_boot, site:%p, msgno:%lu, node:%d", site,
+         p->synode.msgno, p->synode.node);
   /*
    If the message advertises the sender's identity, check if it matches the
    membership information.
@@ -5614,6 +5650,7 @@ void init_need_boot_op(pax_msg *p, node_address *identity) {
   if (identity != nullptr) {
     p->a = new_app_data();
     p->a->body.c_t = xcom_boot_type;
+    G_INFO("init_need_boot_op set xcom_boot_type");
     init_node_list(1, identity, &p->a->body.app_u_u.nodes);
   }
 }
@@ -5825,9 +5862,10 @@ static u_int allow_add_node(app_data_ptr a) {
   }
 
   G_INFO("allow_add_node check ask_for_detector_if_added_ok");
-  if (!ask_for_detector_if_added_ok()) {
-    G_WARNING(
-        "Old incarnation has not been removed while trying to add a new node");
+  if (!ask_for_detector_if_added_ok(nr_nodes_to_add, nodes_to_change)) {
+    G_INFO(
+        "Old incarnation has not been removed while trying to add a new "
+        "node");
     return 0;
   }
 
@@ -5874,6 +5912,45 @@ static u_int allow_remove_node(app_data_ptr a) {
   }
 
   return 1;
+}
+
+int ask_for_reconnect_if_ok(server *reconnect_server) {
+  /* Get information on the current site definition */
+  const site_def *s = get_site_def();
+
+  u_int n;
+
+  if (s) {
+    u_int i = 0;
+    n = s->nodes.node_list_len;
+
+    for (i = 0; i < n; i++) {
+      char *addr = s->nodes.node_list_val[i].address;
+      char *name = nullptr;
+      xcom_port port = 0;
+
+      name = (char *)xcom_malloc(IP_MAX_SIZE);
+
+      /* In this specific place, addr must have been validated elsewhere,
+         specifically when the node is added. */
+      if (get_ip_and_port(addr, name, &port)) {
+        G_INFO("Error parsing ip:port for new server. Incorrect value is %s",
+               addr ? addr : "unknown");
+        free(name);
+        continue;
+      }
+
+      if (port == reconnect_server->port) {
+        if (strcmp(name, reconnect_server->srv) == 0) {
+          free(name);
+          return 1;
+        }
+      }
+      free(name);
+    }
+  }
+
+  return 0;
 }
 
 /**
@@ -6169,6 +6246,42 @@ static void process_client_msg(site_def const *site, pax_msg *p,
     SEND_REPLY;
     return;
   }
+
+  if (p->a && (p->a->body.c_t == set_notify_truly_remove)) {
+    CREATE_REPLY(p);
+    if (the_app_xcom_cfg) {
+      strcpy(the_app_xcom_cfg->ip_port, p->a->body.app_u_u.ip_port);
+      size_t len = strlen(the_app_xcom_cfg->ip_port);
+      char *split = nullptr;
+      if (len > 1) {
+        for (int i = len - 1; i >= 0; i--) {
+          if (the_app_xcom_cfg->ip_port[i] == ':') {
+            split = the_app_xcom_cfg->ip_port + i;
+            break;
+          }
+        }
+      }
+      if (split) {
+        const char *ip = the_app_xcom_cfg->ip_port;
+        xcom_port port = atoi(split + 1);
+        *split = '\0';
+        G_INFO("find split for ip port pair,ip:%s, port:%d", ip, port);
+        notify_detector_when_needed(ip, port, 0);
+        *split = ':';
+        reply->cli_err = REQUEST_OK;
+      } else {
+        G_INFO("could not find split for ip port pair:%s",
+               the_app_xcom_cfg->ip_port);
+        reply->cli_err = REQUEST_FAIL;
+      }
+    } else {
+      reply->cli_err = REQUEST_FAIL;
+    }
+    reply->op = xcom_client_reply;
+    SEND_REPLY;
+    return;
+  }
+
   if (p->a && (p->a->body.c_t == x_terminate_and_exit)) {
     /* purecov: begin deadcode */
     CREATE_REPLY(p);
@@ -7147,7 +7260,8 @@ int reply_handler_task(task_arg arg) {
       ADD_DBG(D_BASE,
               add_event(EVENT_DUMP_PAD,
                         string_arg("calling server_handle_need_snapshot")););
-      if (should_handle_need_boot(find_site_def(p->synode), p)) {
+      site_def const *find_site = find_site_def(p->synode);
+      if (find_site && should_handle_need_boot(find_site, p)) {
         server_handle_need_snapshot(ep->s, find_site_def(p->synode), p->from);
         /* Wake senders waiting to connect, since new node has appeared */
         wakeup_sender();
@@ -7269,6 +7383,14 @@ app_data_ptr init_set_flp_timeout_msg(app_data *a, uint64_t flp_timeout) {
   init_app_data(a);
   a->body.c_t = set_flp_timeout;
   a->body.app_u_u.flp_timeout = flp_timeout;
+  return a;
+}
+
+app_data_ptr init_set_notify_truly_remove_msg(app_data *a,
+                                              const char *address) {
+  init_app_data(a);
+  a->body.c_t = set_notify_truly_remove;
+  strcpy(a->body.app_u_u.ip_port, address);
   return a;
 }
 
@@ -7593,6 +7715,7 @@ static void send_need_boot() {
   ref_msg(p);
   p->synode = get_site_def()->start;
   p->op = need_boot_op;
+  G_INFO("send_need_boot set need_boot_op");
   send_to_all_except_self(get_site_def(), p, "need_boot_op");
   unref_msg(&p);
 }
@@ -7830,6 +7953,7 @@ static int handle_local_snapshot(task_arg fsmargs, xcom_fsm_state *ctxt) {
   /* When recovering locally, fetch node number from site_def after
    * processing the snapshot */
   note_snapshot(get_site_def()->nodeno);
+  G_INFO("handle_local_snapshot calls send_need_boot");
   send_need_boot();
   pop_dbg();
   SET_X_FSM_STATE(xcom_fsm_recover_wait_enter);
@@ -7848,6 +7972,7 @@ static int handle_snapshot(task_arg fsmargs, xcom_fsm_state *ctxt) {
    * local snapshot will ever arrive. This simplifies the test in
    * got_all_snapshots() */
   note_snapshot(get_site_def()->nodeno);
+  G_INFO("handle_snapshot calls send_need_boot");
   send_need_boot();
   pop_dbg();
   SET_X_FSM_STATE(xcom_fsm_recover_wait_enter);
@@ -8004,7 +8129,9 @@ static void handle_fsm_force_config(task_arg fsmargs) {
   site_def *s = create_site_def_with_start(a, executed_msg);
 
   s->boot_key = executed_msg;
-  invalidate_servers(get_site_def(), s);
+  site_def const *old_site = get_site_def();
+  invalidate_servers(old_site, s);
+  notify_detector_when_forced();
   start_force_config(s, 1);
   wait_forced_config = 1; /* Note that forced config has not yet arrived */
 }

@@ -2,7 +2,7 @@
 #define FIELD_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -607,13 +607,11 @@ class Field {
   void operator=(Field &) = delete;
 
   // for Field_row
-  virtual TABLE **virtual_tmp_table_addr() { return nullptr; }
   virtual bool sp_prepare_and_store_item(THD *thd, Item **value);
   virtual void clear_table_all_field() {}
   virtual void set_arg_count(uint) {}
 
   virtual LEX_CSTRING get_nested_table_udt() { return NULL_CSTR; }
-  virtual longlong get_varray_size_limit() { return -1; }
   // for Field_udt_type
   virtual LEX_STRING udt_name() { return NULL_STR; }
   virtual char *get_udt_db_name() { return nullptr; }
@@ -841,6 +839,7 @@ class Field {
  public:
   /* Generated column data */
   Value_generator *gcol_info{nullptr};
+  TABLE *m_udt_table{nullptr};
   /**
     Indication that the field is physically stored in tables
     rather than just generated on SQL queries.
@@ -999,6 +998,11 @@ class Field {
   type_conversion_status store(const char *to, size_t length,
                                const CHARSET_INFO *cs,
                                enum_check_fields check_level);
+  virtual type_conversion_status store_udt(TABLE *, Item *) {
+    assert(false);
+    return TYPE_ERR_BAD_VALUE;
+  }
+  virtual TABLE *val_udt() { return m_udt_table; }
   virtual double val_real() const = 0;
   virtual longlong val_int() const = 0;
   /**
@@ -2239,6 +2243,7 @@ class Field_new_decimal : public Field_num {
   static Field *create_from_item(const Item *item, MEM_ROOT *root = nullptr);
   bool send_to_protocol(Protocol *protocol) const final;
   void set_keep_precision(bool arg) { m_keep_precision = arg; }
+  bool get_keep_precision() { return m_keep_precision; }
 };
 
 class Field_tiny : public Field_num {
@@ -2618,8 +2623,6 @@ class Field_null : public Field_str {
 };
 
 class Field_row : public Field_null {
-  TABLE *m_table;
-
  protected:
   Item **m_cdf_default_list;
   uint arg_count;
@@ -2629,12 +2632,12 @@ class Field_row : public Field_null {
  public:
   Field_row(uchar *ptr_arg, const char *field_name_arg)
       : Field_null(ptr_arg, 0, Field::NONE, field_name_arg, &my_charset_bin),
-        m_table(NULL),
+        m_cdf_default_list(nullptr),
         arg_count(0),
         m_udt_name(NULL_STR),
         m_udt_db_name(NULL_STR),
-        is_udt_value_initialized(false),
         m_nested_table_udt(NULL_CSTR),
+        is_udt_value_initialized(false),
         is_tmp_field(false) {}
   ~Field_row() override;
   Field_row(const Field_row &) = default;
@@ -2642,7 +2645,6 @@ class Field_row : public Field_null {
     assert(type() == MYSQL_TYPE_NULL);
     return new (mem_root) Field_row(*this);
   }
-  TABLE **virtual_tmp_table_addr() override { return &m_table; }
   void clear_table_all_field() override;
   bool alloc_default_value_list(THD *thd, uint count);
   Item *get_cdf_default_list(uint i) { return m_cdf_default_list[i]; }
@@ -2676,15 +2678,16 @@ class Field_row : public Field_null {
   void set_null(ptrdiff_t row_offset = 0) override;
   void set_notnull(ptrdiff_t row_offset = 0) override;
   void sql_type(String &str) const override;
+  type_conversion_status store_udt(TABLE *table, Item *item) override;
   void create_udt_table(THD *thd, List<Create_field> *fld_list);
   uint32 pack_length() const override {
-    if (!m_table || !m_table->s) return 0;
-    return m_table->s->reclength;
+    if (!m_udt_table || !m_udt_table->s) return 0;
+    return m_udt_table->s->reclength;
   }
 
  public:
-  bool is_udt_value_initialized;
   LEX_CSTRING m_nested_table_udt;
+  bool is_udt_value_initialized;
   bool is_tmp_field;
 };
 
@@ -2698,7 +2701,6 @@ class Cursor_return_table {
   Cursor_return_table() : m_table(nullptr), tmp_table_param(nullptr) {}
   ~Cursor_return_table();
   TABLE *get_table() { return m_table; }
-  TABLE **get_table_addr() { return &m_table; }
   bool make_return_table(THD *thd, List<Create_field> *list);
   bool check_return_data(THD *thd, const mem_root_deque<Item *> &items);
 };
@@ -2727,10 +2729,7 @@ class Field_refcursor final : public Field_row {
 
   void set_cursor_return_type();
   bool set_cursor_return_type_from_other_refcursor(uint offset);
-  TABLE *get_return_table() { return m_return_table->get_table(); }
-  TABLE **virtual_tmp_table_addr() override {
-    return m_return_table->get_table_addr();
-  }
+  TABLE *val_udt() override { return m_return_table->get_table(); }
 
  public:
   std::shared_ptr<sp_refcursor> m_cursor;
@@ -2747,6 +2746,8 @@ class Field_row_table final : public Field_row {
   longlong m_varray_size_limit;
   bool m_is_record_table_type_define;
   bool m_is_index_by;
+  // a temp Table_function_record to save data from value.
+  Table_function_record *tmp_table_record;
 
  public:
   Field_row_table(uchar *ptr_arg, const char *field_name_arg, int index_length)
@@ -2755,7 +2756,8 @@ class Field_row_table final : public Field_row {
         table_record(nullptr),
         m_varray_size_limit(-1),
         m_is_record_table_type_define(false),
-        m_is_index_by(false) {}
+        m_is_index_by(false),
+        tmp_table_record(nullptr) {}
   ~Field_row_table() override;
   Field_row_table(const Field_row_table &) = default;
   /**
@@ -2792,17 +2794,22 @@ class Field_row_table final : public Field_row {
   longlong get_row_count();
 
   void clear_table_all_field() override;
-  TABLE **virtual_tmp_table_addr() override;
   bool fill_result_table_all_default_col(Item *index_item);
   Item *get_table_element(Item *item_index, uint i);
 
-  longlong get_varray_size_limit() override { return m_varray_size_limit; }
-  bool insert_into_table_udt_table_values(THD *thd, Item *item_from);
   void set_null(ptrdiff_t row_offset = 0) override;
   void set_notnull(ptrdiff_t row_offset = 0) override;
   int get_index_length() { return m_index_length; }
   String *val_str(String *, String *value2) const override;
+  TABLE *val_udt() override;
+  type_conversion_status store_udt(TABLE *table, Item *item) override;
   List<Create_field> *get_field_create_field_list();
+  bool create_tmp_record_table_to_store_bulk_data(THD *thd, const char *alias,
+                                                  List<Create_field> vt_list,
+                                                  uint spv_offset,
+                                                  uint forall_i_offset,
+                                                  bool is_str_index);
+  bool fill_bulk_table_with_tmp_table();
 };
 
 /*
@@ -4152,7 +4159,6 @@ class Field_blob : public Field_longstr {
 
 class Field_udt_type : public Field_varstring {
   LEX_CSTRING m_ident;
-  TABLE *m_type_table;
   MEM_ROOT *m_share_mem_root;
   char *m_udt_db_name;
 
@@ -4188,14 +4194,14 @@ class Field_udt_type : public Field_varstring {
   ~Field_udt_type() override { clear_table_all_field(); }
   type_conversion_status store(const Field *from);
   using Field_varstring::store;
+  type_conversion_status store_udt(TABLE *table, Item *item) override;
+  TABLE *val_udt() override;
   String *val_str(String *, String *) const override;
   longlong val_int() const final { return 1; }
   bool create_udt_table_from_routine(THD *thd);
   LEX_STRING udt_name() override { return to_lex_string(m_ident); }
   Item_result result_type() const override { return ROW_RESULT; }
-  TABLE **virtual_tmp_table_addr() override { return &m_type_table; }
   void clear_table_all_field() override;
-  void set_udt_table(TABLE *table_udt) { m_type_table = table_udt; }
   void sql_type(String &str) const final;
   const CHARSET_INFO *charset_for_protocol() const override;
   char *get_udt_db_name() override { return m_udt_db_name; }
@@ -5009,14 +5015,15 @@ type_conversion_status store_internal_with_error_check(Field_new_decimal *field,
     indexed expression.
 
   @param thd       Thread handler
-  @param item      The item to generate a Create_field from
+  @param source_item      The item to generate a Create_field from
   @param tmp_table A table object which is used to generate a temporary table
                    field, as described above. This doesn't need to be an
                    existing table.
   @return          A Create_field generated from the input item, or nullptr
                    in case of errors.
 */
-Create_field *generate_create_field(THD *thd, Item *item, TABLE *tmp_table);
+Create_field *generate_create_field(THD *thd, Item *source_item,
+                                    TABLE *tmp_table);
 
 inline bool is_blob(enum_field_types sql_type) {
   return (sql_type == MYSQL_TYPE_BLOB || sql_type == MYSQL_TYPE_MEDIUM_BLOB ||
@@ -5048,7 +5055,10 @@ bool pre_validate_value_generator_expr(Item *expression, const char *name,
 
 // Used to show udt data
 String *show_udt_values(TABLE *table, String *var);
+String *get_udt_table_val_str(String *str, TABLE *table, LEX_STRING m_udt_name,
+                              LEX_CSTRING m_nested_table_udt);
 void append_field_to_string(Field *fld, String *str);
+void free_udt_tmp_table(TABLE *table);
 
 // build field raw data from Field
 extern uint32 pq_build_field_raw(Field *field, Field_raw_data *field_raw);

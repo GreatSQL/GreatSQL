@@ -372,7 +372,8 @@ DROP   USER 'testuser1'@'localhost';
 CREATE USER 'testuser1'@'localhost';
 SELECT 'empty result set was expected' AS my_col
 FROM information_schema.schema_privileges
-WHERE table_schema = 'information_schema';
+WHERE table_schema = 'information_schema' AND
+GRANTEE NOT IN ("'SYSTEM_DAA'@'%'", "'SYSTEM_DBA'@'%'", "'SYSTEM_DSA'@'%'");
 my_col
 SELECT 'empty result set was expected' AS my_col
 FROM information_schema.table_privileges
@@ -420,7 +421,8 @@ TO 'testuser1'@'localhost';
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
 SELECT 'empty result set was expected' AS my_col
 FROM information_schema.schema_privileges
-WHERE table_schema = 'information_schema';
+WHERE table_schema = 'information_schema' AND
+GRANTEE NOT IN ("'SYSTEM_DAA'@'%'", "'SYSTEM_DBA'@'%'", "'SYSTEM_DSA'@'%'");
 my_col
 SELECT 'empty result set was expected' AS my_col
 FROM information_schema.table_privileges

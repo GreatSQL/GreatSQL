@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -70,7 +70,8 @@
 #include "sql/auth/auth_common.h"  // check_single_table_access
 #include "sql/check_stack.h"       // check_stack_overrun
 #include "sql/current_thd.h"       // current_thd
-#include "sql/derror.h"            // ER_THD
+#include "sql/data_mask/data_masking.h"
+#include "sql/derror.h"  // ER_THD
 #include "sql/enum_query_type.h"
 #include "sql/error_handler.h"  // View_error_handler
 #include "sql/field.h"
@@ -305,10 +306,10 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
                    insert_field_list, &fields, base_ref_items))
     return true;
 
-  // Ensure that all selected expressions have a positive reference count
-  for (auto it : fields) {
-    it->increment_ref_count();
+  if (enable_data_masking && outer_query_block() == nullptr) {
+    if (data_masking::check_and_replace_mask_data(thd, this)) return true;
   }
+
   resolve_place = RESOLVE_NONE;
 
   const nesting_map save_allow_sum_func = thd->lex->allow_sum_func;
@@ -580,8 +581,30 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
     if (setup_ftfuncs(thd, this)) return true;
   }
 
-  if (setup_sequence_func(thd, &fields)) {
-    return true;
+  if (sequences_counter && agg_func_used()) {
+    // only allow window function
+    for (auto &it : fields) {
+      if (it->type() == Item::SUM_FUNC_ITEM) {
+        if (!down_cast<Item_sum *>(it)->m_is_window_function) {
+          my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), "Aggregate function");
+          return true;
+        }
+      }
+    }
+    // check sequence function
+
+    // pesudo column spilte like item_sum
+    for (size_t i = 0; i < fields.size(); i++) {
+      auto it = fields[i];
+      if (it->has_sequence() && (it->used_tables() & ~RAND_TABLE_BIT)) {
+        auto old = fields.size();
+        auto new_item = CompileItemConnectbyRef(thd, it, this);
+        if (!new_item) return true;
+        new_item->update_used_tables();
+        select_list_tables |= new_item->used_tables();
+        i += (fields.size() - old);
+      }
+    }
   }
 
   if (query_result() && query_result()->prepare(thd, fields, unit)) return true;
@@ -643,8 +666,6 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
 
   // Eliminate unused window definitions, redundant sorts etc.
   if (!m_windows.is_empty()) Window::eliminate_unused_objects(&m_windows);
-
-  if (rewrite_all_rownum(thd)) return true;
 
   // Replace group by field references inside window functions with references
   // in the presence of ROLLUP.
@@ -1467,11 +1488,6 @@ bool Query_block::resolve_subquery(THD *thd) {
   */
   Item_subselect *subq_predicate = master_query_expression()->item;
   assert(subq_predicate != nullptr);
-
-  if (check_rownum_validate(subq_predicate)) {
-    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "ROWNUM & IN/ALL/ANY/SOME subquery");
-    return true;
-  }
   /**
     @note
     In this case: IN (SELECT ... UNION SELECT ...), Query_block::prepare() is
@@ -1614,7 +1630,8 @@ bool Query_block::resolve_subquery(THD *thd) {
       predicate->choose_semijoin_or_antijoin() &&                          // 14
       (!cannot_do_antijoin || !predicate->can_do_aj) &&                    // 15
       is_row_count_valid_for_semi_join() &&                                // 16
-      !(outer->has_connect_by || has_connect_by)) {                        // 17
+      !(outer->has_connect_by || has_connect_by) &&                        // 17
+      !(outer->has_rownum || has_rownum)) {
     DBUG_PRINT("info", ("Subquery is semi-join conversion candidate"));
 
     /* Notify in the subquery predicate where it belongs in the query graph */
@@ -1860,14 +1877,6 @@ bool Query_block::setup_join_cond(THD *thd, mem_root_deque<Table_ref *> *tables,
     if (join_cond) {
       assert(join_cond->is_bool_func());
       resolve_place = Query_block::RESOLVE_JOIN_NEST;
-      if (tr->outer_join && has_rownum_func(join_cond, thd)) {
-        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
-                 "ROWNUM occur in outer join on conditions.");
-        return true;
-      }
-      if (rownum_func && rewrite_rownum_ref(join_cond, &rownum_func))
-        return true;
-
       resolve_nest = tr;
       thd->where = "on clause";
       if ((!join_cond->fixed && join_cond->fix_fields(thd, ref)) ||
@@ -2130,29 +2139,29 @@ bool Query_block::simplify_joins(THD *thd,
                          in_sj || table->is_sj_or_aj_nest(), cond, changelog))
         return true;
       used_tables = nested_join->used_tables;
-      not_null_tables = nested_join->not_null_tables;
+      if (!table->foj_nest) not_null_tables = nested_join->not_null_tables;
     } else {
       used_tables = table->map();
-      if (*cond) not_null_tables = (*cond)->not_null_tables();
+      if (*cond && (!table->foj_inner && !table->foj_outer))
+        not_null_tables = (*cond)->not_null_tables();
     }
 
     if (table->embedding) {
       table->embedding->nested_join->used_tables |= used_tables;
       table->embedding->nested_join->not_null_tables |= not_null_tables;
     }
-    if (!table->foj_inner &&
-        (!table->outer_join || (used_tables & not_null_tables)) &&
+    if ((!table->outer_join || (used_tables & not_null_tables)) &&
         !(table->foj_inner && table->has_lnnvl()) &&
         !(table->outer_join && table->has_lnnvl())) {
       /*
         For some of the inner tables there are conjunctive predicates
         that reject nulls => the outer join can be replaced by an inner join.
       */
-      if (table->outer_join) {
+      if (table->outer_join && !table->foj_inner) {
         *changelog |= OUTER_JOIN_TO_INNER;
         table->outer_join = false;
       }
-      if (table->join_cond()) {
+      if (table->join_cond() && !table->foj_nest) {
         *changelog |= JOIN_COND_TO_WHERE;
         /* Add join condition to the WHERE or upper-level join condition. */
         if (*cond) {
@@ -3632,6 +3641,11 @@ bool Query_block::merge_derived(THD *thd, Table_ref *derived_table) {
     return false;
   }
 
+  if (derived_query_block->has_rownum ||
+      (master_query_block && master_query_block->has_rownum)) {
+    return false;
+  }
+
   derived_table->set_merged();
 
   DBUG_PRINT("info", ("algorithm: MERGE"));
@@ -4405,7 +4419,7 @@ bool Query_block::setup_connect_by(THD *thd) {
           simplify_const_condition(thd, &it, false))
         return true;
       auto new_item = CompileItemConnectbyRef(thd, it, this);
-      cond = &new_item;
+      *cond = new_item;
       return false;
     };
     if (setup_item_func(&m_connect_by_cond)) {
@@ -4413,6 +4427,7 @@ bool Query_block::setup_connect_by(THD *thd) {
     }
 
     if (m_start_with_cond) {
+      resolve_place = Query_block::RESOLVE_START_WITH;
       assert(m_start_with_cond->is_bool_func());
       thd->where = "start with clause";
       if (setup_item_func(&m_start_with_cond)) {
@@ -4608,6 +4623,7 @@ bool find_order_in_list(THD *thd, Ref_item_array ref_item_array,
       order->in_field_list = true;
       if (resolution == RESOLVED_AGAINST_ALIAS && from_field == not_found_field)
         order->used_alias = true;
+      // select from table order by udt_column.
       if ((*order->item)->this_item()->is_ora_udt_type()) {
         my_error(ER_TYPE_IN_ORDER_BY, MYF(0));
         return true;
@@ -4678,10 +4694,12 @@ bool find_order_in_list(THD *thd, Ref_item_array ref_item_array,
   */
   bool save_group_fix_field = thd->lex->current_query_block()->group_fix_field;
   if (is_group_field) thd->lex->current_query_block()->group_fix_field = true;
+  thd->lex->current_query_block()->window_order_field = true;
   bool ret =
       (!order_item->fixed && (order_item->fix_fields(thd, order->item) ||
                               (order_item = *order->item)->check_cols(1)));
   thd->lex->current_query_block()->group_fix_field = save_group_fix_field;
+  thd->lex->current_query_block()->window_order_field = false;
   if (ret) return true; /* Wrong field. */
 
   order_item->increment_ref_count();
@@ -4711,12 +4729,8 @@ bool find_order_in_list(THD *thd, Ref_item_array ref_item_array,
   */
   assert(order_item == *order->item);
   order->item = &ref_item_array[el];
-  if ((*order->item)->this_item()->is_ora_udt_type()) {
-    my_error(ER_TYPE_IN_ORDER_BY, MYF(0));
-    return true;
-  }
-  if ((*order->item)->this_item()->is_sequence_field()) {
-    my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), "");
+  if ((*order->item)->has_sequence()) {
+    my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), thd->where);
     return true;
   }
   return false;
@@ -4754,6 +4768,37 @@ bool setup_order(THD *thd, Ref_item_array ref_item_array, Table_ref *tables,
   const bool is_aggregated = select->is_grouped();
 
   for (uint number = 1; order; order = order->next, number++) {
+    Item *order_item = *order->item;
+    if (order_item->fixed && !order_item->const_item()) {
+      // If a non constant expression in order by is already
+      // resolved, it must have been merged from a derived table.
+      // So, we do not need to re-resolve in this query block. Add
+      // a hidden item if not present in the visible fields list.
+      // Update with the correct ref item.
+      uint counter = fields->size();
+      for (uint i = 0; i < fields->size(); i++) {
+        if (order_item->real_item()->eq(ref_item_array[i]->real_item(),
+                                        false)) {
+          order->item = &ref_item_array[i];
+          // Order by is now referencing select expression, so increment the
+          // reference count for the select expression.
+          (*order->item)->increment_ref_count();
+          order->in_field_list = true;
+          counter = i;
+          break;
+        }
+      }
+      if (counter == fields->size()) {
+        // Add as a hidden item.
+        ref_item_array[counter] = order_item;
+        fields->push_front(order_item);
+        order_item->hidden = true;
+        order->in_field_list = false;
+        order->item = &ref_item_array[counter];
+      }
+      continue;
+    }
+
     if (find_order_in_list(thd, ref_item_array, tables, order, fields, false,
                            false))
       return true;
@@ -6073,6 +6118,7 @@ static bool replace_aggregate_in_list(Item::Aggregate_replacement &info,
     new_item->update_used_tables();
     if (new_item != select_expr) {
       new_item->hidden = was_hidden;
+      new_item->increment_ref_count();
       *lii = new_item;
       for (size_t i = 0; i < list->size(); i++) {
         if ((*ref_item_array)[i] == select_expr)
@@ -6687,6 +6733,8 @@ bool Query_block::transform_grouped_to_derived(THD *thd, bool *break_off) {
       // now that replaces_field has inherited the upper context
       pair.second->context = &new_derived->context;
 
+      replaces_field->increment_ref_count();
+
       for (auto expr : contrib_exprs) {
         Item_field *replacement = replaces_field;
         // If this expression was hidden, we need to make a copy of the derived
@@ -6956,6 +7004,132 @@ struct Lifted_fields_map {
 };
 
 /**
+  Given an expression, create an ORDER expression for that expression and add
+  it to a window's ORDER BY list in preparation for synthesizing a window
+  function, cf. \c setup_counts_over_partitions
+ */
+static bool add_partition_by_expr(THD *thd, PT_order_list *partition,
+                                  Query_block *qb, Item *expr) {
+  ORDER *o = new (thd->mem_root) PT_order_expr(expr, ORDER_ASC);
+  if (o == nullptr) return true;
+  o->in_field_list = true;
+  (*o->item)->increment_ref_count();
+  bool found [[maybe_unused]] = false;
+  for (size_t idx = 0; idx < qb->base_ref_items.size(); idx++) {
+    if (qb->base_ref_items[idx] == expr) {
+      o->item = &qb->base_ref_items[idx];
+      found = true;
+      break;
+    }
+  }
+  assert(found);
+  o->used = expr->used_tables();
+  // Add at back of list
+  partition->value.link_in_list(o, &o->next);
+  return false;
+}
+
+/**
+  Add all COUNT(0) to SELECT list of the derived table to be used for
+  cardinality checking of the transformed subquery. Minion of
+  \c decorrelate_derived_scalar_subquery_pre
+
+  a. Add COUNT(0) OVER (PARTITION BY group-by-list)
+  b. Add COUNT(0) OVER (PARTITION BY inner-expr) for each inner-expression
+     not already grouped on.
+*/
+bool Query_block::setup_counts_over_partitions(
+    THD *thd, Table_ref *derived, Lifted_fields_map *lifted_fields,
+    std::deque<Item_field *> &added_to_group_by, uint hidden_fields) {
+  for (size_t i = 0; i < added_to_group_by.size() + 1; i++) {
+    // 1. Construct PARTITION BY
+    PT_order_list *partition = new (thd->mem_root) PT_order_list();
+    if (i == 0) {
+      // 1. a  partition for original group by list
+      for (ORDER *group = group_list.first; group != nullptr;
+           group = group->next) {
+        if (add_partition_by_expr(thd, partition, this, *group->item))
+          return true;
+      }
+    } else {
+      // 1. b  partition for each added expression
+      Item *f = added_to_group_by[i - 1];
+      if (add_partition_by_expr(thd, partition, this, f)) return true;
+    }
+
+    // 2. Construct default frame
+    auto start_bound = new (thd->mem_root) PT_border(WBT_UNBOUNDED_PRECEDING);
+    if (start_bound == nullptr) return true;
+    auto end_bound = new (thd->mem_root) PT_border(WBT_UNBOUNDED_FOLLOWING);
+    if (end_bound == nullptr) return true;
+    auto bounds = new (thd->mem_root) PT_borders(start_bound, end_bound);
+    if (bounds == nullptr) return true;
+    PT_frame *frame = new (thd->mem_root) PT_frame(WFU_ROWS, bounds, nullptr);
+    if (frame == nullptr) return true;
+    frame->m_originally_absent = true;
+
+    // 3. Construct window and set it up (mini-version of what is normally done
+    // by
+    //    setup_windows1).
+    PT_window *w =
+        new (thd->mem_root) PT_window(partition, /*order_by*/ nullptr, frame);
+    if (w == nullptr) return true;
+    if (w->setup_ordering_cached_items(thd, this, partition, true)) return true;
+    if (w->check_window_functions1(thd, this)) return true;
+    // initialize the physical sorting order for the partition
+    (void)w->sorting_order(thd, /*implicitly_grouped*/ false);
+    char buff[NAME_LEN + 1];
+    size_t namelen = snprintf(buff, NAME_LEN, "w%u", m_windows.size());
+    Item_string *wname =
+        new (thd->mem_root) Item_string(buff, namelen, thd->collation());
+    if (wname == nullptr) return true;
+    w->set_name(wname);
+    if (m_windows.push_back(w)) return true;
+
+    // 4. Construct window function COUNT and bind it
+    //
+    Item_int *number_0 = new (thd->mem_root) Item_int(int32{0}, 1);
+    if (number_0 == nullptr) return true;
+
+    Item_sum *cnt = new (thd->mem_root) Item_sum_count(POS(), number_0, w);
+    if (cnt == nullptr) return true;
+    cnt->m_is_window_function = true;
+    cnt->set_wf();
+
+    int item_no = fields.size() + 1;
+    baptize_item(thd, cnt, &item_no);
+    m_added_non_hidden_fields++;
+    {
+      // prelude to binding COUNT(*)
+      const bool save_asf = thd->lex->allow_sum_func;
+      Query_block *save_query_block = thd->lex->current_query_block();
+      assert(save_query_block == outer_query_block());
+      thd->lex->set_current_query_block(this);
+      auto save_allow_sum_func = thd->lex->allow_sum_func;
+      thd->lex->allow_sum_func |= (nesting_map)1 << nest_level;
+      Item *count = cnt;
+      if (cnt->fix_fields(thd, &count)) return true;
+
+      // postlude to binding COUNT(*)
+      thd->lex->allow_sum_func = save_asf;
+      thd->lex->set_current_query_block(save_query_block);
+      thd->lex->allow_sum_func = save_allow_sum_func;
+    }
+
+    // 5. Add window function to the SELECT list so we can reference it from
+    //    outside the derived table (the cardinality check)
+
+    base_ref_items[fields.size()] = cnt;
+    lifted_fields->m_field_positions.push_back(fields.size() - hidden_fields);
+    fields.push_back(cnt);
+    cnt->increment_ref_count();
+    // Add a new column to the derived table's query expression
+    derived->derived_query_expression()->types.push_back(cnt);
+  }
+  return false;
+}
+
+/**
    We have a correlated scalar subquery, so we must do several things:
 
    1. Add the relevant non-correlated fields "NCF"(*) to the select list so they
@@ -7066,6 +7240,7 @@ bool Query_block::decorrelate_derived_scalar_subquery_pre(
         lifted_fields->m_field_positions.push_back(fields.size() -
                                                    hidden_fields);
         fields.push_back(inner_field);
+        inner_field->increment_ref_count();
         // We have added to fields; master_query_expression->types must
         // always be equal to it;
         master_query_expression()->types.push_back(inner_field);
@@ -7119,11 +7294,12 @@ bool Query_block::decorrelate_derived_scalar_subquery_pre(
   // added to group by above.
   if (!selected_field_in_group_by &&
       !fields[first_non_hidden]->has_aggregation()) {
-    Item *func_any =
-        new (thd->mem_root) Item_func_any_value(fields[first_non_hidden]);
+    Item *const old_field = fields[first_non_hidden];
+    Item *func_any = new (thd->mem_root) Item_func_any_value(old_field);
     if (func_any == nullptr) return true;
     if (func_any->fix_fields(thd, &func_any)) return true;
     fields[first_non_hidden] = func_any;
+    replace_referenced_item(old_field, func_any);
   }
 
   if (!m_agg_func_used) {
@@ -7157,6 +7333,7 @@ bool Query_block::decorrelate_derived_scalar_subquery_pre(
     base_ref_items[fields.size()] = cnt;
     lifted_fields->m_field_positions.push_back(fields.size() - hidden_fields);
     fields.push_back(cnt);
+    cnt->increment_ref_count();
     m_agg_func_used = true;
     // Add a new column to the derived table's query expression
     derived->derived_query_expression()->types.push_back(cnt);
@@ -7236,6 +7413,31 @@ bool Query_block::decorrelate_derived_scalar_subquery_post(
   }
   derived->join_cond()->update_used_tables();
   return false;
+}
+
+/**
+  Replace item in select list and preserve its reference count.
+
+  @param old_item  Item to be replaced.
+  @param new_item  Item to replace the old item.
+
+  If old item is present in base_ref_items, make sure it is replaced there.
+
+  Also make sure that reference count for old item is preserved in new item.
+*/
+void Query_block::replace_referenced_item(Item *const old_item,
+                                          Item *const new_item) {
+  for (size_t i = 0; i < fields.size(); i++) {
+    if (base_ref_items[i] == old_item) {
+      base_ref_items[i] = new_item;
+      break;
+    }
+  }
+  // Keep the same number of references as for the old expression:
+  new_item->increment_ref_count();
+  while (old_item->decrement_ref_count() > 0) {
+    new_item->increment_ref_count();
+  }
 }
 
 /**
@@ -7927,15 +8129,7 @@ bool Query_block::transform_scalar_subqueries_to_join_with_derived(THD *thd) {
           return true;
         Item *unwrapped_select_expr = unwrap_rollup_group(select_expr);
         if (unwrapped_select_expr != prev_value) {
-          // If we replace a subquery in the select field list, possibly
-          // hidden inside a rollup wrapper, replace corresponding item
-          // in base_ref_items
-          for (size_t i = 0; i < fields.size(); i++) {
-            if (base_ref_items[i] == prev_value)
-              base_ref_items[i] = unwrapped_select_expr;
-          }
-          // All items in select list must have a positive ref count.
-          unwrapped_select_expr->increment_ref_count();
+          replace_referenced_item(prev_value, unwrapped_select_expr);
         }
         if (fields.size() != old_size) {
           // The (implicit) iterator over fields has been invalidated,
@@ -7967,194 +8161,6 @@ bool Query_block::transform_scalar_subqueries_to_join_with_derived(THD *thd) {
     opt_trace_print_expanded_query(thd, this, &trace_object);
   }
 
-  return false;
-}
-
-bool has_rownum_func(Item *item, THD *thd) {
-  if (!item) {
-    return false;
-  }
-  mem_root_deque<Item_func *> funcs(thd->mem_root);
-  item->walk(&Item::collect_item_func_processor, enum_walk::POSTFIX,
-             (uchar *)&funcs);
-  for (Item_func *func : funcs) {
-    if (func->functype() == Item_func::ROWNUM_FUNC) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool Query_block::setup_sequence_func(THD *thd, mem_root_deque<Item *> *input) {
-  DBUG_TRACE;
-  if (!has_sequence) {
-    return false;
-  }
-  if (master_query_expression()->is_union() || outer_query_block() ||
-      is_grouped() || is_distinct() || is_ordered()) {
-    my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), "");
-    return true;
-  }
-
-  // replace sequence field with sequence func.
-  List<Item_func> seq_funcs;
-  Item::Item_sequence_field_replacement replacements(&seq_funcs);
-  for (Item *&item : *input) {
-    Item *new_item = item->transform(&Item::replace_sequence_field,
-                                     pointer_cast<uchar *>(&replacements));
-    if (!new_item) return true;  // may be cased by new (thd->mem_root) failed.
-    if (new_item != item) {
-      item = new_item;
-    }
-  }
-
-  /* Not allow sequence appears in more than one row, such as "insert ...
-     values (seq.nextval, xxx), (seq.nextval, xxx)..." */
-  bool no_seq = seq_funcs.is_empty();
-  if (no_seq) {
-    return false;
-  } else if (!sequence_funcs.empty()) {
-    my_error(ER_GDB_SEQUENCE_POSITION, MYF(0),
-             "sequence appears more than one row!");
-    return true;
-  }
-
-  // set ref_sequence_func for all sequence funcs came from the same sequence.
-  std::map<std::string, Item_func *> sequence_info;
-  List_iterator<Item_func> lfi(seq_funcs);
-  Item *lf;
-  while ((lf = lfi++)) {
-    Item_func_sequence *f = dynamic_cast<Item_func_sequence *>(lf);
-    std::string db = f->db_name;
-    std::string table = f->table_name;
-    std::string key(db + "." + table);
-    transform(key.begin(), key.end(), key.begin(), ::tolower);
-    Item_func_sequence *seq_func;
-    std::map<std::string, Item_func *>::iterator finder =
-        sequence_info.find(key);
-    if (finder != sequence_info.end()) {
-      seq_func = dynamic_cast<Item_func_sequence *>(finder->second);
-    } else {
-      seq_func = new (thd->mem_root)
-          Item_func_sequence(POS(), f->db_name, f->table_name, f->field_name,
-                             f->sequences_metadata_version);
-      if (seq_func == nullptr) return true;
-      sequence_info.insert(std::pair<std::string, Item_func *>(key, seq_func));
-    }
-    if (f->read_next) {
-      seq_func->read_next = true;
-    }
-    f->ref_seq_func = seq_func;
-  }
-  for (std::map<std::string, Item_func *>::iterator it = sequence_info.begin();
-       it != sequence_info.end(); it++) {
-    auto item_func_seq = dynamic_cast<Item_func_sequence *>(it->second);
-    auto db_name = item_func_seq->db_name;
-    auto seq_name = item_func_seq->table_name;
-    assert(item_func_seq);
-    auto seq_def = get_sequence_def(db_name, seq_name);
-    if (seq_def == nullptr) return true;
-    item_func_seq->set_seq_def(seq_def.get());
-
-    /**
-     * @name For compatibility with Oracle, see #4421
-     * @{ */
-    const my_decimal *cached_currval =
-        thd->get_cached_seq_currval(db_name, seq_name, seq_def.get());
-    if (item_func_seq->read_next == false && cached_currval == nullptr) {
-      my_error(ER_GDB_READ_SEQUENCE, MYF(0),
-               "currval is not yet defined in this session");
-      return true;
-    }
-    /**  @} */
-
-    sequence_funcs.push_back(it->second);
-  }
-  return false;
-}
-
-void Query_block::reset_sequence_read_flag() {
-  for (Item_func *func : sequence_funcs) {
-    Item_func_sequence *seq_func = dynamic_cast<Item_func_sequence *>(func);
-    seq_func->reset_read_flag();
-  }
-}
-
-bool Query_block::rewrite_rownum_ref(Item *&item,
-                                     Item_func_rownum **rownum_ref) {
-  Item *new_item = item->transform(&Item::replace_rownum_func,
-                                   pointer_cast<uchar *>(rownum_ref));
-  if (!new_item) return true;
-  if (new_item != item) {
-    new_item->hidden = item->hidden;
-    item = new_item;
-  }
-  return false;
-}
-
-// all rownum funcs of the query block shoud be pointer to the same one.
-bool Query_block::rewrite_all_rownum(THD *thd) {
-  if (!rownum_func) return false;
-  thd->lex->m_cmd_rownums.push_back(rownum_func);
-  for (Item *&item : fields) {
-    // Maybe there was complex expression that has not setted rownum flag.
-    if (rewrite_rownum_ref(item, &rownum_func)) return true;
-  }
-
-  if (m_where_cond && has_rownum_in_cond) {
-    if (rewrite_rownum_ref(m_where_cond, &rownum_func)) return true;
-  }
-
-  if (m_connect_by_cond && has_rownum_in_cond) {
-    if (rewrite_rownum_ref(m_connect_by_cond, &rownum_func)) return true;
-    if (m_after_connect_by_where &&
-        rewrite_rownum_ref(m_after_connect_by_where, &rownum_func))
-      return true;
-  }
-
-  if (group_list.elements) {
-    for (ORDER *group = group_list.first; group; group = group->next) {
-      Item **gi = group->item;
-      if (rewrite_rownum_ref((*gi), &rownum_func)) return true;
-    }
-  }
-
-  if (order_list.elements) {
-    for (ORDER *order = order_list.first; order; order = order->next) {
-      Item **oi = order->item;
-      if (rewrite_rownum_ref((*oi), &rownum_func)) return true;
-    }
-  }
-  if (m_having_cond && has_rownum_in_cond) {
-    if (rewrite_rownum_ref(m_having_cond, &rownum_func)) return true;
-  }
-  return false;
-}
-
-void Query_block::reset_rownum_read_flag() {
-  if (rownum_func) {
-    Item_func_rownum *ir = dynamic_cast<Item_func_rownum *>(rownum_func);
-    ir->reset_read_flag();
-  }
-}
-
-bool check_rownum_validate(Item_subselect *sub_select) {
-  Query_expression *qe = sub_select->unit;
-  assert(qe);
-  bool has_rownum = false;
-  for (Query_block *sl = qe->first_query_block(); sl;
-       sl = sl->next_query_block()) {
-    if (sl->has_rownum) {
-      has_rownum = true;
-      break;
-    }
-  }
-  if (has_rownum) {
-    if ((sub_select->substype() != Item_subselect::SINGLEROW_SUBS) ||
-        qe->uncacheable & UNCACHEABLE_DEPENDENT) {
-      return true;
-    }
-  }
   return false;
 }
 
@@ -8444,7 +8450,7 @@ class AccessOrFilter {
     auto right_item = it->arguments()[1];
     auto isTransItem = [](Item *cond) {
       if (cond->type() == Item::FUNC_ITEM) {
-        auto func_it = dynamic_cast<Item_func *>(cond);
+        auto func_it = down_cast<Item_func *>(cond);
         switch (func_it->functype()) {
           case Item_func::GREATEST_FUNC:
           case Item_func::LEAST_FUNC:
@@ -8463,7 +8469,7 @@ class AccessOrFilter {
           ((right_item->used_tables() & (~PSEUDO_TABLE_BITS)) != 0) &&
           isNotJoinCond(right_item->used_tables())) {
         if (spliteItem(thd, it, it->arguments()[1],
-                       dynamic_cast<Item_func *>(it->arguments()[0]), join_cond,
+                       down_cast<Item_func *>(it->arguments()[0]), join_cond,
                        where_cond)) {
           return true;
         } else {
@@ -8475,7 +8481,7 @@ class AccessOrFilter {
           ((left_item->used_tables() & (~PSEUDO_TABLE_BITS)) != 0) &&
           isNotJoinCond(left_item->used_tables())) {
         if (spliteItem(thd, it, it->arguments()[0],
-                       dynamic_cast<Item_func *>(it->arguments()[1]), join_cond,
+                       down_cast<Item_func *>(it->arguments()[1]), join_cond,
                        where_cond)) {
           return true;
         } else {
@@ -8555,17 +8561,16 @@ class AccessOrFilter {
   bool transformCompatItem(THD *thd, Item *cond, Item **join_cond,
                            Item **where_cond) {
     if (cond->gc_subst_analyzer(nullptr)) {
-      auto it = dynamic_cast<Item_func *>(cond);
+      auto it = down_cast<Item_func *>(cond);
       switch (it->functype()) {
         case Item_func::BETWEEN: {
-          if (transformItem_between(thd,
-                                    dynamic_cast<Item_func_between *>(cond),
+          if (transformItem_between(thd, down_cast<Item_func_between *>(cond),
                                     join_cond, where_cond))
             return true;
           return false;
         }
         case Item_func::IN_FUNC: {
-          if (transformItem_in(thd, dynamic_cast<Item_func_in *>(it), join_cond,
+          if (transformItem_in(thd, down_cast<Item_func_in *>(it), join_cond,
                                where_cond))
             return true;
           return false;
@@ -8608,7 +8613,7 @@ class AccessOrFilter {
   bool transformFilterCond(THD *thd, Item *cond, Item **where_cond,
                            Item **join_cond) {
     if (cond->type() == Item::COND_ITEM) {
-      auto cond_item = dynamic_cast<Item_cond *>(cond);
+      auto cond_item = down_cast<Item_cond *>(cond);
       List_iterator<Item> li(*cond_item->argument_list());
       Item *temp;
       Item *new_where_cond = nullptr;

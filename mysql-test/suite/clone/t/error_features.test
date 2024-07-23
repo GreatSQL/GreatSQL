@@ -1,9 +1,10 @@
 # Test clone error conditions with incompatible features
 
 --disable_query_log
---replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
-LET $restart_parameters = restart:--innodb-directories=$MYSQL_TMP_DIR;
---replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--let $CASE_TABLE_NAME= `select @@lower_case_table_names`
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR $CASE_TABLE_NAME CASE_TABLE_NAME
+LET $restart_parameters = restart:--innodb-directories=$MYSQL_TMP_DIR --lower_case_table_names=$CASE_TABLE_NAME;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR $CASE_TABLE_NAME CASE_TABLE_NAME
 --source include/restart_mysqld.inc
 --enable_query_log
 
@@ -151,16 +152,17 @@ DROP TABLESPACE tbs1;
 UNINSTALL PLUGIN clone;
 
 --echo # 2. Encrypted Table
+--let $CASE_TABLE_NAME= `select @@lower_case_table_names`
 --source include/shutdown_mysqld.inc
 --let clone_require_no_ssl = 1
 
---replace_result $MYSQLD MYSQLD $BOOTSTRAP_SQL BOOTSTRAP_SQL $ENCRYPT_DATADIR ENCRYPT_DATADIR $START_PAGE_SIZE PAGE_SIZE $ENCRYPT_ERROR_FILE ENCRYPT_ERROR_FILE
---let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --init-file=$BOOTSTRAP_SQL --innodb_redo_log_capacity=10M --innodb_page_size=$START_PAGE_SIZE --datadir=$ENCRYPT_DATADIR > $ENCRYPT_ERROR_FILE  2>&1
+--replace_result $MYSQLD MYSQLD $BOOTSTRAP_SQL $CASE_TABLE_NAME CASE_TABLE_NAME BOOTSTRAP_SQL $ENCRYPT_DATADIR ENCRYPT_DATADIR $START_PAGE_SIZE PAGE_SIZE $ENCRYPT_ERROR_FILE ENCRYPT_ERROR_FILE
+--let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --lower_case_table_names=$CASE_TABLE_NAME --initialize-insecure --init-file=$BOOTSTRAP_SQL --innodb_redo_log_capacity=10M --innodb_page_size=$START_PAGE_SIZE --datadir=$ENCRYPT_DATADIR > $ENCRYPT_ERROR_FILE  2>&1
 
 --exec $NEW_CMD
 
---replace_result $KEYRING_PLUGIN KEYRING_PLUGIN $MYSQL_TMP_DIR MYSQL_TMP_DIR $ENCRYPT_DATADIR ENCRYPT_DATADIR
---let $restart_parameters=restart: --datadir=$ENCRYPT_DATADIR --early-plugin-load="keyring_file=$KEYRING_PLUGIN" --keyring_file_data=$MYSQL_TMP_DIR/mysecret_keyring
+--replace_result $KEYRING_PLUGIN KEYRING_PLUGIN $MYSQL_TMP_DIR MYSQL_TMP_DIR $ENCRYPT_DATADIR ENCRYPT_DATADIR $CASE_TABLE_NAME CASE_TABLE_NAME
+--let $restart_parameters=restart: --lower_case_table_names=$CASE_TABLE_NAME --datadir=$ENCRYPT_DATADIR --early-plugin-load="keyring_file=$KEYRING_PLUGIN" --keyring_file_data=$MYSQL_TMP_DIR/mysecret_keyring
 --source include/start_mysqld.inc
 
 --replace_result $CLONE_PLUGIN CLONE_PLUGIN
@@ -225,8 +227,9 @@ SET global sql_require_primary_key = @saved_sql_require_primary_key;
 
 UNINSTALL PLUGIN clone;
 UNINSTALL PLUGIN keyring_file;
-
-let $restart_parameters = "restart:";
+--let $CASE_TABLE_NAME= `select @@lower_case_table_names`
+--replace_result $CASE_TABLE_NAME CASE_TABLE_NAME
+let $restart_parameters = "restart: --lower_case_table_names=$CASE_TABLE_NAME";
 --source include/restart_mysqld.inc
 
 DROP TABLE t1;

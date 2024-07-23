@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -595,6 +595,7 @@ bool create_routine(THD *thd, const Schema &schema, sp_head *sp,
         thd->check_for_truncated_fields;
     thd->check_for_truncated_fields = CHECK_FIELD_WARN;
     error = thd->dd_client()->store(type.get());
+    if (!error) error = update_udt_object_comment(thd, sp);
     thd->check_for_truncated_fields = saved_check_for_truncated_fields;
   } else {
     return true;

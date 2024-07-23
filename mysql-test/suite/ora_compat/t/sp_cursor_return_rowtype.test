@@ -429,7 +429,7 @@ begin
     select a1,b1;
   end loop;
   for i in sc3 loop
-    select i.id,i.type1;
+    select i.a,i.b;
   end loop;
 end;
 $$
@@ -634,6 +634,33 @@ $$
 DELIMITER ;$$
 insert into t1 values(f1(),'cc');
 select * from t1;
+drop function f1;
+
+--echo #
+--echo # test of bug9462
+--echo #
+DELIMITER $$;
+create or replace function f1()
+ return  int
+ as
+begin
+  insert into t1 values(1,'aa');
+  return 1;
+end;
+$$
+CREATE or replace PROCEDURE p1() as
+a int;
+cursor c2 is select f1()  from dual ;
+begin
+open c2;
+end ;
+$$
+DELIMITER ;$$
+select count(*) from t1;
+call p1;
+select count(*) from t1;
+call p1;
+select count(*) from t1;
 drop function f1;
 
 drop procedure pro_return;

@@ -4,6 +4,11 @@
 --source include/count_sessions.inc
 --source include/not_windows.inc
 
+--disable_query_log
+call mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.*mysql_admin_session failed*");
+--enable_query_log
+
+
 ## Install plugin
 --let $CLONE_DATADIR = $MYSQL_TMP_DIR/data_new
 

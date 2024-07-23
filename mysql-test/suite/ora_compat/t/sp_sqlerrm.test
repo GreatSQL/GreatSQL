@@ -1,0 +1,55 @@
+set sql_mode=oracle;
+
+--echo [# bugfix 7448:http://zbox.greatdb.com/zentao/bug-view-9027.html]
+--error ER_SYNTAX_ERROR
+select sqlerrm(1023);
+
+
+--error ER_SYNTAX_ERROR
+select sqlerrm;
+
+SET serveroutput=1;
+--echo [# bugfix 7448:http://zbox.greatdb.com/zentao/bug-view-9027.html]
+DELIMITER //;
+CREATE OR REPLACE PROCEDURE p1()
+as
+  v_err_msg VARCHAR2(4000);
+BEGIN
+  SELECT * FROM t1;
+EXCEPTION
+  WHEN OTHERS THEN
+    v_err_msg := SQLERRM;
+    SELECT 'Error: ' || v_err_msg;
+END;
+//
+DELIMITER ;//
+CALL p1; 
+
+drop procedure p1;
+
+DELIMITER //;
+begin
+  select * from t1;
+exception
+  when others then
+    select 'errcode:' || sqlcode ||' msg:' || sqlerrm as res;
+end;
+//
+
+begin
+  select * from t1;
+exception
+  when others then
+    select ' msg:' || sqlerrm(sqlcode) as res;
+end;
+//
+
+begin
+  select vv  from t2;
+exception
+  when others then
+    select 'errcode:' || sqlcode ||' msg:' || sqlerrm(1054) as res;
+end;
+//
+
+DELIMITER ;//

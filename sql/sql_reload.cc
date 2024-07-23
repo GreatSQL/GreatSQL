@@ -1,5 +1,5 @@
 /* Copyright (c) 2010, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -39,6 +39,7 @@
 #include "sql/binlog.h"
 #include "sql/conn_handler/connection_handler_impl.h"
 #include "sql/current_thd.h"  // my_thread_set_THR_THD
+#include "sql/data_mask/data_masking.h"
 #include "sql/debug_sync.h"
 #include "sql/handler.h"
 #include "sql/hostname_cache.h"  // hostname_cache_refresh
@@ -162,9 +163,11 @@ bool handle_reload_request(THD *thd, unsigned long options, Table_ref *tables,
 
     if (thd) {
       bool reload_acl_failed = reload_acl_caches(thd, false);
+      bool relad_data_mask_failed = data_masking::reload(thd, false);
       bool reload_servers_failed = servers_reload(thd);
       notify_flush_event(thd);
-      if (reload_acl_failed || reload_servers_failed) {
+      if (reload_acl_failed || reload_servers_failed ||
+          relad_data_mask_failed) {
         result = true;
         /*
           When an error is returned, my_message may have not been called and

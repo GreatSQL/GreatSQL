@@ -2,7 +2,7 @@
 #define ITEM_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -93,7 +93,6 @@ class PT_type;
 class Row_definition_table_list;
 struct ora_simple_ident_def;
 class sp_pcontext;
-class Table_function_record;
 
 typedef Bounds_checked_array<Item *> Ref_item_array;
 
@@ -1268,6 +1267,13 @@ class Item : public Parse_tree_node {
   */
   virtual void cleanup() { marker = MARKER_NONE; }
   /**
+    Called for every sp_instr_copen_for_sql after exec_core.
+    the item's m_arena is same as
+    sp_instr_copen_for_sql->m_arena, but for item_func_sp->sp_result_field,its
+    m_arena is field_ref->m_cursor's m_arena, so it needs to cleanup here.
+  */
+  virtual void cleanup_for_refcursor() {}
+  /**
     Called when an item has been removed, can be used to notify external
     objects about the removal, e.g subquery predicates that are part of
     the sj_candidates container.
@@ -2028,6 +2034,11 @@ class Item : public Parse_tree_node {
   }
   /* purecov: end */
 
+  virtual TABLE *val_udt() {
+    null_value = m_nullable;
+    return nullptr;
+  }
+
   /**
     Calculate the filter contribution that is relevant for table
     'filter_for_table' for this item.
@@ -2082,8 +2093,6 @@ class Item : public Parse_tree_node {
     Convert a non-temporal type to time
   */
   bool get_time_from_non_temporal(MYSQL_TIME *ltime);
-
-  virtual bool is_sequence_field() { return false; }
 
  protected:
   /* Helper functions, see item_sum.cc */
@@ -2655,13 +2664,14 @@ class Item : public Parse_tree_node {
   virtual bool collect_all_item_fields_processor(uchar *) { return false; }
   virtual bool collect_item_field_processor(uchar *) { return false; }
   virtual bool collect_item_field_or_ref_processor(uchar *) { return false; }
+  virtual bool collect_item_ref_processor(uchar *) { return false; }
+  virtual bool collect_item_cache_processor(uchar *) { return false; }
+
   virtual bool collect_item_func_processor(uchar *) { return false; }
 
-  // collect prior or connect_by_root in connect by cond
+  // collect prior in connect by cond
   virtual bool collect_connect_by_item_processor(uchar *) { return false; }
-  virtual bool collect_connect_by_leaf_cycle_or_ref_processor(uchar *) {
-    return false;
-  }
+
   class Collect_item_fields_or_refs : public Item_tree_walker {
    public:
     List<Item> *m_items;
@@ -2671,6 +2681,7 @@ class Item : public Parse_tree_node {
     Collect_item_fields_or_refs &operator=(
         const Collect_item_fields_or_refs &) = delete;
 
+    friend class Item;
     friend class Item_sum;
     friend class Item_field;
     friend class Item_ref;
@@ -2828,6 +2839,7 @@ class Item : public Parse_tree_node {
     */
     Query_block *const m_root;
 
+    friend class Item;
     friend class Item_sum;
     friend class Item_subselect;
     friend class Item_ref;
@@ -2836,11 +2848,12 @@ class Item : public Parse_tree_node {
      Clean up after removing the item from the item tree.
 
      param arg pointer to a Cleanup_after_removal_context object
+     @todo: If class ORDER is refactored so that all indirect
+     grouping/ordering expressions are represented with Item_ref
+     objects, all implementations of cleanup_after_removal() except
+     the one for Item_ref can be removed.
   */
-  virtual bool clean_up_after_removal(uchar *arg [[maybe_unused]]) {
-    assert(arg != nullptr);
-    return false;
-  }
+  virtual bool clean_up_after_removal(uchar *arg);
 
   /// @see Distinct_check::check_query()
   virtual bool aggregate_check_distinct(uchar *) { return false; }
@@ -3094,7 +3107,6 @@ class Item : public Parse_tree_node {
   virtual LEX_STRING get_udt_db_name() const { return NULL_STR; }
   virtual LEX_STRING get_udt_name() const { return NULL_STR; }
   virtual bool udt_table_store_to_table(TABLE *) { return false; }
-  virtual longlong get_varray_size_limit() { return -1; }
   virtual List<Create_field> *get_field_create_field_list() { return nullptr; }
   virtual bool has_assignment_list() { return false; }
   virtual TABLE *get_udt_table() { return nullptr; }
@@ -3144,12 +3156,6 @@ class Item : public Parse_tree_node {
         : Item_replacement(select, select), m_target(target), m_field(field) {}
   };
 
-  struct Item_sequence_field_replacement {
-    List<Item_func> *m_sequences;
-    Item_sequence_field_replacement(List<Item_func> *funcs)
-        : m_sequences(funcs) {}
-  };
-
   struct Aggregate_replacement {
     Item_sum *m_target;
     Item_field *m_replacement;
@@ -3175,9 +3181,6 @@ class Item : public Parse_tree_node {
   virtual Item *replace_item_view_ref(uchar *) { return this; }
   virtual Item *replace_aggregate(uchar *) { return this; }
   virtual Item *replace_outer_ref(uchar *) { return this; }
-  virtual Item *replace_sequence_field(uchar *) { return this; }
-  virtual Item *replace_rownum_func(uchar *) { return this; }
-  virtual Item *replace_rownum_use_tmp_field(uchar *) { return this; }
 
   struct Aggregate_ref_update {
     Item_sum *m_target;
@@ -3320,14 +3323,20 @@ class Item : public Parse_tree_node {
      @retval false Otherwise.
   */
   bool is_blob_field() const;
+  /// @returns number of references to an item.
+  uint reference_count() const { return m_ref_count; }
 
   /// Increment reference count
-  void increment_ref_count() { ++m_ref_count; }
+  void increment_ref_count() {
+    assert(!m_abandoned);
+    ++m_ref_count;
+  }
 
   /// Decrement reference count
   uint decrement_ref_count() {
     assert(m_ref_count > 0);
-    return --m_ref_count;
+    if (--m_ref_count == 0) m_abandoned = true;
+    return m_ref_count;
   }
 
  protected:
@@ -3347,6 +3356,7 @@ class Item : public Parse_tree_node {
   /// Set the "has stored program" property
   void set_stored_program() { m_accum_properties |= PROP_STORED_PROGRAM; }
 
+ public:
   /// Set the "has ora type" property
   void set_ora_type() { m_accum_properties |= PROP_ORA_TYPE; }
 
@@ -3434,6 +3444,9 @@ class Item : public Parse_tree_node {
     return m_accum_properties & PROP_CONNECT_BY_VALUE;
   }
 
+  void set_sequence() { m_accum_properties |= PROP_SEQUENCE; }
+
+  bool has_sequence() const { return m_accum_properties & PROP_SEQUENCE; }
   /**
     @return true if this item is a PIVOT function
    */
@@ -3449,9 +3462,21 @@ class Item : public Parse_tree_node {
     return false;
   }
 
+  /// Forbid udt_table(id_seq.NEXTVAL) or udt_table(rownum)
+  /// TODO: delete future
+  bool forbid_udt_table_index() {
+    if (m_is_udt_table_index && (has_sequence() || has_rownum_expr())) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "SEQUENCE or ROWNUM as record table's index");
+      return true;
+    }
+    return false;
+  }
+
   bool is_ora_udt_type() {
     return is_ora_type() || is_ora_table() || is_ora_refcursor();
   }
+  virtual bool mask_data() const { return false; }
 
   /// Whether this Item was created by the IN->EXISTS subquery transformation
   virtual bool created_by_in2exists() const { return false; }
@@ -3508,6 +3533,7 @@ class Item : public Parse_tree_node {
     return false;
   }
   virtual bool strip_db_table_name_processor(uchar *) { return false; }
+  bool is_abandoned() const { return m_abandoned; }
 
  private:
   virtual bool subq_opt_away_processor(uchar *) { return false; }
@@ -3595,10 +3621,24 @@ class Item : public Parse_tree_node {
   Item_result cmp_context;  ///< Comparison context
  private:
   /**
-    Number of references to this item from Item_ref objects. Used during
-    resolving to manage proper deletion of item sub-trees.
-  */
+      Number of references to this item. It is used for two purposes:
+      1. When eliminating redundant expressions, the reference count is used
+         to tell how many Item_ref objects that point to an item. When a
+         sub-tree of items is eliminated, it is traversed and any item that
+         is referenced from an Item_ref has its reference count decremented.
+         Only when the reference count reaches zero is the item actually
+     deleted.
+      2. Keeping track of unused expressions selected from merged derived
+     tables. An item that is added to the select list of a query block has its
+         reference count set to 1. Any references from outer query blocks are
+         through Item_ref objects, thus they will cause the reference count
+         to be incremented. At end of resolving, the reference counts of all
+         items in select list of merged derived tables are decremented, thus
+         if the reference count becomes zero, the expression is known to
+         be unused and can be removed.
+    */
   uint m_ref_count{0};
+  bool m_abandoned{false};    ///< true if item has been fully de-referenced
   const bool is_parser_item;  ///< true if allocated directly by parser
   int8 is_expensive_cache;    ///< Cache of result of is_expensive()
   uint8 m_data_type;          ///< Data type assigned to Item
@@ -3644,6 +3684,16 @@ class Item : public Parse_tree_node {
   bool unsigned_flag;
   bool m_is_window_function;  ///< True if item represents window func
   bool m_is_pivot_ref{false};  ///< True if item represents pivot func
+  /// TODO: delete future
+  bool m_is_udt_table_index{
+      false};  ///< True if item used as udt table's index.
+  /**
+    True if item represents null value from dk.
+    Used for:
+      1. Item::send()
+      2. Item::save_in_field()
+  */
+  bool m_is_dk_null_value{false};
   /**
     If the item is in a SELECT list (Query_block::fields) and hidden is true,
     the item wasn't actually in the list as given by the user (it was added
@@ -3712,6 +3762,11 @@ class Item : public Parse_tree_node {
     function. syc_connect_by_path,isleaf,iscycle
   */
   static constexpr uint32 PROP_CONNECT_BY_VALUE = 0x0400;
+
+  /**
+    Set if the item or one or more of the underlying items is a sequence
+  */
+  static constexpr uint32 PROP_SEQUENCE = 0x0800;
 
   uint32 m_accum_properties;
 
@@ -3861,6 +3916,8 @@ class Item_sp_variable : public Item {
   bool val_json(Json_wrapper *result) override;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
   bool get_time(MYSQL_TIME *ltime) override;
+  TABLE *val_udt() override;
+  TABLE *get_udt_table() override;
   bool is_null() override;
 
  public:
@@ -3968,6 +4025,8 @@ class Item_splocal : public Item_sp_variable,
     return this_item()->charset_for_protocol();
   }
   void set_result_type(Item_result result) { m_result_type = result; }
+  /// used for udt_table(id_seq.NEXTVAL) or udt_table(rownum)
+  bool fix_index_and_check(THD *thd, Item **index);
 };
 
 /**
@@ -4039,10 +4098,11 @@ class Item_splocal_row_field_table_by_name
         m_arg_list(arg_list),
         m_number(number),
         m_pctx(pctx) {}
+  bool itemize(Parse_context *pc, Item **res) override;
   bool pre_fix_fields(THD *thd, Item **result);
   bool fix_fields(THD *thd, Item **) override;
   Item *this_item() override;
-  const Item *this_item() const override { return nullptr; }
+  const Item *this_item() const override;
   void print(const THD *, String *str,
              enum_query_type query_type) const override;
   inline enum Type type() const override {
@@ -4071,10 +4131,11 @@ class Item_splocal_row_field_table_by_ident
                                        len_in_q),
         m_number_idx(number_idx),
         m_pctx(pctx) {}
+  bool itemize(Parse_context *pc, Item **res) override;
   bool pre_fix_fields(THD *thd, Item **result);
   bool fix_fields(THD *thd, Item **) override;
   Item *this_item() override;
-  const Item *this_item() const override { return nullptr; }
+  const Item *this_item() const override;
   void print(const THD *, String *str,
              enum_query_type query_type) const override;
   inline enum Type type() const override {
@@ -4528,8 +4589,6 @@ class Item_field : public Item_ident {
                          Query_block *removed_query_block) override {
     super::fix_after_pullout(parent_query_block, removed_query_block);
 
-    if (is_sequence) return;  // skip set nullable for sequence
-
     // Update nullability information, as the table may have taken over
     // null_row status from the derived table it was part of.
     set_nullable(field->is_nullable() || field->is_tmp_nullable() ||
@@ -4554,10 +4613,6 @@ class Item_field : public Item_ident {
   const char *ref_col_name{nullptr};
   bool ref{false};
 
-  // add for greatdb, support sequence
-  bool is_sequence{false};
-  uint64_t sequences_metadata_version{0};
-  bool seq_need_get_next{false};  // seq.nextval or seq.currval
   enum_parsing_context parsing_place{CTX_NONE};
   /// Result field
   Field *result_field{nullptr};
@@ -4660,6 +4715,7 @@ class Item_field : public Item_ident {
   my_decimal *val_decimal(my_decimal *) override;
   const uchar *val_extra(uint32 *len) override;
   String *val_str(String *) override;
+  TABLE *val_udt() override;
   bool val_json(Json_wrapper *result) override;
   bool send(Protocol *protocol, String *str_arg) override;
   void reset_field(Field *f);
@@ -4668,22 +4724,13 @@ class Item_field : public Item_ident {
   void save_org_in_field(Field *field) override;
   table_map used_tables() const override;
   Item_result result_type() const override {
-    if (is_sequence) {
-      return DECIMAL_RESULT;
-    }
     return field->result_type();
   }
   Item_result numeric_context_result_type() const override {
-    if (is_sequence) {
-      return DECIMAL_RESULT;
-    }
     return field->numeric_context_result_type();
   }
   TYPELIB *get_typelib() const override;
   Item_result cast_to_int_type() const override {
-    if (is_sequence) {
-      return DECIMAL_RESULT;
-    }
     return field->cast_to_int_type();
   }
   enum_monotonicity_info get_monotonicity_info() const override {
@@ -4704,9 +4751,6 @@ class Item_field : public Item_ident {
   bool get_time(MYSQL_TIME *ltime) override;
   bool get_timeval(my_timeval *tm, int *warnings) override;
   bool is_null() override {
-    if (is_sequence) {
-      return false;
-    }
     // NOTE: May return true even if maybe_null is not set!
     // This can happen if the underlying TABLE did not have a NULL row
     // at set_field() time (ie., table->is_null_row() was false),
@@ -4748,14 +4792,12 @@ class Item_field : public Item_ident {
   bool subst_argument_checker(uchar **arg) override;
   Item *equal_fields_propagator(uchar *arg) override;
   Item *replace_item_field(uchar *) override;
-  Item *replace_sequence_field(uchar *) override;
   bool disable_constant_propagation(uchar *) override {
     no_constant_propagation = true;
     return false;
   }
   Item *replace_equal_field(uchar *) override;
   inline uint32 max_disp_length() {
-    if (is_sequence) return ORA_SEQUENCE_MAX_DIGITS;
     return field->max_display_length();
   }
   Item_field *field_for_view_update() override { return this; }
@@ -4773,9 +4815,6 @@ class Item_field : public Item_ident {
     return field->get_geometry_type();
   }
   const CHARSET_INFO *charset_for_protocol(void) override {
-    if (is_sequence) {
-      return &my_charset_numeric;
-    }
     return field->charset_for_protocol();
   }
 
@@ -4860,19 +4899,18 @@ class Item_field : public Item_ident {
   // forall insert table have no context,so it can't do check_privileges.
   bool is_record_table_field;
   LEX_STRING get_udt_db_name() const override {
-    return to_lex_string(to_lex_cstring(db_name));
+    if (field == nullptr) return to_lex_string(to_lex_cstring(db_name));
+    return to_lex_string(to_lex_cstring(field->get_udt_db_name()));
   }
   LEX_STRING get_udt_name() const override { return field->udt_name(); }
   bool udt_table_store_to_table(TABLE *table_to) override;
 
-  bool is_sequence_field() override { return is_sequence; }
-
   Item *element_index(uint i) override;
 
-  TABLE *get_udt_table() override { return field->virtual_tmp_table_addr()[0]; }
+  TABLE *get_udt_table() override { return field->m_udt_table; }
 
  private:
-  bool try_fix_sequence_field(THD *thd);
+  bool try_fix_sequence_field(THD *thd, Item **ref, bool *is_seq);
 };
 
 class Item_field_refcursor : public Item_field {
@@ -4935,7 +4973,10 @@ class Item_field_row : public Item_field {
         arg_count(0),
         m_udt_name(field_row->udt_name()),
         m_udt_db_name(
-            to_lex_string(to_lex_cstring(field_row->get_udt_db_name()))) {}
+            to_lex_string(to_lex_cstring(field_row->get_udt_db_name()))) {
+    set_ora_type();
+    reset_ora_table();
+  }
   ~Item_field_row() override {
     if (row) row->mem_free();
     if (!m_is_refer_from_field_table) destroy(field);
@@ -4986,8 +5027,6 @@ class Item_field_row : public Item_field {
   uint arg_count;
   LEX_STRING m_udt_name;
   LEX_STRING m_udt_db_name;
-  type_conversion_status save_in_field_inner(Field *to,
-                                             bool no_conversions) override;
   bool find_duplicate_def_name(uint arg_count, Create_field *def,
                                List<Create_field> *list);
 };
@@ -4997,15 +5036,13 @@ class Item_field_row : public Item_field {
 */
 class Item_field_row_table : public Item_field_row {
   char *row_table_name;
-  LEX_CSTRING m_nested_table_udt;
-  longlong m_varray_size_limit;
 
  public:
   Item_field_row_table(Field *field_row)
-      : Item_field_row(field_row),
-        row_table_name(nullptr),
-        m_nested_table_udt(field_row->get_nested_table_udt()),
-        m_varray_size_limit(field_row->get_varray_size_limit()) {}
+      : Item_field_row(field_row), row_table_name(nullptr) {
+    set_ora_table();
+    reset_ora_type();
+  }
   Item *element_row_index(Item *item_index, uint i);
   Item *element_table_index(Item *item_index);
   bool result_type_table() const override { return true; }
@@ -5018,10 +5055,9 @@ class Item_field_row_table : public Item_field_row {
   bool insert_into_table_default_value(THD *thd, Item *index_item);
   bool insert_into_table_all_value(THD *thd,
                                    const mem_root_deque<Item *> &items,
-                                   Item *item_index);
+                                   Item *item_index, bool is_bulk_into = false);
   bool update_table_value(THD *thd, Item **value, int field_idx,
                           Item *item_index, Field *field_udt = nullptr);
-  longlong get_varray_size_limit() override { return m_varray_size_limit; }
   bool create_item_for_store_default_value_and_insert_into_table(
       THD *thd, sp_rcontext *rtx, Item *index_item);
   enum Type type() const override { return ORACLE_ROWTYPE_TABLE_ITEM; }
@@ -5034,10 +5070,15 @@ class Item_field_row_table : public Item_field_row {
     if (f == nullptr) return nullptr;
     return f->get_field_create_field_list();
   }
-
- protected:
-  type_conversion_status save_in_field_inner(Field *to,
-                                             bool no_conversions) override;
+  LEX_CSTRING get_nested_table_udt() {
+    return get_row_table_field()->get_nested_table_udt();
+  }
+  /**
+   * for type is table of cursor%rowtype,the cursor's structure was got after
+   * create this field, so it needs to create table_record->table after got the
+   * cursor's structure.
+   */
+  bool modify_row_field_table_definitions(THD *thd, List<Create_field> *defs);
 };
 
 /**
@@ -5134,6 +5175,7 @@ class Item_null : public Item_basic_constant {
   bool get_date(MYSQL_TIME *, my_time_flags_t) override { return true; }
   bool get_time(MYSQL_TIME *) override { return true; }
   bool val_json(Json_wrapper *wr) override;
+  TABLE *val_udt() override;
   bool send(Protocol *protocol, String *str) override;
   Item_result result_type() const override { return STRING_RESULT; }
   Item *clone_item() const override { return new Item_null(item_name); }
@@ -6311,13 +6353,14 @@ class Item_ref : public Item_ident {
 
  private:
   /// True if referenced item has been unlinked, used during item tree removal
-  bool m_unlinked{false};
 
   Field *result_field{nullptr}; /* Save result here */
 
  public:
   /// Indirect pointer to the referenced item.
   Item **m_ref_item{nullptr};
+
+  Item *m_ast_item{nullptr};
 
   enum PQ_copy_type {
     WITH_CONTEXT = 0,
@@ -6388,6 +6431,7 @@ class Item_ref : public Item_ident {
   bool val_bool() override;
   String *val_str(String *tmp) override;
   bool val_json(Json_wrapper *result) override;
+  TABLE *val_udt() override;
   bool is_null() override;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
   bool send(Protocol *prot, String *tmp) override;
@@ -6395,6 +6439,15 @@ class Item_ref : public Item_ident {
   bool fix_fields(THD *, Item **) override;
   void fix_after_pullout(Query_block *parent_query_block,
                          Query_block *removed_query_block) override;
+
+  LEX_STRING get_udt_db_name() const override {
+    return ref_item()->get_udt_db_name();
+  }
+  LEX_STRING get_udt_name() const override {
+    return ref_item()->get_udt_name();
+  }
+
+  TABLE *get_udt_table() override { return ref_item()->get_udt_table(); }
 
   Item_result result_type() const override { return ref_item()->result_type(); }
 
@@ -6546,8 +6599,7 @@ class Item_ref : public Item_ident {
     return ref_item()->check_column_in_group_by(arg);
   }
   bool collect_item_field_or_ref_processor(uchar *arg) override;
-
-  bool collect_connect_by_leaf_cycle_or_ref_processor(uchar *arg) override;
+  bool collect_item_ref_processor(uchar *arg) override;
 
   bool strip_db_table_name_processor(uchar *) override;
 
@@ -6774,6 +6826,39 @@ class Item_ref_null_helper final : public Item_ref {
     return (depended_from ? OUTER_REF_TABLE_BIT
                           : ref_item()->used_tables() | RAND_TABLE_BIT);
   }
+};
+
+class Item_data_mask_with_ref : public Item_ref {
+  Item **mask_result;
+
+ protected:
+  type_conversion_status save_in_field_inner(Field *field,
+                                             bool no_conversions) override {
+    type_conversion_status res;
+    res = ref_mask()->save_in_field(field, no_conversions);
+    null_value = ref_mask()->null_value;
+    return res;
+  }
+
+ public:
+  //  new (thd->mem_root)  Item_ref(&select->context, select_item,
+  //  it->item_name.ptr());
+  Item_data_mask_with_ref(Name_resolution_context *context_arg, Item **ref,
+                          const char *field_name_arg, Item **ref_mask)
+      : Item_ref(context_arg, ref, field_name_arg), mask_result(ref_mask) {}
+  ///
+  Item *ref_mask() const { return *mask_result; }
+  bool send(Protocol *prot, String *tmp) override {
+    return ref_mask()->send(prot, tmp);
+  }
+  void make_field(Send_field *field) override {
+    // ref_mask()->item_name.copy(item_name.st);
+    ref_mask()->make_field(field);
+  }
+  const CHARSET_INFO *charset_for_protocol(void) override {
+    return ref_mask()->charset_for_protocol();
+  }
+  bool mask_data() const override { return true; }
 };
 
 /*
@@ -7404,6 +7489,7 @@ class Item_cache : public Item_basic_constant {
   }
   Item *get_example() const { return example; }
   Item **get_example_ptr() { return &example; }
+  bool collect_item_cache_processor(uchar *arg) override;
   Item *get_example() { return example; }
   bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
 };
@@ -7539,12 +7625,15 @@ class Item_cache_str final : public Item_cache {
   bool get_time(MYSQL_TIME *ltime) override {
     return get_time_from_string(ltime);
   }
+  TABLE *val_udt() override;
   Item_result result_type() const override { return STRING_RESULT; }
   const CHARSET_INFO *charset() const { return value->charset(); }
   bool cache_value() override;
   void store_value(Item *expr, String &s);
   LEX_STRING get_udt_db_name() const override { return m_db_name; }
   LEX_STRING get_udt_name() const override { return m_udt_name; }
+  List<Create_field> *get_field_create_field_list() override;
+  TABLE *get_udt_table() override { return example->get_udt_table(); }
 
   Item *pq_clone(THD *thd, Query_block *select) override;
 };

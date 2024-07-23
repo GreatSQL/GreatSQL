@@ -1,5 +1,5 @@
 /* Copyright (c) 2018, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -379,7 +379,6 @@ int AggregateIterator::Read() {
           if ((*item)->reset_and_add()) return true;
         }
       }
-      m_join->query_block->reset_rownum_read_flag();
 
       // Keep reading rows as long as they are part of the existing group.
       for (;;) {
@@ -470,7 +469,6 @@ int AggregateIterator::Read() {
             }
           }
         }
-        m_join->query_block->reset_rownum_read_flag();
 
         // We're still in the same group, so just loop back.
       }
@@ -575,10 +573,6 @@ int NestedLoopIterator::Read() {
       return 1;
     }
     if (err == -1) {
-      if (thd()->lex->m_end_of_rownum) {
-        m_state = END_OF_ROWS;
-        return -1;
-      }
       // Out of inner rows for this outer row. If we are an outer join
       // and never found any inner rows, return a null-complemented row.
       // If not, skip that and go straight to reading a new outer row.
@@ -1239,10 +1233,6 @@ bool MaterializeIterator<Profiler>::MaterializeQueryBlock(
 
     if (*stored_rows >= m_limit_rows) break;
 
-    if (join && join->query_block) {
-      join->query_block->reset_rownum_read_flag();
-      join->query_block->reset_sequence_read_flag();
-    }
     int error = query_block.subquery_iterator->Read();
     if (error > 0 || thd()->is_error())
       return true;
@@ -1619,10 +1609,6 @@ int StreamingIterator::Read() {
     memcpy(table()->file->ref, &m_row_number, sizeof(m_row_number));
     ++m_row_number;
   }
-  if (m_join->query_block) {
-    m_join->query_block->reset_sequence_read_flag();
-    m_join->query_block->reset_rownum_read_flag();
-  }
   return 0;
 }
 
@@ -1869,13 +1855,10 @@ bool TemptableAggregateIterator<Profiler>::Init() {
         // Retry the update on the newly created on-disk table.
         error = table()->file->ha_update_row(table()->record[1],
                                              table()->record[0]);
-        m_join->query_block->reset_rownum_read_flag();
         if (error != 0 && error != HA_ERR_RECORD_IS_THE_SAME) {
           PrintError(error);
           return true;
         }
-      } else {
-        m_join->query_block->reset_rownum_read_flag();
       }
       continue;
     }
@@ -1921,7 +1904,6 @@ bool TemptableAggregateIterator<Profiler>::Init() {
       return true;
     }
     int error = table()->file->ha_write_row(table()->record[0]);
-    m_join->query_block->reset_rownum_read_flag();
     if (error != 0) {
       /*
          If the error is HA_ERR_FOUND_DUPP_KEY and the grouping involves a
@@ -2337,80 +2319,21 @@ void AppendIterator::UnlockRow() {
   m_sub_iterators[m_current_iterator_index]->UnlockRow();
 }
 
-RownumFilterIterator::RownumFilterIterator(
-    THD *thd, unique_ptr_destroy_only<RowIterator> source, Item *condition,
-    Item_func_rownum *rownum_func)
-    : RowIterator(thd),
-      m_source(move(source)),
-      m_condition(condition),
-      m_base_rownum(rownum_func) {}
-
-bool RownumFilterIterator::Init() {
-  if (first_init && init_variables()) {
-    return true;
-  }
-  return m_source->Init();
+bool CounterIterator::Init() {
+  auto ret = m_source->Init();
+  ret |= m_counter->Reset();
+  return ret;
 }
 
-int RownumFilterIterator::Read() {
-  for (;;) {
-    int err = m_source->Read();
-    if (err != 0) return err;
-
-    bool matched = m_condition->val_int();
-
-    if (thd()->killed) {
-      thd()->send_kill_message();
-      return 1;
-    }
-
-    /* check for errors evaluating the condition */
-    if (thd()->is_error()) return 1;
-
-    if (!matched) {
-      m_source->UnlockRow();
-      if (stopkey) {
-        thd()->lex->m_end_of_rownum = true;
-        return -1;
-      } else {
-        m_base_rownum->fallback_value();
-        m_base_rownum->reset_read_flag();
-        continue;
-      }
-    }
-
-    // Successful row.
-    return 0;
+int CounterIterator::Read() {
+  if (m_counter->BeforeRead) {
+    if (m_counter->Incr()) return 1;
   }
-}
+  auto ret = m_source->Read();
 
-// success return false. else true;
-bool RownumFilterIterator::init_variables() {
-  mem_root_deque<Item_func *> funcs(thd()->mem_root);
-  if (m_condition->walk(&Item::collect_item_func_processor, enum_walk::POSTFIX,
-                        (uchar *)&funcs)) {
-    return true;
+  if (ret == 0) {
+    if (!m_counter->BeforeRead)
+      if (m_counter->Incr()) return 1;
   }
-  for (Item_func *fun : funcs) {
-    if (fun->functype() == Item_func::CASE_FUNC) {
-      stopkey = false;
-      break;
-    }
-  }
-
-  List<Item> item_fields_or_view_refs;
-  Item::Collect_item_fields_or_view_refs info{&item_fields_or_view_refs,
-                                              thd()->lex->query_block};
-  if (m_condition->walk(&Item::collect_item_field_or_view_ref_processor,
-                        enum_walk::SUBQUERY_PREFIX | enum_walk::POSTFIX,
-                        pointer_cast<uchar *>(&info))) {
-    return true;
-  }
-  if (item_fields_or_view_refs.elements > 0) {
-    stopkey = false;
-  }
-  if (!m_base_rownum) return true;
-  m_base_rownum->reset_value();
-  first_init = false;
-  return false;
+  return ret;
 }

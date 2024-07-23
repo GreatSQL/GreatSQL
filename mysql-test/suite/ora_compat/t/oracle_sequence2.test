@@ -14,8 +14,6 @@ insert into t1 select seq1.nextval, seq1.currval from t1;
 select * from t1;
 insert into t1 values(seq1.nextval, 11);
 insert into t1 values(seq1.nextval, seq1.currval);
---error ER_GDB_SEQUENCE_POSITION
-insert into t1 values(seq1.currval,seq1.currval),(seq1.currval,seq1.currval);
 insert into t1 values(seq1.currval, 110);
 select * from t1;
 update t1 set ida = seq1.nextval, age = seq1.currval where ida = 1;
@@ -47,12 +45,13 @@ select seq1.nextval, ida from t1 union select ida, age from t1;
 select 1, ida from t1 union select ida, seq1.currval from t1;
 --error ER_GDB_SEQUENCE_POSITION
 select seq1.currval from t1 order by ida;
---error ER_GDB_SEQUENCE_POSITION
-update t1 join t2 on t1.ida > t2.ida set t1.ida = seq1.nextval, t2.ida = seq2.nextval;
---error ER_GDB_SEQUENCE_POSITION
-update t1, t2 set t1.ida = seq1.nextval, t2.ida = seq1.nextval where t1.ida < 5;
+explain format=tree update t1 join t2 on t1.ida > t2.ida set t1.ida = seq1.nextval, t2.ida = seq2.nextval;
+explain format=tree update t1, t2 set t1.ida = seq1.nextval, t2.ida = seq1.nextval where t1.ida < 5;
 --error ER_GDB_SEQUENCE_POSITION
 update t1 set ida = seq1.nextval, age = (select seq2.nextval from dual) where ida = 15;
+
+insert into t1 values(seq1.currval,seq1.currval),(seq1.currval,seq1.currval);
+insert into t1 values(seq1.nextval,seq1.currval),(seq1.nextval,seq1.currval);
 
 drop table t1, t2;
 drop sequence seq1;
@@ -239,6 +238,29 @@ drop sequence MYSEQ;
 CREATE SEQUENCE MYSEQ MINVALUE 1 START WITH 10000 MAXVALUE 15000 INCREMENT BY 6000 CYCLE CACHE 10;
 
 
+--echo [# bugfix 8822:http://zbox.greatdb.com/zentao/bug-view-8822.html]
+CREATE SEQUENCE seq1;
+select (seq1.nextval%(seq1.nextval+1))*rownum from dual connect by level<2; 
+
+drop sequence seq1;
+
+--echo [# bugfix 7431:http://zbox.greatdb.com/zentao/bug-view-7431.html]
+CREATE SEQUENCE myseq MINVALUE 1 START WITH 1 NOMAXVALUE INCREMENT BY 1 NOCYCLE CACHE 30;
+select myseq.nextval from dual connect by level<10;
+
+drop sequence myseq;
+
+CREATE SEQUENCE myseq ;
+
+select myseq.nextval,sys_connect_by_path(myseq.nextval,'->') from dual connect by level<10;
+drop sequence myseq;
+
+create sequence seq minvalue -10 maxvalue 10 increment by 1 start with -9;
+
+select seq.nextval;
+
+drop sequence seq;
+
 create sequence xx;
 
 select xx.nextval;
@@ -247,3 +269,243 @@ select xx.nextval;
 alter sequence xx  Minvalue 15;
 
 drop sequence xx;
+
+
+--echo [# bugfix 9419: enable using sequence for multi table update]
+create table t1(c1 int primary key, c2 varchar(64));
+create table t2(c1 int primary key, c2 varchar(64));
+create sequence seq;
+insert into t1 values (1,1),(2,2),(3,3),(4,4),(5,5);
+insert into t2 values (1,1),(2,2),(3,3),(4,4),(5,5);
+explain
+ update t1,t2
+    set t1.c2=concat(seq.currval,'_',seq.nextval), t2.c2=concat(seq.currval,'_',seq.nextval)
+  where t1.c1=t2.c1;
+explain format=tree
+ update t1,t2
+    set t1.c2=concat(seq.currval,'_',seq.nextval), t2.c2=concat(seq.currval,'_',seq.nextval)
+  where t1.c1=t2.c1;
+update t1,t2
+   set t1.c2=concat(seq.currval,'_',seq.nextval), t2.c2=concat(seq.currval,'_',seq.nextval)
+ where t1.c1=t2.c1;
+select * from t1;
+select * from t2;
+drop table t1,t2;
+drop sequence seq;
+
+--echo [# bugfix 7431:http://zbox.greatdb.com/zentao/bug-view-7431.html]
+
+create sequence q1;
+select q1.nextval;
+
+set @v=q1.currval;
+select @v;
+
+drop sequence q1;
+
+create sequence q1;
+select q1.nextval;
+
+set sql_mode=oracle;
+delimiter $$;
+
+declare
+v int;
+begin
+ v:= q1.currval;
+ select v;
+end;
+$$
+delimiter ;$$
+
+drop sequence q1;
+
+create sequence q1;
+
+set @n=q1.nextval;
+select @n;
+
+set @a=q1.nextval,@b=q1.nextval;
+select @a,@b;
+set @a=q1.nextval,@b=q1.currval;
+select @a,@b;
+drop sequence q1;
+
+
+CREATE TABLE seq_windows (
+    name VARCHAR2(20) PRIMARY KEY,
+    score INT NOT NULL,
+    team varchar2(2)
+);
+
+INSERT INTO
+ seq_windows(name, score,team)
+VALUES
+ ('Smith',81,'2');
+INSERT INTO
+ seq_windows(name, score,team)
+VALUES
+ ('Jones',55,'2');
+INSERT INTO
+ seq_windows(name, score,team)
+VALUES
+ ('Williams',55,'1');
+INSERT INTO
+ seq_windows(name, score,team)
+VALUES
+ ('Taylor',62,'3');
+INSERT INTO
+ seq_windows(name, score,team)
+VALUES
+ ('Brown',62,'2');
+INSERT INTO
+ seq_windows(name, score,team)
+VALUES
+ ('Davies',84,'1');
+INSERT INTO
+ seq_windows(name, score,team)
+VALUES
+ ('Evans',87,'2');
+INSERT INTO
+ seq_windows(name, score,team)
+VALUES
+ ('Wilson',72,'2');
+INSERT INTO
+ seq_windows(name, score,team)
+VALUES
+ ('Thomas',72,'1');
+INSERT INTO
+ seq_windows(name, score,team)
+VALUES
+ ('小张',100,'3');
+
+
+CREATE SEQUENCE seq_table_windows
+    START WITH 1
+    INCREMENT BY 1
+    NOCACHE
+    NOCYCLE;
+
+select
+    seq_table_windows.nextval, rownum,
+    ROW_NUMBER() OVER (ORDER BY score) row_num,
+    RANK() OVER (PARTITION BY team ORDER BY score) rank_val,name,score,team
+from seq_windows where rownum < 11.5425;
+
+
+select
+    seq_table_windows.nextval + 1,
+    ROW_NUMBER() OVER (ORDER BY score) row_num
+from seq_windows ;
+
+select
+    seq_table_windows.nextval + score,score,
+    ROW_NUMBER() OVER (ORDER BY score) row_num
+from seq_windows ;
+
+select
+    seq_table_windows.nextval + score,
+    ROW_NUMBER() OVER (ORDER BY score) row_num
+from seq_windows ;
+
+drop sequence seq_table_windows;
+drop table seq_windows;
+
+
+CREATE SEQUENCE id_seq;
+delimiter //;
+create procedure sp2()
+AS
+  id int;
+BEGIN
+   id := id_seq.NEXTVAL;
+   select id ;
+END;
+//
+create procedure sp3()
+AS
+  id int;
+BEGIN
+   id := id_seq.currval;
+   select id ;
+END;
+
+//
+delimiter ;//
+
+--error ER_GDB_READ_SEQUENCE
+call sp3;
+
+call sp2;
+call sp3;
+
+call sp2;
+call sp2;
+
+select id_seq.nextval;
+
+call sp2;
+call sp3;
+
+drop procedure sp2;
+drop procedure sp3;
+delimiter //;
+create function f2 RETURN INT
+AS
+BEGIN
+   return id_seq.NEXTVAL; 
+END;
+//
+
+create function f3  RETURN INT
+AS
+BEGIN
+   return id_seq.currval; 
+END;
+//
+delimiter ;//
+
+ 
+select f2() from dual;
+select f2() from dual;
+select f3() from dual;
+select f2() from dual;
+
+select f3() from dual;
+
+drop function f2;
+drop function f3;
+
+drop sequence id_seq;
+
+
+CREATE TABLE ta1 (
+    id NUMBER,
+    name VARCHAR2(50)
+);
+CREATE SEQUENCE id_seq START WITH 1 INCREMENT BY 1 NOCACHE;
+delimiter //;
+CREATE TRIGGER id_trigger
+BEFORE INSERT ON ta1
+FOR EACH ROW
+BEGIN
+    :NEW.id := id_seq.NEXTVAL;
+END;
+//
+delimiter ;//
+INSERT INTO ta1 (name) VALUES ('Alice');
+INSERT INTO ta1 (name) VALUES ('Alice');
+INSERT INTO ta1 (name) VALUES ('Alice');
+
+select * from ta1;
+
+drop TRIGGER id_trigger;
+drop table ta1;
+drop sequence id_seq;
+
+
+--echo [# bugfix 10096: sequence memory leak, caused by length of "test.seq_backend" > 15]
+create sequence seq_backend;
+select seq_backend.nextval;
+select seq_backend.nextval;
+drop sequence seq_backend;

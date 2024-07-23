@@ -19,6 +19,7 @@ ERROR HY000: You must reset your password using ALTER USER statement before exec
 SELECT user, host, plugin, LENGTH(authentication_string)
 FROM mysql.user ORDER BY user;
 user	host	plugin	LENGTH(authentication_string)
+greatdb.sys	localhost	caching_sha2_password	70
 mysql.infoschema	localhost	caching_sha2_password	70
 mysql.session	localhost	caching_sha2_password	70
 mysql.sys	localhost	caching_sha2_password	70

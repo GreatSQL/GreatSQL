@@ -1,0 +1,574 @@
+set sql_mode=oracle;
+
+# round(datetime)  requirements testcases
+select
+	to_char(round(to_date('2021-01-20', 'yyyy-mm-dd'), 'year'),
+	'yyyy-mm-dd') "new year",
+	to_char(round(to_date('2021-01-20', 'yyyy-mm-dd'), 'q'),
+	'yyyy-mm-dd') "new quarter",
+	to_char(round(to_date('2021-01-20', 'yyyy-mm-dd'), 'month'),
+	'yyyy-mm-dd') "new month",
+	to_char(round(to_date('2021-01-20', 'yyyy-mm-dd'), 'day'),
+	'yyyy-mm-dd') "new day",
+	to_char(round(to_date('2021-01-20', 'yyyy-mm-dd')),
+	'yyyy-mm-dd') "new time",
+	round(15.193, 1) "round1",
+	round(15.193,-1) "round2"
+from
+	dual;
+
+# round(datetime) scc cc testcases
+select ROUND(to_date('1949-01-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'SCC') from dual;
+select ROUND(to_date('1950-01-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'SCC') from dual;
+select ROUND(to_date('1951-01-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'SCC') from dual;
+select ROUND(to_date('1949-01-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'CC') from dual;
+select ROUND(to_date('1950-01-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'CC') from dual;
+select ROUND(to_date('1951-01-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'CC') from dual;
+#The maximum cannot exceed the 99th century, and if it exceeds it,
+#it will be converted to the null
+select to_date('9951-01-02 10:11:12','yyyy-mm-dd hh:mi:ss') from dual;
+select ROUND(to_date('9951-01-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'SCC') from dual;
+select ROUND(to_date('9901-01-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'CC') from dual;
+#Valid values for year: 1~9999，other values ,result is null
+select to_date('0000-01-02 10:11:12','yyyy-mm-dd hh:mi:ss') from dual;
+select ROUND(to_date('0000-01-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'CC') from dual;
+select to_date('10000-01-02 10:11:12','yyyy-mm-dd hh:mi:ss') from dual;
+select ROUND(to_date('10000-01-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'SCC') from dual;
+
+# round(datetime) IYYY,IYY,IY,I testcases
+select ROUND(to_date('2023-05-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'IYYY') from dual;
+select ROUND(to_date('2023-06-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'IYY') from dual;
+select ROUND(to_date('2023-07-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'IY') from dual;
+select ROUND(to_date('9999-08-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'I') from dual;
+select ROUND(to_date('2020-04-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'I') from dual;
+select ROUND(to_date('2020-06-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'IY') from dual;
+select ROUND(to_date('2020-07-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'IYYY') from dual;
+select ROUND(to_date('2020-04-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'IYY') from dual;
+select ROUND(to_date('2020-06-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'I') from dual;
+select ROUND(to_date('2020-07-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'I') from dual;
+select ROUND(to_date('2017-04-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'I') from dual;
+select ROUND(to_date('2017-07-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'I') from dual;
+select ROUND(to_date('2016-04-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'I') from dual;
+select ROUND(to_date('2016-07-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'I') from dual;
+select ROUND(to_date('2024-06-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'I') from dual;
+select ROUND(to_date('2024-07-02 10:11:12','yyyy-mm-dd hh:mi:ss'), 'I') from dual;
+select round(to_date('2022-12-29 22:34:56','yyyy-mm-dd hh24:mi:ss'),'IYYY') as round_iy_date from dual;
+select round(to_date('2021-06-30 22:34:56','yyyy-mm-dd hh24:mi:ss'),'IYYY') as round_iy_date from dual;
+select round(to_date('2021-07-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'IYYY') as round_iy_date from dual;
+select round(to_date('2023-06-30 22:34:56','yyyy-mm-dd hh24:mi:ss'),'IYYY') as round_iy_date from dual;
+select round(to_date('2023-07-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'IYYY') as round_iy_date from dual;
+select round(to_date('2020-06-30 22:34:56','yyyy-mm-dd hh24:mi:ss'),'IYYY') as round_iy_date from dual;
+select round(to_date('2020-07-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'IYYY') as round_iy_date from dual;
+
+# round(datetime) SYYYY,YYYY,YEAR,SYEAR,YYY,YY testcases
+select round(to_date('2023-06-30 8:11:30','yyyy-mm-dd HH24:MI:SS'), 'SYYYY') from dual;
+select round(to_date('2023-07-02 8:11:31','yyyy-mm-dd HH24:MI:SS'), 'YYYY') from dual;
+select round(to_date('2020-01-02 8:11:29','yyyy-mm-dd HH24:MI:SS'), 'YEAR') from dual;
+select round(to_date('2020-06-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'SYEAR') from dual;
+select round(to_date('2099-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'YYY') from dual;
+select round(to_date('1999-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'YY') from dual;
+select round(to_date('9999-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'YY') from dual;
+
+# round(datetime) Q testcases
+select round(to_date('2023-1-31 23:11:12','yyyy-mm-dd HH24:MI:SS'),'Q') from dual;
+select round(to_date('2023-10-16 23:11:12','yyyy-mm-dd HH24:MI:SS'),'Q') from dual;
+select round(to_date('2023-11-16 23:11:12','yyyy-mm-dd HH24:MI:SS'),'Q') from dual;
+select round(to_date('2023-12-16 23:11:12','yyyy-mm-dd HH24:MI:SS'),'Q') from dual;
+
+# round(datetime) MONTH, MON, MM, RM testcases
+select round(to_date('2023-01-15 23:11:12','yyyy-mm-dd HH24:MI:SS'),'MONTH') from dual;
+select round(to_date('2023-02-15 23:11:12','yyyy-mm-dd HH24:MI:SS'),'MON') from dual;
+select round(to_date('2023-01-31 23:11:12','yyyy-mm-dd HH24:MI:SS'),'MONTH') from dual;
+select round(to_date('2023-10-16 23:11:12','yyyy-mm-dd HH24:MI:SS'),'MON') from dual;
+select round(to_date('2023-11-16 23:11:12','yyyy-mm-dd HH24:MI:SS'),'MM') from dual;
+select round(to_date('2023-12-16 23:11:12','yyyy-mm-dd HH24:MI:SS'),'RM') from dual;
+
+# round(datetime) IW testcases
+select round(to_date('2023-03-27 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as round_iw_date from dual;
+select round(to_date('2023-03-28 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as round_iw_date from dual;
+select round(to_date('2023-03-29 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as round_iw_date from dual;
+select round(to_date('2023-03-30 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as round_iw_date from dual;
+select round(to_date('2023-03-31 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as round_iw_date from dual;
+select round(to_date('2023-04-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as round_iw_date from dual;
+select round(to_date('2023-04-02 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as round_iw_date from dual;
+select round(to_date('2023-04-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iw') as round_iw_date from dual;
+select round(to_date('1999-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'iw') from dual;
+select round(to_date('2000-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'iw') from dual;
+select round(to_date('2001-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'iw') from dual;
+select round(to_date('2002-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'iw') from dual;
+select round(to_date('2003-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'iw') from dual;
+select round(to_date('2004-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'iw') from dual;
+select round(to_date('2005-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'iw') from dual;
+select round(date('0001-01-01'),'iw') as round_date from dual;
+
+# round(datetime) WW testcases
+select round(to_date('2020-04-24 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2020-04-25 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2020-04-26 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2020-04-27 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2020-04-28 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2020-04-29 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2020-04-30 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2020-05-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2020-05-02 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2020-05-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+
+select round(to_date('2017-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2018-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2019-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2020-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2015-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2021-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2022-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+# ww: different weekdays of the same year
+select round(to_date('2022-04-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2022-04-04 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2022-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('2022-04-09 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww') as round_ww_date from dual;
+select round(to_date('1582-09-30','YYYY-MM-DD'),'ww') as trunc_date from dual;
+select round(to_date('1582-10-01','YYYY-MM-DD'),'ww') as trunc_date from dual;
+select round(to_date('1582-10-02','YYYY-MM-DD'),'ww') as trunc_date from dual;
+select round(to_date('1582-10-03','YYYY-MM-DD'),'ww') as trunc_date from dual;
+select round(to_date('1582-10-04','YYYY-MM-DD'),'ww') as trunc_date from dual;
+# ww: testcases from sunday to monday
+select to_char(round(to_date('2017-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+select to_char(round(to_date('2018-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+select to_char(round(to_date('2019-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+select to_char(round(to_date('2020-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+select to_char(round(to_date('2015-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+select to_char(round(to_date('2021-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+select to_char(round(to_date('2022-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'ww'),'d') as weekday from dual;
+
+# round(datetime) W testcases
+select round(to_date('2023-04-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-04-04 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-04-05 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-04-06 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-04-07 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-04-09 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-04-10 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-04-11 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+
+# round(datetime) DDD,DD,J testcases
+select round(to_date('2023-01-15 12:30:30','yyyy-mm-dd HH24:MI:SS'), 'DDD') from dual;
+select round(to_date('2023-01-15 13:31:31','yyyy-mm-dd HH24:MI:SS'), 'DDD') from dual;
+select round(to_date('2023-01-15 11:29:29','yyyy-mm-dd HH24:MI:SS'), 'DDD') from dual;
+select round(to_date('2023-01-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'DDD') from dual;
+select round(to_date('2099-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'DDD') from dual;
+select round(to_date('1999-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'DDD') from dual;
+
+# round(datetime) DAY,DY,D testcases
+select round(to_date('2023-04-02 22:34:56','yyyy-mm-dd hh24:mi:ss'),'DAY') as round_w_date from dual;
+select round(to_date('2023-04-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'DAY') as round_w_date from dual;
+select round(to_date('2023-04-04 22:34:56','yyyy-mm-dd hh24:mi:ss'),'DY') as round_w_date from dual;
+select round(to_date('2023-04-05 22:34:56','yyyy-mm-dd hh24:mi:ss'),'D') as round_w_date from dual;
+select round(to_date('2023-04-06 22:34:56','yyyy-mm-dd hh24:mi:ss'),'D') as round_w_date from dual;
+select round(to_date('2023-04-07 22:34:56','yyyy-mm-dd hh24:mi:ss'),'D') as round_w_date from dual;
+select round(to_date('2023-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'D') as round_w_date from dual;
+
+# round(datetime) HH,HH12,HH24 testcases
+select round(to_date('2023-01-02 8:30:30','yyyy-mm-dd HH24:MI:SS'), 'HH') from dual;
+select round(to_date('2023-01-02 8:31:31','yyyy-mm-dd HH24:MI:SS'), 'HH') from dual;
+select round(to_date('2023-01-02 8:29:29','yyyy-mm-dd HH24:MI:SS'), 'HH') from dual;
+select round(to_date('2023-01-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'HH') from dual;
+select round(to_date('2099-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'HH') from dual;
+select round(to_date('1999-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'HH') from dual;
+
+# round(datetime) MI testcases
+select round(to_date('2023-01-02 8:11:30','yyyy-mm-dd HH24:MI:SS'), 'MI') from dual;
+select round(to_date('2023-01-02 8:11:31','yyyy-mm-dd HH24:MI:SS'), 'MI') from dual;
+select round(to_date('2023-01-02 8:11:29','yyyy-mm-dd HH24:MI:SS'), 'MI') from dual;
+select round(to_date('2023-01-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'MI') from dual;
+select round(to_date('2099-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'MI') from dual;
+select round(to_date('1999-12-31 23:59:31','yyyy-mm-dd HH24:MI:SS'), 'MI') from dual;
+
+# round(datetime) base testcases
+create table t1 (c_date datetime, format varchar(10));
+# all supported format in upper case
+insert into t1 values
+('2021-01-02 10:11:12', 'SCC'),    # Century
+('2021-01-02 10:11:12', 'CC'),
+('2021-01-02 10:11:12', 'SYEAR'),  # Year
+('2021-01-02 10:11:12', 'SYYYY'),
+('2021-01-02 10:11:12', 'SYEAR'),
+('2021-01-02 10:11:12', 'YEAR'),
+('2021-01-02 10:11:12', null),
+('2021-01-02 10:11:12', 'YYYY'),
+(null, null),
+('2021-01-02 10:11:12', 'YYY'),
+('2021-01-02 10:11:12', 'YY'),
+('2021-01-02 10:11:12', 'Y'),
+(null, 'YYY'),
+('2021-01-02 10:11:12', 'Q'),      # Quarter
+('2021-01-02 10:11:12', 'MONTH'),  # Month
+('2021-01-02 10:11:12', 'MON'),
+('2021-01-02 10:11:12', 'MM'),
+('2021-01-02 10:11:12', 'RM'),
+('2021-01-02 10:11:12', 'DDD'),    # Day
+('2021-01-02 10:11:12', 'DD'),
+('2021-01-02 10:11:12', 'DAY'),    # Closest Sunday
+('2021-01-02 10:11:12', 'DY'),
+('2021-01-02 10:11:12', 'D'),
+('2021-01-02 10:11:12', 'HH'),     #Hours
+('2021-01-02 10:11:12', 'HH12'),
+('2021-01-02 10:11:12', 'HH24'),
+('2021-01-02 10:11:12', 'MI');     #Minutes
+
+select c_date,format, round(c_date, format) as result from t1 where format is not null;
+truncate table t1;
+
+# formats in lower cases
+insert into t1 values
+('2021-04-03 12:34:56', 'scc'),
+('2021-04-03 12:34:56', 'cc'),
+('2021-04-03 12:34:56', 'syear'),
+('2021-04-03 12:34:56', 'syyyy'),
+('2021-04-03 12:34:56', 'syear'),
+('2021-04-03 12:34:56', 'year'),
+('2021-04-03 12:34:56', 'yyyy'),
+('2021-04-03 12:34:56', 'yyy'),
+('2021-04-03 12:34:56', 'yy'),
+('2021-04-03 12:34:56', 'y'),
+('2021-04-03 12:34:56', 'q'),
+('2021-04-03 12:34:56', 'month'),
+('2021-04-03 12:34:56', 'mon'),
+('2021-04-03 12:34:56', 'mm'),
+('2021-04-03 12:34:56', 'rm'),
+('2021-04-03 12:34:56', 'ddd'),
+('2021-04-03 12:34:56', 'dd'),
+('2021-04-03 12:34:56', 'day'),
+('2021-04-03 12:34:56', 'dy'),
+('2021-04-03 12:34:56', 'd'),
+('2021-04-03 12:34:56', 'hh'),
+('2021-04-03 12:34:56', 'hh12'),
+('2021-04-03 12:34:56', 'hh24'),
+('2021-04-03 12:34:56', 'mi');
+
+select c_date,format, round(c_date, format) as result from t1;
+truncate table t1;
+
+# invalid formats
+insert into t1 values
+('2021-01-02 10:11:12', 'YEAR  '),
+('2021-01-02 10:11:12', '  YYYY'),
+('2021-01-02 10:11:12', 'YYYD'),
+('2021-01-02 10:11:12', 'EYYY'),
+('2021-01-02 10:11:12', 'MONTA'),
+('2021-01-02 10:11:12', 'MONAB'),
+('2021-01-02 10:11:12', 'MINUTE'),
+('2021-01-02 10:11:12', 'DDDD'),
+('2021-01-02 10:11:12', 'DC'),
+('2021-01-02 10:11:12', 'DAZ'),
+('2021-01-02 10:11:12', 'HA'),
+('2021-01-02 10:11:12', 'H12'),
+('2021-01-02 10:11:12', 'H24'),
+('2021-01-02 10:11:12', 'MIC');
+
+--error ER_WRONG_ARGUMENTS
+select c_date,format, round(c_date, format) as result from t1;
+
+drop table t1;
+
+#misc tests
+select round(to_date('2021-05-06','yyyy-mm-dd')) from dual;   #Without format mask
+select round(to_date('2021-03-02 10:11:12','yyyy-mm-dd HH24:MI:SS'), 'YEAR') from dual;
+select round(to_date('03-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'month') from dual;
+select round(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'MI') from dual;
+select round(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'HH') from dual;
+select round(to_date('2003-01-02 23:11:12','yyyy-mm-dd HH24:MI:SS'), 'HH12') from dual;
+select round(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q') from dual;
+select round(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY') from dual;
+--error ER_WRONG_ARGUMENTS
+select round(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg') from dual;
+select round('-1.4', '-1') from dual;
+select round('-1.4', '-2') from dual;
+set @a=123.456;
+select round(@a, @a) from dual;
+set @a=123.456000;
+select round(@a, 4) from dual;
+select round(@a, 5) from dual;
+set @a=-123.456000;
+select round(@a, 4) from dual;
+select round(@a, 5) from dual;
+
+
+# null value tests
+--error ER_WRONG_ARGUMENTS
+select round(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH24:MI:SS'),'') from dual;
+--error ER_WRONG_ARGUMENTS
+select round(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH24:MI:SS'),null) from dual;
+select round(null, 'aaa') from dual;
+select round(null, null) from dual;
+select round(123.456, null) from dual;
+select round(123.456,'') from dual;
+
+# round in procedure
+delimiter //;
+create procedure p_round() as
+begin
+SELECT round(123.456, 1) FROM dual;
+SELECT round(123.456, 2) FROM dual;
+SELECT round(123.456, 3) FROM dual;
+SELECT round(123.456, 4) FROM dual;
+SELECT round(123.456, 0) FROM dual;
+SELECT round(123.456, -1) FROM dual;
+SELECT round(123.456, -2) FROM dual;
+SELECT round(123.456, -3) FROM dual;
+SELECT round(123.456, -4) FROM dual;
+SELECT round(.456, 1) FROM dual;
+SELECT round(.456, 2) FROM dual;
+SELECT round(.456, 3) FROM dual;
+select round(to_date('2021-05-06','yyyy-mm-dd')) from dual;
+select round(to_date('2021-03-02 10:11:12','yyyy-mm-dd HH24:MI:SS'), 'YEAR') from dual;
+select round(to_date('03-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'month') from dual;
+select round(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'MI') from dual;
+select round(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'HH') from dual;
+select round(to_date('2003-01-02 23:11:12','yyyy-mm-dd HH24:MI:SS'), 'HH12') from dual;
+select round(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q') from dual;
+select round(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY') from dual;
+select round(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg') from dual;
+end;//
+--error ER_WRONG_ARGUMENTS
+call p_round//
+drop procedure p_round//
+delimiter ;//
+
+# test round in oracle mode
+set sql_mode=oracle;
+SELECT round(123.456, 1) FROM dual;
+SELECT round(123.456, 2) FROM dual;
+SELECT round(123.456, 3) FROM dual;
+SELECT round(123.456, 4) FROM dual;
+SELECT round(123.456, 0) FROM dual;
+SELECT round(123.456, -1) FROM dual;
+SELECT round(123.456, -2) FROM dual;
+SELECT round(123.456, -3) FROM dual;
+SELECT round(123.456, -4) FROM dual;
+SELECT round(.456, 1) FROM dual;
+SELECT round(.456, 2) FROM dual;
+SELECT round(.456, 3) FROM dual;
+select round(to_date('2021-05-06','yyyy-mm-dd')) from dual;
+select round(to_date('2021-03-02 10:11:12','yyyy-mm-dd HH24:MI:SS'), 'YEAR') from dual;
+select round(to_date('03-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'month') from dual;
+select round(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'MI') from dual;
+select round(to_date('0003-01-02 8:11:2.123456','yyyy-mm-dd HH12:MI:SS.FF'), 'HH') from dual;
+select round(to_date('2003-01-02 23:11:12','yyyy-mm-dd HH24:MI:SS'), 'HH12') from dual;
+select round(to_date('1998-01-02 01:11:12','yyyy-mm-dd HH12:MI:SS'), 'Q') from dual;
+select round(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'DAY') from dual;
+--error ER_WRONG_ARGUMENTS
+select round(to_date('1930-01-02 02:11:12','yyyy-mm-dd HH12:MI:SS'), 'abcdefg') from dual;
+
+--echo testcases
+--echo set timestamp to '2021-12-01 10:00:00'
+set timestamp = 1638324000;
+create table test (c1 datetime);
+insert into test values('2021-11-30');
+insert into test values('2021-12-01');
+insert into test values('2021-12-02');
+
+# use cases under oracle mode
+set sql_mode=oracle;
+select round(sysdate) + 10 from dual;
+select round(sysdate) + 10 from dual;
+select round(now(6)) + 10 from dual;
+select round(now(6)) - 10 from dual;
+
+select * from test where round(c1) <> c1;
+select * from test where round(sysdate) = c1;
+select * from test where round(sysdate) < c1;
+select * from test where round(sysdate) > c1;
+select * from test where round(sysdate) <> c1;
+
+select * from test where round(sysdate+1) = c1;
+select * from test where round(sysdate+1) > c1;
+select * from test where round(sysdate+1) <> c1;
+
+select * from test where round(sysdate-1) = c1;
+select * from test where round(sysdate-1) > c1;
+select * from test where round(sysdate-1) <> c1;
+
+select * from test where c1 = round(sysdate);
+select * from test where c1 > round(sysdate);
+select * from test where c1 < round(sysdate);
+select * from test where c1 <> round(sysdate);
+
+create table t1(userid int, login_time datetime);
+create table t2(id int, name datetime);
+
+insert into t1 values (1, round(sysdate));
+insert into t1 values (2, round(sysdate+1));
+insert into t1 values (3, round(sysdate)+2);
+insert into t2 values (1, round(sysdate)+3);
+
+#select push down
+select * from (select * from t1,t2 where t1.userid = t2.id) where round(login_time)>'1000-12-02';
+select * from (select * from t1 union select * from t2) as t where round(t.login_time)>'1000-12-02';
+
+#round a column which refers to the outer SELECT
+select userid, login_time from t1
+where userid in (
+    select id from t2
+    where  round(t1.login_time) = '2021-12-02'
+);
+
+update t1 set login_time=round(sysdate+10,'DD')
+where userid = 1;
+update t1 set login_time=round(sysdate-10,'DD')
+where userid = 2;
+
+select userid, login_time from t1;
+
+drop table t1, t2;
+
+# use cases under default mode
+set sql_mode=default;
+select * from test where round(c1) <> c1;
+select * from test where round(now()) = c1;
+select * from test where round(now()) < c1;
+select * from test where round(now()) > c1;
+select * from test where round(now()) <> c1;
+select * from test where round(now());
+
+select round(now()) + 0 from dual;
+select round(now()) + interval 1 day from dual;
+
+drop table test;
+
+set sql_mode=oracle;
+# fromat W
+select round(to_date('2023-04-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-04-04 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-04-09 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+
+# W: from Sunday to Monday
+select to_char(round(to_date('2023-01-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+select to_char(round(to_date('2023-05-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+select to_char(round(to_date('2023-08-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+select to_char(round(to_date('2023-02-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+select to_char(round(to_date('2023-06-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+select to_char(round(to_date('2023-09-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+select to_char(round(to_date('2023-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w'),'d') as weekday from dual;
+
+select round(to_date('2023-01-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-05-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-08-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-02-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2023-06-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2021-09-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+select round(to_date('2020-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'w') as round_w_date from dual;
+
+## format: IYYYY, IYYY, IYY, IY, I
+select round(to_date('2010-01-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('1977-01-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2017-01-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2018-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2019-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2020-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2015-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2021-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2022-04-08 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+
+select round(to_date('2022-12-29 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2022-12-30 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2022-12-31 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2023-01-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2023-01-02 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2023-01-03 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2023-01-04 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('1900-01-01 22:34:56','yyyy-mm-dd hh24:mi:ss'),'iy') as round_iy_date from dual;
+select round(to_date('2023-12-20 01','YYYY-MM-DD ss'),'ww') as trunc_date from dual;
+select round(to_date('2019-12-20 01','YYYY-MM-DD ss'),'ww') as trunc_date from dual;
+select round(to_date('2019-12-21 01','YYYY-MM-DD ss'),'ww') as trunc_date from dual;
+select round(to_date('2019-12-18 01','YYYY-MM-DD ss'),'w') as trunc_date from dual;
+select round(to_date('2019-12-19 01','YYYY-MM-DD ss'),'w') as trunc_date from dual;
+select round(to_date('2019-12-20 01','YYYY-MM-DD ss'),'w') as trunc_date from dual;
+
+# special cases in year 1582
+select round(date('1582-10-15'),'iy') as round_date from dual;
+select round(date('1582-10-15'),'iw') as round_date from dual;
+select round(date('1582-10-15'),'ww') as round_date from dual;
+select round(date('1582-10-15'),'w')  as round_date from dual;
+
+select round(date('1582-10-05'),'iy') as round_date from dual;
+select round(date('1582-10-05'),'iw') as round_date from dual;
+select round(date('1582-10-05'),'ww') as round_date from dual;
+select round(date('1582-10-05'),'w')  as round_date from dual;
+
+select round(date('1582-10-04'),'iy') as round_date from dual;
+select round(date('1582-10-04'),'iw') as round_date from dual;
+select round(date('1582-10-04'),'ww') as round_date from dual;
+select round(date('1582-10-04'),'w')  from dual;
+
+select round(date('1582-11-08'),'iy') as round_date from dual;
+select round(date('1582-11-08'),'iw') as round_date from dual;
+select round(date('1582-11-08'),'ww') as round_date from dual;
+select round(date('1582-11-08'),'w')  as round_date from dual;
+
+select round(to_date('1582-10-03','YYYY-MM-DD'),'day') as trunc_date from dual;
+select round(to_date('1582-10-20','YYYY-MM-DD'),'day') as trunc_date from dual;
+select round(to_date('1582-10-07','YYYY-MM-DD'),'day') as trunc_date from dual;
+
+
+select round(date('0001-01-01'),'ww') as round_date from dual;
+select round(date('0001-01-01'),'w')  as round_date from dual;
+
+--echo
+--echo === round(date) warnings ===
+select round(date('0001-01-01'),'iy') as round_date from dual;
+select round(date('0000-01-10'),'iy') as round_date from dual;
+select round(date('0000-01-10'),'iw') as round_date from dual;
+select round(date('0000-01-10'),'ww') as round_date from dual;
+select round(date('0000-01-10'),'w')  as round_date from dual;
+select round(date('0000-01-10'),'yy') as round_date from dual;
+select round(date('0000-01-10'),'day') as round_date from dual;
+select round(date('0000-01-10'),'dd') as round_date from dual;
+select round(date('0000-01-10'),'hh') as round_date from dual;
+select round(date('0000-01-10'),'mi') as round_date from dual;
+
+--echo test bug#9586
+--error ER_WRONG_ARGUMENTS
+select round(timestamp'2024-05-11 04:06:30',1);
+--error ER_WRONG_ARGUMENTS
+select round(timestamp'2024-05-11 04:06:30','dddd');
+# set timestamp to '2023-04-14 10:09:06'
+set timestamp=1681438146;
+select now() from dual;
+select round(current_timestamp,'ddd');
+select round(current_timestamp,'year') from dual;
+select round(current_timestamp,'mm') from dual;
+select round(current_timestamp) from dual;
+
+--echo
+--echo === round(date) error ===
+--error ER_WRONG_ARGUMENTS
+SELECT round('2021-10-12', 1) FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT round('2021', 'dd') FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT round('2021-11-12') FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT round('abc', 0) FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT round(' ', '') FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT round('        ', 1) FROM dual;
+--error ER_WRONG_ARGUMENTS
+SELECT round (1.234, '   ') FROM dual;
+
+--echo test bug#9585
+select round(to_date('2024-03-27 11:30:30','yyyy-mm-dd HH24:MI:SS'), 'day') from dual;
+select round(to_date('2024-03-27 12:30:30','yyyy-mm-dd HH24:MI:SS'), 'day') from dual;
+
+--echo test bug#10095
+select round(to_date('2024-06-27 11:26:43','yyyy-mm-dd HH24:MI:SS'), 'ww') from dual;
+select round(to_date('2024-06-27 12:26:43','yyyy-mm-dd HH24:MI:SS'), 'ww') from dual;
+select round(to_date('2024-06-27 11:26:43','yyyy-mm-dd HH24:MI:SS'), 'iw') from dual;
+select round(to_date('2024-06-27 12:26:43','yyyy-mm-dd HH24:MI:SS'), 'iw') from dual;
+select round(to_date('2024-06-25 11:26:43','yyyy-mm-dd HH24:MI:SS'), 'w') from dual;
+select round(to_date('2024-06-25 12:26:43','yyyy-mm-dd HH24:MI:SS'), 'w') from dual;
+
+
+
+

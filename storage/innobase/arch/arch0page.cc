@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -104,6 +105,10 @@ Arch_Group::~Arch_Group() {
   }
 
   if (!is_durable()) {
+    if (m_page_tracking)
+      init_dblwr_file_ctx(
+          ARCH_DBLWR_DIR, ARCH_DBLWR_FILE, ARCH_DBLWR_NUM_FILES,
+          static_cast<uint64_t>(ARCH_PAGE_BLK_SIZE) * ARCH_DBLWR_FILE_CAPACITY);
     m_file_ctx.delete_files(m_begin_lsn);
   }
 }
@@ -522,8 +527,16 @@ bool Arch_File_Ctx::find_stop_point(Arch_Group *group, lsn_t check_lsn,
 
   lsn_t block_stop_lsn;
   int err;
-
-  while (left_pos.m_block_num <= right_pos.m_block_num) {
+  // fix bug: right_pos.m_block_num=-1(即18446744073709551615).
+  // the initial condition is:
+  // left_pos.m_block_num = 0, right_pos.m_block_num =12
+  // The final condition is:
+  // left_pos.m_block_num = 0, right_pos.m_block_num =-1,
+  // since the the type of right_pos.m_block_num is int64_t,
+  // then the condition (left_pos.m_block_num < right_pos.m_block_num) is right,
+  // the group will open a file which not exist.
+  while (static_cast<int64_t>(left_pos.m_block_num) <=
+         static_cast<int64_t>(right_pos.m_block_num)) {
     Arch_Page_Pos middle_pos;
     middle_pos.init();
     middle_pos.m_offset = 0;
@@ -1077,6 +1090,77 @@ int Page_Arch_Client_Ctx::get_pages(Page_Arch_Cbk *cbk_func, void *cbk_ctx,
   arch_client_mutex_exit();
 
   return (err);
+}
+
+int Page_Arch_Client_Ctx::set_start_end_pos(lsn_t &start_id, lsn_t &stop_id) {
+  DBUG_PRINT("page_archiver", ("set page arch start and stop pos"));
+
+  arch_page_sys->arch_mutex_enter();
+
+  /** 1. Get appropriate LSN range. */
+
+  int error =
+      arch_page_sys->fetch_group_within_lsn_range(start_id, stop_id, &m_group);
+
+  if (error != 0 && m_group == nullptr) {
+    ib::info(ER_IB_MSG_21) << "page_archiver Start point - lsn : " << start_id
+                           << " \t Stop point - lsn :" << stop_id
+                           << " \tcheckpoint point - lsn :"
+                           << log_sys->last_checkpoint_lsn;
+    my_error(error, MYF(0),
+             "page_archiver Can't set postion - No matching stop point.");
+
+    return (error);
+  }
+
+  ut_ad(m_group != nullptr);
+
+  /** 2. Get block position from where to start. */
+
+  bool success;
+  Arch_Point start_point;
+  success = m_group->find_reset_point(start_id, start_point);
+
+  ib::info(ER_IB_MSG_21) << "page_archiver Start point - lsn : "
+                         << start_point.lsn
+                         << " \tstart pos(block_num, offset) : "
+                         << start_point.pos.m_block_num << ", "
+                         << start_point.pos.m_offset;
+
+  if (!success) {
+    my_error(ER_INTERNAL_ERROR, MYF(0),
+             "page_archiver Can't set postion - No matching reset point.");
+    arch_page_sys->arch_mutex_exit();
+    return (ER_INTERNAL_ERROR);
+  }
+
+  m_start_pos = start_point.pos;
+  start_id = start_point.lsn;
+
+  /** 3. Get block position where to stop */
+
+  Arch_Point stop_point;
+  Arch_Page_Pos m_write_pos = arch_page_sys->write_pos();
+
+  success = m_group->find_stop_point(stop_id, stop_point, m_write_pos);
+  ut_ad(success);
+
+  ib::info(ER_IB_MSG_21) << "page_archiver Stop point - lsn : "
+                         << stop_point.lsn
+                         << " \tstop pos(block_num, offset) : "
+                         << stop_point.pos.m_block_num << ", "
+                         << stop_point.pos.m_offset
+                         << " \twrite pos(block_num, offset) : "
+                         << m_write_pos.m_block_num << ", "
+                         << m_write_pos.m_offset;
+
+  arch_page_sys->arch_mutex_exit();
+
+  m_stop_pos = m_write_pos;
+
+  /** 4. for use Page_Arch_Client_Ctx::get_pages() */
+  m_state = ARCH_CLIENT_STATE_STOPPED;
+  return (0);
 }
 
 void Page_Arch_Client_Ctx::release() {
@@ -2466,7 +2550,7 @@ int Arch_Page_Sys::start(Arch_Group **group, lsn_t *start_lsn,
 
     m_current_group = ut::new_withkey<Arch_Group>(
         ut::make_psi_memory_key(mem_key_archive), log_sys_lsn,
-        ARCH_PAGE_FILE_HDR_SIZE, &m_mutex);
+        ARCH_PAGE_FILE_HDR_SIZE, &m_mutex, true);
 
     if (m_current_group == nullptr) {
       acquired_oper_mutex = false;

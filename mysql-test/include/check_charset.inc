@@ -78,7 +78,7 @@ if ($check_for_object_names)
   SELECT * FROM `±í¸ñ`;
   eval SELECT `straÃe`(_$cset'한글');
 
-  --exec $MYSQL_PUMP --exclude-databases=mysql,mtr,sys,sys_audit > $MYSQLTEST_VARDIR/tmp/db1_non_ascii.sql
+  --exec $MYSQL_PUMP --exclude-databases=mysql,mtr,sys > $MYSQLTEST_VARDIR/tmp/db1_non_ascii.sql
 
   DROP DATABASE `Êý¾Ý¿â`;
   --exec $MYSQL < $MYSQLTEST_VARDIR/tmp/db1_non_ascii.sql

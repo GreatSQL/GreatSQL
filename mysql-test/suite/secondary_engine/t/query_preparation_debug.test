@@ -6,6 +6,8 @@
 # successfully opened them, using a debug flag to inject an error in
 # EXECUTE.
 
+SET @@use_secondary_engine = ON;
+
 --disable_query_log
 eval INSTALL PLUGIN MOCK SONAME '$MOCK_PLUGIN';
 --enable_query_log

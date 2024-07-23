@@ -428,10 +428,12 @@ Note	1592	Unsafe statement written to the binary log using statement format sinc
 ROWS in table t: 3
 REPLACE INTO t SELECT * FROM t1 ORDER BY nnuk LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 3
 REPLACE INTO t SELECT * FROM t1 ORDER BY nnuk_str_short LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 3
 REPLACE INTO t SELECT * FROM t1 ORDER BY nnuk_str_long LIMIT 1;
@@ -441,18 +443,22 @@ Note	1592	Unsafe statement written to the binary log using statement format sinc
 ROWS in table t: 3
 REPLACE INTO t SELECT * FROM t1 ORDER BY pk LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 3
 REPLACE INTO t SELECT * FROM t1 ORDER BY nnuk1, nnuk2 LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 3
 REPLACE INTO t SELECT * FROM t1 ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 3
 REPLACE INTO t SELECT * FROM t1 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 3
 REPLACE INTO t SELECT * FROM t1 WHERE nokey=1 LIMIT 0;
@@ -481,10 +487,12 @@ Note	1592	Unsafe statement written to the binary log using statement format sinc
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY nnuk LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY nnuk_str_short LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY nnuk_str_long LIMIT 1;
@@ -494,18 +502,22 @@ Note	1592	Unsafe statement written to the binary log using statement format sinc
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY pk LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY nnuk1, nnuk2 LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nuk=1   LIMIT 0;
@@ -534,10 +546,12 @@ Note	1592	Unsafe statement written to the binary log using statement format sinc
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY nnuk LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY nnuk_str_short LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY nnuk_str_long LIMIT 1;
@@ -547,18 +561,22 @@ Note	1592	Unsafe statement written to the binary log using statement format sinc
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY pk LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY nnuk1, nnuk2 LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nnuk=1  LIMIT 0;
@@ -567,46 +585,57 @@ Note	1592	Unsafe statement written to the binary log using statement format sinc
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nnuk=1  LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nokey LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nuk LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk1 LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk_str_short LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY pk LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk1, nnuk2 LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE pk=1    LIMIT 0;
@@ -615,46 +644,57 @@ Note	1592	Unsafe statement written to the binary log using statement format sinc
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE pk=1    LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nokey LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nuk LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk1 LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk_str_short LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY pk LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk1, nnuk2 LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 REPLACE INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
 Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. REPLACE... SELECT is unsafe because the order in which rows are retrieved by the SELECT determines which (if any) rows are replaced. This order cannot be predicted and may differ on master and the slave.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 LIMIT 0;
@@ -676,20 +716,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT * FROM t1 ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT * FROM t1 ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT * FROM t1 ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT * FROM t1 ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT * FROM t1 ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT * FROM t1 ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT * FROM t1 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT * FROM t1 WHERE nokey=1 LIMIT 0;
 ROWS in table t: 2
@@ -710,20 +762,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nokey=1 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nuk=1   LIMIT 0;
 ROWS in table t: 2
@@ -744,68 +808,124 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nuk=1   ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nnuk=1  LIMIT 0;
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nnuk=1  LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk1 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk_str_long LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE nnuk=1  ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk=1    LIMIT 0;
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk=1    LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk1 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk_str_long LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk=1    ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t (SELECT * FROM t1) UNION (SELECT * FROM t2) LIMIT 0;
 ROWS in table t: 2
@@ -872,20 +992,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1 ORDER BY nnuk LIMIT 1) UNION (SELECT * FROM t2);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1 ORDER BY nnuk_str_short LIMIT 1) UNION (SELECT * FROM t2);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1 ORDER BY nnuk_str_long LIMIT 1) UNION (SELECT * FROM t2);
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1 ORDER BY pk LIMIT 1) UNION (SELECT * FROM t2);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1 ORDER BY nnuk1, nnuk2 LIMIT 1) UNION (SELECT * FROM t2);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1 ORDER BY nnuk1, nnuk2, nokey LIMIT 1) UNION (SELECT * FROM t2);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1) UNION (SELECT * FROM t2);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1) UNION (SELECT * FROM t2 LIMIT 0);
 ROWS in table t: 4
@@ -906,22 +1038,36 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1) UNION (SELECT * FROM t2 ORDER BY nnuk LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1) UNION (SELECT * FROM t2 ORDER BY nnuk_str_short LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1) UNION (SELECT * FROM t2 ORDER BY nnuk_str_long LIMIT 1);
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1) UNION (SELECT * FROM t2 ORDER BY pk LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1) UNION (SELECT * FROM t2 ORDER BY nnuk1, nnuk2 LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1) UNION (SELECT * FROM t2 ORDER BY nnuk1, nnuk2, nokey LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1) UNION (SELECT * FROM t2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 5
 INSERT INTO t (SELECT * FROM t1 LIMIT 0) UNION (SELECT * FROM t2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t (SELECT * FROM t1 LIMIT 1) UNION (SELECT * FROM t2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1);
 Warnings:
@@ -940,20 +1086,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 4
 INSERT INTO t (SELECT * FROM t1 ORDER BY nnuk LIMIT 1) UNION (SELECT * FROM t2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 4
 INSERT INTO t (SELECT * FROM t1 ORDER BY nnuk_str_short LIMIT 1) UNION (SELECT * FROM t2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 4
 INSERT INTO t (SELECT * FROM t1 ORDER BY nnuk_str_long LIMIT 1) UNION (SELECT * FROM t2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1);
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 4
 INSERT INTO t (SELECT * FROM t1 ORDER BY pk LIMIT 1) UNION (SELECT * FROM t2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 4
 INSERT INTO t (SELECT * FROM t1 ORDER BY nnuk1, nnuk2 LIMIT 1) UNION (SELECT * FROM t2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 4
 INSERT INTO t (SELECT * FROM t1 ORDER BY nnuk1, nnuk2, nokey LIMIT 1) UNION (SELECT * FROM t2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 4
 INSERT INTO t (SELECT * FROM t1 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1) UNION (SELECT * FROM t2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1);
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 4
 INSERT INTO t SELECT * FROM (SELECT * FROM t1 LIMIT 0) AS subselect ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
 Warnings:
@@ -1022,20 +1180,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk IN (SELECT t2.pk FROM t2 WHERE t1.pk = t2.pk) ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk IN (SELECT t2.pk FROM t2 WHERE t1.pk = t2.pk) ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk IN (SELECT t2.pk FROM t2 WHERE t1.pk = t2.pk) ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk IN (SELECT t2.pk FROM t2 WHERE t1.pk = t2.pk) ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk IN (SELECT t2.pk FROM t2 WHERE t1.pk = t2.pk) ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk IN (SELECT t2.pk FROM t2 WHERE t1.pk = t2.pk) ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT * FROM t1 WHERE pk IN (SELECT t2.pk FROM t2 WHERE t1.pk = t2.pk) ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 LIMIT 0;
 ROWS in table t: 2
@@ -1194,20 +1364,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.nnuk=t2.nnuk   ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.nnuk=t2.nnuk   ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.nnuk=t2.nnuk   ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.nnuk=t2.nnuk   ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.nnuk=t2.nnuk   ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.nnuk=t2.nnuk   ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.nnuk=t2.nnuk   ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.pk=t2.pk       LIMIT 0;
 ROWS in table t: 2
@@ -1228,20 +1410,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.pk=t2.pk       ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.pk=t2.pk       ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.pk=t2.pk       ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.pk=t2.pk       ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.pk=t2.pk       ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.pk=t2.pk       ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1, t2 WHERE t1.pk=t2.pk       ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 NATURAL JOIN t2 LIMIT 0;
 ROWS in table t: 2
@@ -1262,20 +1456,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 NATURAL JOIN t2 ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 NATURAL JOIN t2 ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 NATURAL JOIN t2 ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 NATURAL JOIN t2 ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 NATURAL JOIN t2 ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 NATURAL JOIN t2 ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 NATURAL JOIN t2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 USING(pk) LIMIT 0;
 ROWS in table t: 2
@@ -1296,20 +1502,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 USING(pk) ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 USING(pk) ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 USING(pk) ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 USING(pk) ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 USING(pk) ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 USING(pk) ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 USING(pk) ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk1 AND t1.nnuk2=t2.nnuk2 LIMIT 0;
 ROWS in table t: 2
@@ -1330,20 +1548,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk1 AND t1.nnuk2=t2.nnuk2 ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk1 AND t1.nnuk2=t2.nnuk2 ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk1 AND t1.nnuk2=t2.nnuk2 ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk1 AND t1.nnuk2=t2.nnuk2 ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk1 AND t1.nnuk2=t2.nnuk2 ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk1 AND t1.nnuk2=t2.nnuk2 ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk1 AND t1.nnuk2=t2.nnuk2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk2 AND t1.nnuk2=t2.nnuk1 LIMIT 0;
 ROWS in table t: 2
@@ -1364,20 +1594,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk2 AND t1.nnuk2=t2.nnuk1 ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk2 AND t1.nnuk2=t2.nnuk1 ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk2 AND t1.nnuk2=t2.nnuk1 ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk2 AND t1.nnuk2=t2.nnuk1 ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk2 AND t1.nnuk2=t2.nnuk1 ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk2 AND t1.nnuk2=t2.nnuk1 ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN t2 ON t1.nnuk1=t2.nnuk2 AND t1.nnuk2=t2.nnuk1 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN t3 USING (pk)) USING(pk) LIMIT 0;
 ROWS in table t: 2
@@ -1398,20 +1640,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN t3 USING (pk)) USING(pk) ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN t3 USING (pk)) USING(pk) ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN t3 USING (pk)) USING(pk) ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN t3 USING (pk)) USING(pk) ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN t3 USING (pk)) USING(pk) ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN t3 USING (pk)) USING(pk) ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN t3 USING (pk)) USING(pk) ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.pk=t3.pk) ON t1.pk=t4.pk LIMIT 0;
 ROWS in table t: 2
@@ -1432,20 +1686,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.pk=t3.pk) ON t1.pk=t4.pk ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.pk=t3.pk) ON t1.pk=t4.pk ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.pk=t3.pk) ON t1.pk=t4.pk ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.pk=t3.pk) ON t1.pk=t4.pk ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.pk=t3.pk) ON t1.pk=t4.pk ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.pk=t3.pk) ON t1.pk=t4.pk ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.pk=t3.pk) ON t1.pk=t4.pk ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 LIMIT 0;
 ROWS in table t: 2
@@ -1466,44 +1732,78 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 AND t2.pk=1 LIMIT 0;
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 AND t2.pk=1 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 AND t2.pk=1 ORDER BY nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 AND t2.pk=1 ORDER BY nuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 AND t2.pk=1 ORDER BY nnuk1 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 AND t2.pk=1 ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 AND t2.pk=1 ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 AND t2.pk=1 ORDER BY nnuk_str_long LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 AND t2.pk=1 ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 AND t2.pk=1 ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 AND t2.pk=1 ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 JOIN (t2 JOIN (t3 JOIN t4 USING (pk)) ON t2.nnuk=t3.nnuk) ON t1.nnuk1=t4.nnuk1 AND t1.nnuk2=t4.nnuk2 AND t2.pk=1 ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 2
 INSERT INTO t SELECT t1.* FROM t1 LEFT JOIN t2 ON t1.pk=t2.pk LIMIT 0;
 ROWS in table t: 2
@@ -1524,20 +1824,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t1.* FROM t1 LEFT JOIN t2 ON t1.pk=t2.pk ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t1.* FROM t1 LEFT JOIN t2 ON t1.pk=t2.pk ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t1.* FROM t1 LEFT JOIN t2 ON t1.pk=t2.pk ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t1.* FROM t1 LEFT JOIN t2 ON t1.pk=t2.pk ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t1.* FROM t1 LEFT JOIN t2 ON t1.pk=t2.pk ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t1.* FROM t1 LEFT JOIN t2 ON t1.pk=t2.pk ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t1.* FROM t1 LEFT JOIN t2 ON t1.pk=t2.pk ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t2.* FROM t1 RIGHT JOIN t2 ON t1.pk=t2.pk LIMIT 0;
 ROWS in table t: 2
@@ -1558,20 +1870,32 @@ Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t2.* FROM t1 RIGHT JOIN t2 ON t1.pk=t2.pk ORDER BY nnuk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t2.* FROM t1 RIGHT JOIN t2 ON t1.pk=t2.pk ORDER BY nnuk_str_short LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t2.* FROM t1 RIGHT JOIN t2 ON t1.pk=t2.pk ORDER BY nnuk_str_long LIMIT 1;
 Warnings:
 Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t2.* FROM t1 RIGHT JOIN t2 ON t1.pk=t2.pk ORDER BY pk LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t2.* FROM t1 RIGHT JOIN t2 ON t1.pk=t2.pk ORDER BY nnuk1, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t2.* FROM t1 RIGHT JOIN t2 ON t1.pk=t2.pk ORDER BY nnuk1, nnuk2, nokey LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 INSERT INTO t SELECT t2.* FROM t1 RIGHT JOIN t2 ON t1.pk=t2.pk ORDER BY nnuk1, nokey, nnuk2 LIMIT 1;
+Warnings:
+Note	1592	Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT. The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted.
 ROWS in table t: 3
 SET MAX_SORT_LENGTH=DEFAULT;
 DROP TABLE t, t1, t2, t3, t4;

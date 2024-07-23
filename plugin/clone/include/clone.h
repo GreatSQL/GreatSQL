@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -80,6 +81,16 @@ extern bool clone_autotune_concurrency;
 
 /** Clone system variable: Maximum concurrent threads */
 extern uint clone_max_concurrency;
+
+/** Clone system variable: Number of threads for parallel data compression */
+extern uint clone_file_compress_threads;
+
+/** Clone system variable: Zstandard compression level */
+extern uint clone_file_compress_zstd_level;
+
+/** Clone system variable: Size of working buffer(s) for compression threads in
+ * bytes */
+extern ulonglong clone_file_compress_chunk_size;
 
 /** Clone system variable: Maximum network bandwidth in MiB/sec */
 extern uint clone_max_network_bandwidth;

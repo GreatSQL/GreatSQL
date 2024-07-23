@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+Copyright (c) 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -149,8 +150,12 @@ bool Clone_Desc_Task_Meta::deserialize(const byte *desc_task, uint desc_len) {
 /** Locator: Clone identifier in 8 bytes */
 static const uint CLONE_LOC_CID_OFFSET = CLONE_DESC_HEADER_LEN;
 
+/** Locator: Clone server_uuid in 16 bytes */
+static const uint CLONE_LOC_UUID_OFFSET =
+    CLONE_LOC_CID_OFFSET + binary_log::Uuid::BYTE_LENGTH;
+
 /** Locator: Snapshot identifier in 8 bytes */
-static const uint CLONE_LOC_SID_OFFSET = CLONE_LOC_CID_OFFSET + 8;
+static const uint CLONE_LOC_SID_OFFSET = CLONE_LOC_UUID_OFFSET + 8;
 
 /** Locator: Clone array index in 4 bytes */
 static const uint CLONE_LOC_IDX_OFFSET = CLONE_LOC_SID_OFFSET + 8;
@@ -470,7 +475,7 @@ void Chunk_Info::deserialize(const byte *desc_chunk, uint &len_left) {
   ut_ad(len_left == 0);
 }
 
-void Clone_Desc_Locator::init(uint64_t id, uint64_t snap_id,
+void Clone_Desc_Locator::init(char *uuid, uint64_t id, uint64_t snap_id,
                               Snapshot_State state, uint version, uint index) {
   m_header.m_version = version;
 
@@ -478,6 +483,7 @@ void Clone_Desc_Locator::init(uint64_t id, uint64_t snap_id,
 
   m_header.m_type = CLONE_DESC_LOCATOR;
 
+  memcpy(m_uuid, uuid, UUID_LENGTH + 1);
   m_clone_id = id;
   m_snapshot_id = snap_id;
 
@@ -492,7 +498,8 @@ bool Clone_Desc_Locator::match(Clone_Desc_Locator *other_desc) {
 #endif /* UNIV_DEBUG */
 
   if (other_desc->m_clone_id == m_clone_id &&
-      other_desc->m_snapshot_id == m_snapshot_id) {
+      other_desc->m_snapshot_id == m_snapshot_id &&
+      strcmp(other_desc->m_uuid, m_uuid) == 0) {
     ut_ad(m_header.m_version == other_header->m_version);
     return (true);
   }
@@ -518,7 +525,8 @@ void Clone_Desc_Locator::serialize(byte *&desc_loc, uint &len,
 
   m_header.serialize(desc_loc);
 
-  mach_write_to_8(desc_loc + CLONE_LOC_CID_OFFSET, m_clone_id);
+  binary_log::Uuid::parse(m_uuid, UUID_LENGTH, desc_loc + CLONE_LOC_CID_OFFSET);
+  mach_write_to_8(desc_loc + CLONE_LOC_UUID_OFFSET, m_clone_id);
   mach_write_to_8(desc_loc + CLONE_LOC_SID_OFFSET, m_snapshot_id);
 
   mach_write_to_4(desc_loc + CLONE_LOC_IDX_OFFSET, m_clone_index);
@@ -567,7 +575,11 @@ void Clone_Desc_Locator::deserialize(const byte *desc_loc, uint desc_len,
     ut_o(return );
   }
 
-  m_clone_id = mach_read_from_8(desc_loc + CLONE_LOC_CID_OFFSET);
+  binary_log::Uuid::to_string(
+      reinterpret_cast<const uchar *>(desc_loc + CLONE_LOC_CID_OFFSET), m_uuid);
+
+  m_clone_id = mach_read_from_8(desc_loc + CLONE_LOC_UUID_OFFSET);
+
   m_snapshot_id = mach_read_from_8(desc_loc + CLONE_LOC_SID_OFFSET);
 
   m_clone_index = mach_read_from_4(desc_loc + CLONE_LOC_IDX_OFFSET);
@@ -884,14 +896,32 @@ static const uint CLONE_DESC_STATE_NUM_CHUNKS = CLONE_DESC_TASK_OFFSET + 4;
 /** Clone State: Number of files in 4 bytes */
 static const uint CLONE_DESC_STATE_NUM_FILES = CLONE_DESC_STATE_NUM_CHUNKS + 4;
 
+/** Clone State: Number of files in 4 bytes for clone_page*/
+static const uint CLONE_DESC_STATE_CLONE_PAGE_NUM_FILES =
+    CLONE_DESC_STATE_NUM_FILES + 4;
+
 /** Clone State: Estimated number of bytes in 8 bytes */
-static const uint CLONE_DESC_STATE_EST_BYTES = CLONE_DESC_STATE_NUM_FILES + 4;
+static const uint CLONE_DESC_STATE_EST_BYTES =
+    CLONE_DESC_STATE_CLONE_PAGE_NUM_FILES + 4;
 
 /** Clone State: Estimated number of bytes in 8 bytes */
 static const uint CLONE_DESC_STATE_EST_DISK = CLONE_DESC_STATE_EST_BYTES + 8;
 
+/** Clone State: clone start lsn */
+static const uint CLONE_DESC_START_CLONE_LSN = CLONE_DESC_STATE_EST_DISK + 8;
+
+/** Clone State: enable page track lsn */
+static const uint CLONE_DESC_PAGE_TRACK_LSN = CLONE_DESC_START_CLONE_LSN + 8;
+
+/** Clone State: clone finish lsn */
+static const uint CLONE_DESC_FINISH_CLONE_LSN = CLONE_DESC_PAGE_TRACK_LSN + 8;
+
+/** Clone State: file compress mode */
+static const uint CLONE_DESC_FILE_COMPRESS_MODE =
+    CLONE_DESC_FINISH_CLONE_LSN + 8;
+
 /** Clone State: flags in 2 byte [max 16 flags] */
-static const uint CLONE_DESC_STATE_FLAGS = CLONE_DESC_STATE_EST_DISK + 8;
+static const uint CLONE_DESC_STATE_FLAGS = CLONE_DESC_FILE_COMPRESS_MODE + 8;
 
 /** Clone State: Total length */
 static const uint CLONE_DESC_STATE_LEN = CLONE_DESC_STATE_FLAGS + 2;
@@ -928,8 +958,15 @@ void Clone_Desc_State::serialize(byte *&desc_state, uint &len,
 
   mach_write_to_4(desc_state + CLONE_DESC_STATE_NUM_CHUNKS, m_num_chunks);
   mach_write_to_4(desc_state + CLONE_DESC_STATE_NUM_FILES, m_num_files);
+  mach_write_to_4(desc_state + CLONE_DESC_STATE_CLONE_PAGE_NUM_FILES,
+                  m_clone_page_num_files);
   mach_write_to_8(desc_state + CLONE_DESC_STATE_EST_BYTES, m_estimate);
   mach_write_to_8(desc_state + CLONE_DESC_STATE_EST_DISK, m_estimate_disk);
+  mach_write_to_8(desc_state + CLONE_DESC_START_CLONE_LSN, m_start_lsn);
+  mach_write_to_8(desc_state + CLONE_DESC_PAGE_TRACK_LSN, m_page_track_lsn);
+  mach_write_to_8(desc_state + CLONE_DESC_FINISH_CLONE_LSN, m_end_lsn);
+  mach_write_to_8(desc_state + CLONE_DESC_FILE_COMPRESS_MODE,
+                  m_file_compress_mode);
 
   ulint state_flags = 0;
 
@@ -961,9 +998,15 @@ bool Clone_Desc_State::deserialize(const byte *desc_state, uint desc_len) {
 
   m_num_chunks = mach_read_from_4(desc_state + CLONE_DESC_STATE_NUM_CHUNKS);
   m_num_files = mach_read_from_4(desc_state + CLONE_DESC_STATE_NUM_FILES);
+  m_clone_page_num_files =
+      mach_read_from_4(desc_state + CLONE_DESC_STATE_CLONE_PAGE_NUM_FILES);
   m_estimate = mach_read_from_8(desc_state + CLONE_DESC_STATE_EST_BYTES);
   m_estimate_disk = mach_read_from_8(desc_state + CLONE_DESC_STATE_EST_DISK);
-
+  m_start_lsn = mach_read_from_8(desc_state + CLONE_DESC_START_CLONE_LSN);
+  m_page_track_lsn = mach_read_from_8(desc_state + CLONE_DESC_PAGE_TRACK_LSN);
+  m_end_lsn = mach_read_from_8(desc_state + CLONE_DESC_FINISH_CLONE_LSN);
+  m_file_compress_mode = static_cast<file_compress_mode_t>(
+      mach_read_from_8(desc_state + CLONE_DESC_FILE_COMPRESS_MODE));
   auto state_flags =
       static_cast<ulint>(mach_read_from_2(desc_state + CLONE_DESC_STATE_FLAGS));
 
@@ -992,7 +1035,10 @@ static const uint CLONE_DATA_TASK_BLOCK_OFFSET =
 static const uint CLONE_DATA_FILE_IDX_OFFSET = CLONE_DATA_TASK_BLOCK_OFFSET + 4;
 
 /** Clone Data: Data length in 4 bytes */
-static const uint CLONE_DATA_LEN_OFFSET = CLONE_DATA_FILE_IDX_OFFSET + 4;
+static const uint CLONE_DATA_PAGE_IDX_OFFSET = CLONE_DATA_FILE_IDX_OFFSET + 4;
+
+/** Clone Data: Data length in 4 bytes */
+static const uint CLONE_DATA_LEN_OFFSET = CLONE_DATA_PAGE_IDX_OFFSET + 4;
 
 /** Clone Data: Data file offset in 8 bytes */
 static const uint CLONE_DATA_FOFF_OFFSET = CLONE_DATA_LEN_OFFSET + 4;
@@ -1033,6 +1079,7 @@ void Clone_Desc_Data::serialize(byte *&desc_data, uint &len, mem_heap_t *heap) {
                   m_task_meta.m_block_num);
 
   mach_write_to_4(desc_data + CLONE_DATA_FILE_IDX_OFFSET, m_file_index);
+  mach_write_to_4(desc_data + CLONE_DATA_PAGE_IDX_OFFSET, m_page_index);
   mach_write_to_4(desc_data + CLONE_DATA_LEN_OFFSET, m_data_len);
   mach_write_to_8(desc_data + CLONE_DATA_FOFF_OFFSET, m_file_offset);
   mach_write_to_8(desc_data + CLONE_DATA_FILE_SIZE_OFFSET, m_file_size);
@@ -1061,6 +1108,7 @@ bool Clone_Desc_Data::deserialize(const byte *desc_data, uint desc_len) {
       mach_read_from_4(desc_data + CLONE_DATA_TASK_BLOCK_OFFSET);
 
   m_file_index = mach_read_from_4(desc_data + CLONE_DATA_FILE_IDX_OFFSET);
+  m_page_index = mach_read_from_4(desc_data + CLONE_DATA_PAGE_IDX_OFFSET);
   m_data_len = mach_read_from_4(desc_data + CLONE_DATA_LEN_OFFSET);
   m_file_offset = mach_read_from_8(desc_data + CLONE_DATA_FOFF_OFFSET);
   m_file_size = mach_read_from_8(desc_data + CLONE_DATA_FILE_SIZE_OFFSET);

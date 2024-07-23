@@ -123,7 +123,7 @@ insert into test.pfs_published_schema
 
 insert into test.pfs_published_schema
  values("MySQL 8.0.32",
-        "f1f4333cbce3fb0e8840ecacd6d0d417abfdf7dcbf61b01180c73a837ec0753b");
+        "451a89281c405e3865478ce7aa88c6600ee8d20fda283bf25f7e8f7359f24820");
 
 create table test.pfs_check_table
   (id int NOT NULL AUTO_INCREMENT,

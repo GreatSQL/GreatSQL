@@ -1,5 +1,5 @@
 /* Copyright (c) 2010, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -322,6 +322,7 @@ extern char *my_proxy_protocol_networks;
 extern const char *opt_tc_log_file;
 extern char server_uuid[UUID_LENGTH + 1];
 extern const char *server_uuid_ptr;
+extern const char *clone_incremental_dir;
 #if defined(HAVE_BUILD_ID_SUPPORT)
 extern char server_build_id[42];
 extern const char *server_build_id_ptr;
@@ -340,7 +341,6 @@ extern ulong stored_program_def_size;
 extern ulong table_def_size;
 extern ulong tablespace_def_size;
 extern MYSQL_PLUGIN_IMPORT ulong max_connections;
-extern ulong audit_log_max_rows;
 extern ulong max_digest_length;
 extern ulong max_connect_errors, connect_timeout;
 extern bool opt_replica_allow_batching;
@@ -374,6 +374,7 @@ extern uint32 gtid_executed_compression_period;
 extern bool binlog_gtid_simple_recovery;
 extern ulong binlog_error_action;
 extern ulong locked_account_connection_count;
+extern bool enable_data_masking;
 enum enum_binlog_error_action {
   /// Ignore the error and let server continue without binlogging
   IGNORE_ERROR = 0,
@@ -524,6 +525,8 @@ extern PSI_mutex_key key_LOCK_sp_version_change_mutex;
 
 extern PSI_mutex_key key_commit_order_manager_mutex;
 extern PSI_mutex_key key_mutex_replica_worker_hash;
+
+extern PSI_mutex_key key_sched_affinity_mutex;
 
 extern PSI_rwlock_key key_rwlock_LOCK_logger;
 extern PSI_rwlock_key key_rwlock_channel_map_lock;

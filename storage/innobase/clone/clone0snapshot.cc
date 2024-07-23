@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -44,7 +44,9 @@ const uint MAX_CLONES_PER_SNAPSHOT = 1;
 
 Clone_Snapshot::Clone_Snapshot(Clone_Handle_Type hdl_type,
                                Ha_clone_type clone_type, uint arr_idx,
-                               uint64_t snap_id)
+                               uint64_t snap_id, bool enable_page_track,
+                               uint64_t start_id, uint64_t page_track_lsn,
+                               file_compress_mode_t comp_mode)
     : m_snapshot_handle_type(hdl_type),
       m_snapshot_type(clone_type),
       m_snapshot_id(snap_id),
@@ -72,13 +74,21 @@ Clone_Snapshot::Clone_Snapshot(Clone_Handle_Type hdl_type,
       m_redo_file_size(),
       m_num_redo_chunks(),
       m_enable_pfs(false),
-      m_enable_encryption(false) {
+      m_enable_encryption(false),
+      m_file_compress_mode(comp_mode),
+      m_enable_page_track(enable_page_track),
+      m_start_id(start_id),
+      m_page_track_lsn(page_track_lsn),
+      m_end_id(0) {
   mutex_create(LATCH_ID_CLONE_SNAPSHOT, &m_snapshot_mutex);
 
   m_snapshot_heap =
       mem_heap_create(SNAPSHOT_MEM_INITIAL_SIZE, UT_LOCATION_HERE);
-
-  m_chunk_size_pow2 = SNAPSHOT_DEF_CHUNK_SIZE_POW2;
+  if (m_file_compress_mode) {
+    m_chunk_size_pow2 = SNAPSHOT_DEF_COMP_CHUNK_SIZE_POW2;
+  } else {
+    m_chunk_size_pow2 = SNAPSHOT_DEF_CHUNK_SIZE_POW2;
+  }
   m_block_size_pow2 = SNAPSHOT_DEF_BLOCK_SIZE_POW2;
 }
 
@@ -88,7 +98,10 @@ Clone_Snapshot::~Clone_Snapshot() {
   if (m_page_ctx.is_active()) {
     m_page_ctx.stop(nullptr);
   }
-  m_page_ctx.release();
+
+  if (m_snapshot_type != HA_CLONE_PAGE) {
+    m_page_ctx.release();
+  }
 
   mem_heap_free(m_snapshot_heap);
 
@@ -111,6 +124,11 @@ void Clone_Snapshot::get_state_info(bool do_estimate,
     state_desc->m_estimate_disk = 0;
   }
 
+  state_desc->m_start_lsn = m_start_id;
+  state_desc->m_page_track_lsn = m_page_track_lsn;
+  state_desc->m_end_lsn = m_end_id;
+  state_desc->m_file_compress_mode = m_file_compress_mode;
+
   switch (m_snapshot_state) {
     case CLONE_SNAPSHOT_FILE_COPY:
       state_desc->m_num_files = num_data_files();
@@ -118,6 +136,7 @@ void Clone_Snapshot::get_state_info(bool do_estimate,
 
     case CLONE_SNAPSHOT_PAGE_COPY:
       state_desc->m_num_files = m_num_pages;
+      state_desc->m_clone_page_num_files = num_data_files();
       break;
 
     case CLONE_SNAPSHOT_REDO_COPY:
@@ -153,6 +172,10 @@ void Clone_Snapshot::set_state_info(Clone_Desc_State *state_desc) {
   } else if (m_snapshot_state == CLONE_SNAPSHOT_PAGE_COPY) {
     m_num_pages = state_desc->m_num_files;
 
+    if (m_snapshot_type == HA_CLONE_PAGE) {
+      m_data_file_vector.resize(state_desc->m_clone_page_num_files, nullptr);
+    }
+
     m_monitor.init_state(srv_stage_clone_page_copy.m_key, m_enable_pfs);
     m_monitor.add_estimate(state_desc->m_estimate);
     m_monitor.change_phase();
@@ -180,7 +203,11 @@ Snapshot_State Clone_Snapshot::get_next_state() {
   ut_ad(m_snapshot_state != CLONE_SNAPSHOT_NONE);
 
   if (m_snapshot_state == CLONE_SNAPSHOT_INIT) {
-    next_state = CLONE_SNAPSHOT_FILE_COPY;
+    if (m_snapshot_type == HA_CLONE_PAGE) {
+      next_state = CLONE_SNAPSHOT_PAGE_COPY;
+    } else {
+      next_state = CLONE_SNAPSHOT_FILE_COPY;
+    }
 
   } else if (m_snapshot_state == CLONE_SNAPSHOT_FILE_COPY) {
     if (m_snapshot_type == HA_CLONE_HYBRID ||
@@ -317,6 +344,10 @@ int Clone_Snapshot::iterate_files(File_Cbk_Func &&func) {
     case CLONE_SNAPSHOT_FILE_COPY:
       err = iterate_data_files(std::forward<File_Cbk_Func>(func));
       break;
+    case CLONE_SNAPSHOT_PAGE_COPY:
+      if (is_clone_page_type())
+        err = iterate_data_files(std::forward<File_Cbk_Func>(func));
+      break;
     case CLONE_SNAPSHOT_REDO_COPY:
       err = iterate_redo_files(std::forward<File_Cbk_Func>(func));
       break;
@@ -365,8 +396,8 @@ int Clone_Snapshot::get_next_block(uint chunk_num, uint &block_num,
   } else if (m_snapshot_state == CLONE_SNAPSHOT_REDO_COPY) {
     /* For redo copy header and trailer are returned in buffer. */
 
-    if (chunk_num == (m_num_current_chunks - 1)) {
-      /* Last but one chunk is the redo header. */
+    if (chunk_num == 1) {
+      /*First one chunk is the redo header. */
 
       if (block_num != 0) {
         block_num = 0;
@@ -406,7 +437,7 @@ int Clone_Snapshot::get_next_block(uint chunk_num, uint &block_num,
 
     /* This is not header or trailer chunk. Need to get redo
     data from archived file. */
-    if (file_meta->m_begin_chunk == 1) {
+    if (file_meta->m_begin_chunk == 2) {
       /* Set start offset for the first file. */
       start_offset = m_redo_start_offset;
     }
@@ -1027,7 +1058,7 @@ Clone_file_ctx *Clone_Snapshot::get_data_file_ctx(uint32_t chunk_num,
 Clone_file_ctx *Clone_Snapshot::get_redo_file_ctx(uint32_t chunk_num,
                                                   uint32_t hint_index) {
   /* Last but one chunk is redo header */
-  if (chunk_num == (m_num_current_chunks - 1)) {
+  if (chunk_num == 1) {
     return m_redo_file_vector.front();
   }
   /* Last chunk is the redo trailer. */

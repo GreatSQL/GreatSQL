@@ -37,9 +37,9 @@ ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 DAY
 DO INSERT INTO test.t1 VALUES (1);
 CREATE FUNCTION f1 () RETURNS INT DETERMINISTIC
 RETURN 1;
-CREATE PROCEDURE p1 (OUT rownum INT)
+CREATE PROCEDURE p1 (OUT row_num INT)
 BEGIN
-SELECT COUNT(*) INTO rownum FROM t1;
+SELECT COUNT(*) INTO row_num FROM t1;
 END;
 //
 CREATE SERVER s1
@@ -98,9 +98,9 @@ include/rpl_diff.inc
 DROP FUNCTION IF EXISTS f2;
 source include/kill_query.inc;
 include/rpl_diff.inc
-CREATE PROCEDURE p2 (OUT rownum INT)
+CREATE PROCEDURE p2 (OUT row_num INT)
 BEGIN
-SELECT COUNT(*) INTO rownum FROM t2;
+SELECT COUNT(*) INTO row_num FROM t2;
 END;
 //
 source include/kill_query.inc;

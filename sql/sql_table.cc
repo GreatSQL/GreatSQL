@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -7445,10 +7445,9 @@ static bool prepare_key(
       key_info->flags |= HA_SPATIAL;
       break;
     case KEYTYPE_UNIQUE:
-      if ((thd->variables.sql_mode & MODE_ORACLE)) {
-        /* NULL is not allowed in PRIMARY KEY */
-        /* HA_NULL_ARE_EQUAL is not usable in such case */
-        key_info->flags |= HA_NULL_ARE_EQUAL;
+      if (create_info->m_from_ora_mode) {
+        /* NULL is not allowed in PRIMARY KEY in oracle mode */
+        key_info->flags |= HA_NULL_ARE_EQUAL | HA_FROM_ORA_MODE;
       }
       [[fallthrough]];
     case KEYTYPE_PRIMARY:
@@ -9506,6 +9505,12 @@ bool mysql_create_table_no_lock(THD *thd, const char *db,
   }
 
   if (thd->is_plugin_fake_ddl()) no_ha_table = true;
+  /*
+    create table index mode
+  */
+  if ((thd->variables.sql_mode & MODE_ORACLE) && (thd->lex->create_info) &&
+      !(thd->lex->create_info->options & HA_LEX_CREATE_TABLE_LIKE))
+    create_info->m_from_ora_mode = true;
 
   return create_table_impl(
       thd, *schema, db, table_name, table_name, path, create_info, alter_info,
@@ -15492,6 +15497,7 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
       (table->s->tmp_table ? table->s->tmp_table_def : src_table);
   bool skip_secondary = thd->variables.expand_fast_index_creation &&
                         (obj == nullptr || obj->foreign_key_parents().empty());
+  bool has_keytype_unique = false;
 
   for (uint i = 0; i < table->s->keys; i++, key_info++) {
     const char *key_name = key_info->name;
@@ -15690,6 +15696,17 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
         key_type = static_cast<enum keytype>(key_type | KEYTYPE_CLUSTERING);
 
       /*
+        create table like and alter table opeition maintain the source table
+        index mode
+      */
+      if ((key_type == KEYTYPE_UNIQUE) && !has_keytype_unique) {
+        if ((key_info->flags & HA_FROM_ORA_MODE) &&
+            (!create_info->m_from_ora_mode))
+          create_info->m_from_ora_mode = true;
+        has_keytype_unique = true;
+      }
+
+      /*
         If we have dropped a column associated with an index,
         this warrants a check for duplicate indexes
       */
@@ -15703,6 +15720,15 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
       }
     }
   }
+
+  /*
+   create table like and alter table opeition maintain the source table
+   index mode ,if the source table does not have a unique key, press the current
+   sql_mode
+ */
+  if ((thd->variables.sql_mode & MODE_ORACLE) && !has_keytype_unique)
+    create_info->m_from_ora_mode = true;
+
   {
     new_key_list.reserve(new_key_list.size() + alter_info->key_list.size());
     for (size_t i = 0; i < alter_info->key_list.size(); i++) {
@@ -16529,7 +16555,6 @@ static bool simple_rename_or_index_change(
                          alter_ctx->new_name, false);
       }
     }
-
     /*
       Commit changes to data-dictionary, SE and binary log if it was not done
       earlier. We need to do this before releasing/downgrading MDL.

@@ -1,5 +1,5 @@
 /* Copyright (c) 2018, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -539,7 +539,11 @@ Acl_table_user_writer_status Acl_table_user_writer::driver() {
       update_user_resources() || update_password_expiry() ||
       update_password_history() || update_password_reuse() ||
       update_password_require_current() || update_account_locking() ||
-      update_user_application_user_metadata()) {
+      update_user_application_user_metadata()
+#ifdef CASCADE_REVOKE
+      || update_user_granter()
+#endif
+  ) {
     return err_return_value;
   }
 
@@ -1250,6 +1254,15 @@ bool Acl_table_user_writer::update_user_attributes(
   }
   return false;
 }  // namespace acl_table
+
+#ifdef CASCADE_REVOKE
+bool Acl_table_user_writer::update_user_granter() {
+  if (m_operation == Acl_table_operation::OP_INSERT) {
+    m_table->field[m_table_schema->user_grantor_idx()]->set_null();
+  }
+  return false;
+}
+#endif
 
 /**
   Send the function for updating the user metadata JSON code

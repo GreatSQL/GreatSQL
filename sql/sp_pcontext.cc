@@ -1,5 +1,5 @@
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -174,7 +174,10 @@ sp_pcontext::sp_pcontext(THD *thd, sp_pcontext *prev,
       m_handlers(thd->mem_root),
       m_children(thd->mem_root),
       m_scope(scope) {
-  init(prev->m_var_offset + prev->m_max_var_index, prev->current_cursor_count(),
+  init(prev->m_var_offset + prev->m_max_var_index,
+       (thd->variables.sql_mode & MODE_ORACLE)
+           ? prev->m_cursor_offset + prev->m_max_cursor_index
+           : prev->current_cursor_count(),
        prev->m_udt_var_offset + prev->m_max_udt_var_index,
        prev->get_num_case_exprs());
 }
@@ -207,10 +210,13 @@ void sp_pcontext::push_unique_goto_label(sp_label *a) {
 sp_pcontext *sp_pcontext::pop_context() {
   m_parent->m_max_var_index += m_max_var_index;
   m_parent->m_max_udt_var_index += m_max_udt_var_index;
-
-  uint submax = max_cursor_index();
-  if (submax > m_parent->m_max_cursor_index)
-    m_parent->m_max_cursor_index = submax;
+  if (current_thd->variables.sql_mode & MODE_ORACLE)
+    m_parent->m_max_cursor_index += m_max_cursor_index;
+  else {
+    uint submax = max_cursor_index();
+    if (submax > m_parent->m_max_cursor_index)
+      m_parent->m_max_cursor_index = submax;
+  }
 
   if (m_num_case_exprs > m_parent->m_num_case_exprs)
     m_parent->m_num_case_exprs = m_num_case_exprs;
@@ -364,18 +370,8 @@ sp_variable *sp_pcontext::add_udt_variable(THD *thd, Row_definition_list *rdl,
                                  nested_table_udt, udt_db_name, spvar_udt);
 
   if (result == -1) {
-    Row_definition_list *list = nullptr;
-    List_iterator_fast<Create_field> it(*rdl);
-    Create_field *def;
-    for (uint i = 0; (def = it++); i++) {
-      if (i == 0) {
-        continue;  // don't need index column
-      } else if (i == 1) {
-        list = Row_definition_list::make(thd->mem_root, def);
-      } else {
-        list->append_uniq(thd->mem_root, def);
-      }
-    }
+    Row_definition_list *list = new (thd->mem_root) Row_definition_list();
+    if (list->make_from_defs(thd->mem_root, rdl, false)) return nullptr;
 
     sp_variable *spvar_udt_table =
         add_udt_variable(thd, list, to_lex_string(nested_table_udt), 255, type,
@@ -549,6 +545,50 @@ sp_label *sp_pcontext::find_goto_label(LEX_CSTRING name, bool recusive) {
              : nullptr;
 }
 
+sp_label *sp_pcontext::find_continue_label(LEX_CSTRING name) {
+  List_iterator_fast<sp_label> li(m_labels);
+  sp_label *lab;
+
+  while ((lab = li++)) {
+    if (my_strcasecmp(system_charset_info, name.str, lab->name.str) == 0)
+      return lab;
+  }
+  /*e.g:
+  <<lab>>
+  for i in 1 .. 2 loop
+    EXCEPTION WHEN DUP_VAL_ON_INDEX THEN
+      continue lab;
+  end loop;*/
+  if (m_scope == HANDLER_SCOPE && m_parent) {
+    return m_parent->find_continue_label(name);
+  }
+  /*
+    In short, a DECLARE HANDLER block refers
+    to labels from the parent context, as they are out of scope.
+  */
+  return (m_parent && (m_scope == REGULAR_SCOPE))
+             ? m_parent->find_continue_label(name)
+             : nullptr;
+}
+
+sp_label *sp_pcontext::find_continue_label_current_loop_start(
+    bool current_scope_only) {
+  List_iterator_fast<sp_label> li(m_labels);
+  sp_label *lab;
+
+  while ((lab = li++)) {
+    if (lab->type == sp_label::ITERATION) return lab;
+  }
+  if (!current_scope_only && m_scope == HANDLER_SCOPE && m_parent) {
+    return m_parent->find_continue_label_current_loop_start(current_scope_only);
+  }
+  // See a comment in sp_pcontext::find_label()
+  return (!current_scope_only && m_parent && m_scope == REGULAR_SCOPE)
+             ? m_parent->find_continue_label_current_loop_start(
+                   current_scope_only)
+             : nullptr;
+}
+
 sp_label *sp_pcontext::find_label_current_loop_start() {
   List_iterator_fast<sp_label> li(m_labels);
   sp_label *lab;
@@ -561,6 +601,18 @@ sp_label *sp_pcontext::find_label_current_loop_start() {
   return (m_parent && (m_scope == REGULAR_SCOPE))
              ? m_parent->find_label_current_loop_start()
              : nullptr;
+}
+
+void sp_pcontext::set_for_loop_to_label(
+    Oracle_sp_for_loop_index_and_bounds *for_loop, uint loop_ip) {
+  sp_label *lab = find_label_current_loop_start();
+  lab->m_for_loop = for_loop;
+  lab->loop_ip = loop_ip;
+  sp_label *goto_lab = nullptr;
+  if (lab->name.str && (goto_lab = find_goto_label(lab->name, true))) {
+    goto_lab->m_for_loop = for_loop;
+    goto_lab->loop_ip = loop_ip;
+  }
 }
 
 bool sp_pcontext::add_condition(THD *thd, LEX_STRING name,
@@ -833,7 +885,8 @@ bool sp_pcontext::add_cursor_parameters(THD *thd, const LEX_STRING name,
     return true;
   }
   sp_pcursor *spcur = new (thd->mem_root)
-      sp_pcursor(to_lex_cstring(name), param_ctx, *offset, cursor_spv);
+      sp_pcursor(to_lex_cstring(name), param_ctx,
+                 *offset + m_max_cursor_index - 1, cursor_spv);
   return m_cursor_vars.push_back(spcur);
 }
 
@@ -903,7 +956,7 @@ bool sp_pcontext::add_udt_to_sp_var_list(THD *thd,
       if (cdf_mas->ora_record.row_field_definitions())
         cdf_mas->ora_record.row_field_definitions()->append_uniq(thd->mem_root,
                                                                  cdf);
-      else
+      else if (cdf_mas->ora_record.row_field_table_definitions())
         cdf_mas->ora_record.row_field_table_definitions()
             ->find_row_fields_by_offset(0)
             ->append_uniq(current_thd->mem_root, cdf);
@@ -932,15 +985,9 @@ bool sp_pcontext::resolve_udt_create_field_list(
             thd, to_lex_string(thd->db()), def->udt_name, false,
             &field_def_list, &reclength, &sql_mode, &nested_table_udt,
             &table_type, &varray_limit)) {
-      List_iterator_fast<Create_field> it_tmp(*field_def_list);
-      Create_field *def_tmp_udt;
-      Row_definition_list *rdl_tmp = nullptr;
-      for (uint j = 0; (def_tmp_udt = it_tmp++); j++) {
-        if (j == 0)
-          rdl_tmp = Row_definition_list::make(thd->mem_root, def_tmp_udt);
-        else
-          rdl_tmp->append_uniq(thd->mem_root, def_tmp_udt);
-      }
+      Row_definition_list *rdl_tmp = new (thd->mem_root) Row_definition_list();
+      if (rdl_tmp->make_from_defs(thd->mem_root, field_def_list)) return true;
+
       def->ora_record.set_row_field_definitions(rdl_tmp);
       if (vars_udt_list) {
         sp_variable *spvar_udt_new = new (thd->mem_root)
@@ -1103,8 +1150,8 @@ void sp_pcontext::retrieve_field_definitions(List<Create_field> *field_def_lst,
     }
     if (var_def->field_def.ora_record.table_rowtype_ref()) {
       List<Create_field> defs;
-      if (!var_def->field_def.ora_record.is_row_table() ||
-          (var_def->field_def.ora_record.is_row_table() &&
+      if (!var_def->field_def.ora_record.row_field_table_definitions() ||
+          (var_def->field_def.ora_record.row_field_table_definitions() &&
            !my_strcasecmp(system_charset_info, var_def->field_def.field_name,
                           var_def->field_def.udt_name.str))) {
         if (var_def->field_def.ora_record.table_rowtype_ref()
@@ -1113,11 +1160,11 @@ void sp_pcontext::retrieve_field_definitions(List<Create_field> *field_def_lst,
                                    vars_udt_list, udt_var_count_diff))
           return;
       }
-      if (var_def->field_def.ora_record.is_row_table()) {
+      if (var_def->field_def.ora_record.row_field_table_definitions()) {
         if (resolve_table_definitions(&var_def->field_def)) return;
       }
     }
-    if (var_def->field_def.ora_record.is_row()) {
+    if (var_def->field_def.ora_record.row_field_definitions()) {
       // resolve the source row_field_definitions() to get new structure.
       if (resolve_the_definitions(
               var_def->field_def.ora_record.row_field_definitions()))
@@ -1222,11 +1269,11 @@ Item *sp_pcontext::make_item_plsql_sp_for_loop_attr(THD *thd, int m_direction,
   return expr;
 }
 
-Item *sp_pcontext::make_item_plsql_plus_one(THD *thd, POS &pos, int direction,
+Item *sp_pcontext::make_item_plsql_plus_one(THD *thd, int direction,
                                             Item_splocal *item_splocal) {
   int32 one = 1;
 
-  Item_int *inc = new (thd->mem_root) Item_int(pos, one);
+  Item_int *inc = new (thd->mem_root) Item_int(one);
   LEX_CSTRING name = to_lex_cstring("1");
   Item_name_string *item_name = new (thd->mem_root) Item_name_string(name);
   inc->item_name = *item_name;

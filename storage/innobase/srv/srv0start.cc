@@ -3,7 +3,7 @@
 Copyright (c) 1996, 2022, Oracle and/or its affiliates.
 Copyright (c) 2008, Google Inc.
 Copyright (c) 2009, Percona Inc.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -95,6 +95,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <zlib.h>
 
+#include "arch0apply.h"
 #include "arch0arch.h"
 #include "arch0recv.h"
 #include "btr0pcur.h"
@@ -130,6 +131,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /** fil_space_t::flags for hard-coded tablespaces */
 extern uint32_t predefined_flags;
+
+extern hash_table_t *inc_dir_tables_hash;
 
 /** Recovered persistent metadata */
 static MetadataRecover *srv_dict_metadata;
@@ -764,36 +767,36 @@ If we are making a new database, these have been created.
 If doing recovery, these should exist and may be needed for recovery.
 If we fail to open any of these it is a fatal error.
 @return DB_SUCCESS or error code */
-static dberr_t srv_undo_tablespaces_open() {
+static dberr_t srv_undo_tablespaces_open(bool backup_mode = false) {
   dberr_t err;
+  if (!backup_mode) {
+    /* If upgrading from 5.7, build a list of existing undo tablespaces
+    from the references in the TRX_SYS page. (not including the system
+    tablespace) */
+    trx_rseg_get_n_undo_tablespaces(trx_sys_undo_spaces);
 
-  /* If upgrading from 5.7, build a list of existing undo tablespaces
-  from the references in the TRX_SYS page. (not including the system
-  tablespace) */
-  trx_rseg_get_n_undo_tablespaces(trx_sys_undo_spaces);
+    /* If undo tablespaces are being tracked in trx_sys then these
+    will need to be replaced by independent undo tablespaces with
+    reserved space_ids and RSEG_ARRAY pages. */
+    if (trx_sys_undo_spaces->size() > 0) {
+      /* Open each undo tablespace tracked in TRX_SYS. */
+      for (const auto space_id : *trx_sys_undo_spaces) {
+        fil_set_max_space_id_if_bigger(space_id);
 
-  /* If undo tablespaces are being tracked in trx_sys then these
-  will need to be replaced by independent undo tablespaces with
-  reserved space_ids and RSEG_ARRAY pages. */
-  if (trx_sys_undo_spaces->size() > 0) {
-    /* Open each undo tablespace tracked in TRX_SYS. */
-    for (const auto space_id : *trx_sys_undo_spaces) {
-      fil_set_max_space_id_if_bigger(space_id);
+        /* Check if this undo tablespace was in the process of being truncated.
+        If so, just delete the file since it will be replaced. */
+        if (DB_TABLESPACE_DELETED == srv_undo_tablespace_fixup_57(space_id)) {
+          continue;
+        }
 
-      /* Check if this undo tablespace was in the process of being truncated.
-      If so, just delete the file since it will be replaced. */
-      if (DB_TABLESPACE_DELETED == srv_undo_tablespace_fixup_57(space_id)) {
-        continue;
-      }
-
-      err = srv_undo_tablespace_open_by_id(space_id);
-      if (err != DB_SUCCESS) {
-        ib::error(ER_IB_MSG_CANNOT_OPEN_57_UNDO, ulong{space_id});
-        return (err);
+        err = srv_undo_tablespace_open_by_id(space_id);
+        if (err != DB_SUCCESS) {
+          ib::error(ER_IB_MSG_CANNOT_OPEN_57_UNDO, ulong{space_id});
+          return (err);
+        }
       }
     }
   }
-
   /* Open all existing implicit and explicit undo tablespaces.
   The tablespace scan has completed and the undo::space_id_bank has been
   filled with the space Ids that were found. */
@@ -1210,12 +1213,13 @@ void undo_spaces_deinit() {
 /** Open the configured number of implicit undo tablespaces.
 @param[in]      create_new_db   true if new db being created
 @return DB_SUCCESS or error code */
-static dberr_t srv_undo_tablespaces_init(bool create_new_db) {
+dberr_t srv_undo_tablespaces_init(bool create_new_db,
+                                  bool backup_mode = false) {
   dberr_t err = DB_SUCCESS;
 
   /* Open any existing implicit undo tablespaces. */
   if (!create_new_db) {
-    err = srv_undo_tablespaces_open();
+    err = srv_undo_tablespaces_open(backup_mode);
     if (err != DB_SUCCESS) {
       return (err);
     }
@@ -2086,6 +2090,69 @@ dberr_t srv_start(bool create_new_db) {
       /* This means that either no log files have been found
       or the existing log files were marked as uninitialized. */
       flushed_lsn = new_files_lsn;
+    }
+
+    /************************************************************************
+      Applies all .delta files from incremental clone to the full clone. */
+    if (clone_incremental_dir != nullptr) {
+      char errmsg[FN_REFLEN_SE];
+
+      bool need_copy_redo = true;
+      char dst_dir[FN_REFLEN];
+      unpack_dirname(dst_dir, mysql_real_data_home_ptr);
+      char src_dir[FN_REFLEN];
+      unpack_dirname(src_dir, clone_incremental_dir);
+
+      if (!strcmp(src_dir, dst_dir)) {
+        need_copy_redo = false;
+      }
+
+      sprintf(errmsg, "Apply delta pages in  %s start", clone_incremental_dir);
+      ib::info(ER_CLONE_APPLY_FILE) << errmsg;
+
+      inc_dir_tables_hash = ut::new_<hash_table_t>(1000);
+      if (!clone_apply_deltas(!need_copy_redo)) {
+        clone_filter_hash_free(inc_dir_tables_hash);
+        sprintf(errmsg, "Apply delta pages in  %s failed!",
+                clone_incremental_dir);
+        ib::error(ER_CLONE_APPLY_FILE_ERROR) << errmsg;
+
+        exit(EXIT_FAILURE);
+      }
+
+      /* Cleanup datadir from tablespaces deleted between full and
+         incremental backups */
+      clone_process_datadir("./", ".ibd", rm_if_not_found, NULL);
+      clone_process_datadir("./", ".ibu", rm_if_not_found, NULL);
+      clone_filter_hash_free(inc_dir_tables_hash);
+
+      sprintf(errmsg, "Apply delta pages in  %s complete!",
+              clone_incremental_dir);
+      ib::info(ER_CLONE_APPLY_FILE) << errmsg;
+
+      /************************************************************************
+      extend tablespace in the full clone directory. */
+      clone_extend_space();
+
+      /************************************************************************
+      replace full clone redo log */
+      if (!need_copy_redo) {
+        exit(EXIT_SUCCESS);
+      }
+
+      std::string full_clone_redo(mysql_real_data_home_ptr);
+      full_clone_redo += "/#innodb_redo/";
+      std::string inc_clone_redo(clone_incremental_dir);
+      inc_clone_redo += "/#innodb_redo/*";
+
+      sprintf(errmsg, "CP  %s TO %s", inc_clone_redo.c_str(),
+              full_clone_redo.c_str());
+      ib::info(ER_CLONE_APPLY_FILE) << errmsg;
+      if (execute_syscmd("rm -rf " + full_clone_redo + "*") ||
+          execute_syscmd("cp " + inc_clone_redo + " " + full_clone_redo)) {
+        exit(EXIT_FAILURE);
+      }
+      exit(EXIT_SUCCESS);
     }
 
     err = recv_recovery_from_checkpoint_start(*log_sys, flushed_lsn);

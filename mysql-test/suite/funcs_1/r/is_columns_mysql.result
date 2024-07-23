@@ -5,6 +5,22 @@ ORDER BY table_schema,
 table_name COLLATE utf8_general_ci,
 ordinal_position;
 TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT	GENERATION_EXPRESSION	SRS_ID
+def	mysql	clone_history	ID	1	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int	PRI	auto_increment	select,insert,update,references			NULL
+def	mysql	clone_history	PID	2	0	YES	int	NULL	NULL	10	0	NULL	NULL	NULL	int			select,insert,update,references			NULL
+def	mysql	clone_history	CLONE_TYPE	3	NULL	YES	varchar	50	200	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(50)			select,insert,update,references			NULL
+def	mysql	clone_history	STATE	4	NULL	YES	char	16	64	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	char(16)			select,insert,update,references			NULL
+def	mysql	clone_history	BEGIN_TIME	5	NULL	YES	timestamp	NULL	NULL	NULL	NULL	3	NULL	NULL	timestamp(3)			select,insert,update,references			NULL
+def	mysql	clone_history	END_TIME	6	NULL	YES	timestamp	NULL	NULL	NULL	NULL	3	NULL	NULL	timestamp(3)			select,insert,update,references			NULL
+def	mysql	clone_history	SOURCE	7	NULL	YES	varchar	512	2048	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(512)			select,insert,update,references			NULL
+def	mysql	clone_history	DESTINATION	8	NULL	YES	varchar	512	2048	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(512)			select,insert,update,references			NULL
+def	mysql	clone_history	ERROR_NO	9	NULL	YES	int	NULL	NULL	10	0	NULL	NULL	NULL	int			select,insert,update,references			NULL
+def	mysql	clone_history	ERROR_MESSAGE	10	NULL	YES	varchar	512	2048	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(512)			select,insert,update,references			NULL
+def	mysql	clone_history	BINLOG_FILE	11	NULL	YES	varchar	512	2048	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(512)			select,insert,update,references			NULL
+def	mysql	clone_history	BINLOG_POSITION	12	NULL	YES	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint			select,insert,update,references			NULL
+def	mysql	clone_history	GTID_EXECUTED	13	NULL	YES	varchar	4096	16384	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(4096)			select,insert,update,references			NULL
+def	mysql	clone_history	START_LSN	14	NULL	YES	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint			select,insert,update,references			NULL
+def	mysql	clone_history	PAGE_TRACK_LSN	15	NULL	YES	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint			select,insert,update,references			NULL
+def	mysql	clone_history	END_LSN	16	NULL	YES	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint			select,insert,update,references			NULL
 def	mysql	columns_priv	Host	1		NO	char	255	255	NULL	NULL	NULL	ascii	ascii_general_ci	char(255)	PRI		select,insert,update,references			NULL
 def	mysql	columns_priv	Db	2		NO	char	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	char(64)	PRI		select,insert,update,references			NULL
 def	mysql	columns_priv	User	3		NO	char	32	96	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	char(32)	PRI		select,insert,update,references			NULL
@@ -69,6 +85,18 @@ def	mysql	global_grants	USER	1		NO	char	32	96	NULL	NULL	NULL	utf8mb3	utf8mb3_bin
 def	mysql	global_grants	HOST	2		NO	char	255	255	NULL	NULL	NULL	ascii	ascii_general_ci	char(255)	PRI		select,insert,update,references			NULL
 def	mysql	global_grants	PRIV	3		NO	char	32	96	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	char(32)	PRI		select,insert,update,references			NULL
 def	mysql	global_grants	WITH_GRANT_OPTION	4	N	NO	enum	1	3	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	enum('N','Y')			select,insert,update,references			NULL
+def	mysql	greatdb_sequences	db	1	NULL	NO	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)	PRI		select,insert,update,references			NULL
+def	mysql	greatdb_sequences	name	2	NULL	NO	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)	PRI		select,insert,update,references			NULL
+def	mysql	greatdb_sequences	start_with	3	NULL	NO	decimal	NULL	NULL	28	0	NULL	NULL	NULL	decimal(28,0)			select,insert,update,references			NULL
+def	mysql	greatdb_sequences	minvalue	4	NULL	NO	decimal	NULL	NULL	28	0	NULL	NULL	NULL	decimal(28,0)			select,insert,update,references			NULL
+def	mysql	greatdb_sequences	maxvalue	5	NULL	NO	decimal	NULL	NULL	28	0	NULL	NULL	NULL	decimal(28,0)			select,insert,update,references			NULL
+def	mysql	greatdb_sequences	increment	6	NULL	NO	decimal	NULL	NULL	28	0	NULL	NULL	NULL	decimal(28,0)			select,insert,update,references			NULL
+def	mysql	greatdb_sequences	cycle_flag	7	NULL	NO	tinyint	NULL	NULL	3	0	NULL	NULL	NULL	tinyint(1)			select,insert,update,references			NULL
+def	mysql	greatdb_sequences	cache_num	8	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int unsigned			select,insert,update,references			NULL
+def	mysql	greatdb_sequences	order_flag	9	NULL	NO	tinyint	NULL	NULL	3	0	NULL	NULL	NULL	tinyint(1)			select,insert,update,references			NULL
+def	mysql	greatdb_sequences_persist	db	1	NULL	NO	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)	PRI		select,insert,update,references			NULL
+def	mysql	greatdb_sequences_persist	name	2	NULL	NO	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)	PRI		select,insert,update,references			NULL
+def	mysql	greatdb_sequences_persist	currval	3	NULL	NO	decimal	NULL	NULL	28	0	NULL	NULL	NULL	decimal(28,0)			select,insert,update,references			NULL
 def	mysql	gtid_executed	source_uuid	1	NULL	NO	char	36	144	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	char(36)	PRI		select,insert,update,references	uuid of the source where the transaction was originally executed.		NULL
 def	mysql	gtid_executed	interval_start	2	NULL	NO	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint	PRI		select,insert,update,references	First number of interval.		NULL
 def	mysql	gtid_executed	interval_end	3	NULL	NO	bigint	NULL	NULL	19	0	NULL	NULL	NULL	bigint			select,insert,update,references	Last number of interval.		NULL
@@ -110,7 +138,7 @@ def	mysql	procs_priv	Host	1		NO	char	255	255	NULL	NULL	NULL	ascii	ascii_general_
 def	mysql	procs_priv	Db	2		NO	char	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	char(64)	PRI		select,insert,update,references			NULL
 def	mysql	procs_priv	User	3		NO	char	32	96	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	char(32)	PRI		select,insert,update,references			NULL
 def	mysql	procs_priv	Routine_name	4		NO	char	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	char(64)	PRI		select,insert,update,references			NULL
-def	mysql	procs_priv	Routine_type	5	NULL	NO	enum	9	27	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	enum('FUNCTION','PROCEDURE')	PRI		select,insert,update,references			NULL
+def	mysql	procs_priv	Routine_type	5	NULL	NO	enum	12	36	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	enum('FUNCTION','PROCEDURE','PACKAGE','PACKAGE BODY','TYPE')	PRI		select,insert,update,references			NULL
 def	mysql	procs_priv	Grantor	6		NO	varchar	288	864	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(288)	MUL		select,insert,update,references			NULL
 def	mysql	procs_priv	Proc_priv	7		NO	set	27	81	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	set('Execute','Alter Routine','Grant')			select,insert,update,references			NULL
 def	mysql	procs_priv	Timestamp	8	CURRENT_TIMESTAMP	NO	timestamp	NULL	NULL	NULL	NULL	0	NULL	NULL	timestamp		DEFAULT_GENERATED on update CURRENT_TIMESTAMP	select,insert,update,references			NULL
@@ -342,6 +370,7 @@ COL_CML	DATA_TYPE	CHARACTER_SET_NAME	COLLATION_NAME
 3.0000	set	utf8mb3	utf8mb3_general_ci
 3.0000	varchar	utf8mb3	utf8mb3_general_ci
 4.0000	char	utf8mb4	utf8mb4_0900_ai_ci
+4.0000	varchar	utf8mb4	utf8mb4_0900_ai_ci
 4.0000	varchar	utf8mb4	utf8mb4_general_ci
 SELECT DISTINCT
 CHARACTER_OCTET_LENGTH / CHARACTER_MAXIMUM_LENGTH AS COL_CML,
@@ -354,6 +383,7 @@ AND CHARACTER_OCTET_LENGTH / CHARACTER_MAXIMUM_LENGTH IS NULL
 ORDER BY CHARACTER_SET_NAME, COLLATION_NAME, COL_CML, DATA_TYPE;
 COL_CML	DATA_TYPE	CHARACTER_SET_NAME	COLLATION_NAME
 NULL	bigint	NULL	NULL
+NULL	decimal	NULL	NULL
 NULL	float	NULL	NULL
 NULL	int	NULL	NULL
 NULL	json	NULL	NULL
@@ -377,6 +407,22 @@ FROM information_schema.columns
 WHERE table_schema = 'mysql' AND table_name != 'ndb_binlog_index'
 ORDER BY TABLE_SCHEMA, TABLE_NAME COLLATE utf8_general_ci, ORDINAL_POSITION;
 COL_CML	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE
+NULL	mysql	clone_history	ID	int	NULL	NULL	NULL	NULL	int
+NULL	mysql	clone_history	PID	int	NULL	NULL	NULL	NULL	int
+4.0000	mysql	clone_history	CLONE_TYPE	varchar	50	200	utf8mb4	utf8mb4_0900_ai_ci	varchar(50)
+4.0000	mysql	clone_history	STATE	char	16	64	utf8mb4	utf8mb4_0900_ai_ci	char(16)
+NULL	mysql	clone_history	BEGIN_TIME	timestamp	NULL	NULL	NULL	NULL	timestamp(3)
+NULL	mysql	clone_history	END_TIME	timestamp	NULL	NULL	NULL	NULL	timestamp(3)
+4.0000	mysql	clone_history	SOURCE	varchar	512	2048	utf8mb4	utf8mb4_0900_ai_ci	varchar(512)
+4.0000	mysql	clone_history	DESTINATION	varchar	512	2048	utf8mb4	utf8mb4_0900_ai_ci	varchar(512)
+NULL	mysql	clone_history	ERROR_NO	int	NULL	NULL	NULL	NULL	int
+4.0000	mysql	clone_history	ERROR_MESSAGE	varchar	512	2048	utf8mb4	utf8mb4_0900_ai_ci	varchar(512)
+4.0000	mysql	clone_history	BINLOG_FILE	varchar	512	2048	utf8mb4	utf8mb4_0900_ai_ci	varchar(512)
+NULL	mysql	clone_history	BINLOG_POSITION	bigint	NULL	NULL	NULL	NULL	bigint
+4.0000	mysql	clone_history	GTID_EXECUTED	varchar	4096	16384	utf8mb4	utf8mb4_0900_ai_ci	varchar(4096)
+NULL	mysql	clone_history	START_LSN	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	mysql	clone_history	PAGE_TRACK_LSN	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	mysql	clone_history	END_LSN	bigint	NULL	NULL	NULL	NULL	bigint
 1.0000	mysql	columns_priv	Host	char	255	255	ascii	ascii_general_ci	char(255)
 3.0000	mysql	columns_priv	Db	char	64	192	utf8mb3	utf8mb3_bin	char(64)
 3.0000	mysql	columns_priv	User	char	32	96	utf8mb3	utf8mb3_bin	char(32)
@@ -441,6 +487,18 @@ NULL	mysql	general_log	server_id	int	NULL	NULL	NULL	NULL	int unsigned
 1.0000	mysql	global_grants	HOST	char	255	255	ascii	ascii_general_ci	char(255)
 3.0000	mysql	global_grants	PRIV	char	32	96	utf8mb3	utf8mb3_general_ci	char(32)
 3.0000	mysql	global_grants	WITH_GRANT_OPTION	enum	1	3	utf8mb3	utf8mb3_general_ci	enum('N','Y')
+4.0000	mysql	greatdb_sequences	db	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
+4.0000	mysql	greatdb_sequences	name	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
+NULL	mysql	greatdb_sequences	start_with	decimal	NULL	NULL	NULL	NULL	decimal(28,0)
+NULL	mysql	greatdb_sequences	minvalue	decimal	NULL	NULL	NULL	NULL	decimal(28,0)
+NULL	mysql	greatdb_sequences	maxvalue	decimal	NULL	NULL	NULL	NULL	decimal(28,0)
+NULL	mysql	greatdb_sequences	increment	decimal	NULL	NULL	NULL	NULL	decimal(28,0)
+NULL	mysql	greatdb_sequences	cycle_flag	tinyint	NULL	NULL	NULL	NULL	tinyint(1)
+NULL	mysql	greatdb_sequences	cache_num	int	NULL	NULL	NULL	NULL	int unsigned
+NULL	mysql	greatdb_sequences	order_flag	tinyint	NULL	NULL	NULL	NULL	tinyint(1)
+4.0000	mysql	greatdb_sequences_persist	db	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
+4.0000	mysql	greatdb_sequences_persist	name	varchar	64	256	utf8mb4	utf8mb4_0900_ai_ci	varchar(64)
+NULL	mysql	greatdb_sequences_persist	currval	decimal	NULL	NULL	NULL	NULL	decimal(28,0)
 4.0000	mysql	gtid_executed	source_uuid	char	36	144	utf8mb4	utf8mb4_0900_ai_ci	char(36)
 NULL	mysql	gtid_executed	interval_start	bigint	NULL	NULL	NULL	NULL	bigint
 NULL	mysql	gtid_executed	interval_end	bigint	NULL	NULL	NULL	NULL	bigint
@@ -482,7 +540,7 @@ NULL	mysql	password_history	Password_timestamp	timestamp	NULL	NULL	NULL	NULL	tim
 3.0000	mysql	procs_priv	Db	char	64	192	utf8mb3	utf8mb3_bin	char(64)
 3.0000	mysql	procs_priv	User	char	32	96	utf8mb3	utf8mb3_bin	char(32)
 3.0000	mysql	procs_priv	Routine_name	char	64	192	utf8mb3	utf8mb3_general_ci	char(64)
-3.0000	mysql	procs_priv	Routine_type	enum	9	27	utf8mb3	utf8mb3_bin	enum('FUNCTION','PROCEDURE')
+3.0000	mysql	procs_priv	Routine_type	enum	12	36	utf8mb3	utf8mb3_bin	enum('FUNCTION','PROCEDURE','PACKAGE','PACKAGE BODY','TYPE')
 3.0000	mysql	procs_priv	Grantor	varchar	288	864	utf8mb3	utf8mb3_bin	varchar(288)
 3.0000	mysql	procs_priv	Proc_priv	set	27	81	utf8mb3	utf8mb3_general_ci	set('Execute','Alter Routine','Grant')
 NULL	mysql	procs_priv	Timestamp	timestamp	NULL	NULL	NULL	NULL	timestamp

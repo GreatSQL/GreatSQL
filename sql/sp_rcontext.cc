@@ -1,5 +1,5 @@
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -339,7 +339,7 @@ bool sp_rcontext::set_variable_row_table_by_name(
       return item_table->update_table_value(thd, nullptr, table_field_idx,
                                             def_number_before, udt_field);
     } else {
-      field = field->virtual_tmp_table_addr()[0]->field[m_field_idx];
+      field = field->val_udt()->field[m_field_idx];
       return sp_eval_expr(thd, field, value);
     }
   } else {  // a(1).b
@@ -349,13 +349,15 @@ bool sp_rcontext::set_variable_row_table_by_name(
     }
     Item *item_number = sp_prepare_func_item(thd, &def_before->number);
     if (item_number == nullptr) return true;
-    if (!item_number->is_null() && item_number->result_type() != ROW_RESULT) {
-      if (record_field_expand_table(thd, field, item_number)) return true;
-    } else {
+    if (item_number->is_null() || item_number->result_type() == ROW_RESULT) {
       my_error(ER_WRONG_PARAMCOUNT_TO_TYPE_TABLE, MYF(0),
                item_number->item_name.ptr());
       return true;
     }
+    Item *item_str_index = make_item_index(thd, item_number);
+    if (!item_str_index ||
+        record_field_expand_table(thd, field, item_str_index))
+      return true;
     cdf_before_last =
         spv->field_def.ora_record.row_field_table_definitions()
             ->find_row_field_by_name(
@@ -366,12 +368,13 @@ bool sp_rcontext::set_variable_row_table_by_name(
       return true;
     }
     item_table = dynamic_cast<Item_field_row_table *>(item);
-    Item *item_tmp = item_table->element_row_index(item_number, m_field_idx);
+    Item *item_tmp = item_table->element_row_index(item_str_index, m_field_idx);
     if (!item_tmp)
       if (!(item = insert_into_table_default_and_set_default(
-                thd, item, m_field_idx, item_number)))
+                thd, item, m_field_idx, item_str_index)))
         return true;
-    return item_table->update_table_value(thd, value, m_field_idx, item_number);
+    return item_table->update_table_value(thd, value, m_field_idx,
+                                          item_str_index);
   }
 }
 
@@ -384,11 +387,13 @@ Item *sp_rcontext::insert_into_table_default_and_set_default(THD *thd,
   Item_field_row_table *item_table = dynamic_cast<Item_field_row_table *>(item);
   if (!item_table) return nullptr;
 
+  Item *index_item_tmp = sp_prepare_func_item(thd, &index_item);
   if (item_table->create_item_for_store_default_value_and_insert_into_table(
-          thd, this, index_item))
+          thd, this, index_item_tmp))
     return nullptr;
 
-  Item *item_result = item_table->element_row_index(index_item, m_field_idx);
+  Item *item_result =
+      item_table->element_row_index(index_item_tmp, m_field_idx);
   if (!item_result) {
     my_error(ER_UDT_REF_UNINIT_COMPOSITE, MYF(0));
   }
@@ -399,6 +404,10 @@ bool sp_rcontext::set_variable_row_table_by_index(THD *thd, uint var_idx,
                                                   Item *index, Item **value) {
   Item *item = get_item(var_idx);
   Item_field_row_table *item_table = dynamic_cast<Item_field_row_table *>(item);
+  if (!item_table) {
+    my_error(ER_SP_MISMATCH_RECORD_TABLE_VAR, MYF(0), item->item_name.m_str);
+    return true;
+  }
   Field *field = item_table->field;
   if (!field->udt_value_initialized()) {
     my_error(ER_UDT_REF_UNINIT_COMPOSITE, MYF(0));
@@ -411,6 +420,8 @@ bool sp_rcontext::set_variable_row_table_by_index(THD *thd, uint var_idx,
     my_error(ER_NOT_SUPPORTED_YET, MYF(0), "record table with null index");
     return true;
   }
+  Item *item_str_index = make_item_index(thd, item_index);
+  if (!item_str_index) return true;
   // Avoid stu_record_val1(3) := stu_record_val1(3) when stu_record_val1(3) is
   // empty.
   if (!sp_prepare_func_item(thd, value)) return true;
@@ -420,22 +431,22 @@ bool sp_rcontext::set_variable_row_table_by_index(THD *thd, uint var_idx,
           field->udt_name().str, field->udt_name().length,
           field->get_udt_db_name(),
           field->get_udt_db_name() ? strlen(field->get_udt_db_name()) : 0)) {
-    if (row_field->check_if_row_not_exist(item_index)) {
+    if (row_field->check_if_row_not_exist(item_str_index)) {
       my_error(ER_UDT_REF_UNINIT_COMPOSITE, MYF(0));
       return true;
     }
   }
 
-  if (record_field_expand_table(thd, field, item_index)) return true;
+  if (record_field_expand_table(thd, field, item_str_index)) return true;
 
-  Item *item_tmp = item_table->element_row_index(item_index, 1);
+  Item *item_tmp = item_table->element_row_index(item_str_index, 1);
   if (!item_tmp) {
     mem_root_deque<Item *> items(thd->mem_root);
     items.push_back(*value);
-    return item_table->insert_into_table_all_value(thd, items, item_index);
+    return item_table->insert_into_table_all_value(thd, items, item_str_index);
   }
 
-  return item_table->update_table_value(thd, value, -1, item_index);
+  return item_table->update_table_value(thd, value, -1, item_str_index);
 }
 
 bool sp_rcontext::set_variable_row(THD *thd, uint var_idx,
@@ -478,12 +489,25 @@ bool sp_rcontext::set_variable_row_table(THD *thd, uint var_idx,
       dynamic_cast<Item_field_row_table *>(item_var);
   Item *item_index = new (thd->mem_root) Item_uint(row_count);
   if (record_field_expand_table(thd, field_first, item_index)) return true;
-  return item_table->insert_into_table_all_value(thd, items, item_index);
+  return item_table->insert_into_table_all_value(thd, items, item_index,
+                                                 is_bulk_into);
 }
 
 void sp_rcontext::cleanup_record_variable_row_table(uint var_idx) {
   Item *item = get_item(var_idx);
   item->clear_args_table();
+}
+
+void sp_rcontext::cleanup_record_variable_tmp_row_table(uint var_idx) {
+  Item *item = get_item(var_idx);
+  Item_field_row_table *item_table = dynamic_cast<Item_field_row_table *>(item);
+  item_table->get_row_table_field()->tmp_table_record->init_table();
+}
+
+bool sp_rcontext::fill_bulk_table_with_tmp_table(uint var_idx) {
+  Item *item = get_item(var_idx);
+  Item_field_row_table *item_table = dynamic_cast<Item_field_row_table *>(item);
+  return item_table->get_row_table_field()->fill_bulk_table_with_tmp_table();
 }
 
 TABLE *sp_rcontext::virtual_tmp_table_for_row(uint var_idx) {
@@ -494,9 +518,7 @@ TABLE *sp_rcontext::virtual_tmp_table_for_row(uint var_idx) {
     return nullptr;
   }
   Field *field = m_var_table->field[var_idx];
-  TABLE **ptable = field->virtual_tmp_table_addr();
-  assert(ptable[0]);
-  return ptable[0];
+  return field->val_udt();
 }
 
 bool sp_rcontext::alloc_arrays(THD *thd) {
@@ -568,43 +590,42 @@ bool sp_rcontext::init_var_items(THD *thd) {
     if (vars->field_def.ora_record.is_record_define ||
         vars->field_def.ora_record.is_record_table_define ||
         vars->field_def.ora_record.is_index_by ||
-        (vars->field_def.ora_record.is_row() &&
+        (vars->field_def.ora_record.row_field_definitions() &&
          // rec3 rec%type;rec3 must set initialize.
          !search_udt_variable(vars->field_def.udt_name.str,
                               vars->field_def.udt_name.length,
                               vars->field_def.udt_db_name.str,
                               vars->field_def.udt_db_name.length)) ||
         vars->field_def.ora_record.is_cursor_rowtype_ref() ||
-        (vars->field_def.ora_record.is_table_rowtype_ref() &&
-         !vars->field_def.ora_record.is_row_table())) {
+        (vars->field_def.ora_record.table_rowtype_ref() &&
+         !vars->field_def.ora_record.row_field_table_definitions())) {
       m_var_table->field[idx]->set_udt_value_initialized(true);
       m_var_table->field[idx]->set_notnull();
     }
-    if (vars->field_def.ora_record.is_cursor_rowtype_ref() ||
-        (vars->field_def.ora_record.is_ref_cursor &&
-         !vars->field_def.ora_record.is_table_rowtype_ref() &&
-         !vars->field_def.ora_record.is_row())) {
-      if (vars->field_def.ora_record.is_ref_cursor) {
-        m_var_items[idx] =
-            new (thd->mem_root) Item_field_refcursor(m_var_table->field[idx]);
-      } else
-        m_var_items[idx] =
-            new (thd->mem_root) Item_field_row(m_var_table->field[idx]);
+    if (vars->field_def.ora_record.is_ref_cursor) {
+      m_var_items[idx] =
+          new (thd->mem_root) Item_field_refcursor(m_var_table->field[idx]);
       if (!m_var_items[idx]) return true;
-    } else if ((vars->field_def.ora_record.is_table_rowtype_ref() ||
-                vars->field_def.ora_record.is_row()) &&
-               !vars->field_def.ora_record.is_row_table()) {
-      if (vars->field_def.ora_record.is_ref_cursor) {
-        m_var_items[idx] =
-            new (thd->mem_root) Item_field_refcursor(m_var_table->field[idx]);
-      } else
-        m_var_items[idx] =
-            new (thd->mem_root) Item_field_row(m_var_table->field[idx]);
-      if (!m_var_items[idx] ||
-          m_var_items[idx]->row_create_items(
-              thd, vars->field_def.ora_record.row_field_definitions()))
-        return true;
-    } else if (vars->field_def.ora_record.is_row_table()) {
+      if (vars->field_def.ora_record.row_field_definitions()) {
+        if (m_var_items[idx]->row_create_items(
+                thd, vars->field_def.ora_record.row_field_definitions()))
+          return true;
+      }
+    } else if (!vars->field_def.ora_record.is_ref_cursor &&
+               (vars->field_def.ora_record.is_cursor_rowtype_ref() ||
+                vars->field_def.ora_record.row_field_definitions()) &&
+               !vars->field_def.ora_record.row_field_table_definitions()) {
+      m_var_items[idx] =
+          new (thd->mem_root) Item_field_row(m_var_table->field[idx]);
+      if (!m_var_items[idx]) return true;
+      // it's udt column like tt_air.udt%type
+      if (vars->field_def.ora_record.column_type_ref() ||
+          vars->field_def.ora_record.m_is_sp_param) {
+        if (m_var_items[idx]->row_create_items(
+                thd, vars->field_def.ora_record.row_field_definitions()))
+          return true;
+      }
+    } else if (vars->field_def.ora_record.row_field_table_definitions()) {
       Field_row_table *row_field =
           dynamic_cast<Field_row_table *>(m_var_table->field[idx]);
       row_field->m_is_record_table_type_define =
@@ -619,11 +640,13 @@ bool sp_rcontext::init_var_items(THD *thd) {
                                                      : -1;
       Item_field_row_table *item =
           new (thd->mem_root) Item_field_row_table(m_var_table->field[idx]);
-        m_var_items[idx] = item;
-        item->set_item_table_name(vars->name.str);
+      m_var_items[idx] = item;
+      item->set_item_table_name(vars->name.str);
+      if (vars->field_def.ora_record.m_is_sp_param) {
         if (item->row_table_create_items(
                 thd, vars->field_def.ora_record.row_field_table_definitions()))
           return true;
+      }
     } else {
       if (!(m_var_items[idx] =
                 new (thd->mem_root) Item_field(m_var_table->field[idx])))
@@ -1061,11 +1084,6 @@ bool sp_cursor::open(THD *thd) {
   }
   bool rc = mysql_open_cursor(thd, &m_result, &m_server_side_cursor);
 
-  Query_block *sl = thd->lex->query_block;
-  if (sl && sl->rownum_func && sl->need_to_reset_flag) {
-    sl->reset_rownum_read_flag();
-  }
-
   // If execution failed, ensure that the cursor is closed.
   if (rc && m_server_side_cursor != nullptr) {
     m_server_side_cursor->close();
@@ -1215,14 +1233,48 @@ bool sp_cursor::check_cursor_return_type_count() {
   return false;
 }
 
-// for static cursor,it needs to create a result table to check.
-bool sp_cursor::make_return_table(THD *thd, List<Create_field> *list) {
+static bool change_list_field_name(List<Create_field> *list,
+                                   List<Create_field> *list_open) {
+  if (list == list_open) return false;
+  if (list->size() != list_open->size()) {
+    my_error(ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT, MYF(0));
+    return true;
+  }
+  List_iterator_fast<Create_field> iter(*list);
+  List_iterator_fast<Create_field> iter_open(*list_open);
+  Create_field *def = nullptr;
+  Create_field *def_open = nullptr;
+
+  while ((def = iter++)) {
+    def_open = iter_open++;
+    if (!def_open) return true;
+    def->field_name = def_open->field_name;
+  }
+  return false;
+}
+
+/**
+  for static cursor,it needs to create a result table to check.
+  Use the list_open's column name instead of list's column name.
+
+  @param thd       THD
+  @param list      the structure of cursor return %rowtype
+*/
+bool sp_cursor::make_return_table(THD *thd, List<Create_field> *list,
+                                  List<Create_field> *list_c) {
+  if (change_list_field_name(list, list_c)) return true;
+
   return m_result.m_return_table->make_return_table(thd, list);
 }
 
 // for static cursor or ref cursor,it's result table is field's return table.
-void sp_cursor::set_return_table_from_cursor(sp_cursor *from_cursor) {
-  m_result.m_return_table = from_cursor->m_result.m_return_table;
+bool sp_cursor::set_return_table_from_cursor(sp_cursor *from_cursor,
+                                             List<Create_field> *list_c) {
+  List<Create_field> list;
+  if (from_cursor->m_result.m_return_table->get_table()->export_structure(
+          current_thd, &list))
+    return true;
+  return make_return_table(current_thd, &list, list_c);
 }
 
 // for type is ref cursor,it's result table is field's return table.
@@ -1359,7 +1411,7 @@ bool sp_refcursor::open_for_ident(THD *thd, uint m_sql_spv_idx) {
   thd->temporary_tables = open_tables_state_backup.temporary_tables;
 
   auto backup_guard2 = create_scope_guard([&]() {
-    thd->use_in_dbms_sql = false;
+    thd->use_in_dyn_sql = false;
     thd->in_sub_stmt = in_sub_stmt;
     open_tables_state_backup.temporary_tables = thd->temporary_tables;
     thd->temporary_tables = nullptr;
@@ -1392,37 +1444,12 @@ bool sp_refcursor::open_for_ident(THD *thd, uint m_sql_spv_idx) {
   /*It must set back the in_sub_stmt for not do close_thread_table in
    * sp_lex_instr::reset_lex_and_exec_core.*/
   thd->in_sub_stmt = in_sub_stmt;
-  thd->use_in_dbms_sql = true;
+  thd->use_in_dyn_sql = true;
   thd->push_diagnostics_area(&tmp_da);
   rc = stmt->execute_loop(thd, result, true);
 
-  if (open_tables_state_backup.lock) {
-    if (thd->lock) {
-      auto merged_lock =
-          mysql_lock_merge(open_tables_state_backup.lock, thd->lock);
-      open_tables_state_backup.lock = merged_lock;
-    }
-  } else {
-    if (thd->lock) {
-      open_tables_state_backup.lock = thd->lock;
-    }
-  }
+  thd->merge_backup_open_tables_state(&open_tables_state_backup);
 
-  thd->lock = nullptr;
-  if (thd->open_tables) {
-    // set all mdl_ticket to nullptr, has already free in prepare trans
-    auto table_ptr = thd->open_tables;
-    while (table_ptr) {
-      table_ptr->mdl_ticket = nullptr;
-      table_ptr = table_ptr->next;
-    }
-  }
-  if (open_tables_state_backup.open_tables) {
-    open_tables_state_backup.open_tables->next = thd->open_tables;
-  } else {
-    open_tables_state_backup.open_tables = thd->open_tables;
-  }
-  thd->open_tables = nullptr;
   stmt->m_lex->lock_tables_state = Query_tables_list::LTS_NOT_LOCKED;
   thd->pop_diagnostics_area();
   if (tmp_da.is_error()) {
@@ -1431,6 +1458,7 @@ bool sp_refcursor::open_for_ident(THD *thd, uint m_sql_spv_idx) {
                                          tmp_da.message_text(),
                                          tmp_da.returned_sqlstate());
   }
+
   if (!rc) {
     m_server_side_cursor = m_query_result->cursor();
     if (check_cursor_return_type_count()) {
@@ -1454,4 +1482,14 @@ void sp_refcursor::destroy() {
   m_server_side_cursor = nullptr;
   m_arena.free_items();
   m_mem_root.ClearForReuse();
+}
+
+Item *make_item_index(THD *thd, Item *item_index) {
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> buf;
+  String *res = item_index->val_str(&buf);
+  char *str = thd->strmake(res->c_ptr_safe(), res->length());
+  Item *item_str_index =
+      new Item_string(str, res->length(), item_index->charset_for_protocol());
+  item_str_index->m_is_udt_table_index = true;
+  return item_str_index;
 }

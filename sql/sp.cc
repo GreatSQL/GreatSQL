@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -920,7 +920,7 @@ static bool check_routine_already_exists(THD *thd, sp_head *sp,
     }
   }
 
-  if (thd->lex->create_sp_mode != enum_sp_create_mode::SP_CREATE_OR_REPLACE) {
+  if (!thd->lex->is_sp_create_or_replace()) {
     // Check if routine with same name exists.
     if (sp->m_type == enum_sp_type::FUNCTION)
       error = thd->dd_client()->acquire<dd::Function>(sp->m_db.str,
@@ -1232,7 +1232,7 @@ bool sp_create_routine(THD *thd, sp_head *sp, const LEX_USER *definer,
     return true;
   }
 
-  if (thd->lex->create_sp_mode == enum_sp_create_mode::SP_CREATE_OR_REPLACE) {
+  if (thd->lex->is_sp_create_or_replace()) {
     sp_name name(to_lex_cstring(sp->m_db), sp->m_name, true);
     enum_sp_return_code rc;
 
@@ -2208,18 +2208,8 @@ sp_head *sp_find_routine(THD *thd, enum_sp_type type, sp_name *name,
     cp = &thd->sp_package_body_cache;
   }
 
-  /*
-   1. this is not a package routine
-   2. with-func is defined
-   3. empty db of this routine, and there is no database name specified
-   4. sp name is the same as with-func name
-  */
   sp_head *sp;
-  bool use_with_func =
-      (!in_package_body && thd->lex->m_with_func && name->m_db.str &&
-       !name->m_db.str[0] && !name->m_explicit_name &&
-       sp_eq_routine_name(thd->lex->spname->m_name, name->m_name));
-  if (use_with_func) {
+  if (name->m_is_with_function) {
     sp = thd->lex->sphead;
     return sp;
   }
@@ -2273,20 +2263,9 @@ sp_head *sp_setup_routine(THD *thd, enum_sp_type type, sp_name *name,
     in_package_body = true;
     cp = &thd->sp_package_body_cache;
   }
-  /*
-   1. this is not a package routine
-   2. with-func is defined
-   3. empty db of this routine, and there is no database name specified
-   4. sp name is the same as with-func name
-   NOTE: if this function is used in recursion call, it is necessary
-   to fill more fields of thd->lex->sphead so that db_load_routine() works.
-  */
+
   sp_head *sp;
-  bool use_with_func =
-      (!in_package_body && thd->lex->m_with_func && name->m_db.str &&
-       !name->m_db.str[0] && !name->m_explicit_name &&
-       sp_eq_routine_name(thd->lex->spname->m_name, name->m_name));
-  if (use_with_func) {
+  if (name->m_is_with_function) {
     sp = thd->lex->sphead;
   } else {
     if (in_package_body)
@@ -2457,7 +2436,7 @@ static bool sp_add_used_routine(
     size_t key_length, size_t db_length, const char *name, size_t name_length,
     Table_ref *belong_to_view, const char *pkg_name = nullptr,
     size_t pkg_name_length = 0, sp_signature *sig = nullptr,
-    uint key_add_length = 0) {
+    uint key_add_length = 0, bool with_function = false) {
   if (prelocking_ctx->sroutines == nullptr) {
     prelocking_ctx->sroutines.reset(
         new malloc_unordered_map<std::string, Sroutine_hash_entry *>(
@@ -2501,6 +2480,7 @@ static bool sp_add_used_routine(
     prelocking_ctx->sroutines_list.link_in_list(rn, &rn->next);
     rn->belong_to_view = belong_to_view;
     rn->m_cache_version = 0;
+    rn->m_is_with_function = with_function;
     return true;
   }
   return false;
@@ -2533,6 +2513,7 @@ static bool sp_add_used_routine(
                                        (nullptr if routine is not used by view)
   @param pkg_name                      package name
   @param pkg_name_length               package name length
+  @param with_function                 Indicates whether with function
 
   @note
     Will also add element to end of 'Query_tables_list::sroutines_list' list
@@ -2550,7 +2531,7 @@ bool sp_add_used_routine(Query_tables_list *prelocking_ctx, Query_arena *arena,
                          Sp_name_normalize_type name_normalize_type,
                          bool own_routine, Table_ref *belong_to_view,
                          const char *pkg_name, size_t pkg_name_length,
-                         sp_signature *sig) {
+                         sp_signature *sig, bool with_function) {
   // Length of routine name components needs to be checked earlier.
   assert(db_length <= NAME_LEN && name_length <= NAME_LEN);
 
@@ -2630,7 +2611,8 @@ bool sp_add_used_routine(Query_tables_list *prelocking_ctx, Query_arena *arena,
 
   if (sp_add_used_routine(prelocking_ctx, arena, key, key_length, db_length,
                           name, name_length, belong_to_view, pkg_name,
-                          pkg_name_length, sig, key_add_length)) {
+                          pkg_name_length, sig, key_add_length,
+                          with_function)) {
     if (own_routine) {
       prelocking_ctx->sroutines_list_own_last =
           prelocking_ctx->sroutines_list.next;
@@ -2832,17 +2814,8 @@ enum_sp_return_code sp_cache_routine(THD *thd, enum_sp_type type,
     spc = &thd->sp_package_body_cache;
     in_package_body = true;
   }
-  /*
-   1. this is not a package routine
-   2. with-func is defined
-   3. empty db of this routine, and there is no database name specified
-   4. sp name is the same as with-func name
-  */
-  bool use_with_func =
-      (!in_package_body && thd->lex->m_with_func && name->m_db.str &&
-       !name->m_db.str[0] && !name->m_explicit_name &&
-       sp_eq_routine_name(thd->lex->spname->m_name, name->m_name));
-  if (use_with_func) {
+
+  if (name->m_is_with_function) {
     *sp = thd->lex->sphead;
     return SP_OK;
   }
@@ -2964,7 +2937,7 @@ static bool create_string(
   thd->variables.sql_mode = sql_mode;
   buf->append(STRING_WITH_LEN("CREATE "));
 
-  if (thd->lex->create_sp_mode == enum_sp_create_mode::SP_CREATE_OR_REPLACE)
+  if (thd->lex->is_sp_create_or_replace())
     buf->append(STRING_WITH_LEN("OR REPLACE "));
 
   append_definer(thd, buf, definer_user, definer_host);
@@ -3048,7 +3021,7 @@ static bool create_string(
   if (chistics->detistic) buf->append(STRING_WITH_LEN("    DETERMINISTIC\n"));
   if (chistics->suid == SP_IS_NOT_SUID)
     buf->append(STRING_WITH_LEN("    SQL SECURITY INVOKER\n"));
-  if (chistics->comment.length) {
+  if (chistics->comment.length && type != enum_sp_type::TYPE) {
     buf->append(STRING_WITH_LEN("    COMMENT "));
     append_unescaped(buf, chistics->comment.str, chistics->comment.length);
     buf->append('\n');
@@ -3539,6 +3512,14 @@ Item *sp_prepare_func_item(THD *thd, Item **it_addr) {
   } else
     it_addr = (*it_addr)->this_item_addr(thd, it_addr);
 
+  // add for sequence item re-fix
+  if ((*it_addr)->fixed) {
+    Query_block *qb = thd->lex->query_block;
+    if (qb && qb->sequences_counter &&
+        qb->sequences_counter->check_and_refix(thd))
+      return nullptr;
+  }
+
   if ((*it_addr)->fixed) {
     thd->lex->set_exec_started();
     return *it_addr;
@@ -3557,9 +3538,11 @@ Item *sp_prepare_func_item(THD *thd, Item **it_addr) {
     thd->lex->set_exec_started();
     return *it_addr;
   }
-  thd->lex->unit->set_prepared();
-  thd->lex->save_cmd_properties(thd);
-  thd->lex->set_exec_started();
+  if (!thd->lex->unit->is_prepared()) {
+    thd->lex->unit->set_prepared();
+    thd->lex->save_cmd_properties(thd);
+    thd->lex->set_exec_started();
+  }
 
   return *it_addr;
 }
@@ -3585,20 +3568,10 @@ bool sp_eval_expr(THD *thd, Field *result_field, Item **expr_item_ptr) {
   unsigned int stmt_unsafe_rollback_flags =
       thd->get_transaction()->get_unsafe_rollback_flags(Transaction_ctx::STMT);
 
-  Field_row *field_row = dynamic_cast<Field_row *>(result_field);
-  Field_refcursor *field_refcursor =
-      dynamic_cast<Field_refcursor *>(result_field);
   if (!*expr_item_ptr) goto error;
 
   if (!(expr_item = sp_prepare_func_item(thd, expr_item_ptr))) goto error;
-  /*When record.record_table := 1,it sets wrong value.*/
-  if (field_row && !field_refcursor) {
-    if (expr_item->this_item()->result_type() != ROW_RESULT &&
-        expr_item->this_item()->type() != Item::NULL_ITEM) {
-      my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), expr_item->item_name.ptr());
-      goto error;
-    }
-  }
+
   /*
     Set THD flags to emit warnings/errors in case of overflow/type errors
     during saving the item into the field.
@@ -4374,4 +4347,22 @@ sp_ora_type *sp_start_type_parsing(THD *thd, enum_sp_type sp_type,
   type->init_sp_name(thd, sp_name);
 
   return type;
+}
+
+/*For mysqldump for udt object,it needs right order for object,use routine
+id to get right sequence.*/
+bool update_udt_object_comment(THD *thd, sp_head *sp) {
+  sp_name *name =
+      new (thd->mem_root) sp_name(to_lex_cstring(sp->m_db), sp->m_name, false);
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  dd::Routine *routine = nullptr;
+  bool error;
+  error = thd->dd_client()->acquire_for_modification<dd::Oracle_type>(
+      name->m_db.str, name->m_name.str, &routine);
+  if (error) return true;
+  if (routine == nullptr) return true;
+  ulonglong nr = routine->id();
+  routine->set_comment(std::to_string(nr).c_str());
+  error = thd->dd_client()->update(routine);
+  return error;
 }

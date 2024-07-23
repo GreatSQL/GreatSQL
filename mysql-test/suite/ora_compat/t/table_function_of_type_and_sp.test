@@ -347,7 +347,7 @@ BEGIN
 end;
 $$
 DELIMITER ;$$
---error ER_UDT_INCONS_DATATYPES
+--error ER_WRONG_UDT_DATA_TYPE
 call p1();
 drop PROCEDURE p1;
 
@@ -1301,6 +1301,8 @@ END;
 $$
 DELIMITER ;$$
 
+--error ER_NOT_SUPPORTED_YET
+with recursive cte as (select t_air_table(t_air1(1,1,1))) select * from cte;
 
 drop table tt_air;
 drop type t_air_table;

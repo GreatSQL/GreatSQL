@@ -1,5 +1,5 @@
 /* Copyright (c) 2013, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -177,7 +177,8 @@ bool PTI_comp_op_all::itemize(Parse_context *pc, Item **res) {
       subselect->contextualize(pc))
     return true;
 
-  *res = all_any_subquery_creator(left, comp_op, is_all, subselect->value());
+  *res = all_any_subquery_creator(left, comp_op, is_all, subselect->value(),
+                                  subselect);
 
   return *res == nullptr;
 }
@@ -274,11 +275,11 @@ bool PTI_function_call_nonkeyword_sysdate::itemize(Parse_context *pc,
 
 bool PTI_function_call_nonkeyword_trigger_event_is::itemize(Parse_context *pc,
                                                             Item **res) {
-  if (!m_column) m_column = new (pc->mem_root) Item_null();
+  if ((is_NULL = !m_column)) m_column = new (pc->mem_root) Item_null();
   if (super::itemize(pc, res) || m_column->itemize(pc, &m_column)) return true;
 
   *res = new (pc->mem_root)
-      Item_func_trigger_event_is(POS(), m_event_type, m_column);
+      Item_func_trigger_event_is(POS(), m_event_type, m_column, is_NULL);
 
   if (*res == nullptr) return true;
 
@@ -424,6 +425,7 @@ bool PTI_text_literal_nchar_string::itemize(Parse_context *pc, Item **res) {
 bool PTI_singlerow_subselect::itemize(Parse_context *pc, Item **res) {
   if (super::itemize(pc, res) || subselect->contextualize(pc)) return true;
   *res = new (pc->mem_root) Item_singlerow_subselect(subselect->value());
+  ((Item_singlerow_subselect *)*res)->set_subselect(subselect);
   pc->select->n_scalar_subqueries++;
   return *res == nullptr;
 }
@@ -431,6 +433,7 @@ bool PTI_singlerow_subselect::itemize(Parse_context *pc, Item **res) {
 bool PTI_exists_subselect::itemize(Parse_context *pc, Item **res) {
   if (super::itemize(pc, res) || subselect->contextualize(pc)) return true;
   *res = new (pc->mem_root) Item_exists_subselect(subselect->value());
+  ((Item_exists_subselect *)*res)->set_subselect(subselect);
   return *res == nullptr;
 }
 
@@ -551,12 +554,12 @@ bool PTI_simple_ident_q_3d::itemize(Parse_context *pc, Item **res) {
       return true;
     }
     // for record type
-    if (spv->field_def.ora_record.is_row_table() ||
-        spv->field_def.ora_record.is_row() ||
+    if (spv->field_def.ora_record.row_field_table_definitions() ||
+        spv->field_def.ora_record.row_field_definitions() ||
         // FOR rec IN c_country(10),rec.name.id is allowed.
         spv->field_def.ora_record.m_cursor_rowtype_ref ||
-        spv->field_def.ora_record.is_column_type_ref() ||
-        spv->field_def.ora_record.is_table_rowtype_ref()) {
+        spv->field_def.ora_record.column_type_ref() ||
+        spv->field_def.ora_record.table_rowtype_ref()) {
       List<ora_simple_ident_def> *def_list =
           new (thd->mem_root) List<ora_simple_ident_def>;
       ora_simple_ident_def *def = new (thd->mem_root)
@@ -643,7 +646,7 @@ bool PTI_simple_ident_q_2d::itemize(Parse_context *pc, Item **res) {
       my_error(ER_VIEW_SELECT_VARIABLE, MYF(0));
       return true;
     }
-    if (spv->field_def.ora_record.is_row_table()) {
+    if (spv->field_def.ora_record.row_field_table_definitions()) {
       if (my_strcasecmp(system_charset_info, field, "count") == 0) {
         *res = new (thd->mem_root) Item_func_table_count(POS(), spv->offset);
       } else if (my_strcasecmp(system_charset_info, field, "first") == 0) {
@@ -655,9 +658,9 @@ bool PTI_simple_ident_q_2d::itemize(Parse_context *pc, Item **res) {
         return true;
       }
     } else if (spv->field_def.ora_record.is_cursor_rowtype_ref() ||
-               spv->field_def.ora_record.is_table_rowtype_ref() ||
-               spv->field_def.ora_record.is_row() ||
-               spv->field_def.ora_record.is_column_type_ref()) {
+               spv->field_def.ora_record.table_rowtype_ref() ||
+               spv->field_def.ora_record.row_field_definitions() ||
+               spv->field_def.ora_record.column_type_ref()) {
       *res = create_item_for_sp_var_row_field(
           thd, to_lex_cstring(table), field, rh, spv,
           sp->m_parser_data.get_current_stmt_start_ptr(), raw.start, raw.end);
@@ -666,6 +669,7 @@ bool PTI_simple_ident_q_2d::itemize(Parse_context *pc, Item **res) {
       my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), spv->name.str);
       return true;
     }
+    return (*res)->itemize(pc, res);
   } else {
     if (super::itemize(pc, res)) return true;
   }
@@ -685,8 +689,8 @@ bool PTI_simple_ident_q_nd::itemize(Parse_context *pc, Item **res) {
   if (!def_first) return true;
   if ((spv = thd->lex->find_variable(def_first->ident.str,
                                      def_first->ident.length, &pctx, &rh))) {
-    if (!spv->field_def.ora_record.is_row_table() &&
-        !spv->field_def.ora_record.is_row()) {
+    if (!spv->field_def.ora_record.row_field_table_definitions() &&
+        !spv->field_def.ora_record.row_field_definitions()) {
       // bugfix:rec int;select rec(0).s1;
       my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), def_first->ident.str);
       return true;
@@ -709,7 +713,7 @@ bool PTI_simple_ident_q_nd::itemize(Parse_context *pc, Item **res) {
     return true;
   }
 
-  return false;
+  return (*res)->itemize(pc, res);
 }
 
 bool PTI_simple_ident_q_for_loop::itemize(Parse_context *pc, Item **res) {
@@ -722,8 +726,8 @@ bool PTI_simple_ident_q_for_loop::itemize(Parse_context *pc, Item **res) {
   // for i in var.first .. var.last loop,it's var(i).col
   if ((spv = thd->lex->find_variable(m_sp_ident->name.str,
                                      m_sp_ident->name.length, &pctx, &rh))) {
-    if (!spv->field_def.ora_record.is_row_table() &&
-        !spv->field_def.ora_record.is_row()) {
+    if (!spv->field_def.ora_record.row_field_table_definitions() &&
+        !spv->field_def.ora_record.row_field_definitions()) {
       // bugfix:rec int;select rec(0).s1;
       my_error(ER_SP_MISMATCH_RECORD_VAR, MYF(0), m_sp_ident->name.str);
       return true;

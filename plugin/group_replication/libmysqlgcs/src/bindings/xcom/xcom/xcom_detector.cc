@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -50,6 +50,7 @@
 #include "xcom/xcom_common.h"
 #include "xcom/xcom_detector.h"
 #include "xcom/xcom_interface.h"
+#include "xcom/xcom_limits.h"
 #include "xcom/xcom_transport.h"
 #include "xdr_gen/xcom_vp.h"
 
@@ -61,6 +62,9 @@ extern int all_nodes_valid;
 /* See if node has been suspiciously still for some time */
 int may_be_dead(detector_state const ds, node_no i, double seconds, int silent,
                 int unreachable) {
+  if (ds[i] == 0.0) {
+    return 0;
+  }
   if (unreachable) {
     return 1;
   } else {
@@ -72,6 +76,7 @@ static int detect_node_timeout(site_def const *site, node_no node) {
   int alive = 1;
   ulong timeout = DEFAULT_DETECTOR_LIVE_TIMEOUT;
   double current = task_now();
+
   if (site->servers[node]->unreachable >= MAX_CONNECT_FAIL_TIMES) {
     timeout = 1;
   } else if (site->servers[node]->unreachable == DIRECT_ABORT_CONN) {
@@ -263,25 +268,6 @@ static void check_global_node_set(site_def *site, int *notify) {
   }
 }
 
-static void check_local_node_set(site_def *site, int *notify) {
-  u_int i;
-  u_int nodes = get_maxnodes(site);
-
-  all_nodes_valid = 1;
-  for (i = 0; i < nodes && i < site->local_node_set.node_set_len; i++) {
-    int detect = detect_node_timeout(site, i);
-    if (!detect) {
-      all_nodes_valid = 0;
-    }
-    if (site->local_node_set.node_set_val[i] != detect) {
-      site->local_node_set.node_set_val[i] = detect;
-      *notify = 1;
-      G_INFO("notify is set true in check_local_node_set");
-    }
-    IFDBG(D_DETECT, FN; NDBG(i, u); NDBG(*notify, d));
-  }
-}
-
 static node_no get_leader(site_def const *s) {
   if (s) {
     node_no leader = 0;
@@ -310,7 +296,8 @@ extern synode_no executed_msg;
 extern synode_no max_synode;
 
 static site_def *last_x_site = nullptr;
-static int wait_for_node_left = 0;
+
+server_timewait_info server_timewait[NSERVERS];
 
 void invalidate_detector_sites(site_def *site) {
   if (last_x_site == site) {
@@ -318,11 +305,125 @@ void invalidate_detector_sites(site_def *site) {
   }
 }
 
-void notify_detector_when_removed() { wait_for_node_left = 1; }
+static void initiate_server_timeout() {
+  u_int i;
+  for (i = 0; i < NSERVERS; i++) {
+    server_timewait[i].last_removed_time = task_now();
+    memset(server_timewait[i].ip, 0, IP_MAX_SIZE);
+    server_timewait[i].port = 0;
+    server_timewait[i].occupied = 0;
+    server_timewait[i].timeout = 0;
+  }
+}
 
-void notify_detector_when_actually_removed() { wait_for_node_left = 0; }
+void notify_detector_when_forced() { initiate_server_timeout(); }
 
-int ask_for_detector_if_added_ok() { return !wait_for_node_left; }
+static inline void save_server_timeout(server_timewait_info *server_info,
+                                       const char *ip, xcom_port port,
+                                       int timeout) {
+  server_info->last_removed_time = task_now();
+  server_info->occupied = 1;
+  strcpy(server_info->ip, ip);
+  server_info->port = port;
+  server_info->timeout = timeout;
+}
+
+void notify_detector_when_needed(const char *ip, xcom_port port, int timeout) {
+  u_int j;
+  for (j = 0; j < NSERVERS; j++) {
+    if (server_timewait[j].occupied) {
+      double diff = task_now() - server_timewait[j].last_removed_time;
+      if (diff > 60.0) {
+        save_server_timeout(server_timewait + j, ip, port, timeout);
+        break;
+      } else {
+        int retval = ((port == server_timewait[j].port) &&
+                      strcmp(ip, server_timewait[j].ip) == 0);
+        if (retval) {
+          save_server_timeout(server_timewait + j, ip, port, timeout);
+          break;
+        } else {
+          continue;
+        }
+      }
+    } else {
+      save_server_timeout(server_timewait + j, ip, port, timeout);
+      break;
+    }
+  }
+}
+
+void notify_detector_when_removed(u_int n, node_address *names, int timeout) {
+  u_int i;
+  for (i = 0; i < n; i++) {
+    node_address const *name = names + i;
+    char ip[IP_MAX_SIZE];
+    xcom_port port;
+    int error = get_ip_and_port(name->address, ip, &port);
+    if (!error) {
+      notify_detector_when_needed(ip, port, timeout);
+    }
+  }
+}
+
+int ask_for_detector_if_added_ok(u_int n, node_address *names) {
+  u_int i;
+
+  if (n > 1) {
+    G_WARNING("ask_for_detector_if_added_ok num:%u, not expected", n);
+    return 1;
+  }
+
+  for (i = 0; i < n; i++) {
+    node_address const *name = names + i;
+    char ip[IP_MAX_SIZE];
+    xcom_port port;
+    int error = get_ip_and_port(name->address, ip, &port);
+    if (!error) {
+      u_int j;
+      for (j = 0; j < NSERVERS; j++) {
+        if (server_timewait[j].occupied) {
+          int retval = ((port == server_timewait[j].port) &&
+                        strcmp(ip, server_timewait[j].ip) == 0);
+          if (retval) {
+            double diff = task_now() - server_timewait[j].last_removed_time;
+            if (diff <= server_timewait[j].timeout) {
+              return 0;
+            } else {
+              return 1;
+            }
+          } else {
+            continue;
+          }
+        } else {
+          break;
+        }
+      }
+    } else {
+      G_WARNING("ask_for_detector_if_added_ok get ip and port error");
+    }
+  }
+
+  return 1;
+}
+
+static void check_local_node_set(site_def *site, int *notify) {
+  u_int i;
+  u_int nodes = get_maxnodes(site);
+
+  all_nodes_valid = 1;
+  for (i = 0; i < nodes && i < site->local_node_set.node_set_len; i++) {
+    int detect = detect_node_timeout(site, i);
+    if (!detect) {
+      all_nodes_valid = 0;
+    }
+    if (site->local_node_set.node_set_val[i] != detect) {
+      site->local_node_set.node_set_val[i] = detect;
+      *notify = 1;
+    }
+    IFDBG(D_DETECT, FN; NDBG(i, u); NDBG(*notify, d));
+  }
+}
 
 /* Notify others about our current view */
 int detector_task(task_arg arg [[maybe_unused]]) {
@@ -339,6 +440,7 @@ int detector_task(task_arg arg [[maybe_unused]]) {
   ep->notify = 1;
   ep->local_notify = 1;
   ep->basic_timeout = DEFAULT_DETECTOR_LIVE_TIMEOUT;
+  initiate_server_timeout();
   G_INFO("enter detector_task");
   IFDBG(D_DETECT, FN;);
   while (!xcom_shutdown) {
@@ -540,6 +642,10 @@ int alive_task(task_arg arg [[maybe_unused]]) {
                 ep->you_p->a->app_key.group_id = ep->you_p->a->group_id =
                     get_group_id(site);
                 ep->you_p->a->body.c_t = xcom_boot_type;
+                G_INFO(
+                    "alive task set xcom_boot_type for node:%d, get "
+                    "node no:%d",
+                    i, get_nodeno(site));
                 init_node_list(1, &site->nodes.node_list_val[i],
                                &ep->you_p->a->body.app_u_u.nodes);
 

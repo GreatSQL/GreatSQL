@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1695,15 +1695,6 @@ int BufferingWindowIterator::Read() {
       {
         Switch_ref_item_slice slice_switch(m_join, m_input_slice);
         if (copy_funcs(m_temp_table_param, thd(), CFT_HAS_NO_WF)) return 1;
-      }
-
-      Item_func_rownum *rn = m_join->query_block->rownum_func;
-      if (rn) {
-        rn->reset_read_flag();
-      }
-
-      if (m_join->query_block->has_sequence) {
-        m_join->query_block->reset_sequence_read_flag();
       }
 
       bool new_partition = false;

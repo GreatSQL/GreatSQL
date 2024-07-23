@@ -456,6 +456,22 @@ ELSE
   INTO employees VALUES (x, 'Linda4', 'Mills4', 42, 41)
 SELECT id x FROM t1;
 
+
+set sql_mode=oracle;
+
+--replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/  /rows=\d+(\.\.\d+\.\d+)?/rows=***/
+explain format=tree
+INSERT first
+WHEN 3>x THEN
+  INTO employees  VALUES (x, 'Gary', 'Kang', 4, 5)
+  INTO employees  VALUES (x, 'Tim1', 'Greene1', 31, 11)
+WHEN 2<x THEN
+  INTO employees2  VALUES (x,   'Tim',  'Greene',  3,  1)
+ELSE
+  INTO employees  VALUES (x, 'Linda', 'Mills', 2, 1)
+  INTO employees VALUES (x, 'Linda4', 'Mills4', 42, 41)
+SELECT id x FROM t1;
+
 DROP TABLE employees;
 DROP TABLE employees2;
 DROP TABLE t1;

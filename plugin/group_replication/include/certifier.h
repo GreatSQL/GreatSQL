@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -194,6 +194,16 @@ class Certifier_interface : public Certifier_stats {
   virtual bool is_conflict_detection_enable() = 0;
   virtual bool is_certfy_gtid_committed(const Gtid &gtid) = 0;
 };
+
+#define REPLAY_CAL_HASH_ITEM 1016
+#define REPLAY_CAL_HASH_ITEMS (REPLAY_CAL_HASH_ITEM / 8)
+#define REPLAY_CAL_ARRAY 65536
+#define MAX_RELATIVE_SEQUENCE_NUMBER 65535
+typedef struct {
+  int number;
+  int size;
+  unsigned char values[REPLAY_CAL_HASH_ITEM];
+} replay_cal_hash_item;
 
 class Certifier : public Certifier_interface {
  public:
@@ -617,6 +627,9 @@ class Certifier : public Certifier_interface {
   Last_xa_prepare_writeset_map xa_prepare_writeset_map;
   Sid_map *certification_info_sid_map;
 
+  replay_cal_hash_item replayed_cal_array[REPLAY_CAL_ARRAY];
+  int64 base_parallel_applier_sequence_number;
+
   ulonglong positive_cert;
   ulonglong negative_cert;
   int64 parallel_applier_last_committed_global;
@@ -766,9 +779,16 @@ class Certifier : public Certifier_interface {
   bool add_item(const char *item, Gtid_set_ref *snapshot_version,
                 int64 *item_previous_sequence_number);
 
+  bool quick_add_item(const char *item, int64 sequence_number,
+                      int64 *item_previous_sequence_number);
+
+  void clear_replay_cal_info();
+
   /* For xa replay */
   void clear_old_xa_prepare_map();
-  bool add_item_for_xa_commit(int32_t thread_id, Gtid_set *snapshot_version);
+  bool add_item_for_xa_commit(int32_t thread_id, Gtid_set *snapshot_version,
+                              int *has_to_flush_last_commited,
+                              int64 *transaction_last_committed);
   void add_xa_prepare_writeset_item_to_map(int32_t thread_id, const char *item);
 
   /**

@@ -336,8 +336,6 @@ select length(to_clob(b)),length(b) from t1 where a in(1,2);
 #test raw
 create table my_test_data(id number(4),a clob,b blob);
 
-insert into my_test_data(id,a,b) values(1,'ABC123','ABC123');
-
 insert into my_test_data select  5,a,b from my_test_data where id=1;
 insert into my_test_data select  6,a,b from my_test_data where id=2;
 insert into my_test_data select  7,a,b from my_test_data where id=3;

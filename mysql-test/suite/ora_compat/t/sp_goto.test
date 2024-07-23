@@ -1345,4 +1345,147 @@ $$
 DELIMITER ;$$
 
 
+--echo #
+--echo # test bug9798
+CREATE TABLE t1 (
+  int_field INTEGER UNSIGNED NOT NULL,
+  char_field CHAR(10),
+  INDEX(`int_field`)
+);
+insert into t1 values(1,'test1');
+insert into t1 values(2,'test2');
+insert into t1 values(3,'test3');
+insert into t1 values(4,'test3');
+insert into t1 values(5,'test3');
+insert into t1 values(6,'test3');
+insert into t1 values(7,'test3');
+insert into t1 values(8,'test3');
+insert into t1 values(9,'test3');
+
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE p1 AS
+  CURSOR c1 IS SELECT * FROM t1 where int_field<4 ;
+  CURSOR c2 IS SELECT * FROM t1 where int_field>3 and int_field<7 ;
+  count int := 0;
+BEGIN
+ <<lab1>>
+  select 'lab1';
+  for a in c1 loop
+    select 'for a' || count;
+    if count=3 then exit;
+    end if;
+    count := count+1;
+    for b in c2 loop
+      select 'for b';
+      goto lab1;
+    end loop;
+  end loop;
+END;
+$$
+DELIMITER ;$$
+call p1;
+call p1;
+drop procedure p1;
+
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE p1 AS
+  CURSOR c1 IS SELECT * FROM t1 where int_field<4 ;
+  CURSOR c2 IS SELECT * FROM t1 where int_field>3 and int_field<7 ;
+  count int := 0;
+BEGIN
+ <<lab1>>
+  for a in c1 loop
+    select 'for a' || count;
+    if count=3 then exit;
+    end if;
+    count := count+1;
+    for b in c2 loop
+      select 'for b';
+      goto lab1;
+    end loop;
+  end loop;
+END;
+$$
+DELIMITER ;$$
+--error ER_SP_CURSOR_ALREADY_OPEN
+call p1;
+drop procedure p1;
+
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE p1 AS
+  count int := 0;
+BEGIN
+ <<lab1>>
+  count := count;
+  for a in (SELECT * FROM t1 where int_field<4) loop
+    select 'for a' || count;
+    if count=3 then exit;
+    end if;
+    count := count+1;
+    goto lab1;
+  end loop;
+END;
+$$
+DELIMITER ;$$
+call p1;
+drop procedure p1;
+
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE p1 AS
+  count int := 0;
+BEGIN
+ <<lab1>>
+  for a in (SELECT * FROM t1 where int_field<4) loop
+    select 'for a' || count;
+    goto lab1;
+  end loop;
+END;
+$$
+DELIMITER ;$$
+--error ER_SP_CURSOR_ALREADY_OPEN
+call p1;
+drop procedure p1;
+
+DELIMITER $$;
+--echo # test anonymous block and goto
+--error ER_SP_CURSOR_ALREADY_OPEN
+BEGIN
+declare
+  count int := 0;
+  CURSOR c1 IS SELECT * FROM t1 where int_field<4 ;
+begin
+<<lab1>>
+    for b in c1 loop
+      select 'for b' || count;
+      count := count+1;
+      if count=3 then exit;
+      end if;
+      goto lab1;
+    end loop;
+end;
+END;
+$$
+DELIMITER ;$$
+
+DELIMITER $$;
+--echo # test anonymous block and goto
+--error ER_SP_CURSOR_ALREADY_OPEN
+BEGIN
+declare count int := 0;
+begin
+<<lab1>>
+    for b in (SELECT * FROM t1 where int_field<4) loop
+      select 'for b' || count;
+      count := count+1;
+      if count=3 then exit;
+      end if;
+      goto lab1;
+    end loop;
+end;
+END;
+$$
+DELIMITER ;$$
+
+drop table t1;
+
 

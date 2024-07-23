@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -50,9 +50,12 @@ class Local {
   @param[in]		server		shared server handle
   @param[in]		share		shared client information
   @param[in]		index		index of current thread
-  @param[in]		is_master	true, if it is master thread */
+  @param[in]		is_master	true, if it is master thread
+  @param[in]	start_id		start lsn for increment clone (Clone
+  Type: HA_CLONE_PAGE)
+  @param[in]	enable_page_track	enable page track when clone end*/
   Local(THD *thd, Server *server, Client_Share *share, uint32_t index,
-        bool is_master);
+        bool is_master, uint64_t start_id, bool enable_page_track);
 
   /** Get clone client for data transfer.
   @return clone client handle */
@@ -70,12 +73,17 @@ class Local {
   @return error code */
   int clone_exec();
 
+  uint64_t start_id() { return m_start_id; }
+
  private:
   /** "Clone Server" object to copy data */
   Server *m_clone_server;
 
   /** "Clone Client" object to apply data */
   Client m_clone_client;
+
+  uint64_t m_start_id;
+  bool m_enable_page_track;
 };
 
 /** Clone Local interface to handle callback from Storage Engines */
@@ -133,6 +141,12 @@ class Local_Callback : public Ha_clone_cbk {
   @param[out]	len		data length
   @return error code */
   int apply_buffer_cbk(uchar *&to_buffer, uint &len) override;
+
+  int encrypt_and_write_cbk(uchar *source, Ha_clone_file to_file, size_t length,
+                            const char *dest_name) override;
+
+  // check if  Clone operation types is HA_CLONE_PAGE
+  uint64_t get_clone_page_lsn() { return m_clone_local->start_id(); }
 
  private:
   /** Apply data using storage engine apply interface.

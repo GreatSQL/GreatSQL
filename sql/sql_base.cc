@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1707,7 +1707,7 @@ void close_thread_tables(THD *thd) {
 
     /* Fallthrough */
   }
-  if (thd->use_in_dbms_sql) return;
+  if (thd->use_in_dyn_sql) return;
   if (thd->lock) {
     /*
       For RBR we flush the pending event just before we unlock all the
@@ -2956,10 +2956,29 @@ static bool ora_create_and_open_temporary(THD *thd, Table_ref *tl) {
     statement), clear the metadata observer in THD, if any.
   */
   thd->push_reprepare_observer(nullptr);
-  auto rc = dd::execute_query(thd, crt_table);
+  auto rc = 0;
+  Ed_connection con(thd);
+  {
+    Disable_binlog_guard disable_binlog(thd);
+    LEX_STRING str;
+    lex_string_strmake(thd->mem_root, &str, crt_table.c_str(),
+                       crt_table.length());
+    rc = con.execute_direct(str);
+  }
+
   thd->pop_reprepare_observer();
   thd->m_ora_create_global_temp_instance = false;
-  if (rc) return true;
+  if (rc) {
+    if (!thd->is_error()) {
+      Diagnostics_area *da = thd->get_stmt_da();
+      da->set_error_status(con.get_last_errno(), con.get_last_error(),
+                           mysql_errno_to_sqlstate(con.get_last_errno()));
+      da->push_warning(thd, con.get_last_errno(),
+                       mysql_errno_to_sqlstate(con.get_last_errno()),
+                       Sql_condition::SL_ERROR, con.get_last_error());
+    }
+    return true;
+  }
   thd->get_transaction()->set_unsafe_rollback_flags(Transaction_ctx::STMT,
                                                     stmt_unsafe_rollback_flags);
 
@@ -3225,6 +3244,13 @@ bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx,
           return false;  // VIEW
         }
       }
+    }
+    // If the force view associated tables does not exist, the SHOW CREATE VIEW
+    // syntax must be effective.
+    if (thd->lex->sql_command == SQLCOM_SHOW_CREATE && table_list &&
+        table_list->belong_to_view && table_list->belong_to_force_view &&
+        table_list->belong_to_view == table_list->belong_to_force_view) {
+      return true;
     }
     /*
       No table in the locked tables list. In case of explicit LOCK TABLES
@@ -6131,6 +6157,7 @@ bool open_tables(THD *thd, Table_ref **start, uint *counter, uint flags,
   bool has_prelocking_list;
   DBUG_TRACE;
   bool audit_notified = false;
+  bool force_view_in_lock_table = false;
 
 restart:
   /*
@@ -6208,9 +6235,35 @@ restart:
     for (tables = *table_to_open; tables;
          table_to_open = &tables->next_global, tables = tables->next_global) {
       old_table = (*table_to_open)->table;
-      error = open_and_process_table(thd, thd->lex, tables, counter,
-                                     prelocking_strategy, has_prelocking_list,
-                                     &ot_ctx);
+
+      // reset value in lock table mode.
+      force_view_in_lock_table = false;
+      if (thd->lex->sql_command == SQLCOM_LOCK_TABLES && tables &&
+          tables->belong_to_view && tables->belong_to_force_view &&
+          tables->belong_to_view == tables->belong_to_force_view) {
+        force_view_in_lock_table = true;
+      }
+
+      if (!force_view_in_lock_table) {
+        error = open_and_process_table(thd, thd->lex, tables, counter,
+                                       prelocking_strategy, has_prelocking_list,
+                                       &ot_ctx);
+      } else {
+        Lock_table_ignore_error_handler ignore_handler;
+        auto ignore_handler_guard =
+            create_scope_guard([&, saved_ignore = thd->lex->is_ignore()]() {
+              thd->pop_internal_handler();
+              thd->lex->set_ignore(saved_ignore);
+              if (error && ignore_handler.get_ignore_error()) {
+                error = !error;
+              }
+            });
+        thd->push_internal_handler(&ignore_handler);
+        thd->lex->set_ignore(true);
+        error = open_and_process_table(thd, thd->lex, tables, counter,
+                                       prelocking_strategy, has_prelocking_list,
+                                       &ot_ctx);
+      }
 
       if (error) {
         if (ot_ctx.can_recover_from_failed_open()) {
@@ -7849,6 +7902,151 @@ bool open_temporary_table(THD *thd, Table_ref *tl) {
     my_error(ER_XA_TEMP_TABLE, MYF(0));
     return true;
   }
+
+  /*
+    Add operations such as processing dblink to trigger tables begin
+  */
+  {
+    LEX *lex = thd->lex;
+    if (tl->dblink_name) {
+      const LEX_CSTRING plugin_name = {"DBLINK", 6};
+      plugin_ref plugin = ha_resolve_by_name(thd, &plugin_name, true);
+      if (!plugin) {
+        my_error(ER_UNKNOWN_STORAGE_ENGINE, MYF(0), plugin_name.str);
+        return true;
+      }
+
+      /*
+       sql_command  Only
+       support select xx, xx,... from table@dblink;
+       support create table xxx(select xxx,xx..from table@dblink);
+       support insert into  xxx( xxx,xxx ) select xxx,xx..from table@dblink ;
+       support  PROCEDURE DECLARE cur1 CURSOR FOR select xxx from table@dblink ;
+      */
+      if ((lex->sql_command != SQLCOM_SELECT &&
+           lex->sql_command != SQLCOM_CREATE_TABLE &&
+           lex->sql_command != SQLCOM_INSERT_SELECT &&
+           lex->sql_command != SQLCOM_UPDATE &&
+           lex->sql_command != SQLCOM_DELETE) ||
+          ((lex->sql_command == SQLCOM_CREATE_TABLE ||
+            lex->sql_command == SQLCOM_INSERT_SELECT ||
+            lex->sql_command == SQLCOM_UPDATE ||
+            lex->sql_command == SQLCOM_DELETE) &&
+           tl == lex->current_query_block()->get_table_list())) {
+        my_error(ER_DBLINK_NOT_SUPPORTED_YET, MYF(0));
+        return true;
+      }
+      char create_dblink_trigger_table[300];
+      char dblink_trigger_table_name[NAME_CHAR_LEN + 1];
+      uint errcode = 0;
+      memset(create_dblink_trigger_table, 0,
+             sizeof(create_dblink_trigger_table));
+      /*
+        drop the last temptable to prevent changes to the table schema
+      */
+
+      sprintf(create_dblink_trigger_table, "DROP TEMPORARY TABLE IF EXISTS %s ",
+              tl->table_name);
+      dd::String_type drop_table(create_dblink_trigger_table,
+                                 strlen(create_dblink_trigger_table));
+      unsigned int stmt_unsafe_rollback_flags =
+          thd->get_transaction()->get_unsafe_rollback_flags(
+              Transaction_ctx::STMT);
+      if (dd::execute_query(thd, drop_table)) {
+        my_printf_error(
+            ER_UNKNOWN_ERROR,
+            "Dblink initialization  operation temporary table %s failed.",
+            MYF(0), tl->table_name);
+        return true;
+      }
+
+      /*
+        Ignore the create temporary table transaction
+      */
+      thd->get_transaction()->set_unsafe_rollback_flags(
+          Transaction_ctx::STMT, stmt_unsafe_rollback_flags);
+
+      /*
+          Create a default trigger table for dblink engines
+          If the trigger table already exists, it will not be recreated
+      */
+      memset(dblink_trigger_table_name, 0, sizeof(dblink_trigger_table_name));
+      sprintf(dblink_trigger_table_name, dblink_trigger_table,
+              thd->thread_id());
+      Table_ref tables(tl->db, tl->db_length, dblink_trigger_table_name,
+                       strlen(dblink_trigger_table_name),
+                       dblink_trigger_table_name, TL_READ);
+      TABLE *dblink_table = find_temporary_table(thd, &tables);
+      if (!dblink_table) {
+        memset(create_dblink_trigger_table, 0,
+               sizeof(create_dblink_trigger_table));
+        sprintf(create_dblink_trigger_table,
+                "CREATE TEMPORARY TABLE IF NOT EXISTS %s (ID int)  "
+                "ENGINE='%s' DEFAULT CHARSET=%s COMMENT='@%s' ",
+                dblink_trigger_table_name, plugin_name.str,
+                system_charset_info->csname, dblink_trigger_table_name);
+        dd::String_type create_dblink_table(
+            create_dblink_trigger_table, strlen(create_dblink_trigger_table));
+
+        stmt_unsafe_rollback_flags =
+            thd->get_transaction()->get_unsafe_rollback_flags(
+                Transaction_ctx::STMT);
+        if (dd::execute_query(thd, create_dblink_table)) {
+          my_printf_error(
+              ER_UNKNOWN_ERROR,
+              "Dblink initialization  operation temporary table %s failed.",
+              MYF(0), tl->table_name);
+          return true;
+        }
+
+        /*
+          Ignore the create temporary table transaction
+        */
+        thd->get_transaction()->set_unsafe_rollback_flags(
+            Transaction_ctx::STMT, stmt_unsafe_rollback_flags);
+
+        if (!(dblink_table = find_temporary_table(thd, &tables))) {
+          my_printf_error(
+              ER_UNKNOWN_ERROR,
+              "Dblink initialization  operation temporary table %s failed.",
+              MYF(0), tl->table_name);
+          return true;
+        }
+      }
+      dblink_table->dblink_name = tl->dblink_name;
+      /*
+        Trigger the dblink plugin to create a temporary table schema
+      */
+      errcode = dblink_table->file->ha_rnd_init(true);
+      if (errcode) {
+        return true;
+      }
+      dblink_table->file->ha_rnd_end();
+      /*
+        Find temptable again
+      */
+      table = find_temporary_table(thd, tl);
+      /*
+        Record dblink_name
+      */
+      if (table) table->dblink_name = tl->dblink_name;
+    } else if (table && (table->file->ht->db_type == DB_TYPE_DBLINK_DB)) {
+      if (table->dblink_name) {
+        tl->dblink_name = table->dblink_name;
+      } else
+        /*
+          Unsupport insert, alert and other commands
+        */
+        if (lex->sql_command != SQLCOM_CREATE_TABLE &&
+            lex->sql_command != SQLCOM_DROP_TABLE) {
+          my_error(ER_DBLINK_NOT_SUPPORTED_YET, MYF(0));
+          return true;
+        }
+    }
+  }
+  /*
+    Add operations such as processing dblink to trigger tables end
+  */
 
   if (!table) {
     if (tl->open_type == OT_TEMPORARY_ONLY &&
@@ -9650,27 +9848,17 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
     // Check that we don't have a field that is hidden system field. This should
     // be caught in Item_field::fix_fields.
     assert(
-        item->type() != Item::FIELD_ITEM || item->is_sequence_field() ||
+        item->type() != Item::FIELD_ITEM ||
         !static_cast<const Item_field *>(item)->field->is_hidden_by_system());
 
-    /* select returnacursor() from t1 --unallowed.
-    select returnacursor() into c1 from t1 --unallowed.
-    select returnacursor() into c1 from dual --allowed.
-    */
-    Item_func_sp *item_sp = dynamic_cast<Item_func_sp *>(item);
-    if (item_sp &&
-        dynamic_cast<Field_refcursor *>(item_sp->get_sp_result_field()) &&
-        (!dynamic_cast<Query_dumpvar *>(thd->lex->result) ||
-         (dynamic_cast<Query_dumpvar *>(thd->lex->result) &&
-          thd->lex->query_tables &&
-          // It's not function()'s table,but from table.
-          !(*thd->lex->query_tables_own_last)))) {
-      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "ref cursor used in table");
-      return true;
-    }
     if (!ref.is_null()) {
       ref[0] = item;
       ref.pop_front();
+      /*
+        Items present in ref_array have a positive reference count since
+        removal of unused columns from derived tables depends on this.
+      */
+      item->increment_ref_count();
     }
     Item *typed_item = nullptr;
     if (typed_items != nullptr && typed_it != typed_items->end()) {
@@ -9714,11 +9902,6 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
       if ((item->has_aggregation() && !(item->type() == Item::SUM_FUNC_ITEM &&
                                         !item->m_is_window_function)) ||  //(1)
           item->has_wf()) {                                               // (2)
-        if (item->this_item()->is_ora_udt_type()) {
-          my_error(ER_NOT_SUPPORTED_YET, MYF(0),
-                   "udt value in aggregate function");
-          return true;
-        }
         item->split_sum_func(thd, ref_item_array, fields);
       }
     }
@@ -10095,11 +10278,6 @@ static bool bitmap_set_bit_and_save_field(
     set_field_to_null_with_conversions()). So evaluation of this flag can't
     be moved outside of fill_record(), to be done once per statement.
   */
-  // e.g:update tabl1 set (u1)=(select name1 from tt_air where id=10)
-  if (dynamic_cast<Item_singlerow_subselect *>(value) &&
-      value->result_type() == ROW_RESULT && value->cols() == 1) {
-    value = value->element_index(0);
-  }
   if (value && value->save_in_field(rfield, false) < 0) {
     my_error(ER_UNKNOWN_ERROR, MYF(0));
     return true;
@@ -10170,6 +10348,12 @@ bool fill_record(THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
       thd->lex->sql_command != SQLCOM_UPDATE_MULTI) {
     if ((fields.size() > 1 || (table->s->fields == 1 && fields.size() == 1)) &&
         values.size() == 1 && values.at(0)->this_item()->is_ora_type()) {
+      values.at(0)->this_item()->val_udt();
+      // e.g:insert into table_of select t_air(100,'asdf')=t_air(1,1);
+      if (!values.at(0)->this_item()->get_udt_table()) {
+        my_error(ER_WRONG_VALUE_COUNT_ON_ROW, MYF(0), 1);
+        return true;
+      }
       is_udt_insert = true;
       if (values.at(0)->udt_table_store_to_table(table)) return true;
       if (table->has_gcol() && update_generated_write_fields(
@@ -10230,9 +10414,6 @@ bool fill_record(THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
   */
   assert(table->autoinc_field_has_explicit_non_null_value == false ||
          raise_autoinc_has_expl_non_null_val);
-
-  // add for GreatDB: reset sequence flag.
-  thd->lex->query_block->reset_sequence_read_flag();
 
   return thd->is_error();
 }
@@ -10689,10 +10870,6 @@ bool fill_record(THD *thd, TABLE *table, Field **ptr,
   */
   assert(table->autoinc_field_has_explicit_non_null_value == false ||
          raise_autoinc_has_expl_non_null_val);
-
-  // add for GreatDB: reset sequence flag.
-  thd->lex->query_block->reset_sequence_read_flag();
-  thd->lex->query_block->reset_rownum_read_flag();
 
   return thd->is_error();
 }

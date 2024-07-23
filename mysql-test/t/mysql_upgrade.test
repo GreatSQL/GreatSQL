@@ -113,6 +113,7 @@ SHOW GRANTS FOR u2;
 
 # remove these privielges
 REVOKE PASSWORDLESS_USER_ADMIN, AUTHENTICATION_POLICY_ADMIN ON *.* FROM root@localhost;
+REVOKE PASSWORDLESS_USER_ADMIN, AUTHENTICATION_POLICY_ADMIN ON *.* FROM 'greatdb.sys'@localhost;
 
 --let $restart_parameters = restart:--upgrade=FORCE
 --let $wait_counter= 10000
@@ -138,6 +139,7 @@ SHOW GRANTS for u34068378;
 
 # remove SENSITIVE_VARIABLES_OBSERVER from root
 REVOKE SENSITIVE_VARIABLES_OBSERVER ON *.* FROM root@localhost;
+REVOKE SENSITIVE_VARIABLES_OBSERVER ON *.* FROM 'greatdb.sys'@localhost;
 
 --let $restart_parameters = restart:--upgrade=FORCE
 --let $wait_counter= 10000

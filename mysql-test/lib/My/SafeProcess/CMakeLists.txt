@@ -38,6 +38,12 @@ ENDIF()
 # inserted into the code will segfault.
 # As a workaround, do LD_PRELOAD=/lib64/libtirpc.so
 # For dynamically linked libasan (default for gcc), we must preload that as well
+MESSAGE("==================================================")
+MESSAGE("HAVE_ASAN:${HAVE_ASAN}   TIRPC_FOUND:${TIRPC_FOUND}")
+IF (HAVE_ASAN AND NOT TIRPC_FOUND)
+  MESSAGE(FATAL_ERROR "HAVE_ASAN BUT NOT HAVE TIRPC")
+ENDIF()
+MESSAGE("==================================================")
 IF(HAVE_ASAN AND TIRPC_FOUND)
   TARGET_INCLUDE_DIRECTORIES(mysqltest_safe_process
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR})

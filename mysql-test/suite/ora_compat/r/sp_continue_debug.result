@@ -1,0 +1,84 @@
+set sql_mode=oracle;
+set @@udt_format_result='DBA';
+#
+# CONTINUE statement
+#
+#
+# create table
+#
+create table tt_air(id int,name1 varchar(100));
+insert into tt_air values(1,null);
+insert into tt_air values(2,'aabb');
+insert into tt_air values(3,'qwed');
+create table t1 (a int, b varchar(100));
+insert into t1 values(1,'aaaaa'),(2,'bbbbb'),(3,'ccccc') ;
+# Test show procedure code
+# continue in for cursor loop
+# it should pop cursors and handlers
+CREATE or replace PROCEDURE p1() as
+ret varchar(100);
+CURSOR cc IS SELECT * FROM t1 where a<3;
+CURSOR cc1 IS SELECT * FROM tt_air where id<3;
+begin
+for i in cc loop
+select i;
+for j in cc1 loop
+select j;
+continue;
+select 'after continue';
+end loop;
+end loop;
+end;
+$$
+show procedure code p1;
+Pos	Instruction
+0	set ret@0 NULL
+1	cpush_rowtype cc@0:SELECT * FROM t1 where a<3
+2	cpush_rowtype cc1@1:SELECT * FROM tt_air where id<3
+3	cursor_copy_struct cc@0 i@1
+4	copen cc@0
+5	cfetch cc@0 i@1
+6	jump_if_not 19(19) "cc"%FOUND
+7	stmt "select i"
+8	cursor_copy_struct cc1@1 j@2
+9	copen cc1@1
+10	cfetch cc1@1 j@2
+11	jump_if_not 16(16) "cc1"%FOUND
+12	stmt "select j"
+13	cfetch cc1@1 j@2
+14	continue
+15	jump 11
+16	cclose cc1@1
+17	cfetch cc@0 i@1
+18	jump 6
+19	cclose cc@0
+20	cpop 2
+call p1;
+i
+a:1 | b:aaaaa
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+call p1;
+i
+a:1 | b:aaaaa
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+i
+a:2 | b:bbbbb
+j
+id:1 | name1:NULL
+j
+id:2 | name1:aabb
+DROP PROCEDURE p1;
+drop table tt_air;
+drop table t1;

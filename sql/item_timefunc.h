@@ -2,7 +2,7 @@
 #define ITEM_TIMEFUNC_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -885,6 +885,8 @@ class Item_date_literal final : public Item_date_func {
   void cleanup() override { assert(marker == MARKER_NONE); }
   bool eq(const Item *item, bool binary_cmp) const override;
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return DATE_LITERAL_FUNC; }
+  MYSQL_TIME_cache *get_cached_time() { return &cached_time; }
 };
 
 /**
@@ -929,6 +931,7 @@ class Item_time_literal final : public Item_time_func {
   void cleanup() override { assert(marker == MARKER_NONE); }
   bool eq(const Item *item, bool binary_cmp) const override;
   Item *pq_clone(THD *thd, Query_block *select) override;
+  MYSQL_TIME_cache *get_cached_time() { return &cached_time; }
 };
 
 /**
@@ -974,6 +977,7 @@ class Item_datetime_literal final : public Item_datetime_func {
   void cleanup() override { assert(marker == MARKER_NONE); }
   bool eq(const Item *item, bool binary_cmp) const override;
   Item *pq_clone(THD *thd, Query_block *select) override;
+  MYSQL_TIME_cache *get_cached_time() { return &cached_time; }
 };
 
 /**
@@ -1124,6 +1128,7 @@ class Item_func_curdate : public Item_date_func {
     return ((func_arg->source == VGS_GENERATED_COLUMN) ||
             (func_arg->source == VGS_CHECK_CONSTRAINT));
   }
+  enum Functype functype() const override { return CURDATE_FUNC; }
 };
 
 class Item_func_curdate_local final : public Item_func_curdate {
@@ -1889,32 +1894,7 @@ class Item_func_to_timestamp final : public Item_temporal_hybrid_func {
 
 class Item_func_trunc final : public Item_func_round {
   typedef Item_func_round super;
-  typedef enum {
-    TRUNC_CENTURY = 0, /* CC,SCC: First day of the centory */
-    TRUNC_ISO_YEAR,    /* IYYY,IYY,IY,I Year containing the calendar week, as
-                          defined by the ISO 8601 standard */
-    TRUNC_YEAR,        /* SYYYY,YYYY,YEAR,SYEAR,YYY,YY,Y: Year */
-    TRUNC_QUARTER,     /* Q: Quarter */
-    TRUNC_MONTH,       /* MONTH,MON,MM,RM: Month */
-    TRUNC_ISO_WEEK, /* IW: Same day of the week as the first day of the calendar
-                       week as defined by the ISO 8601 standard, which is Monday
-                    */
-    TRUNC_WEEKDAY_YEAR, /* WW: Same day of the week as the first day of the year
-                         */
-    TRUNC_WEEKDAY_MONTH, /* W: Same day of the week as the first day of the
-                          * month
-                          */
-    TRUNC_DAY,           /* DDD,DD,J: Day */
-    TRUNC_DOW,           /* DAY,DY,D: Starting day of week */
-    TRUNC_HOUR,          /* HH,HH12,HH24: Hour */
-    TRUNC_MINUTE         /* MI: Minute */
-  } TRUNC_UNIT_TYPE;
-
-  uint16 unit_type = TRUNC_DAY;
   bool default_arg;
-  bool trunc_date = false;
-  bool get_trunc_unit_type(const String *format);
-  int strncasecmpwrap(const String *format, const char *pattern);
 
  public:
   Item_func_trunc(const POS &pos, Item *a, Item *b, bool def_arg)
@@ -1928,31 +1908,6 @@ class Item_func_trunc final : public Item_func_round {
   bool resolve_type(THD *thd) override;
   double real_op() override;
   my_decimal *decimal_op(my_decimal *decimal_value) override;
-  String *val_str(String *str) override {
-    if (trunc_date) return val_string_from_datetime(str);
-    check_trunc_number_params();
-    return (null_value ? nullptr : super::val_str(str));
-  }
-
-  double val_real() override {
-    if (trunc_date) return val_real_from_decimal();
-    check_trunc_number_params();
-    return (null_value ? 0.0 : real_op());
-  }
-
-  longlong val_int() override {
-    if (trunc_date) return val_int_from_datetime();
-    check_trunc_number_params();
-    return (null_value ? 0 : super::val_int());
-  }
-
-  my_decimal *val_decimal(my_decimal *decimal_value) override {
-    if (trunc_date) return val_decimal_from_date(decimal_value);
-    check_trunc_number_params();
-    return (null_value ? nullptr : decimal_op(decimal_value));
-  }
-
-  void check_trunc_number_params();
   longlong get_decimal_place();
 };
 

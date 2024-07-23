@@ -91,7 +91,7 @@ def populate_table(con, num_records_before, do_blob, log):
   for i in range(10):
     # We use raw data as long strings of digits were interpretted by connector as
     # a float and cast to float value of "inf".
-    w = PopulateWorker(mysql.connector.connect(user=user, host=host, port=port, db=db, ssl_disabled=True, raw=True),
+    w = PopulateWorker(mysql.connector.connect(user=user, host=host, port=port, db=db, raw=True),
                        start_id, start_id + N, i)
     start_id += N
     workers.append(w)
@@ -413,7 +413,7 @@ if  __name__ == '__main__':
     print("populate table do_blob is %d" % do_blob, file=log)
     # We use raw data as long strings of digits were interpretted by connector as
     # a float and cast to float value of "inf".
-    con = mysql.connector.connect(user=user, host=host, port=port, db=db, ssl_disabled=True, raw=True)
+    con = mysql.connector.connect(user=user, host=host, port=port, db=db, raw=True)
     if not populate_table(con, num_records_before, do_blob, log):
       sys.exit(1)
     con.close()
@@ -422,8 +422,7 @@ if  __name__ == '__main__':
     print("start the checksum thread", file=log)
     # We use raw data as long strings of digits were interpretted by connector as
     # a float and cast to float value of "inf".
-    checksum_worker = ChecksumWorker(mysql.connector.connect(user=user, host=host, port=port, db=db,
-                                                             ssl_disabled=True), checksum, raw=True)
+    checksum_worker = ChecksumWorker(mysql.connector.connect(user=user, host=host, port=port, db=db), checksum, raw=True)
     workers.append(checksum_worker)
 
   print("start %d threads" % num_workers, file=log)
@@ -431,7 +430,7 @@ if  __name__ == '__main__':
     # We use raw data as long strings of digits were interpretted by connector as
     # a float and cast to float value of "inf".
     worker = Worker(num_xactions_per_worker, i,
-                    mysql.connector.connect(user=user, host=host, port=port, db=db, ssl_disabled=True, raw=True),
+                    mysql.connector.connect(user=user, host=host, port=port, db=db, raw=True),
                     server_pid, do_blob, max_id, fake_changes, secondary_checks)
     workers.append(worker)
 

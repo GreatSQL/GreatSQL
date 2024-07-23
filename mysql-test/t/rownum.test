@@ -85,21 +85,24 @@ explain format=tree select * from t2 where ida < 8 and age < 6 and rownum < 4;
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select * from (select * from t2 where rownum <=3 ) t where age < 5;
 
-## no support.
---error 1235
 select * from t2 t1 where t1.ida in (select ida from t2 where rownum < t1.age); 
---error 1235
+
 select * from t2 t1 where t1.ida in (select ida from t2 where rownum < 5);
---error 1235
+
 select * from t2 t1 where ida in (select rownum from t2 where age < t1.age);
---error 1235
-select * from t2 t1 left join t2 on t1.ida = t2.ida and rownum < 3; 
---error 1235
+
+--error ER_NOT_SUPPORTED_YET
+select * from t2 t1 right join t2 on t1.ida = t2.ida and rownum < 3;
+--error ER_NOT_SUPPORTED_YET
+select * from t2 t1 full join t2 on t1.ida = t2.ida and rownum < 3;
+--error ER_NOT_SUPPORTED_YET
+select * from t2 t1 left join t2 on t1.ida = t2.ida and rownum < 3;
+ 
 select * from t2 t1 where exists (select rownum from t2);
---error 1235
-select * from t2 t1 where ida not in (select * from t2 where rownum < 10);
---error 1242
-select (select rownum from t2 where age = t2.age) from t2 t1;
+ 
+select * from t2 t1 where ida not in (select t2.ida from t2 where rownum < 10);
+
+select (select rownum from t2 where age = t2.age limit 1) from t2 t1;
 
 drop table t2;
 CREATE TABLE t2
@@ -171,13 +174,13 @@ insert into t1 values(3, 4);
 create table t2(ida int, age int);
 insert into t2 values(2, 5);
 
---error 1235
+
 select * from t2 where t2.ida in (select ida from t1 where rownum < 2);
---error 1235
+
 select (select ida from t1 where age = t2.age and rownum <2) a from t2;
---error 1235
+
 select (select ida from t1 where rownum < 2 union all select 1 from t1 where t2.age < 7 and rownum < 1) b from t2;
---error 1235
+
 select * from t1 where ida = (select ida from t2 where rownum < 2 and age < t1.age);
 
 select (select ida from t1 where rownum = 1) a from t2;
@@ -505,4 +508,136 @@ select rownum * id + 1, id,rownum, CUME_DIST() OVER (ORDER BY grade) cume_dist_v
 
 select rownum * id + 1, id,rownum, CUME_DIST() OVER (ORDER BY grade) cume_dist_val from student;
 
+#bugfix9522
+select rownum * id + 1, id,rownum, ROW_NUMBER() OVER (ORDER BY grade) row_num from student where rownum < 4;
+select rownum * id + 1, id,rownum, CUME_DIST() OVER (ORDER BY grade) cume_dist_val from student where rownum < 4;
+
 drop table student;
+
+## bugfix8831
+
+create table t1( col35 int,
+        col351 NUMBER(10,0),
+        col352 NUMBER(10,3),
+        col36 VARCHAR2(100),
+        col37 int);
+
+insert into t1 values(null,null,null,null,null);
+insert into t1 values(1.234,1.234,1.234, 'ooooooo', 987);
+
+create table t2( col35 int,
+        col351 NUMBER(10,0),
+        col352 NUMBER(10,3),
+        col36 VARCHAR2(100),
+        col37 int);
+insert into t2 values(2.234,1.2234,1.1234, 'ooooooro', 987);
+insert into t2 values(null,null,null,null,null);
+insert into t2 values(3.234,11.2234,1.1234, 'oeoooooro', 1987);
+
+select * from t1 INNER join  t2 
+on t1.col35<>t2.col35 or t1.col35 is not null AND rownum=2  
+where t1.col35<>t2.col35 or t1.col35 is not NULL;
+
+
+update t1 set col35 = rownum;
+select * from t1;
+
+drop table t1;
+drop table t2;
+
+#bugfix9522
+CREATE TABLE event3 (
+    name VARCHAR(20) PRIMARY KEY,
+    score INT NOT NULL,
+    team varchar(2)
+);
+
+INSERT INTO
+ event3(name, score,team)
+VALUES
+ ('Smith',81,'2'),
+ ('Jones',55,'2'),
+ ('Williams',55,'1'),
+ ('Taylor',62,'3'),
+ ('Brown',62,'2'),
+ ('Davies',84,'1'),
+ ('Evans',87,'2'),
+ ('Wilson',72,'2'),
+ ('Thomas',72,'1'),
+ ('Johnson',100,'3');
+
+select rownum,ROW_NUMBER() OVER (ORDER BY score) row_num from event3 where rownum < 8;
+
+select rownum,ROW_NUMBER() OVER () row_num from event3 where rownum < 8;
+
+drop table event3;
+
+ CREATE TABLE `employees` (
+  `EMPLOYEE_ID` int DEFAULT NULL,
+  `FIRST_NAME` varchar(20) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `LAST_NAME` varchar(25) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `EMAIL` varchar(25) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `PHONE_NUMBER` varchar(20) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `HIRE_DATE` date DEFAULT NULL,
+  `JOB_ID` varchar(10) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `SALARY` decimal(8,2) DEFAULT NULL,
+  `COMMISSION_PCT` decimal(2,2) DEFAULT NULL,
+  `MANAGER_ID` decimal(6,0) DEFAULT NULL,
+  `DEPARTMENT_ID` decimal(4,0) DEFAULT NULL
+);
+
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (147, 'Alberto', 'Errazuriz', 'AERRAZUR', '011.44.1344.429278', '2006-09-01', 'SA_MAN', 12000.00, 0.30, 100, 80);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (150, 'Peter', 'Tucker', 'PTUCKER', '011.44.1344.129268', '2009-05-01', 'SA_REP', 10000.00, 0.30, 145, 90);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (145, 'John', 'Russell', 'JRUSSEL', '011.44.1344.429268', '2005-01-05', 'SA_MAN', 14000.00, 0.40, 100, 80);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (148, 'Gerald', 'Cambrault', 'GCAMBRAU', '011.44.1344.619268', '2007-03-01', 'SA_MAN', 11000.00, 0.30, 100, 80);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (151, 'David', 'Bernstein', 'DBERNSTE', '011.44.1344.345268', '2010-07-01', 'SA_REP', 9500.00, 0.25, 145, 90);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (146, 'Karen', 'Partners', 'KPARTNER', '011.44.1344.467268', '2004-10-01', 'SA_MAN', 13500.00, 0.30, 100, 80);
+
+create table tt4 select * from employees;
+
+
+select * FROM tt4 a WHERE a.EMPLOYEE_ID IN ( SELECT link1.EMPLOYEE_ID as f1  FROM employees  link1, employees link2 
+  WHERE  link1.EMPLOYEE_ID=link2.EMPLOYEE_ID  AND link1.JOB_ID = ANY  ('SA_MAN','SA_REP')   AND rownum<=3 order by f1);
+
+--replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/  /rows=\d+(\.\.\d+\.\d+)?/rows=***/
+explain format = tree
+select * FROM tt4 a WHERE a.EMPLOYEE_ID IN ( SELECT link1.EMPLOYEE_ID as f1  FROM employees  link1, employees link2 
+  WHERE  link1.EMPLOYEE_ID=link2.EMPLOYEE_ID  AND link1.JOB_ID = ANY  ('SA_MAN','SA_REP')   AND rownum<=3 order by f1);
+
+drop table tt4;
+drop table employees;
+
+
+ CREATE TABLE `employees` (
+  `EMPLOYEE_ID` int key,
+  `FIRST_NAME` varchar(20) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `LAST_NAME` varchar(25) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `EMAIL` varchar(25) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `PHONE_NUMBER` varchar(20) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `HIRE_DATE` date DEFAULT NULL,
+  `JOB_ID` varchar(10) CHARACTER SET utf8mb3 DEFAULT NULL,
+  `SALARY` decimal(8,2) DEFAULT NULL,
+  `COMMISSION_PCT` decimal(2,2) DEFAULT NULL,
+  `MANAGER_ID` decimal(6,0) DEFAULT NULL,
+  `DEPARTMENT_ID` decimal(4,0) DEFAULT NULL
+);
+
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (147, 'Alberto', 'Errazuriz', 'AERRAZUR', '011.44.1344.429278', '2006-09-01', 'SA_MAN', 12000.00, 0.30, 100, 80);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (150, 'Peter', 'Tucker', 'PTUCKER', '011.44.1344.129268', '2009-05-01', 'SA_REP', 10000.00, 0.30, 145, 90);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (145, 'John', 'Russell', 'JRUSSEL', '011.44.1344.429268', '2005-01-05', 'SA_MAN', 14000.00, 0.40, 100, 80);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (148, 'Gerald', 'Cambrault', 'GCAMBRAU', '011.44.1344.619268', '2007-03-01', 'SA_MAN', 11000.00, 0.30, 100, 80);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (151, 'David', 'Bernstein', 'DBERNSTE', '011.44.1344.345268', '2010-07-01', 'SA_REP', 9500.00, 0.25, 145, 90);
+INSERT INTO `employees`(`EMPLOYEE_ID`, `FIRST_NAME`, `LAST_NAME`, `EMAIL`, `PHONE_NUMBER`, `HIRE_DATE`, `JOB_ID`, `SALARY`, `COMMISSION_PCT`, `MANAGER_ID`, `DEPARTMENT_ID`) VALUES (146, 'Karen', 'Partners', 'KPARTNER', '011.44.1344.467268', '2004-10-01', 'SA_MAN', 13500.00, 0.30, 100, 80);
+
+create table tt4 select * from employees;
+
+select * FROM tt4 a WHERE a.EMPLOYEE_ID IN ( SELECT link1.EMPLOYEE_ID as f1  FROM employees  link1, employees link2 
+  WHERE  link1.EMPLOYEE_ID=link2.EMPLOYEE_ID  AND link1.JOB_ID = ANY  ('SA_MAN','SA_REP')   AND rownum<=3 order by f1);
+
+--replace_regex /cost=\d+.\d+(\.\.\d+\.\d+)?/cost=***/  /rows=\d+(\.\.\d+\.\d+)?/rows=***/
+explain format = tree
+select * FROM tt4 a WHERE a.EMPLOYEE_ID IN ( SELECT link1.EMPLOYEE_ID as f1  FROM employees  link1, employees link2 
+  WHERE  link1.EMPLOYEE_ID=link2.EMPLOYEE_ID  AND link1.JOB_ID = ANY  ('SA_MAN','SA_REP')   AND rownum<=3 order by f1);
+
+drop table tt4;
+drop table employees;

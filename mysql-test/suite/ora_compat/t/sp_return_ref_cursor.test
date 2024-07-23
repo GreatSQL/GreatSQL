@@ -1297,6 +1297,11 @@ call p1();
 drop function returnacursor2;
 drop PROCEDURE p1;
 
+--error ER_NOT_SUPPORTED_YET
+insert into t1 select returnacursor(),'nam2'  from t1;
+--error ER_NOT_SUPPORTED_YET
+replace into t1  select returnacursor(),'nam2' from t1;
+
 drop procedure pro_return;
 drop function returnacursor;
 drop function returnacursor1;

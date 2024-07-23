@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -736,6 +736,10 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
           path = NewFilterAccessPath(thd, path, conds);
         }
 
+        if (query_block->counter) {
+          path = NewCounterAccessPath(thd, path, query_block->counter);
+        }
+
         // Force filesort to sort by position.
         fsort.reset(new (thd->mem_root) Filesort(
             thd, {table}, /*keep_buffers=*/false, order, limit,
@@ -803,6 +807,10 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
                                         /*count_examined_rows=*/false);
         }
 
+        if (query_block->counter) {
+          path = NewCounterAccessPath(thd, path, query_block->counter);
+        }
+
         iterator = CreateIteratorFromAccessPath(
             thd, path, /*join=*/nullptr, /*eligible_for_batch_mode=*/true);
         // Prevent cleanup in JOIN::destroy() and in the cleanup condition
@@ -855,7 +863,6 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
             error = 1; /* purecov: inspected */
             break;     /* purecov: inspected */
           }
-          lex->query_block->reset_rownum_read_flag();
           if (!--limit && using_limit) {
             error = -1;
             break;
@@ -899,6 +906,14 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
                               /*ignore_not_found_rows=*/false,
                               /*count_examined_rows=*/false);
       if (iterator == nullptr) return true; /* purecov: inspected */
+    }
+    if (query_block->counter) {
+      query_block->counter->Reset();
+      query_block->counter->Incr();
+    }
+
+    if (query_block->sequences_counter) {
+      if (query_block->sequences_counter->Reset()) return true;
     }
 
     table->file->try_semi_consistent_read(true);
@@ -986,6 +1001,12 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
 
         table->clear_partial_update_diffs();
 
+        if (query_block->sequences_counter) {
+          if (query_block->sequences_counter->Incr()) {
+            return true;
+          }
+        }
+
         store_record(table, record[1]);
         bool is_row_changed = false;
         if (fill_record_n_invoke_before_triggers(
@@ -994,8 +1015,6 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
           error = 1;
           break;
         }
-        lex->query_block->reset_sequence_read_flag();
-        thd->lex->query_block->reset_rownum_read_flag();
         found_rows++;
 
         if (is_row_changed) {
@@ -1151,6 +1170,13 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
         if (thd->is_error()) {
           error = 1;
           break;
+        }
+
+        if (query_block->counter) {
+          if (query_block->counter->Incr()) {
+            error = 1;
+            break;
+          }
         }
       }
     }
@@ -1641,6 +1667,8 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
 
   thd->want_privilege = SELECT_ACL;
   enum enum_mark_columns mark_used_columns_saved = thd->mark_used_columns;
+  auto grd = create_scope_guard(
+      [&]() { thd->mark_used_columns = mark_used_columns_saved; });
   thd->mark_used_columns = MARK_COLUMNS_READ;
   if (select->derived_table_count || select->table_func_count) {
     /*
@@ -1941,13 +1969,6 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
                    Ref_item_array(), true, false))
     return true; /* purecov: inspected */
 
-  if (select->setup_sequence_func(
-          thd, const_cast<mem_root_deque<Item *> *>(update_value_list))) {
-    return true;
-  }
-
-  thd->mark_used_columns = mark_used_columns_saved;
-
   if (select->resolve_limits(thd)) return true;
 
   if (!multitable) {
@@ -2083,10 +2104,7 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
       return true;
     }
   }
-  if (multitable && select->has_sequence) {
-    my_error(ER_GDB_SEQUENCE_POSITION, MYF(0), "");
-    return true;
-  }
+
   if (select->order_list.first) {
     mem_root_deque<Item *> fields(thd->mem_root);
     if (setup_order(thd, select->base_ref_items, table_list, &fields,

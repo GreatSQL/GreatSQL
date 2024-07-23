@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -7811,7 +7811,17 @@ void handler::set_end_range(const key_range *range,
 int handler::compare_key(key_range *range) {
   int cmp;
   if (!range || in_range_check_pushed_down) return 0;  // No max range
-  cmp = key_cmp(range_key_part, range->key, range->length);
+  /*
+    In MODE_EMPTYSTRING_EQUAL_NULL mode, the range comparison range uses the
+    original value of the data.
+  */
+  if (current_thd->variables.sql_mode & MODE_EMPTYSTRING_EQUAL_NULL) {
+    const sql_mode_t orig_sql_mode = current_thd->variables.sql_mode;
+    current_thd->variables.sql_mode &= ~(MODE_EMPTYSTRING_EQUAL_NULL);
+    cmp = key_cmp(range_key_part, range->key, range->length);
+    current_thd->variables.sql_mode = orig_sql_mode;
+  } else
+    cmp = key_cmp(range_key_part, range->key, range->length);
   if (!cmp) cmp = key_compare_result_on_equal;
   return cmp;
 }
@@ -8337,6 +8347,7 @@ int handler::ha_write_row(uchar *buf) {
                   return HA_ERR_INTERNAL_ERROR;);
   DBUG_EXECUTE_IF("simulate_storage_engine_out_of_memory",
                   return HA_ERR_SE_OUT_OF_MEMORY;);
+
   mark_trx_read_write();
 
   DBUG_EXECUTE_IF(

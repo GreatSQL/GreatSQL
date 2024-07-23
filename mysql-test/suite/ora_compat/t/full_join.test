@@ -24,6 +24,7 @@ select * from t1 full join (t2 full join t3 on t2.c1=t3.c1) on t1.c1=t3.c1;
 select * from t1 full join (t2 full join t3 on t2.c1=t3.c1) on t1.c1=t2.c1 where t2.c1 = 1;
 
 --echo explain json test
+--replace_regex /(_cost": )"[0-9.]+"/\1"#"/ /(per_join": )"[0-9]+"/\1"#"/ /(per_scan": )[0-9]+/\1"#"/ /(per_join": )[0-9]+/\1"#"/
 explain format=json select * from t1 full join t2 on t1.c1=t2.c1;
 
 --echo
@@ -269,10 +270,21 @@ select t1.c, t1.b, t2.a from t1 full join (t2 full join t4 on b + 1 = y) on t1.c
 create algorithm=merge view v2b as
 select t1.c as b, t1.b as a, t2.a as c
 from t1 join (t2 full join t4 on b + 1 = y) on t1.c = t4.c;
+
 --sorted_result
 select * from v2a;
 --sorted_result
 select * from v2b;
+
+# bugfix9170: result set should be same as 'select * from v2a;'
+--sorted_result
+select t1.c, t1.b, t2.a from t1 full join (t2 full join t4 on b + 1 = y) on t1.c = t4.c;
+
+# bugfix9170: result set should be same as 'select * from v2b;'
+--sorted_result
+select t1.c as b, t1.b as a, t2.a as c from t1 join (t2 full join t4 on b + 1 = y) on t1.c = t4.c;
+
+
 drop view v2a;
 drop view v2b;
 
@@ -499,6 +511,7 @@ create table t1(c1 int);
 create table t2(c1 int);
 insert into t1 values (146),(150),(151);
 insert into t2 values (145);
+--replace_regex /cost=\d+\.\d+\ rows=\d+/cost=* rows=*/
 explain format=tree SELECT * FROM (SELECT * FROM t1 WHERE c1 IN (146,150,151)) t1
 FULL JOIN t2
 ON t1.c1=t2.c1
@@ -511,6 +524,7 @@ WHERE t1.c1 IS NOT NULL;
 
 alter table t1 add primary key(c1);
 
+--replace_regex /cost=\d+\.\d+\ rows=\d+/cost=* rows=*/
 explain format=tree SELECT * FROM (SELECT * FROM t1 WHERE c1 IN (146,150,151)) t1
 FULL JOIN t2
 ON t1.c1=t2.c1
@@ -548,3 +562,7 @@ WHERE b.job_id <> 'SA_REP'  AND b.EMPLOYEE_ID  IN ( SELECT a.EMPLOYEE_ID FROM  e
 SELECT cte1.EMPLOYEE_ID,cte1.FIRST_NAME,cte2.HIRE_DATE FROM cte1  FULL JOIN cte2 ON cte1.EMPLOYEE_ID=cte2.EMPLOYEE_ID WHERE cte1.EMPLOYEE_ID IS NULL ;
 
 DROP TABLE employees;
+
+# bugfix9560
+select STATEMENT_DIGEST_TEXT('SELECT * FROM t1 full join t2 on true');
+select STATEMENT_DIGEST_TEXT('SELECT * FROM t1 full outer join t2 on true');

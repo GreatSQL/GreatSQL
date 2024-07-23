@@ -1,5 +1,5 @@
 /* Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -549,7 +549,9 @@ class sp_instr_set : public sp_lex_instr {
         m_value_item(value_item),
         m_value_query(value_query),
         m_pcont(ctx),
-        m_rcontext_handler(rh) {}
+        m_rcontext_handler(rh) {
+    m_lex->is_include_udt_table_item = false;
+  }
 
   /////////////////////////////////////////////////////////////////////////
   // sp_printable implementation.
@@ -605,6 +607,32 @@ class sp_instr_set : public sp_lex_instr {
 };
 
 /*
+  This class used for item_field_row to do row_create_items().
+  e.g:type tklist is table of cursor%rowtype
+  it can't get the structure of cursor when sp_rcontext->init_var_items,
+  so does row_create_items() until open the cursor.
+*/
+class sp_instr_setup_row_field : public sp_instr {
+  sp_instr_setup_row_field(
+      const sp_instr_setup_row_field &);  // Prevent use of this
+  void operator=(sp_instr_setup_row_field &);
+  sp_variable *m_spv;
+
+ public:
+  sp_instr_setup_row_field(uint ip, sp_pcontext *ctx, sp_variable *spv)
+      : sp_instr(ip, ctx), m_spv(spv) {}
+
+  bool execute(THD *thd, uint *nextp) override;
+  void print(const THD *thd, String *str) override;
+
+#ifdef HAVE_PSI_INTERFACE
+ public:
+  static PSI_statement_info psi_info;
+  PSI_statement_info *get_psi_info() override { return &psi_info; }
+#endif
+};
+
+/*
   This class sets values to a ROW fields:
   type stu_record is record(
     id    int := 1,
@@ -631,12 +659,6 @@ class sp_instr_set_row_field : public sp_instr_set {
   bool exec_core(THD *thd, uint *nextp) override;
 
   void print(const THD *thd, String *str) override;
-
-#ifdef HAVE_PSI_INTERFACE
- public:
-  static PSI_statement_info psi_info;
-  PSI_statement_info *get_psi_info() override { return &psi_info; }
-#endif
 };
 
 /**
@@ -1404,6 +1426,28 @@ class sp_instr_goto : public sp_instr {
 
 ///////////////////////////////////////////////////////////////////////////
 
+class sp_instr_continue : public sp_instr_goto {
+ public:
+  sp_instr_continue(uint ip, sp_pcontext *ctx) : sp_instr_goto(ip, ctx) {}
+
+  /////////////////////////////////////////////////////////////////////////
+  // sp_printable implementation.
+  /////////////////////////////////////////////////////////////////////////
+
+  void print(const THD *, String *str) override {
+    str->append(STRING_WITH_LEN("continue"));
+  }
+
+#ifdef HAVE_PSI_INTERFACE
+ public:
+  PSI_statement_info *get_psi_info() override { return &psi_info; }
+
+  static PSI_statement_info psi_info;
+#endif
+};
+
+///////////////////////////////////////////////////////////////////////////
+
 class sp_instr_hreturn : public sp_instr_jump {
  public:
   sp_instr_hreturn(uint ip, sp_pcontext *ctx);
@@ -1466,7 +1510,8 @@ class sp_instr_cpush : public sp_lex_instr {
       : sp_lex_instr(ip, ctx, cursor_lex, true),
         m_cursor_query(cursor_query),
         m_valid(true),
-        m_cursor_idx(cursor_idx) {
+        m_cursor_idx(cursor_idx),
+        is_copy_struct(false) {
     /*
       Cursors cause queries to depend on external state, so they are
       noncacheable.
@@ -1505,11 +1550,6 @@ class sp_instr_cpush : public sp_lex_instr {
     return false;
   }
 
-  bool copy_structure(THD *thd, sp_cursor *c, uint *nextp);
-
-  bool copy_structure_from_other_cursor(THD *thd, uint *nextp,
-                                        sp_cursor *c_return, sp_cursor *c);
-
  protected:
   /// This attribute keeps the cursor SELECT statement.
   LEX_CSTRING m_cursor_query;
@@ -1520,6 +1560,9 @@ class sp_instr_cpush : public sp_lex_instr {
 
   /// Used to identify the cursor in the sp_rcontext.
   int m_cursor_idx;
+
+  /// It's for copy struct(true) or open cursor(false).
+  bool is_copy_struct;
 
 #ifdef HAVE_PSI_INTERFACE
  public:
@@ -1533,9 +1576,7 @@ class sp_instr_cpush_rowtype : public sp_instr_cpush {
  public:
   sp_instr_cpush_rowtype(uint ip, sp_pcontext *ctx, LEX *cursor_lex,
                          LEX_CSTRING cursor_query, int cursor_idx)
-      : sp_instr_cpush(ip, ctx, cursor_lex, cursor_query, cursor_idx),
-        is_copy_struct(false),
-        m_var(-1) {
+      : sp_instr_cpush(ip, ctx, cursor_lex, cursor_query, cursor_idx) {
     /*
       Cursors cause queries to depend on external state, so they are
       noncacheable.
@@ -1555,18 +1596,8 @@ class sp_instr_cpush_rowtype : public sp_instr_cpush {
 
   bool exec_core(THD *thd, uint *nextp) override;
 
-  /////////////////////////////////////////////////////////////////////////
-  // var offset of %ROWTYPE,for export_structure.
-  /////////////////////////////////////////////////////////////////////////
-  void set_var(int var_offset) { m_var = var_offset; }
-
-  int get_var() { return m_var; }
-
-  /// It's for copy struct(true) or open cursor(false).
-  bool is_copy_struct;
-
- private:
-  int m_var;  // for cursor%rowtype
+  bool copy_structure_from_return(THD *thd, sp_cursor *c,
+                                  List<Create_field> *defs_c);
 
 #ifdef HAVE_PSI_INTERFACE
  public:

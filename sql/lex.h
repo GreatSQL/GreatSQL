@@ -2,7 +2,7 @@
 #define LEX_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -103,6 +103,7 @@ static const SYMBOL symbols[] = {
     {SYM("AVG", AVG_SYM)},
     {SYM("AVG_ROW_LENGTH", AVG_ROW_LENGTH)},
     {SYM("BACKUP", BACKUP_SYM)},
+    {SYM("BASED", BASED_SYM)},
     {SYM("BEFORE", BEFORE_SYM)},
     {SYM("BEGIN", BEGIN_SYM)},
     {SYM("BETWEEN", BETWEEN_SYM)},
@@ -774,6 +775,7 @@ static const SYMBOL symbols[] = {
     {SYM("SSL", SSL_SYM)},
     {SYM("STACKED", STACKED_SYM)},
     {SYM("START", START_SYM)},
+    {SYM("START_LSN", START_LSN_SYM)},
     {SYM("STARTING", STARTING)},
     {SYM("STARTS", STARTS_SYM)},
     {SYM("STATS_AUTO_RECALC", STATS_AUTO_RECALC_SYM)},
@@ -822,6 +824,7 @@ static const SYMBOL symbols[] = {
     {SYM("TINYTEXT", TINYTEXT_SYN)},
     {SYM("TLS", TLS_SYM)},
     {SYM("TO", TO_SYM)},
+    {SYM("TRACK", TRACK_SYM)},
     {SYM("TRAILING", TRAILING)},
     {SYM("TRANSACTION", TRANSACTION_SYM)},
     {SYM("TRIGGER", TRIGGER_SYM)},

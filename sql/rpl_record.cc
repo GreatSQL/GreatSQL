@@ -1,4 +1,5 @@
 /* Copyright (c) 2007, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -167,9 +168,8 @@ static void pack_field(uchar **pack_ptr, Field *field, size_t rec_offset,
   and it fails to apply the diff.  The error has already been reported
   through my_error.
 */
-static bool unpack_field(const uchar **pack_ptr, Field *field, uint metadata,
-                         enum_row_image_type row_image_type,
-                         bool is_partial_column) {
+bool unpack_field(const uchar **pack_ptr, Field *field, uint metadata,
+                  enum_row_image_type row_image_type, bool is_partial_column) {
   DBUG_TRACE;
   /*
     For a virtual generated column based on the blob type, we have to keep both

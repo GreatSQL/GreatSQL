@@ -1,0 +1,1 @@
+../../../../sql/data_mask/sys_masking.sql

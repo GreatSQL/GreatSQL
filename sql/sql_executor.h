@@ -3,7 +3,7 @@
 
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -293,7 +293,6 @@ class QEP_TAB : public QEP_shared_owner {
         rematerialize(false),
         not_used_in_distinct(false),
         having(nullptr),
-        connect_by(nullptr),
         tmp_table_param(nullptr),
         filesort(nullptr),
         ref_item_slice(REF_SLICE_SAVED_BASE),
@@ -448,8 +447,6 @@ class QEP_TAB : public QEP_shared_owner {
   /** HAVING condition for checking prior saving a record into tmp table*/
   Item *having;
 
-  Connect_by_param *connect_by;
-
   // Operation between the previous QEP_TAB and this one.
   enum enum_op_type {
     // Regular nested loop.
@@ -463,7 +460,6 @@ class QEP_TAB : public QEP_shared_owner {
     OT_AGGREGATE_THEN_MATERIALIZE,
     OT_AGGREGATE_INTO_TMP_TABLE,
     OT_WINDOWING_FUNCTION,
-    OT_CONNECT_BY,
 
     // Block-nested loop (rewritten to hash join).
     OT_BNL,

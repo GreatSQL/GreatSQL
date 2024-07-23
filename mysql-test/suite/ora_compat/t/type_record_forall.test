@@ -1526,7 +1526,7 @@ call p1;
 drop procedure p1;
 
 --echo #
---echo # test of error ER_SP_MISMATCH_RECORD_VAR
+--echo # test of error ER_UDT_INCONS_DATATYPES
 --echo #
 
 DELIMITER $$;
@@ -1547,12 +1547,12 @@ begin
 end;
 $$
 DELIMITER ;$$
---error ER_SP_MISMATCH_RECORD_VAR
+--error ER_UDT_INCONS_DATATYPES
 call p1;
 drop procedure p1;
 
 --echo #
---echo # test of error ER_SP_MISMATCH_RECORD_VAR
+--echo # test of error ER_UDT_INCONS_DATATYPES
 --echo #
 
 DELIMITER $$;
@@ -1573,7 +1573,7 @@ begin
 end;
 $$
 DELIMITER ;$$
---error ER_SP_MISMATCH_RECORD_VAR
+--error ER_UDT_INCONS_DATATYPES
 call p1;
 drop procedure p1;
 
@@ -1677,7 +1677,7 @@ begin
 end;
 $$
 DELIMITER ;$$
---error ER_UDT_INCONS_DATATYPES
+--error ER_WRONG_UDT_DATA_TYPE
 call p1;
 drop procedure p1;
 

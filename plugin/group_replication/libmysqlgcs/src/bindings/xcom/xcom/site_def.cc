@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -196,11 +196,12 @@ site_def const *find_site_def(synode_no synode) {
   site_def const *retval = nullptr;
   u_int i;
 
-  for (i = 0; i < site_defs.count; i++)
+  for (i = 0; i < site_defs.count; i++) {
     if (match_def(site_defs.site_def_ptr_array_val[i], synode)) {
       retval = site_defs.site_def_ptr_array_val[i];
       break;
     }
+  }
   assert(!retval ||
          retval->global_node_set.node_set_len == _get_maxnodes(retval));
   return retval;
@@ -278,6 +279,8 @@ void garbage_collect_site_defs(synode_no x) {
     IFDBG(D_NONE, NDBG(i, d); PTREXP(site_defs.site_def_ptr_array_val[i]););
     if (site) {
       IFDBG(D_NONE, SYCEXP(site->start); SYCEXP(site->boot_key););
+      G_INFO("free_site_def site:%p, x.msgno:%lu, x.node:%d", site, x.msgno,
+             x.node);
       free_site_def(site);
       site_defs.site_def_ptr_array_val[i] = nullptr;
     }
@@ -296,6 +299,7 @@ char *dbg_site_def(site_def const *site) {
 site_def *new_site_def() {
   site_def *retval = (site_def *)xcom_calloc((size_t)1, sizeof(site_def));
   retval->nodeno = VOID_NODE_NO;
+  G_INFO("new_site_def, new:%p", retval);
   return retval;
 }
 
@@ -324,6 +328,7 @@ leader_array clone_leader_array(leader_array const x) {
 
 site_def *clone_site_def(site_def const *site) {
   site_def *retval = new_site_def();
+  G_INFO("clone_site_def, new:%p,old site:%p", retval, site);
   assert(site->global_node_set.node_set_len == _get_maxnodes(site));
   *retval = *site;
   init_node_list(site->nodes.node_list_len, site->nodes.node_list_val,
@@ -371,6 +376,7 @@ void init_site_def(u_int n, node_address *names, site_def *site) {
 
 /* Add nodes to site definition, avoid duplicates */
 void add_site_def(u_int n, node_address *names, site_def *site) {
+  G_INFO("add_site_def n:%u, site:%p", n, site);
   if (n > 0) {
     add_node_list(n, names, &site->nodes);
   }
@@ -380,6 +386,7 @@ void add_site_def(u_int n, node_address *names, site_def *site) {
 
 /* Remove nodes from site definition, ignore missing nodes */
 void remove_site_def(u_int n, node_address *names, site_def *site) {
+  G_INFO("remove_site_def n:%u, site:%p", n, site);
   if (n > 0) {
     remove_node_list(n, names, &site->nodes);
     realloc_node_set(&site->global_node_set, _get_maxnodes(site));
@@ -414,8 +421,10 @@ static inline node_no _get_nodeno(site_def const *site) {
   if (site) {
     assert(site->global_node_set.node_set_len == _get_maxnodes(site));
     return site->nodeno;
-  } else
+  } else {
+    G_INFO("_get_nodeno return VOID_NODE_NO");
     return VOID_NODE_NO;
+  }
 }
 
 /* purecov: begin deadcode */

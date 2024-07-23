@@ -1232,3 +1232,70 @@ a	1 row
 1	1 row
 drop table zgh1;
 drop table zgh2;
+# test MYSQL_DUMP
+set sql_mode=oracle;
+create table bonuses (employee_id number(10,0), bonus number(10,2) default 100);
+insert into bonuses values(111,111);
+insert into bonuses values(222,222);
+select * from bonuses;
+employee_id	bonus
+111	111
+222	222
+create global temporary table tmp_bonuses(employee_id int,bonus decimal(10,2) ) on commit preserve rows ;
+insert into tmp_bonuses select employee_id,bonus from bonuses;
+select * from tmp_bonuses;
+employee_id	bonus
+111	111
+222	222
+create temporary table t_t1 (select * from bonuses);
+select * from t_t1;
+employee_id	bonus
+111	111
+222	222
+drop table bonuses;
+drop table tmp_bonuses;
+drop table t_t1;
+show tables;
+Tables_in_test
+show tables;
+Tables_in_test
+bonuses
+tmp_bonuses
+select * from bonuses;
+employee_id	bonus
+111	111
+222	222
+select * from tmp_bonuses;
+employee_id	bonus
+insert into tmp_bonuses select employee_id,bonus from bonuses;
+select * from tmp_bonuses;
+employee_id	bonus
+111	111
+222	222
+select * from t_t1;
+ERROR 42S02: Table 'test.t_t1' doesn't exist
+drop table bonuses;
+drop table tmp_bonuses;
+# global temp table in insert statement without CREATE TEMPORARY TABLES privilege
+SET SQL_MODE=oracle;
+CREATE GLOBAL TEMPORARY TABLE gt_t(a int, b int, c int) ON COMMIT PRESERVE ROWS;
+CREATE USER 'user_test' IDENTIFIED BY '123';
+GRANT SELECT,INSERT,UPDATE,DELETE,EXECUTE,DROP,CREATE,CREATE ROUTINE,CREATE VIEW ON test.* TO user_test;
+FLUSH PRIVILEGES;
+SET SQL_MODE=oracle;
+INSERT INTO gt_t VALUES(1, 1, 1), (2, 1, 2), (3, 2, 1), (4, 2, 2), (5, 3, 1), (6, 3, 2);
+ERROR 42000: Access denied for user 'user_test'@'%' to database 'test'
+GRANT CREATE TEMPORARY TABLES ON test.* TO user_test;
+FLUSH PRIVILEGES;
+SET SQL_MODE=oracle;
+INSERT INTO gt_t VALUES(1, 1, 1), (2, 1, 2), (3, 2, 1), (4, 2, 2), (5, 3, 1), (6, 3, 2);
+SELECT * FROM gt_t;
+a	b	c
+1	1	1
+2	1	2
+3	2	1
+4	2	2
+5	3	1
+6	3	2
+DROP TABLE gt_t;
+DROP USER user_test;

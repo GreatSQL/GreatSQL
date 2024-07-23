@@ -2,7 +2,7 @@
 #define SQL_ITERATORS_COMPOSITE_ITERATORS_H_
 
 /* Copyright (c) 2018, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -888,10 +888,16 @@ class AppendIterator final : public RowIterator {
   bool m_pfs_batch_mode_enabled = false;
 };
 
-class RownumFilterIterator final : public RowIterator {
+class CounterItem;
+
+class CounterIterator final : public RowIterator {
+  unique_ptr_destroy_only<RowIterator> m_source;
+  CounterItem *m_counter;
+
  public:
-  RownumFilterIterator(THD *thd, unique_ptr_destroy_only<RowIterator> source,
-                       Item *condition, Item_func_rownum *rownum_func);
+  CounterIterator(THD *thd, unique_ptr_destroy_only<RowIterator> source,
+                  CounterItem *counter)
+      : RowIterator(thd), m_source(std::move(source)), m_counter(counter) {}
 
   bool Init() override;
 
@@ -906,25 +912,6 @@ class RownumFilterIterator final : public RowIterator {
     m_source->EndPSIBatchModeIfStarted();
   }
   void UnlockRow() override { m_source->UnlockRow(); }
-
- private:
-  bool init_variables();
-
- private:
-  unique_ptr_destroy_only<RowIterator> m_source;
-  Item *m_condition;
-  Item_func_rownum *m_base_rownum;
-  /**
-   * stop fetch row from child when not matched. Default is true,
-   * we think rownum compare with const value, like rownum< 10.
-   * False when there are variables factors in m_condition, such as where
-   * rownum < field, (case when rownum < 10 then 1 else 0 end)<10 and so on.
-   **/
-  bool stopkey{true};
-  /**
-   * if this is the first init, if true,
-   * call init_variables() to init stopkey and m_rownums.
-   * */
-  bool first_init{true};
 };
+
 #endif  // SQL_ITERATORS_COMPOSITE_ITERATORS_H_

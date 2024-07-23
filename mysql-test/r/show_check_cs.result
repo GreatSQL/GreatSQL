@@ -159,7 +159,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_audit
 test
 show databases like "test%";
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr

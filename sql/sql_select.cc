@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -130,6 +130,8 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_lock.h"
+
+#include "sql/secondary_engine_inc_load_task.h"
 
 using std::max;
 using std::min;
@@ -540,15 +542,11 @@ bool Sql_cmd_dml::execute(THD *thd) {
        item, recheck version and do re-prepare if not pass */
     {
       auto *qb = thd->lex->current_query_block();
-      if (qb && qb->has_sequence) {
-        for (auto *item_func : qb->sequence_funcs) {
-          assert(item_func != nullptr);
-          auto *item_seq_func = pointer_cast<Item_func_sequence *>(item_func);
-          if (item_seq_func->recheck_sequence_version(thd)) {
-            ask_to_reprepare(thd);
-            close_thread_tables(thd);
-            goto err;
-          }
+      if (qb && qb->sequences_counter) {
+        if (qb->sequences_counter->check_sequence_version(thd)) {
+          ask_to_reprepare(thd);
+          close_thread_tables(thd);
+          goto err;
         }
       }
     }
@@ -567,6 +565,12 @@ bool Sql_cmd_dml::execute(THD *thd) {
       if (result->prepare(thd, *unit->get_unit_column_types(), unit)) goto err;
       m_lazy_result = false;
     }
+  }
+
+  // for cursor%rowtype,only want structure but not execute_inner.
+  if (lex->is_cursor_get_structure) {
+    lex->set_exec_started();
+    goto err;
   }
 
   if (validate_use_secondary_engine(lex)) goto err;
@@ -646,7 +650,7 @@ bool Sql_cmd_dml::execute(THD *thd) {
   return false;
 
 err:
-  assert(thd->is_error() || thd->killed);
+  assert(thd->is_error() || thd->killed || lex->is_cursor_get_structure);
   DBUG_PRINT("info", ("report_error: %d", thd->is_error()));
   THD_STAGE_INFO(thd, stage_end);
 
@@ -664,7 +668,7 @@ err:
 
   // Abort and cleanup the result set (if it has been prepared).
   if (result != nullptr) {
-    result->abort_result_set(thd);
+    if (!lex->is_cursor_get_structure) result->abort_result_set(thd);
     result->cleanup();
   }
   if (error_handler_active) thd->pop_internal_handler();
@@ -754,6 +758,22 @@ static bool retry_with_secondary_engine(THD *thd) {
       oto.add("threshold", thd->variables.secondary_engine_cost_threshold);
     }
     return false;
+  }
+
+  {
+    Table_ref *tables = thd->lex->query_block->m_table_list.first;
+    for (; tables; tables = tables->next_global) {
+      auto ret = can_read_from_secondary_engine(
+          tables->table, tables->db, tables->table_name,
+          thd->variables.secondary_engine_read_delay_time_threshold,
+          thd->variables.secondary_engine_read_delay_gtid_threshold,
+          thd->variables.secondary_engine_read_delay_wait_timeout,
+          thd->variables.secondary_engine_read_delay_wait_mode,
+          thd->variables.secondary_engine_read_delay_level);
+      if (ret != SECONDARY_ENGINE_OK_TO_READ) {
+        return false;
+      }
+    }
   }
 
   return true;
@@ -1806,6 +1826,10 @@ void JOIN::destroy() {
       JOIN_TAB *const tab = join_tab ? &join_tab[i] : best_ref[i];
       tab->cleanup();
     }
+  }
+  if (connect_by_param) {
+    ::destroy(connect_by_param);
+    connect_by_param = nullptr;
   }
 
   /*
@@ -2865,6 +2889,7 @@ void QEP_TAB::push_index_cond(const JOIN_TAB *join_tab, uint keyno,
        than on a non-clustered key. This restriction should be
        re-evaluated when WL#6061 is implemented.
     7. The index on virtual generated columns is not supported for ICP.
+    8. Range scan and MODE_EMPTYSTRING_EQUAL_NULL mode not use index tree
   */
   if (condition() &&
       tbl->file->index_flags(keyno, 0, true) & HA_DO_INDEX_COND_PUSHDOWN &&
@@ -2874,7 +2899,8 @@ void QEP_TAB::push_index_cond(const JOIN_TAB *join_tab, uint keyno,
       join_->thd->lex->sql_command != SQLCOM_DELETE_MULTI &&
       !has_guarded_conds() && type() != JT_CONST && type() != JT_SYSTEM &&
       !(keyno == tbl->s->primary_key &&
-        tbl->file->primary_key_is_clustered())) {
+        tbl->file->primary_key_is_clustered()) &&
+      (!(current_thd->variables.sql_mode & MODE_EMPTYSTRING_EQUAL_NULL))) {
     if (do_parallel_scan) {
       has_pq_cond = true;
       pq_cond = condition()->pq_clone(join_->thd, join_->query_block);
@@ -3431,8 +3457,7 @@ void QEP_TAB::cleanup(bool is_free) {
     if (op_type == QEP_TAB::OT_MATERIALIZE ||
         op_type == QEP_TAB::OT_AGGREGATE_THEN_MATERIALIZE ||
         op_type == QEP_TAB::OT_AGGREGATE_INTO_TMP_TABLE ||
-        op_type == QEP_TAB::OT_WINDOWING_FUNCTION ||
-        op_type == QEP_TAB::OT_CONNECT_BY) {
+        op_type == QEP_TAB::OT_WINDOWING_FUNCTION) {
       // free only tmp table
       if (old_t != nullptr) {
         close_tmp_table(old_t);
@@ -3447,10 +3472,7 @@ void QEP_TAB::cleanup(bool is_free) {
 
       destroy(tmp_table_param);
       tmp_table_param = nullptr;
-      if (connect_by != nullptr) {
-        destroy(connect_by);
-        connect_by = nullptr;
-      }
+
     } else {
       if (t != nullptr && old_t != nullptr &&
           t->s->table_category == TABLE_CATEGORY_TEMPORARY) {
@@ -4982,9 +5004,6 @@ bool JOIN::make_tmp_tables_info() {
             free_tmp_table(table);
             qep_tab[table_idx].set_table(nullptr);
           }
-          if (qep_tab[table_idx].connect_by) {
-            ::destroy(qep_tab[table_idx].connect_by);
-          }
         }
       });
 
@@ -5031,39 +5050,24 @@ bool JOIN::make_tmp_tables_info() {
     tmp_table_param->precomputed_group_by =
         !is_agg_loose_index_scan(qep_tab[0].range_scan());
 
-  if (qep_tab && connect_by_cond) {
-    curr_tmp_table = primary_tables;
-    if (plan_is_const()) {
-      curr_tmp_table += 1;
-      tmp_tables++;
-    }
-
-    Opt_trace_object trace_this_outer(trace);
-    trace_this_outer.add("adding_tmp_table_in_plan_at_position",
-                         curr_tmp_table);
-    tmp_tables++;
-
+  if (connect_by_cond) {
     /*
-    Make a copy of the base slice in the save slice.
-    This is needed because later steps will overwrite the base slice with
-    another slice (1-3 or window slice).
-    After this slice has been used, overwrite the base slice again with
-    the copy in the save slice.
+      Make a copy of the base slice in the save slice.
+      This is needed because later steps will overwrite the base slice with
+      another slice (1-3 or window slice).
+      After this slice has been used, overwrite the base slice again with
+      the copy in the save slice.
     */
     if (alloc_ref_item_slice(thd, REF_SLICE_SAVED_BASE)) return true;
-
     copy_ref_item_slice(REF_SLICE_SAVED_BASE, REF_SLICE_ACTIVE);
     current_ref_item_slice = REF_SLICE_SAVED_BASE;
 
     tmp_table_param->hidden_field_count = CountHiddenFields(*fields);
-    if (SetupConnectByTmp(thd, this, curr_tmp_table, curr_fields,
-                          *tmp_table_param)) {
+
+    if (SetupConnectByTmp(thd, this, curr_fields, *tmp_table_param)) {
       return true;
     }
-    curr_fields = &tmp_fields[REF_SLICE_CONNECT_BY_RES];
-    set_ref_item_slice(REF_SLICE_CONNECT_BY_RES);
-    qep_tab[curr_tmp_table].ref_item_slice = REF_SLICE_CONNECT_BY_RES;
-    setup_tmptable_write_func(&qep_tab[curr_tmp_table], &trace_this_outer);
+    curr_fields = &connect_by_param->stack->fields;
   }
 
   /*
@@ -5071,32 +5075,27 @@ bool JOIN::make_tmp_tables_info() {
     if the sort is too complicated to be evaluated as a filesort.
   */
   if (need_tmp_before_win) {
-    Opt_trace_object trace_this_outer(trace);
+    curr_tmp_table = primary_tables;
+    if (ref_items[REF_SLICE_SAVED_BASE].is_null()) {
+      /*
+       Make a copy of the base slice in the save slice.
+       This is needed because later steps will overwrite the base slice with
+       another slice (1-3 or window slice).
+       After this slice has been used, overwrite the base slice again with
+       the copy in the save slice.
+       */
+      if (alloc_ref_item_slice(thd, REF_SLICE_SAVED_BASE)) return true;
 
-    if (!tmp_tables) {
-      curr_tmp_table = primary_tables;
-      trace_this_outer.add("adding_tmp_table_in_plan_at_position",
-                           curr_tmp_table);
-      tmp_tables++;
-      if (ref_items[REF_SLICE_SAVED_BASE].is_null()) {
-        /*
-          Make a copy of the base slice in the save slice.
-          This is needed because later steps will overwrite the base slice with
-          another slice (1-3).
-          After this slice has been used, overwrite the base slice again with
-          the copy in the save slice.
-        */
-        if (alloc_ref_item_slice(thd, REF_SLICE_SAVED_BASE)) return true;
-
-        copy_ref_item_slice(REF_SLICE_SAVED_BASE, REF_SLICE_ACTIVE);
-        current_ref_item_slice = REF_SLICE_SAVED_BASE;
-      }
-    } else {
-      curr_tmp_table++;
-      trace_this_outer.add("adding_tmp_table_in_plan_at_position",
-                           curr_tmp_table);
-      tmp_tables++;
+      copy_ref_item_slice(REF_SLICE_SAVED_BASE, REF_SLICE_ACTIVE);
+      current_ref_item_slice = REF_SLICE_SAVED_BASE;
     }
+
+    tmp_tables++;
+
+    Opt_trace_object trace_this_outer(trace);
+    trace_this_outer.add("adding_tmp_table_in_plan_at_position",
+                         curr_tmp_table);
+
     /*
       Create temporary table for use in a single execution.
       (Will be reused if this is a subquery that is executed several times
@@ -5105,7 +5104,8 @@ bool JOIN::make_tmp_tables_info() {
       very ineffective.
     */
     ORDER_with_src tmp_group;
-    if (!simple_group && !(test_flags & TEST_NO_KEY_GROUP) && !with_json_agg)
+    if (!simple_group && !(test_flags & TEST_NO_KEY_GROUP) && !with_json_agg &&
+        !connect_by_cond)
       tmp_group = group_list;
 
     tmp_table_param->hidden_field_count = CountHiddenFields(*curr_fields);
@@ -5157,15 +5157,6 @@ bool JOIN::make_tmp_tables_info() {
     setup_tmptable_write_func(&qep_tab[curr_tmp_table], &trace_this_outer);
     // last_slice_before_windowing = REF_SLICE_TMP1;
     last_slice_before_pq = REF_SLICE_TMP1;
-
-    if (having_cond) {
-      Item *new_having =
-          having_cond->transform(&Item::replace_rownum_use_tmp_field, nullptr);
-      if (!new_having) return true;
-      if (new_having != having_cond) {
-        having_cond = new_having;
-      }
-    }
 
     /*
       If having is not handled here, it will be checked before the row is sent
@@ -5356,7 +5347,7 @@ bool JOIN::make_tmp_tables_info() {
          JOIN::optimize).
       */
       assert(query_block->active_options() & OPTION_BUFFER_RESULT ||
-             m_windowing_steps);
+             m_windowing_steps || (connect_by_cond && plan_is_const()));
       // the temporary table does not have a grouping expression
       assert(!qep_tab[curr_tmp_table].table()->group);
     }

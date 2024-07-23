@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -46,8 +47,12 @@ struct Mysql_clone {
   /** Clone database from local server.
   @param[in]	thd		server thread handle
   @param[in]	data_dir	cloned data directory
+  @param[in]	start_id		start lsn for increment clone (Clone
+  Type: HA_CLONE_PAGE)
+  @param[in]	enable_page_track	enable page track when clone end
   @return error code, 0 on success */
-  int (*clone_local)(THD *thd, const char *data_dir);
+  int (*clone_local)(THD *thd, const char *data_dir, uint64_t start_id,
+                     bool enable_page_track, const char *based_dir);
 
   /** Clone database from remote server.
   @param[in]	thd		server thread handle
@@ -57,10 +62,15 @@ struct Mysql_clone {
   @param[in]	remote_passwd	remote user's password
   @param[in]	data_dir	cloned data directory
   @param[in]	ssl_mode	ssl mode for remote connection
+  @param[in]	start_id		start lsn for increment clone (Clone
+  Type: HA_CLONE_PAGE)
+  @param[in]	enable_page_track	enable page track when clone end
   @return error code, 0 on success */
   int (*clone_client)(THD *thd, const char *remote_host, uint remote_port,
                       const char *remote_user, const char *remote_passwd,
-                      const char *data_dir, int ssl_mode);
+                      const char *data_dir, int ssl_mode,
+                      bool enable_page_track, uint64_t start_id,
+                      const char *based_dir);
 
   /** Clone database and send to remote clone client.
   @param[in]	thd	server thread handle

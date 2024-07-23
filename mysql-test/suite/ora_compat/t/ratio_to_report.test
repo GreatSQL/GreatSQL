@@ -158,9 +158,9 @@ SELECT  json_value, c1, ratio_to_report(json_value) over () c from test_type;
 --echo #
 --echo # test of definate type
 --echo #
---error ER_WRONG_ARGUMENTS
+--error ER_NOT_SUPPORTED_YET
 SELECT  name1, c1, ratio_to_report(name1) over (partition by c1) c from test_type;
---error ER_WRONG_ARGUMENTS
+--error ER_NOT_SUPPORTED_YET
 SELECT  name1, c1, ratio_to_report(name1) over () c from test_type;
 
 --echo #

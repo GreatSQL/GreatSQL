@@ -1,4 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2024, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -79,7 +80,7 @@ class GcsXComXComCache : public GcsBaseTest {
     m_sd = new_site_def();
     init_site_def(1, m_na, m_sd);
     push_site_def(m_sd);
-    m_payload_size = 512 - sizeof(pax_msg) - sizeof(app_data);
+    m_payload_size = 512 - (u_int)sizeof(pax_msg) - (u_int)sizeof(app_data);
     init_app_msg(&m_a, m_payload, m_payload_size);
     init_cfg_app_xcom();
   }

@@ -419,3 +419,43 @@ insert into t_regexp_replace(a) values('111.222.3333');
 select @context;
 drop trigger test_tri;
 drop table t_regexp_replace;
+
+--echo #
+--echo # sql_mode
+--echo #
+CREATE TABLE t1 (
+  col_tinyint TINYINT AUTO_INCREMENT PRIMARY KEY,
+  col_tinyintus TINYINT UNSIGNED
+);
+
+INSERT INTO t1 VALUES (-128, 0);
+INSERT INTO t1 VALUES (-127, 0);
+INSERT INTO t1 VALUES (-126, 0);
+INSERT INTO t1 VALUES (1, 127);
+INSERT INTO t1 VALUES (3, 255);
+
+SET sql_mode=default;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+',null,1,0) IS NULL;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+',null,1,0) IS NOT NULL;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+','',1,0) IS NULL;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+','',1,0) IS NOT NULL;
+
+SET sql_mode=CONCAT(@@sql_mode, ',emptystring_equal_null');
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+',null,1,0) IS NULL;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+',null,1,0) IS NOT NULL;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+','',1,0) IS NULL;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+','',1,0) IS NOT NULL;
+
+SET sql_mode='oracle';
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+',null,1,0) IS NULL;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+',null,1,0) IS NOT NULL;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+','',1,0) IS NULL;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+','',1,0) IS NOT NULL;
+
+SET sql_mode='oracle,emptystring_equal_null';
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+',null,1,0) IS NULL;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+',null,1,0) IS NOT NULL;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+','',1,0) IS NULL;
+SELECT col_tinyint FROM t1 WHERE regexp_replace(col_tinyint,'-[:digit:]+','',1,0) IS NOT NULL;
+
+DROP TABLE t1;
