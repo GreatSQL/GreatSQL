@@ -9695,6 +9695,8 @@ bool THD::is_binlog_cache_empty(bool is_transactional) const {
   assert(opt_bin_log);
   binlog_cache_mngr *cache_mngr = thd_get_cache_mngr(this);
 
+  if (cache_mngr == nullptr) return true;
+
   // cache_mngr is NULL until we call thd->binlog_setup_trx_data, so
   // we assert that this has been done.
   assert(cache_mngr != nullptr);

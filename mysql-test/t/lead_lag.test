@@ -1,6 +1,8 @@
 --echo # Test of SQL window functions LEAD/LAG
 --echo # ----------------------------------------------------------------------
 
+--source include/no_turbo.inc
+
 SET NAMES utf8mb4;
 
 SELECT LEAD(6, 0)    OVER ();

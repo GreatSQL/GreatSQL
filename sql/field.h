@@ -2,7 +2,7 @@
 #define FIELD_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2699,7 +2699,8 @@ class Cursor_return_table {
 
  public:
   Cursor_return_table() : m_table(nullptr), tmp_table_param(nullptr) {}
-  ~Cursor_return_table();
+  ~Cursor_return_table() { cleanup(); }
+  void cleanup();
   TABLE *get_table() { return m_table; }
   bool make_return_table(THD *thd, List<Create_field> *list);
   bool check_return_data(THD *thd, const mem_root_deque<Item *> &items);
@@ -3251,7 +3252,6 @@ class Field_timestamp : public Field_temporal_with_date_and_time {
 class Field_timestampf : public Field_temporal_with_date_and_timef {
  protected:
   bool get_date_internal(MYSQL_TIME *ltime) const final;
-  bool get_date_internal_at_utc(MYSQL_TIME *ltime) const final;
   type_conversion_status store_internal(const MYSQL_TIME *ltime,
                                         int *error) final;
   my_time_flags_t date_flags(const THD *thd) const final;
@@ -3302,6 +3302,7 @@ class Field_timestampf : public Field_temporal_with_date_and_timef {
   bool get_timestamp(my_timeval *tm, int *warnings) const final;
   /* Validate the value stored in a field */
   type_conversion_status validate_stored_val(THD *thd) final;
+  bool get_date_internal_at_utc(MYSQL_TIME *ltime) const final;
 
  private:
   /**

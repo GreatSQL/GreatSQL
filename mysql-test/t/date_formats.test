@@ -72,8 +72,10 @@ insert into t1 values
 ('Tuesday 52 2001', '%W %u %x'),
 ('7 53 1998', '%w %u %Y'),
 (NULL, get_format(DATE,'USA'));
+--source include/disable_turbo.inc
 select date,format,str_to_date(date, format) as str_to_date from t1;
 select date,format,concat(str_to_date(date, format),'') as con from t1;
+--source include/restore_turbo.inc
 
 # Test 'maybe' date formats and 'strange but correct' results
 

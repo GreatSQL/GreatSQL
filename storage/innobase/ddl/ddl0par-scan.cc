@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2020, 2022, Oracle and/or its affiliates.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -236,6 +237,7 @@ dberr_t Parallel_cursor::scan(Builders &builders) noexcept {
             thread_ctx->get_state() != Parallel_reader::State::THREAD) {
           thread_ctx->savepoint();
           latches_released = true;
+          DEBUG_SYNC_C("ddl_bulk_inserter_latches_released");
         }
         return DB_SUCCESS;
       });

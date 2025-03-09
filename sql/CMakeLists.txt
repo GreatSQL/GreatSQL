@@ -1,5 +1,5 @@
 # Copyright (c) 2006, 2022, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -403,6 +403,7 @@ SET(SQL_SHARED_SOURCES
   dd_sp.cc
   dd_table_share.cc
   debug_sync.cc
+  query_plan_plugin.cc
   default_values.cc
   derror.cc
   error_handler.cc
@@ -630,6 +631,7 @@ SET(SQL_SHARED_SOURCES
   sql_show_processlist.cc
   sql_signal.cc
   sql_state.cc
+  sql_synonym.cc
   sql_table.cc
   sql_tablespace.cc
   sql_test.cc
@@ -1011,6 +1013,7 @@ TARGET_LINK_LIBRARIES(sql_main ${MYSQLD_STATIC_PLUGIN_LIBS}
 # sql/immutable_string.h uses
 # google::protobuf::io::CodedOutputStream::WriteVarint64ToArray
 # which may or may not be inlined.
+
 TARGET_LINK_LIBRARIES(sql_main ${PROTOBUF_LITE_LIBRARY})
 
 ADD_LIBRARY(sql_gis STATIC ${SQL_GIS_SOURCES})
@@ -1527,11 +1530,4 @@ ADD_CUSTOM_TARGET(distclean
 
 ADD_CUSTOM_TARGET(show-dist-name
   COMMAND ${CMAKE_COMMAND} -E echo "${CPACK_PACKAGE_FILE_NAME}"
-)
-
-INSTALL(FILES
-${CMAKE_CURRENT_SOURCE_DIR}/data_mask/sys_masking.sql
-DESTINATION ${INSTALL_MYSQLSHAREDIR}
-COMPONENT SupportFiles
-PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )

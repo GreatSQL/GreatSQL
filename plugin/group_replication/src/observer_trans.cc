@@ -1,5 +1,5 @@
 /* Copyright (c) 2013, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -555,6 +555,21 @@ int group_replication_trans_before_commit(Trans_param *param) {
     goto err;
   }
 
+  DBUG_EXECUTE_IF("group_replication_server_shutdown_1", {
+    const char act[] =
+        "now signal group_replication_wait_register_ticket_before_shutdown";
+    assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+    while (!get_server_shutdown_status()) {
+      sleep(1);
+    }
+  });
+  if (get_server_shutdown_status()) {
+    LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
+                 "unable to commit transaction after server shutdown");
+    error = 1;
+    goto err;
+  }
+
   if (transactions_latch->registerTicket(param->thread_id)) {
     /* purecov: begin inspected */
     LogPluginErr(ERROR_LEVEL,
@@ -564,6 +579,15 @@ int group_replication_trans_before_commit(Trans_param *param) {
     goto err;
     /* purecov: end */
   }
+
+  DBUG_EXECUTE_IF("group_replication_server_shutdown_2", {
+    const char act[] =
+        "now signal group_replication_wait_send_message_before_shutdown";
+    assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+    while (!get_server_shutdown_status()) {
+      sleep(1);
+    }
+  });
 
 #ifndef NDEBUG
   DBUG_EXECUTE_IF("test_basic_CRUD_operations_sql_service_interface", {

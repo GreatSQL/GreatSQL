@@ -1,5 +1,5 @@
 /* Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -344,6 +344,18 @@ class sp_lex_instr : public sp_instr {
   }
 
   void set_first_execution(bool exe) { m_first_execution = exe; }
+
+  /*for cursor,if it has dblink table,don't need to reopen cursor to get
+  struture, because alter dblink table doesn't support.*/
+  bool is_dblink_table(THD *thd) {
+    return thd->lex->query_tables && thd->lex->query_tables->dblink_name
+               ? true
+               : false;
+  }
+
+  virtual bool is_ref_cursor() { return false; }
+
+  virtual bool is_sp_copen() { return false; }
 
  protected:
   /////////////////////////////////////////////////////////////////////////
@@ -1511,7 +1523,8 @@ class sp_instr_cpush : public sp_lex_instr {
         m_cursor_query(cursor_query),
         m_valid(true),
         m_cursor_idx(cursor_idx),
-        is_copy_struct(false) {
+        is_copy_struct(false),
+        m_is_copen(false) {
     /*
       Cursors cause queries to depend on external state, so they are
       noncacheable.
@@ -1549,6 +1562,9 @@ class sp_instr_cpush : public sp_lex_instr {
     m_valid = true;
     return false;
   }
+  virtual void cleanup_mem_root() {}
+
+  bool is_sp_copen() override { return m_is_copen; }
 
  protected:
   /// This attribute keeps the cursor SELECT statement.
@@ -1561,8 +1577,10 @@ class sp_instr_cpush : public sp_lex_instr {
   /// Used to identify the cursor in the sp_rcontext.
   int m_cursor_idx;
 
+ public:
   /// It's for copy struct(true) or open cursor(false).
   bool is_copy_struct;
+  bool m_is_copen;
 
 #ifdef HAVE_PSI_INTERFACE
  public:
@@ -1576,12 +1594,22 @@ class sp_instr_cpush_rowtype : public sp_instr_cpush {
  public:
   sp_instr_cpush_rowtype(uint ip, sp_pcontext *ctx, LEX *cursor_lex,
                          LEX_CSTRING cursor_query, int cursor_idx)
-      : sp_instr_cpush(ip, ctx, cursor_lex, cursor_query, cursor_idx) {
+      : sp_instr_cpush(ip, ctx, cursor_lex, cursor_query, cursor_idx),
+        m_copy_struct_arena(&m_copy_struct_mem_root,
+                            Query_arena::STMT_EXECUTED),
+        m_for_var(0),
+        m_copy_struct_mem_root(key_memory_sp_head_execute_root,
+                               MEM_ROOT_BLOCK_SIZE) {
     /*
       Cursors cause queries to depend on external state, so they are
       noncacheable.
     */
     cursor_lex->safe_to_cache_query = false;
+  }
+
+  ~sp_instr_cpush_rowtype() override {
+    m_copy_struct_arena.free_items();
+    m_copy_struct_mem_root.ClearForReuse();
   }
 
   /////////////////////////////////////////////////////////////////////////
@@ -1594,10 +1622,32 @@ class sp_instr_cpush_rowtype : public sp_instr_cpush {
   // sp_lex_instr implementation.
   /////////////////////////////////////////////////////////////////////////
 
+  bool on_after_expr_parsing(THD *thd) override;
+
   bool exec_core(THD *thd, uint *nextp) override;
 
   bool copy_structure_from_return(THD *thd, sp_cursor *c,
                                   List<Create_field> *defs_c);
+
+  /*for next case:
+  for i in cursor/select_stmt loop
+    for j in cursor/select_stmt loop
+    end loop;
+  end loop;
+  the i and j are Item_field_row,when they go to loop,they will do
+  modify_item_field_about_cursor() to make new item list and create new tmp
+  table for field,so it needs free these item list and drops tmp table to avoid
+  make item list duplicately.
+  */
+  void cleanup_mem_root() override;
+
+ public:
+  Query_arena m_copy_struct_arena;
+  // for i in cursor/select_stmt loop,this is i
+  uint m_for_var;
+
+ private:
+  MEM_ROOT m_copy_struct_mem_root;
 
 #ifdef HAVE_PSI_INTERFACE
  public:
@@ -1759,6 +1809,8 @@ class sp_instr_copen_for_ident : public sp_instr_copen_for {
 
   void invalidate() override {}
 
+  bool is_ref_cursor() override { return true; }
+
  private:
   int m_sql_spv_idx;
 };
@@ -1773,10 +1825,20 @@ class sp_instr_cursor_copy_struct : public sp_instr {
   void operator=(sp_instr_cursor_copy_struct &);
   uint m_cursor_idx;
   uint m_var;
+  /* used for next case:
+    1.for i in cursor loop
+    2.for i in (select_stmt) loop
+    it must free items in loop for cursor.
+  */
+  bool m_is_cursor;
 
  public:
-  sp_instr_cursor_copy_struct(uint ip, sp_pcontext *ctx, uint coffs, uint voffs)
-      : sp_instr(ip, ctx), m_cursor_idx(coffs), m_var(voffs) {}
+  sp_instr_cursor_copy_struct(uint ip, sp_pcontext *ctx, uint coffs, uint voffs,
+                              bool is_cursor = false)
+      : sp_instr(ip, ctx),
+        m_cursor_idx(coffs),
+        m_var(voffs),
+        m_is_cursor(is_cursor) {}
 
   bool execute(THD *thd, uint *nextp) override;
   void print(const THD *thd, String *str) override;
@@ -1798,8 +1860,12 @@ class sp_instr_cursor_copy_struct : public sp_instr {
 */
 class sp_instr_cclose : public sp_instr {
  public:
-  sp_instr_cclose(uint ip, sp_pcontext *ctx, int cursor_idx)
-      : sp_instr(ip, ctx), m_cursor_idx(cursor_idx), m_cursor_spv(nullptr) {}
+  sp_instr_cclose(uint ip, sp_pcontext *ctx, int cursor_idx,
+                  bool is_cursor = false)
+      : sp_instr(ip, ctx),
+        m_cursor_idx(cursor_idx),
+        m_cursor_spv(nullptr),
+        m_is_cursor(is_cursor) {}
 
   /////////////////////////////////////////////////////////////////////////
   // sp_printable implementation.
@@ -1823,6 +1889,13 @@ class sp_instr_cclose : public sp_instr {
 
   /// the sp_variable of ref cursor.
   sp_variable *m_cursor_spv;
+
+  /* used for next case:
+    1.for i in cursor loop
+    2.for i in (select_stmt) loop
+    it must free items in loop for cursor.
+  */
+  bool m_is_cursor;
 
 #ifdef HAVE_PSI_INTERFACE
  public:

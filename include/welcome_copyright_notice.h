@@ -1,5 +1,5 @@
 /* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
-   Copyright (c) 2021, 2024 GreatDB Software Co., Ltd
+   Copyright (c) 2021, 2025 GreatDB Software Co., Ltd
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,7 +30,7 @@
 
 #include <string.h>
 
-#define COPYRIGHT_NOTICE_CURRENT_YEAR "2024"
+#define COPYRIGHT_NOTICE_CURRENT_YEAR "2025"
 
 /*
   This define specifies copyright notice which is displayed by every MySQL

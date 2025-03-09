@@ -2,6 +2,7 @@
 # Test that various query plans are logged correctly in the slow query log.
 #
 
+--source include/no_turbo.inc
 --source include/log_prepare.inc
 
 FLUSH STATUS;

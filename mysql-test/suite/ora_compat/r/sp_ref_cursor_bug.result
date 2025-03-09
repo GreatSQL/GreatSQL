@@ -93,4 +93,58 @@ a:1 | b:aa
 i
 a3:1 | b3:aa | c:NULL
 drop PROCEDURE p1;
+#
+# test of bug10530
+#
+CREATE or replace PROCEDURE p1() as
+strsql1 text;
+type refcursor is ref cursor;
+v_cursor1 refcursor;
+account_id_9 int;
+begin
+strsql1 := 'select a from t1';
+open v_cursor1 for strsql1;
+loop
+fetch v_cursor1 into account_id_9;
+exit when v_cursor1%notfound;
+end loop;
+end;
+$$
+SET global debug = "+d,cursor_sleep_to_change_version";
+call p1;
+
+[connect conn2]
+set debug_sync = 'now WAIT_FOR reach_wait_sync';
+alter table t1 modify a number(16);
+alter table t1 modify a int;
+set debug_sync = 'now SIGNAL end_wait_sync';
+SET global debug = "-d,cursor_sleep_to_change_version";
+call p1;
+drop PROCEDURE p1;
+#
+# oracle Cursors bug11275
+#
+CREATE OR REPLACE PROCEDURE p1() AS
+cursor c is select * from t1;
+job1 c%rowtype;
+job2 c%rowtype;
+begin
+open c;
+fetch c into job1; -- fetches first row
+fetch c into job2; -- fetches second row
+select job1.a,job1.b;
+select job2.a,job2.b;
+close c;
+END$$
+call p1;
+job1.a	job1.b
+1	aa
+job2.a	job2.b
+2	bb
+call p1;
+job1.a	job1.b
+1	aa
+job2.a	job2.b
+2	bb
+drop procedure p1;
 drop TABLE t1,t2,t3,t4;

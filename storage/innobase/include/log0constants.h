@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2022, Oracle and/or its affiliates.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -86,14 +87,17 @@ constexpr double LOG_N_FILES_MAX_DOWNSIZE_RATIO = 1.0 / 8;
 /** Minimum size of single log file, expressed in bytes. */
 constexpr os_offset_t LOG_FILE_MIN_SIZE = 64 * 1024;
 
-/** Maximum size of single log file, expressed in bytes. */
-constexpr os_offset_t LOG_FILE_MAX_SIZE = 4ULL * 1024 * 1024 * 1024; /* 4G */
-
 /** Minimum allowed value for innodb_redo_log_capacity. */
 constexpr os_offset_t LOG_CAPACITY_MIN = 8 * 1024 * 1024; /* 8M */
 
 /** Maximum allowed value for innodb_redo_log_capacity. */
-constexpr os_offset_t LOG_CAPACITY_MAX = LOG_N_FILES * LOG_FILE_MAX_SIZE;
+constexpr os_offset_t LOG_CAPACITY_MAX = 512ull * 1024 * 1024 * 1024; /* 512G */
+
+static_assert(LOG_CAPACITY_MAX % LOG_N_FILES == 0,
+              "A valid log size can be created with LOG_N_FILES");
+
+/** Maximum size of a log file, expressed in bytes. */
+constexpr os_offset_t LOG_FILE_MAX_SIZE = LOG_CAPACITY_MAX / LOG_N_FILES;
 
 /** Id of the first redo log file (assigned to the first log file
 when new data directory is being initialized). */

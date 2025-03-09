@@ -2,7 +2,7 @@
 #define LEX_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -590,6 +590,7 @@ static const SYMBOL symbols[] = {
     {SYM("PROFILES", PROFILES_SYM)},
     {SYM("PRIOR", PRIOR_SYM)},
     {SYM("PROXY", PROXY_SYM)},
+    {SYM("PUBLIC", PUBLIC_SYM)},
     {SYM("PURGE", PURGE)},
     {SYM("QUARTER", QUARTER_SYM)},
     {SYM("QUERY", QUERY_SYM)},
@@ -796,6 +797,8 @@ static const SYMBOL symbols[] = {
     {SYM("SUSPEND", SUSPEND_SYM)},
     {SYM("SWAPS", SWAPS_SYM)},
     {SYM("SWITCHES", SWITCHES_SYM)},
+    {SYM("SYNONYM", SYNONYM_SYM)},
+    {SYM("SYNONYMS", SYNONYMS_SYM)},
     {SYM("SYSDATE", SYSDATE)},
     {SYM("SYSTEM", SYSTEM_SYM)},
     {SYM("SYSTIMESTAMP", SYSTIMESTAMP_SYM)},

@@ -1,6 +1,6 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -56,6 +56,7 @@
 #include "sql/mysqld.h"            // key_select_to_file
 #include "sql/parse_tree_nodes.h"  // PT_select_var
 #include "sql/protocol.h"
+#include "sql/sp_head.h"
 #include "sql/sp_rcontext.h"  // sp_rcontext
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"  // THD
@@ -1193,9 +1194,15 @@ bool Query_dumpvar::send_data(THD *thd, const mem_root_deque<Item *> &items) {
 }
 
 bool Query_dumpvar::send_eof(THD *thd) {
-  if (!row_count)
-    push_warning(thd, Sql_condition::SL_WARNING, ER_SP_FETCH_NO_DATA,
-                 ER_THD(thd, ER_SP_FETCH_NO_DATA));
+  if (!row_count) {
+    if ((thd->variables.sql_mode & MODE_ORACLE) && thd->sp_runtime_ctx &&
+        thd->variables.ora_warning_as_error &&
+        thd->sp_runtime_ctx->sp->m_type != enum_sp_type::FUNCTION) {
+      my_error(ER_SP_FETCH_NO_DATA, MYF(0));
+    } else
+      push_warning(thd, Sql_condition::SL_WARNING, ER_SP_FETCH_NO_DATA,
+                   ER_THD(thd, ER_SP_FETCH_NO_DATA));
+  }
   /*
     Don't send EOF if we're in error condition (which implies we've already
     sent or are sending an error)

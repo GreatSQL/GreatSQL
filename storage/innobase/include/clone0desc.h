@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
-Copyright (c) 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2024, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -447,6 +447,9 @@ struct Clone_Desc_State {
   /** Current snapshot State */
   Snapshot_State m_state;
 
+  /** Clone type */
+  Ha_clone_type m_snapshot_type;
+
   /** Task identifier */
   uint m_task_index;
 
@@ -577,6 +580,8 @@ struct Clone_File_Meta {
 
   /** File name */
   const char *m_file_name;
+
+  bool is_revert{false};
 
   /** Encryption metadata. */
   Encryption_metadata m_encryption_metadata;

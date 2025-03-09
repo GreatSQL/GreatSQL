@@ -21,6 +21,7 @@ BEGIN
 END;
 $$
 DELIMITER ;$$
+--error ER_SP_FETCH_NO_DATA
 CALL p1();
 INSERT INTO t1(col1,col2,col3) values(1,'col1',11),(2,'col2',12),(3,'col3',13),(4,'col4',14),(5,'col5',15);
 CALL p1();

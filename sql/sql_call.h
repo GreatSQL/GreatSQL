@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -100,7 +100,6 @@ class Sql_cmd_compound : public Sql_cmd_dml {
 };
 
 class Sql_cmd_execute : public Sql_cmd_dml {
-  Query_arena m_arena;
   Item *m_query;
   int mode;
   mem_root_deque<Item *> m_param;
@@ -109,10 +108,7 @@ class Sql_cmd_execute : public Sql_cmd_dml {
  public:
   Sql_cmd_execute(Item *query_arg, int mode_arg,
                   mem_root_deque<Item *> *param_arg)
-      : m_arena(*THR_MALLOC, Query_arena::STMT_REGULAR_EXECUTION),
-        m_query(query_arg),
-        mode(mode_arg),
-        m_param(*THR_MALLOC) {
+      : m_query(query_arg), mode(mode_arg), m_param(*THR_MALLOC) {
     if (param_arg) {
       m_param = std::move(*param_arg);
     }

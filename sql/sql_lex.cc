@@ -2,7 +2,7 @@
 /*
    Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -549,6 +549,7 @@ LEX::~LEX() {
   unit = nullptr;  // Created in mem_root - no destructor
   query_block = nullptr;
   m_current_query_block = nullptr;
+  assert(m_secondary_engine_context == nullptr);
 }
 
 /**
@@ -590,6 +591,7 @@ void LEX::reset() {
   is_cursor_get_structure = false;
   is_cmp_udt_table = false;
   is_include_udt_table_item = false;
+  for_i_ident = NULL_STR;
   insert_table = nullptr;
   insert_table_leaf = nullptr;
   parsing_options.reset();
@@ -625,6 +627,7 @@ void LEX::reset() {
   explain_format = nullptr;
   is_explain_analyze = false;
   using_hypergraph_optimizer = false;
+  merge_into_with_derived_source_table = false;
   is_lex_started = true;
   reset_slave_info.all = false;
   mi.channel = nullptr;
@@ -654,8 +657,12 @@ void LEX::reset() {
   ignore_unknown_user = false;
   reset_rewrite_required();
   set_is_materialized_view(false);
-  use_rapid_exec = false;
-  rapid_fields = nullptr;
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+  set_use_query_plan_plugin(true);
+#endif
+  root = nullptr;
+  path_id = 0;
+  m_has_synonym = false;
 }
 
 /**
@@ -716,6 +723,10 @@ void lex_end(LEX *lex) {
   lex->sphead = nullptr;
   lex->has_sp = false;
   lex->has_notsupported_func = false;
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+  lex->set_use_query_plan_plugin(true);
+  lex->query_plan_plugin_enabled = false;
+#endif
 }
 
 void LEX::release_plugins() {
@@ -5904,7 +5915,7 @@ bool LEX::make_sql_cmd(Parse_tree_root *parse_tree) {
 
   m_sql_cmd = parse_tree->make_cmd(thd);
   if (m_sql_cmd == nullptr) return true;
-
+  root = parse_tree;
   assert(m_sql_cmd->sql_command_code() == sql_command);
 
   return false;
@@ -7822,8 +7833,6 @@ bool LEX::ora_sp_for_loop_index_and_bounds(
     my_error(ER_SP_DUP_VAR, MYF(0), ident.str);
     return true;
   }
-  sp_assignment_lex *lex_expr_from = sp_for_loop_bounds->from;
-  Item *dflt_value_item = lex_expr_from->get_item();
 
   if (sp_for_loop_bounds->is_cursor) {
     spvar =
@@ -7860,7 +7869,7 @@ bool LEX::ora_sp_for_loop_index_and_bounds(
 
       sp_instr_cursor_copy_struct *copy_struct =
           new (thd->mem_root) sp_instr_cursor_copy_struct(
-              sp->instructions(), pctx, offset, spvar->offset);
+              sp->instructions(), pctx, offset, spvar->offset, true);
       if (!copy_struct || sp->add_instr(thd, copy_struct)) return true;
     } else {
       if (!spvar->field_def.ora_record.row_field_definitions())
@@ -7888,13 +7897,21 @@ bool LEX::ora_sp_for_loop_index_and_bounds(
     i->add_to_varlist(spv);
   } else {
     /*no cursor type,for i in expr .. expr*/
-    sp_assignment_lex *lex_expr_to = sp_for_loop_bounds->to;
-    if (sp_for_loop_bounds->direction < 0)
-      dflt_value_item = lex_expr_to->get_item();
-
+    sp_assignment_lex *lex_expr = sp_for_loop_bounds->direction > 0
+                                      ? sp_for_loop_bounds->from
+                                      : sp_for_loop_bounds->to;
+    Item *dflt_value_item = lex_expr->get_item();
     spvar =
         pctx->add_variable(thd, ident, MYSQL_TYPE_LONG, sp_variable::MODE_IN);
 
+    thd->lex->sphead->setup_sp_assignment_lex(thd, lex_expr);
+    Parse_context pc(thd, thd->lex->current_query_block());
+    thd->lex->for_i_ident = ident;
+    auto strict_handler_guard =
+        create_scope_guard([thd]() { thd->lex->for_i_ident = NULL_STR; });
+    if ((thd->lex->will_contextualize &&
+         dflt_value_item->itemize(&pc, &dflt_value_item)))
+      return true;
     spvar->type = MYSQL_TYPE_LONG;
     spvar->default_value = dflt_value_item;
     if (spvar->field_def.init(thd, "", MYSQL_TYPE_LONG, nullptr, nullptr, 0,
@@ -7912,14 +7929,11 @@ bool LEX::ora_sp_for_loop_index_and_bounds(
 
     *var_offset = spvar->offset;
     sp_instr_set *is = new (thd->mem_root) sp_instr_set(
-        sp->instructions(),
-        sp_for_loop_bounds->direction > 0 ? lex_expr_from : lex_expr_to,
-        spvar->offset, dflt_value_item,
-        sp_for_loop_bounds->direction > 0 ? lex_expr_from->get_value_query()
-                                          : lex_expr_to->get_value_query(),
-        true, pctx, &sp_rcontext_handler_local);
+        sp->instructions(), lex_expr, spvar->offset, dflt_value_item,
+        lex_expr->get_value_query(), true, pctx, &sp_rcontext_handler_local);
 
     if (!is || sp->add_instr(thd, is)) return true;
+    if (thd->lex->sphead->restore_lex(thd)) return true;
     *cursor_var_item = create_item_for_sp_var(
         thd, to_lex_cstring(ident), &sp_rcontext_handler_local, spvar,
         sp->m_parser_data.get_current_stmt_start_ptr(), start, end);
@@ -7930,11 +7944,9 @@ bool LEX::ora_sp_for_loop_index_and_bounds(
   return false;
 }
 
-bool LEX::make_temp_upper_bound_variable_and_set(THD *thd, Item *item_uuid,
-                                                 int m_direction,
-                                                 sp_assignment_lex *lex_from,
-                                                 sp_assignment_lex *lex_to,
-                                                 Item **item_out) {
+bool LEX::make_temp_upper_bound_variable_and_set(
+    THD *thd, Item *item_uuid, int m_direction, sp_assignment_lex *lex_from,
+    sp_assignment_lex *lex_to, Item **item_out, LEX_STRING cursor_var) {
   LEX *lex = thd->lex;
   sp_head *sp = lex->sphead;
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
@@ -7967,6 +7979,12 @@ bool LEX::make_temp_upper_bound_variable_and_set(THD *thd, Item *item_uuid,
 
   Item *expr = m_direction > 0 ? lex_to->get_item() : lex_from->get_item();
   sp_assignment_lex *lex_assign = m_direction > 0 ? lex_to : lex_from;
+  thd->lex->sphead->setup_sp_assignment_lex(thd, lex_assign);
+  Parse_context pc(thd, thd->lex->current_query_block());
+  thd->lex->for_i_ident = cursor_var;
+  auto strict_handler_guard =
+      create_scope_guard([thd]() { thd->lex->for_i_ident = NULL_STR; });
+  if ((thd->lex->will_contextualize && expr->itemize(&pc, &expr))) return true;
   sp_instr_set *is = new (thd->mem_root) sp_instr_set(
       sp->instructions(), lex_assign, spvar->offset, expr,
       lex_assign->get_value_query(), true, pctx, &sp_rcontext_handler_local);
@@ -7978,6 +7996,7 @@ bool LEX::make_temp_upper_bound_variable_and_set(THD *thd, Item *item_uuid,
   Item_splocal *splocal = dynamic_cast<Item_splocal *>(*item_out);
   if (splocal) splocal->m_sp = thd->lex->sphead;
 #endif
+  if (thd->lex->sphead->restore_lex(thd)) return true;
 
   return false;
 }
@@ -8098,7 +8117,7 @@ bool LEX::close_ref_cursor(THD *thd, uint cursor_offset) {
   sp_pcontext *pctx = lex->get_sp_current_parsing_ctx();
   sp_head *sp = lex->sphead;
   sp_instr_cclose *iclose = new (thd->mem_root)
-      sp_instr_cclose(sp->instructions(), pctx, cursor_offset);
+      sp_instr_cclose(sp->instructions(), pctx, cursor_offset, true);
   if (!iclose || sp->add_instr(thd, iclose)) return true;
   const LEX_STRING *cursor_name = pctx->find_cursor(cursor_offset);
   sp_variable *spvar =
@@ -8307,7 +8326,6 @@ bool LEX::sp_continue_when_statement(THD *thd, LEX_CSTRING name, Item *expr,
   sp->m_parser_data.do_backpatch(pctx->pop_label(), sp->instructions());
   return false;
 }
-
 /**oracle sp end **/
 
 PT_set *LEX::dbmsotpt_set_serveroutput(THD *thd, bool enabled, YYLTYPE pos_set,

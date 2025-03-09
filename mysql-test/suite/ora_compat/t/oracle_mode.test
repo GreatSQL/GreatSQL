@@ -151,6 +151,14 @@ select TABLE_NAME from information_schema.tables where TABLE_NAME like 'innodb'|
 create table t1 (id int);
 eval select TABLE_NAME  from information_schema.tables where TABLE_SCHEMA = '$db' and  TABLE_NAME NOT like 'innodb'|| '_redo' || '_log%' ;
 
+#bug 10178
+set sql_mode=default;
+select * from (select 'b'||null  a from dual) c where a='b';
+select * from (select concat('b',null)  a from dual) c where a='b';
+set sql_mode=oracle;
+select * from (select 'b'||null  a from dual) c where a='b';
+select * from (select concat('b',null)  a from dual) c where a='b';
+
 drop table t1;
 
 --error ER_WRONG_VALUE_FOR_VAR

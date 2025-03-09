@@ -1,5 +1,5 @@
 # Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -10423,12 +10423,31 @@ ER_GDB_PARALLEL_LOAD_WORKER
 start-error-number 8630
 ER_VIEW_SELECT_SEQUENCE
   eng "View's SELECT refers to a sequence '%-.192s'"
+start-error-number 8641
+
+ER_SYNONYM_DUPLICATE_NAME
+  eng "Duplicated name with: `%-.192s`.`%-.192s`"
+ER_SYNONYM_ALREADY_EXISTS
+  eng "Synonym '%-.192s' already exists"
+ER_SYNONYM_DOES_NOT_EXIST
+  eng "Synonym '%-.192s' does not exist"
+ER_SYNONYM_TRANS_INVALID
+  eng "Synonym translation is no longer valid `%-.192s.%-.192s`. (%-.192s)"
+ER_SYNONYM_RECURSIVE
+  eng "`%-.192s`.`%-.192s` contains synonym recursion"
+ER_SYNONYM_UNSUPPORTED_OPERATION
+  eng "Unsupporetd synonym operation '%-.192s'"
+ER_SYNONYM_INVALID_PUBLIC_SYNONYM_NAME
+  eng "Invalid public synonym name `%-.192s`.`%-.192s`"
+
+### Query plugin plugin error
+start-error-number 8700
+ER_QUERY_PLAN_PLUGIN
+  eng "%s"
 
 #
 # End of GreatDB specific messages
 #
-
-################################################################################
 # DO NOT add messages for the error-log to this file;
 # they go in messages_to_error_log.txt in the same
 # directory as this file.
@@ -10441,3 +10460,4 @@ ER_VIEW_SELECT_SEQUENCE
 # same directory as this file for more
 # information.
 ################################################################################
+

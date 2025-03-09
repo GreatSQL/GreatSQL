@@ -3,6 +3,7 @@
 --echo #
 
 --source include/have_debug.inc
+--source include/no_turbo.inc
 
 # Test the implementation of InnoDB export CFG version 4 (IB_EXPORT_CFG_VERSION_V4).
 # It shows what happens when a sort order of a key on a secondary index

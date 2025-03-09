@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
-Copyright (c) 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -140,16 +140,18 @@ enum Clone_Handle_State {
 enum Clone_Task_State { CLONE_TASK_INACTIVE = 1, CLONE_TASK_ACTIVE };
 
 /** Maximum number of concurrent snapshots */
-const int MAX_SNAPSHOTS = MAX_CLONE_COURRENCY_NUM;
+const int MAX_SNAPSHOTS = 1;
+const int MAX_APPLY_SNAPSHOTS = MAX_CLONE_COURRENCY_NUM;
 
 /** Maximum number of concurrent clones */
-const int MAX_CLONES = MAX_CLONE_COURRENCY_NUM;
+const int MAX_CLONES = 1;
+const int MAX_APPLY_CLONES = MAX_CLONE_COURRENCY_NUM;
 
 /** Clone system array size */
-const int CLONE_ARR_SIZE = 2 * MAX_CLONES;
+const int CLONE_ARR_SIZE = 2 * MAX_APPLY_CLONES;
 
 /** Snapshot system array size */
-const int SNAPSHOT_ARR_SIZE = 2 * MAX_SNAPSHOTS;
+const int SNAPSHOT_ARR_SIZE = 2 * MAX_APPLY_SNAPSHOTS;
 
 /** Task for clone operation. Multiple task can concurrently work
 on a clone operation. */
@@ -965,7 +967,8 @@ class Clone_Handle {
   @param[in]            new_meta        new file metadata
   @return error code */
   int apply_file_delete(Clone_Task *task, Clone_file_ctx *file_ctx,
-                        const Clone_File_Meta *new_meta);
+                        const Clone_File_Meta *new_meta,
+                        Ha_clone_cbk *callback);
 
   /** Apply DDL changes to file at the end of FILE_COPY stage.
   @param[in]            new_meta        new file metadata

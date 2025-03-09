@@ -180,7 +180,9 @@ set @Sort_scan = (select variable_value from performance_schema.session_status w
 set @optimizer_switch_saved=@@optimizer_switch;
 set optimizer_switch='derived_merge=off';
 
+--source include/disable_turbo.inc
 select count(1) from (select b.* from tab1 b inner join tab1 c inner join tab1 d inner join tab1 e inner join tab1 f order by 1) a;
+--source include/restore_turbo.inc
 
 --disable_warnings
 select ( select variable_value from performance_schema.global_status where variable_name ='Sort_merge_passes') - @Sort_merge_passes;
@@ -188,7 +190,9 @@ select (select variable_value from performance_schema.global_status where variab
 select (select variable_value from performance_schema.global_status where variable_name ='Sort_scan') - @Sort_scan;
 --enable_warnings
 
+--source include/disable_turbo.inc
 select count(1) from (select b.* from tab1 b inner join tab1 c inner join tab1 d inner join tab1 e inner join tab1 f order by 1) a;
+--source include/restore_turbo.inc
 
 --disable_warnings
 select ( select variable_value from performance_schema.global_status where variable_name ='Sort_merge_passes') - @Sort_merge_passes;

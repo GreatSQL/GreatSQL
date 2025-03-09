@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -357,6 +357,53 @@ bool Sql_cmd_show_create_package_body::check_privileges(THD *) { return false; }
 bool Sql_cmd_show_create_package_body::execute_inner(THD *thd) {
   return sp_show_create_routine(thd, enum_sp_type::PACKAGE_BODY, lex->spname);
 }
+
+bool Sql_cmd_show_create_synonym::check_privileges(THD *thd) { return !thd; }
+
+bool Sql_cmd_show_create_synonym::execute_inner(THD *thd) {
+  DBUG_ENTER("Sql_cmd_show_create_synonym::execute_inner");
+
+  LEX *old_lex = thd->lex;
+  LEX local_lex;
+
+  Pushed_lex_guard lex_guard(thd, &local_lex);
+  LEX *lex = thd->lex;
+
+  lex->sql_command = old_lex->sql_command;
+  //
+  // Disable constant subquery evaluation as we won't be locking tables.
+  lex->context_analysis_only = CONTEXT_ANALYSIS_ONLY_VIEW;
+
+  const char *db_name = m_table_ident->db.str;
+  const char *synonym_name = m_table_ident->table.str;
+
+  char buff[384];
+  String buffer(buff, sizeof(buff), system_charset_info);
+  buffer.length(0);
+  if (build_synonym_create_str(thd, buffer, db_name, synonym_name,
+                               m_is_public)) {
+    DBUG_RETURN(true);
+  }
+
+  mem_root_deque<Item *> field_list(thd->mem_root);
+  field_list.push_back(new Item_empty_string("Synonym", NAME_CHAR_LEN));
+  // 1024 is for not to confuse old clients
+  field_list.push_back(new Item_empty_string(
+      "Create Synonym", max<size_t>(buffer.length(), 1024U)));
+  if (thd->send_result_metadata(field_list,
+                                Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
+    DBUG_RETURN(true);
+  Protocol *protocol = thd->get_protocol();
+  protocol->start_row();
+  protocol->store(synonym_name, system_charset_info);
+  protocol->store_string(buffer.ptr(), buffer.length(), buffer.charset());
+  if (protocol->end_row()) {
+    DBUG_RETURN(true);
+  }
+
+  my_eof(thd);
+  DBUG_RETURN(false);
+}  // bool Sql_cmd_show_create_synonym::execute_inner(THD *thd)
 
 bool Sql_cmd_show_create_type::check_privileges(THD *) { return false; }
 

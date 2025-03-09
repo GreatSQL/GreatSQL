@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -8443,20 +8443,6 @@ longlong Item_func_cursor_isopen::val_int() {
   sp_cursor *c = get_open_cursor_or_error();
   return c ? c->is_open() : 0;
 }
-
-bool Item_func_dbms_sql_is_open::val_bool() {
-  auto stmt_id = args[0]->val_int();
-  if (args[0]->null_value) {
-    return false;
-  }
-  auto stmt = current_thd->stmt_map.find(stmt_id);
-  if (!stmt) {
-    return false;
-  }
-  return true;
-}
-
-longlong Item_func_dbms_sql_is_open::val_int() { return val_bool() ? 1 : 0; }
 
 void Item_func_record_table_forall_bool::print(const THD *, String *str,
                                                enum_query_type) const {

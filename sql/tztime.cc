@@ -1,5 +1,6 @@
 /*
    Copyright (c) 2004, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -839,11 +840,28 @@ class Time_zone_db : public Time_zone {
     assert(false);
     return 0;
   }
+  bool has_dst() {
+    if (tz_info && tz_info->ttis) {
+      return tz_info->ttis->tt_isdst;
+    }
+    return false;
+  }
 
  private:
   TIME_ZONE_INFO *tz_info;
   const String *tz_name;
 };
+
+bool is_dst_TZ(Time_zone *tz) {
+  if (tz->get_timezone_type() == Time_zone::TZ_DB) {
+    return ((Time_zone_db *)tz)->has_dst();
+  } else {
+    if (tz->get_timezone_type() == Time_zone::TZ_SYSTEM) {
+      return __daylight != 0;
+    }
+  }
+  return false;
+}
 
 /*
   Initializes object representing time zone described by mysql.time_zone

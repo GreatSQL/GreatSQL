@@ -76,11 +76,13 @@ ANALYZE TABLE t_innodb;
 
 SET debug= '+d,bug28079850';
 #checks handler::records_from_index()
+--source include/disable_turbo.inc
 --error ER_QUERY_INTERRUPTED
 SELECT COUNT(*) FROM t_innodb;
 #checks handler::records()
 --error ER_QUERY_INTERRUPTED
 SELECT COUNT(*) FROM performance_schema.table_handles;
+--source include/restore_turbo.inc
 SET debug= '-d,bug28079850';
 
 DROP TABLE t_innodb;

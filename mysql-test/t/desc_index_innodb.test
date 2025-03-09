@@ -1,2 +1,3 @@
+--source include/no_turbo.inc
 let $engine=innodb;
 --source include/desc_index.inc

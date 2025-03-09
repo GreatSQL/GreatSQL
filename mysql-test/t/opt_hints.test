@@ -1,4 +1,5 @@
 --source include/not_hypergraph.inc  # Optimizer hints are not supported.
+--source include/no_turbo.inc
 
 --echo # WL#8017 Infrastructure for Optimizer Hints
 

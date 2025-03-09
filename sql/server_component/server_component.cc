@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -611,9 +611,10 @@ PROVIDES_SERVICE(mysql_server_path_filter, dynamic_loader_scheme_file),
     PROVIDES_SERVICE(performance_schema, psi_error_v1),
     PROVIDES_SERVICE(performance_schema, psi_file_v2),
     PROVIDES_SERVICE(performance_schema, psi_idle_v1),
-    /* Deprecated, use psi_mdl_v2. */
+    /* Deprecated, use psi_mdl_v3. */
     PROVIDES_SERVICE(performance_schema, psi_mdl_v1),
     PROVIDES_SERVICE(performance_schema, psi_mdl_v2),
+    PROVIDES_SERVICE(performance_schema, psi_mdl_v3),
     /* Obsolete: PROVIDES_SERVICE(performance_schema, psi_memory_v1), */
     PROVIDES_SERVICE(performance_schema, psi_memory_v2),
     PROVIDES_SERVICE(performance_schema, psi_mutex_v1),

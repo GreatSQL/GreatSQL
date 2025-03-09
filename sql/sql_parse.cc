@@ -1,6 +1,6 @@
 /* Copyright (c) 1999, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -40,6 +40,7 @@
 #include <vector>
 
 #include "my_config.h"
+#include "sql_synonym.h"
 #ifdef HAVE_LSAN_DO_RECOVERABLE_LEAK_CHECK
 #include <sanitizer/lsan_interface.h>
 #endif
@@ -573,6 +574,13 @@ void init_sql_command_flags() {
       CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_DROP_TYPE] = CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
 
+  sql_command_flags[SQLCOM_CREATE_SYNONYM] =
+      CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
+  sql_command_flags[SQLCOM_DROP_SYNONYM] =
+      CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
+  sql_command_flags[SQLCOM_ALTER_SYNONYM] =
+      CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
+
   sql_command_flags[SQLCOM_ALTER_DB] = CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_RENAME_TABLE] =
       CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
@@ -939,6 +947,9 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_DROP_PACKAGE_BODY] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_CREATE_TYPE] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_DROP_TYPE] |= CF_DISALLOW_IN_RO_TRANS;
+  sql_command_flags[SQLCOM_CREATE_SYNONYM] |= CF_DISALLOW_IN_RO_TRANS;
+  sql_command_flags[SQLCOM_DROP_SYNONYM] |= CF_DISALLOW_IN_RO_TRANS;
+  sql_command_flags[SQLCOM_ALTER_SYNONYM] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_ALTER_DB] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_CREATE_VIEW] |= CF_DISALLOW_IN_RO_TRANS;
   sql_command_flags[SQLCOM_DROP_VIEW] |= CF_DISALLOW_IN_RO_TRANS;
@@ -1040,9 +1051,12 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_CREATE_PACKAGE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_CREATE_PACKAGE_BODY] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_CREATE_TYPE] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_CREATE_SYNONYM] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_DROP_FUNCTION] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_DROP_PACKAGE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_DROP_PACKAGE_BODY] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_DROP_SYNONYM] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_ALTER_SYNONYM] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_DROP_TYPE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_REVOKE] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_OPTIMIZE] |= CF_ALLOW_PROTOCOL_PLUGIN;
@@ -1236,6 +1250,12 @@ void init_sql_command_flags() {
   sql_command_flags[SQLCOM_CREATE_SRS] |=
       CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
   sql_command_flags[SQLCOM_DROP_SRS] |=
+      CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
+  sql_command_flags[SQLCOM_CREATE_SYNONYM] |=
+      CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
+  sql_command_flags[SQLCOM_ALTER_SYNONYM] |=
+      CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
+  sql_command_flags[SQLCOM_DROP_SYNONYM] |=
       CF_NEEDS_AUTOCOMMIT_OFF | CF_POTENTIAL_ATOMIC_DDL;
 
   /*
@@ -1688,10 +1708,12 @@ static void check_secondary_engine_statement(THD *thd,
                                              Parser_state *parser_state,
                                              const char *query_string,
                                              size_t query_length) {
+  assert(thd->is_error());
+
   bool use_secondary_engine = false;
 
   // Only restart the statement if a non-fatal error was raised.
-  if (!thd->is_error() || thd->is_killed() || thd->is_fatal_error()) return;
+  if (thd->is_killed() || thd->is_fatal_error()) return;
 
   // Only SQL commands can be restarted with another storage engine.
   if (thd->lex->m_sql_cmd == nullptr) return;
@@ -1712,10 +1734,11 @@ static void check_secondary_engine_statement(THD *thd,
       use_secondary_engine = true;
       break;
     case Secondary_engine_optimization::SECONDARY:
-      // If the query failed during offloading to a secondary engine,
-      // retry in the primary engine. Don't retry if the failing query
-      // was already using the primary storage engine.
-      if (!thd->lex->m_sql_cmd->using_secondary_storage_engine()) return;
+      // If query is forced to secondary engine, just exit with the error:
+      if (thd->is_secondary_engine_forced()) {
+        return;
+      }
+      // Otherwise, retry the query in the primary engine.
       thd->set_secondary_engine_optimization(
           Secondary_engine_optimization::PRIMARY_ONLY);
       break;
@@ -1762,8 +1785,10 @@ static void check_secondary_engine_statement(THD *thd,
 
   // Check if the restarted statement failed, and if so, if it needs
   // another restart/fallback to the primary storage engine.
-  check_secondary_engine_statement(thd, parser_state, query_string,
-                                   query_length);
+  if (thd->is_error()) {
+    check_secondary_engine_statement(thd, parser_state, query_string,
+                                     query_length);
+  }
 }
 
 /*Reference to the GR callback that receives incoming connections*/
@@ -2207,26 +2232,27 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
       // by setting maximum digest length to zero
       if (get_max_digest_length() != 0)
         parser_state.m_input.m_compute_digest = true;
-
-      // Initially, prepare and optimize the statement for the primary
-      // storage engine. If an eligible secondary storage engine is
-      // found, the statement may be reprepared for the secondary
-      // storage engine later.
-      const auto saved_secondary_engine = thd->secondary_engine_optimization();
+      /*
+        Initially, set up the statement for preparation and optimization
+        in the primary storage engine. If an eligible secondary storage engine
+        is found, the statement may be reprepared for the secondary storage
+        engine later. In addition, open_secondary_engine_tables() will directly
+        set up for the secondary storage engine if secondary engine is forced.
+      */
       thd->set_secondary_engine_optimization(
           Secondary_engine_optimization::PRIMARY_TENTATIVELY);
 
       copy_bind_parameter_values(thd, com_data->com_query.parameters,
                                  com_data->com_query.parameter_count);
 
+      /* This will call MYSQL_NOTIFY_STATEMENT_QUERY_ATTRIBUTES() */
       dispatch_sql_command(thd, &parser_state, false);
 
-      // Check if the statement failed and needs to be restarted in
-      // another storage engine.
-      check_secondary_engine_statement(thd, &parser_state, orig_query.str,
-                                       orig_query.length);
-
-      thd->set_secondary_engine_optimization(saved_secondary_engine);
+      // If statement failed, possibly restart it in another storage engine.
+      if (thd->is_error()) {
+        check_secondary_engine_statement(thd, &parser_state, orig_query.str,
+                                         orig_query.length);
+      }
 
       DBUG_EXECUTE_IF("parser_stmt_to_error_log", {
         LogErr(INFORMATION_LEVEL, ER_PARSER_TRACE, thd->query().str);
@@ -2307,10 +2333,10 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
         /* TODO: set thd->lex->sql_command to SQLCOM_END here */
         dispatch_sql_command(thd, &parser_state, false);
 
-        check_secondary_engine_statement(thd, &parser_state,
-                                         beginning_of_next_stmt, length);
-
-        thd->set_secondary_engine_optimization(saved_secondary_engine);
+        if (thd->is_error()) {
+          check_secondary_engine_statement(thd, &parser_state,
+                                           beginning_of_next_stmt, length);
+        }
       }
 
       thd->bind_parameter_values = nullptr;
@@ -3317,6 +3343,20 @@ int mysql_execute_command(THD *thd, bool first_level) {
     push_warning(thd, ER_WARN_DEPRECATED_CLIENT_NO_SCHEMA_OPTION);
   }
 
+  if (!skip_synm_trans_for_command(thd, false /*not in prepare*/)) {
+    for (Table_ref *tr = query_block->get_table_list(); tr != nullptr;
+         tr = tr->next_global) {
+      enum_synm_trans_result trans_res = translate_synonym_if_any(thd, tr);
+      if (trans_res == enum_synm_trans_result::SYNM_TRANS_INVALID) {
+        if (!thd->in_sub_stmt && thd->transaction_rollback_request) {
+          trans_rollback_implicit(thd);
+          thd->mdl_context.release_transactional_locks();
+        }
+        return -1;
+      }
+    }
+  }
+
   if (unlikely(thd->slave_thread)) {
     if (!check_database_filters(thd, thd->db().str, lex->sql_command)) {
       binlog_gtid_end_transaction(thd);
@@ -3607,6 +3647,18 @@ int mysql_execute_command(THD *thd, bool first_level) {
     test for LOCK TABLE etc. first. To rephrase, we try not to set TX_STMT_DML
     until we have the MDL, and LOCK TABLE could massively delay this.
   */
+
+  // add for synonym translation, moved to here to use `goto` to jump to
+  // the `error` label
+  // if (!skip_synm_trans_for_command(thd, false /*not in prepare*/)) {
+  //   for (Table_ref *tr = query_block->get_table_list(); tr != nullptr;
+  //        tr = tr->next_global) {
+  //     enum_synm_trans_result trans_res = translate_synonym_if_any(thd, tr);
+  //     if (trans_res == enum_synm_trans_result::SYNM_TRANS_INVALID) {
+  //       goto error;
+  //     }
+  //   }
+  // }
 
   switch (lex->sql_command) {
     case SQLCOM_PREPARE: {
@@ -5101,6 +5153,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
     case SQLCOM_SHOW_SLAVE_STAT:
     case SQLCOM_SHOW_STATUS:
     case SQLCOM_SHOW_STORAGE_ENGINES:
+    case SQLCOM_SHOW_SYNONYMS:
     case SQLCOM_SHOW_TABLE_STATUS:
     case SQLCOM_SHOW_SEQUENCES:
     case SQLCOM_SHOW_TABLES:
@@ -5281,6 +5334,15 @@ int mysql_execute_command(THD *thd, bool first_level) {
       if (!res && is_self && finish_reg) {
         if (turn_off_sandbox_mode(thd, tmp_user)) return true;
       }
+      break;
+    }
+    case SQLCOM_CREATE_SYNONYM:
+    case SQLCOM_DROP_SYNONYM: {
+      res = lex->m_sql_cmd->execute(thd);
+      break;
+    }
+    case SQLCOM_ALTER_SYNONYM: {
+      my_error(ER_SYNONYM_UNSUPPORTED_OPERATION, MYF(0), "ALTER");
       break;
     }
     default:
@@ -6439,6 +6501,7 @@ Table_ref *Query_block::add_table_to_list(
   DBUG_TRACE;
 
   assert(table_name != nullptr);
+
   // A derived table has no table name, only an alias.
   if (!(table_options & TL_OPTION_ALIAS) && !table_name->is_derived_table()) {
     Ident_name_check ident_check_status =
@@ -7763,7 +7826,7 @@ bool parse_sql(THD *thd, Parser_state *parser_state,
 
   /* That's it. */
 
-  ret_value = mysql_parse_status || thd->is_fatal_error();
+  ret_value = mysql_parse_status;
 
   if ((ret_value == 0) && (parser_state->m_digest_psi != nullptr)) {
     /*

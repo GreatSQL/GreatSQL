@@ -268,9 +268,9 @@ INSERT INTO t1 VALUES (-1.1), (1.1),
 # (see comments for MAX_EXACT_INTEGER)
                       (-1e16 - 0.5), (1e16 + 0.5),
                       (-1e16 - 1.5), (1e16 + 1.5);
-
+--source include/disable_turbo.inc
 SELECT a, ROUND(a) FROM t1;
-
+--source include/restore_turbo.inc
 DROP TABLE t1;
 
 #

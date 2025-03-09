@@ -1,5 +1,5 @@
 # Copyright (c) 2006, 2022, Oracle and/or its affiliates. All rights reserved.
-# Copyright (c) 2023, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -71,4 +71,11 @@ ENDIF()
 INSTALL(FILES messages_to_error_log.txt messages_to_clients.txt dictionary.txt
   DESTINATION ${INSTALL_MYSQLSHAREDIR}
   COMPONENT Server
+)
+
+INSTALL(FILES
+${CMAKE_CURRENT_SOURCE_DIR}/sys_masking.sql
+DESTINATION ${INSTALL_MYSQLSHAREDIR}
+COMPONENT SupportFiles
+PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )

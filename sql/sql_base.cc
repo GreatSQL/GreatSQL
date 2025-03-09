@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2625,50 +2625,14 @@ static bool check_if_table_exists(THD *thd, Table_ref *table, bool *exists) {
     return true;
   }
 
+  if (Db_object_synonyms_cache::find(thd, table->db, table->table_name)) {
+    my_error(ER_SYNONYM_DUPLICATE_NAME, MYF(0), table->db, table->table_name);
+    return true;
+  }
+
 end:
   return false;
 }
-
-/**
-  An error handler which converts, if possible, ER_LOCK_DEADLOCK error
-  that can occur when we are trying to acquire a metadata lock to
-  a request for back-off and re-start of open_tables() process.
-*/
-
-class MDL_deadlock_handler : public Internal_error_handler {
- public:
-  MDL_deadlock_handler(Open_table_context *ot_ctx_arg)
-      : m_ot_ctx(ot_ctx_arg), m_is_active(false) {}
-
-  bool handle_condition(THD *, uint sql_errno, const char *,
-                        Sql_condition::enum_severity_level *,
-                        const char *) override {
-    if (!m_is_active && sql_errno == ER_LOCK_DEADLOCK) {
-      /* Disable the handler to avoid infinite recursion. */
-      m_is_active = true;
-      (void)m_ot_ctx->request_backoff_action(
-          Open_table_context::OT_BACKOFF_AND_RETRY, nullptr);
-      m_is_active = false;
-      /*
-        If the above back-off request failed, a new instance of
-        ER_LOCK_DEADLOCK error was emitted. Thus the current
-        instance of error condition can be treated as handled.
-      */
-      return true;
-    }
-    return false;
-  }
-
- private:
-  /** Open table context to be used for back-off request. */
-  Open_table_context *m_ot_ctx;
-  /**
-    Indicates that we are already in the process of handling
-    ER_LOCK_DEADLOCK error. Allows to re-emit the error from
-    the error handler without falling into infinite recursion.
-  */
-  bool m_is_active;
-};
 
 /**
   Try to acquire an MDL lock for a table being opened.
@@ -7126,6 +7090,18 @@ err:
   statement, and if so, replace the opened tables with their secondary
   counterparts.
 
+  The secondary engine state is set according to these rules:
+  - If secondary engine operation is turned off, set state PRIMARY_ONLY
+  - If secondary engine operation is forced:
+      If operation can be evaluated in secondary engine, set state SECONDARY,
+      otherwise set state PRIMARY_ONLY.
+  - Otherwise, secondary engine state remains unchanged.
+
+  If state is SECONDARY, secondary engine tables are opened, unless there
+  is some property about the query or the environment that prevents this,
+  in which case the primary tables remain open. The caller must notice this
+  and issue exceptions according to its policy.
+
   @param thd       thread handler
   @param flags     bitmap of flags to pass to open_table
   @return true if an error is raised, false otherwise
@@ -7135,29 +7111,62 @@ static bool open_secondary_engine_tables(THD *thd, uint flags) {
   Sql_cmd *const sql_cmd = lex->m_sql_cmd;
 
   // The previous execution context should have been destroyed.
-  assert(lex->secondary_engine_execution_context() == nullptr);
+  assert(lex->secondary_engine_execution_context() == nullptr ||
+         sql_cmd->owner() != nullptr);
 
-  // If use of secondary engines has been disabled for the statement,
-  // there is nothing to do.
-  if (sql_cmd == nullptr || sql_cmd->secondary_storage_engine_disabled())
-    return false;
+  // Save value of forced secondary engine, as it is not sufficiently persistent
+  thd->set_secondary_engine_forced(thd->variables.use_secondary_engine ==
+                                   SECONDARY_ENGINE_FORCED);
 
-  // If the user has requested the use of a secondary storage engine
-  // for this statement, skip past the initial optimization for the
-  // primary storage engine and go straight to the secondary engine.
-  if (thd->secondary_engine_optimization() ==
-          Secondary_engine_optimization::PRIMARY_TENTATIVELY &&
-      thd->variables.use_secondary_engine == SECONDARY_ENGINE_FORCED) {
+  // If use of primary engine is requested, set state accordingly
+  if (thd->variables.use_secondary_engine == SECONDARY_ENGINE_OFF) {
     thd->set_secondary_engine_optimization(
-        Secondary_engine_optimization::SECONDARY);
-    mysql_thread_set_secondary_engine(true);
-    mysql_statement_set_secondary_engine(thd->m_statement_psi, true);
+        Secondary_engine_optimization::PRIMARY_ONLY);
+    return false;
+  }
+  // Statements without Sql_cmd representations are for primary engine only:
+  if (sql_cmd == nullptr) {
+    thd->set_secondary_engine_optimization(
+        Secondary_engine_optimization::PRIMARY_ONLY);
+    return false;
   }
 
+  /*
+    Only some SQL commands can be offloaded to secondary table offload.
+    Note that table-less queries are always executed in primary engine.
+  */
+  const bool offload_possible =
+      (lex->sql_command == SQLCOM_SELECT && lex->table_count > 0) ||
+      ((lex->sql_command == SQLCOM_INSERT_SELECT ||
+        lex->sql_command == SQLCOM_CREATE_TABLE) &&
+       lex->table_count > 1);
+
+  /*
+    If use of a secondary storage engine is requested for this statement,
+    skip past the initial optimization for the primary storage engine and
+    go straight to the secondary engine.
+    Notice the little difference between commands that must execute in
+    secondary engine, vs those that are forced to secondary engine:
+    the latter ones execute in primary engine if they are table-less.
+  */
+  if (thd->secondary_engine_optimization() ==
+          Secondary_engine_optimization::PRIMARY_TENTATIVELY &&
+      thd->is_secondary_engine_forced()) {
+    if (offload_possible) {
+      thd->set_secondary_engine_optimization(
+          Secondary_engine_optimization::SECONDARY);
+      mysql_thread_set_secondary_engine(true);
+      mysql_statement_set_secondary_engine(thd->m_statement_psi, true);
+    } else {
+      thd->set_secondary_engine_optimization(
+          Secondary_engine_optimization::PRIMARY_ONLY);
+    }
+  }
   // Only open secondary engine tables if use of a secondary engine
-  // has been requested.
-  if (thd->secondary_engine_optimization() !=
-      Secondary_engine_optimization::SECONDARY)
+  // has been requested, and access has not been disabled previously.
+  if (sql_cmd->secondary_storage_engine_disabled() ||
+      thd->secondary_engine_optimization() !=
+          Secondary_engine_optimization::SECONDARY)
     return false;
 
   // If the statement cannot be executed in a secondary engine because

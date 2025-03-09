@@ -36,8 +36,8 @@ explain select * from t1 where not(a is not null);
 select * from t1 where not(a is not null);
 explain select * from t1 where not(a < 5 or a > 15);
 select * from t1 where not(a < 5 or a > 15);
-explain select * from t1 where not(a < 15 and a > 5);
-select * from t1 where not(a < 15 and a > 5);
+explain select * from t1 where not(a < 15 and a > 5) order by a;
+select * from t1 where not(a < 15 and a > 5) order by a;
 
 explain select * from t1 where a = 2 or not(a < 10);
 select * from t1 where a = 2 or not(a < 10);
@@ -48,11 +48,11 @@ select * from t1 where a > 5 xor a < 10;
 
 explain select * from t1 where a = 2 or not(a < 5 or a > 15);
 select * from t1 where a = 2 or not(a < 5 or a > 15);
-explain select * from t1 where a = 7 or not(a < 15 and a > 5);
-select * from t1 where a = 7 or not(a < 15 and a > 5);
+explain select * from t1 where a = 7 or not(a < 15 and a > 5) order by a;
+select * from t1 where a = 7 or not(a < 15 and a > 5) order by a;
 
-explain select * from t1 where NULL or not(a < 15 and a > 5);
-select * from t1 where NULL or not(a < 15 and a > 5);
+explain select * from t1 where NULL or not(a < 15 and a > 5) order by a;
+select * from t1 where NULL or not(a < 15 and a > 5) order by a;
 explain select * from t1 where not(NULL and a > 5);
 select * from t1 where not(NULL and a > 5);
 explain select * from t1 where not(NULL or a);

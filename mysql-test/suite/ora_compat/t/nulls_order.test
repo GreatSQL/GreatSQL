@@ -82,6 +82,7 @@ select name,c5,'ora nl' from test1 order by name nulls last,c5 nulls last;
 select name,c5,'ora desc nf' from test1 order by name nulls first,c5 desc nulls first;
 select name,c5,'ora desc nl' from test1 order by name nulls last,c5 desc nulls last;
 
+--sorted_result
 select name,c5,'ora' from test1 group by name,c5 order by name;
 select name,c5,'ora desc' from test1 group by name,c5 order by name,c5 desc;
 select name,c5,'ora nf' from test1 group by name,c5 order by name nulls first,c5 nulls first;
@@ -132,42 +133,72 @@ explain select nation,city,listagg(city,',') within group (order by city desc nu
 --echo # index scan check
 create index i1 on test1 (name,c5);
 create index i1 on p (nation,city);
+--sorted_result
 select name,c5,'my' from test1 order by name;
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my' from test1 order by name;
+--source include/restore_turbo.inc
+--sorted_result
 select name,c5,'my desc' from test1 order by name desc;
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my desc' from test1 order by name desc;
+--source include/restore_turbo.inc
+--sorted_result
 select name,c5,'my nf' from test1 order by name nulls first;
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my nf' from test1 order by name nulls first;
+--source include/restore_turbo.inc
+--sorted_result
 select name,c5,'my nl' from test1 order by name nulls last;
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my nl' from test1 order by name nulls last;
+--source include/restore_turbo.inc
+--sorted_result
 select name,c5,'my desc nf' from test1 order by name desc nulls first;
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my desc nf' from test1 order by name desc nulls first;
+--source include/restore_turbo.inc
+--sorted_result
 select name,c5,'my desc nl' from test1 order by name desc nulls last;
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my desc nl' from test1 order by name desc nulls last;
+--source include/restore_turbo.inc
 select name,c5,'my' from test1 order by name,c5;
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my' from test1 order by name,c5;
+--source include/restore_turbo.inc
 select name,c5,'my desc' from test1 order by name,c5 desc;
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my desc' from test1 order by name,c5 desc;
+--source include/restore_turbo.inc
 select name,c5,'my nf' from test1 order by name nulls first,c5 nulls last;
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my nf' from test1 order by name nulls first,c5 nulls last;
+--source include/restore_turbo.inc
 select name,c5,'my nl' from test1 order by name nulls last,c5 nulls first;
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my nl' from test1 order by name nulls last,c5 nulls first;
+--source include/restore_turbo.inc
 select name,c5,'my desc nf' from test1 order by name desc nulls first,c5 desc nulls last;
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my desc nf' from test1 order by name desc nulls first,c5 desc nulls last;
+--source include/restore_turbo.inc
 select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls first;
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select name,c5,'my desc nl' from test1 order by name desc nulls last,c5 desc nulls first;
+--source include/restore_turbo.inc
 select nation,city,listagg(city,',') within group (order by city) over (partition by nation) ora_la_oc from p;
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 explain format=tree select nation,city,listagg(city,',') within group (order by city) over (partition by nation) ora_la_oc from p;

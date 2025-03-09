@@ -2,7 +2,7 @@
 
 Copyright (c) 2018, 2021, Oracle and/or its affiliates.
 Copyright (c) 2022, Huawei Technologies Co., Ltd.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -34,6 +34,7 @@ Created 2018-01-27 by Sunny Bains. */
 #ifndef row0par_read_h
 #define row0par_read_h
 
+#include <deque>
 #include <functional>
 #include <vector>
 
@@ -97,10 +98,283 @@ without worrying about dangling pointers.
 
 NOTE: Secondary index scans are not supported currently. */
 class ReadView;
+
+class row_prebuilt_parallel_ctx_t {
+ public:
+  row_prebuilt_parallel_ctx_t(const row_prebuilt_parallel_ctx_t &) = delete;
+  row_prebuilt_parallel_ctx_t &operator=(const row_prebuilt_parallel_ctx_t &) =
+      delete;
+  row_prebuilt_parallel_ctx_t(const row_prebuilt_parallel_ctx_t &&) = delete;
+  row_prebuilt_parallel_ctx_t &operator=(const row_prebuilt_parallel_ctx_t &&) =
+      delete;
+  row_prebuilt_parallel_ctx_t() { m_compress_col_heap = nullptr; }
+
+  ~row_prebuilt_parallel_ctx_t() {
+    if (m_compress_col_heap) {
+      mem_heap_free(m_compress_col_heap);
+      m_compress_col_heap = nullptr;
+    }
+  }
+
+ public:
+  mem_heap_t *get_compress_col_heap() { return m_compress_col_heap; }
+  mem_heap_t *reset_compress_col_heap() {
+    mem_heap_t *t = m_compress_col_heap;
+    m_compress_col_heap = nullptr;
+    return t;
+  }
+
+  mem_heap_t **get_compress_col_heap_addr() { return &m_compress_col_heap; }
+  void create_compress_col_heap() {
+    ut_a(nullptr == m_compress_col_heap);
+    m_compress_col_heap = mem_heap_create(UNIV_PAGE_SIZE, UT_LOCATION_HERE);
+  }
+
+ private:
+  mem_heap_t *m_compress_col_heap{nullptr};
+};
+
+/** typename T must has default constructor, AND, it must be plain data
+ * structure.
+ *
+ *  the type T copy construct or assignment should avoid much memory copy.
+ */
+template <typename T>
+class parallel_reader_block_queue_t {
+ public:
+  /** 0 == max_capacity means infinite capacity */
+  int init_queue(size_t max_capacity);
+  int deinit_queue();
+
+  /** if the queue has been full, this maybe blocked */
+  void en_queue(T &item);
+  /** this function maybe blocked, and try to put the item at the queue front*/
+  void en_queue_head(T &item);
+  /** if the queue is empty, this maybe blocked.
+   *  it need block always?
+   */
+  T de_queue();
+
+  /** if the queue is empty, this is not blocked.
+   *  this is used to clear the queue gracefully or some other purpose.
+   */
+  T de_queue_non_block(bool &has_data);
+
+  size_t que_size() {
+    size_t count = 0;
+    mutex_enter(&m_mutex);
+    count = m_queue.size();
+    mutex_exit(&m_mutex);
+    return count;
+  }
+
+  bool empty() { return 0 == que_size(); }
+
+  uint64_t wait_enque_count() {
+    return m_wait_enque_count.load(std::memory_order_relaxed);
+  }
+  uint64_t wait_deque_count() {
+    return m_wait_deque_count.load(std::memory_order_relaxed);
+  }
+
+ private:
+  ib_mutex_t m_mutex;
+  /** these are manual reset event type*/
+  os_event_t m_prod_event{};
+  os_event_t m_cons_event{};
+  std::atomic<uint64_t> m_wait_enque_count{0};
+  std::atomic<uint64_t> m_wait_deque_count{0};
+  bool m_is_inited{false};
+
+ private:
+  size_t m_max_capacity;
+  /** protected by m_mutex */
+  std::deque<T> m_queue;
+};
+
+template <typename T>
+int parallel_reader_block_queue_t<T>::init_queue(size_t max_capacity) {
+  m_max_capacity = max_capacity;
+
+  mutex_create(LATCH_ID_PARALLEL_READ, &m_mutex);
+  m_prod_event = os_event_create();
+  m_cons_event = os_event_create();
+  m_wait_enque_count.store(0, std::memory_order_relaxed);
+  m_wait_deque_count.store(0, std::memory_order_relaxed);
+  os_event_reset(m_prod_event);
+  os_event_reset(m_cons_event);
+
+  m_is_inited = true;
+
+  return 0;
+}
+
+template <typename T>
+int parallel_reader_block_queue_t<T>::deinit_queue() {
+  if (m_is_inited) {
+    mutex_destroy(&m_mutex);
+    os_event_destroy(m_prod_event);
+    os_event_destroy(m_cons_event);
+    m_is_inited = true;
+  }
+  return 0;
+}
+
+/**
+ * the en-queue operation will be blocked until the queue has space
+ * to store the item. The en-queue operation is not stealed, the
+ * initial thread must make the en-queue done.
+ */
+
+template <typename T>
+void parallel_reader_block_queue_t<T>::en_queue(T &item) {
+  bool is_full = false;
+  bool has_count_wait = false;
+  while (1) {
+    is_full = false;
+    mutex_enter(&m_mutex);
+
+    if (0 != m_max_capacity && m_queue.size() >= m_max_capacity) {
+      is_full = true;
+    }
+    if (!is_full) {
+      m_queue.emplace_back(item);
+      if (m_wait_deque_count.load(std::memory_order_relaxed)) {
+        os_event_set(m_cons_event);
+      }
+      if (has_count_wait) {
+        m_wait_enque_count.fetch_sub(1, std::memory_order_relaxed);
+      }
+    } else {
+      if (!has_count_wait) {
+        m_wait_enque_count.fetch_add(1, std::memory_order_relaxed);
+        has_count_wait = true;
+      }
+    }
+
+    mutex_exit(&m_mutex);
+
+    if (!is_full) {
+      /** the item has been putted into queue */
+      break;
+    } else {
+      os_event_wait(m_prod_event);
+      os_event_reset(m_prod_event);
+    }
+  }
+}
+
+template <typename T>
+void parallel_reader_block_queue_t<T>::en_queue_head(T &item) {
+  bool is_full = false;
+  bool has_count_wait = false;
+  while (1) {
+    is_full = false;
+    mutex_enter(&m_mutex);
+
+    if (0 != m_max_capacity && m_queue.size() >= m_max_capacity) {
+      is_full = true;
+    }
+    if (!is_full) {
+      m_queue.emplace_front(item);
+      if (m_wait_deque_count.load(std::memory_order_relaxed)) {
+        os_event_set(m_cons_event);
+      }
+      if (has_count_wait) {
+        m_wait_enque_count.fetch_sub(1, std::memory_order_relaxed);
+      }
+    } else {
+      if (!has_count_wait) {
+        m_wait_enque_count.fetch_add(1, std::memory_order_relaxed);
+        has_count_wait = true;
+      }
+    }
+    mutex_exit(&m_mutex);
+
+    if (!is_full) {
+      /** the item has been putted at the queue front */
+      break;
+    } else {
+      os_event_wait(m_prod_event);
+      os_event_reset(m_prod_event);
+    }
+  }
+}
+
+template <typename T>
+T parallel_reader_block_queue_t<T>::de_queue() {
+  T item;
+  bool is_empty = false;
+  bool has_count_deque_wait = false;
+
+  while (1) {
+    is_empty = false;
+
+    mutex_enter(&m_mutex);
+
+    if (!m_queue.empty()) {
+      item = m_queue.front();
+      m_queue.pop_front();
+      if (m_wait_enque_count.load(std::memory_order_relaxed)) {
+        os_event_set(m_prod_event);
+      }
+      if (has_count_deque_wait) {
+        m_wait_deque_count.fetch_sub(1, std::memory_order_relaxed);
+      }
+    } else {
+      is_empty = true;
+      if (!has_count_deque_wait) {
+        m_wait_deque_count.fetch_add(1, std::memory_order_relaxed);
+        has_count_deque_wait = true;
+      }
+    }
+
+    mutex_exit(&m_mutex);
+
+    if (!is_empty) {
+      break;
+    } else {
+      os_event_wait(m_cons_event);
+      os_event_reset(m_cons_event);
+    }
+  }
+
+  return item;
+}
+
+template <typename T>
+T parallel_reader_block_queue_t<T>::de_queue_non_block(bool &has_data) {
+  T item;
+  has_data = false;
+
+  mutex_enter(&m_mutex);
+
+  do {
+    if (m_queue.empty()) {
+      has_data = false;
+      break;
+    } else {
+      has_data = true;
+      item = m_queue.front();
+      m_queue.pop_front();
+      if (m_wait_enque_count.load(std::memory_order_relaxed)) {
+        os_event_set(m_prod_event);
+      }
+    }
+  } while (false);
+
+  mutex_exit(&m_mutex);
+
+  return item;
+}
+
+constexpr ulong srv_n_max_parallel_read_threads = 256;
+constexpr ulong MAX_PARALLEL_READ_THREADS = 2048;
+
 class Parallel_reader {
  public:
   /** Maximum value for innodb-parallel-read-threads. */
-  constexpr static size_t MAX_THREADS{256};
+  static size_t MAX_THREADS;
 
   /** Maximum value for reserved parallel read threads for data load so that
   at least this many threads are always available for data load. */
@@ -108,11 +382,12 @@ class Parallel_reader {
 
   /** Maximum value for at most number of parallel read threads that can be
   spawned. */
-  constexpr static size_t MAX_TOTAL_THREADS{MAX_THREADS + MAX_RESERVED_THREADS};
+  static size_t MAX_TOTAL_THREADS;
 
   using Links = std::vector<page_no_t, ut::allocator<page_no_t>>;
 
   // Forward declaration.
+  class Sec_index_visibilty_checker_t;
   class Ctx;
   class Scan_ctx;
   struct Thread_ctx;
@@ -164,6 +439,13 @@ class Parallel_reader {
 
     /** Convert the instance to a string representation. */
     [[nodiscard]] std::string to_string() const;
+
+    /** begin: greatdb ap range scan support */
+    bool is_greatdb_ap_range_scan{false};
+    ha_rkey_function m_range_start_flag{HA_READ_INVALID};
+    ha_rkey_function m_range_end_flag{HA_READ_INVALID};
+
+    /** end: greatdb ap range scan support */
   };
 
   /** Scan (Scan_ctx) configuration. */
@@ -182,7 +464,11 @@ class Parallel_reader {
           m_is_compact(dict_table_is_comp(index->table)),
           m_page_size(dict_tf_to_fsp_flags(index->table->flags)),
           m_read_level(read_level),
-          m_partition_id(partition_id) {}
+          m_partition_id(partition_id),
+          m_is_greatdb_ap_read(false),
+          m_is_read_cluster_index(false),
+          m_is_need_cluster_rec(false),
+          m_is_greatdb_ap_desc_fetch(false) {}
 
     /** Copy constructor.
     @param[in] config           Instance to copy from. */
@@ -195,9 +481,17 @@ class Parallel_reader {
           m_partition_id(config.m_partition_id),
           m_range_errno(config.m_range_errno),
           m_pcur(config.m_pcur),
-          m_pq_reverse_scan(config.m_pq_reverse_scan) {}
+          m_pq_reverse_scan(config.m_pq_reverse_scan),
+          m_is_greatdb_ap_read(config.m_is_greatdb_ap_read),
+          m_is_read_cluster_index(config.m_is_read_cluster_index),
+          m_is_need_cluster_rec(config.m_is_need_cluster_rec),
+          m_is_greatdb_ap_desc_fetch(config.m_is_greatdb_ap_desc_fetch) {}
 
     ~Config() {}
+
+    bool is_greatdb_ap_read_sec_index() {
+      return (m_is_greatdb_ap_read && !m_is_read_cluster_index);
+    }
 
     /** Range to scan. */
     const Scan_range m_scan_range;
@@ -223,6 +517,20 @@ class Parallel_reader {
     btr_pcur_t *m_pcur{nullptr};
 
     bool m_pq_reverse_scan{false};
+
+    bool m_is_greatdb_ap_read{false};
+
+    bool m_is_read_cluster_index{false};
+
+    /** cluster rec will be return if this flag is true.*/
+    bool m_is_need_cluster_rec{false};
+
+    /** this is greatdb: supporting reverse parallel fetch scan.
+     *  this maybe, duplication of m_pq_reverse_scan, but pq maybe
+     *  deprecated in the future and its meaning is the identify
+     *  with parallel fetch. So we create one new flag.
+     */
+    bool m_is_greatdb_ap_desc_fetch{false};
   };
 
   /** Thread related context information. */
@@ -237,6 +545,11 @@ class Parallel_reader {
 
       if (m_blob_heap != nullptr) {
         mem_heap_free(m_blob_heap);
+      }
+
+      if (nullptr != m_temp_heap) {
+        mem_heap_free(m_temp_heap);
+        m_temp_heap = nullptr;
       }
     }
 
@@ -261,6 +574,14 @@ class Parallel_reader {
       m_blob_heap = mem_heap_create(UNIV_PAGE_SIZE, UT_LOCATION_HERE);
     }
 
+    void create_com_col_heap() noexcept {
+      m_parallel_ctx.create_compress_col_heap();
+    }
+
+    row_prebuilt_parallel_ctx_t *get_row_built_para_ctx() {
+      return &m_parallel_ctx;
+    }
+
     /** @return the worker thread state. */
     State get_state() const noexcept { return m_state; }
 
@@ -270,6 +591,16 @@ class Parallel_reader {
     /** Restore saved position and resume scan.
     @return DB_SUCCESS or error code. */
     [[nodiscard]] dberr_t restore_from_savepoint() noexcept;
+
+    mem_heap_t *get_vers_heap() {
+      if (nullptr != m_temp_heap) {
+        mem_heap_empty(m_temp_heap);
+      } else {
+        m_temp_heap = mem_heap_create(1024, UT_LOCATION_HERE);
+      }
+
+      return m_temp_heap;
+    }
 
     /** Thread ID. */
     size_t m_thread_id{std::numeric_limits<size_t>::max()};
@@ -281,11 +612,18 @@ class Parallel_reader {
     /** BLOB heap per thread. */
     mem_heap_t *m_blob_heap{};
 
+    /** temporary heap for vers per thread */
+    mem_heap_t *m_temp_heap{nullptr};
+
+    row_prebuilt_parallel_ctx_t m_parallel_ctx;
+
     /** Worker thread state. */
     State m_state{State::UNKNOWN};
 
     /** Current persistent cursor. */
     PCursor *m_pcursor{};
+
+    std::shared_ptr<Parallel_reader::Ctx> m_ctx{nullptr};
 
     Thread_ctx(Thread_ctx &&) = delete;
     Thread_ctx(const Thread_ctx &) = delete;
@@ -353,11 +691,15 @@ class Parallel_reader {
   @param[in]  n_threads number of threads that *need* to be spawned
   @return DB_SUCCESS or error code. */
   [[nodiscard]] dberr_t spawn(size_t n_threads) noexcept;
+  [[nodiscard]] dberr_t async_spawn(size_t n_threads) noexcept;
 
   /** Start the threads to do the parallel read for the specified range.
   @param[in] n_threads          Number of threads to use for the scan.
   @return DB_SUCCESS or error code. */
   [[nodiscard]] dberr_t run(size_t n_threads);
+
+  [[nodiscard]] dberr_t async_run(size_t n_threads);
+  void wait_work_finish() { join(); }
 
   /** dispatch a execution context to the prebuilt object */
   dberr_t dispatch_ctx(row_prebuilt_t *prebuilt);
@@ -435,9 +777,14 @@ class Parallel_reader {
   /** Poll for requests and execute.
   @param[in]  thread_ctx  thread related context information */
   void worker(Thread_ctx *thread_ctx);
+  void async_worker(Thread_ctx *thread_ctx);
 
   /** Create the threads and do a parallel read across the partitions. */
   void parallel_read();
+
+  dberr_t async_parallel_read(size_t thread_index, size_t &thread_created_count,
+                              std::string &create_thread_err_msg,
+                              bool &need_to_retry);
 
   /** @return true if tasks are still executing. */
   [[nodiscard]] bool is_active() const {
@@ -460,6 +807,9 @@ class Parallel_reader {
       std::list<std::shared_ptr<Scan_ctx>,
                 ut::allocator<std::shared_ptr<Scan_ctx>>>;
 
+
+  using Ctxs_async_queue_t = parallel_reader_block_queue_t<std::shared_ptr<Ctx>>;
+
   // clang-format on
 
   /** Maximum number of worker threads to use. */
@@ -480,6 +830,8 @@ class Parallel_reader {
 
   /** Scan contexts. */
   Scan_ctxs m_scan_ctxs{};
+
+  Ctxs_async_queue_t m_ctxs_async_que;
 
   /** For signalling worker threads about events. */
   os_event_t m_event{};
@@ -524,6 +876,18 @@ class Parallel_reader {
 
   bool m_pq_reverse_scan{false};
 
+  /** this flag is added fort greatdb ap parallel fetch.
+   *  this is for handling the empty table.
+   *  the parallel fetch interface will call async_run and
+   *  set this to true.
+   */
+  bool m_force_start_thread_for_ap_async_fetch{false};
+
+  bool m_greatdb_ap_reverse_fetch{false};
+
+  std::atomic<uint64_t> m_n_threads_created{0};
+  std::atomic<uint64_t> m_n_threads_exited{0};
+
   friend class Ctx;
   friend class Scan_ctx;
   friend class Parallel_reader_adapter;
@@ -565,6 +929,10 @@ class Parallel_reader::Scan_ctx {
 
     /** Persistent cursor.*/
     btr_pcur_t *m_pcur{};
+
+    bool m_iter_for_greatdb_range{false};
+    bool m_is_first_range{false};
+    bool m_is_last_range{false};
   };
 
   /** mtr_t savepoint. */
@@ -669,7 +1037,22 @@ class Parallel_reader::Scan_ctx {
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
   [[nodiscard]] bool check_visibility(const rec_t *&rec, ulint *&offsets,
-                                      mem_heap_t *&heap, mtr_t *mtr);
+                                      mem_heap_t *&heap, mtr_t *mtr, Ctx *ctx,
+                                      rec_t *&out_clust_rec,
+                                      ulint *&out_clust_offsets);
+
+  /** Check the secondary index rec visibility,
+    and maybe need access cluster index.
+  @param[in,out]  rec           Current row read from the index. This can
+                              be modified by this method if an older version
+                              needs to be built.
+  @param[in,out]  offsets       Same as above but pertains to the rec offsets
+  @param[in,out]  heap          Heap to use if a previous version needs to be
+                              built from the undo log.
+  @param[in,out]  mtr           Mini-transaction covering the read.
+  @return true if row is visible to the transaction. */
+  bool check_sec_visibility(const rec_t *rec, ulint *offsets,
+                            mem_heap_t *vers_heap);
 
   dberr_t find_visible_record(byte *buf, const rec_t *&rec,
                               const rec_t *&clust_rec, ulint *&offsets,
@@ -709,6 +1092,10 @@ class Parallel_reader::Scan_ctx {
     return m_s_locks.load(std::memory_order_acquire) > 0;
   }
 
+  bool need_access_clust_rec_for_sec() {
+    return m_config.m_is_need_cluster_rec;
+  }
+
  private:
   using Config = Parallel_reader::Config;
 
@@ -742,6 +1129,61 @@ class Parallel_reader::Scan_ctx {
   Scan_ctx(const Scan_ctx &) = delete;
   Scan_ctx &operator=(Scan_ctx &&) = delete;
   Scan_ctx &operator=(const Scan_ctx &) = delete;
+};
+
+/** this class refer the class Row_sel_get_clust_rec_for_mysql.
+ * the purpose of this class is to enhance the performance in
+ * some cases: multi secondary index records maybe mapped to
+ * one cluster record.
+ * Now the Thread_ctx and ctx is 1:1
+ */
+class Parallel_reader::Sec_index_visibilty_checker_t {
+  const rec_t *cached_clust_rec{nullptr};
+  ulint m_cached_page_offset{0};
+  rec_t *cached_old_vers{nullptr};
+  lsn_t cached_lsn{0};
+  page_no_t cached_page_no{0};
+  space_id_t cached_space_id{0};
+  mem_heap_t *m_cache_mem_heap{nullptr};
+  mem_heap_t *m_tmp_mem_heap{nullptr};
+  ulint *m_cache_offsets{nullptr};
+
+ public:
+  Sec_index_visibilty_checker_t() {
+    cached_clust_rec = nullptr;
+    m_cached_page_offset = 0;
+    cached_old_vers = nullptr;
+    cached_lsn = 0;
+    cached_page_no = 0;
+    cached_space_id = 0;
+    m_cache_mem_heap = mem_heap_create(1024, UT_LOCATION_HERE);
+    m_tmp_mem_heap = mem_heap_create(1024, UT_LOCATION_HERE);
+    m_cache_offsets = nullptr;
+  }
+
+  ~Sec_index_visibilty_checker_t() {
+    if (m_cache_mem_heap) {
+      mem_heap_free(m_cache_mem_heap);
+      m_cache_mem_heap = nullptr;
+    }
+    if (m_tmp_mem_heap) {
+      mem_heap_free(m_tmp_mem_heap);
+      m_tmp_mem_heap = nullptr;
+    }
+  }
+
+ public:
+  /** check the secondary record visibility */
+  bool judge_sec_visibility(trx_t *trx, Parallel_reader::Ctx *ctx,
+                            const rec_t *sec_rec, ulint *sec_offsets,
+                            mem_heap_t *vers_heap);
+
+  /** for get cluster rec, if cache is enabled, then the cached old vers must be
+   * vaild
+   */
+  bool get_cluster_rec(trx_t *trx, Parallel_reader::Ctx *ctx,
+                       const rec_t *sec_rec, ulint *sec_offsets,
+                       rec_t *&clust_rec, ulint *&clust_offset);
 };
 
 /** Parallel reader execution context. */
@@ -796,7 +1238,20 @@ class Parallel_reader::Ctx {
   @return true if row is visible to the transaction. */
   bool is_rec_visible(const rec_t *&rec, ulint *&offsets, mem_heap_t *&heap,
                       mtr_t *mtr) {
-    return m_scan_ctx->check_visibility(rec, offsets, heap, mtr);
+    rec_t *clust_rec{nullptr};
+    ulint *clust_rec_offsets{nullptr};
+
+    return m_scan_ctx->check_visibility(rec, offsets, heap, mtr, this,
+                                        clust_rec, clust_rec_offsets);
+    ut_a(nullptr == clust_rec);
+  }
+
+  [[nodiscard]] bool sec_need_clust_rec() const {
+    return m_scan_ctx->m_config.m_is_need_cluster_rec;
+  }
+
+  bool is_greatdb_ap_desc() {
+    return m_scan_ctx->m_config.m_is_greatdb_ap_desc_fetch;
   }
 
  private:
@@ -804,11 +1259,14 @@ class Parallel_reader::Ctx {
   @return DB_SUCCESS or error code. */
   [[nodiscard]] dberr_t traverse();
 
+  [[nodiscard]] dberr_t traverse_desc();
+
   /** Traverse the records in a node.
   @param[in]  pcursor persistent b-tree cursor
   @param[in]  mtr mtr
   @return error */
   dberr_t traverse_recs(PCursor *pcursor, mtr_t *mtr);
+  dberr_t traverse_recs_desc(PCursor *pcursor, mtr_t *mtr, rec_t *end_rec);
 
   /** Move to the next node in the specified level.
   @param[in]  pcursor persistent b-tree cursor
@@ -873,7 +1331,11 @@ class Parallel_reader::Ctx {
 
   Parallel_reader *reader;
 
+  Sec_index_visibilty_checker_t sec_index_visibilty_checker;
+
   friend class Parallel_reader;
 };
+
+/****************************************************************************************************************/
 
 #endif /* !row0par_read_h */

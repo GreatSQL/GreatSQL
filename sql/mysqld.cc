@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -819,6 +819,7 @@ MySQL clients support the protocol:
 #include "sql/replication.h"                        // thd_enter_cond
 #include "sql/resourcegroups/resource_group_mgr.h"  // init, post_init
 #include "sql/sql_profile.h"
+#include "sql/sql_synonym.h"
 #ifdef _WIN32
 #include "sql/restart_monitor_win.h"
 #endif
@@ -1397,6 +1398,7 @@ bool thread_cache_size_specified = false;
 bool host_cache_size_specified = false;
 bool table_definition_cache_specified = false;
 ulong locked_account_connection_count = 0;
+bool synonym_translation_enabled = false;
 
 ulonglong denied_connections = 0;
 ulonglong global_conn_mem_limit = 0;
@@ -1732,6 +1734,7 @@ static ulong opt_specialflag;
 char *opt_binlog_index_name;
 char *mysql_home_ptr, *pidfile_name_ptr;
 char *default_auth_plugin;
+
 /**
   Memory for allocating command line arguments, after load_defaults().
 */
@@ -2644,6 +2647,7 @@ static void clean_up(bool print_message) {
   my_tz_free();
   servers_free(true);
   sequences_free(true);
+  Db_object_synonyms_cache::free(true);
   acl_free(true);
   grant_free();
   data_masking::free();
@@ -2757,10 +2761,15 @@ static void clean_up(bool print_message) {
   persisted_variables_cache.cleanup();
 
   udf_deinit_globals();
+
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+  query_plan_plugin_deinit_globals();
+#endif
   /*
     The following lines may never be executed as the main thread may have
     killed us
   */
+
   DBUG_PRINT("quit", ("done with cleanup"));
 } /* clean_up */
 
@@ -4827,6 +4836,18 @@ SHOW_VAR com_status_vars[] = {
     {"alter_sequence",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_ALTER_SEQUENCE]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"create_synonym",
+     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_CREATE_SYNONYM]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"drop_synonym",
+     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_DROP_SYNONYM]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"alter_synonym",
+     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_ALTER_SYNONYM]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"show_synonyms",
+     (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_SHOW_SYNONYMS]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
 LEX_CSTRING sql_statement_names[(uint)SQLCOM_END + 1];
@@ -6815,6 +6836,9 @@ static int init_server_components() {
     to register their UDFs at init time and de-register them at deinit time.
   */
   udf_init_globals();
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+  query_plan_plugin_deinit_globals();
+#endif
 
   /*
     Set tc_log to point to TC_LOG_DUMMY early in order to allow plugin_init()
@@ -8539,6 +8563,8 @@ int mysqld_main(int argc, char **argv)
   // add for Greatdb: support oracle sequence
   init_sequence_global_var();
   sequences_init(opt_initialize);
+  // add for GreatDB: support for Oracle Synonym
+  Db_object_synonyms_cache::init(opt_initialize);
 
   if (!opt_noacl) {
     udf_read_functions_table();
@@ -10246,6 +10272,25 @@ static int show_resource_group_support(THD *, SHOW_VAR *var, char *buf) {
   return 0;
 }
 
+static int show_rpl_data_speed(THD *, SHOW_VAR *var, char *buff) {
+  var->type = SHOW_CHAR;
+  var->value = buff;
+
+  buff[0] = 0;
+  std::lock_guard<std::mutex> lock(
+      Speed_controller::binlog_transfer_speed_hash_lock);
+  for (auto it = Speed_controller::binlog_transfer_speed_hash.begin();
+       it != Speed_controller::binlog_transfer_speed_hash.end(); it++) {
+    auto data_speed = it->second;
+    if (Speed_controller::INVALID_SPEED != data_speed) {
+      snprintf(buff + strlen(buff), SHOW_VAR_FUNC_BUFF_SIZE - strlen(buff),
+               0 == buff[0] ? "%s=%0.2f" : ",%s=%0.2f", it->first,
+               data_speed / 1024.0);
+    }
+  }
+  return 0;
+}
+
 /*
   Variables shown by SHOW STATUS in alphabetical order
 */
@@ -10637,6 +10682,8 @@ SHOW_VAR status_vars[] = {
     {"Tls_library_version", (char *)&show_tls_library_version, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
     {"Resource_group_supported", (char *)show_resource_group_support, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"Rpl_data_speed", (char *)&show_rpl_data_speed, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
@@ -12509,6 +12556,7 @@ PSI_mutex_key key_LOCK_delegate_connection_mutex;
 PSI_mutex_key key_LOCK_group_replication_connection_mutex;
 PSI_mutex_key key_LOCK_sp_version_change_mutex;
 PSI_mutex_key key_sched_affinity_mutex;
+PSI_mutex_key key_LOCK_thd_query_plan_plugin;
 
 /* clang-format off */
 static PSI_mutex_info all_server_mutexes[]=
@@ -12610,7 +12658,8 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_global_conn_mem_limit, "LOCK_global_conn_mem_limit", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_pq_threads_running, "LOCK_pq_threads_running", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_sp_version_change_mutex, "LOCK_sp_version_change_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-  { &key_sched_affinity_mutex, "Sched_affinity::m_mutex", 0, 0, PSI_DOCUMENT_ME}
+  { &key_sched_affinity_mutex, "Sched_affinity::m_mutex", 0, 0, PSI_DOCUMENT_ME},
+  { &key_LOCK_thd_query_plan_plugin, "THD::LOCK_thd_query_plan_plugin", 0, PSI_VOLATILITY_SESSION, PSI_DOCUMENT_ME},
 };
 /* clang-format on */
 

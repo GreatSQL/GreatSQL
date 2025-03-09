@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+/* Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -83,6 +83,32 @@ static int read_secondary_load_gtid(TABLE *table, const char *schema_name,
 void secondary_engine_task_shutdown() {
   auto &mngr = Secondary_engine_increment_load_task_manager::instance();
   mngr.shutdown_and_clear_all_inc_load_task();
+}
+
+bool table_should_float_query(TABLE *table) {
+  assert(table != nullptr);
+  auto has_primary_key = (table->s->primary_key != MAX_KEY);
+  bool has_float = false;
+  for (Field **field = table->field; *field; field++) {
+    if ((*field)->real_type() == MYSQL_TYPE_FLOAT) {
+      has_float = true;
+      break;
+    }
+  }
+  if (!has_primary_key) return has_float;
+
+  assert(has_primary_key);
+  bool pk_has_float = false;
+  KEY *key_info = &table->key_info[table->s->primary_key];
+  for (uint i = 0; i < key_info->user_defined_key_parts; i++) {
+    KEY_PART_INFO *key_part = key_info->key_part + i;
+    Field *part_field = key_part->field;
+    if (part_field->real_type() == MYSQL_TYPE_FLOAT) {
+      pk_has_float = true;
+      break;
+    }
+  }
+  return pk_has_float;
 }
 
 enum_secondary_read_delay_cost_level can_read_from_secondary_engine(
@@ -200,7 +226,7 @@ Secondary_engine_increment_load_task_manager::can_read_from_secondary_engine(
 
 int Secondary_engine_increment_load_task_manager::start_inc_load_task(
     const char *schema_name, const char *table_name, const char *gtid_value,
-    String *str, bool auto_position) {
+    String *str, bool auto_position, bool strict_mode) {
   DBUG_TRACE;
   int lower_case = lower_case_table_names;
 #ifndef NDEBUG
@@ -232,20 +258,28 @@ int Secondary_engine_increment_load_task_manager::start_inc_load_task(
     task.reset(
         new Secondary_engine_inc_load_task(db_name, tbl_name, gtid_value));
   } else {
-    assert(gtid_value == nullptr);
     task.reset(new Secondary_engine_inc_load_task(db_name, tbl_name));
   }
-  int ret = task->start_task();
+  int ret = task->start_task(strict_mode);
+  auto &task_errmsg = task->m_errmsg;
+  auto &task_warning = task->m_warning;
   if (!ret) {
     m_inc_load_tasks[table] = std::move(task);
-    str->append(STRING_WITH_LEN("success"));
+    str->append(STRING_WITH_LEN("start task success"));
+    if (!task_warning.empty()) {
+      str->append(STRING_WITH_LEN(". Warning: "));
+      str->append(task_warning.c_str(), task_warning.size());
+    }
     std::string info_msg("Start econdary_engine binlog load task for table ");
     info_msg += schema_name;
     info_msg += ".";
     info_msg += table_name;
     LogErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, info_msg.c_str());
   } else {
-    str->append(STRING_WITH_LEN("start task error"));
+    str->append(STRING_WITH_LEN("start task error."));
+    if (!task_errmsg.empty()) {
+      str->append(task_errmsg.c_str(), task_errmsg.size());
+    }
   }
   m_mutex.unlock();
   return ret;
@@ -373,17 +407,65 @@ Secondary_engine_inc_load_task::Secondary_engine_inc_load_task(
   m_start_time = get_format_date_string();
 }
 
-int Secondary_engine_inc_load_task::start_task() {
+int Secondary_engine_inc_load_task::start_task(bool strict_mode) {
   DBUG_TRACE;
+  // TODO: mode for different situation
+  // now, strict_mode situation:
+  // 1. table without primary key. because the duckdb does not
+  //    support UPDATE xxx LIMIT 1, and DELETE xxx LIMIT 1
+  // 2. table with FLOAT column. if (1) table has FLOAT column
+  //    without primary key, or (2) the primary key contain
+  //    FLOAT column, then for UPDATE\DELETE, the FLOAT must
+  //    in WHERE clause, while duckdb may not find the record
   {
     // check table
     THD *thd = current_thd;
     TABLE *table =
         open_table_for_task(thd, m_schema_name.c_str(), m_table_name.c_str());
     if (table == nullptr) {
+      m_errmsg += "cannot open table";
       return 1;
     }
+    auto has_primary_key = (table->s->primary_key != MAX_KEY);
+    auto has_float = table_should_float_query(table);
     close_table_for_task(thd);
+    if (!has_primary_key) {
+      char errbuf[1024];
+      sprintf(errbuf,
+              " No primary key on table %s.%s, secondary_engine_load_inc_task "
+              "may interrupt when UPDATE or DELETE when table has repeat rows.",
+              m_schema_name.c_str(), m_table_name.c_str());
+      LogErr(WARNING_LEVEL, ER_LOG_PRINTF_MSG, errbuf);
+      if (strict_mode) {
+        m_errmsg += errbuf;
+        return 1;
+      } else {
+        m_warning += errbuf;
+      }
+    }
+    if (has_float) {
+      char errbuf[1024];
+      if (has_primary_key) {
+        sprintf(errbuf,
+                " Primary key contain Float type on table %s.%s, "
+                "secondary_engine_load_inc_task may "
+                "interrupt for any UPDATE or DELETE.",
+                m_schema_name.c_str(), m_table_name.c_str());
+      } else {
+        sprintf(errbuf,
+                " Table %s.%s contain Float type without primary key, "
+                "secondary_engine_load_inc_task may interrupt for any UPDATE "
+                "or DELETE.",
+                m_schema_name.c_str(), m_table_name.c_str());
+      }
+      LogErr(WARNING_LEVEL, ER_LOG_PRINTF_MSG, errbuf);
+      if (strict_mode) {
+        m_errmsg += errbuf;
+        return 1;
+      } else {
+        m_warning += errbuf;
+      }
+    }
   }
   if (m_auto_position) {
     assert(m_start_gtid.empty());
@@ -394,6 +476,7 @@ int Secondary_engine_inc_load_task::start_task() {
               "%s.%s",
               m_schema_name.c_str(), m_table_name.c_str());
       LogErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, errbuf);
+      m_errmsg += errbuf;
       return 1;
     }
   }
@@ -407,6 +490,7 @@ int Secondary_engine_inc_load_task::start_task() {
         "wrong gtid value %s in secondary_engine_load_inc_task for table %s.%s",
         m_start_gtid.c_str(), m_schema_name.c_str(), m_table_name.c_str());
     LogErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, errbuf);
+    m_errmsg += errbuf;
     return 1;
   }
 
@@ -446,6 +530,7 @@ int Secondary_engine_inc_load_task::run() {
   }
   thd->thread_stack = (char *)&thd;
   thd->store_globals();
+  thd->variables.time_zone = my_tz_UTC;
 
   int ret = 0;
   Read_binlog_meta_applier *applier = nullptr;
@@ -463,9 +548,13 @@ int Secondary_engine_inc_load_task::run() {
         open_table_for_task(thd, m_schema_name.c_str(), m_table_name.c_str());
     if (table == nullptr) {
       ret = 1;
+      m_errmsg =
+          "Cannot open table when register binlog_executor_cbk for secondary "
+          "storage engine";
       goto end;
     }
     executor = register_engine_cbk(thd, table, &m_gtid_set, &m_sync_timestamp);
+    m_errmsg = "Fail register binlog_executor_cbk for secondary storage engine";
     if (executor == nullptr) {
       ret = 1;
       goto end;

@@ -1224,12 +1224,14 @@ let $query=select a, (a in (select * from t2)) from t1;
 
 eval explain $query;
 flush status;
+--source include/disable_turbo.inc
 eval $query;
 --echo There will be one look-up in the temporary table for each row
 --echo of t1 (12), plus one additional look-up to check whether table
 --echo contains a NULL value.
 --skip_if_hypergraph  # Depends on the query plan.
 show status like "handler_read_key";
+--source include/restore_turbo.inc
 
 drop table t1,t2;
 
@@ -1329,9 +1331,11 @@ ANALYZE TABLE t1, t2;
 let $query=select * from t1 where a in (select a from t2);
 eval explain $query;
 flush status;
+--source include/disable_turbo.inc
 eval $query;
 --skip_if_hypergraph  # Depends on the query plan.
 show status like "handler_read%";
+--source include/restore_turbo.inc
 drop table t1,t2;
 
 --echo #

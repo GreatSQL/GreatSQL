@@ -983,6 +983,7 @@ $$
 call p1();
 dr_table(100).a
 100
+ERROR 02000: No data - zero rows fetched, selected, or processed
 select * from t2;
 a	b
 INSERT INTO t1 VALUES (null,null);

@@ -9,6 +9,8 @@
 # Simple select test
 #
 
+--source include/disable_turbo.inc
+
 --disable_warnings
 drop table if exists t1,t2,t3,t4;
 --enable_warnings
@@ -1949,3 +1951,5 @@ SELECT ELT(FIELD(kundentyp,'PP','PPA','PG','PGA','FK','FKA','FP','FPA','K','KA',
 
 --source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 drop table t1;
+
+--source include/restore_turbo.inc

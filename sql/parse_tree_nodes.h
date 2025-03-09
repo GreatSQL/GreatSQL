@@ -1,5 +1,5 @@
 /* Copyright (c) 2013, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -102,6 +102,18 @@ struct CHARSET_INFO;
   @ingroup  ptn
 */
 /**
+  @defgroup ptn_create_synonym CREATE SYNONYM statement
+  @ingroup  ptn_stmt
+*/
+/**
+  @defgroup ptn_alter_synonym ALTER SYNONYM statement
+  @ingroup  ptn_stmt
+*/
+/**
+  @defgroup ptn_drop_synonym DROP SYNONYM statement
+  @ingroup  ptn_stmt
+*/
+/**
   @defgroup ptn_create_table  CREATE TABLE statement
   @ingroup  ptn_stmt
 */
@@ -152,7 +164,13 @@ bool contextualize_nodes(Mem_root_array_YY<Node_type *> nodes,
   return false;
 }
 
-enum PT_root_type { ROOT_DEFAULT = 0, ROOT_SELECT_STMT, ROOT_EXPLAIN_STMT };
+enum PT_root_type {
+  ROOT_DEFAULT = 0,
+  ROOT_SELECT_STMT,
+  ROOT_EXPLAIN_STMT,
+  ROOT_INSERT_SELECT,
+  ROOT_INSERT
+};
 
 enum PT_qe_body_type {
   PT_QE_BODY_DEFAULT = 0,
@@ -295,6 +313,8 @@ class PT_common_table_expr : public Parse_tree_node {
     return other == &m_postparse;
   }
   void print(const THD *thd, String *str, enum_query_type query_type);
+  const Create_col_name_list *get_column_names() { return &m_column_names; }
+  PT_subquery *get_subquery() { return m_subq_node; }
 
  private:
   LEX_STRING m_name;
@@ -379,6 +399,8 @@ class PT_with_clause : public Parse_tree_node {
     m_most_inner_in_parsing = old;
   }
   void print(const THD *thd, String *str, enum_query_type query_type);
+  const PT_with_list *get_list() { return m_list; }
+  bool recursive() { return m_recursive; }
 
  private:
   /// All CTEs of this clause
@@ -436,7 +458,7 @@ enum PT_table_reference_type {
 
 class PT_table_reference : public Parse_tree_node {
  public:
-  Table_ref *m_table_ref;
+  Table_ref *m_table_ref{nullptr};
 
   /**
     Lets us build a parse tree top-down, which is necessary due to the
@@ -596,6 +618,7 @@ class PT_table_factor_joined_table : public PT_table_reference {
 
   bool contextualize(Parse_context *pc) override;
   PT_table_reference_type type() const override { return PT_FACTOR_JOINED; }
+  PT_joined_table *get_PT_joined_table() { return m_joined_table; }
 
  private:
   PT_joined_table *m_joined_table;
@@ -1618,6 +1641,9 @@ class PT_query_specification : public PT_query_primary {
   PT_group *get_group_clause() { return opt_group_clause; }
   Item *get_having_clause() { return opt_having_clause; }
   Query_options get_options() { return options; }
+  PT_connect_by *get_connect_by_clause() { return opt_connect_by_clause; }
+  PT_pivot *get_pivot_clause() { return m_pivot; }
+  PT_window_list *get_window_clause() { return opt_window_clause; }
 
   PT_qe_body_type type() const override { return PT_QUERY_SPEC; }
 
@@ -1749,6 +1775,7 @@ class PT_query_expression final : public PT_query_expression_body {
   PT_query_expression_body *get_body() { return m_body; }
   PT_order *get_order() { return m_order; }
   PT_limit_clause *get_limit() { return m_limit; }
+  PT_with_clause *get_with_clause() { return m_with_clause; }
 
  private:
   /**
@@ -2204,6 +2231,15 @@ class PT_insert final : public Parse_tree_root {
 
  private:
   bool has_query_block() const { return insert_query_expression != nullptr; }
+
+ public:
+  PT_root_type type() override {
+    return insert_query_expression ? ROOT_INSERT_SELECT : ROOT_INSERT;
+  }
+  PT_query_expression_body *get_insert_query() {
+    return insert_query_expression;
+  }
+  bool is_dup_update() { return opt_on_duplicate_column_list ? true : false; }
 };
 
 class PT_insert_all_into : public Parse_tree_node {
@@ -3176,6 +3212,64 @@ enum temp_table_oc_param : int {
 };
 
 /**
+ * Top-level node for the CREATE %SYNONYM statement
+ * @ingroup ptn_create_synonym
+ * @{ */
+class PT_create_synonym_stmt final : public Parse_tree_root {
+ private:
+  Table_ident *m_synonym_ident;
+  bool m_or_replace;
+  bool m_is_public;
+  Table_ident *m_target_ident;
+
+ public:
+  PT_create_synonym_stmt(Table_ident *synonym_ident, bool or_replace,
+                         bool is_public, Table_ident *target_ident)
+      : m_synonym_ident(synonym_ident),
+        m_or_replace(or_replace),
+        m_is_public(is_public),
+        m_target_ident(target_ident) {}
+
+ public:
+  Sql_cmd *make_cmd(THD *thd) override;
+};
+/**  @} Top-level node for the CREATE SYNONYM %SYNONYM statement */
+
+/**
+ * Top-level node for the DROP %SYNONYM  statement
+ * @{ */
+class PT_drop_synonym_stmt final : public Parse_tree_root {
+ private:
+  Table_ident *m_synonym_ident;
+  bool m_is_public;
+
+ public:
+  PT_drop_synonym_stmt(Table_ident *synonym_ident, bool is_public)
+      : m_synonym_ident(synonym_ident), m_is_public(is_public) {}
+
+ public:
+  Sql_cmd *make_cmd(THD *thd) override;
+};
+/**  @} Top-level node for the DROP %SYNONYM  statement */
+
+/**
+ * Top-level node for the ALTER %SYNONYM statement
+ * @{ */
+class PT_alter_synonym_stmt final : public Parse_tree_root {
+ private:
+  Table_ident *m_synonym_ident;
+  bool m_is_public;
+
+ public:
+  PT_alter_synonym_stmt(Table_ident *synonym_ident, bool is_public)
+      : m_synonym_ident(synonym_ident), m_is_public(is_public) {}
+
+ public:
+  Sql_cmd *make_cmd(THD *thd) override;
+};
+/**  @} Top-level node for the ALTER %SYNONYM statement */
+
+/**
   Top-level node for the CREATE %TABLE statement
 
   @ingroup ptn_create_table
@@ -3771,6 +3865,20 @@ class PT_show_create_package_body final : public PT_show_base {
 
   Sql_cmd_show_create_package_body m_sql_cmd;
 };
+
+class PT_show_create_synonym final : public PT_show_base {
+ public:
+  PT_show_create_synonym(const POS &pos, bool is_public,
+                         Table_ident *table_ident)
+      : PT_show_base(pos, SQLCOM_SHOW_CREATE),
+        m_sql_cmd(table_ident, is_public) {}
+
+ public:
+  Sql_cmd *make_cmd(THD *thd) override;
+
+ private:
+  Sql_cmd_show_create_synonym m_sql_cmd;
+};  // class PT_show_create_synonym final : public PT_show_base
 
 /// Parse tree node for SHOW CREATE TYPE statement
 
@@ -4377,6 +4485,17 @@ class PT_show_sequences final : public PT_show_schema_base {
 
   Show_cmd_type m_show_cmd_type;
 };
+
+class PT_show_synonyms final : public PT_show_base {
+ public:
+  PT_show_synonyms(const POS &pos) : PT_show_base(pos, SQLCOM_SHOW_SYNONYMS) {}
+
+ public:
+  Sql_cmd *make_cmd(THD *thd) override;
+
+ private:
+  Sql_cmd_show_synonyms m_sql_cmd;
+};  // class PT_show_synonyms final : public PT_show_filter_base
 
 /// Parse tree node for SHOW TABLES statement
 

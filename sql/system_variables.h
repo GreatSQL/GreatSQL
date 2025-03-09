@@ -1,6 +1,6 @@
 /* Copyright (c) 2015, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -756,6 +756,8 @@ struct System_variables {
   uint gdb_parallel_load_chunk_size;
   bool gdb_parallel_load_executor;  // not displayed, need delete THD after use.
                                     // inited to false by memset of THD()
+  bool ora_warning_as_error;
+
   bool force_parallel_execute;
 
   ulong parallel_cost_threshold;

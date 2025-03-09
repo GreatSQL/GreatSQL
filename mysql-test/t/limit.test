@@ -46,6 +46,7 @@ LIMIT 8;
 SELECT * FROM t2
 LIMIT 8 OFFSET 1;
 
+--source include/disable_turbo.inc
 (SELECT * FROM t1 ORDER BY a DESC LIMIT 5) UNION
 SELECT * FROM t2
 LIMIT 8;
@@ -53,6 +54,7 @@ LIMIT 8;
 (SELECT * FROM t1 ORDER BY a DESC LIMIT 5 OFFSET 4) UNION
 SELECT * FROM t2
 LIMIT 8 OFFSET 1;
+--source include/restore_turbo.inc
 
 (SELECT * FROM t1 LIMIT 5) UNION
 SELECT * FROM t2

@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -77,6 +77,7 @@
 #include "sql/parse_tree_node_base.h"  // enum_parsing_context
 #include "sql/parser_yystype.h"
 #include "sql/query_options.h"  // OPTION_NO_CONST_TABLES
+#include "sql/query_plan_plugin.h"
 #include "sql/query_term.h"
 #include "sql/sequence_option.h"
 #include "sql/set_var.h"
@@ -95,6 +96,7 @@
 #include "sql/visible_fields.h"
 #include "sql_chars.h"
 #include "sql_string.h"
+#include "sql_synonym.h"
 #include "thr_lock.h"  // thr_lock_type
 #include "violite.h"   // SSL_type
 
@@ -139,6 +141,8 @@ struct sql_digest_state;
 union Lexer_yystype;
 struct Lifted_fields_map;
 class sp_label;
+
+class DKStatements;
 
 const size_t INITIAL_LEX_PLUGIN_LIST_SIZE = 16;
 constexpr const int MAX_SELECT_NESTING{sizeof(nesting_map) * 8 - 1};
@@ -4000,7 +4004,8 @@ struct LEX : public Query_tables_list {
   Query_block *m_current_query_block;
 
  public:
-  Parse_tree_root *root;  // parse tree
+  Parse_tree_root *root{nullptr};  // parse tree
+  bool parse_tree_has_changed = false;
 
   inline Query_block *current_query_block() const {
     return m_current_query_block;
@@ -4024,6 +4029,7 @@ struct LEX : public Query_tables_list {
     mark with function syntax
   */
   bool m_with_func = false;
+  uint32_t path_id{0};
   /**
     Whether the currently-running query should be (attempted) executed in
     the hypergraph optimizer. This will not change after the query is
@@ -4032,6 +4038,7 @@ struct LEX : public Query_tables_list {
     does not properly understand yet.
    */
   bool using_hypergraph_optimizer = false;
+  bool merge_into_with_derived_source_table{false};
   LEX_STRING name;
   char *help_arg;
   char *to_log; /* For PURGE MASTER LOGS TO */
@@ -4290,12 +4297,18 @@ struct LEX : public Query_tables_list {
   // for Item_splocal_row_field_table in loop stmt,it needs fix_field every loop
   // because the data of udt table maybe null.
   bool is_include_udt_table_item;
+  /*for i ==> for_i_ident = i
+    in first .. last ==> PTI_simple_ident_ident::itemize check name
+    loop; ==> for_i_ident = NULL_STR
+  */
+  LEX_STRING for_i_ident;
 
  private:
   /// True if statement references UDF functions
   bool m_has_udf{false};
   bool ignore;
   bool m_materialized_view{false};
+  bool m_has_synonym{false};
 
  public:
   bool is_ignore() const { return ignore; }
@@ -4303,6 +4316,8 @@ struct LEX : public Query_tables_list {
   void set_has_udf() { m_has_udf = true; }
   bool has_udf() const { return m_has_udf; }
   bool has_udt_table() const { return is_include_udt_table_item; }
+  void set_has_synonym() { m_has_synonym = true; }
+  bool has_synonym() const { return m_has_synonym; }
   st_parsing_options parsing_options;
   Alter_info *alter_info;
   bool in_execute_ps{false};
@@ -4328,8 +4343,6 @@ struct LEX : public Query_tables_list {
   void set_is_materialized_view(bool materialized_param) {
     m_materialized_view = materialized_param;
   }
-  bool use_rapid_exec{false};
-  mem_root_deque<Item *> *rapid_fields{nullptr};
 
   bool is_sp_create_or_replace() const {
     return create_sp_mode == enum_sp_create_mode::SP_CREATE_OR_REPLACE;
@@ -4504,6 +4517,7 @@ struct LEX : public Query_tables_list {
 
   /// Destroy contained objects, but not the LEX object itself.
   void destroy() {
+    destroy_additional_query_plan(this);
     if (unit == nullptr) return;
     unit->destroy();
     unit = nullptr;
@@ -4905,11 +4919,9 @@ struct LEX : public Query_tables_list {
       uint *var_offset, const char *start, const char *end,
       Item_splocal **cursor_var_item);
 
-  bool make_temp_upper_bound_variable_and_set(THD *thd, Item *item_uuid,
-                                              int m_direction,
-                                              sp_assignment_lex *lex_from,
-                                              sp_assignment_lex *lex_to,
-                                              Item **item_out);
+  bool make_temp_upper_bound_variable_and_set(
+      THD *thd, Item *item_uuid, int m_direction, sp_assignment_lex *lex_from,
+      sp_assignment_lex *lex_to, Item **item_out, LEX_STRING cursor_var);
 
   bool sp_goto_statement(THD *thd, LEX_CSTRING label_name);
 
@@ -4940,6 +4952,18 @@ struct LEX : public Query_tables_list {
   void set_rewrite_required() { rewrite_required = true; }
   void reset_rewrite_required() { rewrite_required = false; }
   bool is_rewrite_required() { return rewrite_required; }
+
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+  bool m_use_query_plan_plugin{true};
+  bool query_plan_plugin_enabled{false};
+
+  bool use_query_plan_plugin() { return m_use_query_plan_plugin; }
+  void set_use_query_plan_plugin(bool use) { m_use_query_plan_plugin = use; }
+
+  void *m_query_plan_context{nullptr};
+  void set_query_plan_context(void *context) { m_query_plan_context = context; }
+  void *get_query_plan_context() { return m_query_plan_context; }
+#endif
 };
 
 /**

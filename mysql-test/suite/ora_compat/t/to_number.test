@@ -337,7 +337,7 @@ select to_number('123.45','FML999.99') from dual;
 select to_number('123','999S') from dual;
 --error 1690
 SELECT to_number('12,454.8-', '99G999D9S') FROM dual;
---error 1690
+--error ER_STD_INVALID_ARGUMENT
 select to_number('1-','9999S') FROM dual;
 --error 3047
 select to_number('$10','$99') from dual;
@@ -393,7 +393,7 @@ select to_number('-1.6e0000020','9.90EEEE') FROM dual;
 --error 1690
 select to_number('-1.6,e20,,','9.90EEEE') FROM dual;
 set sql_mode = NO_BACKSLASH_ESCAPES;
---error 1690
+--error ER_STD_INVALID_ARGUMENT
 select to_number('-\,0.0','9,9.9') FROM dual;
 set sql_mode=DEFAULT;
 select to_number('-\,0.0','9,9.9') FROM dual;
@@ -442,9 +442,9 @@ select to_number('0.1','xxx') FROM dual;
 select to_number(',0,','xxx') FROM dual;
 select to_number(',10','xxx') FROM dual;
 select to_number('1,f','xxx') FROM dual;
---error 1690
+--error ER_STD_INVALID_ARGUMENT
 select to_number('-\\\,0\.0','9,9.9') FROM dual;
---error 1690
+--error ER_STD_INVALID_ARGUMENT
 select to_number(''',0.0','9,9.9') FROM dual;
 --error 1690
 select to_number('-1.0','9999') FROM dual;
@@ -805,4 +805,72 @@ select to_number(substr(NULL,2,4));//
 
 drop function my_getage;//
 delimiter ;//
+
+#TASK 20332
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('ae+02','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('e+02','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('ee+02','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('e02','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('0e02 ','9.99EEEE') FROM dual;
+SELECT to_number('0e02','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('10e02','9.99EEEE') FROM dual;
+SELECT to_number('1e02','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('1e','9.99EEEE') FROM dual;
+SELECT to_number('1e-0','9.99EEEE') FROM dual;
+SELECT to_number('1e-0,','9.99EEEE') FROM dual;
+SELECT to_number(',1e-0,','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('1e+a','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('1e+,','9.99EEEE') FROM dual;
+SELECT to_number('1e+1,','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('1e1 ','9.99EEEE') FROM dual;
+SELECT to_number(' 1e1','9.99EEEE') FROM dual;
+SELECT to_number(' 1e1,,','9.99EEEE') FROM dual;
+SELECT to_number(' 1e1,,.','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number(' 1e1,,.,','9.99EEEE') FROM dual;
+SELECT to_number('.','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('.,','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('. ','9.99EEEE') FROM dual;
+SELECT to_number('1e1,,.','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('1e1,,..','9.99EEEE') FROM dual;
+SELECT to_number('1e1.22','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('1e1.222','9.99EEEE') FROM dual;
+SELECT to_number('1e1.22','9.99EEEE') FROM dual;
+--error ER_STD_INVALID_ARGUMENT
+SELECT to_number(' ','9.99EEEE') FROM dual;
+SELECT to_number(' ,','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number(', ','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number('1e.1','9.99EEEE') FROM dual;
+SELECT to_number('1e0.1','9.99EEEE') FROM dual;
+SELECT to_number('1e+0.1','9.99EEEE') FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT to_number(',-1e1','9.99EEEE') FROM dual;
+--error ER_STD_INVALID_ARGUMENT
+select to_number(-1.000,'9.9EEEe') FROM dual;
+SELECT to_number(' -,1e+11,,.1','99.99EEEE') FROM dual;
+select to_number(-1.000,'9.9EEEE') FROM dual;
+SELECT  to_number('   ,ffff0','XXXXx')  FROM dual;
+SELECT  to_number('   ,f,f,ff0,','XXXXx')  FROM dual;
+SELECT  to_number('   ,f,f,f,f,0,,','XXXXx')  FROM dual;
+SELECT  to_number('   -,f,f,f,f,0,,','XXXXx')  FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT  to_number('   ,,,-,f,f,f,f,0,,','XXXXx')  FROM dual;
+--error ER_DATA_OUT_OF_RANGE
+SELECT  to_number('   -,f,f,f,f,0,, ','XXXXx')  FROM dual;
 

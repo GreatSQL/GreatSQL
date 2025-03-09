@@ -303,11 +303,11 @@ a
 hello
 select c from t1 group by c;
 c
-NULL
 
+HELLO MY
+NULL
 a
 hello
-HELLO MY
 select d from t1 group by d;
 d
 NULL

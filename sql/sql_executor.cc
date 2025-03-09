@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -4763,6 +4763,10 @@ bool change_to_use_tmp_fields_except_sums(mem_root_deque<Item *> *fields,
 
       ORDER *order =
           select->find_in_group_list(rollup_item->inner_item(), nullptr);
+      if (!order) {
+        my_error(ER_FIELD_IN_GROUPING_NOT_GROUP_BY, MYF(0), (i));
+        return true;
+      }
       order->rollup_item->inner_item()->set_result_field(
           item->get_result_field());
 
@@ -4865,6 +4869,10 @@ bool change_to_use_tmp_fields_except_sums_or_connect_by(
 
       ORDER *order =
           select->find_in_group_list(rollup_item->inner_item(), nullptr);
+      if (!order) {
+        my_error(ER_FIELD_IN_GROUPING_NOT_GROUP_BY, MYF(0), (i));
+        return true;
+      }
       order->rollup_item->inner_item()->set_result_field(
           item->get_result_field());
 

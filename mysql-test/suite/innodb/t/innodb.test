@@ -1,5 +1,6 @@
 #Want to skip this test from daily Valgrind execution
 --source include/no_valgrind_without_big.inc
+--source include/no_turbo.inc
 
 -- source include/have_innodb_max_16k.inc
 
@@ -983,7 +984,9 @@ SELECT * FROM t1;
 drop table  t1,t2;
 create table t1  ( pk         int primary key,    parent     int not null,    child      int not null,       index (parent)  ) engine = innodb;
 insert into t1 values   (1,0,4),  (2,1,3),  (3,2,1),  (4,1,2);
+--source include/disable_turbo.inc
 select distinct  parent,child   from t1   order by parent;
+--source include/restore_turbo.inc
 drop table t1;
 
 #
@@ -2556,8 +2559,10 @@ show create table t1;
 --enable_query_log
 flush status;
 show status like "handler_read_key";
+--source include/disable_turbo.inc
 select f1 from t1;
 show status like "handler_read_key";
+--source include/restore_turbo.inc
 drop table t1;
 
 #

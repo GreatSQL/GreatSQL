@@ -1,5 +1,5 @@
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -474,8 +474,8 @@ class sp_cursor {
           m_row_batch(1),
           m_return_table(std::make_shared<Cursor_return_table>()) {}
     uint get_field_count() { return field_count; }
-    void set_field_count(uint count) { field_count = count; }
     ha_rows get_fetch_bulk_count() const { return fetch_bulk_count; }
+    void reset_fetch_bulk_count() { fetch_bulk_count = 0; }
     void set_spvar_list(List<sp_variable> *vars) { spvar_list = vars; }
     void set_row_batch(ha_rows rows) { m_row_batch = rows; }
     ha_rows get_row_batch() { return m_row_batch; }
@@ -501,7 +501,11 @@ class sp_cursor {
       : m_server_side_cursor(nullptr),
         m_push_instr(i),
         m_result(),
-        m_cursor_offset(cursor_offset) {}
+        m_cursor_offset(cursor_offset),
+        m_return_table_arena(&m_return_table_mem_root,
+                             Query_arena::STMT_EXECUTED),
+        m_return_table_mem_root(key_memory_sp_head_execute_root,
+                                MEM_ROOT_BLOCK_SIZE) {}
 
   virtual ~sp_cursor() { destroy(); }
 
@@ -537,6 +541,16 @@ class sp_cursor {
 
   bool check_cursor_return_type_count();
 
+  /*for next case:
+  for i in 1 .. 10 loop
+    for j in cursor/select_stmt loop
+    end loop;
+  end loop;
+  the j will make_return_table everytime when i++,so it must cleanup the table
+  to avoid make table duplicately.
+  */
+  void cleanup_return_table_mem_root();
+
   Server_side_cursor *m_server_side_cursor;
 
   sp_instr_cpush *m_push_instr;
@@ -544,6 +558,10 @@ class sp_cursor {
   Query_fetch_into_spvars m_result;
 
   uint m_cursor_offset;
+
+ private:
+  Query_arena m_return_table_arena;
+  MEM_ROOT m_return_table_mem_root;
 
  private:
   void destroy();

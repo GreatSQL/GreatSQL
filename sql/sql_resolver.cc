@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -613,10 +613,18 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
 
   set_sj_candidates(nullptr);
 
-  // connect by change where_cond filter and join
-  if (connect_by_cond() && where_cond()) {
-    if (transform_filter_with_connect_by(thd)) {
+  if (connect_by_cond()) {
+    if (olap == ROLLUP_TYPE && has_windows()) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+               "CONNECT BY with ROLLUP window functions");
       return true;
+    }
+
+    // connect by change where_cond filter and join
+    if (where_cond()) {
+      if (transform_filter_with_connect_by(thd)) {
+        return true;
+      }
     }
   }
 
@@ -4400,6 +4408,10 @@ void Query_block::empty_order_list(Query_block *sl) {
 bool Query_block::setup_connect_by(THD *thd) {
   DBUG_TRACE;
   if (m_connect_by_cond) {
+    if (has_ft_funcs()) {
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "CONNECT BY with fulltext search");
+    }
+
     assert(m_connect_by_cond->is_bool_func());
     resolve_place = Query_block::RESOLVE_CONNECT_BY;
     thd->where = "connect by clause";
@@ -4975,6 +4987,12 @@ ORDER *Query_block::find_in_group_list(Item *item, int *rollup_level) const {
   int idx = 0;
   for (ORDER *group = group_list.first; group; group = group->next, ++idx) {
     Item *group_item = *group->item;
+    if (connect_by_cond() && is_rollup_group_wrapper(group_item)) {
+      Item_rollup_group_item *rollup_item =
+          down_cast<Item_rollup_group_item *>(group_item);
+      group_item = rollup_item->inner_item();
+    }
+
     assert(group_item->real_item()->type() != Item::CACHE_ITEM);
     if (real_item->eq(group_item->real_item(), /*binary_cmp=*/false)) {
       if (item->item_name.ptr() != nullptr &&

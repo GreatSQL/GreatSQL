@@ -1,0 +1,182 @@
+#
+# 1. Set up masters server_1 and server_3 with server_2 being a slave.
+#.
+include/rpl_init.inc [topology=1->2,3->2]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+#
+# 2. Stop slave (on server_2).
+#
+[connection server_1]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'channel_1']
+[connection server_3]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'channel_3']
+SELECT CHANNEL_NAME FROM performance_schema.replication_connection_status;
+CHANNEL_NAME
+channel_1
+channel_3
+include/rpl_stop_slaves.inc
+#
+# 3. Create a table test.t1 on server_1 and insert values in the table.
+[connection server_1]
+RESET MASTER;
+SHOW MASTER STATUS;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000001	157			
+CREATE PROCEDURE dml_insert_t1()
+BEGIN
+DECLARE i INT DEFAULT 0;
+WHILE i < 1000 DO
+INSERT INTO t1 SET NAME='greatdb', ADDRESS='beijing', SEX='xxx', OTHER='nothing';
+SET i = i + 1;
+END WHILE;
+END;|
+CREATE TABLE t1(
+id int NOT NULL AUTO_INCREMENT,
+name varchar(36) NOT NULL,
+address varchar(36) NOT NULL DEFAULT '',
+sex varchar(12) NOT NULL DEFAULT 'Man',
+other varchar(256) NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CALL dml_insert_t1();
+DROP TABLE t1;
+DROP PROCEDURE dml_insert_t1;
+SHOW MASTER STATUS;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000001	320364			
+#
+# 4. Create a table test.t3 on server_3 and insert values in the table.
+[connection server_3]
+RESET MASTER;
+SHOW MASTER STATUS;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+binlog.000001	157			
+CREATE PROCEDURE dml_insert_t3()
+BEGIN
+DECLARE i INT DEFAULT 0;
+WHILE i < 2000 DO
+INSERT INTO t3 SET NAME='greatdb', ADDRESS='beijing', SEX='xxx', OTHER='nothing';
+SET i = i + 1;
+END WHILE;
+END;|
+CREATE TABLE t3(
+id int NOT NULL AUTO_INCREMENT,
+name varchar(36) NOT NULL,
+address varchar(36) NOT NULL DEFAULT '',
+sex varchar(12) NOT NULL DEFAULT 'Man',
+other varchar(256) NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CALL dml_insert_t3();
+DROP TABLE t3;
+DROP PROCEDURE dml_insert_t3;
+SHOW MASTER STATUS;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+binlog.000001	639364			
+#
+# 5. Sync the slave (server_2) with both masters (server_1 and server_3)
+#
+[connection server_2]
+CREATE FUNCTION split_str(x VARCHAR(255), delim VARCHAR(12), pos INT)
+RETURNS VARCHAR(255)
+BEGIN
+RETURN REPLACE(SUBSTRING(SUBSTRING_INDEX(x, delim, pos),
+LENGTH(SUBSTRING_INDEX(x, delim, pos -1)) + 1),
+delim, '');
+END|
+CREATE PROCEDURE test_speed()
+BEGIN
+DECLARE i INT DEFAULT 0;
+DECLARE channel_count INT DEFAULT 0;
+DECLARE data_speed INT DEFAULT 0;
+DECLARE channel_name VARCHAR(255);
+DECLARE str_channel_speed VARCHAR(255);
+DECLARE str_data_speed VARCHAR(1024);
+DECLARE str_res VARCHAR(2048) DEFAULT '';
+SELECT VARIABLE_VALUE INTO str_data_speed from performance_schema.global_status where VARIABLE_NAME='Rpl_data_speed';
+IF @@rpl_read_binlog_speed_limit > 0 THEN 
+IF LENGTH(str_data_speed) > 0 THEN
+SET channel_count = CHAR_LENGTH(str_data_speed) - CHAR_LENGTH(REPLACE(str_data_speed, ',', '')) + 1;
+WHILE i < channel_count DO
+SET str_channel_speed = split_str(str_data_speed, ',', i+1);
+SET channel_name = split_str(str_channel_speed, '=', 1);
+SET data_speed = split_str(str_channel_speed, '=', 2);
+IF data_speed <= @@rpl_read_binlog_speed_limit THEN
+SET str_res = CONCAT(str_res, IF (i <> 0, ',', ''), channel_name, ': [PASS] ');
+ELSE
+SET str_res = CONCAT(str_res, IF (i <> 0, ',', ''), channel_name, ': [FAILED] ');
+END IF;
+SET i = i + 1;
+END WHILE;
+SELECT
+substring_index(substring_index(str_res,',',help_topic_id + 1),',' ,- 1) AS RESULT
+FROM
+mysql.help_topic
+WHERE
+help_topic_id < (length(str_res) - length(REPLACE (str_res, ',', '')) + 1) ORDER BY RESULT;
+ELSE
+SELECT "No speed data";
+END IF;
+END IF;
+END;|
+#
+# 5.1 Set the speed limit.
+#
+SET GLOBAL rpl_read_binlog_speed_limit = 64;
+#
+# 5.2 Reset and start slave.
+#
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_PORT=SERVER_PORT_1, SOURCE_LOG_FILE='master-bin.000001', SOURCE_LOG_POS=157 FOR CHANNEL 'channel_1';
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_PORT=SERVER_PORT_3, SOURCE_LOG_FILE='binlog.000001', SOURCE_LOG_POS=157 FOR CHANNEL 'channel_3';
+RESET REPLICA FOR CHANNEL 'channel_1';
+RESET REPLICA FOR CHANNEL 'channel_3';
+include/rpl_start_slaves.inc
+include/wait_for_slave_to_start.inc [FOR CHANNEL 'channel_1']
+include/wait_for_slave_to_start.inc [FOR CHANNEL 'channel_3']
+#
+# 5.3 Determine whether the data speed is within the speed limit.
+#
+SET @start = unix_timestamp(now());
+SET @least_expect_time_channel_1 = FLOOR((320364 - 157) / 1024 / @@rpl_read_binlog_speed_limit);
+SET @least_expect_time_channel_3 = FLOOR((639364 - 157) / 1024 / @@rpl_read_binlog_speed_limit);
+SELECT @least_expect_time_channel_1, @least_expect_time_channel_3, 
+SLEEP(FLOOR(1 + RAND() * IF(@least_expect_time_channel_1 > @least_expect_time_channel_3, @least_expect_time_channel_3, @least_expect_time_channel_1)));
+@least_expect_time_channel_1	@least_expect_time_channel_3	SLEEP(FLOOR(1 + RAND() * IF(@least_expect_time_channel_1 > @least_expect_time_channel_3, @least_expect_time_channel_3, @least_expect_time_channel_1)))
+4	9	0
+CALL test_speed();
+RESULT
+channel_1: [PASS] 
+channel_3: [PASS] 
+#
+# 5.4 Waits until both the IO and SQL threads of the current connection have started
+#
+[connection server_1]
+include/sync_slave_io_with_master.inc [FOR CHANNEL 'channel_1']
+[connection server_3]
+include/sync_slave_io_with_master.inc [FOR CHANNEL 'channel_3']
+#
+# 5.5 Determine whether the total transmission time is greater than or equal to the expected time.
+#
+SET @end = unix_timestamp(now());
+SELECT @least_expect_time_channel_1, @least_expect_time_channel_3, 
+(@end - @start) >= IF(@least_expect_time_channel_1 > @least_expect_time_channel_3, @least_expect_time_channel_1, @least_expect_time_channel_3) as result;
+@least_expect_time_channel_1	@least_expect_time_channel_3	result
+4	9	1
+SET GLOBAL rpl_read_binlog_speed_limit = 0;
+DROP FUNCTION split_str;
+DROP PROCEDURE test_speed;
+#
+#  5.6 sync the slave with both masters
+#
+[connection server_1]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'channel_1']
+[connection server_3]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'channel_3']
+include/rpl_end.inc
+RESET REPLICA ALL FOR CHANNEL 'channel_1';
+RESET REPLICA ALL FOR CHANNEL 'channel_3';

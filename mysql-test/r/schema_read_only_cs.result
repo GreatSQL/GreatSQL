@@ -706,9 +706,9 @@ connection default;
 SELECT object_schema, object_name, lock_type, lock_status
 FROM performance_schema.metadata_locks WHERE object_schema in ('s', 'S');
 object_schema	object_name	lock_type	lock_status
-S	t	SHARED_WRITE	GRANTED
-S	NULL	EXCLUSIVE	GRANTED
-S	t	EXCLUSIVE	PENDING
+S	t	SHARED	GRANTED
+S	NULL	INTENTION_EXCLUSIVE	GRANTED
+S	NULL	EXCLUSIVE	PENDING
 SET DEBUG_SYNC = 'now SIGNAL continue';
 # Verify that the statements complete. Note deadlock for the insert
 # due to acquiring IX on schema name.
@@ -736,7 +736,7 @@ FROM performance_schema.metadata_locks WHERE object_schema in ('s', 'S');
 object_schema	object_name	lock_type	lock_status
 S	NULL	EXCLUSIVE	GRANTED
 S	t	EXCLUSIVE	GRANTED
-S	t	SHARED_WRITE	PENDING
+S	t	SHARED	PENDING
 SET DEBUG_SYNC = 'now SIGNAL continue';
 # Verify that the statements complete.
 connection con1;

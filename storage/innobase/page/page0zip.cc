@@ -2,6 +2,7 @@
 
 Copyright (c) 2005, 2022, Oracle and/or its affiliates.
 Copyright (c) 2012, Facebook Inc.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -74,6 +75,9 @@ const byte field_ref_zero[FIELD_REF_SIZE] = {
 static_assert(DATA_TRX_ID_LEN == 6, "DATA_TRX_ID_LEN != 6");
 static_assert(DATA_ROLL_PTR_LEN == 7, "DATA_ROLL_PTR_LEN != 7");
 static_assert(DATA_TRX_ID + 1 == DATA_ROLL_PTR, "DATA_TRX_ID invalid value!");
+
+/** page compression zstd compress level, Settable by user. */
+uint srv_page_zstd_compression_level = DEFAULT_COMPRESSION_LEVEL;
 
 #ifndef UNIV_HOTBACKUP
 /** Statistics on compression, indexed by page_zip_des_t::ssize - 1 */

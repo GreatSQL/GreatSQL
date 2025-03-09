@@ -2,7 +2,7 @@
 
 Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 Copyright (c) 2022, Huawei Technologies Co., Ltd.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -470,6 +470,17 @@ class ha_innobase : public handler {
   int parallel_scan_init(void *&scan_ctx, size_t *num_threads,
                          bool use_reserved_threads) override;
 
+  int parallel_fetch_init(void *&fecth_ctx, size_t *num_threads,
+                          bool use_reserved_threads, uint desire_threads,
+                          uint fetch_index,
+                          parallel_read_data_reader_range_t *to_fetch_range,
+                          unsigned long int max_read_buf_size) override;
+
+  int parallel_fetch(void *fetch_ctx, void **thread_ctxs,
+                     Reader::Init_fn init_fn, Reader::Load_fn load_fn,
+                     Reader::End_fn end_fn) override;
+  void parallel_fetch_end(void *fetch_ctx) override;
+
   int pq_leader_range_select_scan_init(uint keyno, void *&pq_ctx,
                                        uint &n_threads);
 
@@ -728,6 +739,8 @@ extern const struct _ft_vft ft_vft_result;
 @param[in]      thd       Session instance, or nullptr to query the global
                           innodb_parallel_read_threads value. */
 ulong thd_parallel_read_threads(THD *thd);
+
+ulong thd_parallel_fetch_enable_test(THD *thd);
 
 /** Structure Returned by ha_innobase::ft_init_ext() */
 typedef struct new_ft_info {

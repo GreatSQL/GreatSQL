@@ -3,6 +3,8 @@
 --echo #               MYSQL_BENCH/COUNT_DISTINCT_KEY_PREFIX" 
 --echo #
 
+--source include/no_turbo.inc
+
 CREATE TABLE t1 (
   c1 CHAR(1) NOT NULL,
   i1 INTEGER NOT NULL,

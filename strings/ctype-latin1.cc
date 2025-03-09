@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates.
-   Copyright (c) 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2024, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -706,105 +706,108 @@ CHARSET_INFO my_charset_latin1_bin = {
 /*
  * RFC 1866 chracter enitry reference
  */
-std::map<std::string, uint8_t> char_ent_ref_to_uni = {
-    {"AElig", 198},  /* capital AE diphthong (ligature)  */
-    {"Aacute", 193}, /* capital A, acute accent  */
-    {"Acirc", 194},  /* capital A, circumflex accent  */
-    {"Agrave", 192}, /* capital A, grave accent  */
-    {"Aring", 197},  /* capital A, ring  */
-    {"Atilde", 195}, /* capital A, tilde  */
-    {"Auml", 196},   /* capital A, dieresis or umlaut mark  */
-    {"Ccedil", 199}, /* capital C, cedilla  */
-    {"ETH", 208},    /* capital Eth, Icelandic  */
-    {"Eacute", 201}, /* capital E, acute accent  */
-    {"Ecirc", 202},  /* capital E, circumflex accent  */
-    {"Egrave", 200}, /* capital E, grave accent  */
-    {"Euml", 203},   /* capital E, dieresis or umlaut mark  */
-    {"Iacute", 205}, /* capital I, acute accent  */
-    {"Icirc", 206},  /* capital I, circumflex accent  */
-    {"Igrave", 204}, /* capital I, grave accent  */
-    {"Iuml", 207},   /* capital I, dieresis or umlaut mark  */
-    {"Ntilde", 209}, /* capital N, tilde  */
-    {"Oacute", 211}, /* capital O, acute accent  */
-    {"Ocirc", 212},  /* capital O, circumflex accent  */
-    {"Ograve", 210}, /* capital O, grave accent  */
-    {"Oslash", 216}, /* capital O, slash  */
-    {"Otilde", 213}, /* capital O, tilde  */
-    {"Ouml", 214},   /* capital O, dieresis or umlaut mark  */
-    {"THORN", 222},  /* capital THORN, Icelandic  */
-    {"Uacute", 218}, /* capital U, acute accent  */
-    {"Ucirc", 219},  /* capital U, circumflex accent  */
-    {"Ugrave", 217}, /* capital U, grave accent  */
-    {"Uuml", 220},   /* capital U, dieresis or umlaut mark  */
-    {"Yacute", 221}, /* capital Y, acute accent  */
-    {"aacute", 225}, /* small a, acute accent  */
-    {"acirc", 226},  /* small a, circumflex accent  */
-    {"acute", 180},  /* acute accent  */
-    {"aelig", 230},  /* small ae diphthong (ligature)  */
-    {"agrave", 224}, /* small a, grave accent  */
-    {"amp", 38},     /* ampersand  */
-    {"aring", 229},  /* small a, ring  */
-    {"atilde", 227}, /* small a, tilde  */
-    {"auml", 228},   /* small a, dieresis or umlaut mark  */
-    {"brvbar", 166}, /* broken (vertical) bar  */
-    {"ccedil", 231}, /* small c, cedilla  */
-    {"cedil", 184},  /* cedilla  */
-    {"cent", 162},   /* cent sign  */
-    {"copy", 169},   /* copyright sign  */
-    {"curren", 164}, /* general currency sign  */
-    {"deg", 176},    /* degree sign  */
-    {"divide", 247}, /* divide sign  */
-    {"eacute", 233}, /* small e, acute accent  */
-    {"ecirc", 234},  /* small e, circumflex accent  */
-    {"egrave", 232}, /* small e, grave accent  */
-    {"eth", 240},    /* small eth, Icelandic  */
-    {"euml", 235},   /* small e, dieresis or umlaut mark  */
-    {"frac12", 189}, /* fraction one-half  */
-    {"frac14", 188}, /* fraction one-quarter  */
-    {"frac34", 190}, /* fraction three-quarters  */
-    {"gt", 62},      /* greater than  */
-    {"iacute", 237}, /* small i, acute accent  */
-    {"icirc", 238},  /* small i, circumflex accent  */
-    {"iexcl", 161},  /* inverted exclamation mark  */
-    {"igrave", 236}, /* small i, grave accent  */
-    {"iquest", 191}, /* inverted question mark  */
-    {"iuml", 239},   /* small i, dieresis or umlaut mark  */
-    {"laquo", 171},  /* angle quotation mark, left  */
-    {"lt", 60},      /* less than  */
-    {"macr", 175},   /* macron  */
-    {"micro", 181},  /* micro sign  */
-    {"middot", 183}, /* middle dot  */
-    {"nbsp", 160},   /* no-break space  */
-    {"not", 172},    /* not sign  */
-    {"ntilde", 241}, /* small n, tilde  */
-    {"oacute", 243}, /* small o, acute accent  */
-    {"ocirc", 244},  /* small o, circumflex accent  */
-    {"ograve", 242}, /* small o, grave accent  */
-    {"ordf", 170},   /* ordinal indicator, feminine  */
-    {"ordm", 186},   /* ordinal indicator, masculine  */
-    {"oslash", 248}, /* small o, slash  */
-    {"otilde", 245}, /* small o, tilde  */
-    {"ouml", 246},   /* small o, dieresis or umlaut mark  */
-    {"para", 182},   /* pilcrow (paragraph sign)  */
-    {"plusmn", 177}, /* plus-or-minus sign  */
-    {"pound", 163},  /* pound sterling sign  */
-    {"quot", 34},    /* double quote  */
-    {"raquo", 187},  /* angle quotation mark, right  */
-    {"reg", 174},    /* registered sign  */
-    {"sect", 167},   /* section sign  */
-    {"shy", 173},    /* soft hyphen  */
-    {"sup1", 185},   /* superscript one  */
-    {"sup2", 178},   /* superscript two  */
-    {"sup3", 179},   /* superscript three  */
-    {"szlig", 223},  /* small sharp s, German (sz ligature)  */
-    {"thorn", 254},  /* small thorn, Icelandic  */
-    {"times", 215},  /* multiply sign  */
-    {"uacute", 250}, /* small u, acute accent  */
-    {"ucirc", 251},  /* small u, circumflex accent  */
-    {"ugrave", 249}, /* small u, grave accent  */
-    {"uml", 168},    /* umlaut (dieresis)  */
-    {"uuml", 252},   /* small u, dieresis or umlaut mark  */
-    {"yacute", 253}, /* small y, acute accent  */
-    {"yen", 165},    /* yen sign  */
-    {"yuml", 255},   /* small y, dieresis or umlaut mark  */
-};
+const std::map<std::string, uint8_t> &get_char_ent_ref_to_uni() {
+  static const std::map<std::string, uint8_t> char_ent_ref_to_uni = {
+      {"AElig", 198},  /* capital AE diphthong (ligature)  */
+      {"Aacute", 193}, /* capital A, acute accent  */
+      {"Acirc", 194},  /* capital A, circumflex accent  */
+      {"Agrave", 192}, /* capital A, grave accent  */
+      {"Aring", 197},  /* capital A, ring  */
+      {"Atilde", 195}, /* capital A, tilde  */
+      {"Auml", 196},   /* capital A, dieresis or umlaut mark  */
+      {"Ccedil", 199}, /* capital C, cedilla  */
+      {"ETH", 208},    /* capital Eth, Icelandic  */
+      {"Eacute", 201}, /* capital E, acute accent  */
+      {"Ecirc", 202},  /* capital E, circumflex accent  */
+      {"Egrave", 200}, /* capital E, grave accent  */
+      {"Euml", 203},   /* capital E, dieresis or umlaut mark  */
+      {"Iacute", 205}, /* capital I, acute accent  */
+      {"Icirc", 206},  /* capital I, circumflex accent  */
+      {"Igrave", 204}, /* capital I, grave accent  */
+      {"Iuml", 207},   /* capital I, dieresis or umlaut mark  */
+      {"Ntilde", 209}, /* capital N, tilde  */
+      {"Oacute", 211}, /* capital O, acute accent  */
+      {"Ocirc", 212},  /* capital O, circumflex accent  */
+      {"Ograve", 210}, /* capital O, grave accent  */
+      {"Oslash", 216}, /* capital O, slash  */
+      {"Otilde", 213}, /* capital O, tilde  */
+      {"Ouml", 214},   /* capital O, dieresis or umlaut mark  */
+      {"THORN", 222},  /* capital THORN, Icelandic  */
+      {"Uacute", 218}, /* capital U, acute accent  */
+      {"Ucirc", 219},  /* capital U, circumflex accent  */
+      {"Ugrave", 217}, /* capital U, grave accent  */
+      {"Uuml", 220},   /* capital U, dieresis or umlaut mark  */
+      {"Yacute", 221}, /* capital Y, acute accent  */
+      {"aacute", 225}, /* small a, acute accent  */
+      {"acirc", 226},  /* small a, circumflex accent  */
+      {"acute", 180},  /* acute accent  */
+      {"aelig", 230},  /* small ae diphthong (ligature)  */
+      {"agrave", 224}, /* small a, grave accent  */
+      {"amp", 38},     /* ampersand  */
+      {"aring", 229},  /* small a, ring  */
+      {"atilde", 227}, /* small a, tilde  */
+      {"auml", 228},   /* small a, dieresis or umlaut mark  */
+      {"brvbar", 166}, /* broken (vertical) bar  */
+      {"ccedil", 231}, /* small c, cedilla  */
+      {"cedil", 184},  /* cedilla  */
+      {"cent", 162},   /* cent sign  */
+      {"copy", 169},   /* copyright sign  */
+      {"curren", 164}, /* general currency sign  */
+      {"deg", 176},    /* degree sign  */
+      {"divide", 247}, /* divide sign  */
+      {"eacute", 233}, /* small e, acute accent  */
+      {"ecirc", 234},  /* small e, circumflex accent  */
+      {"egrave", 232}, /* small e, grave accent  */
+      {"eth", 240},    /* small eth, Icelandic  */
+      {"euml", 235},   /* small e, dieresis or umlaut mark  */
+      {"frac12", 189}, /* fraction one-half  */
+      {"frac14", 188}, /* fraction one-quarter  */
+      {"frac34", 190}, /* fraction three-quarters  */
+      {"gt", 62},      /* greater than  */
+      {"iacute", 237}, /* small i, acute accent  */
+      {"icirc", 238},  /* small i, circumflex accent  */
+      {"iexcl", 161},  /* inverted exclamation mark  */
+      {"igrave", 236}, /* small i, grave accent  */
+      {"iquest", 191}, /* inverted question mark  */
+      {"iuml", 239},   /* small i, dieresis or umlaut mark  */
+      {"laquo", 171},  /* angle quotation mark, left  */
+      {"lt", 60},      /* less than  */
+      {"macr", 175},   /* macron  */
+      {"micro", 181},  /* micro sign  */
+      {"middot", 183}, /* middle dot  */
+      {"nbsp", 160},   /* no-break space  */
+      {"not", 172},    /* not sign  */
+      {"ntilde", 241}, /* small n, tilde  */
+      {"oacute", 243}, /* small o, acute accent  */
+      {"ocirc", 244},  /* small o, circumflex accent  */
+      {"ograve", 242}, /* small o, grave accent  */
+      {"ordf", 170},   /* ordinal indicator, feminine  */
+      {"ordm", 186},   /* ordinal indicator, masculine  */
+      {"oslash", 248}, /* small o, slash  */
+      {"otilde", 245}, /* small o, tilde  */
+      {"ouml", 246},   /* small o, dieresis or umlaut mark  */
+      {"para", 182},   /* pilcrow (paragraph sign)  */
+      {"plusmn", 177}, /* plus-or-minus sign  */
+      {"pound", 163},  /* pound sterling sign  */
+      {"quot", 34},    /* double quote  */
+      {"raquo", 187},  /* angle quotation mark, right  */
+      {"reg", 174},    /* registered sign  */
+      {"sect", 167},   /* section sign  */
+      {"shy", 173},    /* soft hyphen  */
+      {"sup1", 185},   /* superscript one  */
+      {"sup2", 178},   /* superscript two  */
+      {"sup3", 179},   /* superscript three  */
+      {"szlig", 223},  /* small sharp s, German (sz ligature)  */
+      {"thorn", 254},  /* small thorn, Icelandic  */
+      {"times", 215},  /* multiply sign  */
+      {"uacute", 250}, /* small u, acute accent  */
+      {"ucirc", 251},  /* small u, circumflex accent  */
+      {"ugrave", 249}, /* small u, grave accent  */
+      {"uml", 168},    /* umlaut (dieresis)  */
+      {"uuml", 252},   /* small u, dieresis or umlaut mark  */
+      {"yacute", 253}, /* small y, acute accent  */
+      {"yen", 165},    /* yen sign  */
+      {"yuml", 255},   /* small y, dieresis or umlaut mark  */
+  };
+  return char_ent_ref_to_uni;
+}

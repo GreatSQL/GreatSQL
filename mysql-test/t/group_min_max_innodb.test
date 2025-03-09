@@ -59,6 +59,7 @@ create index idx12672_1 on t4 (a1,a2,b,c);
 create index idx12672_2 on t4 (a1,a2,b);
 analyze table t4;
 
+--sorted_result
 select distinct a1 from t4 where pk_col not in (1,2,3,4);
 
 drop table t4;
@@ -197,6 +198,7 @@ SELECT c1, max(i2) FROM t1 WHERE (c1 = 'C' AND i2 = 17) OR ( c1 = 'F')
 GROUP BY c1;
 --replace_column 10 ROWS
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 --skip_if_hypergraph  # Does not output the same optimizer trace.
 eval $show_method;
@@ -206,6 +208,7 @@ SELECT c1, max(i2) FROM t1 WHERE (c1 = 'C' OR ( c1 = 'F' AND i2 = 17))
 GROUP BY c1;
 --replace_column 10 ROWS
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 --skip_if_hypergraph  # Does not output the same optimizer trace.
 eval $show_method;
@@ -215,6 +218,7 @@ SELECT c1, max(i2) FROM t1 WHERE (c1 = 'C' OR c1 = 'F' ) AND ( i2 = 17 )
 GROUP BY c1;
 --replace_column 10 ROWS
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 --skip_if_hypergraph  # Does not output the same optimizer trace.
 eval $show_method;
@@ -235,6 +239,7 @@ WHERE (c1 = 'C' OR ( c1 = 'F' AND i1 < 35)) AND ( i2 = 17 )
 GROUP BY c1,i1;
 --replace_column 10 ROWS
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 --skip_if_hypergraph  # Does not output the same optimizer trace.
 eval $show_method;
@@ -245,6 +250,7 @@ WHERE (((c1 = 'C' AND i1 < 40) OR ( c1 = 'F' AND i1 < 35)) AND ( i2 = 17 ))
 GROUP BY c1,i1;
 --replace_column 10 ROWS
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 --skip_if_hypergraph  # Does not output the same optimizer trace.
 eval $show_method;
@@ -252,7 +258,7 @@ eval $show_method;
 let query=
 SELECT c1, i1, max(i2) FROM t2 
 WHERE ((c1 = 'C' AND i1 < 40) OR ( c1 = 'F' AND i1 < 35) OR ( i2 = 17 ))
-GROUP BY c1,i1;
+GROUP BY c1,i1 order by c1,i1;
 --replace_column 10 ROWS
 eval EXPLAIN $query;
 eval $query;
@@ -459,7 +465,9 @@ WHERE pk IN (1,231) and c1 IS NOT NULL;
 eval EXPLAIN $query1;
 eval EXPLAIN $query2;
 
+--sorted_result
 eval $query1;
+--sorted_result
 eval $query2;
 
 DROP TABLE t1;

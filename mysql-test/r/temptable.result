@@ -9,6 +9,7 @@ def	mysql	PRIMARY	mysql	clone_history	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	columns_priv	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	component	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	db	PRIMARY KEY	YES
+def	mysql	PRIMARY	mysql	db_object_synonyms	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	default_roles	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	engine_cost	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	func	PRIMARY KEY	YES

@@ -1,0 +1,239 @@
+SET DEFAULT_STORAGE_ENGINE=InnoDB;
+# ZSTD option NOT affect already exist compress options
+CREATE TABLE t1(a INT PRIMARY KEY);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1 values (1),(2),(3),(4),(5);
+FLUSH TABLES t1 WITH READ LOCK;
+UNLOCK TABLES;
+SELECT * FROM t1;
+a
+1
+2
+3
+4
+5
+CREATE TABLE t2(a INT PRIMARY KEY) compression="ZLIB";
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` int NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMPRESSION='ZLIB'
+INSERT INTO t2 values (1),(2),(3),(4),(5);
+FLUSH TABLES t2 WITH READ LOCK;
+UNLOCK TABLES;
+SELECT * FROM t2;
+a
+1
+2
+3
+4
+5
+CREATE TABLE t3(a INT PRIMARY KEY) compression="LZ4";
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `a` int NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMPRESSION='LZ4'
+INSERT INTO t3 VALUES (1),(2),(3),(4),(5);
+FLUSH TABLES t3 WITH READ LOCK;
+UNLOCK TABLES;
+SELECT * FROM t3;
+a
+1
+2
+3
+4
+5
+CREATE TABLE t4(a INT PRIMARY KEY, b VARCHAR(100), c VARCHAR(20) DEFAULT "xyz") compression="ZSTD";
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `a` int NOT NULL,
+  `b` varchar(100) DEFAULT NULL,
+  `c` varchar(20) DEFAULT 'xyz',
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMPRESSION='ZSTD'
+INSERT INTO t4(a,b) VALUES (1, REPEAT('a', 50)), (2, REPEAT('b', 51)), (3, REPEAT('c',52)), (4, REPEAT('d', 32)), (5,REPEAT('E',80));
+FLUSH TABLES t4 WITH READ LOCK;
+UNLOCK TABLES;
+SELECT * from t4;
+a	b	c
+1	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	xyz
+2	bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb	xyz
+3	cccccccccccccccccccccccccccccccccccccccccccccccccccc	xyz
+4	dddddddddddddddddddddddddddddddd	xyz
+5	EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE	xyz
+SELECT TABLE_NAME, TABLE_SCHEMA, CREATE_OPTIONS, ROW_FORMAT, ENGINE FROM INFORMATION_SCHEMA.TABLES WHERE CREATE_OPTIONS LIKE '%COMPRESSION=%' AND TABLE_SCHEMA="test" ORDER BY TABLE_NAME;
+TABLE_NAME	TABLE_SCHEMA	CREATE_OPTIONS	ROW_FORMAT	ENGINE
+t2	test	COMPRESSION="ZLIB"	Dynamic	InnoDB
+t3	test	COMPRESSION="LZ4"	Dynamic	InnoDB
+t4	test	COMPRESSION="ZSTD"	Dynamic	InnoDB
+#CREATE TABLE: ZSTD + KEY_BLOCK_SIZE
+CREATE TABLE t5(a INT PRIMARY KEY, b VARCHAR(100)) COMPRESSION="ZSTD" KEY_BLOCK_SIZE=8;
+ERROR HY000: Table storage engine for 't5' doesn't have this option
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1112	InnoDB: Page Compression is not supported with row_format=compressed or key_block_size > 0
+Error	1031	Table storage engine for 't5' doesn't have this option
+#CREATE TABLE: ZSTD + ROW_FORMAT=COMPRESSED
+CREATE TABLE t6(a INT PRIMARY KEY, c TEXT(200)) COMPRESSION="ZSTD" ROW_FORMAT=COMPRESSED;
+ERROR HY000: Table storage engine for 't6' doesn't have this option
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1112	InnoDB: Page Compression is not supported with row_format=compressed or key_block_size > 0
+Error	1031	Table storage engine for 't6' doesn't have this option
+# CREATE TABLE: COMPRESSION + TEMPORARY
+CREATE TEMPORARY TABLE t7(a INT PRIMARY KEY) COMPRESSION="ZLIB";
+ERROR HY000: Table storage engine for 't7' doesn't have this option
+SHOW WARNINGS;
+Level	Code	Message
+Warning	138	InnoDB: Page Compression is not supported for temporary tables
+Error	1031	Table storage engine for 't7' doesn't have this option
+CREATE TEMPORARY TABLE t8(a INT PRIMARY KEY, b VARCHAR(100)) COMPRESSION="ZSTD";
+ERROR HY000: Table storage engine for 't8' doesn't have this option
+SHOW WARNINGS;
+Level	Code	Message
+Warning	138	InnoDB: Page Compression is not supported for temporary tables
+Error	1031	Table storage engine for 't8' doesn't have this option
+# CREATE TABLE: COMPRESSION + TABLESPACE=innodb_system
+CREATE TABLE t9(a INT PRIMARY KEY, b CHAR(50)) COMPRESSION="ZLIB" TABLESPACE=innodb_system;
+ERROR HY000: Table storage engine for 't9' doesn't have this option
+SHOW WARNINGS;
+Level	Code	Message
+Warning	138	InnoDB: Page Compression is not supported for the system tablespace
+Error	1031	Table storage engine for 't9' doesn't have this option
+CREATE TABLE t10(a INT PRIMARY KEY, b CHAR(50)) COMPRESSION="ZSTD" TABLESPACE=innodb_system;
+ERROR HY000: Table storage engine for 't10' doesn't have this option
+SHOW WARNINGS;
+Level	Code	Message
+Warning	138	InnoDB: Page Compression is not supported for the system tablespace
+Error	1031	Table storage engine for 't10' doesn't have this option
+# CREATE TABLE: COMPRESSION + TABLESPACE=innodb_temporary
+CREATE TABLE t11(c1 INT PRIMARY KEY) COMPRESSION="ZLIB" TABLESPACE=innodb_temporary;
+ERROR HY000: InnoDB: Tablespace `innodb_temporary` can only contain TEMPORARY tables.
+SHOW WARNINGS;
+Level	Code	Message
+Error	1478	InnoDB: Tablespace `innodb_temporary` can only contain TEMPORARY tables.
+Error	1031	Table storage engine for 't11' doesn't have this option
+# CREATE TABLE: COMPRESSION + TABLESPACE=innodb_temporary
+CREATE TABLE t12(c1 INT PRIMARY KEY) COMPRESSION="ZSTD" TABLESPACE=innodb_temporary;
+ERROR HY000: InnoDB: Tablespace `innodb_temporary` can only contain TEMPORARY tables.
+SHOW WARNINGS;
+Level	Code	Message
+Error	1478	InnoDB: Tablespace `innodb_temporary` can only contain TEMPORARY tables.
+Error	1031	Table storage engine for 't12' doesn't have this option
+# TEST THE ALTER OPERATION
+CREATE TABLE t13 (a INT AUTO_INCREMENT PRIMARY KEY, b varchar(100), c varchar(200), d INT, KEY(`d`)) COMPRESSION="ZSTD";
+INSERT INTO t13(`b`,`c`,`d`) values (REPEAT("ab", 10), REPEAT("jet", 20), 1), (REPEAT("df", 10), REPEAT("bro", 20), 2), (REPEAT("ubu", 10), REPEAT("kilo", 20), 3);
+INSERT INTO t13(`b`,`c`,`d`) SELECT b, c, d+1 FROM t13;
+INSERT INTO t13(`b`,`c`,`d`) SELECT b, c, d+1 FROM t13;
+INSERT INTO t13(`b`,`c`,`d`) SELECT b, c, d+1 FROM t13;
+INSERT INTO t13(`b`,`c`,`d`) SELECT b, c, d+1 FROM t13;
+INSERT INTO t13(`b`,`c`,`d`) SELECT b, c, d+1 FROM t13;
+FLUSH TABLE t13 WITH READ LOCK;
+UNLOCK TABLES;
+SELECT a, d FROM t13 WHERE a=1;
+a	d
+1	1
+ALTER TABLE t13 COMPRESSION="ZLIB";
+OPTIMIZE TABLE t13;
+Table	Op	Msg_type	Msg_text
+test.t13	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t13	optimize	status	OK
+SELECT a, d FROM t13 WHERE a=1;
+a	d
+1	1
+SHOW CREATE TABLE t13;
+Table	Create Table
+t13	CREATE TABLE `t13` (
+  `a` int NOT NULL AUTO_INCREMENT,
+  `b` varchar(100) DEFAULT NULL,
+  `c` varchar(200) DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `d` (`d`)
+) ENGINE=InnoDB AUTO_INCREMENT=123 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMPRESSION='ZLIB'
+ALTER TABLE t13 COMPRESSION="ZSTD";
+OPTIMIZE TABLE t13;
+Table	Op	Msg_type	Msg_text
+test.t13	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t13	optimize	status	OK
+SELECT a, d FROM t13 WHERE a=1;
+a	d
+1	1
+SHOW CREATE TABLE t13;
+Table	Create Table
+t13	CREATE TABLE `t13` (
+  `a` int NOT NULL AUTO_INCREMENT,
+  `b` varchar(100) DEFAULT NULL,
+  `c` varchar(200) DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `d` (`d`)
+) ENGINE=InnoDB AUTO_INCREMENT=123 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMPRESSION='ZSTD'
+ALTER TABLE t13 COMPRESSION="None";
+OPTIMIZE TABLE t13;
+Table	Op	Msg_type	Msg_text
+test.t13	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t13	optimize	status	OK
+SELECT a, d FROM t13 WHERE a=2;
+a	d
+2	2
+SHOW CREATE TABLE t13;
+Table	Create Table
+t13	CREATE TABLE `t13` (
+  `a` int NOT NULL AUTO_INCREMENT,
+  `b` varchar(100) DEFAULT NULL,
+  `c` varchar(200) DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `d` (`d`)
+) ENGINE=InnoDB AUTO_INCREMENT=123 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMPRESSION='None'
+SELECT NAME, FS_BLOCK_SIZE, FILE_SIZE, ROUND(ALLOCATED_SIZE/1024/1024) AS ACTUAL_SIZE_MB FROM INFORMATION_SCHEMA.INNODB_TABLESPACES WHERE NAME='test/t13';
+NAME	FS_BLOCK_SIZE	FILE_SIZE	ACTUAL_SIZE_MB
+test/t13	4096	131072	0
+ALTER TABLE t13 COMPRESSION="ZSTD";
+OPTIMIZE TABLE t13;
+Table	Op	Msg_type	Msg_text
+test.t13	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t13	optimize	status	OK
+SELECT a, d FROM t13 WHERE a=2;
+a	d
+2	2
+SHOW CREATE TABLE t13;
+Table	Create Table
+t13	CREATE TABLE `t13` (
+  `a` int NOT NULL AUTO_INCREMENT,
+  `b` varchar(100) DEFAULT NULL,
+  `c` varchar(200) DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `d` (`d`)
+) ENGINE=InnoDB AUTO_INCREMENT=123 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMPRESSION='ZSTD'
+SELECT NAME, FS_BLOCK_SIZE, FILE_SIZE, ROUND(ALLOCATED_SIZE/1024/1024) AS ACTUAL_SIZE_MB FROM INFORMATION_SCHEMA.INNODB_TABLESPACES WHERE NAME='test/t13';
+NAME	FS_BLOCK_SIZE	FILE_SIZE	ACTUAL_SIZE_MB
+test/t13	4096	131072	0
+#
+# BUG#22916982 - ASSERT 0 IN FSP_SDI_GET_ROOT_PAGE_NUM(), FLUSH TABLES FOR EXPORT
+#
+CREATE TABLE t14 (a INT) ENGINE=INNODB ROW_FORMAT=DYNAMIC COMPRESSION='ZSTD';
+FLUSH TABLE t14 FOR EXPORT;
+# restart
+FLUSH TABLE t14 FOR EXPORT;
+UNLOCK TABLES;
+#
+# Cleanup
+#
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t3;
+DROP TABLE IF EXISTS t4;
+DROP TABLE IF EXISTS t13;
+DROP TABLE t14;

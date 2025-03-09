@@ -1,0 +1,157 @@
+
+# NOTE: Pls don't change the order of the merge-into testcases here.
+
+CREATE TABLE target (prd_code VARCHAR(20), recommend_tag VARCHAR(20), PRIMARY KEY (prd_code));
+CREATE TABLE source1 LIKE target;
+CREATE TABLE source2 LIKE target;
+CREATE TABLE source3 LIKE target;
+create  table t5 engine=memory as select 'SU7488' as prd_code,'abcd' as recommend_tag;
+
+INSERT INTO target VALUES('SU7488','abcd');
+INSERT INTO source1 VALUES('SU7488','s1');
+INSERT INTO source2 VALUES('SU7488','s2');
+INSERT INTO source3 VALUES('SU7488','s3');
+INSERT INTO source3 VALUES('SU7487','abcd');
+
+SELECT * FROM target;
+
+--echo this explain result must be the same before and after merge-into stmts.
+explain select * from t5 where prd_code='SU7488';
+
+--echo use-case: pseudo table
+--echo expected result: 'SU7488 456'
+MERGE INTO target A USING (SELECT 'SU7488' PRD_CODE, '456' RECOMMEND_TAG) B ON(A.PRD_CODE = B.PRD_CODE)
+WHEN MATCHED THEN
+UPDATE SET A.RECOMMEND_TAG = B.RECOMMEND_TAG WHERE A.PRD_CODE = B.PRD_CODE
+WHEN NOT MATCHED THEN INSERT (A.PRD_CODE, A.RECOMMEND_TAG) VALUES (B.PRD_CODE, B.RECOMMEND_TAG);
+
+explain select * from t5 where prd_code='SU7488';
+
+--echo use-case: One row source table
+--echo expected result: 'SU7488 s1'
+MERGE INTO target A USING (SELECT * FROM source1 WHERE PRD_CODE='SU7488') B ON(A.PRD_CODE = B.PRD_CODE)
+WHEN MATCHED THEN
+UPDATE SET A.RECOMMEND_TAG = B.RECOMMEND_TAG WHERE A.PRD_CODE = B.PRD_CODE
+WHEN NOT MATCHED THEN INSERT (A.PRD_CODE, A.RECOMMEND_TAG) VALUES (B.PRD_CODE, B.RECOMMEND_TAG);
+SELECT * FROM target;
+
+--echo use-case: merge-into using union-source-table
+--echo expected result: 'SU7488 ssss'
+MERGE INTO target A USING
+ (SELECT * FROM source1 WHERE PRD_CODE='SU7487' UNION SELECT 'SU7488' PRD_CODE, 'ssss' RECOMMEND_TAG) B
+ ON(A.PRD_CODE = B.PRD_CODE)
+ WHEN MATCHED THEN UPDATE SET A.RECOMMEND_TAG = B.RECOMMEND_TAG WHERE A.PRD_CODE = B.PRD_CODE
+ WHEN NOT MATCHED THEN INSERT (A.PRD_CODE, A.RECOMMEND_TAG) VALUES (B.PRD_CODE, B.RECOMMEND_TAG);
+
+SELECT * FROM target;
+
+--echo use-case: merge-into using minus-source-table
+--echo expected result: 'SU7488 s1'
+MERGE INTO target A USING
+ (SELECT * FROM source1 WHERE PRD_CODE='SU7488' MINUS SELECT 'SU7488' PRD_CODE, 'ssss' RECOMMEND_TAG) B
+ ON(A.PRD_CODE = B.PRD_CODE)
+ WHEN MATCHED THEN UPDATE SET A.RECOMMEND_TAG = B.RECOMMEND_TAG WHERE A.PRD_CODE = B.PRD_CODE
+ WHEN NOT MATCHED THEN INSERT (A.PRD_CODE, A.RECOMMEND_TAG) VALUES (B.PRD_CODE, B.RECOMMEND_TAG);
+SELECT * FROM target;
+
+--echo use-case: merge-into using intersect-source-table
+--echo expected result: 'SU7488 s2'
+MERGE INTO target A USING
+ (SELECT * FROM source2 WHERE PRD_CODE='SU7488' INTERSECT SELECT 'SU7488' PRD_CODE, 's2' RECOMMEND_TAG) B
+ ON(A.PRD_CODE = B.PRD_CODE)
+ WHEN MATCHED THEN UPDATE SET A.RECOMMEND_TAG = B.RECOMMEND_TAG WHERE A.PRD_CODE = B.PRD_CODE
+ WHEN NOT MATCHED THEN INSERT (A.PRD_CODE, A.RECOMMEND_TAG) VALUES (B.PRD_CODE, B.RECOMMEND_TAG);
+SELECT * FROM target;
+
+MERGE INTO target A USING source3 B ON(A.PRD_CODE = B.PRD_CODE)
+WHEN MATCHED THEN
+UPDATE SET A.RECOMMEND_TAG = B.RECOMMEND_TAG WHERE A.PRD_CODE = B.PRD_CODE
+WHEN NOT MATCHED THEN INSERT (A.PRD_CODE, A.RECOMMEND_TAG) VALUES (B.PRD_CODE, B.RECOMMEND_TAG);
+
+SELECT * FROM target;
+
+DROP TABLE source1, source2, source3;
+DROP TABLE target;
+
+
+CREATE TABLE `t_product_extended` (
+  `ta_code` varchar(9) COLLATE utf8mb4_bin NOT NULL,
+  `prd_code` varchar(20) COLLATE utf8mb4_bin NOT NULL,
+  `recommend_tag` varchar(20) COLLATE utf8mb4_bin DEFAULT NULL,
+  PRIMARY KEY (`prd_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+create table t1 like t_product_extended;
+select * from t1;
+INSERT INTO t1 VALUES('B0','SU7488','abcd');
+
+MERGE INTO t_product_extended A USING t1 ON (A.TA_CODE = t1.TA_CODE AND A.PRD_CODE = t1.PRD_CODE)
+WHEN MATCHED THEN
+UPDATE
+SET A.RECOMMEND_TAG = t1.RECOMMEND_TAG
+WHERE
+    A.TA_CODE = t1.TA_CODE AND
+    A.PRD_CODE = t1.PRD_CODE
+WHEN NOT MATCHED THEN
+INSERT
+    (A.TA_CODE
+        , A.PRD_CODE
+        , A.RECOMMEND_TAG)
+VALUES (t1.TA_CODE
+    , t1.PRD_CODE
+    , t1.RECOMMEND_TAG);
+
+select * from t_product_extended;
+
+
+MERGE INTO t_product_extended A
+        USING (
+        SELECT
+             'B0' TA_CODE
+            , 'SU7488' PRD_CODE
+            , '456' RECOMMEND_TAG
+        ) B ON
+    (
+    A.TA_CODE = B.TA_CODE AND
+    A.PRD_CODE = B.PRD_CODE )
+    WHEN MATCHED THEN
+UPDATE
+SET A.RECOMMEND_TAG = B.RECOMMEND_TAG
+WHERE
+    A.TA_CODE = B.TA_CODE AND
+    A.PRD_CODE = B.PRD_CODE
+WHEN NOT MATCHED THEN
+INSERT
+    (A.TA_CODE
+        , A.PRD_CODE
+        , A.RECOMMEND_TAG)
+VALUES (B.TA_CODE
+    , B.PRD_CODE
+    , B.RECOMMEND_TAG);
+
+MERGE INTO t_product_extended A
+        USING (
+        SELECT
+             'B0' TA_CODE
+            , 'SU7488' PRD_CODE
+            , '789' RECOMMEND_TAG
+        ) B ON
+    (
+    A.TA_CODE = B.TA_CODE AND
+    A.PRD_CODE = B.PRD_CODE )
+    WHEN MATCHED THEN
+UPDATE
+SET A.RECOMMEND_TAG = B.RECOMMEND_TAG
+WHEN NOT MATCHED THEN
+INSERT
+    (A.TA_CODE
+        , A.PRD_CODE
+        , A.RECOMMEND_TAG)
+VALUES (B.TA_CODE
+    , B.PRD_CODE
+    , B.RECOMMEND_TAG);
+
+select * from t_product_extended;
+
+drop table t_product_extended;
+drop table t1;
+drop table t5;

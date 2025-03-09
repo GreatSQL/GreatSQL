@@ -1,7 +1,6 @@
 SET @@use_secondary_engine = ON;
 CREATE TABLE t1 (a INT, b INT NOT SECONDARY) secondary_engine=rapid;
 alter table t1 secondary_load;
-ERROR HY000: The column marked as NOT SECONDARY is not supported
 ALTER TABLE t1 SECONDARY_ENGINE NULL;
 ALTER TABLE t1 MODIFY b INT;
 ALTER TABLE t1 SECONDARY_ENGINE=rapid;

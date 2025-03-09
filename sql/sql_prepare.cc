@@ -1,6 +1,6 @@
 /* Copyright (c) 2002, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -148,6 +148,7 @@ When one supplies long data for a placeholder:
 #include "sql/protocol_classic.h"
 #include "sql/psi_memory_key.h"
 #include "sql/query_options.h"
+#include "sql/query_plan_plugin.h"  // has_additional_query_plan
 #include "sql/query_result.h"
 #include "sql/resourcegroups/resource_group_basic_types.h"
 #include "sql/resourcegroups/resource_group_mgr.h"
@@ -1378,6 +1379,17 @@ bool Prepared_statement::prepare_query(THD *thd) {
     return true;
   }
 
+  // add for synonym translation
+  if (!skip_synm_trans_for_command(thd, true /*in prepare*/)) {
+    for (Table_ref *tr = query_block->get_table_list(); tr != nullptr;
+         tr = tr->next_global) {
+      enum_synm_trans_result trans_res = translate_synonym_if_any(thd, tr);
+      if (trans_res == enum_synm_trans_result::SYNM_TRANS_INVALID) {
+        return true;
+      }
+    }
+  }
+
   if (sql_command_flags[sql_command] & CF_HA_CLOSE)
     mysql_ha_rm_tables(thd, tables);
 
@@ -1695,9 +1707,9 @@ void mysqld_stmt_prepare(THD *thd, const char *query, uint length,
   // Initially, optimize the statement for the primary storage engine.
   // If an eligible secondary storage engine is found, the statement
   // may be reprepared for the secondary storage engine later.
-  const auto saved_secondary_engine = thd->secondary_engine_optimization();
   thd->set_secondary_engine_optimization(
       Secondary_engine_optimization::PRIMARY_TENTATIVELY);
+
   /* Create PS table entry, set query text after rewrite. */
   stmt->m_prepared_stmt =
       MYSQL_CREATE_PS(stmt, stmt->m_id, thd->m_statement_psi, stmt->name().str,
@@ -1710,7 +1722,6 @@ void mysqld_stmt_prepare(THD *thd, const char *query, uint length,
     thd->stmt_map.erase(stmt);
   }
 
-  thd->set_secondary_engine_optimization(saved_secondary_engine);
   if (switch_protocol) thd->pop_protocol();
 
   sp_cache_enforce_limit(thd->sp_proc_cache, stored_program_cache_size);
@@ -2039,7 +2050,6 @@ void mysqld_stmt_execute(THD *thd, Prepared_statement *stmt, bool has_new_types,
   // Initially, optimize the statement for the primary storage engine.
   // If an eligible secondary storage engine is found, the statement
   // may be reprepared for the secondary storage engine later.
-  const auto saved_secondary_engine = thd->secondary_engine_optimization();
   thd->set_secondary_engine_optimization(
       Secondary_engine_optimization::PRIMARY_TENTATIVELY);
 
@@ -2053,8 +2063,6 @@ void mysqld_stmt_execute(THD *thd, Prepared_statement *stmt, bool has_new_types,
     bool open_cursor = execute_flags & (ulong)CURSOR_TYPE_READ_ONLY;
     stmt->execute_loop(thd, &expanded_query, open_cursor);
   }
-
-  thd->set_secondary_engine_optimization(saved_secondary_engine);
 
   if (switch_protocol) thd->pop_protocol();
 
@@ -2168,17 +2176,21 @@ bool Sql_cmd_execute::execute_inner(THD *thd) {
     return true;
   }
   auto into_result = thd->lex->result;
-
+  MEM_ROOT execute_mem_root(key_memory_sp_head_execute_root,
+                            MEM_ROOT_BLOCK_SIZE);
+  Query_arena execute_arena(&execute_mem_root,
+                            Query_arena::STMT_INITIALIZED_FOR_SP);
   Open_tables_backup open_tables_state_backup;
   Query_tables_list table_list_backup;
-  thd->reset_n_backup_open_tables_state(&open_tables_state_backup, 0);
+  thd->reset_n_backup_open_tables_state_with_lock(&open_tables_state_backup, 0);
   thd->lex->reset_n_backup_query_tables_list(&table_list_backup);
-  thd->temporary_tables = open_tables_state_backup.temporary_tables;
+
   Query_arena backup_arena;
-  thd->swap_query_arena(m_arena, &backup_arena);
-  auto backup_guard = create_scope_guard([this, thd, backup_arena]() {
-    thd->swap_query_arena(backup_arena, &m_arena);
-  });
+  thd->swap_query_arena(execute_arena, &backup_arena);
+  auto backup_guard =
+      create_scope_guard([this, thd, backup_arena, &execute_arena]() {
+        thd->swap_query_arena(backup_arena, &execute_arena);
+      });
 
   auto stmt = std::make_unique<Prepared_statement>(thd);
   stmt->set_sql_prepare();
@@ -2186,10 +2198,8 @@ bool Sql_cmd_execute::execute_inner(THD *thd) {
   stmt->set_query_result(into_result);
   auto ret = stmt->prepare(thd, sql_str->ptr(), sql_str->length(), nullptr);
 
-  open_tables_state_backup.temporary_tables = thd->temporary_tables;
-  thd->temporary_tables = nullptr;
   thd->lex->restore_backup_query_tables_list(&table_list_backup);
-  thd->restore_backup_open_tables_state(&open_tables_state_backup);
+  thd->restore_backup_open_tables_state_with_lock(&open_tables_state_backup);
 
   if (ret) return true;
 
@@ -2228,10 +2238,11 @@ bool Sql_cmd_execute::execute_inner(THD *thd) {
   thd->rollback_item_tree_changes();
   if (ret) return true;
 
-  thd->swap_query_arena(m_arena, &backup_arena);
-  auto backup_guard2 = create_scope_guard([this, thd, backup_arena]() {
-    thd->swap_query_arena(backup_arena, &m_arena);
-  });
+  thd->swap_query_arena(execute_arena, &backup_arena);
+  auto backup_guard2 =
+      create_scope_guard([this, thd, backup_arena, &execute_arena]() {
+        thd->swap_query_arena(backup_arena, &execute_arena);
+      });
 
   if (mode != sp_variable::MODE_IN) stmt->reset_param = false;
   ret = stmt->execute_loop(thd, &expanded_query, false);
@@ -3001,8 +3012,15 @@ bool Prepared_statement::prepare(THD *thd, const char *query_str,
   if (m_lex->has_into_clause) {
     has_into_clause = true;
   }
-
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+  auto can_use = m_lex->m_use_query_plan_plugin;
+  bool plugin_enabled = m_lex->query_plan_plugin_enabled;
   lex_end(m_lex);
+  m_lex->m_use_query_plan_plugin = can_use;
+  m_lex->query_plan_plugin_enabled = plugin_enabled;
+#else
+  lex_end(m_lex);
+#endif
 
   rewrite_query_if_needed(thd);
 
@@ -3398,6 +3416,9 @@ bool Prepared_statement::execute_loop(THD *thd, String *expanded_query,
     return true;
   }
 
+  if (m_lex->m_sql_cmd != nullptr) {
+    m_lex->m_sql_cmd->enable_secondary_storage_engine();
+  }
   // Remember if the general log was temporarily disabled when repreparing the
   // statement for a secondary engine.
   bool general_log_temporarily_disabled = false;
@@ -3415,6 +3436,10 @@ bool Prepared_statement::execute_loop(THD *thd, String *expanded_query,
 
   if (is_state_inconsistent(thd) && reprepare(thd)) return true;
 
+  // Reprepare statement if it has not trans
+  if (has_additional_query_plan(thd, m_lex) && reprepare(thd)) {
+    return true;
+  }
 reexecute:
   /*
     If the item_list is not empty, we'll wrongly free some externally
@@ -3460,6 +3485,9 @@ reexecute:
       assert(thd->get_stmt_da()->mysql_errno() == ER_NEED_REPREPARE);
 
       if (reprepare_observer.can_retry()) {
+        if (m_is_ref_cursor) {
+          return true;
+        }
         thd->clear_error();
         error = reprepare(thd);
         DEBUG_SYNC(thd, "after_statement_reprepare");
@@ -3501,21 +3529,21 @@ reexecute:
       // If (re-?)preparation or optimization failed and it was for
       // a secondary storage engine, disable the secondary storage
       // engine and try again without it.
-      // If use_secondary_engine is FORCED, there is no need to retry.
       if (error && m_lex->m_sql_cmd != nullptr &&
           thd->secondary_engine_optimization() ==
               Secondary_engine_optimization::SECONDARY &&
-          !m_lex->unit->is_executed() &&
-          thd->variables.use_secondary_engine != SECONDARY_ENGINE_FORCED) {
-        thd->clear_error();
-        thd->set_secondary_engine_optimization(
-            Secondary_engine_optimization::PRIMARY_ONLY);
-        MYSQL_SET_PS_SECONDARY_ENGINE(m_prepared_stmt, false);
-        error = reprepare(thd);
-        if (!error) {
-          // The reprepared statement should not use a secondary engine.
-          assert(!m_lex->m_sql_cmd->using_secondary_storage_engine());
-          m_lex->m_sql_cmd->disable_secondary_storage_engine();
+          !m_lex->unit->is_executed()) {
+        if (!thd->is_secondary_engine_forced()) {
+          thd->clear_error();
+          thd->set_secondary_engine_optimization(
+              Secondary_engine_optimization::PRIMARY_ONLY);
+          MYSQL_SET_PS_SECONDARY_ENGINE(m_prepared_stmt, false);
+          error = reprepare(thd);
+          if (!error) {
+            // The reprepared statement should not use a secondary engine.
+            assert(!m_lex->m_sql_cmd->using_secondary_storage_engine());
+            m_lex->m_sql_cmd->disable_secondary_storage_engine();
+          }
         }
       }
     }
@@ -3598,6 +3626,9 @@ bool Prepared_statement::reprepare(THD *thd) {
   LEX_STRING saved_cur_db_name = {saved_cur_db_name_buf,
                                   sizeof(saved_cur_db_name_buf)};
 
+  if (m_is_ref_cursor) {
+    return true;
+  }
   /*
     Create an intermediate Prepared_statement object and move the MEM_ROOT
     allocated data of the original Prepared_statement into it. Set up a guard

@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2018, 2022, Oracle and/or its affiliates.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -69,6 +70,7 @@ Tablespace::Tablespace()
     : m_space_id(++m_last_used_space_id), m_inited(), m_thread_id() {
   ut_ad(m_space_id <= dict_sys_t::s_max_temp_space_id);
   m_purpose = TBSP_NONE;
+  m_is_corrupted = false;
   mutex_create(LATCH_ID_TEMP_POOL_TBLSP, &m_mutex);
 }
 
@@ -81,7 +83,8 @@ Tablespace::~Tablespace() {
 
   close();
 
-  ut_ad(srv_shutdown_state.load() == SRV_SHUTDOWN_EXIT_THREADS);
+  ut_ad(srv_shutdown_state.load() == SRV_SHUTDOWN_EXIT_THREADS ||
+        is_ts_corrupted());
   bool file_pre_exists = false;
   bool success = os_file_delete_if_exists(innodb_temp_file_key, path().c_str(),
                                           &file_pre_exists);
@@ -285,10 +288,11 @@ Tablespace *Tablespace_pool::get(my_thread_id id, enum tbsp_purpose purpose) {
 void Tablespace_pool::free_ts(Tablespace *ts) {
   space_id_t space_id = ts->space_id();
   fil_space_t *space = fil_space_get(space_id);
+  bool ts_truncate_res = true;
   ut_ad(space != nullptr);
 
   if (space->size != FIL_IBT_FILE_INITIAL_SIZE) {
-    ts->truncate();
+    ts_truncate_res = ts->truncate();
   }
 
   acquire();
@@ -300,8 +304,19 @@ void Tablespace_pool::free_ts(Tablespace *ts) {
     ut_d(ut_error);
   }
 
-  ts->reset_thread_id_and_purpose();
-  m_free->push_back(ts);
+  if (ts_truncate_res) {
+    ts->reset_thread_id_and_purpose();
+    m_free->push_back(ts);
+  } else {
+    /** The table space has been corrupted, we don't put it into the free pool.
+     *  delete the corrupted tablespace(also, delete its related file). we need
+     *  to set the corrupted flag to avoid the assert.
+     *  even though, the ts pointer is not reset,  the caller know it calling
+     * the free interface, it will not use the current, free ts.
+     */
+    ts->set_ts_corrupted(true);
+    ut::delete_(ts);
+  }
 
   release();
 }

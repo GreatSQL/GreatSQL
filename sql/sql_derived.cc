@@ -1,5 +1,5 @@
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -41,6 +41,7 @@
 #include "sql/debug_sync.h"  // DEBUG_SYNC
 #include "sql/handler.h"
 #include "sql/item.h"
+#include "sql/item_strfunc.h"
 #include "sql/join_optimizer/join_optimizer.h"
 #include "sql/mem_root_array.h"
 #include "sql/nested_join.h"
@@ -215,6 +216,16 @@ TABLE *Common_table_expr::clone_tmp_table(THD *thd, Table_ref *tl) {
   t->pos_in_table_list = tl;
 
   t->set_not_started();
+
+  if (first->set_counter()) {
+    uint16 counter_index = first->set_counter()->field_index();
+    Field *couter_field = t->field[counter_index];
+    t->set_set_counter((Field_longlong *)couter_field, first->is_except());
+    bitmap_set_bit(t->read_set, counter_index);
+  }
+  if (first->is_distinct()) {
+    t->set_distinct(true);
+  }
 
   if (tmp_tables.push_back(tl)) return nullptr; /* purecov: inspected */
 
@@ -752,6 +763,22 @@ Item *Query_block::clone_expression(THD *thd, Item *item) {
   // original expression. Assign it to the corresponding field in the cloned
   // expression.
   if (copy_field_info(thd, item, cloned_item)) return nullptr;
+
+  // The compatible function alias loses the compatible tag in the where
+  // condition bugfix10178
+  Item_func *item_func = nullptr;
+  if ((thd->variables.sql_mode & MODE_ORACLE) &&
+      (item->type() == Item_func::FUNC_ITEM) &&
+      (item_func = down_cast<Item_func *>(item)) &&
+      (item_func->functype() == Item_func::CONCAT_FUNC)) {
+    Item_func_concat *item_concat1 = down_cast<Item_func_concat *>(item);
+    if (item_concat1 && item_concat1->is_orafun()) {
+      Item_func_concat *item_concat2 =
+          down_cast<Item_func_concat *>(cloned_item);
+      item_concat2->set_orafun(true);
+    }
+  }
+
   return resolve_expression(thd, cloned_item, this);
 }
 

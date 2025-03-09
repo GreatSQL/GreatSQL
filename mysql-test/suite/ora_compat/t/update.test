@@ -422,8 +422,44 @@ select * from t1;
 
 drop table t1;
 
+--echo # test of bug11163
+--echo #
+set @@udt_format_result=dba;
+create type tp310 as object(id int,type varchar(20));
+create type tp311 is object(id2 int,name2 varchar(20));
+create type tp312 as object(id3 int,name3 varchar(20));
+create table tbl133 (
+    id int auto_increment,
+    f1 tp310 default null, 
+    primary key (id)
+);
+create table tbl134 (
+    id int auto_increment,
+    f1 tp310 default null, 
+    f2 tp311,
+    primary key (id)
+);
 
+insert into tbl133 select 1,tp310(1,'aaaaa');
+alter table tbl133 add f2 tp311;
+insert into tbl133(id,f1,f2) values(   2, tp310(2,'bbbbb'),  tp311(null,null));
+insert into tbl133(f2) select (tp311(3,'ccccc'));
+alter table tbl133 add f2_2 tp311;
+alter table tbl133 add f3 tp312;   #字段f3为udt:tp312.  
+insert into tbl133 values (4,tp310(4,'ddd'||'DDDD'), tp311(nvl2(null,rownum,rownum+1),null), null, tp312(4,initcap('hello world')));
+insert into tbl133 select 5, tp310(5,'eeee'), tp311(5,'eeee'), tp311(5,'eeee'),tp312(5,'eeee');
+insert into tbl133 select 6, tp310(null,'NULL'), tp311(null,'fffff'), tp311(null,null),  tp312(6,null);
+    
+insert into   tbl134(f1,f2) select f1, f2 from tbl133  where  f2 is not null limit 2;
+insert into tbl134 values (101, tp310(101,'101aaa'), tp311(101,'101aaa') );
+insert into tbl134 values (  102, tp310(2,'bbbbb'),  tp311(3,'ccccc'));
+insert into tbl134 values (  103,null, tp311(null,'NULL'));
 
-
-
-
+update  tbl133 a
+set  (a.f1,a.f3) = ( select  b.f1,tp312(999,'999-update')  from   tbl134 b where  b.id=1  )
+where  a.id=1;
+table tbl133;
+drop table tbl133,tbl134;
+drop type tp310;
+drop type tp311;
+drop type tp312;

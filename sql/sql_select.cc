@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -131,6 +131,7 @@
 #include "template_utils.h"
 #include "thr_lock.h"
 
+#include "sql/query_plan_plugin.h"
 #include "sql/secondary_engine_inc_load_task.h"
 
 using std::max;
@@ -282,6 +283,9 @@ static bool reads_not_secondary_columns(const LEX *lex) {
 }
 
 bool validate_use_secondary_engine(const LEX *lex) {
+  if (lex->m_sql_cmd == nullptr) {
+    return false;
+  }
   const THD *thd = lex->thd;
   const Sql_cmd *sql_cmd = lex->m_sql_cmd;
   // Ensure that all read columns are in the secondary engine.
@@ -294,27 +298,15 @@ bool validate_use_secondary_engine(const LEX *lex) {
     return false;
   }
 
-  // A query must be executed in secondary engine if these conditions are met:
-  //
-  // 1) use_secondary_engine is FORCED
-  // and either
-  // 2) Is a SELECT statement that accesses one or more base tables.
-  // or
-  // 3) Is an INSERT SELECT or CREATE TABLE AS SELECT statement that accesses
-  // two or more base tables
-  if (thd->variables.use_secondary_engine == SECONDARY_ENGINE_FORCED &&  // 1
-      ((sql_cmd->sql_command_code() == SQLCOM_SELECT &&
-        lex->table_count >= 1) ||  // 2
-       ((sql_cmd->sql_command_code() == SQLCOM_INSERT_SELECT ||
-         sql_cmd->sql_command_code() == SQLCOM_CREATE_TABLE) &&
-        lex->table_count >= 2))) {  // 3
+  if (thd->secondary_engine_optimization() ==
+          Secondary_engine_optimization::SECONDARY &&
+      thd->is_secondary_engine_forced()) {
     my_error(
         ER_SECONDARY_ENGINE, MYF(0),
         "use_secondary_engine is FORCED but query could not be executed in "
         "secondary engine");
     return true;
   }
-
   return false;
 }
 
@@ -358,6 +350,9 @@ bool Sql_cmd_dml::prepare(THD *thd) {
   // Trigger out_of_memory condition inside open_tables_for_query()
   DBUG_EXECUTE_IF("sql_cmd_dml_prepare__out_of_memory",
                   DBUG_SET("+d,simulate_out_of_memory"););
+
+  prepare_additional_query_plan(thd, lex);
+
   /*
     Open tables and expand views.
     During prepare of query (not as part of an execute), acquire only
@@ -396,8 +391,11 @@ bool Sql_cmd_dml::prepare(THD *thd) {
     }
     if (!is_regular()) {
       if (save_cmd_properties(thd)) goto err;
-      lex->set_secondary_engine_execution_context(nullptr);
     }
+    /* preserve secondary_engine_execution_context for prepared statement */
+    // if (needs_explicit_preparation()) {
+    //   lex->set_secondary_engine_execution_context(nullptr);
+    // }
     set_prepared();
   }
 
@@ -556,7 +554,7 @@ bool Sql_cmd_dml::execute(THD *thd) {
       DEBUG_SYNC(thd, "after_table_open");
 #endif
     // Bind table and field information
-    if (restore_cmd_properties(thd)) return true;
+    if (restore_cmd_properties(thd)) goto err;
     if (check_privileges(thd)) goto err;
 
     if (m_lazy_result) {
@@ -619,7 +617,7 @@ bool Sql_cmd_dml::execute(THD *thd) {
   lex->cleanup(false);
   lex->clear_values_map();
   lex->set_secondary_engine_execution_context(nullptr);
-
+  free_additional_query_plan_runtime(thd);
   /*
     Free with function and flags added by with_function syntax
   */
@@ -657,6 +655,7 @@ err:
   lex->cleanup(false);
   lex->clear_values_map();
   lex->set_secondary_engine_execution_context(nullptr);
+  free_additional_query_plan_runtime(thd);
   /*
    when other error, Free with function and flags added by with_function syntax
   */
@@ -739,9 +738,17 @@ static bool retry_with_secondary_engine(THD *thd) {
     return false;
   }
 
+  // Don't retry if it's already determined that the statement should not be
+  // executed by a secondary engine.
+  if (sql_cmd->secondary_storage_engine_disabled()) {
+    return false;
+  }
+
   // Don't retry if there is a property of the environment that prevents use of
   // secondary engines.
-  if (!thd->is_secondary_storage_engine_eligible()) return false;
+  if (!thd->is_secondary_storage_engine_eligible()) {
+    return false;
+  }
 
   // Only attempt to use the secondary engine if the estimated cost of the query
   // is higher than the specified cost threshold.
@@ -761,6 +768,7 @@ static bool retry_with_secondary_engine(THD *thd) {
   }
 
   {
+    if (thd->lex->query_block->sequences_counter) return false;
     Table_ref *tables = thd->lex->query_block->m_table_list.first;
     for (; tables; tables = tables->next_global) {
       auto ret = can_read_from_secondary_engine(
@@ -809,6 +817,22 @@ bool optimize_secondary_engine(THD *thd) {
 
 void thd_set_thread_stack(THD *thd, const char *stack_start);
 
+bool validate_use_turbo_plugin(LEX *lex) {
+  if (lex->sql_command != SQLCOM_SELECT &&
+      lex->sql_command != SQLCOM_INSERT_SELECT) {
+    return false;
+  }
+  if (global_query_plan_plugin_interface &&
+      (global_query_plan_plugin_interface->get_turbo_enable() ==
+       use_turbo_plugin::TURBO_PLUGIN_FORCED) &&
+      !lex->use_query_plan_plugin()) {
+    my_error(ER_QUERY_PLAN_PLUGIN, MYF(0),
+             "turbo_enable is FORCED but query could not be executed in Turbo");
+    return true;
+  }
+  return false;
+}
+
 /**
   Execute a DML statement.
   This is the default implementation for a DML statement and uses a
@@ -842,6 +866,8 @@ bool Sql_cmd_dml::execute_inner(THD *thd) {
 
     DEBUG_SYNC(thd, "after_pq_leader_plan");
   }
+
+  if (validate_use_turbo_plugin(lex)) return true;
 
   // We know by now that execution will complete (successful or with error)
   lex->set_exec_completed();
@@ -1057,6 +1083,9 @@ const MYSQL_LEX_CSTRING *Sql_cmd_dml::get_eligible_secondary_engine() const {
 
     // We're only interested in base tables.
     if (tl->is_placeholder()) continue;
+
+    // check if required pointers are valid before proceeding further
+    if (tl->table == nullptr || tl->table->s == nullptr) continue;
 
     assert(!tl->table->s->is_secondary_engine());
     // If not in a secondary engine
@@ -5063,7 +5092,6 @@ bool JOIN::make_tmp_tables_info() {
     current_ref_item_slice = REF_SLICE_SAVED_BASE;
 
     tmp_table_param->hidden_field_count = CountHiddenFields(*fields);
-
     if (SetupConnectByTmp(thd, this, curr_fields, *tmp_table_param)) {
       return true;
     }

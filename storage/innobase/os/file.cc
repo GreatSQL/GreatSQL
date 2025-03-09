@@ -1,6 +1,7 @@
 /***********************************************************************
 Copyright (c) 1995, 2022, Oracle and/or its affiliates.
 Copyright (c) 2009, Percona Inc.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted
 by Percona Inc.. Those modifications are
@@ -50,6 +51,7 @@ external tools. */
 
 #include <lz4.h>
 #include <zlib.h>
+#include <zstd.h>
 
 /** Convert to a "string".
 @param[in]      type            The compression type
@@ -62,6 +64,8 @@ const char *Compression::to_string(Type type) {
       return ("Zlib");
     case LZ4:
       return ("LZ4");
+    case ZSTD:
+      return ("zstd");
   }
 
   ut_d(ut_error);
@@ -202,8 +206,7 @@ dberr_t Compression::deserialize(bool dblwr_read, byte *src, byte *dst,
       break;
     }
 
-    case Compression::LZ4:
-
+    case Compression::LZ4: {
       if (dblwr_read) {
         ret = LZ4_decompress_safe(
             reinterpret_cast<char *>(ptr), reinterpret_cast<char *>(dst),
@@ -231,6 +234,23 @@ dberr_t Compression::deserialize(bool dblwr_read, byte *src, byte *dst,
       }
 
       break;
+    }
+
+    case Compression::ZSTD: {
+      size_t zstd_dec_len = ZSTD_decompress(
+          reinterpret_cast<void *>(dst), header.m_original_size,
+          reinterpret_cast<void *>(ptr), header.m_compressed_size);
+      if (ZSTD_isError(zstd_dec_len)) {
+        if (allocated) {
+          ut::free(dst);
+        }
+        return (DB_IO_DECOMPRESS_FAIL);
+      }
+
+      ut_ad(zstd_dec_len <= header.m_original_size);
+      len = static_cast<ulint>(zstd_dec_len);
+      break;
+    }
 
     default:
 #ifdef UNIV_NO_ERR_MSGS

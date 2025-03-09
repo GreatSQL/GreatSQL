@@ -25,6 +25,7 @@ insert into cust_sales_category values('central',  'gardening',   3, 259);
 insert into cust_sales_category values('east',     'electronics', 3, 407);
 insert into cust_sales_category values('west',     'furniture',   1, 545);
 
+--sorted_result
 select * from cust_sales_category order by location;
 
 select * from cust_sales_category

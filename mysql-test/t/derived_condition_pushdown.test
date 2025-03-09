@@ -97,7 +97,9 @@ let query = SELECT * FROM (SELECT f1, f2, f3 FROM t1) as dt
 --replace_regex / \(cost=[0-9. ]*/(/
 --skip_if_hypergraph  # Depends on the query plan.
 eval EXPLAIN FORMAT=tree $query;
+--source include/disable_turbo.inc
 eval $query;
+--source include/restore_turbo.inc
 
 let query = SELECT * FROM (SELECT f1, f2 FROM t1) as dt1,
                           (SELECT f3 FROM t1) as dt2
@@ -253,7 +255,9 @@ let query = SELECT f1 FROM (SELECT f1, f2 FROM t1 LIMIT 4) as dt WHERE f1 > 0;
 eval EXPLAIN FORMAT=tree $query;
 # Inherently a nondeterministic query, so depends on the query plan
 --skip_if_hypergraph
+--source include/disable_turbo.inc
 eval $query;
+--source include/restore_turbo.inc
 
 # Test with WINDOW FUNCTIONS.
 # ONLY_FULL_GROUP_BY flags some of these query.  However if f1 was a primary
@@ -347,7 +351,9 @@ let query = SELECT *
 --replace_regex / \(cost=[0-9. ]*/(/
 --skip_if_hypergraph  # Depends on the query plan.
 eval EXPLAIN FORMAT=tree $query;
+--source include/disable_turbo.inc
 eval $query;
+--source include/restore_turbo.inc
 
 # Test with multiple window functions with different columns in partition.
 # Should not push the condition down.
@@ -359,7 +365,9 @@ let query = SELECT *
 --replace_regex / \(cost=[0-9. ]*/(/
 --skip_if_hypergraph  # Depends on the query plan.
 eval EXPLAIN FORMAT=tree $query;
+--source include/disable_turbo.inc
 eval $query;
+--source include/restore_turbo.inc
 set sql_mode=default;
 
 # Test with parameters for prepared statements.
@@ -844,7 +852,9 @@ let query = SELECT *
 --replace_regex / \(cost=[0-9. ]*/(/
 --skip_if_hypergraph  # Depends on the query plan.
 eval EXPLAIN FORMAT=tree $query;
+--source include/disable_turbo.inc
 eval $query;
+--source include/restore_turbo.inc
 
 # Same, with INTERSECT
 let query = SELECT *
@@ -857,7 +867,9 @@ let query = SELECT *
 --replace_regex / \(cost=[0-9. ]*/(/
 --skip_if_hypergraph  # Depends on the query plan.
 eval EXPLAIN FORMAT=tree $query;
+--source include/disable_turbo.inc
 eval $query;
+--source include/restore_turbo.inc
 
 # Nested derived table with fields that have different aliases
 let query = SELECT i, j, k
@@ -899,7 +911,9 @@ let query = SELECT i
 --replace_regex / \(cost=[0-9. ]*/(/
 --skip_if_hypergraph  # Depends on the query plan.
 eval EXPLAIN FORMAT=tree $query;
+--source include/disable_turbo.inc
 eval $query;
+--source include/restore_turbo.inc
 
 # Test with aggregated query
 let query = SELECT *

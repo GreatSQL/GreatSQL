@@ -1,0 +1,68 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+INSERT INTO t1 VALUES (1,1);
+[connection server2]
+SET SESSION sql_log_bin = 0;
+call mtr.add_suppression("Error reading master configuration");
+call mtr.add_suppression("Error while creating the group replication recovery channel");
+call mtr.add_suppression("Error when configuring the asynchronous recovery channel connection to the donor.");
+call mtr.add_suppression("Retrying group recovery connection with another donor.");
+SET SESSION sql_log_bin = 1;
+include/start_group_replication.inc
+SELECT * FROM t1;
+c1	c2
+1	1
+[connection server2]
+include/stop_group_replication.inc
+[connection server1]
+INSERT INTO t1 VALUES (2,2);
+[connection server2]
+SET @old_sql_mode=@@sql_mode;
+SET GLOBAL sql_mode='emptystring_equal_null';
+SET GLOBAL debug='+d,keep_emptystring_sqlmode';
+START GROUP_REPLICATION;
+SELECT member_state FROM performance_schema.replication_group_members WHERE MEMBER_ID=@@server_uuid;
+member_state
+RECOVERING
+SELECT * FROM t1;
+c1	c2
+1	1
+include/assert_grep.inc [Init master into error]
+include/assert_grep.inc [Init group_replication_recovery error]
+include/stop_group_replication.inc
+SET GLOBAL sql_mode=@old_sql_mode;
+SET GLOBAL debug='-d,keep_emptystring_sqlmode';
+include/start_group_replication.inc
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+[connection server2]
+include/stop_group_replication.inc
+[connection server1]
+INSERT INTO t1 VALUES (3,3);
+[connection server2]
+SET @old_sql_mode=@@sql_mode;
+SET GLOBAL sql_mode='emptystring_equal_null';
+START GROUP_REPLICATION;
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+SET GLOBAL sql_mode=@old_sql_mode;
+### Cleanup
+[connection server1]
+DROP TABLE t1;
+include/sync_slave_sql_with_master.inc
+[connection server2]
+include/stop_group_replication.inc
+[connection server1]
+include/stop_group_replication.inc
+include/group_replication_end.inc

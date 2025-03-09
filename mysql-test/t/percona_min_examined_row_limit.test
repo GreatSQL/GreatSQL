@@ -20,6 +20,7 @@ SELECT 1;
 
 SET GLOBAL min_examined_row_limit=7;
 
+--sorted_result
 SELECT * FROM t AS t1, t AS t2;
 SELECT 1;
 

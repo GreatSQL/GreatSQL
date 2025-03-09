@@ -1,5 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -49,6 +49,7 @@
 #include "sql/join_optimizer/relational_expression.h"
 #include "sql/opt_explain.h"
 #include "sql/opt_explain_traditional.h"
+#include "sql/query_plan_plugin.h"
 #include "sql/query_result.h"
 #include "sql/range_optimizer/group_index_skip_scan_plan.h"
 #include "sql/range_optimizer/index_skip_scan_plan.h"
@@ -242,9 +243,8 @@ static bool GetAccessPathsFromItem(Item *item_arg, const char *source_text,
                    "Select #%d (subquery in %s; run only once)",
                    query_block->select_number, source_text);
         }
-        if (query_block->join->needs_finalize) {
-          subselect->unit->finalize(current_thd);
-        }
+
+        subselect->unit->finalize(current_thd);
         AccessPath *path;
         if (subselect->unit->root_access_path() != nullptr) {
           path = subselect->unit->root_access_path();
@@ -1777,11 +1777,23 @@ static std::unique_ptr<Json_object> SetObjectMembers(
       description = str + table->file->explain_extra();
       break;
     }
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+    case AccessPath::QUERY_PLAN_EXECUTE: {
+      auto &param = path->query_plan_execute();
+      error |= AddMemberToObject<Json_string>(obj, "access_type",
+                                              "query_plan_plugin_execution");
+      error |= explain_additional_query_plan(
+          description, children, param.native_path, param.native_outlist);
+      break;
+    }
+#endif
   }
-
-  // Append the various costs.
-  error |= AddPathCosts(path, materialized_path, obj,
-                        current_thd->lex->is_explain_analyze);
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+  if (path->type != AccessPath::QUERY_PLAN_EXECUTE)
+#endif
+    // Append the various costs.
+    error |= AddPathCosts(path, materialized_path, obj,
+                          current_thd->lex->is_explain_analyze);
 
   // Empty description means the object already has the description set above.
   if (!description.empty()) {

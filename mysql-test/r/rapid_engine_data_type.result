@@ -1,272 +1,344 @@
 INSTALL PLUGIN rapid SONAME "ha_rapid.so";
 set sql_log_bin = on;
+SET SESSION debug='+d,test_ignore_lower_case_check';
+#
+# test data type - integer
+#
+create table t1 (
+c1 tinyint, c2 tinyint unsigned,
+c3 smallint, c4 smallint unsigned,
+c5 mediumint, c6 mediumint unsigned,
+c7 int, c8 int unsigned,
+c9 bigint, c10 bigint unsigned
+);
+insert into t1 values(-128, 0, -32768, 0, -8388608, 0, -2147483648, 0, -9223372036854775808, 0);
+insert into t1 values(127, 255, 32767, 65535, 8388607, 16777215, 2147483647, 4294967295, 9223372036854775807, 18446744073709551615);
+alter table t1 secondary_engine=rapid;
+alter table t1 secondary_load;
+set use_secondary_engine = off;
+select -c1 from t1;
+-c1
+128
+-127
+select -c2 from t1;
+-c2
+0
+-255
+select -c3 from t1;
+-c3
+32768
+-32767
+select -c4 from t1;
+-c4
+0
+-65535
+select -c5 from t1;
+-c5
+8388608
+-8388607
+select -c6 from t1;
+-c6
+0
+-16777215
+select -c7 from t1;
+-c7
+2147483648
+-2147483647
+select -c8 from t1;
+-c8
+0
+-4294967295
+select -c9 from t1;
+ERROR 22003: BIGINT value is out of range in '-(`test`.`t1`.`c9`)'
+select -c9 from t1 where c9 = 9223372036854775807;
+-c9
+-9223372036854775807
+select -c10 from t1;
+ERROR 22003: BIGINT value is out of range in '-(`test`.`t1`.`c10`)'
+set use_secondary_engine = forced;
+select -c1 from t1;
+-c1
+128
+-127
+select -c2 from t1;
+-c2
+0
+-255
+select -c3 from t1;
+-c3
+32768
+-32767
+select -c4 from t1;
+-c4
+0
+-65535
+select -c5 from t1;
+-c5
+8388608
+-8388607
+select -c6 from t1;
+-c6
+0
+-16777215
+select -c7 from t1;
+-c7
+2147483648
+-2147483647
+select -c8 from t1;
+-c8
+0
+-4294967295
+select -c9 from t1;
+ERROR HY000: Out of Range Error: Overflow in negation of integer!
+select -c9 from t1 where c9 = 9223372036854775807;
+-c9
+-9223372036854775807
+select -c10 from t1;
+ERROR HY000: Out of Range Error: Overflow in negation of integer!
+drop table t1;
 #
 # test data type - datetime
 #
 CREATE TABLE t1 (
-id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-a DATETIME(6) NOT NULL
-) AUTO_INCREMENT = 1;
-INSERT INTO t1( a ) VALUES ( '2015-01-01 10:30:00.01010' );
-SET SESSION debug='+d,test_ignore_lower_case_check';
+a DATETIME(6)
+);
+INSERT INTO t1 VALUES ( '2015-01-01 10:30:00.01010' );
+INSERT INTO t1 VALUES ( '2015-01-01 10:30:00.01010+01:00' );
 alter table t1 secondary_engine=rapid;
 alter table t1 secondary_load;
+set use_secondary_engine = off;
 SELECT * FROM t1;
-id	a
-1	2015-01-01 10:30:00.010100
-SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1;
-id	a
-1	2015-01-01 10:30:00.010100
+a
+2015-01-01 10:30:00.010100
+2015-01-01 12:30:00.010100
 SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010';
-id	a
-1	2015-01-01 10:30:00.010100
-SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 10:30:00.01010';
-id	a
-1	2015-01-01 10:30:00.010100
+a
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 12:30:00.01010';
+a
+2015-01-01 12:30:00.010100
 SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010+04:00';
-id	a
-1	2015-01-01 10:30:00.010100
-SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 11:30:00.01010+04:00';
-id	a
-1	2015-01-01 10:30:00.010100
-SET time_zone = '+02:00';
+a
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 13:30:00.01010+04:00';
+a
+2015-01-01 12:30:00.010100
+set use_secondary_engine = forced;
 SELECT * FROM t1;
-id	a
-1	2015-01-01 10:30:00.010100
-SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1;
-id	a
-1	2015-01-01 10:30:00.010100
+a
+2015-01-01 10:30:00.010100
+2015-01-01 12:30:00.010100
 SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010';
-id	a
-1	2015-01-01 10:30:00.010100
-SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 10:30:00.01010';
-id	a
-1	2015-01-01 10:30:00.010100
+a
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 12:30:00.01010';
+a
+2015-01-01 12:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010+04:00';
+a
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 13:30:00.01010+04:00';
+a
+2015-01-01 12:30:00.010100
+SET time_zone = '+02:00';
+alter table t1 secondary_unload;
+INSERT INTO t1 VALUES ( '2015-01-01 10:30:00.01010' );
+INSERT INTO t1 VALUES ( '2015-01-01 10:30:00.01010+01:00' );
+alter table t1 secondary_load;
+set use_secondary_engine = off;
+SELECT * FROM t1;
+a
+2015-01-01 10:30:00.010100
+2015-01-01 12:30:00.010100
+2015-01-01 10:30:00.010100
+2015-01-01 11:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010';
+a
+2015-01-01 10:30:00.010100
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010';
+a
+2015-01-01 11:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 12:30:00.01010';
+a
+2015-01-01 12:30:00.010100
 SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010+03:00';
-id	a
-1	2015-01-01 10:30:00.010100
-SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 11:30:00.01010+03:00';
-id	a
-1	2015-01-01 10:30:00.010100
+a
+2015-01-01 10:30:00.010100
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 12:30:00.01010+03:00';
+a
+2015-01-01 11:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 13:30:00.01010+03:00';
+a
+2015-01-01 12:30:00.010100
+set use_secondary_engine = forced;
+SELECT * FROM t1;
+a
+2015-01-01 10:30:00.010100
+2015-01-01 12:30:00.010100
+2015-01-01 10:30:00.010100
+2015-01-01 11:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010';
+a
+2015-01-01 10:30:00.010100
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010';
+a
+2015-01-01 11:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 12:30:00.01010';
+a
+2015-01-01 12:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010+03:00';
+a
+2015-01-01 10:30:00.010100
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 12:30:00.01010+03:00';
+a
+2015-01-01 11:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 13:30:00.01010+03:00';
+a
+2015-01-01 12:30:00.010100
 drop table t1;
 SET time_zone = default;
 #
 # test data type - timestamp
 #
 CREATE TABLE t1 (
-id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-a TIMESTAMP(6) NOT NULL
-) AUTO_INCREMENT = 1;
-INSERT INTO t1( a ) VALUES ( '2015-01-01 10:30:00.01010' );
+a TIMESTAMP(6)
+);
+INSERT INTO t1 VALUES ( '2015-01-01 10:30:00.01010' );
+INSERT INTO t1 VALUES ( '2015-01-01 10:30:00.01010+01:00' );
 alter table t1 secondary_engine=rapid;
 alter table t1 secondary_load;
+set use_secondary_engine = off;
 SELECT * FROM t1;
-id	a
-1	2015-01-01 10:30:00.010100
-SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1;
-id	a
-1	2015-01-01 10:30:00.010100
+a
+2015-01-01 10:30:00.010100
+2015-01-01 12:30:00.010100
 SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010';
-id	a
-1	2015-01-01 10:30:00.010100
-SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 10:30:00.01010';
-id	a
-1	2015-01-01 10:30:00.010100
+a
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 12:30:00.01010';
+a
+2015-01-01 12:30:00.010100
 SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010+04:00';
-id	a
-1	2015-01-01 10:30:00.010100
-SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 11:30:00.01010+04:00';
-id	a
-1	2015-01-01 10:30:00.010100
-SET time_zone = '+02:00';
+a
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 13:30:00.01010+04:00';
+a
+2015-01-01 12:30:00.010100
+set use_secondary_engine = forced;
 SELECT * FROM t1;
-id	a
-1	2015-01-01 09:30:00.010100
-SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1;
-id	a
-1	2015-01-01 09:30:00.010100
+a
+2015-01-01 10:30:00.010100
+2015-01-01 12:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010';
+a
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 12:30:00.01010';
+a
+2015-01-01 12:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010+04:00';
+a
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 13:30:00.01010+04:00';
+a
+2015-01-01 12:30:00.010100
+SET time_zone = '+02:00';
+alter table t1 secondary_unload;
+INSERT INTO t1 VALUES ( '2015-01-01 10:30:00.01010' );
+INSERT INTO t1 VALUES ( '2015-01-01 10:30:00.01010+01:00' );
+alter table t1 secondary_load;
+set use_secondary_engine = off;
+SELECT * FROM t1;
+a
+2015-01-01 09:30:00.010100
+2015-01-01 11:30:00.010100
+2015-01-01 10:30:00.010100
+2015-01-01 11:30:00.010100
 SELECT * FROM t1 where a = '2015-01-01 09:30:00.01010';
-id	a
-1	2015-01-01 09:30:00.010100
-SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 09:30:00.01010';
-id	a
-1	2015-01-01 09:30:00.010100
+a
+2015-01-01 09:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010';
+a
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010';
+a
+2015-01-01 11:30:00.010100
+2015-01-01 11:30:00.010100
 SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010+03:00';
-id	a
-1	2015-01-01 09:30:00.010100
-SELECT /*+ SET_VAR(use_secondary_engine=1) SET_VAR(secondary_engine_cost_threshold=0) */ * FROM t1 where a = '2015-01-01 10:30:00.01010+03:00';
-id	a
-1	2015-01-01 09:30:00.010100
+a
+2015-01-01 09:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010+03:00';
+a
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 12:30:00.01010+03:00';
+a
+2015-01-01 11:30:00.010100
+2015-01-01 11:30:00.010100
+set use_secondary_engine = forced;
+SELECT * FROM t1;
+a
+2015-01-01 09:30:00.010100
+2015-01-01 11:30:00.010100
+2015-01-01 10:30:00.010100
+2015-01-01 11:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 09:30:00.01010';
+a
+2015-01-01 09:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010';
+a
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010';
+a
+2015-01-01 11:30:00.010100
+2015-01-01 11:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 10:30:00.01010+03:00';
+a
+2015-01-01 09:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 11:30:00.01010+03:00';
+a
+2015-01-01 10:30:00.010100
+SELECT * FROM t1 where a = '2015-01-01 12:30:00.01010+03:00';
+a
+2015-01-01 11:30:00.010100
+2015-01-01 11:30:00.010100
 drop table t1;
 SET time_zone = default;
 #
-# test prepared statement - 1
+# test zerofill
 #
-set use_secondary_engine = on;
-set secondary_engine_cost_threshold = 0;
-drop table if exists t1;
+CREATE TABLE t1 (
+c_tiny tinyint zerofill,
+c_short smallint zerofill,
+c_medium mediumint zerofill,
+c_int int zerofill,
+c_bigint bigint zerofill,
+c_float float zerofill,
+c_double double zerofill
+);
 Warnings:
-Note	1051	Unknown table 'test.t1'
-create table t1 (a int, b varchar(3));
-alter table t1 secondary_engine=rapid;
-insert into t1 values(1,'aa'), (2,'bb'), (3,'cc') ;
-alter table t1 secondary_load;
-set @a = 1;
-prepare stmt from 'select * from t1 where a = ?';
-execute stmt using @a;
-a	b
-1	aa
-drop table t1;
-#
-# test prepared statement - 2
-#
-set use_secondary_engine = on;
-set secondary_engine_cost_threshold = 0;
-drop table if exists t1;
-Warnings:
-Note	1051	Unknown table 'test.t1'
-create table t1(a int primary key, b char(10));
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+INSERT INTO t1 VALUES (1, 1, 1, 1, 1, 1.1, 1.111);
+INSERT INTO t1 VALUES (22, 22, 22, 22, 22, 22.22, 22.22222);
 alter table t1 secondary_engine=rapid;
 alter table t1 secondary_load;
-SELECT START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1');
-START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1')
-success
-insert into t1 values (1,'one');
-insert into t1 values (2,'two');
-insert into t1 values (3,'three');
-insert into t1 values (4,'four');
-set @a=2;
-prepare stmt1 from 'select * from t1 where a <= ?';
-execute stmt1 using @a;
-a	b
-1	one
-2	two
-SELECT STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1');
-STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1')
-success
-drop table t1;
-#
-# test prepared statement - 3
-#
-set use_secondary_engine = on;
-set secondary_engine_cost_threshold = 0;
-set optimizer_switch='materialization=on';
-set optimizer_switch='semijoin=off';
-set optimizer_switch='index_condition_pushdown=off';
-set optimizer_switch='mrr=off';
-create table t0 (a int);
-insert into t0 values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
-create table t1(a int, b int);
-alter table t1 secondary_engine=rapid;
-alter table t1 secondary_load;
-SELECT START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1');
-START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1')
-success
-insert into t1 values (0,0),(1,1),(2,2);
-create table t2 as select * from t1;
-alter table t2 secondary_engine=rapid;
-alter table t2 secondary_load;
-SELECT START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't2');
-START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't2')
-success
-create table t10 (pk int, a int, primary key(pk));
-alter table t10 secondary_engine=rapid;
-alter table t10 secondary_load;
-SELECT START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't10');
-START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't10')
-success
-insert into t10 select a,a from t0;
-prepare s1 from
-' select * from
-    t1 left join t2 on (t2.a= t1.a and t2.a in (select pk from t10))
-  where t1.a < 5';
-execute s1;
-a	b	a	b
-0	0	0	0
-1	1	1	1
-2	2	2	2
-set optimizer_switch=default;
-SELECT STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1');
-STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't1')
-success
-SELECT STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't2');
-STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't2')
-success
-SELECT STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't10');
-STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK('test', 't10')
-success
-drop table t0, t1, t2, t10;
-#
-# test prepared statement - 4
-#
-set use_secondary_engine = on;
-set secondary_engine_cost_threshold=0;
-CREATE TABLE t1
-(pk INTEGER PRIMARY KEY,
-i1 TINYINT,
-u1 TINYINT UNSIGNED,
-i2 SMALLINT,
-u2 SMALLINT UNSIGNED,
-i3 MEDIUMINT,
-u3 MEDIUMINT UNSIGNED,
-i4 INTEGER,
-u4 INTEGER UNSIGNED,
-i8 BIGINT,
-u8 BIGINT UNSIGNED);
-INSERT INTO t1 VALUES
-(0, -128, 0, -32768, 0, -8388608, 0, -2147483648, 0, -9223372036854775808, 0),
-(1, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0),
-(2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-(3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
-(4, 127, 255, 32767, 65535, 8388607, 16777215, 2147483647, 4294967295,
-9223372036854775807, 18446744073709551615);
-alter table t1 secondary_engine=rapid;
-alter table t1 secondary_load;
-set @iv= -9223372036854775809;
-set @dv= -9223372036854775809.0;
-set @fv= -9223372036854775809.0e0;
-set @sv= "-9223372036854775809";
-prepare s1 from
-"SELECT i1 = ? AS a,
-       u1 = ? AS au,
-       i2 = ? AS b,
-       u2 = ? AS bu,
-       i3 = ? AS c,
-       u3 = ? AS cu,
-       i4 = ? AS d,
-       u4 = ? AS du,
-       i8 = ? AS e,
-       u8 = ? AS eu
-FROM t1;";
-execute s1 using @iv, @iv, @iv, @iv, @iv, @iv, @iv, @iv, @iv, @iv;
-a	au	b	bu	c	cu	d	du	e	eu
-0	0	0	0	0	0	0	0	0	0
-0	0	0	0	0	0	0	0	0	0
-0	0	0	0	0	0	0	0	0	0
-0	0	0	0	0	0	0	0	0	0
-0	0	0	0	0	0	0	0	0	0
-execute s1 using @dv, @dv, @dv, @dv, @dv, @dv, @dv, @dv, @dv, @dv;
-a	au	b	bu	c	cu	d	du	e	eu
-0	0	0	0	0	0	0	0	0	0
-0	0	0	0	0	0	0	0	0	0
-0	0	0	0	0	0	0	0	0	0
-0	0	0	0	0	0	0	0	0	0
-0	0	0	0	0	0	0	0	0	0
-drop table t1;
-#
-# test prepared statement - 5
-#
-set use_secondary_engine = on;
-set secondary_engine_cost_threshold=0;
-CREATE TABLE t1(a INT);
-INSERT INTO t1 VALUES (10), (100), (200), (-100), (-200);
-alter table t1 secondary_engine=rapid;
-alter table t1 secondary_load;
-PREPARE p FROM '(SELECT * FROM t1 LIMIT 3) LIMIT ?';
-SET @a = 2;
-EXECUTE p USING @a;
-a
-10
-100
+set use_secondary_engine = off;
+SELECT * FROM t1;
+c_tiny	c_short	c_medium	c_int	c_bigint	c_float	c_double
+001	00001	00000001	0000000001	00000000000000000001	0000000001.1	000000000000000001.111
+022	00022	00000022	0000000022	00000000000000000022	000000022.22	0000000000000022.22222
+set use_secondary_engine = forced;
+SELECT * FROM t1;
+c_tiny	c_short	c_medium	c_int	c_bigint	c_float	c_double
+001	00001	00000001	0000000001	00000000000000000001	0000000001.1	000000000000000001.111
+022	00022	00000022	0000000022	00000000000000000022	000000022.22	0000000000000022.22222
 drop table t1;
 UNINSTALL PLUGIN rapid;

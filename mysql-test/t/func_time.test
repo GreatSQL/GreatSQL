@@ -207,8 +207,10 @@ drop table t1,t2;
 
 CREATE TABLE t1 (updated text) ENGINE=Innodb;
 INSERT INTO t1 VALUES ('');
+--disable_warnings
 SELECT month(updated) from t1;
 SELECT year(updated) from t1;
+--enable_warnings
 drop table t1;
 
 #

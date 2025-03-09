@@ -473,6 +473,7 @@ analyze table t1;
 EXPLAIN SELECT c1 FROM t1 WHERE (c1 > 10 AND c1 < 13) OR (c1 > 17 AND c1 < 20);
 
 FLUSH STATUS;
+--source include/disable_turbo.inc
 SELECT c1 FROM t1 WHERE (c1 > 10 AND c1 < 13) OR (c1 > 17 AND c1 < 20);
 --skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'Handler_read_%';
@@ -481,6 +482,7 @@ EXPLAIN SELECT c1 FROM t2 WHERE (c1 > 10 AND c1 < 13) OR (c1 > 17 AND c1 < 20);
 
 FLUSH STATUS;
 SELECT c1 FROM t2 WHERE (c1 > 10 AND c1 < 13) OR (c1 > 17 AND c1 < 20);
+--source include/restore_turbo.inc
 --skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'Handler_read_%';
 DROP TABLE t1,t2;
@@ -507,6 +509,7 @@ analyze table t1;
 EXPLAIN SELECT c1 FROM t1 WHERE (c1 > 2 AND c1 < 5);
 
 FLUSH STATUS;
+--source include/disable_turbo.inc
 SELECT c1 FROM t1 WHERE (c1 > 2 AND c1 < 5);
 --skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'Handler_read_%';
@@ -529,6 +532,7 @@ EXPLAIN SELECT c1 FROM t2 WHERE (c1 > 12 AND c1 < 15);
 
 FLUSH STATUS;
 SELECT c1 FROM t2 WHERE (c1 > 12 AND c1 < 15);
+--source include/restore_turbo.inc
 --skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'Handler_read_%';
 DROP TABLE t1,t2;
@@ -2266,7 +2270,9 @@ INSERT INTO t1 VALUES
 (14, 1, 15)
 ;
 
+--source include/disable_turbo.inc
 SELECT b, c FROM t1 WHERE b = 1 GROUP BY b, c;
+--source include/restore_turbo.inc
 analyze table t1;
 EXPLAIN
 SELECT b, c FROM t1 WHERE b = 1 GROUP BY b, c;

@@ -1,6 +1,7 @@
 # Skipping it for binlog_format=STATEMENT due to Unsafe statements:
 # unsafe auto-increment column, LIMIT clause.
 --source include/not_binlog_format_statement.inc
+--source include/no_turbo.inc
 
 #
 # test of updating of keys

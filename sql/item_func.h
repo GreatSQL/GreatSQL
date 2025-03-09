@@ -2,7 +2,7 @@
 #define ITEM_FUNC_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -329,8 +329,33 @@ class Item_func : public Item_result_field {
     JSON_FUNC,
     XML_FUNC,
     DATE_LITERAL_FUNC,
+    TIME_LITERAL_FUNC,
     CURDATE_FUNC,
-    SUBSTR_FUNC
+    SUBSTR_FUNC,
+    CONCAT_FUNC,
+    CONCAT_WS_FUNC,
+    LOWER_FUNC,
+    UPPER_FUNC,
+    LOG2_FUNC,
+    INSTR_FUNC,
+    LOCATE_FUNC,
+    LEFT_FUNC,
+    RIGHT_FUNC,
+    REPEAT_FUNC,
+    LPAD_FUNC,
+    RPAD_FUNC,
+    LTRIM_FUNC,
+    RTRIM_FUNC,
+    TRIM_FUNC,
+    REPLACE_FUNC,
+    REVERSE_FUNC,
+    ASCII_FUNC,
+    BIT_LENGTH_FUNC,
+    LENGTH_FUNC,
+    CHAR_LENGTH_FUNC,
+    TRANSLATE_FUNC,
+    RAND_FUNC,
+    DATE_FORMAT_FUNC,
   };
   enum optimize_type {
     OPTIMIZE_NONE,
@@ -1464,6 +1489,7 @@ class Item_func_log2 final : public Item_dec_func {
   Item_func_log2(const POS &pos, Item *a) : Item_dec_func(pos, a) {}
   double val_real() override;
   const char *func_name() const override { return "log2"; }
+  enum Functype functype() const override { return LOG2_FUNC; }
   Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
@@ -1715,6 +1741,7 @@ class Item_func_rand final : public Item_real_func {
   }
 
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return RAND_FUNC; }
 
  private:
   void seed_random(Item *val);
@@ -1959,6 +1986,7 @@ class Item_func_length : public Item_int_func {
   bool resolve_type(THD *thd) override;
 
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return LENGTH_FUNC; }
 };
 
 class Item_func_bit_length final : public Item_func_length {
@@ -1970,6 +1998,7 @@ class Item_func_bit_length final : public Item_func_length {
   }
   const char *func_name() const override { return "bit_length"; }
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return BIT_LENGTH_FUNC; }
 };
 
 class Item_func_char_length final : public Item_int_func {
@@ -1987,6 +2016,7 @@ class Item_func_char_length final : public Item_int_func {
 
   Item *pq_clone(THD *thd, Query_block *select) override;
   bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
+  enum Functype functype() const override { return CHAR_LENGTH_FUNC; }
 };
 
 class Item_func_coercibility final : public Item_int_func {
@@ -2023,6 +2053,7 @@ class Item_func_locate : public Item_int_func {
              enum_query_type query_type) const override;
   Item *pq_clone(THD *thd, Query_block *select) override;
   bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
+  enum Functype functype() const override { return LOCATE_FUNC; }
 };
 
 class Item_func_instr final : public Item_func_locate {
@@ -2032,6 +2063,7 @@ class Item_func_instr final : public Item_func_locate {
 
   const char *func_name() const override { return "instr"; }
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return INSTR_FUNC; }
 };
 
 class Item_func_instrb final : public Item_int_func {
@@ -2110,6 +2142,7 @@ class Item_func_ascii final : public Item_int_func {
     return Item_int_func::resolve_type(thd);
   }
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return ASCII_FUNC; }
 };
 
 class Item_func_ord final : public Item_int_func {
@@ -3449,7 +3482,6 @@ class user_var_entry {
     by Item_func_get_user_var (because that's not necessary).
   */
   query_id_t m_used_query_id;
-  bool dbms_lob_temporary{false};
 
  public:
   user_var_entry() = default; /* Remove gcc warning */
@@ -3537,8 +3569,6 @@ class user_var_entry {
   longlong val_int(bool *null_value) const;
   String *val_str(bool *null_value, String *str, uint decimals) const;
   my_decimal *val_decimal(bool *null_value, my_decimal *result) const;
-  void set_dbms_lob_temporary(bool v) { dbms_lob_temporary = v; }
-  bool is_dbms_lob_temporary() { return dbms_lob_temporary; }
 };
 
 /**
@@ -4888,29 +4918,6 @@ class Item_func_dbmsotpt_getbuffercount : public Item_int_func {
       : Item_int_func(pos) {}
   longlong val_int() override;
   const char *func_name() const override { return "dbmsotpt_getbuffercount"; }
-};
-
-class Item_func_dbmsjob_submit : public Item_int_func {
- public:
-  Item_func_dbmsjob_submit(const POS &pos, Item *a, Item *b, Item *c, Item *d,
-                           Item *e)
-      : Item_int_func(pos, a, b, c, d, e) {}
-
-  longlong val_int() override;
-  const char *func_name() const override { return "dbms_job_submit"; }
-  bool resolve_type(THD *thd) override {
-    if (param_type_is_default(thd, 0, 3) || !args[3]->is_temporal()) {
-      my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "args", func_name());
-      return true;
-    }
-
-    if (args[4]->propagate_type(thd, MYSQL_TYPE_BOOL)) {
-      my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "broken", func_name());
-      return true;
-    }
-
-    return false;
-  }
 };
 
 /**

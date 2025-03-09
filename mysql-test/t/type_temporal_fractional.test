@@ -7863,7 +7863,9 @@ SET NAMES default;
 SET @@session.sql_buffer_result=TRUE;
 CREATE TABLE t1(a DATETIME) engine=innodb;
 INSERT INTO t1 VALUES('9999-12-31 23:59:58.000015');
+--source include/disable_turbo.inc
 SELECT ADDTIME(a, 100000) FROM t1;
+--source include/restore_turbo.inc
 SET @@session.sql_buffer_result=default;
 
 DROP TABLE t1;

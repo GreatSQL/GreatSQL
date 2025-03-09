@@ -5,6 +5,7 @@
 # We'll be looking at the contents of the slow log later, and PS protocol
 # would give us extra lines for the prepare and drop phases.
 --source include/no_ps_protocol.inc
+--source include/no_turbo.inc
 
 #
 # Confirm that per-query stats work.

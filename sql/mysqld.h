@@ -1,5 +1,5 @@
 /* Copyright (c) 2010, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -401,6 +401,7 @@ extern SHOW_VAR status_vars[];
 extern struct System_variables max_system_variables;
 extern struct System_status_var global_status_var;
 extern struct rand_struct sql_rand;
+extern bool synonym_translation_enabled;
 
 using user_stats_t = collation_unordered_map<std::string, USER_STATS>;
 using thread_stats_t = malloc_unordered_map<my_thread_id, THREAD_STATS>;
@@ -527,6 +528,8 @@ extern PSI_mutex_key key_commit_order_manager_mutex;
 extern PSI_mutex_key key_mutex_replica_worker_hash;
 
 extern PSI_mutex_key key_sched_affinity_mutex;
+
+extern PSI_mutex_key key_LOCK_thd_query_plan_plugin;
 
 extern PSI_rwlock_key key_rwlock_LOCK_logger;
 extern PSI_rwlock_key key_rwlock_channel_map_lock;

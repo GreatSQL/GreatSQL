@@ -785,7 +785,7 @@ select distinct a from v1 limit 2;
 a
 1
 2
-select distinct a from t1 limit 2;
+select distinct a from t1 order by a limit 2;
 a
 1
 2
@@ -2612,11 +2612,11 @@ not blank
 not blank
 SELECT IF(x IS NULL, 'blank', 'not blank') AS x FROM t1 GROUP BY x;
 x
+Warning	1052	Column 'x' in group statement is ambiguous
+Warnings:
 blank
 not blank
 not blank
-Warnings:
-Warning	1052	Column 'x' in group statement is ambiguous
 SELECT IF(x IS NULL, 'blank', 'not blank') AS x FROM v1;
 x
 blank
@@ -4947,24 +4947,24 @@ SELECT * FROM (SELECT DISTINCT a FROM t1 UNION ALL SELECT a FROM t2) AS dt;
 SELECT * FROM v1;
 a
 1
-2
-3
-4
 1
 2
+2
 3
+3
+4
 4
 5
 NULL
 SELECT * FROM (SELECT DISTINCT a FROM t1 UNION ALL SELECT a FROM t2) AS dt;
 a
 1
-2
-3
-4
 1
 2
+2
 3
+3
+4
 4
 5
 NULL

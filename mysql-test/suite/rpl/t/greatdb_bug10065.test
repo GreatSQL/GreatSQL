@@ -1,0 +1,280 @@
+source include/have_binlog_format_row.inc;
+--source include/master-slave.inc
+
+--echo # 
+--echo # mysql_bug113707
+--echo # 
+connection master;
+CREATE TABLE t1 (path varchar(512) CHARACTER SET latin1 NOT NULL,box geometry NOT NULL SRID 4326,SPATIAL KEY box (box));
+insert into t1 values('asdfghjkl', ST_GeomFromText('POINT(39.345 116.123)',4326));
+insert into t1 values('wetryiwo', ST_GeomFromText('POINT(35.631122 134.5672332)',4326));
+insert into t1 values('223fsdssa', ST_GeomFromText('POINT(52.34445 12.433)',4326));
+
+--source include/sync_slave_sql_with_master.inc
+connection slave;
+select ST_X(box),ST_Y(box) from t1 where path='wetryiwo';
+
+connection master;
+update t1 set box=ST_GeomFromText('POINT(68.32145 123.5432)', 4326) where path='wetryiwo';
+
+--source include/sync_slave_sql_with_master.inc
+connection slave;
+select ST_X(box),ST_Y(box) from t1 where path='wetryiwo';
+
+connection master;
+drop table t1;
+--source include/sync_slave_sql_with_master.inc
+
+--echo # 
+--echo # All geometry type as index
+--echo # 
+connection master;
+# geometry
+create table tx52 (c1 int, c2 geometry not null srid 0, spatial index (c2)) comment='disttype=global';
+insert into tx52 values(1, point(1, 1));
+insert into tx52 values(2, point(2, 2));
+insert into tx52 values(3, point(3, 3));
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = point(9, 9) where c2 = point(2, 2);
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52 where c2 = point(9, 9);
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = point(9, 9);
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52;
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+drop table tx52;
+
+# point
+create table tx52 (c1 int, c2 point not null srid 0, spatial index (c2)) comment='disttype=global';
+insert into tx52 values(1, point(1, 1));
+insert into tx52 values(2, point(2, 2));
+insert into tx52 values(3, point(3, 3));--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = point(9, 9) where c2 = point(2, 2);
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52 where c2 = point(9, 9);
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = point(9, 9);
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52;
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+drop table tx52;
+
+# linestring
+create table tx52 (c1 int, c2 linestring not null srid 0, spatial index (c2)) comment='disttype=global';
+insert into tx52 values(1, linestring(point(1, 1), point(9, 9)));
+insert into tx52 values(2, linestring(point(2, 2), point(9, 9)));
+insert into tx52 values(3, linestring(point(3, 3), point(9, 9)));
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 =  linestring(point(4, 4), point(9, 9)) where c2 =  linestring(point(2, 2), point(9, 9));
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52 where c2 = linestring(point(4, 4), point(9, 9));
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = linestring(point(4, 4), point(9, 9));
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52;
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+drop table tx52;
+
+# polygon
+create table tx52 (c1 int, c2 polygon not null srid 0, spatial index (c2)) comment='disttype=global';
+insert into tx52 values(1, st_geomfromtext('polygon((0 0, 10 0, 10 10, 0 10, 0 0))'));
+insert into tx52 values(2, st_geomfromtext('polygon((0 0, 20 0, 20 20, 0 20, 0 0))'));
+insert into tx52 values(3, st_geomfromtext('polygon((0 0, 30 0, 30 30, 0 30, 0 0))'));
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = st_geomfromtext('polygon((0 0, 90 0, 90 90, 0 90, 0 0))') where c2 = st_geomfromtext('polygon((0 0, 20 0, 20 20, 0 20, 0 0))');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52 where c2 = st_geomfromtext('polygon((0 0, 90 0, 90 90, 0 90, 0 0))');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = st_geomfromtext('polygon((0 0, 90 0, 90 90, 0 90, 0 0))');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52;
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+drop table tx52;
+
+# geometrycollection
+create table tx52 (c1 int, c2 geometrycollection not null srid 0, spatial index (c2)) comment='disttype=global';
+insert into tx52 values(1, st_geomfromtext('geometrycollection(point(1 2), linestring(3 4, 5 6))'));
+insert into tx52 values(2, st_geomfromtext('geometrycollection(point(7 8), linestring(9 10, 11 12))'));
+insert into tx52 values(3, st_geomfromtext('geometrycollection(point(13 14), linestring(15 16, 17 18))'));
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = st_geomfromtext('geometrycollection(point(19 20), linestring(21 22, 23 24))') where c2 = st_geomfromtext('geometrycollection(point(7 8), linestring(9 10, 11 12))');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52 where c2 = st_geomfromtext('geometrycollection(point(19 20), linestring(21 22, 23 24))');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = st_geomfromtext('geometrycollection(point(19 20), linestring(21 22, 23 24))');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52;
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+drop table tx52;
+
+
+# multipoint
+create table tx52 (c1 int, c2 multipoint not null srid 0, spatial index (c2)) comment='disttype=global';
+insert into tx52 values(1, st_multipointfromtext('multipoint(1 1, 9 9)'));
+insert into tx52 values(2, st_multipointfromtext('multipoint(2 2, 9 9)'));
+insert into tx52 values(3, st_multipointfromtext('multipoint(3 3, 9 9)'));
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = st_multipointfromtext('multipoint(0 0, 9 9)') where c2 = st_multipointfromtext('multipoint(2 2, 9 9)');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52 where c2 = st_multipointfromtext('multipoint(0 0, 9 9)');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = st_multipointfromtext('multipoint(0 0, 9 9)');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52;
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+drop table tx52;
+
+# multilinestring
+create table tx52 (c1 int, c2 multilinestring not null srid 0, spatial index (c2)) comment='disttype=global';
+insert into tx52 values(1, st_multilinestringfromtext('multilinestring((1 1, 2 2), (3 3, 4 4))'));
+insert into tx52 values(2, st_multilinestringfromtext('multilinestring((5 5, 6 6), (7 7, 8 8))'));
+insert into tx52 values(3, st_multilinestringfromtext('multilinestring((9 9, 10 10), (11 11, 12 12))'));
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = st_multilinestringfromtext('multilinestring((0 0, 9 9), (10 10, 19 19))') where c2 = st_multilinestringfromtext('multilinestring((5 5, 6 6), (7 7, 8 8))');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52 where c2 = st_multilinestringfromtext('multilinestring((0 0, 9 9), (10 10, 19 19))');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = st_multilinestringfromtext('multilinestring((0 0, 9 9), (10 10, 19 19))');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52;
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+drop table tx52;
+
+# multipolygon
+create table tx52 (c1 int, c2 multipolygon not null srid 0, spatial index (c2)) comment='disttype=global';
+insert into tx52 values(1, st_multipolygonfromtext('multipolygon(((0 0, 1 0, 1 1, 0 1, 0 0)), ((1 1, 1 2, 2 2, 2 1, 1 1)))'));
+insert into tx52 values(2, st_multipolygonfromtext('multipolygon(((2 2, 2 3, 3 3, 3 2, 2 2)), ((3 3, 3 4, 4 4, 4 3, 3 3)))'));
+insert into tx52 values(3, st_multipolygonfromtext('multipolygon(((5 5, 5 6, 6 6, 6 5, 5 5)), ((6 6, 6 7, 7 7, 7 6, 6 6)))'));
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = st_multipolygonfromtext('multipolygon(((0 0, 0 9, 9 9, 9 0, 0 0)), ((10 10, 10 20, 20 20, 20 10, 10 10)))') where c2 = st_multipolygonfromtext('multipolygon(((2 2, 2 3, 3 3, 3 2, 2 2)), ((3 3, 3 4, 4 4, 4 3, 3 3)))');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52 where c2 = st_multipolygonfromtext('multipolygon(((0 0, 0 9, 9 9, 9 0, 0 0)), ((10 10, 10 20, 20 20, 20 10, 10 10)))');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+update tx52 set c2 = st_multipolygonfromtext('multipolygon(((0 0, 0 9, 9 9, 9 0, 0 0)), ((10 10, 10 20, 20 20, 20 10, 10 10)))');
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+delete from tx52;
+--source include/sync_slave_sql_with_master.inc
+select c1, st_astext(c2) from tx52;
+
+connection master;
+drop table tx52;
+
+--source include/rpl_end.inc

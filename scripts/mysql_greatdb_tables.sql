@@ -1,4 +1,4 @@
--- Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+-- Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 --
 -- This program is free software; you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License, version 2.0,
@@ -91,6 +91,17 @@ CREATE TABLE IF NOT EXISTS `mysql`.`clone_history`
   `END_LSN` bigint DEFAULT NULL
 ) ENGINE=INNODB STATS_PERSISTENT=0 CHARACTER SET utf8mb4 COMMENT='Clone history';
 
+CREATE TABLE IF NOT EXISTS `mysql`.`db_object_synonyms`
+(
+  `schema`            VARCHAR(64) NOT NULL,
+  `name`              VARCHAR(64) NOT NULL,
+  `target_type`       VARCHAR(64) NOT NULL,
+  `target_schema`     VARCHAR(64) NOT NULL,
+  `target_name`       VARCHAR(64) NOT NULL,
+  `db_link`           VARCHAR(256) NOT NULL,
+  PRIMARY KEY(`schema`, `name`)
+)
+ENGINE=InnoDB STATS_PERSISTENT=0 CHARACTER SET utf8mb4 COMMENT='db object synonyms';
 
 -- should always at the end of this file
 SET @@session.sql_mode = @old_sql_mode;

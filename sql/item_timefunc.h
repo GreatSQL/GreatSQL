@@ -2,7 +2,7 @@
 #define ITEM_TIMEFUNC_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -932,6 +932,8 @@ class Item_time_literal final : public Item_time_func {
   bool eq(const Item *item, bool binary_cmp) const override;
   Item *pq_clone(THD *thd, Query_block *select) override;
   MYSQL_TIME_cache *get_cached_time() { return &cached_time; }
+
+  enum Functype functype() const override { return TIME_LITERAL_FUNC; }
 };
 
 /**
@@ -1366,6 +1368,7 @@ class Item_func_date_format final : public Item_str_func {
   bool eq(const Item *item, bool binary_cmp) const override;
   Item *pq_clone(THD *thd, Query_block *select) override;
   bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
+  enum Functype functype() const override { return DATE_FORMAT_FUNC; }
 };
 
 class Item_func_from_unixtime final : public Item_datetime_func {
@@ -1795,7 +1798,9 @@ class Item_func_str_to_date final : public Item_temporal_hybrid_func {
 
  public:
   Item_func_str_to_date(const POS &pos, Item *a, Item *b)
-      : Item_temporal_hybrid_func(pos, a, b) {}
+      : Item_temporal_hybrid_func(pos, a, b) {
+    set_data_type_datetime(DATETIME_MAX_DECIMALS);
+  }
   const char *func_name() const override { return "str_to_date"; }
   bool resolve_type(THD *) override;
   Item *pq_clone(THD *thd, Query_block *select) override;
@@ -1866,6 +1871,7 @@ class Item_func_to_date final : public Item_temporal_hybrid_func {
         cached_timestamp_type(MYSQL_TIMESTAMP_NONE),
         locale(nullptr) {
     set_has_notsupported_func_true();
+    set_data_type_datetime(0);
   }
   const char *func_name() const override { return "to_date"; }
   bool resolve_type(THD *) override;
@@ -1887,6 +1893,7 @@ class Item_func_to_timestamp final : public Item_temporal_hybrid_func {
         cached_timestamp_type(MYSQL_TIMESTAMP_NONE),
         locale(nullptr) {
     set_has_notsupported_func_true();
+    set_data_type_datetime(DATETIME_MAX_DECIMALS);
   }
   const char *func_name() const override { return "to_timestamp"; }
   bool resolve_type(THD *) override;
@@ -1920,12 +1927,16 @@ class Item_func_add_months final : public Item_temporal_hybrid_func {
 
  public:
   Item_func_add_months(const POS &pos, Item *a, Item *b)
-      : Item_temporal_hybrid_func(pos, a, b) {}
+      : Item_temporal_hybrid_func(pos, a, b) {
+    set_data_type_datetime(0);
+  }
   /**
      POS-less ctor for post-parse construction with implicit addition to THD's
      free_list (see Item::Item() no-argument ctor).
   */
-  Item_func_add_months(Item *a, Item *b) : Item_temporal_hybrid_func(a, b) {}
+  Item_func_add_months(Item *a, Item *b) : Item_temporal_hybrid_func(a, b) {
+    set_data_type_datetime(0);
+  }
 
   const char *func_name() const override { return "add_months"; }
   bool resolve_type(THD *) override;

@@ -16,10 +16,10 @@ INSERT INTO t1 VALUES (10,'VMT');
 INSERT INTO t2 SELECT DISTINCT FACILITY FROM t1;
 select id from t1 group by id;
 id
-NULL
 -1
 0
 1
+10
 2
 3
 4
@@ -28,7 +28,7 @@ NULL
 7
 8
 9
-10
+NULL
 select * from t1 order by id;
 id	facility
 NULL	NULL
@@ -91,12 +91,11 @@ a	max(id)	b
 NULL	NULL	NULL
 select id >= 0 and id <= 5 as grp,count(*) from t1 group by grp;
 grp	count(*)
-NULL	1
 0	6
 1	6
+NULL	1
 SELECT DISTINCT FACILITY FROM t1;
 FACILITY
-NULL
 
 /L
 A01
@@ -104,13 +103,13 @@ ANC
 F01
 FBX
 MT
+NULL
 P
 RV
 SRV
 VMT
 SELECT FACILITY FROM t2;
 FACILITY
-NULL
 
 /L
 A01
@@ -118,6 +117,7 @@ ANC
 F01
 FBX
 MT
+NULL
 P
 RV
 SRV
@@ -243,8 +243,8 @@ Handler_read_rnd_next	1
 explain SELECT distinct t1.a from t1;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	t1	NULL	index	PRIMARY	PRIMARY	4	NULL	4	100.00	Using index
-Warnings:
 Note	1003	/* select#1 */ select distinct `test`.`t1`.`a` AS `a` from `test`.`t1`
+Warnings:
 explain SELECT distinct t1.a from t1 order by a desc;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	t1	NULL	index	PRIMARY	PRIMARY	4	NULL	4	100.00	Backward index scan; Using index
@@ -945,11 +945,11 @@ Warnings:
 Note	1003	/* select#1 */ select distinct `test`.`t1`.`a` AS `a` from `test`.`t1`
 SELECT DISTINCT a FROM t1;
 a
-NULL
 1
 2
 3
 4
+NULL
 EXPLAIN SELECT a FROM t1 GROUP BY a;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	t1	NULL	index	a	a	5	NULL	6	100.00	Using index
@@ -957,11 +957,11 @@ Warnings:
 Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` group by `test`.`t1`.`a`
 SELECT a FROM t1 GROUP BY a;
 a
-NULL
 1
 2
 3
 4
+NULL
 DROP TABLE t1;
 CREATE TABLE t1 (a INT, b INT);
 INSERT INTO t1 VALUES(1,1),(1,2),(1,3);
@@ -1136,8 +1136,8 @@ FROM t1 LEFT JOIN
 ON t1.a = subselect.b
 ;
 b
-NULL
 3
+NULL
 SET @@SESSION.optimizer_switch= @save_optimizer_switch;
 DROP TABLE t1;
 #

@@ -1732,6 +1732,8 @@ The following options may be given as the first argument:
  Synchronize replication receiver positions to disk
  periodically, after the specified number of events. Use 0
  to disable periodic synchronization.
+ --synonym-translation-enabled 
+ Whether to enabled synonym translation.
  --sysdate-is-now    Non-default option to alias SYSDATE() to NOW() to make it
  safe-replicable. Since 5.0, SYSDATE() returns a `dynamic'
  value different for different invocations, even within
@@ -2190,7 +2192,7 @@ performance-schema-max-socket-classes 10
 performance-schema-max-socket-instances -1
 performance-schema-max-sql-text-length 1024
 performance-schema-max-stage-classes 175
-performance-schema-max-statement-classes 259
+performance-schema-max-statement-classes 263
 performance-schema-max-statement-stack 10
 performance-schema-max-table-handles -1
 performance-schema-max-table-instances -1
@@ -2337,6 +2339,7 @@ sync-master-info 10000
 sync-relay-log 10000
 sync-relay-log-info 10000
 sync-source-info 10000
+synonym-translation-enabled FALSE
 sysdate-is-now FALSE
 table-encryption-privilege-check FALSE
 table-open-cache-instances 16

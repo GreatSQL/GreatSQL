@@ -1,6 +1,6 @@
 /* Copyright (c) 2001, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -83,8 +83,9 @@
 #include "sql/pfs_batch_mode.h"
 #include "sql/protocol.h"
 #include "sql/query_options.h"
-#include "sql/sp_rcontext.h"  // sp_rcontext
-#include "sql/sql_base.h"     // fill_record
+#include "sql/query_plan_plugin.h"  // create
+#include "sql/sp_rcontext.h"        // sp_rcontext
+#include "sql/sql_base.h"           // fill_record
 #include "sql/sql_class.h"
 #include "sql/sql_cmd.h"
 #include "sql/sql_const.h"
@@ -106,6 +107,7 @@ using std::vector;
 class Item_rollup_group_item;
 class Item_rollup_sum_switcher;
 class Opt_trace_context;
+class PhysicalMotion;
 
 bool Query_result_union::prepare(THD *, const mem_root_deque<Item *> &,
                                  Query_expression *u) {
@@ -1119,7 +1121,7 @@ bool Query_expression::optimize(THD *thd, TABLE *materialize_destination,
 
   if (create_iterators && IteratorsAreNeeded(thd, m_root_access_path)) {
     JOIN *join = query_term()->query_block()->join;
-
+    create_additional_query_plan_runtime(thd, join, this);
     DBUG_EXECUTE_IF(
         "ast", Query_term *qn = m_query_term;
         DBUG_PRINT("ast", ("\n%s", thd->query().str)); if (qn) {
@@ -1719,109 +1721,6 @@ bool Query_expression::ClearForExecution() {
   return false;
 }
 
-static void create_rapid_fields(THD *thd, mem_root_deque<Item *> *fields,
-                                mem_root_deque<Item *> **rapid_fields) {
-  *rapid_fields = new (thd->mem_root) mem_root_deque<Item *>(thd->mem_root);
-  for (auto &item : *fields) {
-    if (item->hidden) continue;
-    Item *fake_field;
-    switch (item->data_type()) {
-      /* numeric data types */
-      case MYSQL_TYPE_TINY: {
-        fake_field = new Item_int(0);
-        fake_field->set_data_type(MYSQL_TYPE_TINY);
-        break;
-      }
-      case MYSQL_TYPE_SHORT: {
-        fake_field = new Item_int(0);
-        fake_field->set_data_type(MYSQL_TYPE_SHORT);
-        break;
-      }
-      case MYSQL_TYPE_INT24: {
-        fake_field = new Item_int(0);
-        fake_field->set_data_type(MYSQL_TYPE_INT24);
-        break;
-      }
-      case MYSQL_TYPE_LONG: {
-        fake_field = new Item_int(0);
-        fake_field->set_data_type(MYSQL_TYPE_LONG);
-        break;
-      }
-      case MYSQL_TYPE_LONGLONG: {
-        fake_field = new Item_int(0);
-        fake_field->set_data_type(MYSQL_TYPE_LONGLONG);
-        break;
-      }
-      case MYSQL_TYPE_FLOAT: {
-        fake_field = new Item_float((double)0, DECIMAL_NOT_SPECIFIED);
-        fake_field->set_data_type(MYSQL_TYPE_FLOAT);
-        break;
-      }
-      case MYSQL_TYPE_DOUBLE: {
-        fake_field = new Item_float((double)0, DECIMAL_NOT_SPECIFIED);
-        fake_field->set_data_type(MYSQL_TYPE_DOUBLE);
-        break;
-      }
-      case MYSQL_TYPE_DECIMAL:
-      case MYSQL_TYPE_NEWDECIMAL: {
-        fake_field = new Item_decimal((double)0);
-        break;
-      }
-      /* string data types */
-      case MYSQL_TYPE_STRING:
-      case MYSQL_TYPE_VARCHAR:
-      case MYSQL_TYPE_BLOB: {
-        // Item_field *item_field = down_cast<Item_field *>(item);
-        // Field_str *field_str = down_cast<Field_str *>(item_field->field);
-        // fake_field = new Item_string("", 0, field_str->charset());
-        fake_field = new Item_string("", 0, item->charset_for_protocol());
-        break;
-      }
-      /* date and time data types */
-      case MYSQL_TYPE_DATE:
-      case MYSQL_TYPE_NEWDATE: {
-        MYSQL_TIME time;
-        set_zero_time(&time, MYSQL_TIMESTAMP_DATE);
-        fake_field = new Item_date_literal(&time);
-        break;
-      }
-      case MYSQL_TYPE_TIME:
-      case MYSQL_TYPE_TIME2: {
-        MYSQL_TIME time;
-        set_zero_time(&time, MYSQL_TIMESTAMP_TIME);
-        fake_field = new Item_time_literal(&time, item->decimals);
-        break;
-      }
-      case MYSQL_TYPE_DATETIME:
-      case MYSQL_TYPE_DATETIME2: {
-        MYSQL_TIME time;
-        set_zero_time(&time, MYSQL_TIMESTAMP_DATETIME);
-        fake_field = new Item_datetime_literal(&time, item->decimals,
-                                               thd->variables.time_zone);
-        fake_field->set_data_type(MYSQL_TYPE_DATETIME);
-        break;
-      }
-      case MYSQL_TYPE_TIMESTAMP:
-      case MYSQL_TYPE_TIMESTAMP2: {
-        MYSQL_TIME time;
-        set_zero_time(&time, MYSQL_TIMESTAMP_DATETIME);
-        fake_field = new Item_datetime_literal(&time, item->decimals,
-                                               thd->variables.time_zone);
-        fake_field->set_data_type(MYSQL_TYPE_TIMESTAMP);
-        break;
-      }
-      default: {
-        fake_field = new Item_string("", 0, &my_charset_latin1);
-        break;
-      }
-    }
-    fake_field->decimals = item->decimals;
-    fake_field->item_name = item->item_name;
-    fake_field->unsigned_flag = item->unsigned_flag;
-    (*rapid_fields)->push_back(fake_field);
-  }
-}
-
 bool Query_expression::ExecuteIteratorQuery(THD *thd) {
   THD_STAGE_INFO(thd, stage_executing);
   DEBUG_SYNC(thd, "before_join_exec");
@@ -1839,10 +1738,6 @@ bool Query_expression::ExecuteIteratorQuery(THD *thd) {
   }
 
   mem_root_deque<Item *> *fields = get_field_list();
-  if (thd->lex->use_rapid_exec) {
-    create_rapid_fields(thd, fields, &(thd->lex->rapid_fields));
-    fields = thd->lex->rapid_fields;
-  }
   Query_result *query_result = this->query_result();
   assert(query_result != nullptr);
 
@@ -1932,7 +1827,8 @@ bool Query_expression::ExecuteIteratorQuery(THD *thd) {
       if (thd->parallel_exec && thd->pq_iterator) {
         thd->pq_iterator->End();
       }
-
+      // explain analyze may use dkruntime, we only close tables here
+      free_additional_query_plan_runtime(thd, false);
       for (Query_block *sl = first_query_block(); sl;
            sl = sl->next_query_block()) {
         JOIN *join = sl->join;
@@ -1947,6 +1843,9 @@ bool Query_expression::ExecuteIteratorQuery(THD *thd) {
     if (m_root_iterator->Init()) {
       return true;
     }
+
+    // fields may change in DPExecutor::Init(), retrieve it again
+    fields = get_field_list();
 
     uint read_records_num = 0;
     MQueue_handle *handler = query_result->get_mq_handler();

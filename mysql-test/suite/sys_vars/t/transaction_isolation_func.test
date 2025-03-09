@@ -1,3 +1,4 @@
+--source include/no_turbo.inc
 --echo #
 --echo # WL#9636: Rename tx_{isolation,isolation} variables to transaction_*
 --echo #

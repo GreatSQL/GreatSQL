@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -815,7 +815,9 @@ end:
 
 bool Plugin_gcs_events_handler::was_member_expelled_from_group(
     const Gcs_view &view) const {
-  DBUG_TRACE;
+  DBUG_PRINT(
+      "ENTER",
+      ("enter: Plugin_gcs_events_handler::was_member_expelled_from_group"));
   bool result = false;
 
   if (view.get_error_code() == Gcs_view::MEMBER_EXPELLED) {

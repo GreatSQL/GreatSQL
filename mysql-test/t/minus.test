@@ -27,7 +27,9 @@ select a,b from t1 minus select a,b from t1;
 select 't1',b,count(*) from t1 group by b MINUS select 't2',b,count(*) from t2 group by b;
 
 # Test alternate syntax for minuss 
+--sorted_result
 (select a,b from t1 limit 2)  minus (select a,b from t2 order by a) limit 4;
+--sorted_result
 (select a,b from t1 limit 2)  minus (select a,b from t2 order by a limit 1);
 --replace_column 10 # 11 #
 (select a,b from t1 limit 2)  minus (select a,b from t2 order by a limit 1) order by b desc;
@@ -37,10 +39,13 @@ select 't1',b,count(*) from t1 group by b MINUS select 't2',b,count(*) from t2 g
 explain (select a,b from t1 limit 2)  minus (select a,b from t2 order by a limit 1) order by b desc;
 select count(*) from (
 (select                      a,b from t1 limit 2)  minus (select a,b from t2 order by a)) q;
+--source include/disable_turbo.inc
 (select sql_calc_found_rows  a,b from t1 limit 2)  minus (select a,b from t2 order by a) limit 2;
+--source include/restore_turbo.inc
 select found_rows();
 select count(*) from (
 select                      a,b from t1  minus select a,b from t2) q;
+--sorted_result
 select sql_calc_found_rows  a,b from t1  minus select a,b from t2 limit 2;
 select found_rows();
 --replace_column 10 # 11 #
@@ -115,8 +120,11 @@ create table t1 (a int);
 create table t2 (a int);
 insert into t1 values (1),(2),(3),(4),(5);
 insert into t2 values (11),(12),(13),(14),(15);
+--sorted_result
 (select * from t1 limit 2) minus (select * from t2 limit 3) limit 4;
+--sorted_result
 (select * from t1 limit 2) minus (select * from t2 limit 3);
+--sorted_result
 (select * from t1 limit 2) minus (select * from t2 limit 20,3);
 set SQL_SELECT_LIMIT=2;
 (select * from t1 limit 1) minus (select * from t2 limit 3);
@@ -208,7 +216,9 @@ insert into t2 values (3),(4),(5);
 # Test global limits
 SELECT COUNT(*) FROM (
 (SELECT                     * FROM t1) MINUS (SELECT * FROM t2)) q;
+--source include/disable_turbo.inc
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1) MINUS (SELECT * FROM t2) LIMIT 1;
+--source include/restore_turbo.inc
 select found_rows();
 SELECT COUNT(*) FROM (
 (SELECT                     * FROM t1 LIMIT 1) MINUS (SELECT * FROM t2)) q;
@@ -222,6 +232,7 @@ SELECT COUNT(*) FROM (
 select found_rows();
 SELECT COUNT(*) FROM (
 (SELECT                     * FROM t1) MINUS (SELECT * FROM t2 LIMIT 1)) q;
+--sorted_result
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1) MINUS (SELECT * FROM t2 LIMIT 1);
 select found_rows();
 SELECT COUNT(*) FROM (
@@ -238,22 +249,26 @@ SELECT COUNT(*) FROM (
 select found_rows();
 SELECT COUNT(*) FROM (
 SELECT                     * FROM t1 MINUS SELECT * FROM t2) q;
+--sorted_result
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 MINUS SELECT * FROM t2 LIMIT 2;
 select found_rows();
 
 # The following examples will not be exact
 SELECT COUNT(*) FROM (
 SELECT                     * FROM t1 MINUS SELECT * FROM t2) q;
+--sorted_result
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 MINUS SELECT * FROM t2 LIMIT 2;
 select found_rows();
 SELECT COUNT(*) FROM (
 SELECT                     * FROM t1 MINUS SELECT * FROM t2) q;
+--sorted_result
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 MINUS SELECT * FROM t2 LIMIT 100;
 select found_rows();
 --error ER_PARSE_ERROR
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 100 MINUS SELECT * FROM t2;
 SELECT COUNT(*) FROM (
 (SELECT                     * FROM t1 LIMIT 100) MINUS SELECT * FROM t2) q;
+--sorted_result
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 100) MINUS SELECT * FROM t2;
 select found_rows();
 --error ER_PARSE_ERROR
@@ -270,7 +285,9 @@ SELECT COUNT(*) FROM (
 select found_rows();
 SELECT COUNT(*) FROM (
 SELECT                     * FROM t1 MINUS SELECT * FROM t2) q;
+--source include/disable_turbo.inc
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 MINUS SELECT * FROM t2 LIMIT 2,2;
+--source include/restore_turbo.inc
 select found_rows();
 --error ER_PARSE_ERROR
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 limit 2,2 MINUS SELECT * FROM t2;
@@ -324,8 +341,10 @@ insert into t2 (b) values (10),(11),(12),(13);
 analyze table t1;
 
 explain (select * from t1 where a=1) minus (select * from t2 where a=1);
+--source include/disable_turbo.inc
 --skip_if_hypergraph  # No support for const tables.
 explain format=tree (select * from t1 where a=5) minus (select * from t2 where a=1);  # Tests printing of ZeroRowsIterator.
+--source include/restore_turbo.inc
 (select * from t1 where a=5) minus (select * from t2 where a=1);
 (select * from t1 where a=5 and a=6) minus (select * from t2 where a=1);
 (select t1.a,t1.b from t1,t2 where t1.a=5) minus (select * from t2 where a=1);

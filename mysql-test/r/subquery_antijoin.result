@@ -139,14 +139,6 @@ WHERE NOT EXISTS (SELECT * FROM t1 AS it WHERE it.uk=ot.pk)
 AND ot.pk<25;
 pk
 1
-2
-3
-4
-5
-6
-7
-8
-9
 11
 12
 13
@@ -156,10 +148,18 @@ pk
 17
 18
 19
+2
 21
 22
 23
 24
+3
+4
+5
+6
+7
+8
+9
 set optimizer_switch="firstmatch=off,materialization=on";
 select @@optimizer_switch;
 @@optimizer_switch
@@ -288,14 +288,6 @@ WHERE NOT EXISTS (SELECT * FROM t1 AS it WHERE it.uk=ot.pk)
 AND ot.pk<25;
 pk
 1
-2
-3
-4
-5
-6
-7
-8
-9
 11
 12
 13
@@ -305,10 +297,18 @@ pk
 17
 18
 19
+2
 21
 22
 23
 24
+3
+4
+5
+6
+7
+8
+9
 DROP TABLE t1,t2;
 CREATE TABLE t1(a INT, b INT);
 INSERT INTO t1 VALUES(1,1),(2,2),(3,3);

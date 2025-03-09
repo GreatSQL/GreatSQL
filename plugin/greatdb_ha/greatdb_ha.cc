@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+/* Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,11 +26,13 @@
 #include <ifaddrs.h>
 #include <net/ethernet.h>
 #include <net/if.h>
+#include <net/if_arp.h>
 #include <netdb.h>
 #include <netinet/icmp6.h>
 #include <netinet/in.h>
 #include <netinet/ip6.h>
 #include <netinet/ip_icmp.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,6 +76,8 @@
 #include "sql/sql_const.h"
 
 namespace greatdb {
+#define VALIDATE_GREATDB_HA_MSG "Great01HaReserv!"
+#define VALIDATE_GREATDB_HA_MSG_SIZE 16
 
 #define HEART_STRING_BUFFER 200
 #define DEST_MAC \
@@ -161,6 +165,8 @@ struct greatdb_ha_message {
     message_length = 2 * sizeof(int) + sizeof(message_type_t);
     message_type = type;
     view_id_length = 0;
+    memcpy(validate_msg, VALIDATE_GREATDB_HA_MSG, VALIDATE_GREATDB_HA_MSG_SIZE);
+    message_length += VALIDATE_GREATDB_HA_MSG_SIZE;
   }
   void set_view_id(std::string view_id_stamp, int view_id_version) {
     if (!view_id_stamp.empty() && view_id_version > 0) {
@@ -190,7 +196,9 @@ struct greatdb_ha_message {
   }
   message_type_t get_message_type() { return message_type; }
   char *get_message_content() { return message_content + view_id_length; }
+  char *get_validate_msg() { return validate_msg; }
 
+  char validate_msg[VALIDATE_GREATDB_HA_MSG_SIZE];
   int message_length;
   message_type_t message_type;
   int view_id_length;
@@ -392,19 +400,9 @@ static void gdb_cmd_run_force_member() {
 
 static ssize_t recv_packet(int ping_sock_fd) {
   ssize_t len, n;
-  fd_set fds;
-  struct timeval tv;
   struct iphdr *iph;
   struct icmp *icmp;
-  tv.tv_sec = MAX_WAIT_TIME;
-  tv.tv_usec = 0;
-  int maxfds = 0;
   while (1) {
-    FD_ZERO(&fds);
-    FD_SET(ping_sock_fd, &fds);
-    maxfds = ping_sock_fd + 1;
-    n = select(maxfds, &fds, NULL, NULL, &tv);
-    if (n <= 0) return -1;
     memset(recvpacket, 0, sizeof(recvpacket));
     len = ping_family == AF_INET ? sizeof(dest_addr) : sizeof(dest_addr6);
     n = ping_family == AF_INET
@@ -442,7 +440,14 @@ bool ping_gateway(int ping_sock_fd, const char *gateway_ip) {
   if (!gateway_ip || !strlen(gateway_ip)) return true;
   int n;
   int size = 50 * 1024;
-  setsockopt(ping_sock_fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
+  struct timeval tv = {MAX_WAIT_TIME, 0};
+  if (setsockopt(ping_sock_fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size)) <
+          0 ||
+      setsockopt(ping_sock_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "Error: set ping_gateway socket option failed.");
+    return false;
+  }
   bzero(&dest_addr, sizeof(dest_addr));
   bzero(&dest_addr6, sizeof(dest_addr6));
   if (ping_family == AF_INET &&
@@ -532,6 +537,7 @@ void *ping_func(void *) {
     }
     sleep(5);
   }
+  close(ping_sock);
   goto end;
 end:
   delete thd;
@@ -541,6 +547,37 @@ end:
 /*----------------------------------------------------------------
 ping gateway thread end
 ---------------------------------------------------------------*/
+
+bool get_mac_and_index(int sock_fd, unsigned char *mac, int &sll_ifindex) {
+  struct ifreq ifr;
+  memset(&ifr, 0, sizeof(ifr));
+  strncpy(ifr.ifr_name, vip_nic, sizeof(ifr.ifr_name) - 1);
+  ifr.ifr_name[sizeof(ifr.ifr_name) - 1] = '\0';
+
+  if (ioctl(sock_fd, SIOCGIFINDEX, &ifr) == -1) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "Get mac SIOCGIFINDEX failed. %s", strerror(errno));
+    return false;
+  }
+  sll_ifindex = ifr.ifr_ifindex;
+
+  if (ioctl(sock_fd, SIOCGIFHWADDR, &ifr) < 0) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "Get mac SIOCGIFHWADDR failed. %s", strerror(errno));
+    return false;
+  }
+  memcpy(mac, ifr.ifr_hwaddr.sa_data, 6);
+
+  // Set or get the broadcast flag.
+  int tmp_flag = 1;
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_BROADCAST, &tmp_flag,
+                 sizeof(tmp_flag)) == -1) {
+    my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                          "Set mac SO_BROADCAST failed. %s", strerror(errno));
+    return false;
+  }
+  return true;
+}
 
 int get_mac(const char *eno, unsigned char *mac) {
   struct ifreq ifreq;
@@ -798,26 +835,35 @@ static int send_arp(const char *vip) {
   struct in_addr s, r;
   sockaddr_ll sl;
   unsigned char mac[6];
-  if (!get_mac(vip_nic, mac)) return 0;
-  struct arppacket arp = {DEST_MAC,    DEST_MAC,      htons(0x0806),
-                          htons(0x01), htons(0x0800), ETH_ALEN,
-                          4,           htons(0x01),   DEST_MAC,
-                          {0},         DEST_MAC,      {0}};
-  memcpy(arp.src_mac, mac, 6);
-  memcpy(arp.ar_sha, mac, 6);
+  memset(&sl, 0, sizeof(sl));
+
   sock_fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
   if (sock_fd < 0) {
     return 0;
   }
-  memset(&sl, 0, sizeof(sl));
+  if (!get_mac_and_index(sock_fd, mac, sl.sll_ifindex)) return 0;
+  sl.sll_family = AF_PACKET;
+  sl.sll_protocol = htons(ETH_P_ARP);
+
+  struct arppacket arp = {DEST_MAC,
+                          DEST_MAC,
+                          htons(ETH_P_ARP),
+                          htons(ARPHRD_ETHER),
+                          htons(ETHERTYPE_IP),
+                          ETH_ALEN,
+                          4,
+                          htons(ARPOP_REQUEST),
+                          DEST_MAC,
+                          {0},
+                          DEST_MAC,
+                          {0}};
+  memcpy(arp.src_mac, mac, 6);
+  memcpy(arp.ar_sha, mac, 6);
 
   inet_aton(vip, &s);
   memcpy(&arp.ar_sip, &s, sizeof(s));
   inet_aton(vip, &r);
   memcpy(&arp.ar_tip, &r, sizeof(r));
-
-  sl.sll_family = AF_PACKET;
-  sl.sll_ifindex = IFF_BROADCAST;
 
   for (size_t i = 0; i < send_arp_times; i++) {
     if (sendto(sock_fd, &arp, sizeof(arp), 0, (struct sockaddr *)&sl,
@@ -1013,6 +1059,7 @@ static bool unbind_vip(const char *vip, const char *nic_name) {
   bind_ips_with_nicname.erase(vip);
   release_nic_pos(nic_name);
   kill_connection_bind_to_vip(vip);
+  close(fd);
   return true;
 }
 
@@ -1117,6 +1164,7 @@ static bool bind_vip_ipv6(const char *vip) {
     close(sockfd);
     return false;
   }
+  close(sockfd);
   return true;
 }
 
@@ -1148,6 +1196,7 @@ static bool bind_vip_ipv4(const char *vip) {
     close(fd);
     return false;
   }
+  close(fd);
   return true;
 }
 
@@ -1385,6 +1434,15 @@ static int get_all_node_ips(
   return 0;
 }
 
+static bool validate_received_message() {
+  pthread_mutex_lock(&vip_variable_mutex);
+  greatdb_ha_message *receive_message = (greatdb_ha_message *)recv_message_buf;
+  std::string validate_msg(receive_message->get_validate_msg(),
+                           VALIDATE_GREATDB_HA_MSG_SIZE);
+  pthread_mutex_unlock(&vip_variable_mutex);
+  return strcmp(validate_msg.c_str(), VALIDATE_GREATDB_HA_MSG);
+}
+
 static void handle_received_message(int sock) {
   pthread_mutex_lock(&vip_variable_mutex);
   greatdb_ha_message *receive_message = (greatdb_ha_message *)recv_message_buf;
@@ -1395,6 +1453,12 @@ static void handle_received_message(int sock) {
       (recv_view_id_stamp == view_id_stamp &&
        recv_view_id_version < view_id_version)) {
     is_old_view_id = true;
+    my_plugin_log_message(
+        &plugin_ptr, MY_ERROR_LEVEL,
+        "Receive packet`s view_id[%s:%d] older than cur view_id[%s:%d], will "
+        "send YOU_ARE_NOT_PRIMARY packet.",
+        recv_view_id_stamp.c_str(), recv_view_id_version, view_id_stamp.c_str(),
+        view_id_version);
   }
   memset(send_message_buf, 0, 1024);
   greatdb_ha_message *need_send_message =
@@ -1510,44 +1574,27 @@ error:
   return -1;
 }
 
+/**
+  @return -1 Set Timeout Error
+          errno Connct Failed
+          0 Success
+*/
 int connect_with_timeout(int sockfd, struct sockaddr *servaddr,
                          socklen_t servaddr_size) {
-  unsigned long ul = 1;
-  // set not block
-  ul = 1;
-  ioctl(sockfd, FIONBIO, &ul);
-  if (connect(sockfd, servaddr, servaddr_size) >= 0) {
-    // set block
-    ul = 0;
-    ioctl(sockfd, FIONBIO, &ul);
+  struct timeval timeout;
+  timeout.tv_sec = HA_CONNECT_TIMEOUT;
+  timeout.tv_usec = 0;
+
+  // connect() use SO_SNDTIMEO
+  if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) <
+      0) {
     return -1;
   }
-  int ret = 0;
-  fd_set set;
-  struct timeval tm;
-  tm.tv_sec = HA_CONNECT_TIMEOUT;
-  tm.tv_usec = 0;
-  FD_ZERO(&set);
-  FD_SET(sockfd, &set);
 
-  ret = select(sockfd + 1, NULL, &set, NULL, &tm);
-  if (ret > 0) {
-    // get socket status
-    int error = -1, len = sizeof(int);
-    getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &error, (socklen_t *)&len);
-    if (error == 0) {
-      ret = 0;
-    } else {
-      ret = -3;
-    }
-  } else {
-    ret = -2;
+  if (connect(sockfd, servaddr, servaddr_size) < 0) {
+    return errno;
   }
-
-  // set block
-  ul = 0;
-  ioctl(sockfd, FIONBIO, &ul);
-  return ret;
+  return 0;
 }
 
 static int get_socket_by_host(st_row_group_members &secondary_member_info,
@@ -1708,12 +1755,16 @@ static bool get_secondary_node_bind_ips() {
   return true;
 }
 
-static void send_secondary_bind_vips_message() {
+static void send_secondary_bind_vips_message(bool is_update = false) {
   std::string message = gen_messages_according_nodes_relationship();
   memset(all_vip_tope_value, 0, 1024);
   memcpy(all_vip_tope_value, message.c_str(), message.size());
   if (message == "") {
     return;
+  }
+  if (is_update) {
+    my_plugin_log_message(&plugin_ptr, MY_INFORMATION_LEVEL,
+                          "calculated new vip_tope:[%s].", all_vip_tope_value);
   }
   if (!secondary_members.size()) return;
   memset(send_message_buf, 0, 1024);
@@ -1790,7 +1841,7 @@ static std::string get_max_bind_vip_server_uuid() {
   return max_vip_server_uuid;
 }
 
-static void caculate_new_bind_relationship() {
+static void calculate_new_bind_relationship() {
   std::set<std::string> has_bind_vips;
   std::vector<std::string> new_members_uuid;
   std::vector<std::string> need_bind_vips;
@@ -1864,11 +1915,13 @@ static void caculate_new_bind_relationship() {
 }
 
 static bool get_cur_group_view_id(std::string &view_id_stamp,
-                                  int &view_id_version) {
+                                  int &view_id_version,
+                                  bool &is_update_view_id) {
   struct st_row_group_member_stats tmp_row;
   // Set default values.
   tmp_row.channel_name_length = 0;
   tmp_row.trx_committed = nullptr;
+  memset(tmp_row.view_id, 0, HOSTNAME_LENGTH);
   tmp_row.view_id_length = 0;
   tmp_row.member_id_length = 0;
   tmp_row.trx_committed_length = 0;
@@ -1899,23 +1952,26 @@ static bool get_cur_group_view_id(std::string &view_id_stamp,
       &set_transactions_local_rollback,
   };
   // Query plugin and let callbacks do their job.
-  if (get_group_replication_group_member_stats_info(0, callbacks) ||
-      tmp_row.view_id_length == 0) {
-    if (tmp_row.trx_committed != nullptr) {
-      my_free(tmp_row.trx_committed);
-      tmp_row.trx_committed = nullptr;
-    }
-    return false;
-  }
+  bool ret = get_group_replication_group_member_stats_info(0, callbacks);
   if (tmp_row.trx_committed != nullptr) {
     my_free(tmp_row.trx_committed);
     tmp_row.trx_committed = nullptr;
   }
+  if (ret || tmp_row.view_id_length == 0) {
+    return false;
+  }
   std::string str_view_id = tmp_row.view_id;
   std::size_t view_id_position = str_view_id.find(":");
   if (view_id_position > 0) {
-    view_id_stamp = str_view_id.substr(0, view_id_position);
-    view_id_version = std::stoi(str_view_id.substr(view_id_position + 1));
+    std::string tmp_view_id_stamp = str_view_id.substr(0, view_id_position);
+    int tmp_view_id_version = std::stoi(
+        str_view_id.substr(view_id_position + 1, tmp_row.view_id_length));
+    if (view_id_stamp != tmp_view_id_stamp ||
+        view_id_version != tmp_view_id_version) {
+      view_id_stamp = tmp_view_id_stamp;
+      view_id_version = tmp_view_id_version;
+      is_update_view_id = true;
+    }
   }
   if (view_id_position <= 0 || view_id_version < 1 || view_id_stamp.empty()) {
     return false;
@@ -2010,9 +2066,11 @@ static void *mysql_heartbeat() {
       is_master = true;
     } else if (m_row.member_role ==
                    st_row_group_members::Role::ROLE_SECONDARY &&
-               (m_row.member_state == st_row_group_members::State::MGR_ONLINE ||
-                m_row.member_state ==
-                    st_row_group_members::State::MGR_RECOVERING)) {
+               m_row.member_state == st_row_group_members::State::MGR_ONLINE) {
+      /*
+        The new node join MGR group will get vip after status from RECOVERING
+        change to ONLINE
+      */
       secondary_members.push_back(m_row);
     }
   }
@@ -2025,11 +2083,17 @@ static void *mysql_heartbeat() {
   if (work_number <= (n - recover_number) / 2) {
     master_is_running = false;
   } else {
-    if (!get_cur_group_view_id(view_id_stamp, view_id_version)) {
+    bool is_update_view_id = false;
+    if (!get_cur_group_view_id(view_id_stamp, view_id_version,
+                               is_update_view_id)) {
       my_plugin_log_message(
           &plugin_ptr, MY_INFORMATION_LEVEL,
           "Cannot get MGR group view_id info, maybe need wait "
           "MGR complete initialization.");
+    } else if (is_update_view_id) {
+      my_plugin_log_message(&plugin_ptr, MY_INFORMATION_LEVEL,
+                            "Cur MGR group view_id change to [%s:%d].",
+                            view_id_stamp.c_str(), view_id_version);
     }
   }
   is_primary_for_vip = is_master;
@@ -2054,9 +2118,9 @@ static void *mysql_heartbeat() {
     }
     all_node_bind_vips[server_uuid].insert(mgr_write_vip_addr);
     if (secondary_members.size()) {
-      caculate_new_bind_relationship();
+      calculate_new_bind_relationship();
       bind_vip_according_map();
-      send_secondary_bind_vips_message();
+      send_secondary_bind_vips_message(true);
     } else {
       bind_vip_according_map();
     }
@@ -2084,6 +2148,10 @@ DEFINE_BOOL_METHOD(gdb_notify_view_change, (const char *)) {
   return false;
 }
 DEFINE_BOOL_METHOD(gdb_notify_quorum_loss, (const char *)) {
+  /*
+    This function SHALL be called whenever the state of a member
+    changes to UNREACHABLE and that makes the system block.
+  */
   notify_group_replication_view();
   return false;
 }
@@ -2244,49 +2312,58 @@ static int get_local_listen_sock() {
 
 static void *greatdb_ha_receive_from_primary(void *) {
   my_thread_init();
-  int max_fd = -1;
   int sock = get_local_listen_sock();
   if (sock == -1) {
     my_thread_end();
     return nullptr;
   }
-  if (max_fd < sock) max_fd = sock;
-  int clintfd = 0;
+  struct pollfd pfd[2] = {{sock, POLLIN, 0},
+                          {-1, POLLIN | POLLRDHUP | POLLERR, 0}};
+  int tmp_client_fd = -1;
   while (1) {
     if (need_exit) {
       break;
     }
-    fd_set readSet;
-    FD_ZERO(&readSet);
-    FD_SET(sock, &readSet);
-    if (clintfd) {
-      FD_SET(clintfd, &readSet);
-      if (max_fd < clintfd) max_fd = clintfd;
+    // poll set wait_timeout for check need_exit
+    if (poll(pfd, 2, MAX_WAIT_TIME * 1000) < 0) continue;
+    // receive client connect message
+    if (pfd[0].revents & POLLIN) {
+      tmp_client_fd = accept(sock, NULL, NULL);
     }
-    struct timeval timeout;
-    timeout.tv_sec = 5;
-    timeout.tv_usec = 0;
-    int n = select(max_fd + 1, &readSet, NULL, NULL, &timeout);
-    if (n <= 0) continue;
-    if (FD_ISSET(sock, &readSet)) {
-      if (clintfd) close(clintfd);
-      clintfd = accept(sock, NULL, NULL);
-      if (clintfd == -1) continue;
-      setsockopt(clintfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+    // receive client message
+    if (pfd[1].fd != -1) {
+      if (pfd[1].revents & POLLIN) {
+        int iret = receive_message(pfd[1].fd);
+        if (iret == -1 &&
+            (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN))
+          continue;
+        else if (iret <= 0) {
+          close(pfd[1].fd);
+          pfd[1].fd = -1;
+        } else if (validate_received_message()) {
+          my_plugin_log_message(&plugin_ptr, MY_ERROR_LEVEL,
+                                "Error:greatdb ha skip invalid message.");
+          close(pfd[1].fd);
+          pfd[1].fd = -1;
+        } else
+          handle_received_message(pfd[1].fd);
+      } else if ((pfd[1].revents & POLLRDHUP) || (pfd[1].revents & POLLERR)) {
+        close(pfd[1].fd);
+        pfd[1].fd = -1;
+      }
     }
-    if (FD_ISSET(clintfd, &readSet)) {
-      int iret = receive_message(clintfd);
-      if (iret == -1 &&
-          (errno == EINTR || errno == EWOULDBLOCK || errno == EAGAIN))
-        continue;
-      else if (iret <= 0) {
-        close(clintfd);
-        clintfd = 0;
-      } else
-        handle_received_message(clintfd);
+    // update client_fd after process old message
+    if (tmp_client_fd != -1 && tmp_client_fd != pfd[1].fd) {
+      if (pfd[1].fd != -1) close(pfd[1].fd);
+      pfd[1].fd = tmp_client_fd;
+      tmp_client_fd = -1;
     }
   }
   close(sock);
+  if (pfd[1].fd != -1) {
+    close(pfd[1].fd);
+  }
   my_thread_end();
   return nullptr;
 }

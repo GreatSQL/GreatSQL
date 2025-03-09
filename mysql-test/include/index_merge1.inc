@@ -869,9 +869,11 @@ explain select * from t1
 where exists (select 1 from t2, t3 
               where t2.a=t1.a and (t3.a=t2.b or t3.b=t2.b or t3.b=t2.b+1));
 
+--source include/disable_turbo.inc
 select * from t1 
 where exists (select 1 from t2, t3 
               where t2.a=t1.a and (t3.a=t2.b or t3.b=t2.b or t3.b=t2.b+1));
+--source include/restore_turbo.inc
 
 drop table t0, t1, t2, t3;
 

@@ -154,6 +154,20 @@ create table t1 (id int);
 select TABLE_NAME  from information_schema.tables where TABLE_SCHEMA = 'test' and  TABLE_NAME NOT like 'innodb'|| '_redo' || '_log%' ;
 TABLE_NAME
 t1
+set sql_mode=default;
+select * from (select 'b'||null  a from dual) c where a='b';
+a
+Warnings:
+Warning	1287	'|| as a synonym for OR' is deprecated and will be removed in a future release. Please use OR instead
+Warning	1292	Truncated incorrect DOUBLE value: 'b'
+select * from (select concat('b',null)  a from dual) c where a='b';
+a
+set sql_mode=oracle;
+select * from (select 'b'||null  a from dual) c where a='b';
+a
+b
+select * from (select concat('b',null)  a from dual) c where a='b';
+a
 drop table t1;
 set shrink_sql_mode='PIPES_AS_CONCAT';
 ERROR 42000: Variable 'shrink_sql_mode' can't be set to the value of 'PIPES_AS_CONCAT'

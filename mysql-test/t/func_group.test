@@ -59,6 +59,7 @@ CREATE TABLE t1 (id int(11),value1 float(10,2));
 INSERT INTO t1 VALUES (1,0.00),(1,1.00), (1,2.00), (2,10.00), (2,11.00), (2,12.00); 
 CREATE TABLE t2 (id int(11),name char(20)); 
 INSERT INTO t2 VALUES (1,'Set One'),(2,'Set Two'); 
+--sorted_result
 select id, avg(value1), std(value1), variance(value1) from t1 group by id;
 --source include/turn_off_only_full_group_by.inc
 select name, avg(value1), std(value1), variance(value1) from t1, t2 where t1.id = t2.id group by t1.id;
@@ -73,11 +74,16 @@ create table t1 (id int not null);
 create table t2 (id int not null,rating int null);
 insert into t1 values(1),(2),(3);
 insert into t2 values(1, 3),(2, NULL),(2, NULL),(3, 2),(3, NULL);
+--sorted_result
 select t1.id, avg(rating) from t1 left join t2 on ( t1.id = t2.id ) group by t1.id;
 # Test different types with avg()
+--sorted_result
 select sql_small_result t2.id, avg(rating) from t2 group by t2.id;
+--sorted_result
 select sql_big_result t2.id, avg(rating) from t2 group by t2.id;
+--sorted_result
 select sql_small_result t2.id, avg(rating+0.0e0) from t2 group by t2.id;
+--sorted_result
 select sql_big_result t2.id, avg(rating+0.0e0) from t2 group by t2.id;
 drop table t1,t2;
 
@@ -645,6 +651,7 @@ drop table t1, t2, t3;
 
 CREATE TABLE t1 (id int(11),value1 float(10,2));
 INSERT INTO t1 VALUES (1,0.00),(1,1.00), (1,2.00), (2,10.00), (2,11.00), (2,12.00), (2,13.00);
+--sorted_result
 select id, stddev_pop(value1), var_pop(value1), stddev_samp(value1), var_samp(value1) from t1 group by id;
 DROP TABLE t1;
 
@@ -756,6 +763,7 @@ drop table bug22555;
 
 create table bug22555 (i smallint, s1 smallint, s2 smallint, o1 double, o2 double, e1 decimal, e2 decimal);
 insert into bug22555 values (1,53,78,53,78,53,78),(2,17,78,17,78,17,78),(3,18,76,18,76,18,76);
+--sorted_result
 select i, count(*) from bug22555 group by i;
 select std(s1/s2) from bug22555 where i=1;
 select std(s1/s2) from bug22555 where i=2;
@@ -789,9 +797,13 @@ insert into bug22555 values (1,53,78,53,78,53,78),(2,17,78,17,78,17,78),(3,18,76
 select i, count(*), std(s1/s2) from bug22555 group by i order by i;
 select i, count(*), round(std(o1/o2), 16) from bug22555 group by i order by i;
 select i, count(*), std(e1/e2) from bug22555 group by i order by i;
+--source include/disable_turbo.inc
 select std(s1/s2) from bug22555;
+--source include/restore_turbo.inc
 select std(o1/o2) from bug22555;
+--source include/disable_turbo.inc
 select std(e1/e2) from bug22555;
+--source include/restore_turbo.inc
 set @saved_div_precision_increment=@@div_precision_increment;
 set div_precision_increment=19;
 select i, count(*), std(s1/s2) from bug22555 group by i order by i;
@@ -1187,9 +1199,11 @@ DROP TABLE t1;
 
 CREATE TABLE t1(f1 YEAR);
 INSERT INTO t1 VALUES (0000),(2001);
+--source include/disable_turbo.inc
 --enable_metadata
 (SELECT MAX(f1) FROM t1) UNION (SELECT MAX(f1) FROM t1);
 --disable_metadata
+--source include/restore_turbo.inc
 DROP TABLE t1;
 
 

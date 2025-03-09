@@ -48,8 +48,11 @@ from bureau window w as (partition by id);
 create table t3 as
 select * from t1 union select * from t2;
 
+--sorted_result
 select * from t1;
+--sorted_result
 select * from t2;
+--sorted_result
 select * from t3;
 
 select count(*) from t1;

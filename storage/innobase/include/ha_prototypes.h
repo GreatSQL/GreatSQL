@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2006, 2022, Oracle and/or its affiliates.
-Copyright (c) 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2024, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -464,6 +464,8 @@ extern bool innodb_inited;
 @param[in]      thd       Session instance, or nullptr to query the global
                           innodb_parallel_read_threads value. */
 ulong thd_parallel_read_threads(THD *thd);
+
+ulong thd_parallel_fetch_enable_test(THD *thd);
 
 /** Return the maximum buffer size to use for DDL.
 @param[in]      thd       Session instance, or nullptr to query the global

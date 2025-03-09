@@ -3,7 +3,7 @@
 
 /* Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -315,6 +315,7 @@ PQ_CLONE_DEF(Item_field) {
 
   new_item = new (thd->pq_mem_root)
       Item_field(POS(), db_name, table_name, m_orig_field_name);
+  new_item->original_field = field;
 }
 PQ_CLONE_RETURN
 

@@ -7,6 +7,7 @@ CALL mtr.add_suppression("Incorrect definition of table");
 CALL mtr.add_suppression("Cannot load from");
 CALL mtr.add_suppression("Storage engine 'MyISAM' does not");
 CALL mtr.add_suppression("System table 'greatdb_sequences' is expected to be transactional");
+CALL mtr.add_suppression("System table 'db_object_synonyms' is expected to be transactional");
 #-----------------------------------------------------------------------
 # Test cases to verify system table's behavior with storage engines
 # InnoDB and MyISAM.
@@ -64,6 +65,8 @@ Storage engine 'MyISAM' does not support system tables. [mysql.component]
 mysql.db
 ERROR
 Storage engine 'MyISAM' does not support system tables. [mysql.db]
+@table_name
+mysql.db_object_synonyms
 @table_name
 mysql.default_roles
 ERROR
@@ -570,6 +573,7 @@ WHERE table_schema='mysql'
 TABLE_SCHEMA	TABLE_NAME	ENGINE
 mysql	columns_priv	MyISAM
 mysql	db	MyISAM
+mysql	db_object_synonyms	MyISAM
 mysql	event	MyISAM
 mysql	func	MyISAM
 mysql	greatdb_sequences	MyISAM
@@ -585,6 +589,7 @@ SELECT table_schema, table_name, engine FROM information_schema.tables
 WHERE table_schema='mysql'
                                               AND engine='MyISAM';
 TABLE_SCHEMA	TABLE_NAME	ENGINE
+mysql	db_object_synonyms	MyISAM
 mysql	event	MyISAM
 mysql	greatdb_sequences	MyISAM
 mysql	greatdb_sequences_persist	MyISAM

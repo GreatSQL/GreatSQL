@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -4744,6 +4744,12 @@ bool Item_func_group_concat::setup(THD *thd) {
   if (always_null) return false;
 
   assert(thd->lex->current_query_block() == aggr_query_block);
+  if (aggr_query_block->connect_by_cond() &&
+      aggr_query_block->olap == ROLLUP_TYPE) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "CONNECT BY with ROLLUP and group_concat");
+    return true;
+  }
 
   uint new_max_len;
   if (thd->variables.group_concat_max_len > UINT_MAX32)
@@ -6615,7 +6621,7 @@ bool Item_func_grouping::fix_fields(THD *thd, Item **ref) {
   */
   Query_block *select = thd->lex->current_query_block();
 
-  if (select->olap == UNSPECIFIED_OLAP_TYPE ||
+  if (select->olap == UNSPECIFIED_OLAP_TYPE || select->connect_by_cond() ||
       select->resolve_place == Query_block::RESOLVE_JOIN_NEST ||
       select->resolve_place == Query_block::RESOLVE_START_WITH ||
       select->resolve_place == Query_block::RESOLVE_CONNECT_BY ||

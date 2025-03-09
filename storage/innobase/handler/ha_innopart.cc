@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2014, 2022, Oracle and/or its affiliates.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -3211,6 +3212,51 @@ int ha_innopart::records(ha_rows *num_rows) {
   DBUG_TRACE;
 
   *num_rows = 0;
+
+  if (thd_parallel_fetch_enable_test(current_thd)) {
+    // uint keynr = thd_parallel_fetch_enable_test(current_thd);
+    // m_prebuilt->read_just_key = 1;
+    // change_active_index(keynr);
+    // build_template(true);
+    // ib::info()
+    //     << "test the range parallel read in ha_innobase::records_in_range "
+    //        "for index:"
+    //     << keynr;
+
+    // key_range min_key;
+    // key_range max_key;
+    // uchar min_key_buf[4];
+    // uchar max_key_buf[4];
+    // uint32_t min_key_value = 1185123;
+    // uint32_t max_key_value = 8757257;
+
+    // memcpy(min_key_buf, &min_key_value, sizeof(uint32_t));
+    // memcpy(max_key_buf, &max_key_value, sizeof(uint32_t));
+
+    // min_key.flag = ha_rkey_function::HA_READ_KEY_EXACT;
+    // min_key.length = 4;
+    // min_key.key = min_key_buf;
+
+    // max_key.flag = ha_rkey_function::HA_READ_BEFORE_KEY;
+    // max_key.length = 4;
+    // max_key.key = max_key_buf;
+
+    // parallel_read_data_reader_range_test_t read_data_range_tester;
+    // parallel_read_data_reader_range_t fetch_range;
+    // fetch_range.m_keynr = keynr;
+    // fetch_range.m_min_key = &min_key;
+    // fetch_range.m_max_key = &max_key;
+
+    // read_data_range_tester.run_range_test(current_thd, this, fetch_range,
+    //                                       keynr);
+
+    parallel_read_data_reader_test_t read_data_tester;
+
+    read_data_tester.run_test(current_thd, this);
+
+    *num_rows = 100;
+    return 0;
+  }
 
   auto trx = thd_to_trx(ha_thd());
   size_t n_threads = thd_parallel_read_threads(m_prebuilt->trx->mysql_thd);

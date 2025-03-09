@@ -457,8 +457,8 @@ c
 𠻠
 SELECT c FROM t2a WHERE NOT EXISTS (SELECT c FROM t2b WHERE t2a.c = t2b.c);
 c
-齳
 䑂
+齳
 'Test for JOIN'
 SELECT * FROM t1a JOIN t1b;
 c	c

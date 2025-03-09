@@ -35,7 +35,9 @@ INSERT INTO t1 SELECT id+256 FROM t1;
 INSERT INTO t1 SELECT id+512 FROM t1;
 
 # Just test that AVG(DISTINCT) is there
+--sorted_result
 SELECT AVG(DISTINCT id) FROM t1 GROUP BY id % 13;
+--sorted_result
 SELECT SUM(DISTINCT id)/COUNT(DISTINCT id) FROM t1 GROUP BY id % 13;
 
 INSERT INTO t1 SELECT id+1024 FROM t1;
@@ -48,6 +50,7 @@ INSERT INTO t2 SELECT id FROM t1 ORDER BY id*rand();
 
 SELECT SUM(DISTINCT id) sm FROM t1;
 SELECT SUM(DISTINCT id) sm FROM t2;
+--sorted_result
 SELECT SUM(DISTINCT id) sm FROM t1 group by id % 13;
 
 # this limit for max_heap_table_size is set to force testing the case, when
@@ -63,6 +66,7 @@ SHOW variables LIKE 'max_heap_table_size';
 
 SELECT SUM(DISTINCT id) sm FROM t1;
 SELECT SUM(DISTINCT id) sm FROM t2;
+--sorted_result
 SELECT SUM(DISTINCT id) sm FROM t1 GROUP BY id % 13;
 
 DROP TABLE t1;

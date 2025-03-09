@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, 2024, GreatDB Software Co., Ltd. All rights reserved.
+/* Copyright (c) 2023, 2025, GreatDB Software Co., Ltd. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -282,6 +282,10 @@ bool SetupConnectByTmp(THD *thd, JOIN *join,
   List<Item> filter_cond;
   List<Item> filter_cond2;
   List<Item> rownum_filter_cond;
+  if (join->has_lateral) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0), "CONNECT BY with LATERAL");
+    return true;
+  }
 
   mem_root_deque<Item_func_prior *> cond_cits(thd->mem_root);
   // only get by conect by cond use for check uniq history

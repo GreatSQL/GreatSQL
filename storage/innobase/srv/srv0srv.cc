@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2022, Oracle and/or its affiliates. All rights reserved.
-Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 Copyright (c) 2008, 2009 Google Inc.
 Copyright (c) 2009, Percona Inc.
 
@@ -1960,6 +1960,15 @@ void srv_export_innodb_status(void) {
 
   thd_get_fragmentation_stats(current_thd,
                               &export_vars.innodb_fragmentation_stats);
+
+  export_vars.innodb_parallel_fetch_buffer_server_used =
+      srv_parallel_fetch_buffer_server_used.load(std::memory_order_relaxed);
+  export_vars.innodb_parallel_fetch_buffer_engine_used =
+      srv_parallel_fetch_buffer_engine_used.load(std::memory_order_relaxed);
+  export_vars.innodb_parallel_fetch_buffer_count =
+      srv_parallel_fetch_buffer_count.load(std::memory_order_relaxed);
+  export_vars.innodb_parallel_fetch_buffer_size =
+      srv_parallel_fetch_buffer_size.load(std::memory_order_relaxed);
 
   mutex_exit(&srv_innodb_monitor_mutex);
 }

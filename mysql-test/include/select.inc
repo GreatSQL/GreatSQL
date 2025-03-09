@@ -2,6 +2,8 @@
 # Find string "NOTE NOTE NOTE" in order to find some 'unsure' tests
 #
 
+--source include/disable_turbo.inc
+
 -- disable_query_log
 -- disable_result_log
 # High values set for sampling scanning, effectively forcing full scan for
@@ -1318,6 +1320,7 @@ explain select fld3 from t2 use index (not_used);
 
 select t2.fld3 from t2 where fld3 >= 'honeysuckle' and fld3 <= 'honoring' order by fld3;
 explain select t2.fld3 from t2 where fld3 >= 'honeysuckle' and fld3 <= 'honoring' order by fld3;
+--sorted_result
 select fld1,fld3 from t2 where fld3="Colombo" or fld3 = "nondecreasing" order by fld3;
 
 # 
@@ -1325,7 +1328,7 @@ select fld1,fld3 from t2 where fld3="Colombo" or fld3 = "nondecreasing" order by
 # The table is read directly with read-next having fld3 to get the
 # occurrences
 #
-
+--sorted_result
 select fld1,fld3 from t2 where companynr = 37 and fld3 = 'appendixes';
 
 #
@@ -1365,12 +1368,14 @@ select distinct companynr from t2 order by companynr desc;
 select distinct t2.fld3,period from t2,t1  where companynr=37 and fld3 like "O%" order by fld3;
 
 select distinct fld3 from t2 where companynr = 34 order by fld3;
-select distinct fld3 from t2 limit 10;
+select distinct fld3 from t2 order by fld3 limit 10;
 select distinct fld3 from t2 having fld3 like "A%" limit 10;
+--sorted_result
 --replace_result ann Ann abr Abr art Art ant Ant
 select distinct substring(fld3,1,3) from t2 where fld3 like "A%";
 --replace_result abr Abr
 select distinct substring(fld3,1,3) as a from t2 having a like "A%" order by a limit 10;
+--sorted_result
 --replace_result abr Abr
 select distinct substring(fld3,1,3) from t2 where fld3 like "A%" limit 10;
 --replace_result abr Abr
@@ -1437,6 +1442,7 @@ SET BIG_TABLES=0;
 --source include/turn_off_only_full_group_by.inc
 select distinct concat(fld3," ",fld3) from t2,t3 where t2.fld1=t3.t2nr order by fld3 limit 10;
 --source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+--sorted_result
 --skip_if_hypergraph   # Nondeterministic (depends on which rows DISTINCT outputs first).
 select distinct fld5 from t2 limit 10;
 
@@ -1519,7 +1525,7 @@ select fld3,period,price,price2 from t2,t3 where t2.fld1=t3.t2nr and period >= 1
 # Here t2 will be the main table and only records matching the
 # t2nr will be checked.
 #
-
+--sorted_result
 select t2.fld1,fld3,period,price,price2 from t2,t3 where t2.fld1>= 18201 and t2.fld1 <= 18811 and t2.fld1=t3.t2nr and period = 1001 and t2.companynr = 37;
 
 #
@@ -1617,9 +1623,9 @@ explain select distinct t2.companynr,t4.companynr from t2,t4 where t2.companynr=
 # the other table is referenced with a key with a 'test if key in use' for
 # each record
 #
-
+--sorted_result
 select t2.fld1,t2.companynr,fld3,period from t3,t2 where t2.fld1 = 38208 and t2.fld1=t3.t2nr and period = 1008 or t2.fld1 = 38008 and t2.fld1 =t3.t2nr and period = 1008;
-
+--sorted_result
 select t2.fld1,t2.companynr,fld3,period from t3,t2 where (t2.fld1 = 38208 or t2.fld1 = 38008) and t2.fld1=t3.t2nr and period>=1008 and period<=1009;
 
 select t2.fld1,t2.companynr,fld3,period from t3,t2 where (t3.t2nr = 38208 or t3.t2nr = 38008) and t2.fld1=t3.t2nr and period>=1008 and period<=1009;
@@ -4569,3 +4575,5 @@ SET @@GLOBAL.innodb_stats_transient_sample_pages= @innodb_stats_transient_sample
 SET @@GLOBAL.innodb_stats_persistent_sample_pages= @innodb_stats_persistent_sample_pages;
 -- enable_result_log
 -- enable_query_log
+
+--source include/restore_turbo.inc

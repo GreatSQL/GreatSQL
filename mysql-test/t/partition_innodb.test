@@ -248,6 +248,7 @@ SHOW WARNINGS;
 --disconnect con1
 --connection default
 --echo # Connection default
+--sorted_result
 SELECT * FROM t1;
 --echo # No changes.
 COMMIT;
@@ -715,6 +716,7 @@ ALTER TABLE t1 ADD UNIQUE KEY (b);
 --echo # The below statements should succeed, as ALTER should
 --echo # have left table intact.
 SHOW CREATE TABLE t1;
+--sorted_result
 SELECT * FROM t1;
 DROP TABLE t1;
 
@@ -753,6 +755,7 @@ DROP TABLE t1;
 --echo # List of files after DROP (.cfg files should also be removed).
 --list_files $MYSQLD_DATADIR/test/ t1*
 
+--source include/disable_turbo.inc
 --echo #
 --echo # Bug#13737949: CRASH IN HA_PARTITION::INDEX_INIT
 --echo # Bug#18694052: SERVER CRASH IN HA_PARTITION::INIT_RECORD_PRIORITY_QUEUE
@@ -804,6 +807,7 @@ SELECT b FROM t1 WHERE b = 0;
 SELECT * FROM t1;
 --disconnect con1
 DROP TABLE t1;
+--source include/restore_turbo.inc
 
 --echo Bug 17896265	 PARTITIONED TABLE HAS MISPLACED ROWS, AFTER INPLACE ALTER
 
@@ -1207,6 +1211,7 @@ DROP TABLE t1;
 --echo
 call mtr.add_suppression("Missing .ibd file for table");
 
+--source include/disable_turbo.inc
 #Unnamed Partitioins
 CREATE TABLE t1(c1 INT,c2 CHAR (1),c3 DATE) ENGINE=InnoDB PARTITION BY HASH
 (TO_DAYS(c3)) PARTITIONS 12;
@@ -1228,6 +1233,7 @@ ALTER TABLE t2 DISCARD PARTITION p2 TABLESPACE;
 --error ER_TABLESPACE_DISCARDED
 SELECT COUNT(*)FROM t2,t2 AS b WHERE t2.c1=''AND t2.c2=b.c1;
 DROP TABLE t1,t2;
+--source include/restore_turbo.inc
 
 --echo
 --echo Bug #26034430    ASSERTION `PART_REC_BUF_PTR' FAILED.
@@ -1397,6 +1403,7 @@ ANALYZE TABLE t1;
 
 --echo # Test non ordered index access
 FLUSH STATUS;
+--source include/disable_turbo.inc
 --sorted_result
 SELECT * FROM t1 FORCE INDEX (`PRIMARY`);
 --skip_if_hypergraph  # Index not supported, so different query plan.
@@ -1473,6 +1480,7 @@ EXPLAIN FORMAT=JSON SELECT * FROM t1 FORCE INDEX (`PRIMARY`) ORDER BY a DESC, b;
 --replace_regex /"rows_examined_per_scan": [0-9]+/"rows_examined_per_scan": "X"/ /_per_join": [0-9]+/_per_join": "X"/ /_per_join": "[0-9]+K"/_per_join": "X"/  /"filtered": "[0-9.]+"/"filtered": "X"/ /_cost": "[0-9.]+"/_cost": "X"/ /"data_read_per_join": "[0-9.]+"/"data_read_per_join": "X"/
 --skip_if_hypergraph  # Depends on the query plan.
 EXPLAIN FORMAT=JSON SELECT * FROM t1 FORCE INDEX (`PRIMARY`) ORDER BY a, b DESC;
+--source include/restore_turbo.inc
 
 --echo # Test HANDLER statements.
 FLUSH STATUS;

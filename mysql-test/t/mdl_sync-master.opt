@@ -1,1 +1,1 @@
---information_schema_stats_expiry=0
+--information_schema_stats_expiry=0 --synonym-translation-enabled=off

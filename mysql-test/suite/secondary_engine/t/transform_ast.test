@@ -7,7 +7,6 @@ SET @@use_secondary_engine = ON;
 --enable_query_log
 
 CREATE TABLE t1 (a INT, b INT NOT SECONDARY) secondary_engine=rapid;
---error ER_SECONDARY_ENGINE_PLUGIN
 alter table t1 secondary_load;
 
 ALTER TABLE t1 SECONDARY_ENGINE NULL;

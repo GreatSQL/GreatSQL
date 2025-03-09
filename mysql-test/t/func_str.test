@@ -1773,19 +1773,29 @@ SELECT REPLACE( 'a', binary NULL, 'bravo' ) as xxx;
 
 CREATE TABLE t1(c1 CHAR(30));
 INSERT INTO t1 VALUES('111'),('222');
-
+--sorted_result
 SELECT DISTINCT substr(c1, 1, 2147483647) FROM t1;
+--sorted_result
 SELECT DISTINCT substr(c1, 1, 2147483648) FROM t1;
+--sorted_result
 SELECT DISTINCT substr(c1, -1, 2147483648) FROM t1;
+--sorted_result
 SELECT DISTINCT substr(c1, -2147483647, 2147483648) FROM t1;
+--sorted_result
 SELECT DISTINCT substr(c1, 9223372036854775807, 23) FROM t1;
 
+--sorted_result
 SELECT DISTINCT left(c1, 3) FROM t1;
+--sorted_result
 SELECT DISTINCT left(c1, 2147483647) FROM t1;
+--sorted_result
 SELECT DISTINCT left(c1, 2147483648) FROM t1;
 
+--sorted_result
 SELECT DISTINCT right(c1, 3) FROM t1;
+--sorted_result
 SELECT DISTINCT right(c1, 2147483647) FROM t1;
+--sorted_result
 SELECT DISTINCT right(c1, 2147483648) FROM t1;
 
 DROP TABLE t1;

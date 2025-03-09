@@ -303,6 +303,7 @@ select * from po_order_line;
 
 # Creative reporting ...
 
+--sorted_result
 select po_id as "PO#",
   ( case cust_type
   when "P" then concat (pp.first_name,

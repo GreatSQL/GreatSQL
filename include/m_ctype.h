@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates.
-   Copyright (c) 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2024, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -777,6 +777,6 @@ static inline bool is_supported_parser_charset(const CHARSET_INFO *cs) {
   return (cs->mbminlen == 1);
 }
 
-extern std::map<std::string, uint8_t> char_ent_ref_to_uni;
+const std::map<std::string, uint8_t> &get_char_ent_ref_to_uni();
 
 #endif  // M_CTYPE_INCLUDED

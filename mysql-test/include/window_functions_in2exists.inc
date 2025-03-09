@@ -47,5 +47,5 @@ CREATE TABLE t1(i INT, j INT, k INT);
 INSERT INTO t1 VALUES (1,1,1),(2,2,2);
 --error 0, ER_NOT_SUPPORTED_YET
 select * from t1 AS upper where i+1
- IN (select row_number() over () + upper.i from t1 );
+ IN (select row_number() over () + upper.i from t1 ) order by 1;
 DROP TABLE t1;

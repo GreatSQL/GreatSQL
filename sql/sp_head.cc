@@ -1,7 +1,7 @@
 /*
    Copyright (c) 2002, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -3199,6 +3199,7 @@ bool sp_head::setup_sp_assignment_lex(THD *thd, LEX *assign_lex) {
   sublex->sphead = oldlex->sphead;
   sublex->set_sp_current_parsing_ctx(oldlex->get_sp_current_parsing_ctx());
   sublex->sp_lex_in_use = true;
+  sublex->for_i_ident = oldlex->for_i_ident;
 
   return false;
 }

@@ -257,11 +257,13 @@ analyze table t2;
 analyze table t3;
 analyze table t4;
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 set @@optimizer_switch='materialization=off,semijoin=on';
 
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 --echo # Subquery with GROUP BY and HAVING
@@ -297,11 +299,13 @@ WHERE ta.a IN (SELECT c FROM t2 AS tb
                                   ORDER BY tc.f));
 
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 set @@optimizer_switch='materialization=off,semijoin=on';
 
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 --echo # Reference to the transformed-away query block (dependency was wrong)
@@ -354,6 +358,7 @@ WHERE ta.a IN (SELECT c FROM t2 AS tb
                              WHERE ta.b=tc.e));
 
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 set @@optimizer_switch='materialization=off,semijoin=on';
@@ -373,11 +378,13 @@ WHERE ta.a IN (SELECT c FROM t2 AS tb
                              WHERE ta.b=tc.e));
 
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 set @@optimizer_switch='materialization=off,semijoin=on';
 
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 --echo # Combine scalar subquery with quantified comparison subquery
@@ -392,11 +399,13 @@ WHERE ta.a IN (SELECT c FROM t2 AS tb
                                               WHERE ta.b=tc.e));
 
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 set @@optimizer_switch='materialization=off,semijoin=on';
 
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 DROP TABLE t1, t2, t3, t4;

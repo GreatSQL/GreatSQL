@@ -5,7 +5,7 @@ Copyright (c) 2008, 2009 Google Inc.
 Copyright (c) 2009, Percona Inc.
 Copyright (c) 2012, Facebook Inc.
 Copyright (c) 2022, Huawei Technologies Co., Ltd.
-Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -210,6 +210,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include "row0pread-fetcher.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -1201,6 +1203,17 @@ static MYSQL_THDVAR_ULONG(parallel_read_threads, PLUGIN_VAR_RQCMDARG,
                           1,                            /* Minimum. */
                           Parallel_reader::MAX_THREADS, /* Maximum. */
                           0);
+static MYSQL_THDVAR_ULONG(parallel_fetch_enable_test, PLUGIN_VAR_RQCMDARG,
+                          "Number of threads to do parallel read.", nullptr,
+                          nullptr, 0,                   /* Default. */
+                          0,                            /* Minimum. */
+                          Parallel_reader::MAX_THREADS, /* Maximum. */
+                          0);
+static MYSQL_SYSVAR_ULONG(
+    parallel_max_read_threads, Parallel_reader::MAX_THREADS,
+    PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
+    "maximum threads which parallel read concurrent running", nullptr, nullptr,
+    srv_n_max_parallel_read_threads, 128, MAX_PARALLEL_READ_THREADS, 0);
 
 static MYSQL_THDVAR_ULONG(ddl_buffer_size, PLUGIN_VAR_RQCMDARG,
                           "Maximum size of memory to use (in bytes) for DDL.",
@@ -1488,6 +1501,23 @@ static SHOW_VAR innodb_status_variables[] = {
     {"encryption_n_rowlog_blocks_decrypted",
      (char *)&export_vars.innodb_n_rowlog_blocks_decrypted, SHOW_LONGLONG,
      SHOW_SCOPE_GLOBAL},
+
+    {"parallel_fetch_buffer_server_used",
+     (char *)&export_vars.innodb_parallel_fetch_buffer_server_used, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"parallel_fetch_buffer_engine_used",
+     (char *)&export_vars.innodb_parallel_fetch_buffer_engine_used, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"parallel_fetch_buffer_count",
+     (char *)&export_vars.innodb_parallel_fetch_buffer_count, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"parallel_fetch_buffer_size",
+     (char *)&export_vars.innodb_parallel_fetch_buffer_size, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 
 /** Handling the shared INNOBASE_SHARE structure that is needed to provide table
@@ -2258,6 +2288,10 @@ ulong thd_parallel_read_threads(THD *thd) {
   return THDVAR(thd, parallel_read_threads);
 }
 
+ulong thd_parallel_fetch_enable_test(THD *thd) {
+  return THDVAR(thd, parallel_fetch_enable_test);
+}
+
 ulong thd_ddl_buffer_size(THD *thd) { return THDVAR(thd, ddl_buffer_size); }
 
 size_t thd_ddl_threads(THD *thd) noexcept { return THDVAR(thd, ddl_threads); }
@@ -2832,6 +2866,8 @@ dberr_t Compression::check(const char *algorithm, Compression *compression) {
   } else if (innobase_strcasecmp(algorithm, "lz4") == 0) {
     compression->m_type = LZ4;
 
+  } else if (innobase_strcasecmp(algorithm, "zstd") == 0) {
+    compression->m_type = ZSTD;
   } else {
     return (DB_UNSUPPORTED);
   }
@@ -2855,6 +2891,7 @@ bool Compression::validate(const Compression::Type type) {
     case NONE:
     case ZLIB:
     case LZ4:
+    case ZSTD:
       break;
     default:
       ret = false;
@@ -5656,6 +5693,20 @@ static int innodb_init(void *p) {
 
   innobase_hton->upgrade_get_compression_dict_data =
       dd_upgrade_get_compression_dict_data;
+
+  innobase_hton->data_fetcher_interface.parallel_read_create_data_fetcher =
+      innobase_parallel_read_create_data_fetcher;
+  innobase_hton->data_fetcher_interface.parallel_read_destory_data_fetcher =
+      innobase_parallel_read_destory_data_fetcher;
+  innobase_hton->data_fetcher_interface.parallel_read_init_data_fetcher =
+      innobase_parallel_read_init_data_fetcher;
+  innobase_hton->data_fetcher_interface
+      .parallel_read_add_target_to_data_fetcher =
+      innobase_parallel_read_add_target_to_data_fetcher;
+  innobase_hton->data_fetcher_interface.parallel_read_start_data_fetch =
+      innobase_parallel_read_start_data_fetch;
+  innobase_hton->data_fetcher_interface.parallel_read_end_data_fetch =
+      innobase_parallel_read_end_data_fetch;
 
   static_assert(DATA_MYSQL_TRUE_VARCHAR == (ulint)MYSQL_TYPE_VARCHAR);
 
@@ -17346,6 +17397,57 @@ int ha_innobase::records(ha_rows *num_rows) /*!< out: number of rows */
     return HA_ERR_TABLE_DEF_CHANGED;
   }
 
+  /** TEST async PARALLEL READ-RANGE begin++++ */
+
+  if (thd_parallel_fetch_enable_test(current_thd)) {
+    uint keynr = thd_parallel_fetch_enable_test(current_thd);
+    // m_prebuilt->read_just_key = 1;
+    // change_active_index(keynr);
+    // build_template(true);
+    ib::info() << "test the range parallel read in ha_innobase::records "
+                  "for index:"
+               << index->name;
+
+    key_range min_key;
+    key_range max_key;
+    uchar min_key_buf[4];
+    uchar max_key_buf[4];
+    // uint32_t min_key_value = 1185123;
+    // uint32_t max_key_value = 8757257;
+    int32_t min_key_value = 1;
+    int32_t max_key_value = 10000001;
+
+    memcpy(min_key_buf, &min_key_value, sizeof(int32_t));
+    memcpy(max_key_buf, &max_key_value, sizeof(int32_t));
+
+    min_key.flag = ha_rkey_function::HA_READ_KEY_EXACT;
+    min_key.length = 4;
+    min_key.key = min_key_buf;
+
+    max_key.flag = ha_rkey_function::HA_READ_BEFORE_KEY;
+    max_key.length = 4;
+    max_key.key = max_key_buf;
+
+    parallel_read_data_reader_range_test_t read_data_range_tester;
+    parallel_read_data_reader_range_t fetch_range;
+    fetch_range.m_keynr = keynr;
+    fetch_range.m_min_key = &min_key;
+    fetch_range.m_max_key = &max_key;
+
+    fetch_range.is_desc_fetch = true;
+    read_data_range_tester.run_range_test(current_thd, this, fetch_range,
+                                          keynr);
+
+    // parallel_read_data_reader_test_t read_data_tester;
+
+    // read_data_tester.run_test(current_thd, this);
+
+    *num_rows = 100;
+    return 0;
+  }
+
+  /** TEST async PARALLEL READ-RANGE end---- */
+
   /* (Re)Build the m_prebuilt->mysql_template if it is null to use
   the clustered index and just the key, no off-record data. */
   m_prebuilt->index = index;
@@ -22542,6 +22644,16 @@ static float innobase_fts_find_ranking(FT_INFO *fts_hdl, uchar *, uint) {
   return (fts_retrieve_ranking(result, ft_prebuilt->fts_doc_id));
 }
 
+/** Set the purge state to RUN. If purge is disabled then it
+is a no-op. This function is registered as a callback with MySQL.
+@param[in]  save      immediate result from check function */
+static void enable_fast_purge_set(THD *, SYS_VAR *, void *, const void *save) {
+  if (trx_purge_state() != PURGE_STATE_DISABLED) {
+    srv_enable_fast_purge = (*(bool *)save);
+    trx_purge_run();
+  }
+}
+
 #ifdef UNIV_DEBUG
 static bool innodb_background_drop_list_empty = true;
 static bool innodb_purge_run_now = true;
@@ -23002,6 +23114,10 @@ static MYSQL_SYSVAR_ULONG(io_capacity_max, srv_max_io_capacity,
                           nullptr, innodb_io_capacity_max_update,
                           SRV_MAX_IO_CAPACITY_DUMMY_DEFAULT, 100,
                           SRV_MAX_IO_CAPACITY_LIMIT, 0);
+
+static MYSQL_SYSVAR_BOOL(enable_fast_purge, srv_enable_fast_purge,
+                         PLUGIN_VAR_OPCMDARG, "Purge table parallelly", nullptr,
+                         enable_fast_purge_set, false);
 
 #ifdef UNIV_DEBUG
 static MYSQL_SYSVAR_BOOL(background_drop_list_empty,
@@ -24375,6 +24491,12 @@ static MYSQL_SYSVAR_ULONG(sched_priority_lru_flush,
                           "Nice value for the lru manager thread scheduling",
                           NULL, NULL, 19, 0, 39, 0);
 #endif
+static MYSQL_SYSVAR_UINT(page_zstd_compression_level,
+                         srv_page_zstd_compression_level,
+                         PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
+                         "Zstd Compression level used for compressing page. "
+                         "maximum compress level supported is 9. default is 6.",
+                         nullptr, nullptr, DEFAULT_COMPRESSION_LEVEL, 0, 9, 0);
 
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
@@ -24545,6 +24667,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(monitor_reset_all),
     MYSQL_SYSVAR(purge_threads),
     MYSQL_SYSVAR(purge_batch_size),
+    MYSQL_SYSVAR(enable_fast_purge),
 #ifdef UNIV_DEBUG
     MYSQL_SYSVAR(background_drop_list_empty),
     MYSQL_SYSVAR(purge_run_now),
@@ -24610,6 +24733,8 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(interpreter_output),
 #endif /* UNIV_DEBUG */
     MYSQL_SYSVAR(parallel_read_threads),
+    MYSQL_SYSVAR(parallel_fetch_enable_test),
+    MYSQL_SYSVAR(parallel_max_read_threads),
     MYSQL_SYSVAR(segment_reserve_factor),
     MYSQL_SYSVAR(corrupt_table_action),
     MYSQL_SYSVAR(parallel_doublewrite_path),
@@ -24632,6 +24757,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(sched_priority_pc),
     MYSQL_SYSVAR(sched_priority_lru_flush),
 #endif
+    MYSQL_SYSVAR(page_zstd_compression_level),
     nullptr};
 
 mysql_declare_plugin(innobase){

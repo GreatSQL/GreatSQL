@@ -1,0 +1,81 @@
+CREATE TABLE t1 (s1 INT, s2 char(100),PRIMARY KEY (s1));
+INSERT INTO t1 values(1,'a,aa');
+INSERT INTO t1 values(2,'bb,b');
+INSERT INTO t1 values(3,'c,c,c');
+EXPLAIN  
+select  
+trim(ref_15.c_ogj),
+0<>0 as c_lrcm63eani
+from 
+(select 
+0<>0 as c_ogj
+from 
+t1
+where 0<>0
+order by c_ogj asc) as ref_15;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE
+Warnings:
+Note	1003	/* select#1 */ select trim((0 <> 0)) AS `trim(ref_15.c_ogj)`,(0 <> 0) AS `c_lrcm63eani` from `test`.`t1` where false order by `c_lrcm63eani`
+EXPLAIN 
+WITH 
+cte_0 AS (select  
+(select 1 from t1 limit 1 offset 51)
+as c_nn7max69
+from t1 as subq_0), 
+cte_2 AS (select  
+1 as c_h0u_
+)
+select  
+ref_22.c_nn7max69
+from 
+((cte_0 as ref_22 join cte_2 as ref_23 on (0<>0))
+join (select 1 as ref_31) as subq_3
+on ( select cast(ref_22.c_nn7max69 as char) as c_ds6nqmige
+from 
+t1 as ref_35
+order by c_ds6nqmige desc
+limit 1) <> (cast(ref_23.c_h0u_ as decimal) 
+));
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE
+5	DERIVED	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+4	DERIVED	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+3	SUBQUERY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Not optimized, outer query is empty
+Warnings:
+Note	1276	Field or reference 'ref_22.c_nn7max69' of SELECT #6 was resolved in SELECT #1
+Note	1003	with `cte_2` as (/* select#4 */ select 1 AS `c_h0u_`) /* select#1 */ select (/* select#3 */ select 1 from `test`.`t1` limit 51,1) AS `c_nn7max69` from `test`.`t1` `subq_0` join `cte_2` `ref_23` join (/* select#5 */ select 1 AS `ref_31`) `subq_3` where false
+EXPLAIN 
+WITH 
+cte_0 AS (select  
+(select 1 from t1 limit 1 offset 51)
+as c_nn7max69
+from t1 as subq_0), 
+cte_2 AS (select  
+1 as c_h0u_)
+select  
+ref_22.c_nn7max69
+from 
+((cte_0 as ref_22
+join cte_2 as ref_23
+on (0<>0))
+right outer join (select 1
+from t1 as ref_31
+) as subq_3
+on ( select  
+cast(ref_22.c_nn7max69 as char) as c_ds6nqmige
+from 
+t1 as ref_35
+order by c_ds6nqmige desc
+limit 1) <> (cast(ref_23.c_h0u_ as decimal) 
+));
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	ref_31	NULL	index	NULL	PRIMARY	4	NULL	3	100.00	Using index
+1	PRIMARY	<derived5>	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	Using where; Using join buffer (hash join)
+1	PRIMARY	subq_0	NULL	index	NULL	PRIMARY	4	NULL	3	100.00	Using index; Using join buffer (hash join)
+5	DERIVED	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+4	SUBQUERY	t1	NULL	index	NULL	PRIMARY	4	NULL	3	100.00	Using index
+Warnings:
+Note	1276	Field or reference 'ref_22.c_nn7max69' of SELECT #6 was resolved in SELECT #1
+Note	1003	with `cte_2` as (/* select#5 */ select 1 AS `c_h0u_`) /* select#1 */ select (/* select#4 */ select 1 from `test`.`t1` limit 51,1) AS `c_nn7max69` from `test`.`t1` `ref_31` left join (`test`.`t1` `subq_0` join `cte_2` `ref_23`) on((false)) where true
+drop table t1;

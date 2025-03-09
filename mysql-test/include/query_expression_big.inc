@@ -67,6 +67,7 @@ exec echo "set max_heap_table_size=1024*2014*1024;
 # Sometimes we see MEMORY (#2) winning, other times we see TempTable
 # (#4) winning, so, merge those states by omitting them. We should
 # see only the two slow scenarios: 1 and 3, in that order.
+--sorted_result
 SELECT id FROM timings ORDER BY t LIMIT 2 OFFSET 2;
 
 # clean up

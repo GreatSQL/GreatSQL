@@ -1,5 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -65,9 +65,9 @@ class PT_window : public Parse_tree_node, public Window {
 */
 class PT_window_list : public Parse_tree_node {
   typedef Parse_tree_node super;
-  List<Window> m_windows;
 
  public:
+  List<Window> m_windows;
   PT_window_list() = default;
 
   bool contextualize(Parse_context *pc) override;

@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2014, 2022, Oracle and/or its affiliates.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -617,6 +618,18 @@ class ha_innopart : public ha_innobase,
                                     parallel_scan_init
   */
   void parallel_scan_end(void *parallel_scan_ctx) override;
+
+  int parallel_fetch_init(void *&fecth_ctx, size_t *num_threads,
+                          bool use_reserved_threads, uint desire_threads,
+                          uint fetch_index,
+                          parallel_read_data_reader_range_t *to_fetch_range,
+                          unsigned long int max_read_buf_size) override;
+
+  int parallel_fetch(void *fetch_ctx, void **thread_ctxs,
+                     Reader::Init_fn init_fn, Reader::Load_fn load_fn,
+                     Reader::End_fn end_fn) override;
+
+  void parallel_fetch_end(void *fetch_ctx) override;
 
  private:
   /** Pointer to Ha_innopart_share on the TABLE_SHARE. */

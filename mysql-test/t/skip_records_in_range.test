@@ -40,7 +40,7 @@ ANALYZE TABLE t1;
 ANALYZE TABLE t2;
 
 #range scan
-let query1=SELECT a1 FROM t1 WHERE a1 > 'b';
+let query1=SELECT a1 FROM t1 WHERE a1 > 'b' order by a1;
 let query2=SELECT a1 FROM t1 FORCE INDEX(t1_a1_a2_idx) WHERE a1 > 'b';
 
 #ref access

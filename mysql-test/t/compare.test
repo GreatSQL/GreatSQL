@@ -58,6 +58,7 @@ drop table if exists t1;
 CREATE TABLE  t1 (b int(2) zerofill, c int(2) zerofill);
 INSERT INTO t1 (b,c) VALUES (1,2), (1,1), (2,2);
 
+--source include/disable_turbo.inc
 SELECT CONCAT(b,c), CONCAT(b,c) = '0101' FROM t1;
 
 analyze table t1;
@@ -72,6 +73,7 @@ SELECT a,
   (SELECT COUNT(*) FROM t1 
    WHERE b = t2.a AND CONCAT(b,c) = CONCAT('0',t2.a,'01')) x 
 FROM t2 ORDER BY a;
+--source include/restore_turbo.inc
 
 analyze table t1;
 analyze table t2;

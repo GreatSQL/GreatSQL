@@ -20,6 +20,7 @@ INSERT INTO t1 VALUES (null, 1);
 INSERT INTO t1 VALUES (null, null);
 INSERT INTO t1 VALUES (null, null);
 
+--sorted_result
 SELECT * FROM t1;
 
 DROP TABLE t1;
@@ -118,6 +119,7 @@ INSERT INTO t1 VALUES (null, 1);
 INSERT INTO t1 VALUES (null, null);
 INSERT INTO t1 VALUES (null, null);
 
+--sorted_result
 SELECT * FROM t1;
 
 DROP TABLE t1;

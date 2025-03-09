@@ -1,5 +1,7 @@
 --source include/not_hypergraph.inc  # Optimizer hints are not supported.
 
+--source include/no_turbo.inc
+
 --disable_query_log
 call mtr.add_suppression("Make worker plan failed");
 --enable_query_log

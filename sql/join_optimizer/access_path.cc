@@ -1,5 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -57,8 +57,6 @@
 #include "sql/sql_optimizer.h"
 #include "sql/sql_update.h"
 #include "sql/table.h"
-
-#include <vector>
 
 using pack_rows::TableCollection;
 using std::vector;
@@ -1228,6 +1226,19 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
             &join->examined_rows, param.gather, param.need_rowid);
         break;
       }
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+      case AccessPath::QUERY_PLAN_EXECUTE: {
+        const auto &param = path->query_plan_execute();
+        if (job.children.is_null()) {
+          SetupJobsForChildren(mem_root, param.native_path, join,
+                               eligible_for_batch_mode, &job, &todo);
+          continue;
+        }
+        iterator = create_additional_query_plan_iterator(
+            thd, mem_root, join, move(job.children[0]), param.native_outlist);
+        break;
+      }
+#endif
     }
 
     if (iterator == nullptr) {

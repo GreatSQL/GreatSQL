@@ -1,4 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -47,13 +48,14 @@ Gcs_message_stage::stage_status Gcs_message_stage_lz4::skip_apply(
    disregarding the header because only the palyload is compressed.
    */
   if (original_payload_size > Gcs_message_stage_lz4::max_input_compression()) {
-    MYSQL_GCS_LOG_ERROR(
+    MYSQL_GCS_LOG_WARN(
         "Gcs_packet's payload is too big. Only packets smaller than "
         << Gcs_message_stage_lz4::max_input_compression()
         << " bytes can "
            "be compressed. Payload size is "
-        << original_payload_size << ".");
-    return stage_status::abort;
+        << original_payload_size
+        << ", and the packet will be delivered in an uncompressed format.");
+    return stage_status::skip;
   }
 
   return stage_status::apply;

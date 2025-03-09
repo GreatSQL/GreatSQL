@@ -16,7 +16,9 @@ SELECT * FROM t1 WHERE (salary,department)  = ALL ((select 5000,50 from dual), (
 
 --echo operator = ANY
 SELECT * FROM t1 WHERE salary = ANY (5000);
+--sorted_result
 SELECT * FROM t1 WHERE salary = ANY (5000, 6000);
+--sorted_result
 SELECT * FROM t1 WHERE salary = ANY (5000, 6000,7000);
 SELECT * FROM t1 WHERE salary = ANY ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
 

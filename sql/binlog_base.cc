@@ -1,4 +1,4 @@
-/* Copyright (c) 2024, GreatDB Software Co., Ltd.
+/* Copyright (c) 2024, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -124,6 +124,11 @@ static int parse_query_event(THD *thd, Query_log_event *ev,
       for (; tables; tables = tables->next_global) {
         info.tables.push_back(std::make_pair(tables->db ? tables->db : ev->db,
                                              tables->table_name));
+        // CREATE TABLE SELECT or CREATE TABLE LIKE may have multiple tables
+        // while only the first table is the created table
+        if (thd->lex->sql_command == SQLCOM_CREATE_TABLE) {
+          break;
+        }
       }
     } else {
       ret = 1;

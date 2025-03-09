@@ -8,6 +8,8 @@
 #       as possible.
 #
 
+--source include/disable_turbo.inc
+
 -- disable_query_log
 -- disable_result_log
 # High values set for sampling scanning, effectively forcing full scan for
@@ -6868,3 +6870,5 @@ CREATE TABLE t1 (a INTEGER);
 INSERT INTO t1 VALUES (1), (2), (3);
 SELECT 2 IN ( SELECT 5 UNION SELECT NULL ) FROM t1;
 DROP TABLE t1;
+
+--source include/restore_turbo.inc

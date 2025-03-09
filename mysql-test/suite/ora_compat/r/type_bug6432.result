@@ -165,3 +165,28 @@ drop PROCEDURE p1;
 drop table t1;
 drop type type1;
 drop type type2;
+#
+# test of bug10351
+#
+drop database test;
+create table test.qqq(id aaa , cname varchar(10));
+ERROR HY000: inconsistent datatypes: expected 'test'.'aaa' got '(null)'.'aaa'
+set sql_mode=default;
+create table test.qqq(id aaa , cname varchar(10));
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'aaa , cname varchar(10))' at line 1
+create database test;
+#
+# test of bug10599
+#
+use test;
+create table t1 (c1 int primary key, c2 varchar(32),date1 datetime);
+create table t2 (c1 int primary key, c3 varchar(32));
+insert into t1 values (1,'aaa','2021-03-25 16:44:00.123456'),(2,'bbb','2022-03-25 16:44:00.123456'),(3,'ccc','2023-03-25 16:44:00.123456');
+insert into t2 values (1,'aaa'),(2,'bbb');
+prepare stmt1 from 'update t1 a set c2=(select distinct c2 from t2 c where c1=a.c1 and date1 BETWEEN ''2020-03-25 16:44:00.123456'' and ''2024-03-25 16:44:00.123456'')';
+EXECUTE stmt1;
+EXECUTE stmt1;
+EXECUTE stmt1;
+DEALLOCATE PREPARE stmt1;
+drop table t1;
+drop table t2;

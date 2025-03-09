@@ -975,6 +975,7 @@ EXPLAIN SELECT a, MAX(b) FROM t1 WHERE a IN (10,100) GROUP BY a;
 EXPLAIN SELECT a, MAX(b) FROM t2 WHERE a IN (10,100) GROUP BY a;
 
 FLUSH status;
+--source include/disable_turbo.inc
 SELECT a, MAX(b) FROM t1 WHERE a IN (10, 100) GROUP BY a;
 --echo # Should be no more than 2 reads.
 --skip_if_hypergraph  # Does not support this access method yet.
@@ -985,5 +986,6 @@ SELECT a, MAX(b) FROM t2 WHERE a IN (10, 100) GROUP BY a;
 --echo # Should be no more than 2 reads.
 --skip_if_hypergraph  # Does not support this access method yet.
 SHOW status LIKE 'handler_read_key';
+--source include/restore_turbo.inc
 
 DROP TABLE t1, t2;

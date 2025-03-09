@@ -1,0 +1,67 @@
+include/group_replication.inc [rpl_server_count=4]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+include/start_group_replication.inc
+include/start_group_replication.inc
+[connect server1]
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1',SOURCE_PORT=port_4,SOURCE_USER='root',SOURCE_AUTO_POSITION=1;;
+START REPLICA;
+[connect server4]
+SET sql_log_bin=OFF;
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+SET sql_log_bin=ON;
+INSERT INTO t1 VALUES (1, 1);
+INSERT INTO t1 VALUES (2, 2);
+[connect server1]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+## now, kill -19 primary node
+[connect server1]
+SET SESSION sql_log_bin= 0;
+CREATE TABLE pid_table(pid_no INT PRIMARY KEY);
+LOAD DATA LOCAL INFILE 'pid_file' INTO TABLE pid_table;
+DROP TABLE pid_table;
+SET SESSION sql_log_bin= 1;
+[connection server2]
+include/rpl_gr_wait_for_number_of_members.inc
+[connect server4]
+INSERT INTO t1 VALUES (3,3);
+INSERT INTO t1 VALUES (4,4);
+[connection server1]
+include/wait_for_slave_io_to_stop.inc
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+[connection server_1]
+include/stop_group_replication.inc
+include/start_group_replication.inc
+DO group_replication_set_as_primary(@@server_uuid);
+START REPLICA;
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+[connection server_1]
+STOP REPLICA;
+DROP TABLE t1;
+include/stop_group_replication.inc
+[connection server_2]
+include/stop_group_replication.inc
+[connection server_3]
+include/stop_group_replication.inc
+[connection server_4]
+DROP TABLE t1;
+include/group_replication_end.inc
+[connect server1]
+RESET REPLICA ALL;
+[connect server4]
+RESET REPLICA ALL;

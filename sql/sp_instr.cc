@@ -1,5 +1,5 @@
 /* Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -59,6 +59,7 @@
 #include "sql/opt_trace.h"  // Opt_trace_start
 #include "sql/protocol.h"
 #include "sql/query_options.h"
+#include "sql/query_plan_plugin.h"  // has_additional_query_plan
 #include "sql/session_tracker.h"
 #include "sql/sp.h"           // sp_get_item_value
 #include "sql/sp_head.h"      // sp_head
@@ -525,8 +526,11 @@ bool sp_lex_instr::reset_lex_and_exec_core(THD *thd, uint *nextp,
     STMT_EXECUTED means the statement has been prepared and executed before,
     but some error occurred during table open or execution).
   */
-  bool reprepare_error = error && thd->is_error() &&
-                         thd->get_stmt_da()->mysql_errno() == ER_NEED_REPREPARE;
+  bool reprepare_error =
+      error && thd->is_error() &&
+      (thd->get_stmt_da()->mysql_errno() == ER_NEED_REPREPARE ||
+       thd->get_stmt_da()->mysql_errno() == ER_PREPARE_FOR_PRIMARY_ENGINE ||
+       thd->get_stmt_da()->mysql_errno() == ER_PREPARE_FOR_SECONDARY_ENGINE);
 
   // Unless there is an error, execution must have started (and completed)
   assert(error || m_lex->is_exec_started());
@@ -704,12 +708,21 @@ LEX *sp_lex_instr::parse_expr(THD *thd, sp_head *sp) {
 
 bool sp_lex_instr::validate_lex_and_execute_core(THD *thd, uint *nextp,
                                                  bool open_tables) {
+  // Remember if the general log was temporarily disabled when repreparing the
+  // statement for a secondary engine.
+  bool general_log_temporarily_disabled = false;
+
   Reprepare_observer reprepare_observer;
+
+  if (!is_sp_copen())
+    thd->set_secondary_engine_optimization(
+        Secondary_engine_optimization::PRIMARY_TENTATIVELY);
 
   while (true) {
     DBUG_EXECUTE_IF("simulate_bug18831513", { invalidate(); });
-    if (is_invalid() ||
-        ((m_lex->has_udf() || m_lex->has_udt_table()) && !m_first_execution)) {
+    if (is_invalid() || ((m_lex->has_udf() || m_lex->has_udt_table() ||
+                          has_additional_query_plan(thd, m_lex)) &&
+                         !m_first_execution)) {
       free_lex();
       LEX *lex = parse_expr(thd, thd->sp_runtime_ctx->sp);
 
@@ -739,9 +752,10 @@ bool sp_lex_instr::validate_lex_and_execute_core(THD *thd, uint *nextp,
       representing an expression, so the exact SQL-command does not matter.
     */
 
-    if (!m_first_execution &&
-        (sql_command_flags[m_lex->sql_command] & CF_REEXECUTION_FRAGILE ||
-         m_lex->sql_command == SQLCOM_END)) {
+    if (is_ref_cursor() || /* ref_cursor needs observer to reprepare sql */
+        (!m_first_execution &&
+         (sql_command_flags[m_lex->sql_command] & CF_REEXECUTION_FRAGILE ||
+          m_lex->sql_command == SQLCOM_END))) {
       reprepare_observer.reset_reprepare_observer();
       stmt_reprepare_observer = &reprepare_observer;
     }
@@ -752,22 +766,28 @@ bool sp_lex_instr::validate_lex_and_execute_core(THD *thd, uint *nextp,
 
     thd->pop_reprepare_observer();
 
+    /*
+      Re-enable the general log if it was temporarily disabled while repreparing
+      and executing a statement for a secondary engine.
+    */
+    if (general_log_temporarily_disabled) {
+      thd->variables.option_bits &= ~OPTION_LOG_OFF;
+      general_log_temporarily_disabled = false;
+    }
+
     m_first_execution = false;
 
     if (!rc) return false;
 
-    /*
-      Here is why we need all the checks below:
-        - if the reprepare observer is not set, we've got an error, which should
-          be raised to the user;
-        - if we've got fatal error, it should be raised to the user;
-        - if our thread got killed during execution, the error should be raised
-          to the user;
-        - if we've got an error, different from ER_NEED_REPREPARE, we need to
-          raise it to the user;
-    */
-    if (stmt_reprepare_observer == nullptr || thd->is_fatal_error() ||
-        thd->killed || thd->get_stmt_da()->mysql_errno() != ER_NEED_REPREPARE) {
+    // Exit if a fatal error has occurred or statement execution was killed.
+    if (thd->is_fatal_error() || thd->is_killed()) {
+      return true;
+    }
+    int my_errno = thd->get_stmt_da()->mysql_errno();
+
+    if (my_errno != ER_NEED_REPREPARE &&
+        my_errno != ER_PREPARE_FOR_PRIMARY_ENGINE &&
+        my_errno != ER_PREPARE_FOR_SECONDARY_ENGINE) {
       /*
         If an error occurred before execution, make sure next execution is
         started with a clean statement:
@@ -776,26 +796,72 @@ bool sp_lex_instr::validate_lex_and_execute_core(THD *thd, uint *nextp,
           (m_lex->is_metadata_used() && !m_lex->is_exec_started())) {
         invalidate();
       }
+      if (m_lex->m_sql_cmd != nullptr &&
+          thd->secondary_engine_optimization() ==
+              Secondary_engine_optimization::SECONDARY &&
+          !m_lex->unit->is_executed()) {
+        if (!thd->is_secondary_engine_forced()) {
+          /*
+            Some error occurred during resolving or optimization in
+            the secondary engine, and secondary engine execution is not forced.
+            Retry execution of the statement in the primary engine.
+          */
+          thd->clear_error();
+          thd->set_secondary_engine_optimization(
+              Secondary_engine_optimization::PRIMARY_ONLY);
+          invalidate();
+          // Disable the general log. The query was written to the general log
+          // in the first attempt to execute it. No need to write it twice.
+          if ((thd->variables.option_bits & OPTION_LOG_OFF) == 0) {
+            thd->variables.option_bits |= OPTION_LOG_OFF;
+            general_log_temporarily_disabled = true;
+          }
+          continue;
+        }
+      }
+      assert(thd->is_error());
       return true;
     }
-    /*
-      Reprepare_observer ensures that the statement is retried a maximum number
-      of times, to avoid an endless loop.
-    */
-    assert(stmt_reprepare_observer->is_invalidated());
-    if (!stmt_reprepare_observer->can_retry()) {
+    if (my_errno == ER_NEED_REPREPARE) {
       /*
-        Reprepare_observer sets error status in DA but Sql_condition is not
-        added. Please check Reprepare_observer::report_error(). Pushing
-        Sql_condition for ER_NEED_REPREPARE here.
+        Reprepare_observer ensures that the statement is retried a maximum
+        number of times, to avoid an endless loop.
       */
-      Diagnostics_area *da = thd->get_stmt_da();
-      da->push_warning(thd, da->mysql_errno(), da->returned_sqlstate(),
-                       Sql_condition::SL_ERROR, da->message_text());
-      return true;
+      assert(stmt_reprepare_observer != nullptr &&
+             stmt_reprepare_observer->is_invalidated());
+      if (!stmt_reprepare_observer->can_retry()) {
+        /*
+          Reprepare_observer sets error status in DA but Sql_condition is not
+          added. Please check Reprepare_observer::report_error(). Pushing
+          Sql_condition for ER_NEED_REPREPARE here.
+        */
+        Diagnostics_area *da = thd->get_stmt_da();
+        da->push_warning(thd, da->mysql_errno(), da->returned_sqlstate(),
+                         Sql_condition::SL_ERROR, da->message_text());
+        assert(thd->is_error());
+        return true;
+      }
+      thd->clear_error();
+    } else {
+      assert(my_errno == ER_PREPARE_FOR_PRIMARY_ENGINE ||
+             my_errno == ER_PREPARE_FOR_SECONDARY_ENGINE);
+      assert(thd->secondary_engine_optimization() ==
+             Secondary_engine_optimization::PRIMARY_TENTATIVELY);
+      thd->clear_error();
+      if (my_errno == ER_PREPARE_FOR_SECONDARY_ENGINE) {
+        thd->set_secondary_engine_optimization(
+            Secondary_engine_optimization::SECONDARY);
+      } else {
+        thd->set_secondary_engine_optimization(
+            Secondary_engine_optimization::PRIMARY_ONLY);
+      }
+      // Disable the general log. The query was written to the general log in
+      // the first attempt to execute it. No need to write it twice.
+      if ((thd->variables.option_bits & OPTION_LOG_OFF) == 0) {
+        thd->variables.option_bits |= OPTION_LOG_OFF;
+        general_log_temporarily_disabled = true;
+      }
     }
-
-    thd->clear_error();
     invalidate();
   }
 }
@@ -817,6 +883,7 @@ void sp_lex_instr::free_lex() {
   m_lex->sphead = nullptr;
   lex_end(m_lex);
   destroy(m_lex->result);
+  m_lex->set_secondary_engine_execution_context(nullptr);
   m_lex->destroy();
   delete (st_lex_local *)m_lex;
 
@@ -1871,6 +1938,15 @@ PSI_statement_info sp_instr_cpush_rowtype::psi_info = {0, "cpush_rowtype", 0,
                                                        PSI_DOCUMENT_ME};
 #endif
 
+bool sp_instr_cpush_rowtype::on_after_expr_parsing(THD *thd) {
+  m_valid = true;
+  sp_cursor *c = thd->sp_runtime_ctx->get_cursor(m_cursor_idx);
+  /*for cursor,if it has dblink table,don't need to reopen cursor to get
+  struture, because alter dblink table doesn't support.*/
+  if (!c->m_push_instr->is_dblink_table(thd)) is_copy_struct = true;
+  return false;
+}
+
 bool sp_instr_cpush_rowtype::exec_core(THD *thd, uint *) {
   // sp_instr_cpush_rowtype::exec_core() opens the cursor (it's called from
   // sp_instr_copen::execute().
@@ -1891,7 +1967,7 @@ bool sp_instr_cpush_rowtype::exec_core(THD *thd, uint *) {
   m_lex->is_cursor_get_structure = true;
   Query_arena old_arena;
   thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
-  if (c && c->open(thd)) {
+  if (!c || c->open(thd)) {
     my_error(ER_SP_CURSOR_FAILED, MYF(0));
     goto finish;
   }
@@ -1946,7 +2022,7 @@ bool sp_instr_cpush_rowtype::copy_structure_from_return(
         if (c_return->m_result.get_return_table()) {
           if (c->set_return_table_from_cursor(c_return, defs_c)) return true;
         } else {
-          my_error(ER_OUT_OF_RESOURCES, MYF(ME_FATALERROR));  // unreachable
+          my_error(ER_SP_CURSOR_MISMATCH, MYF(0), pcursor->str);  // unreachable
           return true;
         }
       } else {  // it's type is ref cursor
@@ -1957,6 +2033,16 @@ bool sp_instr_cpush_rowtype::copy_structure_from_return(
     }
   }
   return false;
+}
+
+void sp_instr_cpush_rowtype::cleanup_mem_root() {
+  Item *item = current_thd->sp_runtime_ctx->get_item(m_for_var);
+  if (item->type() != Item::ORACLE_ROWTYPE_ITEM) return;
+  Item_field *item_field = down_cast<Item_field *>(item);
+  if (!item_field->field->m_udt_table) return;
+  item_field->field->clear_table_all_field();
+  m_copy_struct_arena.free_items();
+  m_copy_struct_mem_root.ClearForReuse();
 }
 
 void sp_instr_cpush_rowtype::print(const THD *, String *str) {
@@ -1987,7 +2073,11 @@ bool sp_instr_copen_for_sql::execute(THD *thd, uint *nextp) {
   // lex->result has been set to nullptr in sp_refcursor::open_for_sql,so it
   // must reparse.
   invalidate();
-  return validate_lex_and_execute_core(thd, nextp, false);
+  const LEX_CSTRING query_backup = thd->query();
+  if (alloc_query(thd, m_cursor_query.str, m_cursor_query.length)) return true;
+  bool rc = validate_lex_and_execute_core(thd, nextp, false);
+  thd->set_query(query_backup);
+  return rc;
 }
 
 bool sp_instr_copen_for_sql::exec_core(THD *thd, uint *) {
@@ -2069,6 +2159,9 @@ bool sp_instr_copen_for_ident::exec_core(THD *thd, uint *nextp) {
 
   field_ref->set_cursor_return_type();
   bool rc = field_ref->m_cursor->open_for_ident(thd, m_sql_spv_idx);
+  if (rc) {
+    return rc;
+  }
   thd->lex->set_exec_started();
   return rc;
 }
@@ -2157,6 +2250,16 @@ bool sp_instr_copen::execute(THD *thd, uint *nextp) {
 
   cleanup_items(push_instr->m_arena.item_list());
 
+  if (!rc && push_instr->is_copy_struct) {
+    // If table structure changed,it needs reopen cursor to get cursor
+    // structure.
+    push_instr->is_copy_struct = false;
+    push_instr->m_is_copen = true;
+    rc = push_instr->validate_lex_and_execute_core(thd, nextp, false);
+    cleanup_items(push_instr->m_arena.item_list());
+    push_instr->m_is_copen = false;
+  }
+
   // Restore Statement Arena.
 
   thd->stmt_arena = stmt_arena_saved;
@@ -2217,26 +2320,40 @@ bool sp_instr_cursor_copy_struct::execute(THD *thd, uint *nextp) {
     return true;
   }
 
-  // TYPE ref_rs1 IS REF CURSOR RETURN cursor%rowtype;
-  if (!c->m_result.get_return_table()) {
-    my_error(ER_SP_CURSOR_MISMATCH, MYF(0), pcursor->str);
-    return true;
-  }
-  bool ret = false;
+  /* for next case,table's structure may change,so it needs reopen cursor to get
+  structure. 1.TYPE ref_rs1 IS REF CURSOR RETURN cursor%rowtype; 2.cc
+  cursor%rowtype 3.for i in cursor loop*/
+  sp_instr_cpush *push_instr = c->get_push_instr();
+  Query_arena *stmt_arena_saved = thd->stmt_arena;
+  thd->stmt_arena = &push_instr->m_arena;
+  push_instr->is_copy_struct = true;
+  sp_instr_cpush_rowtype *push_instr_rowtype =
+      down_cast<sp_instr_cpush_rowtype *>(push_instr);
+  assert(push_instr_rowtype);
+  push_instr_rowtype->m_for_var = m_var;
+  // destroy items to avoid leave_stmt or goto_stmt in loop.
+  push_instr_rowtype->cleanup_mem_root();
+  bool ret = push_instr->validate_lex_and_execute_core(thd, nextp, false);
+  push_instr->is_copy_struct = false;
+  cleanup_items(push_instr->m_arena.item_list());
+  thd->stmt_arena = stmt_arena_saved;
+  if (ret) return ret;
+
   Item *item = thd->sp_runtime_ctx->get_item(m_var);
   Query_arena old_arena;
-  thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
+  Query_arena *swap_arena = m_is_cursor
+                                ? &push_instr_rowtype->m_copy_struct_arena
+                                : thd->sp_runtime_ctx->callers_arena;
+  thd->swap_query_arena(*swap_arena, &old_arena);
+  const auto x_guard = create_scope_guard([thd, old_arena, swap_arena]() {
+    thd->swap_query_arena(old_arena, swap_arena);
+  });
   List<Create_field> defs;
-  if (c->m_result.get_return_table()->export_structure(thd, &defs)) {
-    thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+  if (c->m_result.get_return_table()->s->export_structure(thd, &defs)) {
     return true;
   }
-  Item_field_row_table *row_table = dynamic_cast<Item_field_row_table *>(item);
-  if (row_table) {
-    if (row_table->modify_row_field_table_definitions(thd, &defs)) ret = true;
-  } else if (!item->get_arg_count() && item->row_create_items(thd, &defs))
-    ret = true;
-  thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
+
+  ret = item->modify_item_field_about_cursor(thd, &defs, c);
   return ret;
 }
 
@@ -2296,7 +2413,12 @@ bool sp_instr_cclose::execute(THD *thd, uint *nextp) {
     return true;
   }
 
-  return c ? c->close() : true;
+  if (m_is_cursor) {
+    c->get_push_instr()->cleanup_mem_root();
+    c->cleanup_return_table_mem_root();
+  }
+
+  return c->close();
 }
 
 void sp_instr_cclose::print(const THD *, String *str) {

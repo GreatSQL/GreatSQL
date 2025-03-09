@@ -2,7 +2,7 @@
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
    Copyright (c) 2018, Percona and/or its affiliates.
    Copyright (c) 2009, 2016, MariaDB
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -8420,6 +8420,7 @@ static uint search_key_in_table(TABLE *table, MY_BITMAP *bi_cols,
         - Functional indexes if the slave_rows_search_algorithms=INDEX_SCAN
         - Skip multi-valued keys as they have only part of value and can't
           fully identify a record
+        - Spatial indexes.
       */
       if (!(table->s->usable_indexes(current_thd).is_set(key)) ||
           ((keyinfo->flags & (HA_NOSAME | HA_NULL_PART_KEY)) == HA_NOSAME) ||
@@ -8427,7 +8428,7 @@ static uint search_key_in_table(TABLE *table, MY_BITMAP *bi_cols,
           (key == table->s->primary_key) ||
           ((slave_rows_search_algorithms_options & SLAVE_ROWS_INDEX_SCAN) &&
            keyinfo->is_functional_index()) ||
-          keyinfo->flags & HA_MULTI_VALUED_KEY) {
+          keyinfo->flags & HA_MULTI_VALUED_KEY || keyinfo->flags & HA_SPATIAL) {
         continue;
       }
 
@@ -13974,6 +13975,32 @@ void View_change_log_event::print(FILE *,
     to_string(buf, 256);
     print_header(head, print_event_info, false);
     my_b_printf(head, "View_change_log_event: %s\n", buf);
+
+    if (print_event_info->verbose) {
+      int writeset_count = 0;
+      my_b_printf(head, "### view change GTID_EXTRACTED snapshot\n");
+      for (auto &it : certification_info) {
+        if (it.first == "gtid_extracted") {
+          Sid_map sid_map(nullptr);
+          Gtid_set gtid(&sid_map);
+          gtid.add_gtid_encoding((const uchar *)it.second.c_str(),
+                                 it.second.size());
+          size_t length =
+              gtid.get_string_length(&Gtid_set::commented_string_format);
+          char *str =
+              (char *)my_malloc(key_memory_log_event, length + 1, MYF(MY_WME));
+          if (str != nullptr) {
+            gtid.to_string(str, false /*need_lock*/,
+                           &Gtid_set::commented_string_format);
+            my_b_printf(head, "%s\n", str);
+            my_free(str);
+          }
+        } else {
+          writeset_count++;
+        }
+      }
+      my_b_printf(head, "### view change writeset count: %d\n", writeset_count);
+    }
   }
 }
 #endif

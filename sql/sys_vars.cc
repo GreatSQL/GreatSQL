@@ -1,6 +1,6 @@
 /* Copyright (c) 2009, 2021, Oracle and/or its affiliates.
    Copyright (c) 2021, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -6323,6 +6323,12 @@ static Sys_var_uint Sys_gdb_parallel_load_chunk_size(
     VALID_RANGE(64 * 1024, 128 * 1024 * 1024), DEFAULT(4 * 1024 * 1024),
     BLOCK_SIZE(1));
 
+// change warning to error
+static Sys_var_bool Sys_ora_warning_as_error(
+    "ora_warning_as_error", "enable change warning to error",
+    HINT_UPDATEABLE SESSION_VAR(ora_warning_as_error), NO_CMD_LINE,
+    DEFAULT(true));
+
 static char *glob_gdb_sqld_version_ptr;
 const char *gdb_sqld_version_str = const_cast<char *>(GREATDB_VERSION_STR);
 static Sys_var_charptr Sys_gdb_sqld_version(
@@ -8917,4 +8923,9 @@ static Sys_var_uint Dbms_profiler_max_data_size(
 static Sys_var_bool Sys_data_mask_enabled(
     "enable_data_masking", "Enable Data Mask",
     HINT_UPDATEABLE GLOBAL_VAR(enable_data_masking), CMD_LINE(OPT_ARG),
+    DEFAULT(false));
+
+static Sys_var_bool Sys_synonym_translation_enabled(
+    "synonym_translation_enabled", "Whether to enabled synonym translation.",
+    HINT_UPDATEABLE GLOBAL_VAR(synonym_translation_enabled), CMD_LINE(OPT_ARG),
     DEFAULT(false));

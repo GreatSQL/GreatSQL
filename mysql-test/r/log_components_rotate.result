@@ -1,0 +1,36 @@
+SET @@global.log_error_verbosity=3;
+INSTALL COMPONENT "file://component_log_sink_rotate";
+select component_urn from mysql.component;
+component_urn
+file://component_log_sink_rotate
+SET @@session.debug="+d,parser_stmt_to_error_log";
+SET PERSIST log_error_services="log_filter_internal; log_sink_rotate";
+# restart:--log_error=LOG_ERR --no-console
+select component_urn from mysql.component;
+component_urn
+file://component_log_sink_rotate
+SET @@session.debug="+d,parser_stmt_to_error_log";
+select 'test';
+test
+test
+select PRIO , ERROR_CODE , SUBSYSTEM , DATA from performance_schema.error_log order by LOGGED desc limit 2;
+PRIO	ERROR_CODE	SUBSYSTEM	DATA
+Note	MY-010000	Server	Parser saw: select 'test'
+Note	MY-010000	Server	Parser saw: SET @@session.debug="+d,parser_stmt_to_error_log"
+set global log_error_rotate.max_size = 10485760;
+set global  log_error_rotate.total_size = 1048576 * 35;
+select 'test log_components_rotate';
+test log_components_rotate
+test log_components_rotate
+show variables like 'log_error_rotate%';
+Variable_name	Value
+log_error_rotate.max_size	10485760
+log_error_rotate.total_size	36700160
+show variables like 'log_error';
+Variable_name	Value
+log_error	LOG_ERR
+FLUSH LOGS;
+RESET PERSIST;
+set global log_error_services = default;
+# restart:
+uninstall COMPONENT "file://component_log_sink_rotate";

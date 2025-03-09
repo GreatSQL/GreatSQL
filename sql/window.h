@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -667,6 +667,7 @@ class Window {
 
   int keep_dir{0};
   bool has_keep_over{false};
+  bool has_keep{false};
   /*------------------------------------------------------------------------
    *
    * Constructors
@@ -1442,6 +1443,8 @@ class Window {
   Query_block *get_query_block() { return m_query_block; }
   bool has_keep_over_clause() { return has_keep_over; }
   void set_has_keep_over_clause(bool v) { has_keep_over = v; }
+  bool has_keep_clause() { return has_keep; }
+  void set_has_keep_clause(bool v) { has_keep = v; }
 
   /**
     Free up any resource used to process the window functions of this window,

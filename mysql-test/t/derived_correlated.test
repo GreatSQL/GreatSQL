@@ -441,7 +441,9 @@ select * from t1, lateral (select * from (select * from (select t1.a from t2) as
 --skip_if_hypergraph  # Depends on the query plan.
 eval explain format=tree $query;  # Demonstrates Materialize -> Temporary table (forced rematerialization always).
 eval explain $query;
+--source include/disable_turbo.inc
 eval $query;
+--source include/restore_turbo.inc
 
 # Here "dt2" must be made lateral, as its referenced table t0 will be
 # a neighbour in FROM after merging

@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1622,6 +1622,9 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
 %token<lexer.keyword> DELETING 1514
 %token<lexer.keyword> BASED_SYM 1515
 
+%token<lexer.keyword> SYNONYM_SYM   1516
+%token<lexer.keyword> SYNONYMS_SYM  1517
+%token<lexer.keyword> PUBLIC_SYM    1518
 
 /*
   Precedence rules used to resolve the ambiguity when using keywords as idents
@@ -1980,6 +1983,8 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
         opt_source_order
         opt_load_algorithm
 
+%type <opt_public>      opt_public
+
 %type <show_cmd_type> opt_show_cmd_type
 
 /*
@@ -2126,6 +2131,7 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
         alter_instance_stmt
         alter_resource_group_stmt
         alter_sequence_stmt
+        alter_synonym_stmt
         alter_table_stmt
         analyze_table_stmt
         call_stmt
@@ -2135,6 +2141,7 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
         create_role_stmt
         create_sequence_stmt
         create_srs_stmt
+        create_synonym_stmt
         create_table_stmt
         delete_stmt
         describe_stmt
@@ -2145,6 +2152,7 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
         drop_sequence_stmt
         drop_srs_stmt
         execute_stmt
+        drop_synonym_stmt
         explain_oracle_stmt
         explain_stmt
         explainable_stmt
@@ -2175,6 +2183,7 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
         show_create_function_stmt
         show_create_procedure_stmt
         show_create_sequence_stmt
+        show_create_synonym_stmt
         show_create_table_stmt
         show_create_trigger_stmt
         show_create_user_stmt
@@ -2205,6 +2214,7 @@ static bool current_timestamp_parse(const char *cpp, size_t len,
         show_sequences_stmt
         show_stats_stmt
         show_status_stmt
+        show_synonyms_stmt
         show_table_status_stmt
         show_tables_stmt
         show_triggers_stmt
@@ -2684,6 +2694,7 @@ simple_statement:
         | alter_server_stmt             { $$= nullptr; }
         | alter_tablespace_stmt         { $$= nullptr; }
         | alter_undo_tablespace_stmt    { $$= nullptr; }
+        | alter_synonym_stmt
         | alter_table_stmt
         | alter_user_stmt               { $$= nullptr; }
         | alter_view_stmt               { $$= nullptr; }
@@ -2702,6 +2713,7 @@ simple_statement:
         | create_role_stmt
         | create_sequence_stmt
         | create_srs_stmt
+        | create_synonym_stmt
         | create_table_stmt
         | deallocate                    { $$= nullptr; }
         | delete_stmt
@@ -2721,6 +2733,7 @@ simple_statement:
         | drop_sequence_stmt
         | drop_server_stmt              { $$= nullptr; }
         | drop_srs_stmt
+        | drop_synonym_stmt
         | drop_tablespace_stmt          { $$= nullptr; }
         | drop_undo_tablespace_stmt     { $$= nullptr; }
         | drop_table_stmt               { $$= nullptr; }
@@ -2778,6 +2791,7 @@ simple_statement:
 %endif
         | show_create_procedure_stmt
         | show_create_sequence_stmt
+        | show_create_synonym_stmt
         | show_create_table_stmt
         | show_create_trigger_stmt
         | show_create_user_stmt
@@ -2809,6 +2823,7 @@ simple_statement:
         | show_sequences_stmt
         | show_stats_stmt
         | show_status_stmt
+        | show_synonyms_stmt
         | show_table_status_stmt
         | show_tables_stmt
         | show_triggers_stmt
@@ -3818,6 +3833,30 @@ opt_on_mv:
           ON_SYM DEMAND_SYM { $$ = to_lex_cstring("ON DEMAND "); }
         ;
 %endif
+
+create_synonym_stmt:
+          CREATE or_replace opt_public
+          SYNONYM_SYM table_ident
+          FOR_SYM table_ident
+          {
+            $$= NEW_PTN PT_create_synonym_stmt($5 /* synonym_ident */,
+                                               true /* or_replace */,
+                                               $3 /* is_public */,
+                                               $7 /* target_ident */);
+          }
+          |CREATE opt_public SYNONYM_SYM table_ident FOR_SYM table_ident
+          {
+            $$= NEW_PTN PT_create_synonym_stmt($4 /* synonym_ident */,
+                                               false /* or_replace */,
+                                               $2 /* is_public */,
+                                               $6 /* target_ident */);
+          }
+        ;
+
+opt_public:
+          /* empty */ { $$= false; }
+        | PUBLIC_SYM  { $$= true; }
+        ;
 
 create_table_stmt:
           CREATE opt_temporary TABLE_SYM opt_if_not_exists table_ident
@@ -8096,6 +8135,11 @@ column_def:
           }
         | ident ora_udt_ident udt_default
           {
+            if(!$2->table.length && !(YYTHD->variables.sql_mode & MODE_ORACLE)) {
+              YYTHD->syntax_error_at(@2);
+              MYSQL_YYABORT;
+            }
+
             PT_udt_type *udt_type= NEW_PTN PT_udt_type(Char_type::VARCHAR, $2, &my_charset_bin);
             PT_field_def *field_def= NEW_PTN PT_field_def(udt_type, nullptr);
             $$= NEW_PTN PT_column_def($1, field_def, nullptr);
@@ -9456,6 +9500,14 @@ alter_sequence_stmt:
           ALTER SEQUENCE_SYM table_ident sequence_option_list
           {
             $$ = NEW_PTN PT_alter_sequence_stmt($3);
+          }
+        ;
+
+alter_synonym_stmt:
+          ALTER opt_public SYNONYM_SYM table_ident
+          {
+            $$= NEW_PTN PT_alter_synonym_stmt($4 /* synonym_ident */,
+                                              $2 /* is_public */);
           }
         ;
 
@@ -11935,9 +11987,17 @@ bit_expr:
           {
             $$= NEW_PTN Item_date_add_interval(@$, $1, $4, $5, 0);
           }
+        | bit_expr '+' '(' INTERVAL_SYM expr interval ')' %prec '+'
+          {
+            $$= NEW_PTN Item_date_add_interval(@$, $1, $5, $6, 0);
+          }
         | bit_expr '-' INTERVAL_SYM expr interval %prec '-'
           {
             $$= NEW_PTN Item_date_add_interval(@$, $1, $4, $5, 1);
+          }
+        | bit_expr '-' '(' INTERVAL_SYM expr interval ')' %prec '-'
+          {
+            $$= NEW_PTN Item_date_add_interval(@$, $1, $5, $6, 1);
           }
         | bit_expr '*' bit_expr %prec '*'
           {
@@ -12133,6 +12193,11 @@ simple_expr:
           /* we cannot put interval before - */
           {
             $$= NEW_PTN Item_date_add_interval(@$, $5, $2, $3, 0);
+          }
+        | '(' INTERVAL_SYM expr interval ')' '+' expr %prec INTERVAL_SYM
+          /* we cannot put interval before - */
+          {
+            $$= NEW_PTN Item_date_add_interval(@$, $7, $3, $4, 0);
           }
         | simple_ident JSON_SEPARATOR_SYM TEXT_STRING_literal
           {
@@ -12867,6 +12932,9 @@ sum_expr:
           AVG_SYM '(' in_sum_expr ')' opt_keep_clause opt_windowing_clause
           {
             PT_window* window = NULL;
+            if ($5 != NULL) {
+              $5->set_has_keep_clause(true);
+            }
             if ($5 != NULL && $6 == NULL) {
               window = $5;
             } else if ($5 == NULL && $6 != NULL) {
@@ -12886,6 +12954,9 @@ sum_expr:
         | AVG_SYM '(' DISTINCT in_sum_expr ')' opt_keep_clause opt_windowing_clause
           {
             PT_window* window = NULL;
+            if ($6 != NULL) {
+              $6->set_has_keep_clause(true);
+            }
             if ($6 != NULL && $7 == NULL) {
               window = $6;
             } else if ($6 == NULL && $7 != NULL) {
@@ -12945,6 +13016,9 @@ sum_expr:
         | COUNT_SYM '(' opt_all '*' ')' opt_keep_clause opt_windowing_clause
           {
             PT_window* window = NULL;
+            if ($6 != NULL) {
+              $6->set_has_keep_clause(true);
+            }
             if ($6 != NULL && $7 == NULL) {
               window = $6;
             } else if ($6 == NULL && $7 != NULL) {
@@ -12964,6 +13038,9 @@ sum_expr:
         | COUNT_SYM '(' in_sum_expr ')' opt_keep_clause opt_windowing_clause
           {
             PT_window* window = NULL;
+            if ($5 != NULL) {
+              $5->set_has_keep_clause(true);
+            }
             if ($5 != NULL && $6 == NULL) {
               window = $5;
             } else if ($5 == NULL && $6 != NULL) {
@@ -12983,6 +13060,9 @@ sum_expr:
         | COUNT_SYM '(' DISTINCT expr_list ')' opt_keep_clause opt_windowing_clause
           {
             PT_window* window = NULL;
+            if ($6 != NULL) {
+              $6->set_has_keep_clause(true);
+            }
             if ($6 != NULL && $7 == NULL) {
               window = $6;
             } else if ($6 == NULL && $7 != NULL) {
@@ -13001,6 +13081,9 @@ sum_expr:
           }
         | MIN_SYM '(' in_sum_expr ')' opt_keep_clause opt_windowing_clause
           {
+            if ($5 != NULL) {
+              $5->set_has_keep_clause(true);
+            }
             PT_window* window = NULL;
             if ($5 != NULL && $6 == NULL) {
               window = $5;
@@ -13026,6 +13109,9 @@ sum_expr:
         | MIN_SYM '(' DISTINCT in_sum_expr ')' opt_keep_clause opt_windowing_clause
           {
             PT_window* window = NULL;
+            if ($6 != NULL) {
+              $6->set_has_keep_clause(true);
+            }
             if ($6 != NULL && $7 == NULL) {
               window = $6;
             } else if ($6 == NULL && $7 != NULL) {
@@ -13045,6 +13131,9 @@ sum_expr:
         | MAX_SYM '(' in_sum_expr ')' opt_keep_clause opt_windowing_clause
           {
             PT_window* window = NULL;
+            if ($5 != NULL) {
+              $5->set_has_keep_clause(true);
+            }
             if ($5 != NULL && $6 == NULL) {
               window = $5;
             } else if ($5 == NULL && $6 != NULL) {
@@ -13064,6 +13153,9 @@ sum_expr:
         | MAX_SYM '(' DISTINCT in_sum_expr ')' opt_keep_clause opt_windowing_clause
           {
             PT_window* window = NULL;
+            if ($6 != NULL) {
+              $6->set_has_keep_clause(true);
+            }
             if ($6 != NULL && $7 == NULL) {
               window = $6;
             } else if ($6 == NULL && $7 != NULL) {
@@ -13084,6 +13176,9 @@ sum_expr:
           {
             int sample = 0;
             PT_window* window = NULL;
+            if ($5 != NULL) {
+              $5->set_has_keep_clause(true);
+            }
             if ($5 != NULL && $6 == NULL) {
               window = $5;
               sample = 1;
@@ -13106,6 +13201,9 @@ sum_expr:
           {
             int sample = 0;
             PT_window* window = NULL;
+            if ($5 != NULL) {
+              $5->set_has_keep_clause(true);
+            }
             if ($5 != NULL && $6 == NULL) {
               window = $5;
               sample = 1;
@@ -13135,6 +13233,9 @@ sum_expr:
         | SUM_SYM '(' in_sum_expr ')' opt_keep_clause opt_windowing_clause
           {
             PT_window* window = NULL;
+            if ($5 != NULL) {
+              $5->set_has_keep_clause(true);
+            }
             if ($5 != NULL && $6 == NULL) {
               window = $5;
             } else if ($5 == NULL && $6 != NULL) {
@@ -13154,6 +13255,9 @@ sum_expr:
         | SUM_SYM '(' DISTINCT in_sum_expr ')' opt_keep_clause opt_windowing_clause
           {
             PT_window* window = NULL;
+            if ($6 != NULL) {
+              $6->set_has_keep_clause(true);
+            }
             if ($6 != NULL && $7 == NULL) {
               window = $6;
             } else if ($6 == NULL && $7 != NULL) {
@@ -15372,6 +15476,14 @@ do_stmt:
           }
         ;
 
+drop_synonym_stmt:
+          DROP opt_public SYNONYM_SYM table_ident
+          {
+            $$= NEW_PTN PT_drop_synonym_stmt($4 /* synonym_ident */,
+                                             $2 /* is_public */);
+          }
+        ;
+
 /*
   Drop : delete tables or index or user or role
 */
@@ -16688,6 +16800,14 @@ show_sequences_stmt:
           }
         ;
 
+show_synonyms_stmt:
+          SHOW SYNONYMS_SYM
+          {
+            auto *p= NEW_PTN PT_show_synonyms(@$);
+            MAKE_CMD(p);
+          }
+        ;
+
 show_tables_stmt:
           SHOW opt_show_cmd_type TABLES opt_db opt_wild_or_where
           {
@@ -16954,6 +17074,14 @@ show_create_sequence_stmt:
           SHOW CREATE SEQUENCE_SYM table_ident
           {
             auto *tmp= NEW_PTN PT_show_create_sequence(@$, $4);
+            MAKE_CMD(tmp);
+          }
+        ;
+
+show_create_synonym_stmt:
+          SHOW CREATE opt_public SYNONYM_SYM table_ident
+          {
+            auto *tmp= NEW_PTN PT_show_create_synonym(@$, $3, $5);
             MAKE_CMD(tmp);
           }
         ;
@@ -18935,6 +19063,7 @@ ident_keywords_unambiguous:
         | PROCESSLIST_SYM
         | PROFILES_SYM
         | PROFILE_SYM
+        | PUBLIC_SYM
         | QUARTER_SYM
         | QUERY_SYM
         | QUICK
@@ -19066,6 +19195,8 @@ ident_keywords_unambiguous:
         | SUSPEND_SYM
         | SWAPS_SYM
         | SWITCHES_SYM
+        | SYNONYM_SYM
+        | SYNONYMS_SYM
         | TABLES
         | TABLESPACE_SYM
         | TABLE_CHECKSUM_SYM
@@ -22217,16 +22348,6 @@ sp_for_loop_bounds:
               MYSQL_YYABORT;
             }
             LEX_STRING empty_str= to_lex_string(EMPTY_CSTR);
-            Lex->sphead->setup_sp_assignment_lex(YYTHD, $2);
-            Item *item2= $2->get_item();
-            ITEMIZE(item2, &item2);
-            if (unlikely(Lex->sphead->restore_lex(YYTHD)))
-              MYSQL_YYABORT;
-            Lex->sphead->setup_sp_assignment_lex(YYTHD, $4);
-            Item *item4= $4->get_item();
-            ITEMIZE(item4, &item4);
-            if (unlikely(Lex->sphead->restore_lex(YYTHD)))
-              MYSQL_YYABORT;
             $$= NEW_PTN Oracle_sp_for_loop_bounds(0,empty_str,false,1,$2,$4);
             if (!$$)
               MYSQL_YYABORT_ERROR(ER_DA_OOM, MYF(0)); /* purecov: inspected */
@@ -22247,16 +22368,6 @@ sp_for_loop_bounds:
               MYSQL_YYABORT;
             }
             LEX_STRING empty_str= to_lex_string(EMPTY_CSTR);
-            Lex->sphead->setup_sp_assignment_lex(YYTHD, $2);
-            Item *item2= $2->get_item();
-            ITEMIZE(item2, &item2);
-            if (unlikely(Lex->sphead->restore_lex(YYTHD)))
-              MYSQL_YYABORT;
-            Lex->sphead->setup_sp_assignment_lex(YYTHD, $4);
-            Item *item4= $4->get_item();
-            ITEMIZE(item4, &item4);
-            if (unlikely(Lex->sphead->restore_lex(YYTHD)))
-              MYSQL_YYABORT;
             $$= NEW_PTN Oracle_sp_for_loop_bounds(0,empty_str,false,-1,$2,$4);
             if (!$$)
               MYSQL_YYABORT_ERROR(ER_DA_OOM, MYF(0)); /* purecov: inspected */
@@ -22327,7 +22438,7 @@ sp_unlabeled_control_ora:
               Item *item_upper= nullptr;
               if(Lex->make_temp_upper_bound_variable_and_set(YYTHD, tmp,
                 $3->direction > 0 , $3->from,
-                $3->jump_condition, &item_upper))
+                $3->jump_condition, &item_upper, $3->cursor_var))
                 MYSQL_YYABORT;
               if ( ! (expr = pctx->make_item_plsql_sp_for_loop_attr(thd, $3->direction, $3->cursor_var_item, item_upper)))
                 MYSQL_YYABORT;
@@ -24458,7 +24569,7 @@ ora_sp_forall_loop:
             Item *item_upper= nullptr;
             if(Lex->make_temp_upper_bound_variable_and_set(YYTHD, tmp,
               $3->direction > 0 , $3->from,
-              $3->jump_condition, &item_upper))
+              $3->jump_condition, &item_upper, $3->cursor_var))
               MYSQL_YYABORT;
             Item *expr= nullptr;
             if ( ! (expr = pctx->make_item_plsql_sp_for_loop_attr(thd, $3->direction,

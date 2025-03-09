@@ -21,6 +21,9 @@ select @@global.max_connections;
 151
 select `User`, `Host` from mysql.`user` where `host` like '%\\%%';
 User	Host
+SYSTEM_DAA	%
+SYSTEM_DBA	%
+SYSTEM_DSA	%
 select `User`, `Host` from mysql.`user` where `user` like '192.%';
 User	Host
 select `User`, `Host` from mysql.`user` where `user` like '2001:%';

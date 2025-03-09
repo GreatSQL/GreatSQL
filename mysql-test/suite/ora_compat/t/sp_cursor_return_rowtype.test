@@ -663,12 +663,112 @@ call p1;
 select count(*) from t1;
 drop function f1;
 
+--echo # test of table of ref cursor%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR cc RETURN t1%rowtype IS SELECT * FROM t1 WHERE a>3;
+  TYPE ref_rs2 IS REF CURSOR RETURN cc%rowtype;
+  c ref_rs2;
+  type tklist is table of c%rowtype index by binary_integer;
+  tt tklist;
+begin
+  tt(0).a := 10;
+  tt(0).b := 'aa';
+  select tt(0);
+end;
+$$
+DELIMITER ;$$
+call p1;
+call p1;
+
 drop procedure pro_return;
 drop procedure p1;
 drop table t1;
 drop table tt_air;
 drop type t_air_table;
 drop type t_air;
+
+--echo #
+--echo # test of bug10097 about table
+--echo #
+create table yy as select 1 as a,2 as b;
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR CUR IS SELECT * FROM yy;
+  aa cur%rowtype;
+  type tklist is table of cur%rowtype index by binary_integer;
+  tt tklist;
+  TYPE ref_rs1 IS REF CURSOR RETURN CUR%rowtype;
+  cc ref_rs1;
+  cc1 ref_rs1;
+  str varchar(200) := 'SELECT * FROM yy';
+ m int;
+ n int;
+ g int;
+BEGIN
+  drop table yy;
+  create table yy as select 1 as a,2 as b,3 as c;
+  for i in cur loop
+    select i;
+  end loop;
+  open cc for SELECT * FROM yy;
+  fetch cc into m,n,g;
+  select m,n,g;
+  open cc1 for str;
+  fetch cc1 into m,n,g;
+  select m,n,g;
+  tt(0).a := 1;
+  select tt(0);
+  aa.a := 11;
+  select aa;
+  drop table yy;
+  create table yy as select 1 as a,2 as b;
+END;
+$$
+DELIMITER ;$$
+call p1;
+call p1;
+drop PROCEDURE p1;
+drop table yy;
+
+--echo #
+--echo # test of bug10097 about temp table
+--echo #
+create temporary table yy as select 1 as a,2 as b;
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  CURSOR CUR IS SELECT * FROM yy;
+  aa cur%rowtype;
+  TYPE ref_rs1 IS REF CURSOR RETURN CUR%rowtype;
+  cc ref_rs1;
+  cc1 ref_rs1;
+  str varchar(200) := 'SELECT * FROM yy';
+ m int;
+ n int;
+ g int;
+BEGIN
+  drop table yy;
+  create temporary table yy as select 1 as a,2 as b,3 as c;
+  for i in cur loop
+    select i;
+  end loop;
+  open cc for SELECT * FROM yy;
+  fetch cc into m,n,g;
+  select m,n,g;
+  open cc1 for str;
+  fetch cc1 into m,n,g;
+  select m,n,g;
+  drop table yy;
+  create temporary table yy as select 1 as a,2 as b;
+END;
+$$
+DELIMITER ;$$
+call p1;
+call p1;
+drop PROCEDURE p1;
+drop table yy;
+
 
 
 

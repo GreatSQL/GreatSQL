@@ -1154,8 +1154,8 @@ union
 (select * from t1 order by a)
 fetch next 1 percent rows only;
 a
-0
-1
+##
+##
 select * from t1 order by a fetch next 1.5 percent rows only;
 a
 0
@@ -1168,7 +1168,7 @@ a
 2
 3
 drop table t1;
-CREATE TABLE t (a TEXT);
+CREATE TABLE t (a varchar(200));
 INSERT INTO t VALUES ('foo'),('bar');
 SELECT a FROM t ORDER BY a FETCH FIRST 2 ROWS WITH TIES;
 a

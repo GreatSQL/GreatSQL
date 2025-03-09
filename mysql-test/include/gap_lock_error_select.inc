@@ -50,6 +50,7 @@ eval select * from gap1 where id1=1 and id2=1 and id3=1 and value=1
   order by c1 $select_lock;
 eval select * from gap3 where id=1 $select_lock;
 eval select * from gap4 where id=1 $select_lock;
+--sorted_result
 eval select * from gap4 where id in (1, 2, 3) $select_lock;
 --error ER_UNKNOWN_ERROR
 eval select * from gap4 $select_lock;
@@ -59,8 +60,10 @@ eval select * from gap4 where id between 3 and 7 $select_lock;
 
 if (!$is_gaplock_target)
 {
+--source include/disable_turbo.inc
 eval select * from gap1 limit 1 $select_lock;
 eval select * from gap1 where value != 100 limit 1 $select_lock;
+--source include/restore_turbo.inc
 eval select * from gap1 where id1=1 $select_lock;
 eval select * from gap1 where id1=1 and id2= 1 $select_lock;
 eval select * from gap1 where id1=1 and id2= 1 and id3 != 1 $select_lock;
@@ -83,7 +86,10 @@ eval select * from gap1 where id1=1 and id2=1 and id3=1 and value=1
   order by c1 $select_lock;
 eval select * from gap3 where id=1 $select_lock;
 eval select * from gap4 where id=1 $select_lock;
+--sorted_result
 eval select * from gap4 where id in (1, 2, 3) $select_lock;
+--sorted_result
 eval select * from gap4 $select_lock;
+--sorted_result
 eval select * from gap4 where id between 3 and 7 $select_lock;
 }

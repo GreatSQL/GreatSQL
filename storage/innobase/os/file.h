@@ -2,6 +2,7 @@
 
 Copyright (c) 1995, 2022, Oracle and/or its affiliates.
 Copyright (c) 2009, Percona Inc.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted
 by Percona Inc.. Those modifications are
@@ -61,7 +62,10 @@ struct Compression {
     ZLIB = 1,
 
     /** Use LZ4 faster variant, usually lower compression. */
-    LZ4 = 2
+    LZ4 = 2,
+
+    /** Use zstd high compress ratio to compress page for page compress*/
+    ZSTD = 3
   };
 
   /** Compressed page meta-data */

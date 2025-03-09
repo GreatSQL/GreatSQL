@@ -1,7 +1,7 @@
 /*
    Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -89,6 +89,7 @@
 #include "sql/protocol.h"
 #include "sql/protocol_classic.h"
 #include "sql/psi_memory_key.h"
+#include "sql/query_plan_plugin.h"
 #include "sql/query_result.h"
 #include "sql/rpl_msr.h"
 #include "sql/rpl_replica.h"  // rpl_master_erroneous_autoinc
@@ -858,6 +859,9 @@ THD::THD(bool enable_plugins)
   mysql_mutex_init(key_LOCK_current_cond, &LOCK_current_cond,
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(0, &pq_lock_worker, MY_MUTEX_INIT_FAST);
+
+  mysql_mutex_init(key_LOCK_thd_query_plan_plugin, &LOCK_thd_query_plan_plugin,
+                   MY_MUTEX_INIT_FAST);
   mysql_cond_init(key_COND_thr_lock, &COND_thr_lock);
 
   /*Initialize connection delegation mutex and cond*/
@@ -1236,6 +1240,14 @@ void THD::init(void) {
     ALTER USER statements.
   */
   m_disable_password_validation = false;
+
+  mysql_rwlock_rdlock(&THR_LOCK_query_plan);
+  if (global_query_plan_plugin_interface) {
+    set_query_plan_plugin_interface(global_query_plan_plugin_interface);
+  } else {
+    set_query_plan_plugin_interface(nullptr);
+  }
+  mysql_rwlock_unlock(&THR_LOCK_query_plan);
 }
 
 void THD::init_query_mem_roots() {
@@ -1558,6 +1570,9 @@ THD::~THD() {
   mysql_mutex_unlock(&LOCK_thd_data);
   mysql_mutex_lock(&LOCK_thd_query);
   mysql_mutex_unlock(&LOCK_thd_query);
+  //
+  lock_query_plan_plugin();
+  unlock_query_plan_plugin();
 
   assert(!m_attachable_trx);
 
@@ -1575,6 +1590,7 @@ THD::~THD() {
   mysql_mutex_destroy(&LOCK_group_replication_connection_mutex);
 
   mysql_mutex_destroy(&pq_lock_worker);
+  mysql_mutex_destroy(&LOCK_thd_query_plan_plugin);
   mysql_cond_destroy(&COND_thr_lock);
   mysql_cond_destroy(&COND_group_replication_connection_cond_var);
 #ifndef NDEBUG
@@ -1657,7 +1673,6 @@ extern "C" int thd_opt_slow_log() { return (int)opt_slow_log; }
 extern "C" int thd_is_background_thread(const THD *thd) {
   return (thd->system_thread == SYSTEM_THREAD_BACKGROUND);
 }
-
 /**
   Awake a thread.
 
@@ -1727,6 +1742,8 @@ void THD::awake(THD::killed_state state_to_set) {
 
   /* Interrupt target waiting inside a storage engine. */
   if (state_to_set != THD::NOT_KILLED) ha_kill_connection(this);
+
+  if (state_to_set != THD::NOT_KILLED) kill_additional_query_plan(this);
 
   if (state_to_set == THD::KILL_TIMEOUT) {
     assert(!status_var_aggregated);
@@ -2556,39 +2573,66 @@ void THD::restore_backup_open_tables_state(Open_tables_backup *backup) {
   set_open_tables_state(backup);
 }
 
+void THD::reset_n_backup_open_tables_state_with_lock(Open_tables_backup *backup,
+                                                     uint add_state_flags) {
+  reset_n_backup_open_tables_state(backup, add_state_flags);
+  if (backup->locked_tables_mode == LTM_LOCK_TABLES ||
+      backup->locked_tables_mode == LTM_PRELOCKED_UNDER_LOCK_TABLES) {
+    this->open_tables = backup->open_tables;
+    this->lock = backup->lock;
+    this->locked_tables_mode = backup->locked_tables_mode;
+  }
+  this->temporary_tables = backup->temporary_tables;
+}
+
+void THD::restore_backup_open_tables_state_with_lock(
+    Open_tables_backup *backup) {
+  DBUG_TRACE;
+
+  if (backup->locked_tables_mode == LTM_LOCK_TABLES ||
+      backup->locked_tables_mode == LTM_PRELOCKED_UNDER_LOCK_TABLES) {
+    assert(lock == backup->lock);
+    assert(open_tables == backup->open_tables);
+    this->locked_tables_mode = LTM_NONE;
+  }
+  merge_backup_open_tables_state(backup);
+  backup->temporary_tables = temporary_tables;
+  temporary_tables = nullptr;
+  restore_backup_open_tables_state(backup);
+}
+
 void THD::merge_backup_open_tables_state(Open_tables_backup *backup) {
-  if (backup->lock) {
-    if (lock) {
+  if (lock) {
+    if (backup->lock && lock != backup->lock) {
       auto merged_lock = mysql_lock_merge(backup->lock, lock);
       backup->lock = merged_lock;
-    }
-  } else {
-    if (lock) {
+    } else {
       backup->lock = lock;
     }
   }
-  this->lock = nullptr;
-  if (this->open_tables) {
+
+  lock = nullptr;
+  if (open_tables) {
     // set all mdl_ticket to nullptr, has already free in prepare trans
     auto table_ptr = open_tables;
     while (table_ptr) {
       table_ptr->mdl_ticket = nullptr;
       table_ptr = table_ptr->next;
     }
+    if (open_tables != backup->open_tables) {
+      auto next = backup->open_tables;
+      auto last = next;
+      while (next) {
+        last = next;
+        next = next->next;
+      }
+      if (last) {
+        last->next = open_tables;
+      } else {
+        backup->open_tables = open_tables;
+      }
+    }
   }
-
-  auto next = backup->open_tables;
-  auto last = next;
-  while (next) {
-    last = next;
-    next = next->next;
-  }
-  if (last) {
-    last->next = open_tables;
-  } else {
-    backup->open_tables = open_tables;
-  }
-
   open_tables = nullptr;
 }
 
@@ -3620,8 +3664,6 @@ bool THD::is_secondary_storage_engine_eligible() const {
   if ((in_multi_stmt_transaction_mode() &&
        lex->sql_command != SQLCOM_CREATE_TABLE))
     return false;
-  //  It is a sub-statement of a stored procedure
-  if (sp_runtime_ctx != nullptr) return false;
   return true;
 }
 

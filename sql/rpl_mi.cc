@@ -1,5 +1,5 @@
 /* Copyright (c) 2006, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -46,6 +46,89 @@
 #include "sql/rpl_msr.h"      // channel_map
 #include "sql/rpl_replica.h"  // master_retry_count
 #include "sql/sql_class.h"
+
+std::mutex Speed_controller::binlog_transfer_speed_hash_lock;
+std::unordered_map<const char *, const uint64_t &>
+    Speed_controller::binlog_transfer_speed_hash;
+
+Speed_controller::Speed_controller(Master_info *master) : mi(master) {
+  std::lock_guard<std::mutex> lock(binlog_transfer_speed_hash_lock);
+  binlog_transfer_speed_hash.emplace(std::make_pair(
+      strcmp(mi->get_channel(), channel_map.get_default_channel())
+          ? mi->get_channel()
+          : "default_channel",
+      std::cref(data_speed)));
+}
+
+Speed_controller::~Speed_controller() {
+  std::lock_guard<std::mutex> lock(binlog_transfer_speed_hash_lock);
+  binlog_transfer_speed_hash.erase(
+      strcmp(mi->get_channel(), channel_map.get_default_channel())
+          ? mi->get_channel()
+          : "default_channel");
+}
+
+void Speed_controller::check_and_throttle(ulong event_len) {
+  /**
+    Control the binlog read speed of master when rpl_read_binlog_speed_limit
+    is non-zero
+  */
+  uint64_t rpl_read_binlog_speed_limit = opt_rpl_read_binlog_speed_limit * 1024;
+  if (rpl_read_binlog_speed_limit) {
+    do {
+      uint64_t current_time = my_micro_time() / 1000;
+      // Safe multiplication check before adding tokens
+      uint64_t safe_elapsed_time =
+          std::min(current_time - m_last_check_time,
+                   UINT64_MAX / rpl_read_binlog_speed_limit);
+      uint64_t tokens_2_add =
+          safe_elapsed_time * rpl_read_binlog_speed_limit / 1000;
+      // Overflow check before updating m_token_amount
+      m_token_amount =
+          std::numeric_limits<uint64_t>::max() - tokens_2_add > m_token_amount
+              ? m_token_amount + tokens_2_add
+              : std::numeric_limits<uint64_t>::max();
+      m_last_check_time = current_time;
+      if (m_token_amount < event_len) {
+        uint64_t micro_sleeptime =
+            std::ceil(1000 * 1000 * (event_len - m_token_amount) /
+                      rpl_read_binlog_speed_limit);
+        my_sleep(micro_sleeptime > 1000
+                     ? micro_sleeptime
+                     : 1000);  // at least sleep 1000 micro second
+      }
+    } while (m_token_amount < event_len);
+    m_token_amount -= event_len;
+  }
+}
+
+void Speed_controller::update_data_speed(ulong event_len) {
+  m_data_inc += event_len;
+  uint64_t current_time = std::ceil(my_micro_time() / 1000);
+  /**
+    Evaluate data speed per second and overflow check before evaluate data
+    speed.
+  */
+  if ((current_time - m_last_eval_time >= 1000) ||
+      (UINT64_MAX - global_system_variables.net_buffer_length < m_data_inc)) {
+    uint64_t elapsed_time = current_time - m_last_eval_time;
+    data_speed = m_data_inc * 1000 / elapsed_time;
+    m_last_eval_time = current_time;
+    m_data_inc = 0;
+    m_token_amount = 0;
+  }
+}
+
+void Speed_controller::reset() {
+  clean();
+  m_last_eval_time = m_last_check_time = my_micro_time() / 1000;
+}
+
+void Speed_controller::clean() {
+  m_token_amount = 0;
+  m_data_inc = 0;
+  data_speed = 0;
+}
 
 enum {
   LINES_IN_MASTER_INFO_WITH_SSL = 14,
@@ -177,6 +260,7 @@ Master_info::Master_info(
                param_key_info_stop_cond, param_key_info_sleep_cond,
 #endif
                param_id, param_channel),
+      speed_ctrl(this),
       start_user_configured(false),
 #ifdef HAVE_PSI_INTERFACE
       key_info_rotate_lock(param_key_info_rotate_lock),

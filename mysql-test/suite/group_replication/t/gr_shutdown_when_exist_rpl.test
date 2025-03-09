@@ -1,0 +1,115 @@
+--source include/have_debug.inc
+--let $group_replication_group_name= 8a94f357-aab4-11df-86ab-c80aa9429573
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_server_count= 2
+--source include/group_replication.inc
+
+--disable_query_log
+--connection server1
+SET SESSION sql_log_bin= 0;
+call mtr.add_suppression("Plugin group_replication reported: 'unable to commit transaction after server shutdown'");
+call mtr.add_suppression("Run function 'before_commit' in plugin 'group_replication' failed");
+call mtr.add_suppression("Slave SQL for channel '': Worker .* failed executing transaction");
+call mtr.add_suppression("Plugin group_replication reported: 'Due to a plugin error, some transactions were unable to be certified and will now rollback.'");
+call mtr.add_suppression("Plugin group_replication reported: 'Error while waiting for conflict detection procedure to finish on session");
+SET SESSION sql_log_bin= 1;
+--enable_query_log
+
+
+--connection server1
+--source include/start_and_bootstrap_group_replication.inc
+
+--connection server1
+SET sql_log_bin=OFF;
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+SET sql_log_bin=ON;
+--let $local_address_server1= `SELECT @@GLOBAL.group_replication_local_address`
+--let $group_seeds_server1= `SELECT @@GLOBAL.group_replication_group_seeds`
+--disable_warnings
+--replace_result $SLAVE_MYPORT port_2
+--eval CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1',SOURCE_PORT=$SLAVE_MYPORT,SOURCE_USER='root',SOURCE_AUTO_POSITION=1;
+--enable_warnings
+START REPLICA;
+
+--connection server2
+SET sql_log_bin=OFF;
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+SET sql_log_bin=ON;
+INSERT INTO t1 VALUES (1, 1);
+INSERT INTO t1 VALUES (2, 2);
+
+--connection server1
+--let $wait_condition=SELECT COUNT(*)=2 FROM t1
+--source include/wait_condition.inc
+SET GLOBAL debug='+d,group_replication_server_shutdown_1';
+
+--connection server2
+INSERT INTO t1 VALUES (3,3);
+
+--connection server1
+SET debug_sync='now WAIT_FOR group_replication_wait_register_ticket_before_shutdown';
+
+--enable_reconnect
+--echo [server1 shutdown]
+--let $_server_id= `SELECT @@server_id`
+--let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--let $mysqld_pid_file=`SELECT @@GLOBAL.pid_file`
+--source include/expect_crash.inc
+exec kill `cat $mysqld_pid_file`;
+--source include/wait_until_disconnected.inc
+--source include/start_mysqld.inc
+--source include/wait_until_connected_again.inc
+SELECT * FROM t1;
+
+--replace_result $group_seeds_server1 GROUP_SEEDS_SERVER1
+--eval SET @@global.group_replication_group_seeds="$group_seeds_server1"
+--replace_result $local_address_server1 LOCAL_ADDRESS_SERVER1
+--eval SET @@global.group_replication_local_address="$local_address_server1"
+--replace_result $group_replication_group_name GROUP_REPLICATION_GROUP_NAME
+--eval SET @@global.group_replication_group_name="$group_replication_group_name"
+--source include/start_and_bootstrap_group_replication.inc
+START REPLICA;
+--let $wait_condition=SELECT COUNT(*)=3 FROM t1
+--source include/wait_condition.inc
+SELECT * FROM t1;
+SET GLOBAL debug='+d,group_replication_server_shutdown_2';
+
+--connection server2
+INSERT INTO t1 VALUES (4,4);
+
+--connection server1
+SET debug_sync='now WAIT_FOR group_replication_wait_send_message_before_shutdown';
+
+--enable_reconnect
+--echo [server1 shutdown]
+--let $_server_id= `SELECT @@server_id`
+--let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--let $mysqld_pid_file=`SELECT @@GLOBAL.pid_file`
+--source include/expect_crash.inc
+exec kill `cat $mysqld_pid_file`;
+--source include/wait_until_disconnected.inc
+--source include/start_mysqld.inc
+--source include/wait_until_connected_again.inc
+SELECT * FROM t1;
+START REPLICA;
+--let $wait_condition=SELECT COUNT(*)=4 FROM t1
+--source include/wait_condition.inc
+SELECT * FROM t1;
+
+--connection server1
+STOP REPLICA;
+DROP TABLE t1;
+
+--connection server2
+DROP TABLE t1;
+
+--let $rpl_connection_name= server_1
+--source include/rpl_connection.inc
+--enable_reconnect
+connection default;
+--enable_reconnect
+--source include/group_replication_end.inc
+
+--connection server1
+RESET REPLICA ALL;

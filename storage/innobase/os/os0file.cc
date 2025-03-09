@@ -2,6 +2,7 @@
 
 Copyright (c) 1995, 2022, Oracle and/or its affiliates.
 Copyright (c) 2009, 2016, Percona Inc.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted
 by Percona Inc.. Those modifications are
@@ -85,6 +86,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 #include <errno.h>
 #include <lz4.h>
+#include <zstd.h>
 #include "my_aes.h"
 #include "my_rnd.h"
 #include "mysql/service_mysql_keyring.h"
@@ -1364,6 +1366,7 @@ byte *os_file_compress_page(Compression compression, ulint block_size,
                             ulint *dst_len) {
   ulint len = 0;
   ulint compression_level = page_zip_level;
+  int zstd_compress_level = srv_page_zstd_compression_level;
   ulint page_type = mach_read_from_2(src + FIL_PAGE_TYPE);
 
   /* The page size must be a multiple of the OS punch hole size. */
@@ -1438,6 +1441,36 @@ byte *os_file_compress_page(Compression compression, ulint block_size,
       }
 
       break;
+
+    case Compression::ZSTD: {
+      /*! ZSTD_compress() :
+       *  Compresses `src` content as a single zstd compressed frame into
+       * already allocated `dst`. Hint : compression runs faster if
+       * `dstCapacity` >=  `ZSTD_compressBound(srcSize)`.
+       *  @return : compressed size written into `dst` (<= `dstCapacity),
+       *            or an error code if it fails (which can be tested using
+       * ZSTD_isError()). */
+
+      // if (ZSTD_compressBound(content_len) > out_len) {
+      //   *dst_len = src_len;
+      //   return src;
+      // }
+
+      len =
+          ZSTD_compress(reinterpret_cast<void *>(dst + FIL_PAGE_DATA), out_len,
+                        reinterpret_cast<const void *>(src + FIL_PAGE_DATA),
+                        content_len, zstd_compress_level);
+
+      if (ZSTD_isError(len) || 0 == len || len >= out_len) {
+        *dst_len = src_len;
+        return (src);
+      }
+      /**since need ZSTD_isError check the len at first,  so we check here to
+       * ensure the data size. */
+      ut_a(len <= src_len - FIL_PAGE_DATA);
+
+      break;
+    }
 
     default:
       *dst_len = src_len;

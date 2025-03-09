@@ -95,7 +95,9 @@ CREATE TABLE t1 (a VARCHAR(10), b VARCHAR(10)) COLLATE utf8mb4_0900_ai_ci;
 INSERT INTO t1 VALUES(_utf16 0xAC00, _utf16 0x326E), (_utf16 0xAD, _utf16 0xA0),
 (_utf16 0xC6, _utf16 0x41), (_utf16 0xC6, _utf16 0xAA), (_utf16 0xA73A, _utf16 0xA738);
 
+--source include/disable_turbo.inc
 SELECT a = b FROM t1;
+--source include/restore_turbo.inc
 DROP TABLE t1;
 
 SET NAMES utf8mb4;

@@ -1,6 +1,7 @@
 # Bug#26142776 : DIFFERENT MYSQL SCHEMA AFTER UPGRADE
 #files in mysql schema
 clone_history.ibd
+db_object_synonyms.ibd
 general_log.CSM
 general_log.CSV
 general_log_XXX.sdi
@@ -28,6 +29,7 @@ component	mysql
 compression_dictionary	mysql
 compression_dictionary_cols	mysql
 db	mysql
+db_object_synonyms	\N
 dd_properties	mysql
 default_roles	mysql
 engine_cost	mysql
@@ -202,6 +204,7 @@ t1	CREATE TABLE `t1` (
  PARTITION p1 VALUES LESS THAN (MAXVALUE) ENGINE = InnoDB) */
 #files in mysql schema
 clone_history.ibd
+db_object_synonyms.ibd
 general_log.CSM
 general_log.CSV
 general_log_XXX.sdi

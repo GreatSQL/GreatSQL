@@ -69,6 +69,7 @@ eval EXPLAIN $query;
 --replace_regex /(cost.*)/cost: #/
 --skip_if_hypergraph  # Depends on the query plan.
 eval EXPLAIN FORMAT=JSON $query;
+--sorted_result
 eval $query;
 
 # In LEFT JOIN ... ON
@@ -475,12 +476,16 @@ insert into t values(1,1),(2,2),(3,3),(4,4),(5,5);
 
 # Should not transform subquery to antijoin and should evaluate it at
 # optimization time
+--source include/disable_turbo.inc
 --skip_if_hypergraph  # Different plan; does not evaluate at optimization time.
 explain format=tree select a from t where (not exists (select b from t));
+--source include/restore_turbo.inc
 select a from t where (not exists (select b from t));
 
+--source include/disable_turbo.inc
 --skip_if_hypergraph  # Different plan; does not evaluate at optimization time.
 explain format=tree select a from t where 1 not in (select 1 from t);
+--source include/restore_turbo.inc
 select a from t where 1 not in (select 1 from t);
 
 drop table t;

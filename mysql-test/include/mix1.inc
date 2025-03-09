@@ -335,7 +335,7 @@ create index idx12672_1 on t4 (a1,a2,b,c);
 create index idx12672_2 on t4 (a1,a2,b);
 analyze table t4;
 
-select distinct a1 from t4 where pk_col not in (1,2,3,4);
+select distinct a1 from t4 where pk_col not in (1,2,3,4) order by a1;
 
 drop table t1,t4;
 
@@ -460,8 +460,8 @@ INSERT INTO t1(id, dept, age, name) VALUES
 ANALYZE TABLE t1;
 --echo # Masking (#) number in "rows" column of the following EXPLAIN output, as it may vary (bug#47746).
 --replace_column 10 #
-EXPLAIN SELECT DISTINCT t1.name, t1.dept FROM t1 WHERE t1.name='rs5';
-SELECT DISTINCT t1.name, t1.dept FROM t1 WHERE t1.name='rs5';
+EXPLAIN SELECT DISTINCT t1.name, t1.dept FROM t1 WHERE t1.name='rs5' order by t1.dept;
+SELECT DISTINCT t1.name, t1.dept FROM t1 WHERE t1.name='rs5' order by t1.dept;
 DELETE FROM t1;
 ANALYZE TABLE t1;
 --echo # Masking (#) number in "rows" column of the following EXPLAIN output, as it may vary (bug#47746).
@@ -1002,17 +1002,18 @@ ANALYZE TABLE t1;
 -- enable_result_log
 -- enable_query_log
 
-EXPLAIN SELECT c,b,d FROM t1 GROUP BY c,b,d;
-SELECT c,b,d FROM t1 GROUP BY c,b,d;
+EXPLAIN SELECT c,b,d FROM t1 GROUP BY c,b,d order by c,b,d;
+SELECT c,b,d FROM t1 GROUP BY c,b,d order by c,b,d;
 EXPLAIN SELECT c,b,d FROM t1 GROUP BY c,b,d ORDER BY NULL;
+--sorted_result
 SELECT c,b,d FROM t1 GROUP BY c,b,d ORDER BY NULL;
 EXPLAIN SELECT c,b,d FROM t1 ORDER BY c,b,d;
 SELECT c,b,d FROM t1 ORDER BY c,b,d;
 
-EXPLAIN SELECT c,b,d FROM t1 GROUP BY c,b;
-SELECT c,b,d FROM t1 GROUP BY c,b;
-EXPLAIN SELECT c,b   FROM t1 GROUP BY c,b;
-SELECT c,b   FROM t1 GROUP BY c,b;
+EXPLAIN SELECT c,b,d FROM t1 GROUP BY c,b order by c,b;
+SELECT c,b,d FROM t1 GROUP BY c,b order by c,b;
+EXPLAIN SELECT c,b   FROM t1 GROUP BY c,b order by c,b;
+SELECT c,b   FROM t1 GROUP BY c,b order by c,b;
 
 DROP TABLE t1;
 

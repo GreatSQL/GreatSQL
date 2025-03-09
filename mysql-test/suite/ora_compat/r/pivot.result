@@ -27,22 +27,22 @@ location	prod_category	customer_id	sale_amount
 central	furniture	3	174
 central	gardening	3	259
 central	gardening	4	584
-east	gardening	4	136
 east	electronics	3	407
-east	gardening	2	147
-east	furniture	1	192
 east	electronics	4	649
-north	furniture	2	875
-north	electronics	1	729
-north	furniture	4	987
+east	furniture	1	192
+east	gardening	2	147
+east	gardening	4	136
 north	electronics	1	399
+north	electronics	1	729
+north	furniture	2	875
+north	furniture	4	987
 south	electronics	2	378
-south	furniture	2	503
 south	electronics	3	714
-west	gardening	3	946
+south	furniture	2	503
 west	electronics	3	200
 west	electronics	3	236
 west	furniture	1	545
+west	gardening	3	946
 select * from cust_sales_category
 pivot (
 sum(sale_amount)

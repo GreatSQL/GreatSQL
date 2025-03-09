@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -36,6 +36,7 @@ Clone Plugin: Client implementation
 #include "my_byteorder.h"
 #include "my_systime.h"  // my_sleep()
 #include "sql/clone_handler.h"
+#include "sql/debug_sync.h"
 #include "sql/encrypt.h"
 #include "sql/gdb_common.h"
 #include "sql/server_component/gdb_cmd_service.h"
@@ -1295,6 +1296,10 @@ int Client::init_storage(enum Ha_clone_mode mode, size_t &cmd_len) {
       m_server_thd, m_share->m_data_dir, m_share->m_storage_vec, m_tasks, mode,
       m_share->m_max_concurrency, m_share->m_start_id,
       m_share->m_enable_page_track, m_share->m_compress_mode);
+
+  DBUG_SIGNAL_WAIT_FOR(m_server_thd, "clone_courrency_wait",
+                       "clone_courrency_wait", "clone_courrency_continue");
+
   if (err == 0) {
     m_storage_initialized = true;
     err = serialize_init_cmd(cmd_len);

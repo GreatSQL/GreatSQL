@@ -1,6 +1,6 @@
 /* Copyright (c) 2013, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -100,6 +100,7 @@
 #include "sql/trigger_def.h"
 #include "sql/window.h"  // Window
 #include "sql_string.h"
+#include "sql_synonym.h"
 #include "template_utils.h"
 
 static constexpr const size_t MAX_SYS_VAR_LENGTH{32};
@@ -162,6 +163,7 @@ bool PT_joined_table::contextualize_tabs(Parse_context *pc) {
   if (was_right_join) {
     m_type =
         static_cast<PT_joined_table_type>((m_type & ~JTT_RIGHT) | JTT_LEFT);
+    swapped = true;
     std::swap(m_left_pt_table, m_right_pt_table);
   }
 
@@ -2752,7 +2754,8 @@ bool PT_column_def::contextualize(Table_ddl_parse_context *pc) {
 
   if (field_def->udt_ident) {
     ulong reclength;
-    if (my_strcasecmp(table_alias_charset, pc->thd->lex->query_tables->db,
+    if (!field_def->udt_ident->table.length ||
+        my_strcasecmp(table_alias_charset, pc->thd->lex->query_tables->db,
                       field_def->udt_ident->table.str)) {
       my_error(ER_WRONG_UDT_DATA_TYPE, MYF(0), pc->thd->lex->query_tables->db,
                field_def->udt_ident->m_column.str,
@@ -2841,6 +2844,52 @@ bool PT_create_table_stmt::invalid_ora_temp_table_param(
   }
   return false;
 }
+
+Sql_cmd *PT_create_synonym_stmt::make_cmd(THD *thd) {
+  LEX *const lex = thd->lex;
+
+  Parse_context pc(thd, lex->current_query_block());
+
+  Sql_cmd *const cmd = new (thd->mem_root) Sql_cmd_create_synonym(
+      /* synonym_ident */ this->m_synonym_ident,
+      /* or_replace */ this->m_or_replace,
+      /* is_public */ this->m_is_public,
+      /* target */ this->m_target_ident);
+
+  if (likely(cmd)) {
+    lex->sql_command = cmd->sql_command_code();
+  }
+
+  return cmd;
+}  // Sql_cmd *PT_create_synonym_stmt::make_cmd(THD *thd)
+
+Sql_cmd *PT_drop_synonym_stmt::make_cmd(THD *thd) {
+  LEX *const lex = thd->lex;
+
+  Sql_cmd *const cmd = new (thd->mem_root) Sql_cmd_drop_synonym(
+      /* synonym_ident */ this->m_synonym_ident,
+      /* is_public */ this->m_is_public);
+
+  if (likely(cmd)) {
+    lex->sql_command = cmd->sql_command_code();
+  }
+
+  return cmd;
+}  // Sql_cmd *PT_drop_synonym_stmt::make_cmd(THD *thd)
+
+Sql_cmd *PT_alter_synonym_stmt::make_cmd(THD *thd) {
+  LEX *const lex = thd->lex;
+
+  Sql_cmd *const cmd = new (thd->mem_root) Sql_cmd_alter_synonym(
+      /* synonym_ident */ this->m_synonym_ident,
+      /* is_public */ this->m_is_public);
+
+  if (likely(cmd)) {
+    lex->sql_command = cmd->sql_command_code();
+  }
+
+  return cmd;
+}  // Sql_cmd *PT_alter_synonym_stmt::make_cmd(THD *thd)
 
 Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
   LEX *const lex = thd->lex;
@@ -3303,6 +3352,13 @@ Sql_cmd *PT_show_create_package_body::make_cmd(THD *thd) {
   return &m_sql_cmd;
 }
 
+Sql_cmd *PT_show_create_synonym::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  return &m_sql_cmd;
+}  // Sql_cmd *PT_show_create_synonym::make_cmd(THD *thd)
+
 Sql_cmd *PT_show_create_type::make_cmd(THD *thd) {
   LEX *lex = thd->lex;
   lex->sql_command = m_sql_command;
@@ -3707,6 +3763,19 @@ Sql_cmd *PT_show_status_type::make_cmd(THD *thd) {
 
   return &m_sql_cmd;
 }
+
+Sql_cmd *PT_show_synonyms::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = this->m_sql_command;
+
+  setup_lex_show_cmd_type(thd, Show_cmd_type::FULL_SHOW);
+
+  if (dd::info_schema::build_show_synonyms_query(m_pos, thd, lex->wild,
+                                                 nullptr) == nullptr)
+    return nullptr;
+
+  return &m_sql_cmd;
+}  // Sql_cmd *PT_show_synonyms::make_cmd(THD *thd)
 
 Sql_cmd *PT_show_table_status::make_cmd(THD *thd) {
   LEX *lex = thd->lex;

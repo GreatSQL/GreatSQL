@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -703,6 +703,7 @@ uint64 Pipeline_member_stats::get_stamp() { return m_stamp; }
 #ifndef NDEBUG
 void Pipeline_member_stats::debug(const char *member, int64 quota_size,
                                   int64 quota_used) {
+  return;
   LogPluginErr(INFORMATION_LEVEL, ER_GRP_RPL_MEMBER_STATS_INFO, member,
                m_transactions_waiting_certification,
                m_transactions_waiting_apply, m_transactions_certified,

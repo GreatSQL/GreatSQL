@@ -270,7 +270,9 @@ SELECT COUNT(*) FROM (
 select found_rows();
 SELECT COUNT(*) FROM (
 SELECT                     * FROM t1 INTERSECT SELECT * FROM t2) q;
+--source include/disable_turbo.inc
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 INTERSECT SELECT * FROM t2 LIMIT 2,2;
+--source include/restore_turbo.inc
 select found_rows();
 --error ER_PARSE_ERROR
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 limit 2,2 INTERSECT SELECT * FROM t2;
@@ -324,8 +326,10 @@ insert into t2 (b) values (10),(11),(12),(13);
 analyze table t1;
 
 explain (select * from t1 where a=1) intersect (select * from t2 where a=1);
+--source include/disable_turbo.inc
 --skip_if_hypergraph  # No support for const tables.
 explain format=tree (select * from t1 where a=5) intersect (select * from t2 where a=1);  # Tests printing of ZeroRowsIterator.
+--source include/restore_turbo.inc
 (select * from t1 where a=5) intersect (select * from t2 where a=1);
 (select * from t1 where a=5 and a=6) intersect (select * from t2 where a=1);
 (select t1.a,t1.b from t1,t2 where t1.a=5) intersect (select * from t2 where a=1);
@@ -507,6 +511,7 @@ select count(*) from t1 where a=7 intersect select count(*) from t1 where b=13;
 show status like 'Slow_queries';
 # additional test for examined rows
 flush status;
+--sorted_result
 select a from t1 where b not in (1,2,3) intersect select a from t1 where b not in (4,5,6); 
 --skip_if_hypergraph  # Depends on the query plan; all queries use table scans.
 show status like 'Slow_queries';

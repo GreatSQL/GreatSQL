@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2255,6 +2255,10 @@ bool Item_typeto_format_number::generate_number_format_array(
             my_toupper(system_charset_info, *(ptr + 3)) != 'E' ||
             ptr + 4 != end)
           goto error;
+        // to_number('0e02','9.99EEEe') error
+        if (*ptr == 'e' || *(ptr + 1) == 'e' || *(ptr + 2) == 'e' ||
+            *(ptr + 3) == 'e')
+          goto error;
         num_format->is_EEEE = NUM_E;
         ptr += 3;
         break;
@@ -2844,8 +2848,6 @@ bool Item_typeto_format_number::make_format_number_oracle(my_decimal *num,
 }
 
 bool Item_typeto_format_number::resolve_type(THD *thd) {
-  uint32 char_length = 0;
-  uint32 dec_length = 0;
   set_data_type_decimal(DECIMAL_MAX_PRECISION, DECIMAL_MAX_SCALE);
   set_nullable(true);
 
@@ -2882,31 +2884,13 @@ bool Item_typeto_format_number::resolve_type(THD *thd) {
   locale = thd->variables.lc_time_names;
   collation.set(cs, arg1->collation.derivation, repertoire);
 
-  // arg1 is const string
-  if (arg1->type() == STRING_ITEM) {
-    uint ulen = 0;
-    uint dec = 0;
-    String str;
-    // not return error if  args[1] is null
-    auto format = arg1->val_str(&str);
-    if (format->length()) {
-      if (generate_number_format_array(format, &ulen, &dec)) {
-        // char_length = num_format->intg;
-        char_length = ulen;
-        dec_length = (uint32)dec;
-      } else {
-        return false;
-      }
-    } else {
-      return false;
-    }
+  // char_length and dec_length will be fixed in
+  // Item_typeto_format_number::val_decimal.
+  uint32 char_length =
+      min(min(arg1->max_char_length(), uint32(MAX_BLOB_WIDTH)) * 10,
+          uint32(MAX_BLOB_WIDTH));
+  uint32 dec_length = DECIMAL_MAX_SCALE;
 
-    fixed_length = true;
-  } else {
-    char_length = min(min(arg1->max_char_length(), uint32(MAX_BLOB_WIDTH)) * 10,
-                      uint32(MAX_BLOB_WIDTH));
-    dec_length = DECIMAL_MAX_SCALE;
-  }
   if (!char_length) char_length = DECIMAL_MAX_PRECISION;
   set_data_type_decimal(char_length, dec_length);
 
@@ -2943,8 +2927,8 @@ my_decimal *Item_typeto_format_number::format_arg_string_to_number(
     rec = E_DEC_OK;
     rec = double2decimal(value, dec);
     if (rec != E_DEC_OK) {
-      my_error(ER_STD_INVALID_ARGUMENT, MYF(0),
-               "args 0 exponent greater than 80", func_name());
+      my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "Out of range value for args 0",
+               func_name());
     }
   } else if (num_format->is_EEEE == NUM_X || num_format->is_EEEE == NUM_x) {
     longlong tmpdec;  // to_number('4D2','XXX')
@@ -2974,6 +2958,179 @@ my_decimal *Item_typeto_format_number::format_arg_string_to_number(
     longlong2decimal(tmpdec, dec);
   }
   return dec;
+}
+
+/*std::regex: [+-]*[0-9a-fA-F]+
+   e.g:to_number('10','XXXX')*/
+static bool check_numx_str(String *str, uint *comma_count) {
+  str->ltrim();
+  size_t pos = 0;
+  bool is_first_minus_code = false;
+  // to_number('   -,f,f,','XXXXx') allowed, to_number(',-,f,f,, ','XXXXx')
+  // error
+  std::string str_str(str->c_ptr_quick(), str->length());
+  if ((pos = str_str.find('-', 0)) != std::string::npos) {
+    if (pos != 0)
+      return true;
+    else
+      is_first_minus_code = true;
+    (*comma_count)++;
+  }
+  const char *search = str->c_ptr_quick();
+  const char *searchend = str->c_ptr_quick() + str->length();
+  const CHARSET_INFO *cs = str->charset();
+  if (*str->c_ptr() == '+') return true;
+  while (search < searchend) {
+    if (is_first_minus_code || *search == ',') {
+      if (*search == ',') (*comma_count)++;
+      search++;
+      is_first_minus_code = false;
+      continue;
+    }
+    uint32 start = use_mb(cs) ? my_ismbchar(cs, search, searchend) : 0;
+    // it's not alpha and number.
+    if (start != 0) return true;
+    /* Single byte letter or number found */
+    if (!my_isalpha(cs, *search) && !my_isdigit(cs, *search)) return true;
+    // e.g: to_number('jf','XXX')
+    if (my_isalpha(cs, *search) &&
+        my_toupper(system_charset_info, *search) > 'F')
+      return true;
+    search++;
+  }
+  return false;
+}
+
+static bool check_nume_number(std::string str_s, char delimiter,
+                              const CHARSET_INFO *cs, bool before_e,
+                              int fmt_decimal_len) {
+  auto divide_nume_str = [](const std::string &s, char delimiter1) {
+    std::vector<std::string> tokens;
+    size_t start = 0, end = s.find(delimiter1);
+    while (end != std::string::npos) {
+      tokens.push_back(s.substr(start, end - start));
+      start = end + 1;
+      end = s.find(delimiter1, start);
+    }
+    tokens.push_back(s.substr(start, end));
+    return tokens;
+  };
+
+  auto check_nume_dot_number = [](const std::string &str,
+                                  const CHARSET_INFO *cs1, bool before_dot,
+                                  bool before_e1, int decimal_len) {
+    // to_number('1e.1','9.99EEEE') error
+    if (!before_e1 && before_dot && str.length() == 0) return true;
+    if (str.length() == 0) return false;
+
+    const char *search = str.c_str();
+    const char *searchend = str.c_str() + str.length();
+    // support ',' before '.' but not after '.'
+    if (!before_dot && std::count(str.begin(), str.end(), ',') > 0) return true;
+    // support to_number(',','9.99EEEE')
+    if (str.length() == 1 && *search == ',') return false;
+    // support '+' after 'e' but not before 'e'
+    if (before_e1 && *search == '+') return true;
+    // '+''-' can be only one char
+    if (std::count(str.begin(), str.end(), '+') > 1 ||
+        std::count(str.begin(), str.end(), '-') > 1)
+      return true;
+    // '+''-' only can be first position
+    bool is_first_code = false;
+    auto startA = str.find_first_of('+');
+    auto startM = str.find_first_of('-');
+    if (startA != std::string::npos && startA != 0)
+      return true;
+    else if (startA != std::string::npos)
+      is_first_code = true;
+    if (startM != std::string::npos && startM != 0)
+      return true;
+    else if (startM != std::string::npos)
+      is_first_code = true;
+
+    uint count_digit = 0;
+    uint i = 0;
+    while (search < searchend) {
+      // support +- at first char
+      if (i == 0 && is_first_code) {
+        search++;
+        i++;
+        continue;
+      }
+      uint32 start_str = use_mb(cs1) ? my_ismbchar(cs1, search, searchend) : 0;
+      // it's not alpha and number.
+      if (start_str != 0) return true;
+      /*',' can be:
+      1.before e: before and after number
+      2.after e: after number*/
+      if (*search == ',') {
+        if (!before_e1 && count_digit == 0)
+          return true;
+        else {
+          search++;
+          i++;
+          continue;
+        }
+      }
+      if (my_isdigit(cs1, *search))
+        count_digit++;
+      else
+        return true;
+      // support only 1 digit before '.' and 'e'
+      if (before_e1 && before_dot && count_digit > 1) return true;
+      search++;
+      i++;
+    }
+    if (count_digit == 0) return true;
+    // to_number('1e1.111','9.99EEEE') error
+    if (!before_dot && count_digit > (uint)decimal_len) return true;
+
+    return false;
+  };
+
+  if (delimiter == '.' && str_s.length() == 0) return true;
+  auto start_dot = str_s.find_first_of(delimiter);
+  if (start_dot != std::string::npos) {
+    auto tokens = divide_nume_str(str_s, delimiter);
+    uint i = 0;
+    for (const auto &word : tokens) {
+      if (delimiter == '.' &&
+          check_nume_dot_number(word, cs, !i, before_e, fmt_decimal_len))
+        return true;
+      if (delimiter == 'E' &&
+          check_nume_number(word, '.', cs, !i, fmt_decimal_len))
+        return true;
+      i++;
+    }
+  } else {
+    if (delimiter == '.' &&
+        check_nume_dot_number(str_s, cs, true, before_e, fmt_decimal_len))
+      return true;
+    if (delimiter == 'E' &&
+        check_nume_number(str_s, '.', cs, true, fmt_decimal_len))
+      return true;
+  }
+  return false;
+}
+
+/* e.g:to_number(',1e+02','9.99EEEE')
+lastzerosum:
+e.g: support to_number(1.1100,'9.99EEEE')*/
+static bool check_nume_str(String *str, int fmt_decimal_len, int lastzerosum) {
+  std::string str_str(str->c_ptr(), str->length());
+  std::string result = str_str.substr(0, str->length() - lastzerosum);
+  if (result.length() == 0) return true;
+
+  std::transform(result.begin(), result.end(), result.begin(),
+                 [](unsigned char c) { return std::toupper(c); });
+  // only support 1 char '.' and 'E'
+  if (std::count(result.begin(), result.end(), '.') > 1 ||
+      std::count(result.begin(), result.end(), 'E') > 1)
+    return true;
+
+  // divide result1 by 'E' to get 2 string
+  const CHARSET_INFO *cs = str->charset();
+  return check_nume_number(result, 'E', cs, true /*unused*/, fmt_decimal_len);
 }
 
 bool Item_typeto_format_number::check_format(String *format_string) {
@@ -3040,7 +3197,7 @@ bool Item_typeto_format_number::check_format(String *format_string) {
     int sign = 0;
     ptr = format_string->ptr();
     end = format_string->ptr() + format_string->length();
-    if (my_toupper(system_charset_info, *ptr) == '-') sign = 1;
+    if (*ptr == '-') sign = 1;
 
     switch (args[0]->data_type()) {
       case MYSQL_TYPE_DECIMAL:
@@ -3085,8 +3242,7 @@ bool Item_typeto_format_number::check_format(String *format_string) {
           lastzerosum++;
           int last_proint_flag = format_string->length() - lastzerosum;
           // support to_number(-1234.0,'9999') not error
-          if ((my_toupper(system_charset_info, *format_string->ptr()) == '-') ||
-              (my_toupper(system_charset_info, *format_string->ptr()) == '+'))
+          if (*format_string->ptr() == '-' || *format_string->ptr() == '+')
             last_proint_flag = last_proint_flag - 1;
           if (last_proint_flag > num_format->fmt_inter_len) goto error;
         }
@@ -3118,23 +3274,19 @@ bool Item_typeto_format_number::check_format(String *format_string) {
       for (j = num_format->fmt_inter_len; j > 0; j--) {
         if ((num_format->fmt_inter[j - 1] == NUM_COMMA) ||
             (num_format->fmt_inter[j - 1] == NUM_G)) {
-          if (*(format_string_pos - 1) != my_toupper(system_charset_info, ','))
-            goto error;
+          if (*(format_string_pos - 1) != ',') goto error;
         } else {
           if (!fisrt_comma) {
             // The first time there are multiple commas,ignore comma
             for (; k > 0; k--) {
-              if (*(format_string_pos - 1) !=
-                  my_toupper(system_charset_info, ',')) {
+              if (*(format_string_pos - 1) != ',') {
                 break;
               }
               format_string_pos--;
               fisrt_comma = true;
             }
           }
-          if (fisrt_comma &&
-              *(format_string_pos - 1) == my_toupper(system_charset_info, ','))
-            goto error;
+          if (fisrt_comma && *(format_string_pos - 1) == ',') goto error;
         }
         format_string_pos--;
         k--;
@@ -3162,71 +3314,37 @@ bool Item_typeto_format_number::check_format(String *format_string) {
       switch (num_format->is_EEEE) {
         case NUM_x:
         case NUM_X: {
-          std::string strformat{"[+-]*[0-9a-fA-F]+"};
-          std::regex re(strformat);
-          std::string numberStr(str.c_str(), str.length());
-          if (my_toupper(system_charset_info, *str.c_str()) == '+') goto error;
-          if (!(std::regex_match(numberStr, re))) goto error;
-          if (format_string->length() >= num_format->format_length) goto error;
+          // count of ','
+          uint comma_count = 0;
+          if (check_numx_str(format_string, &comma_count)) goto error;
+          if (format_string->length() >=
+              num_format->format_length + comma_count)
+            goto error;
           break;
         }
         case NUM_E: {
-          std::string strformat_numE{
-              "[+-]*[1-9]\\.[0-9]+[eE][+-][0-9]+|[+-]*[0-9]*[.]*[0-9]*[eE]?[+-"
-              "]*[0-9]*|[+-]*[0-9]*[.]*[0-9]*"};
-          std::regex numE_re(strformat_numE);
-          std::string numberStr_numE = str.c_str();
-          // format_string->ptr();
-          if (!(std::regex_match(numberStr_numE, numE_re))) goto error;
-          // support to_number(11,'9.9EEEE') ,to_number('1.66E+2','9.9EEEE'),
-          // to_number('+1.66E+2','9.9EEEE')goto error
+          if (check_nume_str(format_string, num_format->fmt_decimal_len,
+                             lastzerosum))
+            goto error;
           const char *num_E_start, *num_E_end;
           num_E_start = str.c_str();
           num_E_end = str.c_str() + str.length();
           auto proint_pos = std::find(num_E_start, num_E_end, '.');
-          // supoort to_number('1E+2','9.9EEEE')goto error
+          // supoort to_number('1E+2','9.9EEEE')
           if (proint_pos == num_E_end)
             proint_pos = std::find(num_E_start, num_E_end,
                                    my_toupper(system_charset_info, 'e'));
           if (proint_pos == num_E_end)
             proint_pos = std::find(num_E_start, num_E_end,
                                    my_tolower(system_charset_info, 'e'));
-          // supoort to_number('e+02','9.99EEEE') error
-          // to_number('.6','9.9EEEE') not error
-          if ((proint_pos - num_E_start) == 0 &&
-              my_toupper(system_charset_info, *num_E_start) != '.')
-            goto error;
-          // supoort to_number('.e','9.9EEEE') ,to_number('1.e','9.9EEEE') error
-          if (my_toupper(system_charset_info, *proint_pos) == '.' &&
-              my_toupper(system_charset_info, *(proint_pos + 1)) == 'E')
-            goto error;
-          // supoort to_number('-e+02','9.99EEEE'),to_number('+e+02','9.99EEEE')
-          // error
-          if ((my_toupper(system_charset_info, *num_E_start) == '-' ||
-               my_toupper(system_charset_info, *num_E_start) == '+') &&
-              ((proint_pos - num_E_start - 1) == 0))
-            goto error;
-          if (my_toupper(system_charset_info, *num_E_start) == '-') {
-            if ((proint_pos - num_E_start - 1) > 1) goto error;
-          } else {
-            if ((proint_pos - num_E_start) > 1) goto error;
-          }
+
           // to_number('1.6E+02','9.9EEEE') not error
           if ((proint_pos != num_E_end)) {
             auto E_pos = std::find(num_E_start, num_E_end, 'E');
             if (E_pos == num_E_end)
               E_pos = std::find(num_E_start, num_E_end, 'e');
             // to_number(-1.00,'9.9EEEE') not error
-            if (lastzerosum) {
-              // arg0 is number
-              if (number_actual_frac) {
-                if ((E_pos - proint_pos - 1 - lastzerosum) >
-                    num_format->fmt_decimal_len)
-                  goto error;
-              }
-            } else {  // arg0 is string
-              if ((E_pos - proint_pos - 1) > num_format->fmt_decimal_len)
-                goto error;
+            if (!lastzerosum) {
               // support to_number('1.00e+00','9.99EEEE') is 1 not 1.00
               int befor_E_pos_zero = 0, E_decimal_len = E_pos - proint_pos - 1;
               for (; E_decimal_len > 0; E_decimal_len--) {
@@ -3240,7 +3358,7 @@ bool Item_typeto_format_number::check_format(String *format_string) {
               fixed_length = false;
             }
           } else {
-            // support to_number('1','9.9EEEE') is 1 not is 1.0
+            // support to_number('1','9.9EEEE') is 1 not 1.0
             num_format->fmt_decimal_len = 0;
             fixed_length = false;
           }
@@ -3255,44 +3373,12 @@ bool Item_typeto_format_number::check_format(String *format_string) {
       if (actual_frac > num_format->fmt_decimal_len) goto error;
     }
 
-    char cfmt;
-    bool after_proint = false;
     // to_number('-123.456','999.999') not error
-    if (my_toupper(system_charset_info, *ptr) == '-' ||
-        my_toupper(system_charset_info, *ptr) == '+')
-      ptr++;
+    if (*ptr == '-' || *ptr == '+') ptr++;
     for (; ptr < end; ptr++) {
-      cfmt = my_toupper(system_charset_info, *ptr);
-      switch (cfmt) {
-        case 'F':  // skip FM
-          if (!num_format->FM && !num_format->is_EEEE) goto error;
-          if (num_format->FM &&
-              (my_toupper(system_charset_info, *(ptr + 1)) != 'M'))
-            goto error;
-          break;
-        case '.':  // NUM_DEC
-          if (!num_format->proint && number_actual_frac != 0) goto error;
-          after_proint = true;
-          break;
-        case 'D':  // like .
-          if (!num_format->proint && !num_format->is_EEEE) goto error;
-          after_proint = true;
-          break;
-        case '$':  //
-          if (!num_format->is_dollar) goto error;
-          break;
-        case 'G':
-        case ',':
-          if (after_proint) goto error;
-          break;
-        default:
           if (my_iscntrl(system_charset_info, *ptr)) goto error;
-          if (my_ispunct(system_charset_info, *ptr) && !num_format->is_EEEE)
-            goto error;
           if (my_isspace(system_charset_info, *ptr) && !num_format->is_EEEE)
             goto error;
-          break;
-      }
     }
 
     if (lastzerosum != 0) {
@@ -3383,13 +3469,20 @@ my_decimal *Item_typeto_format_number::val_decimal(my_decimal *dec) {
     }
     // support left space not error, for to_number('   10','99') not error
     tmp->ltrim();
+    if (tmp->length() == 0) {
+      my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "args 0 is invald",
+               func_name());
+      null_value = true;
+      return nullptr;
+    }
     if (check_format(tmp)) goto err;
     num = format_arg_string_to_number(tmp, dec);
     if (num_format->is_EEEE == NUM_E) {
       return num;
     }
     if (!num) {
-      my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "args 0", func_name());
+      my_error(ER_STD_INVALID_ARGUMENT, MYF(0), "args 0 is invald",
+               func_name());
       null_value = true;
       return nullptr;
     }

@@ -3,7 +3,7 @@
 
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <bitset>
 #include <functional>
+#include <list>
 #include <map>
 #include <optional>
 #include <random>  // std::mt19937
@@ -2401,6 +2402,94 @@ struct Clone_interface_t {
   Clone_apply_end_t clone_apply_end;
 };
 
+struct parallel_read_data_reader_range_t {
+  bool is_desc_fetch{false};
+  uint m_keynr{MAX_KEY};
+  key_range *m_min_key{nullptr};
+  key_range *m_max_key{nullptr};
+  // access the records in the interval of [min_key, max_key)
+};
+
+// Forward declarion
+class parallel_read_controller_t;
+class parallel_read_data_reader_t;
+
+/** currently, only innobase hanlerton support the
+ * following parallel read/fetch interface. So before
+ * call this, please make sure this case.
+ */
+struct parallel_read_create_data_fetcher_ctx_t {
+  THD *thd{nullptr};
+};
+
+/** data_fetch_ctx is, actually, the engine layer parallel
+ * read manager.
+ */
+using parallel_read_create_data_fetcher_t =
+    int (*)(parallel_read_create_data_fetcher_ctx_t &data_fetcher_ctx,
+            void *&data_fetcher);
+using parallel_read_destroy_data_fetcher_t = int (*)(void *&data_fetcher);
+
+struct parallel_read_init_data_fetcher_ctx_t {
+  void *data_fetcher{nullptr};
+};
+
+using parallel_read_init_data_fetcher_t =
+    int (*)(parallel_read_init_data_fetcher_ctx_t &init_data_fetcher_ctx);
+
+struct parallel_read_add_target_to_data_fetcher_ctx_t {
+  THD *m_thd{nullptr};
+  void *data_fetcher{nullptr};
+  parallel_read_data_reader_t *data_consumer{nullptr};
+};
+
+using parallel_read_add_target_to_data_fetcher_t = int (*)(
+    parallel_read_add_target_to_data_fetcher_ctx_t &target_to_data_fetcher_ctx);
+
+struct parallel_read_start_data_fetch_ctx_t {
+  void *data_fetcher{nullptr};
+};
+
+using parallel_read_start_data_fetch_t =
+    int (*)(parallel_read_start_data_fetch_ctx_t &start_data_fetch_ctx);
+
+struct parallel_read_end_data_fetch_ctx_t {
+  void *data_fetcher{nullptr};
+};
+
+using parallel_read_end_data_fetch_t =
+    int (*)(parallel_read_end_data_fetch_ctx_t &end_data_fetch_ctx);
+
+struct parallel_read_interface_t {
+  parallel_read_create_data_fetcher_t parallel_read_create_data_fetcher;
+  parallel_read_destroy_data_fetcher_t parallel_read_destory_data_fetcher;
+  parallel_read_start_data_fetch_t parallel_read_start_data_fetch;
+
+  /** the following three interface is NOT used currently.
+   *  they maybe useful when we implement parallel thread pool.
+   */
+  parallel_read_init_data_fetcher_t parallel_read_init_data_fetcher;
+  parallel_read_add_target_to_data_fetcher_t
+      parallel_read_add_target_to_data_fetcher;
+  parallel_read_end_data_fetch_t parallel_read_end_data_fetch;
+};
+
+struct Parallel_reader_handler_config_t {
+  /** the desired, parallel background thread count to read table */
+  uint32_t m_thread_count{4};
+  /** the maximum data chunk size(bytes) which bk thread will
+   *  fill with table data
+   */
+  uint64_t m_buffer_size{0};
+  /** the maximum row count per calling acquire table data */
+  uint64_t m_row_num;
+};
+
+/** Forward declaration
+ *  It will create/close by paired interfaces in handler class.
+ */
+class ParallelReaderHandler;
+
 /**
   Perform post-commit/rollback cleanup after DDL statement (e.g. in
   case of DROP TABLES really remove table files from disk).
@@ -2576,6 +2665,8 @@ using secondary_engine_register_binlog_inc_executor_cbk_t =
 using secondary_engine_read_binlog_inc_gtid_t = int (*)(
     TABLE *table, const std::string &schema_name, const std::string &table_name,
     std::string &gtid_value, time_t &time);
+
+using secondary_engine_db = void *(*)();
 
 struct APPEND_INC_DATA_PARAM {
   std::string db_name;
@@ -2904,6 +2995,9 @@ struct handlerton {
   /** Clone data transfer interfaces */
   Clone_interface_t clone_interface;
 
+  /** greatdb ap parallel read data fetcher interfaces */
+  parallel_read_interface_t data_fetcher_interface;
+
   /** Flag for Engine License. */
   uint32 license;
   /** Location for engines to keep personal structures. */
@@ -2973,6 +3067,8 @@ struct handlerton {
   secondary_engine_register_binlog_inc_executor_cbk_t
       secondary_engine_register_binlog_inc_executor_cbk;
   secondary_engine_read_binlog_inc_gtid_t secondary_engine_read_binlog_inc_gtid;
+
+  secondary_engine_db get_secondary_engine_db;
 
   se_before_commit_t se_before_commit;
   se_after_commit_t se_after_commit;
@@ -5149,6 +5245,25 @@ class handler {
     return (0);
   }
 
+  virtual int parallel_fetch_init(
+      void *&fecth_ctx [[maybe_unused]], size_t *num_threads [[maybe_unused]],
+      bool use_reserved_threads [[maybe_unused]],
+      uint desire_threads [[maybe_unused]], uint fetch_index [[maybe_unused]],
+      parallel_read_data_reader_range_t *to_fetch_range [[maybe_unused]],
+      unsigned long int max_read_buf_size [[maybe_unused]]) {
+    return 0;
+  }
+
+  virtual int parallel_fetch(void *fetch_ctx [[maybe_unused]],
+                             void **thread_ctxs [[maybe_unused]],
+                             Load_init_cbk init_fn [[maybe_unused]],
+                             Load_cbk load_fn [[maybe_unused]],
+                             Load_end_cbk end_fn [[maybe_unused]]) {
+    return 0;
+  }
+
+  virtual void parallel_fetch_end(void *fetch_ctx [[maybe_unused]]) { return; }
+
   /**
     Submit a dd::Table object representing a core DD table having
     hardcoded data to be filled in by the DDSE. This function can be
@@ -7271,6 +7386,14 @@ class handler {
   */
   virtual void upgrade_update_field_with_zip_dict_info(THD *, const char *) {}
 
+  /** begin: parallel reader handler  */
+ public:
+  virtual ParallelReaderHandler *create_parallel_reader_handler(
+      Parallel_reader_handler_config_t *para_read_config);
+  virtual void close_parallel_reader_handler(
+      ParallelReaderHandler *para_reader_handler);
+  /** end: parallel reader handler  */
+
  public:
   /* Read-free replication interface */
 
@@ -7864,6 +7987,403 @@ class ha_tablespace_statistics {
   ulonglong m_data_free;         // InnoDB
   dd::String_type m_status;
   dd::String_type m_extra;  // NDB only
+};
+
+struct parallel_reader_data_frame_t {
+  /** caller should not care about the following members */
+  uint64_t m_buf_size{0};
+  uint32_t m_buf_id{0};
+  /** caller can access the following members */
+  char *m_buf{nullptr};
+
+  /** actual data size is zero: means the data
+   * has been read out completely.
+   */
+  uint64_t m_actual_data_size{0};
+  uint64_t m_buf_partition_id{0};
+
+  void init() {
+    m_buf_size = 0;
+    m_buf_id = 0;
+    m_buf = nullptr;
+    m_actual_data_size = 0;
+    m_buf_partition_id = 0;
+  }
+};
+
+class ParallelReaderHandler {
+ public:
+  ParallelReaderHandler();
+  virtual ~ParallelReaderHandler();
+
+ public:
+  /** row descrption meta data */
+  struct mysql_row_desc_t {
+    ulong m_ncols{0};
+    ulong m_row_len{0};
+    const ulong *m_col_offsets{nullptr};
+    const ulong *m_null_byte_offsets{nullptr};
+    const ulong *m_null_bitmasks{nullptr};
+  };
+
+  typedef enum { SEQUENCE = 0, INDEX, INDEX_RANGE } read_type;
+  read_type m_read_type{SEQUENCE};
+
+ public:
+  /** call this after *init interface calling return successfully */
+  virtual mysql_row_desc_t get_row_info_for_parse() = 0;
+  /** return the data frame to reader.
+   *  after this call, the caller must not use this frame again.
+   */
+  virtual void reset_data_frame(parallel_reader_data_frame_t *data_frame) = 0;
+
+ public:
+  virtual int rnd_init() = 0;
+  virtual int rnd_next_block(parallel_reader_data_frame_t *data_frame) = 0;
+  virtual int rnd_end() = 0;
+
+  /** future interfaces which will be supported */
+  /** parallel range scan */
+  virtual int read_range_init(uint keynr, key_range *min_key,
+                              key_range *max_key) = 0;
+  virtual int read_range_next_block(
+      parallel_reader_data_frame_t *data_frame) = 0;
+  virtual int read_range_end() = 0;
+  virtual int condition_pushdown(Item *cond, Item *left) = 0;
+
+  /** scan sequentially */
+  virtual int index_init(int keyno, bool asc) = 0;
+  virtual int index_next_block(parallel_reader_data_frame_t *data_frame) = 0;
+  virtual int index_end() = 0;
+};
+
+class parallel_read_data_reader_t : public ParallelReaderHandler {
+  friend class parallel_read_controller_t;
+  friend class parallel_read_data_reader_test_t;
+  friend class parallel_read_data_reader_range_test_t;
+
+ public:
+  parallel_read_data_reader_t();
+  ~parallel_read_data_reader_t();
+
+ public:
+  struct reader_mysql_row_t {
+    ulong m_ncols{0};
+    ulong m_row_len{0};
+    const ulong *m_col_offsets{nullptr};
+    const ulong *m_null_byte_offsets{nullptr};
+    const ulong *m_null_bitmasks{nullptr};
+  };
+
+ public:
+  ParallelReaderHandler::mysql_row_desc_t get_row_info_for_parse() override;
+  void reset_data_frame(parallel_reader_data_frame_t *data_frame) override;
+  /** begin: table scan interface */
+  int rnd_init() override;
+  int rnd_next_block(parallel_reader_data_frame_t *data_frame) override;
+  int rnd_end() override;
+  /** end: table scan interface */
+
+  int read_range_init(uint keynr, key_range *min_key,
+                      key_range *max_key) override;
+  int read_range_next_block(parallel_reader_data_frame_t *data_frame) override;
+  int read_range_end() override;
+  int condition_pushdown(Item *cond, Item *left) override;
+
+  /** scan sequentially */
+  int index_init(int keyno, bool asc) override;
+  int index_next_block(parallel_reader_data_frame_t *data_frame) override;
+  int index_end() override;
+
+ public:
+  void *m_data_fetcher{nullptr};
+  using call_read_data_hook_t = std::function<int(
+      char *dest, uint64_t max_dest_size, uint64_t *actual_size)>;
+  using call_stop_read_data_hook_t =
+      std::function<int(parallel_read_data_reader_t *reader)>;
+
+  using call_get_data_frame_hook_t =
+      std::function<int(parallel_reader_data_frame_t *data_frame)>;
+  using call_ret_data_frame_hook_t =
+      std::function<int(parallel_reader_data_frame_t *ret_data_frame)>;
+
+ public: /** server layer call interface part */
+  void set_reader_config(Parallel_reader_handler_config_t *reader_config) {
+    m_reader_config = reader_config;
+  }
+
+  void set_target_db_name(const std::string &db_name) {
+    m_target_db_name = db_name;
+  }
+
+  void set_target_table_name(const std::string &table_name) {
+    m_target_table_name = table_name;
+  }
+
+  std::string get_target_db_name() { return m_target_db_name; }
+  std::string get_target_table_name() { return m_target_table_name; }
+
+  void set_target_table(handler *h) { m_target_handler = h; }
+
+  handler *get_target_handler() { return m_target_handler; }
+
+  void set_reader_source_table(TABLE *tab) { m_table = tab; }
+
+  void set_read_range(uint keynr, key_range *min_key, key_range *max_key) {
+    m_reader_range.m_keynr = keynr;
+    m_reader_range.m_min_key = min_key;
+    m_reader_range.m_max_key = max_key;
+  }
+
+  void set_read_range(const parallel_read_data_reader_range_t &read_range) {
+    m_reader_range = read_range;
+  }
+
+  parallel_read_data_reader_range_t get_reader_read_range() {
+    return m_reader_range;
+  }
+  void set_read_index(uint active_index) {
+    active_index = active_index > MAX_KEY ? MAX_KEY : active_index;
+    m_active_index = active_index;
+  }
+  uint get_read_index() { return m_active_index; }
+  char *get_range_start() { return m_range_start; }
+  uint get_range_start_len() { return m_range_start_len; }
+  char *get_range_end() { return m_range_end; }
+  uint get_range_end_len() { return m_range_end_len; }
+
+  uint64_t /* in bytes */ get_data_read_max_chunk_size() {
+    return m_max_data_chunk_size;
+  }
+  void set_need_keep_order(bool need_ordered) {
+    m_need_block_ordered = need_ordered;
+  }
+
+  bool is_need_keep_ordered() { return m_need_block_ordered; }
+
+  void set_mysql_parallel_thread_count(uint32_t thread_count) {
+    m_thread_count = thread_count;
+  }
+
+  uint32_t get_mysql_parallel_thread_count() { return m_thread_count; }
+
+  void set_mysql_block_size(uint64_t desired_block_size /* bytes*/) {
+    if (desired_block_size < (512 * 1024)) {
+      desired_block_size = (512 * 1024);
+    }
+    if (desired_block_size > (10 * 1024 * 1024)) {
+      desired_block_size = (10 * 1024 * 1024);
+    }
+
+    m_desired_block_size = desired_block_size;
+  }
+
+  uint64_t get_mysql_block_size() { return m_desired_block_size; }
+
+ public: /** engine call interface part */
+  void set_read_data_hook(call_read_data_hook_t &&read_data_f) {
+    m_read_data_forward = read_data_f;
+  }
+
+  void set_stop_read_data_hook(call_stop_read_data_hook_t &&stop_read_data_f) {
+    m_stop_read_data_forward = stop_read_data_f;
+  }
+
+  void set_get_data_frame_hook(call_get_data_frame_hook_t &&get_data_frame_f) {
+    m_get_data_frame_forward = get_data_frame_f;
+  }
+
+  void set_ret_data_frame_hook(call_ret_data_frame_hook_t &&ret_data_frame_f) {
+    m_ret_data_frame_forward = ret_data_frame_f;
+  }
+
+  void set_engine_ctx(void *engine_ctx) { m_engine_fetch_ctx = engine_ctx; }
+
+  void *get_engine_ctx() { return m_engine_fetch_ctx; }
+
+  void set_row_info_for_parse(
+      ParallelReaderHandler::mysql_row_desc_t &reader_mysql_row_info) {
+    m_reader_mysql_row_info = reader_mysql_row_info;
+  }
+
+  ParallelReaderHandler::mysql_row_desc_t get_reader_row_info_for_parse() {
+    return m_reader_mysql_row_info;
+  }
+
+  bool is_prepared_for_read() { return m_is_prepared; }
+
+  void set_data_read_max_chunk_size(uint64_t chunk_size) {
+    m_max_data_chunk_size = chunk_size;
+  }
+
+  uint64_t get_active_read_count() {
+    return m_active_read_count.load(std::memory_order_relaxed);
+  }
+
+ private:
+  /** return 0 for success; This should be called from MySQL thread ctx */
+  int prepare_read_block(handlerton *hton, THD *thd,
+                         void *data_fetcher_manager);
+
+  /** actual_data_size means read out all data;
+   *  this is designed for can call from any thread context
+   */
+  int read_block(char *output_block, uint64_t block_size,
+                 uint64_t &actual_data_size);
+  /** if the get data frame call success; then must call ret data frame
+   * to return buffer and release the active thread count; otherwise
+   * the underly read can't exit.
+   */
+  int get_data_frame(parallel_reader_data_frame_t *data_frame);
+  int ret_data_frame(parallel_reader_data_frame_t *data_frame);
+
+  /** after read all data or incur error, call this to end */
+  int stop_read_block();
+
+ private:
+  std::string m_target_db_name;
+  std::string m_target_table_name;
+
+  handler *m_target_handler{nullptr};
+  TABLE *m_table{nullptr};
+
+ private:
+  Parallel_reader_handler_config_t *m_reader_config{nullptr};
+  /** access by this index */
+  uint m_active_index{MAX_KEY};
+  /** mysql key [start, end)*/
+  parallel_read_data_reader_range_t m_reader_range;
+  char *m_range_start{nullptr};
+  uint m_range_start_len{0};
+  char *m_range_end{nullptr};
+  uint m_range_end_len{0};
+  /** keep order flag.*/
+  bool m_need_block_ordered{false};
+
+  /** underlying thread count to work.
+   *  0 means, the thread count is decided by engine.
+   */
+  uint32_t m_thread_count{0};
+
+  /** Server Layer want to use this block size to contain
+   * the fetched rows; but this is just a hint.
+   * more larger more memory need allocate, so larger chunksize
+   * can cause memory pressure; so the chunksize range is [512KB, 10MB]
+   */
+  uint64_t m_desired_block_size{1 << 21};
+
+ private:
+  call_read_data_hook_t m_read_data_forward;
+  call_stop_read_data_hook_t m_stop_read_data_forward;
+  call_get_data_frame_hook_t m_get_data_frame_forward;
+  call_ret_data_frame_hook_t m_ret_data_frame_forward;
+
+ private:
+  /** this is the data reader owner controller */
+  parallel_read_controller_t *m_reader_controller{nullptr};
+  void *m_engine_fetch_ctx{nullptr};
+  bool m_is_prepared{false};
+
+  std::atomic<bool> m_is_stopping{false};
+  std::atomic<uint64_t> m_active_read_count{0};
+
+  /** this is set by engine layer, this is the actual data block used to read */
+  uint64_t m_max_data_chunk_size{2 * 1024 * 1024};
+
+ private:
+  ParallelReaderHandler::mysql_row_desc_t m_reader_mysql_row_info;
+};
+
+/** This is used to manage the parallel_read_data_reader_t object.
+ *  this should be used in MySQL thread context, this is not thread-safe.
+ *  this class is just for ensure all reader objects have been released
+ *  at the end of working.
+ */
+class parallel_read_controller_t {
+ public:
+  parallel_read_controller_t();
+  ~parallel_read_controller_t();
+
+ public:
+  parallel_read_data_reader_t *create_data_reader();
+  void destory_data_reader(parallel_read_data_reader_t *data_reader);
+
+ private:
+  void check_all_reader_exit();
+
+ private:
+  std::list<parallel_read_data_reader_t *> m_reader_list;
+};
+
+/********************************************************************************/
+
+/** the following code is the example of how to use the async parallel read.*/
+
+#include <thread>
+
+/** this test only test the case: parallel read  cluster index of one table  */
+
+class parallel_read_data_reader_test_t {
+ public:
+  parallel_read_data_reader_test_t() { m_target_handler = nullptr; }
+  ~parallel_read_data_reader_test_t() {}
+
+ public:
+  int run_test(THD *thd, handler *target_handler);
+
+ private:
+  int prepare_data_reader();
+  int start_data_consumer_thread(uint32_t thread_count);
+  int stop_data_read();
+  int read_data_thread();
+
+ private:
+  handler *m_target_handler{nullptr};
+  parallel_read_data_reader_t *m_parallel_read_data_reader{nullptr};
+
+  parallel_read_controller_t m_read_controller;
+  void *m_handlerton_data_fetch_manager{nullptr};
+  THD *m_thd;
+
+  uint64_t m_data_chunk_size{2 * 1024 * 1024};
+  std::vector<std::thread> m_consumer_threads;
+};
+
+class parallel_read_data_reader_range_test_t {
+ public:
+  parallel_read_data_reader_range_test_t() { m_target_handler = nullptr; }
+  ~parallel_read_data_reader_range_test_t() {}
+
+ public:
+  int run_range_test(THD *thd, handler *target_handler,
+                     parallel_read_data_reader_range_t fetch_range,
+                     uint to_use_index = 0);
+
+ private:
+  int run_full_index_scan();
+  int run_range_only_left_test();
+  int run_range_left_right_test();
+  int run_range_only_right_test();
+
+  int run_range_left_right_order_test();
+
+ private:
+  int prepare_data_reader();
+  int start_data_consumer_thread(uint32_t thread_count);
+  int stop_data_read();
+  int read_data_thread();
+
+ private:
+  handler *m_target_handler{nullptr};
+  parallel_read_data_reader_t *m_parallel_read_data_reader{nullptr};
+  parallel_read_data_reader_range_t m_fetch_range;
+  parallel_read_controller_t m_read_controller;
+  void *m_handlerton_data_fetch_manager{nullptr};
+  uint m_used_index{0};
+  THD *m_thd;
+
+  uint64_t m_data_chunk_size{2 * 1024 * 1024};
+  std::vector<std::thread> m_consumer_threads;
 };
 
 #endif /* HANDLER_INCLUDED */

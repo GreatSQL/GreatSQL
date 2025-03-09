@@ -1,6 +1,6 @@
 /* Copyright (c) 2010, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,6 +30,7 @@
 #include <memory>
 #include <string>
 
+#include "error_handler.h"
 #include "lex_string.h"
 #include "map_helpers.h"
 #include "mem_root_deque.h"
@@ -602,5 +603,46 @@ class Open_table_context {
 */
 bool is_acl_table_in_non_LTM(const Table_ref *tl,
                              enum enum_locked_tables_mode ltm);
+
+/**
+  An error handler which converts, if possible, ER_LOCK_DEADLOCK error
+  that can occur when we are trying to acquire a metadata lock to
+  a request for back-off and re-start of open_tables() process.
+*/
+
+class MDL_deadlock_handler : public Internal_error_handler {
+ public:
+  MDL_deadlock_handler(Open_table_context *ot_ctx_arg)
+      : m_ot_ctx(ot_ctx_arg), m_is_active(false) {}
+
+  bool handle_condition(THD *, uint sql_errno, const char *,
+                        Sql_condition::enum_severity_level *,
+                        const char *) override {
+    if (!m_is_active && sql_errno == ER_LOCK_DEADLOCK) {
+      /* Disable the handler to avoid infinite recursion. */
+      m_is_active = true;
+      (void)m_ot_ctx->request_backoff_action(
+          Open_table_context::OT_BACKOFF_AND_RETRY, nullptr);
+      m_is_active = false;
+      /*
+        If the above back-off request failed, a new instance of
+        ER_LOCK_DEADLOCK error was emitted. Thus the current
+        instance of error condition can be treated as handled.
+      */
+      return true;
+    }
+    return false;
+  }
+
+ private:
+  /** Open table context to be used for back-off request. */
+  Open_table_context *m_ot_ctx;
+  /**
+    Indicates that we are already in the process of handling
+    ER_LOCK_DEADLOCK error. Allows to re-emit the error from
+    the error handler without falling into infinite recursion.
+  */
+  bool m_is_active;
+};
 
 #endif /* SQL_BASE_INCLUDED */

@@ -2,6 +2,8 @@
 # test of left outer join
 #
 
+--source include/disable_turbo.inc
+
 --disable_warnings
 drop table if exists t0,t1,t2,t3,t4,t5;
 --enable_warnings
@@ -2654,3 +2656,5 @@ INSERT INTO t2 VALUES (1), (2), (3), (4);
 WITH subq(x) AS (SELECT 1 AS x FROM t1 AS t1a, t1 AS t1b, t2 WHERE FALSE)
 SELECT 1 FROM t1 LEFT JOIN subq ON t1.x = subq.x ORDER BY subq.x;
 DROP TABLE t1, t2;
+
+--source include/restore_turbo.inc

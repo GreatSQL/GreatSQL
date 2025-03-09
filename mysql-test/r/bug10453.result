@@ -1,0 +1,90 @@
+create table t1(ida decimal(22,0) NOT NULL, age int, RECDATE datetime, primary key(ida));
+INSERT INTO t1 VALUES (1,8,'1000-01-01'),(2, 4,'1999-12-31'),(3, 3, '2000-01-01'),(4, 4, '2006-12-25'), (5, 6, '2008-02-29');
+INSERT INTO t1 VALUES (6,8,'1000-01-01'),(7, 4,'1999-12-31'),(8, 3, '2000-01-01'),(9, 4, '2006-12-25'), (10, 6, '2008-02-29');
+INSERT INTO t1 VALUES (11,8,'1000-01-01'),(12, 4,'1999-12-31'),(13, 3, '2000-01-01'),(14, 4, '2006-12-25'), (15, 6, '2008-02-29');
+INSERT INTO t1 VALUES (16,8,'1000-01-01'),(17, 4,'1999-12-31'),(18, 3, '2000-01-01'),(19, 4, '2006-12-25'), (20, 6, '2008-02-29');
+insert into t1 select ida*32, age , recdate from t1;
+insert into t1 select ida*64+1, age , recdate from t1;
+insert into t1 select ida*70, age , recdate from t1;
+insert into t1 select ida*78, age , recdate from t1;
+insert into t1 select ida*82, age , recdate from t1;
+insert into t1 select ida*86, age , recdate from t1;
+insert into t1 select ida*89, age , recdate from t1;
+insert into t1 select ida*92, age , recdate from t1;
+insert into t1 select ida*93, age , recdate from t1;
+insert into t1 select ida*94, age , recdate from t1;
+insert into t1 select ida*(-9), age , recdate from t1;
+alter table t1 add key(recdate);
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+select @@sql_mode;
+@@sql_mode
+ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+explain format=tree select * from t1 where recdate is not null order by recdate  limit 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=*** rows=***)
+    -> Index range scan on t1 using RECDATE over (NULL < RECDATE), with index condition: (t1.RECDATE is not null)  (cost=*** rows=***)
+
+explain format=tree select * from t1 order by recdate  limit 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=*** rows=***)
+    -> Index scan on t1 using RECDATE  (cost=*** rows=***)
+
+set sql_mode=oracle;
+select @@sql_mode;
+@@sql_mode
+PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+explain format=tree select * from t1 order by recdate  limit 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=*** rows=***)
+    -> Sort: t1.RECDATE, limit input to 3 row(s) per chunk  (cost=*** rows=***)
+        -> Table scan on t1  (cost=*** rows=***)
+
+explain format=tree select * from t1 where recdate is not null order by recdate  limit 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=*** rows=***)
+    -> Sort: t1.RECDATE, limit input to 3 row(s) per chunk  (cost=*** rows=***)
+        -> Index range scan on t1 using RECDATE over (NULL < RECDATE), with index condition: (t1.RECDATE is not null)  (cost=*** rows=***)
+
+explain format=tree select /*+ SET_VAR(sql_mode='ONLY_FULL_GROUP_BY') */ * from t1 where recdate is not null order by recdate  limit 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=*** rows=***)
+    -> Index range scan on t1 using RECDATE over (NULL < RECDATE), with index condition: (t1.RECDATE is not null)  (cost=*** rows=***)
+
+explain format=tree select /*+ SET_VAR(sql_mode='') */ * from t1 where recdate is not null order by recdate  limit 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=*** rows=***)
+    -> Sort: t1.RECDATE, limit input to 3 row(s) per chunk  (cost=*** rows=***)
+        -> Index range scan on t1 using RECDATE over (NULL < RECDATE), with index condition: (t1.RECDATE is not null)  (cost=*** rows=***)
+
+Warnings:
+Warning	1064	Optimizer hint syntax error near ''') */ * from t1 where recdate is not null order by recdate  limit 3' at line 1
+show warnings;
+Level	Code	Message
+Warning	1064	Optimizer hint syntax error near ''') */ * from t1 where recdate is not null order by recdate  limit 3' at line 1
+select @@sql_mode;
+@@sql_mode
+PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+explain format=tree select /*+ SET_VAR(sql_mode=' ') */ * from t1 where recdate is not null order by recdate  limit 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=*** rows=***)
+    -> Index range scan on t1 using RECDATE over (NULL < RECDATE), with index condition: (t1.RECDATE is not null)  (cost=*** rows=***)
+
+explain format=tree select /*+ SET_VAR(sql_mode=' ') */ * from t1 order by recdate limit 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=*** rows=***)
+    -> Index scan on t1 using RECDATE  (cost=*** rows=***)
+
+explain format=tree select /*+ SET_VAR(sql_mode='default') */ * from t1 where recdate is not null order by recdate  limit 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=*** rows=***)
+    -> Sort: t1.RECDATE, limit input to 3 row(s) per chunk  (cost=*** rows=***)
+        -> Index range scan on t1 using RECDATE over (NULL < RECDATE), with index condition: (t1.RECDATE is not null)  (cost=*** rows=***)
+
+Warnings:
+Warning	1231	Variable 'sql_mode' can't be set to the value of 'default'
+show warnings;
+Level	Code	Message
+Warning	1231	Variable 'sql_mode' can't be set to the value of 'default'
+drop table t1;

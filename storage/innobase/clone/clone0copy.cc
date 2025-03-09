@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
-Copyright (c) 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -302,15 +302,19 @@ int Clone_Snapshot::init_page_copy(Snapshot_State new_state, byte *page_buffer,
     /* purecov: end */
   }
 
+  dberr_t error = DB_ERROR_UNSET;
   if (m_file_compress_mode && m_snapshot_type == HA_CLONE_HYBRID) {
     m_snapshot_type = HA_CLONE_PAGE;
     m_data_file_map.clear();
     m_data_file_vector.clear();
+    /* Iterate all tablespace files and add new data files created. */
+    error = Fil_iterator::for_each_file(
+        [&](fil_node_t *file) { return add_node(file, false); });
+  } else {
+    /* Iterate all tablespace files and add new data files created. */
+    error = Fil_iterator::for_each_file(
+        [&](fil_node_t *file) { return add_node(file, true); });
   }
-
-  /* Iterate all tablespace files and add new data files created. */
-  auto error = Fil_iterator::for_each_file(
-      [&](fil_node_t *file) { return add_node(file, true); });
 
   if (error != DB_SUCCESS) {
     return ER_INTERNAL_ERROR; /* purecov: inspected */
@@ -1089,6 +1093,9 @@ int Clone_Handle::send_state_metadata(Clone_Task *task, Ha_clone_cbk *callback,
   /* Indicate if it is the end of state */
   state_desc.m_is_start = is_start;
 
+  state_desc.m_snapshot_type =
+      snapshot->is_clone_page_type() ? HA_CLONE_PAGE : HA_CLONE_HYBRID;
+
   /* Check if remote has already acknowledged state transfer */
   if (!is_start && task->m_is_master &&
       !m_clone_task_manager.check_ack(&state_desc)) {
@@ -1406,8 +1413,16 @@ int Clone_Handle::copy(uint task_id, Ha_clone_cbk *callback) {
     uint32_t current_chunk = 0;
     uint32_t current_block = 0;
 
-    err = m_clone_task_manager.reserve_next_chunk(task, current_chunk,
-                                                  current_block);
+    bool skip_send_redo = false;
+    if (!task->m_is_master &&
+        m_clone_task_manager.get_state() == CLONE_SNAPSHOT_REDO_COPY &&
+        snapshot->file_compress_mode()) {
+      skip_send_redo = true;
+    }
+
+    if (!skip_send_redo)
+      err = m_clone_task_manager.reserve_next_chunk(task, current_chunk,
+                                                    current_block);
 
     if (err != 0) {
       break;

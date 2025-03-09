@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2467,7 +2467,7 @@ type_conversion_status Field_row::store_udt(TABLE *table,
 /****************************************************************************
   Field_refcursor, e.g. create function f1 return sys_refcursor
 ****************************************************************************/
-Cursor_return_table::~Cursor_return_table() {
+void Cursor_return_table::cleanup() {
   if (!m_table) return;
   free_blobs(m_table);
   if (tmp_table_param) {
@@ -2481,6 +2481,7 @@ Cursor_return_table::~Cursor_return_table() {
 
 bool Cursor_return_table::make_return_table(THD *thd,
                                             List<Create_field> *list) {
+  cleanup();
   m_table = create_tmp_table_from_fields(thd, *list);
   if (!m_table) return true;
   m_table->copy_blobs = true;

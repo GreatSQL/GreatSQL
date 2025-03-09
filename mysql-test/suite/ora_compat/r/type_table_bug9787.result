@@ -353,3 +353,62 @@ stu_record_val(3)
 id:33 | name_d:a | score:1
 drop PROCEDURE p1;
 drop SEQUENCE id_seq;
+#
+# test of BUG11151
+#
+CREATE TABLE TC10573_tb01 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+input VARCHAR2(100),
+fmt  VARCHAR2(100)
+);
+INSERT INTO TC10573_tb01 (id,input, fmt) VALUES (1,'1234567',null);
+INSERT INTO TC10573_tb01 (id,input, fmt) VALUES (2,'1,234.567','9,999.999');
+CREATE OR REPLACE PROCEDURE p1(num int) IS
+v_converted  NUMBER;
+TYPE t_rec IS TABLE OF TC10573_tb01%ROWTYPE INDEX BY INT;    
+rec1 t_rec;
+CURSOR c1 IS SELECT * FROM TC10573_tb01;
+BEGIN
+FOR j in 1 .. num LOOP
+OPEN c1;
+fetch c1 bulk collect into rec1 ;
+for i in rec1.first .. rec1.last loop
+v_converted := to_number(rec1(i).input,rec1(i).fmt);
+select i,rec1(i).id,v_converted; 
+end loop;
+CLOSE c1;
+end loop;
+END ;
+$$
+call p1(2);
+i	rec1(i).id	v_converted
+1	1	NULL
+i	rec1(i).id	v_converted
+2	2	1234.567
+i	rec1(i).id	v_converted
+1	1	NULL
+i	rec1(i).id	v_converted
+2	2	1234.567
+call p1(5);
+i	rec1(i).id	v_converted
+1	1	NULL
+i	rec1(i).id	v_converted
+2	2	1234.567
+i	rec1(i).id	v_converted
+1	1	NULL
+i	rec1(i).id	v_converted
+2	2	1234.567
+i	rec1(i).id	v_converted
+1	1	NULL
+i	rec1(i).id	v_converted
+2	2	1234.567
+i	rec1(i).id	v_converted
+1	1	NULL
+i	rec1(i).id	v_converted
+2	2	1234.567
+i	rec1(i).id	v_converted
+1	1	NULL
+i	rec1(i).id	v_converted
+2	2	1234.567
+drop PROCEDURE p1;
+drop table TC10573_tb01;

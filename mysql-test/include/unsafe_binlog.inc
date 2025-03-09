@@ -21,6 +21,7 @@
 # Test cases for bug#15650
 #      DELETE with LEFT JOIN crashes server with innodb_locks_unsafe_for_binlog
 #
+--source include/no_turbo.inc
 
 --disable_warnings
 drop table if exists t1,t2,t3,t4,t5,t6,t7,t8,t9,t10;

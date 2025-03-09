@@ -12,7 +12,9 @@ set sql_mode=oracle;
 --echo
 --echo ROUND(number) under ORACLE mode:
 select round(296625000/power(10,4)) from dual;
+--source include/disable_turbo.inc
 select round(c1, c5) from t1;
+--source include/restore_turbo.inc
 select round(c2, c5) from t1;
 select round(c3, c5) from t1;
 select round(c4, c5) from t1;

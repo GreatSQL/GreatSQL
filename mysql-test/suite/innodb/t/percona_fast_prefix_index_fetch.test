@@ -1,3 +1,4 @@
+--source include/no_turbo.inc
 --echo # Create a table with a large varchar field that we index the prefix
 --echo # of and ensure we only trigger cluster lookups when we expect it.
 create table prefixinno (

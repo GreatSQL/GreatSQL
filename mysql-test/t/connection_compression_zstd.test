@@ -41,6 +41,7 @@ LOAD DATA INFILE '../../std_data/inconsistent_scan.csv' INTO TABLE t1 COLUMNS TE
 # Test without compression
 SHOW STATUS LIKE 'Compression%';
 FLUSH STATUS;
+--sorted_result
 SELECT * FROM t1;
 --let $size_uncompressed = query_get_value(SHOW STATUS LIKE 'Bytes_sent', Value, 1)
 
@@ -51,6 +52,7 @@ SET GLOBAL protocol_compression_algorithms="zstd";
 connect(zstd_con, localhost, root,,,,,,,zstd,22);
 SHOW STATUS LIKE 'Compression%';
 FLUSH STATUS;
+--sorted_result
 SELECT * FROM t1;
 --let $size_compressed_level22 = query_get_value(SHOW STATUS LIKE 'Bytes_sent', Value, 1)
 connection default;

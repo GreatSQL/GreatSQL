@@ -2,7 +2,7 @@
 
 Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 Copyright (c) 2022, Huawei Technologies Co., Ltd.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -1387,6 +1387,8 @@ row_prebuilt_t *row_create_prebuilt(
 
   prebuilt->m_no_prefetch = false;
   prebuilt->m_read_virtual_key = false;
+
+  prebuilt->is_in_ap_parallel_read_ctx = false;
 
   return prebuilt;
 }
@@ -4836,7 +4838,7 @@ dberr_t row_mysql_parallel_select_count_star(
     ulint *n_rows) {
   ut_a(n_threads > 1);
   ut_a(!indexes.empty());
-  using Shards = Counter::Shards<Parallel_reader::MAX_THREADS>;
+  using Shards = Counter::Shards<MAX_PARALLEL_READ_THREADS>;
 
   Shards n_recs;
   Counter::clear(n_recs);
@@ -4888,7 +4890,7 @@ dberr_t row_mysql_parallel_select_count_star(
 static dberr_t parallel_check_table(trx_t *trx, dict_index_t *index,
                                     size_t n_threads, ulint *n_rows) {
   ut_a(n_threads > 1);
-  using Shards = Counter::Shards<Parallel_reader::MAX_THREADS>;
+  using Shards = Counter::Shards<MAX_PARALLEL_READ_THREADS>;
 
   Shards n_recs{};
   Shards n_dups{};

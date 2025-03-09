@@ -1,5 +1,5 @@
 /* Copyright (c) 2009, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2018,6 +2018,10 @@ void debug_sync_activation_op(THD *thd, const char *dsp_name, size_t name_len,
       action->execute = 1;
     }
   }
+}
+
+bool has_debug_sync_activation_op(THD *thd) {
+  return thd->debug_sync_control && thd->debug_sync_control->ds_action;
 }
 
 #endif /* defined(ENABLED_DEBUG_SYNC) */

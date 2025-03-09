@@ -2,7 +2,7 @@
 #define ITEM_CMPFUNC_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -384,21 +384,6 @@ class Item_func_cursor_notfound : public Item_func_cursor_bool {
   const char *func_name() const override { return "%NOTFOUND"; }
   bool val_bool() override;
   longlong val_int() override;
-};
-
-class Item_func_dbms_sql_is_open : public Item_bool_func {
-  typedef Item_bool_func super;
-
- public:
-  Item_func_dbms_sql_is_open(const POS &pos, Item *a)
-      : Item_bool_func(pos, a) {}
-  const char *func_name() const override { return "dbms_sql_is_open"; }
-  bool val_bool() override;
-  longlong val_int() override;
-  bool resolve_type(THD *thd) override {
-    if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_LONGLONG)) return true;
-    return false;
-  }
 };
 
 class Item_func_record_table_forall_bool : public Item_bool_func {

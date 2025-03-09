@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -7320,7 +7320,7 @@ bool Item_func_add_months::get_month_interval(Item *intvl_arg,
       if (intvl_arg->null_value) return true;
   }
 
-  if (month_interval == LLONG_MIN) {
+  if (month_interval == LLONG_MIN || month_interval == LLONG_MAX) {
     /* Warn about overflow */
     push_warning_printf(
         current_thd, Sql_condition::SL_WARNING, ER_DATETIME_FUNCTION_OVERFLOW,

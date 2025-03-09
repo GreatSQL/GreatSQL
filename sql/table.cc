@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -639,10 +639,19 @@ bool TABLE_SHARE::export_structure(THD *thd, List<Create_field> *defs) {
       def->udt_name.str =
           thd->strmake(def->udt_name.str, strlen(def->udt_name.str));
     }
-    if (def->udt_db_name.str) {
-      LEX_CSTRING db_name = thd->strmake(to_lex_cstring(def->udt_db_name));
-      def->set_udt_db_name(to_lex_string(db_name));
-    }
+
+    LEX_CSTRING db_cstr =
+        (*src)->orig_db_name
+            ? thd->strmake(LEX_CSTRING{(*src)->orig_db_name,
+                                       strlen((*src)->orig_db_name)})
+            : thd->db();
+    LEX_STRING db_name = def->udt_db_name.length
+                             ? LEX_STRING{thd->strmake(def->udt_db_name.str,
+                                                       def->udt_db_name.length),
+                                          def->udt_db_name.length}
+                             : to_lex_string(db_cstr);
+    def->set_udt_db_name(db_name);
+
     def->comment = thd->strmake((*src)->comment);
     def->zip_dict_name = thd->strmake((*src)->zip_dict_name);
     def->m_engine_attribute = thd->strmake((*src)->m_engine_attribute);
@@ -8234,24 +8243,5 @@ bool TABLE::sp_find_field_by_name(uint *idx, const LEX_CSTRING &name) const {
     }
   }
   return true;
-}
-
-bool TABLE::export_structure(THD *thd, List<Create_field> *defs) {
-  for (Field **src = field; *src; src++) {
-    // It must convert the Field to Create_field
-    Create_field *def = new (thd->mem_root) Create_field();
-    *def = Create_field(*src, NULL);
-    LEX_CSTRING db_cstr = (*field)->orig_db_name
-                              ? LEX_CSTRING{(*field)->orig_db_name,
-                                            strlen((*field)->orig_db_name)}
-                              : thd->db();
-    LEX_STRING db_name =
-        def->udt_db_name.length ? def->udt_db_name : to_lex_string(db_cstr);
-    def->set_udt_db_name(db_name);
-    def->flags &= (uint)~NOT_NULL_FLAG;
-    if (prepare_sp_create_field(thd, def)) return true;
-    if (defs->push_back(def)) return true;
-  }
-  return false;
 }
 //////////////////////////////////////////////////////////////////////////

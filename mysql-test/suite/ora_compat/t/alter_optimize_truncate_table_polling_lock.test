@@ -70,7 +70,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send alter table t1 rename column  id to id1, ALGORITHM=INPLACE, LOCK=NONE;
 
 connection addconroot2;
@@ -158,7 +158,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send alter table t1 rename to t11;
 
 connection addconroot2;
@@ -246,7 +246,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send alter table t1 add column name varchar(100);
 
 connection addconroot2;
@@ -335,7 +335,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send alter table t1 drop column name;
 
 connection addconroot2;
@@ -423,7 +423,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send ALTER TABLE t1 ADD PRIMARY KEY (id);
 
 connection addconroot2;
@@ -511,7 +511,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send alter table t1 add index index_name(name);
 
 connection addconroot2;
@@ -599,7 +599,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send create index index_name on t1(name);
 
 connection addconroot2;
@@ -687,7 +687,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send alter table t1 drop index index_name;
 
 connection addconroot2;
@@ -775,7 +775,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send drop index index_name on t1;
 
 connection addconroot2;
@@ -883,7 +883,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send  ALTER TABLE t1 ADD PARTITION (PARTITION p5 VALUES LESS THAN (2100));
 
 connection addconroot2;
@@ -991,7 +991,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send  ALTER TABLE t1 DROP PARTITION p0;
 
 connection addconroot2;
@@ -1078,7 +1078,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send OPTIMIZE TABLE t2;
 
 connection addconroot2;
@@ -1165,7 +1165,7 @@ connection addconroot;
 --echo ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 --send TRUNCATE TABLE t3;
 
 connection addconroot2;

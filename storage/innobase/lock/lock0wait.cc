@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2022, Oracle and/or its affiliates.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -105,9 +106,14 @@ static void lock_wait_table_release_slot(
   ut_ad(slot >= lock_sys->waiting_threads);
   ut_ad(slot < upper);
 
+  if (slot->thr->lock_state == QUE_THR_LOCK_ROW) {
+    srv_stats.n_lock_wait_current_count.dec();
+  }
+
   slot->thr->slot = nullptr;
   slot->thr = nullptr;
   slot->in_use = false;
+
 
   /* Scan backwards and adjust the last free slot pointer. */
   for (slot = lock_sys->last_slot;
@@ -169,6 +175,10 @@ static srv_slot_t *lock_wait_table_reserve_slot(
       slot->suspended = true;
       slot->suspend_time = std::chrono::steady_clock::now();
       slot->wait_timeout = wait_timeout;
+      if (thr->lock_state == QUE_THR_LOCK_ROW) {
+        srv_stats.n_lock_wait_count.inc();
+        srv_stats.n_lock_wait_current_count.inc();
+      }
 
       if (slot == lock_sys->last_slot) {
         ++lock_sys->last_slot;
@@ -244,7 +254,6 @@ void lock_wait_request_check_for_cycles() { lock_set_timeout_event(); }
 void lock_wait_suspend_thread(que_thr_t *thr) {
   srv_slot_t *slot;
   trx_t *trx;
-  std::chrono::steady_clock::time_point start_time;
   blocking_trx_info blocking[MAX_BLOCKING_TRX_IN_REPORT];
   size_t blocking_count = 0;
 
@@ -287,13 +296,6 @@ void lock_wait_suspend_thread(que_thr_t *thr) {
   ut_ad(!thr->is_active);
 
   slot = lock_wait_table_reserve_slot(thr, lock_wait_timeout);
-
-  if (thr->lock_state == QUE_THR_LOCK_ROW) {
-    srv_stats.n_lock_wait_count.inc();
-    srv_stats.n_lock_wait_current_count.inc();
-
-    start_time = std::chrono::steady_clock::now();
-  }
 
   lock_wait_mutex_exit();
 
@@ -391,13 +393,12 @@ void lock_wait_suspend_thread(que_thr_t *thr) {
   }
 
   /* Release the slot for others to use */
-
+  const auto start_time = slot->suspend_time;
   lock_wait_table_release_slot(slot);
 
   if (thr->lock_state == QUE_THR_LOCK_ROW) {
     const auto diff_time = std::chrono::steady_clock::now() - start_time;
 
-    srv_stats.n_lock_wait_current_count.dec();
     srv_stats.n_lock_wait_time.add(
         std::chrono::duration_cast<std::chrono::microseconds>(diff_time)
             .count());

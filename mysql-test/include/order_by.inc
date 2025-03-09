@@ -811,8 +811,10 @@ EXPLAIN SELECT id,c3 FROM t2 WHERE c2=11 ORDER BY c3 LIMIT 4000;
 EXPLAIN SELECT id,c3 FROM t2 WHERE c2 BETWEEN 10 AND 12 ORDER BY c3 LIMIT 20;
 EXPLAIN SELECT id,c3 FROM t2 WHERE c2 BETWEEN 20 AND 30 ORDER BY c3 LIMIT 4000;
 
+--source include/disable_turbo.inc
 --partially_sorted_result 1
 SELECT c3,id FROM t2 WHERE c2=11 ORDER BY c3 LIMIT 20;
+--source include/restore_turbo.inc
 
 DROP TABLE t1,t2;
 
@@ -874,8 +876,10 @@ create table t1(a int, b text);
 insert into t1 values (1,REPEAT('x', 60000)),(3,REPEAT('y', 60000));
 set session sort_buffer_size= 32768;
 CALL mtr.add_suppression("Out of sort memory");
+--source include/disable_turbo.inc
 --error ER_OUT_OF_SORTMEMORY
 select * from t1 order by b;
+--source include/restore_turbo.inc
 drop table t1;
 call mtr.add_suppression("Out of sort memory; increase server sort buffer size");
 --echo #

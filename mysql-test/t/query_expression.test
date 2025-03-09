@@ -315,14 +315,17 @@ eval EXPLAIN FORMAT=tree $query;
 --echo # ALL
 --echo #
 let $query = SELECT * FROM t3 EXCEPT ALL SELECT * FROM t2 EXCEPT ALL SELECT * FROM t1;
+--sorted_result
 eval $query;
 --replace_regex $elide_costs
 eval EXPLAIN FORMAT=tree $query;
 let $query = (SELECT * FROM t3 EXCEPT ALL SELECT * FROM t2) EXCEPT ALL SELECT * FROM t1;
+--sorted_result
 eval $query;
 --replace_regex $elide_costs
 eval EXPLAIN FORMAT=tree $query;
 let $query = SELECT * FROM t3 EXCEPT ALL (SELECT * FROM t2 EXCEPT ALL SELECT * FROM t1);
+--sorted_result
 eval $query;
 --replace_regex $elide_costs
 eval EXPLAIN FORMAT=tree $query;
@@ -331,14 +334,17 @@ eval EXPLAIN FORMAT=tree $query;
 --echo # Mix of DISTINCT and ALL
 --echo #
 let $query = SELECT * FROM t3 EXCEPT ALL SELECT * FROM t2 EXCEPT SELECT * FROM t1;
+--sorted_result
 eval $query;
 --replace_regex $elide_costs
 eval EXPLAIN FORMAT=tree $query;
 let $query = (SELECT * FROM t3 EXCEPT ALL SELECT * FROM t2) EXCEPT SELECT * FROM t1;
+--sorted_result
 eval $query;
 --replace_regex $elide_costs
 eval EXPLAIN FORMAT=tree $query;
 let $query = SELECT * FROM t3 EXCEPT ALL (SELECT * FROM t2 EXCEPT SELECT * FROM t1);
+--sorted_result
 eval $query;
 --replace_regex $elide_costs
 eval EXPLAIN FORMAT=tree $query;
@@ -498,6 +504,7 @@ eval EXPLAIN FORMAT=tree $query;
 #
 # Test of SQL_CALC_FOUND_ROW handling
 #
+--source include/disable_turbo.inc
 let $query =
 SELECT SQL_CALC_FOUND_ROWS i FROM t2 INTERSECT SELECT i FROM t2 LIMIT 1;
 eval $query;
@@ -507,6 +514,7 @@ let $query =
 SELECT SQL_CALC_FOUND_ROWS * FROM (SELECT i FROM t2 INTERSECT SELECT i FROM t2) t LIMIT 1;
 eval $query;
 SELECT FOUND_ROWS();
+--source include/restore_turbo.inc
 
 let $query =
 SELECT SQL_CALC_FOUND_ROWS * FROM (SELECT i FROM t2 INTERSECT SELECT i FROM t2 LIMIT 1) t;

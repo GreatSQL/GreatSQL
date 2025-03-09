@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -3049,10 +3049,10 @@ void *Gdb_load_worker::thread_func(void *worker_handler) {
         handler->m_cur_result.m_errno = cb_data.error_no();
         handler->m_cur_result.m_errmsg = cb_data.error_msg();
         /* need write error log here? */
-        std::string log_error_sql = "[parallel load worker failed] sql is:";
-        log_error_sql += cmd_sql;
-        log_error_sql += " [err_msg]:";
+        std::string log_error_sql = "[parallel load worker failed] err_msg:";
         log_error_sql += handler->m_cur_result.m_errmsg;
+        log_error_sql += " sql is:";
+        log_error_sql += cmd_sql;
         LogErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, log_error_sql.c_str());
         handler->m_exit = true;  // exit worker if failed
       } else {

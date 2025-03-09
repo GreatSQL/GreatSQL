@@ -285,7 +285,7 @@ CREATE TABLE `t1` (
 INSERT INTO t1 VALUES (1,1), (2,2), (3,3);
 INSERT INTO t1(`id`) VALUES (4);
 
---exec $MYSQL_DUMP --skip-comments --innodb-optimize-keys test t1 >$file
+--exec $MYSQL_DUMP --skip-comments --order-by-primary --innodb-optimize-keys test t1 >$file
 
 --echo ######################################
 --cat_file $file

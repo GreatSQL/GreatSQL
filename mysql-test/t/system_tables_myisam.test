@@ -13,6 +13,7 @@ CALL mtr.add_suppression("Incorrect definition of table");
 CALL mtr.add_suppression("Cannot load from");
 CALL mtr.add_suppression("Storage engine 'MyISAM' does not");
 CALL mtr.add_suppression("System table 'greatdb_sequences' is expected to be transactional");
+CALL mtr.add_suppression("System table 'db_object_synonyms' is expected to be transactional");
 
 --echo #-----------------------------------------------------------------------
 --echo # Test cases to verify system table's behavior with storage engines

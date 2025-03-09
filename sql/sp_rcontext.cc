@@ -1,5 +1,5 @@
 /* Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1105,6 +1105,7 @@ bool sp_cursor::close() {
 
 void sp_cursor::destroy() {
   assert(!m_push_instr || m_server_side_cursor == nullptr);
+  cleanup_return_table_mem_root();
 }
 
 bool sp_cursor::fetch(List<sp_variable> *vars) {
@@ -1185,6 +1186,7 @@ bool sp_cursor::fetch_bulk(List<sp_variable> *vars, ha_rows row_count) {
 
   m_result.set_spvar_list(vars);
   m_result.set_row_batch(row_count);
+  m_result.reset_fetch_bulk_count();
 
   /* Attempt to fetch row_count rows */
   if (m_server_side_cursor->is_open()) {
@@ -1220,7 +1222,8 @@ bool sp_cursor::is_cursor_fetched() {
 
 // check cursor return type
 bool sp_cursor::check_cursor_return_type_count() {
-  if (!m_server_side_cursor) return false;
+  if (!m_server_side_cursor || (m_push_instr && m_push_instr->is_copy_struct))
+    return false;
   if (m_result.get_return_table()) {
     if (m_server_side_cursor->get_field_count() !=
         m_result.get_return_table_count()) {
@@ -1253,6 +1256,12 @@ static bool change_list_field_name(List<Create_field> *list,
   return false;
 }
 
+void sp_cursor::cleanup_return_table_mem_root() {
+  m_result.m_return_table->cleanup();
+  m_return_table_arena.free_items();
+  m_return_table_mem_root.ClearForReuse();
+}
+
 /**
   for static cursor,it needs to create a result table to check.
   Use the list_open's column name instead of list's column name.
@@ -1264,6 +1273,11 @@ bool sp_cursor::make_return_table(THD *thd, List<Create_field> *list,
                                   List<Create_field> *list_c) {
   if (change_list_field_name(list, list_c)) return true;
 
+  cleanup_return_table_mem_root();
+  Query_arena old_arena;
+  thd->swap_query_arena(m_return_table_arena, &old_arena);
+  const auto x_guard = create_scope_guard(
+      [&]() { thd->swap_query_arena(old_arena, &m_return_table_arena); });
   return m_result.m_return_table->make_return_table(thd, list);
 }
 
@@ -1271,7 +1285,7 @@ bool sp_cursor::make_return_table(THD *thd, List<Create_field> *list,
 bool sp_cursor::set_return_table_from_cursor(sp_cursor *from_cursor,
                                              List<Create_field> *list_c) {
   List<Create_field> list;
-  if (from_cursor->m_result.m_return_table->get_table()->export_structure(
+  if (from_cursor->m_result.m_return_table->get_table()->s->export_structure(
           current_thd, &list))
     return true;
   return make_return_table(current_thd, &list, list_c);
@@ -1402,24 +1416,22 @@ bool sp_refcursor::open_for_ident(THD *thd, uint m_sql_spv_idx) {
   */
   uint in_sub_stmt = thd->in_sub_stmt;
   thd->in_sub_stmt = 0;
+  bool rc = false;
 
   Diagnostics_area tmp_da(false);
   Open_tables_backup open_tables_state_backup;
   Query_tables_list table_list_backup;
-  thd->reset_n_backup_open_tables_state(&open_tables_state_backup, 0);
+  thd->reset_n_backup_open_tables_state_with_lock(&open_tables_state_backup, 0);
   thd->lex->reset_n_backup_query_tables_list(&table_list_backup);
-  thd->temporary_tables = open_tables_state_backup.temporary_tables;
 
   auto backup_guard2 = create_scope_guard([&]() {
     thd->use_in_dyn_sql = false;
     thd->in_sub_stmt = in_sub_stmt;
-    open_tables_state_backup.temporary_tables = thd->temporary_tables;
-    thd->temporary_tables = nullptr;
     thd->lex->restore_backup_query_tables_list(&table_list_backup);
-    thd->restore_backup_open_tables_state(&open_tables_state_backup);
+    thd->restore_backup_open_tables_state_with_lock(&open_tables_state_backup);
+    if (rc && thd->get_stmt_da()->mysql_errno() == ER_NEED_REPREPARE)
+      thd->get_reprepare_observer()->report_error(thd);
   });
-
-  bool rc = false;
 
   stmt = new (m_arena.mem_root) Prepared_statement(thd);
   m_query_result = new_cursor_result(stmt->m_arena.mem_root, &m_result);
@@ -1429,6 +1441,7 @@ bool sp_refcursor::open_for_ident(THD *thd, uint m_sql_spv_idx) {
   stmt->set_sql_prepare();
   stmt->set_state_for_prepare(thd);
   stmt->set_query_result(m_query_result);
+  stmt->m_is_ref_cursor = true;
 
   rc = stmt->prepare(thd, result->c_ptr_safe(), result->length(), nullptr);
   if (rc) return true;
@@ -1446,9 +1459,13 @@ bool sp_refcursor::open_for_ident(THD *thd, uint m_sql_spv_idx) {
   thd->in_sub_stmt = in_sub_stmt;
   thd->use_in_dyn_sql = true;
   thd->push_diagnostics_area(&tmp_da);
-  rc = stmt->execute_loop(thd, result, true);
 
-  thd->merge_backup_open_tables_state(&open_tables_state_backup);
+#ifndef NDEBUG
+  DBUG_SIGNAL_WAIT_FOR(thd, "cursor_sleep_to_change_version", "reach_wait_sync",
+                       "end_wait_sync");
+#endif
+
+  rc = stmt->execute_loop(thd, result, true);
 
   stmt->m_lex->lock_tables_state = Query_tables_list::LTS_NOT_LOCKED;
   thd->pop_diagnostics_area();

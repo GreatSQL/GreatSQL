@@ -1,5 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -250,6 +250,13 @@ void WalkAccessPaths(AccessPathPtr path, JoinPtr join,
       WalkAccessPaths(path->update_rows().child, join, cross_query_blocks,
                       std::forward<Func &&>(func), post_order_traversal);
       break;
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+    case AccessPath::QUERY_PLAN_EXECUTE:
+      WalkAccessPaths(path->query_plan_execute().native_path, join,
+                      cross_query_blocks, std::forward<Func &&>(func),
+                      post_order_traversal);
+      break;
+#endif
   }
   if (post_order_traversal) {
     if (func(path, join)) {
@@ -355,6 +362,10 @@ void WalkTablesUnderAccessPath(AccessPath *root_path, Func &&func,
             return func(path->parallel_scan().table);
           case AccessPath::PQBLOCK_SCAN:
             return func(path->pqblock_scan().table);
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+          case AccessPath::QUERY_PLAN_EXECUTE:
+            return true;
+#endif
         }
         assert(false);
         return true;

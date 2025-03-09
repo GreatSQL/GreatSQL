@@ -1,5 +1,5 @@
 /* Copyright (c) 2011, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2184,6 +2184,31 @@ bool explain_query_specification(THD *explain_thd, const THD *query_thd,
   return ret;
 }
 
+static bool ExplainRapidEngine(THD *ethd, Query_expression *unit) {
+  Query_result_send result;
+  {
+    mem_root_deque<Item *> field_list(ethd->mem_root);
+    Item *item = new Item_empty_string("EXPLAIN", 78, system_charset_info);
+    field_list.push_back(item);
+    if (result.send_result_set_metadata(
+            ethd, field_list, Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF)) {
+      return true;
+    }
+  }
+  // Hand over the query to the secondary engine if needed.
+  if (unit->first_query_block()->join->override_executor_func != nullptr) {
+    for (Query_block *select = unit->first_query_block(); select != nullptr;
+         select = select->next_query_block()) {
+      if (select->join->override_executor_func != nullptr &&
+          select->join->override_executor_func(select->join, &result)) {
+        return true;
+      }
+    }
+  }
+
+  return result.send_eof(ethd);
+}
+
 static bool ExplainIterator(THD *ethd, const THD *query_thd,
                             Query_expression *unit) {
   Query_result_send result;
@@ -2327,6 +2352,12 @@ bool explain_query(THD *explain_thd, const THD *query_thd,
   const bool other = (explain_thd != query_thd);
   const bool secondary_engine = SecondaryEngineHandlerton(query_thd) != nullptr;
 
+  if (secondary_engine &&
+      (explain_thd->lex->is_explain_analyze ||
+       explain_thd->lex->explain_format->is_iterator_based()) &&
+      (unit->first_query_block()->join->override_executor_func)) {
+    return ExplainRapidEngine(explain_thd, unit);
+  }
   LEX *lex = explain_thd->lex;
   if (lex->explain_format->is_iterator_based()) {
     if (lex->is_explain_analyze) {
@@ -2335,6 +2366,7 @@ bool explain_query(THD *explain_thd, const THD *query_thd,
                  "EXPLAIN ANALYZE with secondary engine");
         return true;
       }
+
       if (unit->root_iterator() == nullptr) {
         // TODO(sgunders): Remove when the iterator executor supports
         // all queries.

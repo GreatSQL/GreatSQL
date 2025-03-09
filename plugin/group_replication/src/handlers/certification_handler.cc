@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -546,6 +546,7 @@ int Certification_handler::extract_certification_info(Pipeline_event *pevent,
   /*
     If there are pending view changes to apply, apply them first.
     If we can't apply the old VCLEs probably we can't apply the new one
+    While, it should always assign gtid, view's gtid_extracted for new one
   */
   if (unlikely(m_view_change_event_on_wait)) {
     error = log_delayed_view_change_events(cont);
@@ -554,9 +555,11 @@ int Certification_handler::extract_certification_info(Pipeline_event *pevent,
 
   std::string local_gtid_certified_string;
   Gtid vlce_gtid = {-1, -1};
-  if (!error) {
-    error = log_view_change_event_in_order(pevent, local_gtid_certified_string,
-                                           &vlce_gtid, cont);
+  {
+    bool last_view_incomplete = error;
+    error =
+        log_view_change_event_in_order(pevent, local_gtid_certified_string,
+                                       &vlce_gtid, cont, last_view_incomplete);
   }
 
   /*
@@ -590,7 +593,7 @@ int Certification_handler::log_delayed_view_change_events(Continuation *cont) {
     error = log_view_change_event_in_order(
         stored_view_info->view_change_pevent,
         stored_view_info->local_gtid_certified,
-        &(stored_view_info->view_change_gtid), cont);
+        &(stored_view_info->view_change_gtid), cont, false);
     // if we timeout keep the event
     if (LOCAL_WAIT_TIMEOUT_ERROR != error) {
       delete stored_view_info->view_change_pevent;
@@ -776,7 +779,7 @@ int Certification_handler::inject_transactional_events(Pipeline_event *pevent,
 
 int Certification_handler::log_view_change_event_in_order(
     Pipeline_event *view_pevent, std::string &local_gtid_string, Gtid *gtid,
-    Continuation *cont) {
+    Continuation *cont, bool last_view_incomplete) {
   DBUG_TRACE;
 
   int error = 0;
@@ -801,13 +804,17 @@ int Certification_handler::log_view_change_event_in_order(
     return 1;
     /* purecov: end */
   }
+
   View_change_log_event *vchange_event =
       static_cast<View_change_log_event *>(event);
   std::string view_change_event_id(vchange_event->get_view_id());
 
   // We are just logging old event(s), this packet was created to delay that
   // process
-  if (unlikely(view_change_event_id == "-1")) return 0;
+  if (unlikely(view_change_event_id == "-1")) {
+    cont->signal();
+    return 0;
+  }
 
   /*
     Certification info needs to be added into the `vchange_event` when this view
@@ -815,9 +822,9 @@ int Certification_handler::log_view_change_event_in_order(
     consistent transactions.
   */
   if ((-1 == gtid->gno) || view_pevent->is_delayed_view_change_resumed()) {
-    LogPluginErrMsg(
-        INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-        "before getting certification info in log_view_change_event_in_order");
+    LogPluginErrMsg(INFORMATION_LEVEL, 0,
+                    "Initialize certification information for view %s.",
+                    view_change_event_id.c_str());
     std::map<std::string, std::string> cert_info;
     cert_module->get_certification_info(&cert_info);
     cert_module->clear_xa_replay_map();
@@ -836,13 +843,15 @@ int Certification_handler::log_view_change_event_in_order(
           "Certification information is too large for transmission.";
       vchange_event->set_certification_info(&cert_info, &event_size);
     }
-    LogPluginErrMsg(
-        INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-        "after setting certification info in log_view_change_event_in_order");
+    LogPluginErrMsg(INFORMATION_LEVEL, 0,
+                    "Finish set certification information for view %s",
+                    view_change_event_id.c_str());
   }
 
   // Assure the last known local transaction was already executed
-  error = wait_for_local_transaction_execution(local_gtid_string);
+  if (!last_view_incomplete) {
+    error = wait_for_local_transaction_execution(local_gtid_string);
+  }
 
   DBUG_EXECUTE_IF("simulate_delayed_view_change_resume_error", { error = 1; });
 
@@ -857,7 +866,8 @@ int Certification_handler::log_view_change_event_in_order(
     error = inject_transactional_events(view_pevent, gtid, cont);
   } else if (view_pevent->is_delayed_view_change_resumed()) {
     error = DELAYED_VIEW_CHANGE_RESUME_ERROR;
-  } else if ((LOCAL_WAIT_TIMEOUT_ERROR == error) && (-1 == gtid->gno)) {
+  } else if ((last_view_incomplete || LOCAL_WAIT_TIMEOUT_ERROR == error) &&
+             (-1 == gtid->gno)) {
     // Even if we can't log it, register the position
     *gtid = cert_module->generate_view_change_group_gtid();
   }

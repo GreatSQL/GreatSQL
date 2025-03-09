@@ -1301,7 +1301,13 @@ create trigger t4_bu before update on t4 for each row set @t4_bu_called:=1|
 
 insert into t1 values(10, 10)|
 set @a:=1/0|
+delimiter ;|
+--source include/disable_turbo.inc
+delimiter |;
 select 1/0 from t1|
+delimiter ;|
+--source include/restore_turbo.inc
+delimiter |;
 
 create trigger t1_bi before insert on t1 for each row set @a:=1/0|
 

@@ -1,0 +1,120 @@
+--source include/have_debug.inc
+--let $group_replication_group_name= 8a94f357-aab4-11df-86ab-c80aa9429573
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_group_replication_single_primary_mode=1
+--let $rpl_server_count= 4
+--source include/group_replication.inc
+
+--disable_query_log
+--connection server1
+SET SESSION sql_log_bin= 0;
+call mtr.add_suppression("Plugin group_replication reported: 'Member was expelled from the group due to network failures, changing member status to ERROR.'");
+call mtr.add_suppression("Plugin group_replication reported: 'Due to a plugin error, some transactions were unable to be certified and will now rollback.'");
+call mtr.add_suppression("Plugin group_replication reported: 'Error while waiting for conflict detection procedure to finish on session");
+call mtr.add_suppression("Run function 'before_commit' in plugin 'group_replication' failed");
+call mtr.add_suppression("Slave SQL for channel '': Worker .* failed executing transaction");
+call mtr.add_suppression("Plugin group_replication reported: 'The server was automatically set into read only mode after an error was detected.'");
+SET SESSION sql_log_bin= 1;
+--enable_query_log
+
+--connection server1
+--source include/start_and_bootstrap_group_replication.inc
+--connection server2
+--source include/start_group_replication.inc
+--connection server3
+--source include/start_group_replication.inc
+
+--connection server1
+--echo [connect server1]
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+--disable_warnings
+--replace_result $SERVER_MYPORT_4 port_4
+--eval CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1',SOURCE_PORT=$SERVER_MYPORT_4,SOURCE_USER='root',SOURCE_AUTO_POSITION=1;
+--enable_warnings
+START REPLICA;
+
+--connection server4
+--echo [connect server4]
+SET sql_log_bin=OFF;
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+SET sql_log_bin=ON;
+INSERT INTO t1 VALUES (1, 1);
+INSERT INTO t1 VALUES (2, 2);
+
+--connection server1
+--echo [connect server1]
+--let $wait_condition=SELECT COUNT(*)=2 FROM t1
+--source include/wait_condition.inc
+SELECT * FROM t1;
+
+--echo ## now, kill -19 primary node
+--connection server1
+--echo [connect server1]
+SET SESSION sql_log_bin= 0;
+CREATE TABLE pid_table(pid_no INT PRIMARY KEY);
+--let $pid_file=`SELECT @@pid_file`
+--replace_result $pid_file pid_file
+--eval LOAD DATA LOCAL INFILE '$pid_file' INTO TABLE pid_table
+--let $server_pid=`SELECT pid_no FROM pid_table`
+DROP TABLE pid_table;
+SET SESSION sql_log_bin= 1;
+
+# Send signal SIGSTOP to server 1
+--exec kill -19 $server_pid
+
+# Wait until the group settles on 2 members
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--let $group_replication_number_of_members= 2
+--source include/gr_wait_for_number_of_members.inc
+
+--connection server4
+--echo [connect server4]
+INSERT INTO t1 VALUES (3,3);
+INSERT INTO t1 VALUES (4,4);
+
+# Send signal SIGCONT to server 1
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--exec kill -18 $server_pid
+--source include/wait_for_slave_io_to_stop.inc
+SELECT * FROM t1;
+
+
+--let $rpl_connection_name= server_1
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+--source include/start_group_replication.inc
+DO group_replication_set_as_primary(@@server_uuid);
+START REPLICA;
+--let $wait_condition=SELECT COUNT(*)=4 FROM t1
+--source include/wait_condition.inc
+SELECT * FROM t1;
+
+--let $rpl_connection_name= server_1
+--source include/rpl_connection.inc
+STOP REPLICA;
+DROP TABLE t1;
+--source include/stop_group_replication.inc
+--let $rpl_connection_name= server_2
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+--let $rpl_connection_name= server_3
+--source include/rpl_connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server_4
+--source include/rpl_connection.inc
+DROP TABLE t1;
+
+connection default;
+--enable_reconnect
+--source include/group_replication_end.inc
+
+--connection server1
+--echo [connect server1]
+RESET REPLICA ALL;
+--connection server4
+--echo [connect server4]
+RESET REPLICA ALL;

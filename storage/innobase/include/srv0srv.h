@@ -3,7 +3,7 @@
 Copyright (c) 1995, 2022, Oracle and/or its affiliates.
 Copyright (c) 2008, 2009, Google Inc.
 Copyright (c) 2009, Percona Inc.
-Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -768,6 +768,7 @@ extern double srv_max_buf_pool_modified_pct;
 
 extern ulong srv_max_purge_lag;
 extern ulong srv_max_purge_lag_delay;
+extern bool srv_enable_fast_purge;
 
 extern ulint srv_pass_corrupt_table;
 
@@ -908,6 +909,11 @@ extern struct export_var_t export_vars;
 #ifndef UNIV_HOTBACKUP
 /** Global counters */
 extern srv_stats_t srv_stats;
+
+extern std::atomic<uint64_t> srv_parallel_fetch_buffer_server_used;
+extern std::atomic<uint64_t> srv_parallel_fetch_buffer_engine_used;
+extern std::atomic<uint64_t> srv_parallel_fetch_buffer_count;
+extern std::atomic<uint64_t> srv_parallel_fetch_buffer_size;
 
 /* Keys to register InnoDB threads with performance schema */
 
@@ -1407,6 +1413,11 @@ struct export_var_t {
 
   fragmentation_stats_t innodb_fragmentation_stats; /*!< Fragmentation
                                            statistics */
+
+  uint64_t innodb_parallel_fetch_buffer_count;
+  uint64_t innodb_parallel_fetch_buffer_size;
+  uint64_t innodb_parallel_fetch_buffer_server_used;
+  uint64_t innodb_parallel_fetch_buffer_engine_used;
 };
 
 #ifndef UNIV_HOTBACKUP

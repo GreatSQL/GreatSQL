@@ -1,5 +1,6 @@
 # WL#13458 Global and session memory allocation limits.
 
+--source include/no_turbo.inc
 --source include/have_debug.inc
 --source include/linux.inc
 

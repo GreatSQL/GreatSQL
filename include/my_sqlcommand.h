@@ -1,5 +1,5 @@
 /* Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -232,6 +232,10 @@ enum enum_sql_command {
   SQLCOM_SHOW_STATUS_TYPE,
   SQLCOM_SHOW_PACKAGE_BODY_CODE,
   SQLCOM_ALTER_TRIGGER,
+  SQLCOM_CREATE_SYNONYM,
+  SQLCOM_DROP_SYNONYM,
+  SQLCOM_ALTER_SYNONYM,
+  SQLCOM_SHOW_SYNONYMS,
   /* This should be the last !!! */
   SQLCOM_END
 };

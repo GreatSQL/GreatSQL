@@ -35,6 +35,7 @@ select DECODE(1<0, false, "TRUE", "FALSE");
 
 create table t1 (a int);
 insert into t1 values(1),(2),(3),(4);
+--sorted_result
 select decode(a, 1, 2, 2, 3, 0) as fcase, count(*) from t1 group by fcase;
 analyze table t1;
 explain select decode(a, 1, 2, 2, 3, 0) as fcase, count(*) from t1 group by fcase;

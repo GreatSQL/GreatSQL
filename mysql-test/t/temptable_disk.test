@@ -80,6 +80,7 @@ INSERT INTO t VALUES
 ANALYZE TABLE t;
 
 SET GLOBAL temptable_max_ram = 2097152;
+--source include/disable_turbo.inc
 -- disable_result_log
 SELECT * FROM
 t AS t1,
@@ -91,6 +92,7 @@ t AS t6
 ORDER BY 1
 LIMIT 2;
 -- enable_result_log
+--source include/restore_turbo.inc
 
 SET GLOBAL temptable_max_ram = default;
 SET GLOBAL temptable_use_mmap = default;
@@ -122,6 +124,7 @@ ANALYZE TABLE t;
 SET GLOBAL temptable_max_ram = 2*1024*1024;
 SET GLOBAL temptable_max_mmap = 4*1024*1024;
 
+--source include/disable_turbo.inc
 -- disable_result_log
 SELECT * FROM
 t AS t1,
@@ -133,6 +136,7 @@ t AS t6
 ORDER BY 1
 LIMIT 2;
 -- enable_result_log
+--source include/restore_turbo.inc
 
 # We need to make sure we have exhausted the RAM limit
 # Greater-or-equal must be used as memory for shared-block is not accounted for. After fixing

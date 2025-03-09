@@ -253,7 +253,9 @@ let $query =
 SELECT DISTINCT 3 + (SELECT COUNT(a) + RAND() FROM t1) FROM t1;
 
 eval explain $query;
+--source include/disable_turbo.inc
 eval SELECT COUNT(*) > 1 FROM ($query) AS dt;
+--source include/restore_turbo.inc
 
 --echo #
 --echo # 1.1  J O I N   C O N D I T I O N  containing scalar subquery
@@ -539,10 +541,12 @@ SELECT (SELECT COUNT(*) + `outer`.a
 FROM t1 AS `outer`
 GROUP BY a;
 
+--sorted_result
 eval $query;
 eval explain $query;
 
 --echo Translated first step by hand
+--sorted_result
 SELECT (SELECT COUNT(*) + derived_1.d_1 FROM t1) +
         IFNULL(derived_1.`MAX(b)`,0) + 1 + 5 AS mx
 
@@ -552,6 +556,7 @@ FROM (SELECT STRAIGHT_JOIN MAX(outer_t.b) AS `MAX(b)`,
       GROUP BY outer_t.a) derived_1;
 
 --echo Translated by hand
+--sorted_result
 SELECT (derived_1.`COUNT(*) + outer_t.a` +
         IFNULL(derived_0.`MAX(b)`,0)) + 1 + 5 AS mx
 FROM (SELECT STRAIGHT_JOIN MAX(outer_t.b) AS `MAX(b)`,
@@ -772,6 +777,7 @@ WHERE ta.a IN (SELECT c FROM t2 AS tb
                WHERE (SELECT MIN(e) FROM t3 as tc
                       WHERE tc.e IS NOT NULL) < SOME(SELECT e FROM t3 as tc
                                                      WHERE ta.b=tc.e));
+--sorted_result
 eval $query;
 eval EXPLAIN $query;
 

@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2018, 2022, Oracle and/or its affiliates.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -166,6 +167,9 @@ class Tablespace {
   new master key */
   void rotate_encryption_key();
 
+  void set_ts_corrupted(bool is_corrupted) { m_is_corrupted = is_corrupted; }
+  bool is_ts_corrupted() { return m_is_corrupted; }
+
  private:
   void acquire() { mutex_enter(&m_mutex); }
 
@@ -197,6 +201,9 @@ class Tablespace {
 
   /** Purpose for this tablespace */
   enum tbsp_purpose m_purpose;
+
+  /** mark the tablespace is corrupted by truncated or other reason */
+  bool m_is_corrupted{false};
 
   /** Used only to synchronize truncate and rotate key operations */
   ib_mutex_t m_mutex;

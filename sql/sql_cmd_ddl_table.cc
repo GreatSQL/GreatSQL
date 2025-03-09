@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -344,7 +344,7 @@ bool Sql_cmd_create_table::execute(THD *thd) {
         return false;
       } else {
         my_error(ER_TABLE_EXISTS_ERROR, MYF(0), create_info.alias);
-        return false;
+        return true;
       }
     }
 

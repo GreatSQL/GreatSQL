@@ -125,6 +125,7 @@ select distinct c from t1;
 select distinct d from t1;
 select distinct c from t1 order by c;
 select distinct d from t1 order by d;
+--sorted_result
 select c from t1 group by c;
 select d from t1 group by d;
 set big_tables=0;

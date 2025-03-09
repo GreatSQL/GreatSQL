@@ -1,3 +1,4 @@
+--source include/no_turbo.inc
 --source include/not_threadpool.inc
 
 # 2010-01-28 OBN Added support to load 'innodb' and 'semisync' if possible.

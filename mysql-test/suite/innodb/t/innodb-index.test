@@ -453,6 +453,7 @@ DROP TABLE t1;
 connect (a,localhost,root,,);
 connect (b,localhost,root,,);
 connection a;
+--source include/disable_turbo.inc
 CREATE TABLE t1 (a INT, b CHAR(1)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (3,'a'),(3,'b'),(1,'c'),(0,'d'),(1,'e');
 CREATE TABLE t2 (a INT, b CHAR(1)) ENGINE=InnoDB;
@@ -462,10 +463,12 @@ INSERT INTO t2 SELECT * FROM t1;
 INSERT INTO t2i SELECT * FROM t1;
 INSERT INTO t2c SELECT * FROM t1;
 connection b;
+--source include/disable_turbo.inc
 BEGIN;
 # This acquires a MDL lock on t1 until commit.
 SELECT * FROM t1;
 connection a;
+--source include/disable_turbo.inc
 # This times out before of the MDL lock held by connection b.
 SET lock_wait_timeout=1;
 --error ER_LOCK_WAIT_TIMEOUT
@@ -478,6 +481,7 @@ ALTER TABLE t2i ADD PRIMARY KEY(a,b), ADD INDEX t2a(a), ALGORITHM=INPLACE;
 ALTER TABLE t2c ADD PRIMARY KEY(a,b), ADD INDEX t2a(a), ALGORITHM=COPY;
 --disable_info
 connection b;
+--source include/disable_turbo.inc
 # t2i and t2c are too new for this transaction, because they were rebuilt
 --error ER_TABLE_DEF_CHANGED
 SELECT * FROM t2i;

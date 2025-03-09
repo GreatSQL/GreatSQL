@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -174,6 +174,10 @@ class Item_str_ascii_func : public Item_str_func {
   }
   Item_str_ascii_func(const POS &pos, Item *a, Item *b, Item *c)
       : Item_str_func(pos, a, b, c) {
+    collation.set_repertoire(MY_REPERTOIRE_ASCII);
+  }
+  Item_str_ascii_func(const POS &pos, Item *a, Item *b, Item *c, Item *d)
+      : Item_str_func(pos, a, b, c, d) {
     collation.set_repertoire(MY_REPERTOIRE_ASCII);
   }
 
@@ -434,7 +438,7 @@ class Item_func_random_bytes : public Item_str_func {
 
 class Item_func_concat : public Item_str_func {
   String tmp_value{"", 0, collation.collation};  // Initialize to empty
-  bool orafun{false};                            // true from oracmp function
+  bool m_orafun{false};                          // true from oracmp function
  public:
   Item_func_concat(const POS &pos, PT_item_list *opt_list)
       : Item_str_func(pos, opt_list) {}
@@ -443,16 +447,19 @@ class Item_func_concat : public Item_str_func {
       : Item_str_func(pos, a, b) {}
   Item_func_concat(const POS &pos, Item *a, Item *b, bool from_orafun)
       : Item_func_concat(pos, a, b) {
-    orafun = from_orafun;
+    m_orafun = from_orafun;
   }
   // for sys_connect_by_path
   Item_func_concat(Item *a, Item *b, Item *c)
-      : Item_str_func(a, b, c), orafun(true) {}
+      : Item_str_func(a, b, c), m_orafun(true) {}
 
   String *val_str(String *) override;
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "concat"; }
   Item *pq_clone(THD *thd, Query_block *select) override;
+  bool is_orafun() { return m_orafun; }
+  void set_orafun(bool orafun) { m_orafun = orafun; }
+  enum Functype functype() const override { return CONCAT_FUNC; }
 };
 
 class Item_func_concat_ws : public Item_str_func {
@@ -470,6 +477,7 @@ class Item_func_concat_ws : public Item_str_func {
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "concat_ws"; }
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return CONCAT_WS_FUNC; }
 };
 
 class Item_func_reverse : public Item_str_func {
@@ -483,6 +491,7 @@ class Item_func_reverse : public Item_str_func {
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "reverse"; }
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return REVERSE_FUNC; }
 };
 
 class Item_func_replace : public Item_str_func {
@@ -497,6 +506,7 @@ class Item_func_replace : public Item_str_func {
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "replace"; }
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return REPLACE_FUNC; }
 };
 
 class Item_func_insert : public Item_str_func {
@@ -532,6 +542,7 @@ class Item_func_lower : public Item_str_conv {
   const char *func_name() const override { return "lower"; }
   bool resolve_type(THD *) override;
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return LOWER_FUNC; }
 };
 
 class Item_func_upper : public Item_str_conv {
@@ -540,6 +551,7 @@ class Item_func_upper : public Item_str_conv {
   const char *func_name() const override { return "upper"; }
   bool resolve_type(THD *) override;
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return UPPER_FUNC; }
 };
 
 class Item_func_left : public Item_str_func {
@@ -551,6 +563,7 @@ class Item_func_left : public Item_str_func {
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "left"; }
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return LEFT_FUNC; }
 };
 
 class Item_func_right : public Item_str_func {
@@ -563,6 +576,7 @@ class Item_func_right : public Item_str_func {
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "right"; }
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return RIGHT_FUNC; }
 };
 
 class Item_func_substr : public Item_str_func {
@@ -663,6 +677,7 @@ class Item_func_translate : public Item_str_func {
   String *val_str(String *) override;
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "translate"; }
+  enum Functype functype() const override { return TRANSLATE_FUNC; }
 };
 
 class Item_func_trim : public Item_str_func {
@@ -746,6 +761,7 @@ class Item_func_trim : public Item_str_func {
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return TRIM_FUNC; }
 };
 
 class Item_func_ltrim final : public Item_func_trim {
@@ -756,6 +772,7 @@ class Item_func_ltrim final : public Item_func_trim {
       : Item_func_trim(pos, a, b, TRIM_LTRIM) {}
 
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return LTRIM_FUNC; }
 };
 
 class Item_func_rtrim final : public Item_func_trim {
@@ -766,6 +783,7 @@ class Item_func_rtrim final : public Item_func_trim {
       : Item_func_trim(pos, a, b, TRIM_RTRIM) {}
 
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return RTRIM_FUNC; }
 };
 
 class Item_func_sysconst : public Item_str_func {
@@ -1023,6 +1041,7 @@ class Item_func_repeat final : public Item_str_func {
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "repeat"; }
   Item *pq_clone(THD *thd, Query_block *select) override;
+  enum Functype functype() const override { return REPEAT_FUNC; }
 };
 
 class Item_func_space final : public Item_str_func {
@@ -1055,6 +1074,7 @@ class Item_func_rpad : public Item_str_func {
   bool oracle_mode_flag = false;
   Item *pq_clone(THD *thd, Query_block *select) override;
   bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
+  enum Functype functype() const override { return RPAD_FUNC; }
 };
 
 class Item_func_oracle_rpad : public Item_func_rpad {
@@ -1088,6 +1108,7 @@ class Item_func_lpad : public Item_str_func {
   bool oracle_mode_flag = false;
   Item *pq_clone(THD *thd, Query_block *select) override;
   bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
+  enum Functype functype() const override { return LPAD_FUNC; }
 };
 
 class Item_func_oracle_lpad final : public Item_func_lpad {
@@ -1276,6 +1297,8 @@ class Item_charset_conversion : public Item_str_func {
       : Item_str_func(pos, a), m_cast_cs(cs_arg) {}
 
   String *val_str(String *) override;
+  longlong cast_length() { return m_cast_length; }
+  const CHARSET_INFO *get_cast_cs() { return m_cast_cs; }
 };
 
 class Item_typecast_char final : public Item_charset_conversion {
@@ -1414,6 +1437,9 @@ class Item_func_set_collation final : public Item_str_func {
 
   Item *pq_clone(THD *thd, Query_block *select) override;
   bool pq_copy_from(THD *thd, Query_block *select, Item *item) override;
+  std::string get_collation_string() {
+    return std::string(collation_string.str, collation_string.length);
+  }
 };
 
 class Item_func_charset final : public Item_str_func {
@@ -1599,10 +1625,20 @@ class Item_func_start_secondary_engine_increment_load_task final
  public:
   Item_func_start_secondary_engine_increment_load_task(const POS &pos, Item *a,
                                                        Item *b)
-      : Item_str_ascii_func(pos, a, b), auto_position(true) {}
+      : Item_str_ascii_func(pos, a, b),
+        auto_position(true),
+        strict_mode(true) {}
   Item_func_start_secondary_engine_increment_load_task(const POS &pos, Item *a,
                                                        Item *b, Item *c)
-      : Item_str_ascii_func(pos, a, b, c), auto_position(false) {}
+      : Item_str_ascii_func(pos, a, b, c),
+        auto_position(false),
+        strict_mode(true) {}
+  Item_func_start_secondary_engine_increment_load_task(const POS &pos, Item *a,
+                                                       Item *b, Item *c,
+                                                       Item *d)
+      : Item_str_ascii_func(pos, a, b, c, d),
+        auto_position(false),
+        strict_mode(true) {}
   bool resolve_type(THD *) override;
   const char *func_name() const override {
     return "Item_func_start_secondary_engine_increment_load_task";
@@ -1611,6 +1647,7 @@ class Item_func_start_secondary_engine_increment_load_task final
 
  private:
   bool auto_position;
+  bool strict_mode;
 };
 
 class Item_func_stop_secondary_engine_increment_load_task final
@@ -2166,183 +2203,6 @@ class Item_func_internal_get_dd_column_extra final : public Item_str_func {
 
   String *val_str(String *) override;
 };
-
-class Item_func_internal_dbmsmeta_router final : public Item_str_func {
- protected:
-  THD *my_thd;
-
- public:
-  enum META_FUNC_TYPE { GET_DDL = 1, GET_DEPENDENT_DDL, GET_GRANTED_DDL };
-
-  enum OBJECT_TYPE {
-    TYPE_TABLE = 1,
-    TYPE_VIEW,
-    TYPE_FUNCTION,
-    TYPE_INDEX,
-    TYPE_PACKAGE,
-    TYPE_PACKAGE_SPEC,
-    TYPE_PACKAGE_BODY,
-    TYPE_PROCEDURE,
-    TYPE_SYSTEM_GRANT,
-    TYPE_DYNAMIC_GRANT,
-    TYPE_UNKNOWN = 99
-  };
-
-  uint8 get_object_type(String *str);
-
-  Item_func_internal_dbmsmeta_router(const POS &pos, PT_item_list *a)
-      : Item_str_func(pos, a) {
-    my_thd = current_thd;
-  }
-
-  bool resolve_type(THD *thd) override {
-    if (param_type_is_default(thd, 1, -1)) return true;
-    if (Item_str_func::resolve_type(thd)) return true;
-
-    set_data_type_blob(MAX_BLOB_WIDTH);
-    set_nullable(true);
-    return false;
-  }
-
-  void get_ddl(uint8 object_type_value, String *tbl_name_ptr,
-               String *db_name_ptr, String *str);
-
-  void get_dependent_ddl(uint8 object_type_value, String *base_object_name,
-                         String *base_object_dbname, String *str);
-
-  void get_granted_ddl(uint8 object_type_value, String *grantee, String *str);
-
-  const char *func_name() const override { return "internal_dbmsmeta_router"; }
-
-  String *val_str(String *) override;
-};
-
-class Item_func_dbmsotpt_getline : public Item_str_func {
- public:
-  explicit Item_func_dbmsotpt_getline(const POS &pos) : Item_str_func(pos) {}
-  String *val_str(String *str) override;
-  bool resolve_type(THD *) override {
-    set_data_type_string(uint32(MYSQL_ERRMSG_SIZE), system_charset_info);
-    set_nullable(true);
-    return false;
-  }
-  const char *func_name() const override { return "dbmsotpt_getline"; }
-};
-
-class Item_func_dbms_lob_func_base : public Item_str_func {
- protected:
-  typedef Item_str_func super;
-  THD *thd;
-  String temp;
-
- public:
-  Item_func_dbms_lob_func_base(const POS &pos, Item *a, Item *b, Item *c,
-                               Item *d, Item *e)
-      : super(pos, a, b, c, d, e) {
-    thd = current_thd;
-  }
-
-  Item_func_dbms_lob_func_base(const POS &pos, Item *a, Item *b, Item *c,
-                               Item *d)
-      : super(pos, a, b, c, d) {
-    thd = current_thd;
-  }
-
-  String *val_str(String *) override;
-  bool resolve_type(THD *thd) override;
-  const char *func_name() const override { return "dbms_lob_func_base"; }
-
-  virtual bool before_check();
-  virtual bool after_check();
-  virtual String *calc(String *str);
-
- protected:
-  String *calc_lob(String *lob_loc, uint64 offset, uint64 amount,
-                   String *buffer);
-  void string_replace(std::string &str);
-};
-
-class Item_func_dbms_lob_write_lob_calc : public Item_func_dbms_lob_func_base {
- protected:
-  typedef Item_func_dbms_lob_func_base super;
-
- private:
-  uint64 amount = 0;
-  uint64 offset = 0;
-  uint64 buffer_length = 0;
-  String *buffer = nullptr;
-
- public:
-  Item_func_dbms_lob_write_lob_calc(const POS &pos, Item *a, Item *b, Item *c,
-                                    Item *d)
-      : super(pos, a, b, c, d) {
-    null_value = false;
-  }
-
-  bool before_check() override;
-  bool after_check() override;
-  String *calc(String *str) override;
-
-  bool resolve_type(THD *thd) override;
-  const char *func_name() const override { return "dbms_lob_write_lob_calc"; }
-};
-
-class Item_func_dbms_lob_write_transform : public Item_func_dbms_lob_func_base {
- protected:
-  typedef Item_func_dbms_lob_func_base super;
-
-  std::string transform_sql;
-  uint64 amount = 0;
-  uint64 offset = 0;
-  uint64 max_size = 0;
-  uint64 buffer_length = 0;
-  String *buffer = nullptr;
-
- public:
-  static const uint MAX_LOB_LENGTH = 16383;
-
- public:
-  Item_func_dbms_lob_write_transform(const POS &pos, Item *a, Item *b, Item *c,
-                                     Item *d, Item *e)
-      : super(pos, a, b, c, d, e) {
-    null_value = false;
-    transform_sql.clear();
-  }
-
-  bool before_check() override;
-  bool after_check() override;
-  String *calc(String *str) override;
-
-  bool resolve_type(THD *thd) override;
-  const char *func_name() const override { return "dbms_lob_write_transform"; }
-
- protected:
-  bool check_param_rela(Query_dumpvar_param_rela *param_rela);
-  virtual std::string gen_dync_sql_statement(
-      Query_dumpvar_param_rela *param_rela, String *lob_content);
-};
-
-class Item_func_dbms_lob_write_precheck
-    : public Item_func_dbms_lob_write_transform {
- protected:
-  typedef Item_func_dbms_lob_write_transform super;
-
- public:
-  Item_func_dbms_lob_write_precheck(const POS &pos, Item *a, Item *b, Item *c,
-                                    Item *d, Item *e)
-      : super(pos, a, b, c, d, e) {
-    null_value = false;
-    transform_sql.clear();
-  }
-
-  const char *func_name() const override { return "dbms_lob_write_precheck"; }
-  String *calc(String *str) override;
-
- protected:
-  std::string gen_dync_sql_statement(Query_dumpvar_param_rela *param_rela,
-                                     String *lob_content) override;
-};
-
 class Item_func_initcap : public Item_str_func {
  protected:
   uint multiply;
@@ -2620,48 +2480,6 @@ class Item_func_utl_url_unescape final : public Item_str_func {
 };
 
 
-class Item_func_dbms_utility_call_stack final : public Item_str_func {
- public:
-  Item_func_dbms_utility_call_stack(const POS &pos) : Item_str_func(pos) {}
-  String *val_str(String *) override;
-  bool resolve_type(THD *thd) override;
-  const char *func_name() const override { return "dbms_utility_call_stack"; }
-};
-
-class Item_func_dbms_lob_create_temporary : public Item_str_func {
- public:
-  explicit Item_func_dbms_lob_create_temporary(const POS &pos, Item *a)
-      : Item_str_func(pos, a) {}
-  String *val_str(String *) override;
-  bool resolve_type(THD *thd) override;
-  const char *func_name() const override { return "dbms_lob_create_temporary"; }
-};
-
-class Item_func_dbms_alert_get_all_sids final : public Item_str_func {
- public:
-  Item_func_dbms_alert_get_all_sids(const POS &pos) : Item_str_func(pos) {}
-  String *val_str(String *) override;
-  bool resolve_type(THD *thd) override;
-  const char *func_name() const override { return "dbms_alert_get_all_sids"; }
-};
-
-class Item_func_dbms_alert_get_sid final : public Item_str_func {
- public:
-  explicit Item_func_dbms_alert_get_sid(const POS &pos) : Item_str_func(pos) {}
-  String *val_str(String *) override;
-  bool resolve_type(THD *thd) override;
-  const char *func_name() const override { return "dbms_alert_get_sid"; }
-};
-
-class Item_func_dbms_pipe_unpack_message : public Item_str_func {
- public:
-  Item_func_dbms_pipe_unpack_message(const POS &pos, Item *a)
-      : Item_str_func(pos, a) {}
-  bool resolve_type(THD *thd) override;
-  String *val_str(String *str) override;
-  const char *func_name() const override { return "dbms_pipe_unpack_message"; }
-};
-
 class Item_func_rawtohex : public Item_func_hex {
  public:
   Item_func_rawtohex(const POS &pos, Item *a) : Item_func_hex(pos, a) {}
@@ -2669,15 +2487,6 @@ class Item_func_rawtohex : public Item_func_hex {
   String *val_str(String *str) override;
   const char *func_name() const override { return "rawtohex"; }
   Item *pq_clone(THD *thd, Query_block *select) override;
-};
-
-class Item_func_dbms_profiler_serialize : public Item_str_func {
- public:
-  Item_func_dbms_profiler_serialize(const POS &pos) : Item_str_func(pos) {}
-  const char *func_name() const override { return "dbms_profiler_serialize"; }
-
-  bool resolve_type(THD *thd) override;
-  String *val_str(String *str) override;
 };
 
 class Item_func_maskall : public Item_str_func {

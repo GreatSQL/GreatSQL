@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, 2024, GreatDB Software Co., Ltd. All rights
+/* Copyright (c) 2023, 2025, GreatDB Software Co., Ltd. All rights
    reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -28,7 +28,7 @@
 #define IB_TO_STR(s) _IB_TO_STR(s)
 
 /* datadict version of greatdb */
-#define GREATDB_DD_VERSION_ID 7
+#define GREATDB_DD_VERSION_ID 8
 
 #define GREATDB_INITIAL_VERSION_ID 80025001  // from Mysql 8.0.25
 #define GREATDB_INITIAL_DD_VERSION_ID 1      // fixed, don't modify it

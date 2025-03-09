@@ -3,6 +3,7 @@
 #
 
 # set timestamp to '2021-11-22 00:00:00'
+--disable_warnings
 set timestamp=1637510400;
 select to_date(concat('15-01-2001',' 2:59:58.999'),
 	           concat('DD-MM-YYYY',' ','HH24:MI:SS.FF3'));
@@ -46,12 +47,16 @@ insert into t1 values
 
 select date,format,to_date(date, format) as to_date from t1;
 # Use as a string
+--source include/disable_turbo.inc
 select date,format,concat('',to_date(date, format)) as con from t1;
+--source include/restore_turbo.inc
 # Use as datetime
 select date,format,cast(to_date(date, format) as datetime) as datetime from t1;
 select date,format,DATE(to_date(date, format)) as date2 from t1;
 select date,format,TIME(to_date(date, format)) as time from t1;
+--source include/disable_turbo.inc
 select date,format,concat(TIME(to_date(date, format))) as time2 from t1;
+--source include/restore_turbo.inc
 # Test small bug in  handling
 select concat('',to_date('8:11:2.123456 03-01-02','HH24:MI:SS YY-MM-DD'));
 
@@ -743,3 +748,4 @@ drop table t1;
 set sql_mode = oracle;
 SELECT TO_DATE('January 15, 1989, 12:00 A.M.','Month dd, YYYY, HH:MI A.M.') - TO_DATE('January 15, 1989, 11:00 A.M.','Month dd, YYYY, HH:MI A.M.') as results FROM DUAL;
 SELECT TO_DATE('January 15, 1989, 12:00 A.M.','Month dd, YYYY, HH12:MI A.M.') - TO_DATE('January 15, 1989, 11:00 A.M.','Month dd, YYYY, HH12:MI A.M.') as results FROM DUAL;
+--enable_warnings

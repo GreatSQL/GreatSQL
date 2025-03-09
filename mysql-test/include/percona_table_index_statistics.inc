@@ -1,6 +1,8 @@
 # include file to test index and table statstics for specific storage engine
 # requires includer set the default strorage engine for the session
 
+--source include/no_turbo.inc
+
 # Bug 602047 (wrong rows_read value)
 
 FLUSH INDEX_STATISTICS;

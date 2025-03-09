@@ -300,7 +300,7 @@ CREATE TABLE t2(a INT, b INT);
 INSERT INTO t2 VALUES(1,2);
 INSERT INTO t2 VALUES(4,5);
 SELECT * FROM (SELECT COUNT(DISTINCT t1.a), t1.b FROM t1 RIGHT JOIN t2 ON
-t1.a=t2.a GROUP BY t1.b) as tt;
+t1.a=t2.a GROUP BY t1.b) as tt order by tt.b;
 
 DROP TABLE t1,t2;
 

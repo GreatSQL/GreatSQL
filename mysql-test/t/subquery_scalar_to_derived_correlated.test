@@ -143,6 +143,7 @@ let $query =
 SELECT SUM(a),
        a, (SELECT MIN(a) FROM t2 WHERE a = AVG(t1.a))
 FROM t1 GROUP BY a;
+--sorted_result
 eval $query;
 eval EXPLAIN $query;
 
@@ -203,7 +204,7 @@ select * from l, p
 where p_pkey = l_pkey and
       l_quantity < (select 0.9 * avg(l_quantity)
                     from l where l_pkey = p_pkey);
-
+--sorted_result
 eval $query;
 eval EXPLAIN $query;
 
@@ -678,8 +679,10 @@ FROM t2 WHERE 1 = (SELECT t1.a FROM t1 WHERE t1.b = t2.a);
 --echo # Nested loop join, reject_if filter is not on top,
 --echo # but that's ok as long as it's on top of the
 --echo # join's index lookup
+--source include/disable_turbo.inc
 --skip_if_hypergraph
 eval EXPLAIN FORMAT=TREE $query;
+--source include/restore_turbo.inc
 eval $query;
 
 let $query =
@@ -687,8 +690,10 @@ SELECT /*+ JOIN_SUFFIX (t2) */ a
 FROM t2 WHERE 1 = (SELECT t1.a FROM t1 WHERE t1.b = t2.a);
 
 --echo # Hash join, the reject_if filter should be on top now:
+--source include/disable_turbo.inc
 --skip_if_hypergraph
 eval EXPLAIN FORMAT=TREE $query;
+--source include/restore_turbo.inc
 eval $query;
 
 DROP TABLE t1,t2;

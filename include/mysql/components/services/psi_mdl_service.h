@@ -1,4 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+  Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -43,7 +44,7 @@ END_SERVICE_DEFINITION(psi_mdl_v1)
 /*
   Version 2.
   Introduced in MySQL 8.0.24
-  Status: Active.
+  Status: Deprecated.
 */
 BEGIN_SERVICE_DEFINITION(psi_mdl_v2)
 create_metadata_lock_v1_t create_metadata_lock;
@@ -54,5 +55,21 @@ destroy_metadata_lock_v1_t destroy_metadata_lock;
 start_metadata_wait_v1_t start_metadata_wait;
 end_metadata_wait_v1_t end_metadata_wait;
 END_SERVICE_DEFINITION(psi_mdl_v2)
+
+/*
+  Version 3.
+  Introduced in GreatDB 6.1.0
+  Status: Active.
+*/
+BEGIN_SERVICE_DEFINITION(psi_mdl_v3)
+create_metadata_lock_v1_t create_metadata_lock;
+set_metadata_lock_status_v1_t set_metadata_lock_status;
+set_metadata_lock_duration_v2_t set_metadata_lock_duration;
+/* Added in version 3. */
+set_metadata_lock_type_v3_t set_metadata_lock_type;
+destroy_metadata_lock_v1_t destroy_metadata_lock;
+start_metadata_wait_v1_t start_metadata_wait;
+end_metadata_wait_v1_t end_metadata_wait;
+END_SERVICE_DEFINITION(psi_mdl_v3)
 
 #endif /* COMPONENTS_SERVICES_PSI_MDL_SERVICE_H */

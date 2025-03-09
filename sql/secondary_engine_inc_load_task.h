@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+/* Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -73,7 +73,8 @@ class Secondary_engine_increment_load_task_manager {
   }
 
   int start_inc_load_task(const char *schema_name, const char *table_name,
-                          const char *gtid, String *str, bool auto_position);
+                          const char *gtid, String *str, bool auto_position,
+                          bool strict_mode);
   int stop_inc_load_task(const char *schema_name, const char *table_name,
                          String *str);
   void shutdown_and_clear_all_inc_load_task();
@@ -109,7 +110,7 @@ class Secondary_engine_inc_load_task {
                                  const std::string &table_name);
   ~Secondary_engine_inc_load_task() = default;
 
-  int start_task();
+  int start_task(bool strict_mode);
   int stop_task();
 
   bool task_stopped() { return m_stop; }
@@ -127,9 +128,15 @@ class Secondary_engine_inc_load_task {
     return (m_reader == nullptr) ? "" : m_reader->get_last_gtid();
   }
   bool has_error() {
-    return (m_reader == nullptr) ? false : m_reader->has_error();
+    if (m_reader) return m_reader->has_error();
+    if (!m_errmsg.empty()) return true;
+    return false;
   }
-  const char *error() { return (m_reader == nullptr) ? "" : m_reader->error(); }
+  const char *error() {
+    if (m_reader) return m_reader->error();
+    if (!m_errmsg.empty()) return m_errmsg.c_str();
+    return "";
+  }
 
   char *get_sync_gtid_set_str() {
     char *buf = nullptr;
@@ -152,6 +159,8 @@ class Secondary_engine_inc_load_task {
   std::atomic_bool m_run_once;
   my_thread_handle m_handle;
   bool m_stop;
+  std::string m_errmsg;
+  std::string m_warning;
 
   std::string m_schema_name;
   std::string m_table_name;
@@ -165,6 +174,8 @@ class Secondary_engine_inc_load_task {
 
   std::string m_start_time;
   std::string m_end_time;
+
+  friend class Secondary_engine_increment_load_task_manager;
 };
 
 #endif  // BINLOG_READER_TASK

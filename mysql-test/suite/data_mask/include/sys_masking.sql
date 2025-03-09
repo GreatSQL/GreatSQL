@@ -1,1 +1,1 @@
-../../../../sql/data_mask/sys_masking.sql
+../../../../share/sys_masking.sql

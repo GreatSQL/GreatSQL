@@ -14,7 +14,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_mac
 test
 test_ignore
 USE test;
@@ -45,7 +44,6 @@ mtr
 mysql
 performance_schema
 sys
-sys_mac
 test
 USE test;
 SHOW TABLES;

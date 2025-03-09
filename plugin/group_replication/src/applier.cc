@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -34,6 +34,7 @@
 #include "my_byteorder.h"
 #include "my_dbug.h"
 #include "my_systime.h"
+#include "mysql/psi/mysql_file.h"
 #include "plugin/group_replication/include/applier.h"
 #include "plugin/group_replication/include/leave_group_on_failure.h"
 #include "plugin/group_replication/include/plugin.h"
@@ -359,11 +360,13 @@ int Applier_module::apply_view_change_packet(
 
 int Applier_module::apply_data_packet(Data_packet *data_packet,
                                       Format_description_log_event *fde_evt,
-                                      Continuation *cont, bool io_buffered) {
+                                      Continuation *cont, bool io_buffered,
+                                      bool &recv_binlog_chaos_error) {
   DBUG_TRACE;
   int error = 0;
   uchar *payload = data_packet->payload;
   uchar *payload_end = data_packet->payload + data_packet->len;
+  ulong left_len = data_packet->len;
 
   DBUG_EXECUTE_IF("group_replication_before_apply_data_packet", {
     const char act[] =
@@ -372,12 +375,62 @@ int Applier_module::apply_data_packet(Data_packet *data_packet,
     assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
   });
 
+  int i = 0;
   while ((payload != payload_end) && !error) {
     uint event_len = uint4korr(((uchar *)payload) + EVENT_LEN_OFFSET);
+    if (++i == 4) {
+      DBUG_EXECUTE_IF("group_replication_recv_binlog_chaos_no_rejoin",
+                      event_len = 1024 * 10;);
+      DBUG_EXECUTE_IF("group_replication_recv_binlog_chaos",
+                      event_len = 1024 * 10;);
+    }
+    if (event_len > left_len || event_len <= LOG_EVENT_HEADER_LEN) {
+      error = 1;
+      recv_binlog_chaos_error = true;
+      DBUG_EXECUTE_IF("group_replication_recv_binlog_chaos_no_rejoin",
+                      recv_binlog_chaos_error = false;);
+      LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                      "An un-expected data_packet from the group, the binlog "
+                      "format is chaos");
+
+      do {
+        char filename[128];
+        struct timeval tv;
+        if (gettimeofday(&tv, nullptr) != 0) {
+          break;
+        }
+        struct tm *tm_p = localtime((const time_t *)&tv.tv_sec);
+        if (tm_p == nullptr) {
+          break;
+        }
+        (void)sprintf(
+            filename,
+            "applier_binlog_chaos_file_%04d-%02d-%02dT%02d:%02d:%02d.%06d",
+            tm_p->tm_year + 1900, tm_p->tm_mon + 1, tm_p->tm_mday,
+            tm_p->tm_hour, tm_p->tm_min, tm_p->tm_sec, (int)(tv.tv_usec));
+
+        int fd = mysql_file_create(PSI_NOT_INSTRUMENTED, filename, CREATE_MODE,
+                                   O_WRONLY | O_EXCL | O_APPEND, MYF(MY_WME));
+        if (fd < 0) {
+          LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                          "Fail write chaos binlog to temp file");
+
+          break;
+        }
+        if (mysql_file_write(fd, data_packet->payload, data_packet->len,
+                             MYF(MY_WME + MY_NABP))) {
+          LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                          "Fail write chaos binlog to temp file");
+        }
+        mysql_file_close(fd, MYF(0));
+      } while (0);
+      break;
+    }
 
     Data_packet *new_packet =
         new Data_packet(payload, event_len, key_transaction_data);
     payload = payload + event_len;
+    left_len -= event_len;
 
     Members_list *online_members = nullptr;
     if (nullptr != data_packet->m_online_members) {
@@ -559,6 +612,7 @@ int Applier_module::applier_thread_handle() {
   bool loop_termination = false, io_buffered = false,
        io_buffered_allowed = false;
   int packet_application_error = 0, delayed = 0;
+  bool recv_binlog_chaos_error = false;
   bool remaining_packets_inited = false;
   int remaining_packets_to_be_processed = 0;
   size_t applier_batch_size_threshold = 0, recovering_queue_size = 0,
@@ -697,8 +751,9 @@ int Applier_module::applier_thread_handle() {
         this->incoming->pop();
         break;
       case DATA_PACKET_TYPE:
-        packet_application_error = apply_data_packet(
-            (Data_packet *)packet, fde_evt, cont, io_buffered);
+        packet_application_error =
+            apply_data_packet((Data_packet *)packet, fde_evt, cont, io_buffered,
+                              recv_binlog_chaos_error);
         // Remove from queue here, so the size only decreases after packet
         // handling
         this->incoming->pop();
@@ -797,6 +852,10 @@ end:
     */
     leave_actions.set(leave_group_on_failure::HANDLE_EXIT_STATE_ACTION,
                       gcs_module->belongs_to_group());
+    if (recv_binlog_chaos_error) {
+      leave_actions.set(leave_group_on_failure::HANDLE_AUTO_REJOIN,
+                        gcs_module->belongs_to_group());
+    }
     leave_group_on_failure::leave(leave_actions,
                                   ER_GRP_RPL_APPLIER_EXECUTION_FATAL_ERROR,
                                   nullptr, exit_state_action_abort_log_message);

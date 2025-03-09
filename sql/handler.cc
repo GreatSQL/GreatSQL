@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -8105,6 +8105,7 @@ static int write_locked_table_maps(THD *thd) {
              ("get_binlog_table_maps(): %d", thd->get_binlog_table_maps()));
 
   if (thd->get_binlog_table_maps() == 0) {
+    int table_maps = 0;
     for (MYSQL_LOCK *lock : {thd->extra_lock, thd->lock}) {
       if (lock == nullptr) continue;
 
@@ -8115,6 +8116,7 @@ static int write_locked_table_maps(THD *thd) {
         DBUG_PRINT("info", ("Checking table %s", table->s->table_name.str));
         if (table->current_lock == F_WRLCK &&
             check_table_binlog_row_based(thd, table)) {
+          table_maps++;
           /*
             We need to have a transactional behavior for SQLCOM_CREATE_TABLE
             (e.g. CREATE TABLE... SELECT * FROM TABLE) in order to keep a
@@ -8142,6 +8144,38 @@ static int write_locked_table_maps(THD *thd) {
           if (unlikely(error)) return 1;
         }
       }
+    }
+    if (table_maps == 0) {
+      char err_buf[1024];
+      auto len =
+          sprintf(err_buf,
+                  "No table_map_log_event is written, the statement hold "
+                  "extra_lock: %s, hold lock: %s",
+                  (thd->extra_lock == nullptr ? "no" : "yes"),
+                  (thd->lock == nullptr ? "no" : "yes"));
+      err_buf[len] = 0;
+      LogErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, err_buf);
+      int i = 0;
+      for (MYSQL_LOCK *lock : {thd->extra_lock, thd->lock}) {
+        const char *lock_name = (i++ == 0 ? "extra_lock" : "lock");
+        if (lock == nullptr) {
+          continue;
+        }
+        TABLE **const end_ptr = lock->table + lock->table_count;
+        for (TABLE **table_ptr = lock->table; table_ptr != end_ptr;
+             ++table_ptr) {
+          TABLE *const table = *table_ptr;
+          len = sprintf(
+              err_buf, "Inside statement's %s, table %s.%s hold F_WRLCK: %s",
+              lock_name, (table->s->db.str == nullptr ? "" : table->s->db.str),
+              (table->s->table_name.str == nullptr ? ""
+                                                   : table->s->table_name.str),
+              (table->current_lock == F_WRLCK ? "yes" : "no"));
+          err_buf[len] = 0;
+          LogErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, err_buf);
+        }
+      }
+      return 1;
     }
   }
   return 0;
@@ -8247,6 +8281,7 @@ int binlog_log_row(TABLE *table, const uchar *before_record,
       the first row handled in this statement. In that case, we need
       to write table maps for all locked tables to the binary log.
     */
+    auto old_table_maps = thd->get_binlog_table_maps();
     if (likely(!(error = write_locked_table_maps(thd)))) {
       /*
         We need to have a transactional behavior for SQLCOM_CREATE_TABLE
@@ -8258,7 +8293,20 @@ int binlog_log_row(TABLE *table, const uchar *before_record,
       */
       bool const has_trans = thd->lex->sql_command == SQLCOM_CREATE_TABLE ||
                              table->file->has_transactions();
-      error = (*log_func)(thd, table, has_trans, before_record, after_record);
+      if (thd->is_binlog_cache_empty(has_trans)) {
+        char err_buf[256];
+        auto len = sprintf(err_buf,
+                           "No table_map_log_event is written, cannot write "
+                           "rows_log_event yet. "
+                           "Binlog table maps before is: %u",
+                           old_table_maps);
+        err_buf[len] = 0;
+        LogErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG, err_buf);
+        thd->clear_binlog_table_maps();
+        error = 1;
+      }
+      if (!error)
+        error = (*log_func)(thd, table, has_trans, before_record, after_record);
     }
   }
 
@@ -9196,6 +9244,43 @@ void handler::ha_set_primary_handler(handler *primary_handler) {
   m_primary_handler = primary_handler;
 }
 
+ParallelReaderHandler *handler::create_parallel_reader_handler(
+    Parallel_reader_handler_config_t *para_read_config) {
+  ParallelReaderHandler *parallel_reader_handler = nullptr;
+  parallel_read_data_reader_t *gdb_reader_handler = nullptr;
+
+  do {
+    gdb_reader_handler = new (std::nothrow) parallel_read_data_reader_t;
+    if (nullptr == gdb_reader_handler) {
+      break;
+    }
+    /** setup the handler information into parallel reader handler */
+    gdb_reader_handler->set_target_table(this);
+    gdb_reader_handler->set_reader_config(para_read_config);
+    // gdb_reader_handler->set_mysql_block_size(para_read_config->m_buffer_size);
+    gdb_reader_handler->set_reader_source_table(this->table);
+    parallel_reader_handler = gdb_reader_handler;
+
+  } while (false);
+
+  return parallel_reader_handler;
+}
+
+void handler::close_parallel_reader_handler(
+    ParallelReaderHandler *para_reader_handler) {
+  if (nullptr == para_reader_handler) return;
+
+  parallel_read_data_reader_t *gdb_reader_handler =
+      dynamic_cast<parallel_read_data_reader_t *>(para_reader_handler);
+
+  void *data_fetcher_manager = gdb_reader_handler->m_data_fetcher;
+  if (data_fetcher_manager) {
+    /** this mean the reader has not been stopped */
+  }
+
+  delete para_reader_handler;
+}
+
 const handlerton *SecondaryEngineHandlerton(const THD *thd) {
   if (thd->lex->m_sql_cmd == nullptr) {
     return nullptr;
@@ -9303,3 +9388,871 @@ Xa_state_list::instantiation_tuple Xa_state_list::new_instance() {
       std::move(mem_root), std::move(map_alloc), std::move(xid_map),
       std::move(xa_list));
 }
+
+/***********************************/
+
+parallel_read_data_reader_t::parallel_read_data_reader_t() {
+  m_is_prepared = false;
+}
+
+parallel_read_data_reader_t::~parallel_read_data_reader_t() {}
+
+/**begin: the implementation of reader interface */
+
+ParallelReaderHandler::mysql_row_desc_t
+parallel_read_data_reader_t::get_row_info_for_parse() {
+  return m_reader_mysql_row_info;
+}
+
+void parallel_read_data_reader_t::reset_data_frame(
+    parallel_reader_data_frame_t *data_frame) {
+  ret_data_frame(data_frame);
+}
+
+/** this is the table scan which use the primary key */
+int parallel_read_data_reader_t::rnd_init() {
+  int ret = 0;
+  parallel_read_create_data_fetcher_ctx_t create_data_fetcher_ctx;
+
+  set_read_index(m_table->s->primary_key);
+  set_need_keep_order(false);
+  set_mysql_block_size(m_reader_config->m_buffer_size);
+  set_mysql_parallel_thread_count(m_reader_config->m_thread_count);
+
+  create_data_fetcher_ctx.thd = current_thd;
+
+  do {
+    ret = m_target_handler->ht->data_fetcher_interface
+              .parallel_read_create_data_fetcher(create_data_fetcher_ctx,
+                                                 m_data_fetcher);
+    if (ret) {
+      break;
+    }
+
+    ret = prepare_read_block(m_target_handler->ht, current_thd, m_data_fetcher);
+
+    if (ret) {
+      /** init read block failure, clear the already allocated resource */
+      m_target_handler->ht->data_fetcher_interface
+          .parallel_read_destory_data_fetcher(m_data_fetcher);
+      m_data_fetcher = nullptr;
+    }
+
+  } while (false);
+
+  return ret;
+}
+
+int parallel_read_data_reader_t::rnd_next_block(
+    parallel_reader_data_frame_t *data_frame) {
+  int ret = 0;
+
+  ret = get_data_frame(data_frame);
+  /** if ret indicate the call success, the caller must call ret_data_frame */
+  return ret;
+}
+
+int parallel_read_data_reader_t::rnd_end() {
+  int ret = 0;
+  /** this will wait all data frame has been reset: return the frame to engine
+   * layer, this will prevent the heap usage after free.
+   * so, be sure all data frames have been returned to engine layer.
+   */
+  ret = stop_read_block();
+
+  if (m_data_fetcher) {
+    m_target_handler->ht->data_fetcher_interface
+        .parallel_read_destory_data_fetcher(m_data_fetcher);
+    m_data_fetcher = nullptr;
+  }
+
+  return ret;
+}
+
+int parallel_read_data_reader_t::read_range_init(uint keynr, key_range *min_key,
+                                                 key_range *max_key) {
+  int ret = 0;
+
+  parallel_read_create_data_fetcher_ctx_t create_data_fetcher_ctx;
+
+  parallel_read_data_reader_range_t fetch_range;
+
+  fetch_range.m_keynr = keynr;
+  fetch_range.m_min_key = min_key;
+  fetch_range.m_max_key = max_key;
+
+  set_need_keep_order(false);
+  set_mysql_parallel_thread_count(m_reader_config->m_thread_count);
+  set_mysql_block_size(m_reader_config->m_buffer_size);
+  set_read_range(fetch_range);
+  set_read_index(keynr);
+
+  create_data_fetcher_ctx.thd = current_thd;
+
+  do {
+    ret = m_target_handler->ht->data_fetcher_interface
+              .parallel_read_create_data_fetcher(create_data_fetcher_ctx,
+                                                 m_data_fetcher);
+    if (ret) {
+      break;
+    }
+
+    ret = prepare_read_block(m_target_handler->ht, current_thd, m_data_fetcher);
+
+    if (ret) {
+      /** init read block failure, clear the already allocated resource */
+      m_target_handler->ht->data_fetcher_interface
+          .parallel_read_destory_data_fetcher(m_data_fetcher);
+      m_data_fetcher = nullptr;
+    }
+
+  } while (false);
+
+  return ret;
+}
+int parallel_read_data_reader_t::read_range_next_block(
+    parallel_reader_data_frame_t *data_frame) {
+  int ret = 0;
+
+  ret = get_data_frame(data_frame);
+
+  return ret;
+}
+
+int parallel_read_data_reader_t::read_range_end() {
+  int ret = 0;
+
+  ret = stop_read_block();
+
+  if (m_data_fetcher) {
+    m_target_handler->ht->data_fetcher_interface
+        .parallel_read_destory_data_fetcher(m_data_fetcher);
+    m_data_fetcher = nullptr;
+  }
+
+  return ret;
+}
+
+int parallel_read_data_reader_t::condition_pushdown(Item *cond, Item *left) {
+  int ret = 0;
+
+  (void)cond;
+  (void)left;
+
+  return ret;
+}
+
+/** scan sequentially */
+int parallel_read_data_reader_t::index_init(int keyno, bool asc) {
+  int ret = 0;
+
+  /** currently, we only one thread to read the data for keep the order */
+  parallel_read_create_data_fetcher_ctx_t create_data_fetcher_ctx;
+  parallel_read_data_reader_range_t fetch_range;
+
+  fetch_range.m_keynr = keyno;
+  fetch_range.is_desc_fetch = !asc;
+  fetch_range.m_min_key = nullptr;
+  fetch_range.m_max_key = nullptr;
+
+  set_need_keep_order(true);
+  set_mysql_block_size(m_reader_config->m_buffer_size);
+  set_mysql_parallel_thread_count(m_reader_config->m_thread_count);
+  set_read_range(fetch_range);
+  set_read_index(keyno);
+
+  create_data_fetcher_ctx.thd = current_thd;
+
+  do {
+    ret = m_target_handler->ht->data_fetcher_interface
+              .parallel_read_create_data_fetcher(create_data_fetcher_ctx,
+                                                 m_data_fetcher);
+    if (ret) {
+      break;
+    }
+
+    ret = prepare_read_block(m_target_handler->ht, current_thd, m_data_fetcher);
+
+    if (ret) {
+      /** init read block failure, clear the already allocated resource */
+      m_target_handler->ht->data_fetcher_interface
+          .parallel_read_destory_data_fetcher(m_data_fetcher);
+      m_data_fetcher = nullptr;
+    }
+
+  } while (false);
+
+  return ret;
+}
+int parallel_read_data_reader_t::index_next_block(
+    parallel_reader_data_frame_t *data_frame) {
+  int ret = 0;
+
+  ret = get_data_frame(data_frame);
+
+  return ret;
+}
+int parallel_read_data_reader_t::index_end() {
+  int ret = 0;
+  ret = stop_read_block();
+
+  if (m_data_fetcher) {
+    m_target_handler->ht->data_fetcher_interface
+        .parallel_read_destory_data_fetcher(m_data_fetcher);
+    m_data_fetcher = nullptr;
+  }
+
+  return ret;
+}
+
+/**end: the implementation of reader interface */
+
+int parallel_read_data_reader_t::prepare_read_block(
+    handlerton *hton, THD *thd, void *data_fetcher_manager) {
+  int err = 0;
+
+  parallel_read_add_target_to_data_fetcher_ctx_t table_data_fetch_ctx;
+  table_data_fetch_ctx.m_thd = thd;
+  table_data_fetch_ctx.data_fetcher = data_fetcher_manager;
+  table_data_fetch_ctx.data_consumer = this;
+  err = hton->data_fetcher_interface.parallel_read_add_target_to_data_fetcher(
+      table_data_fetch_ctx);
+
+  if (0 == err) {
+    m_is_prepared = true;
+  }
+
+  return err;
+}
+
+/** Please note:
+ * if the caller of read can ensure that it wll not call the
+ * read interface after the stop infterface is called,
+ * then we ignore the atomic count call.
+ */
+
+int parallel_read_data_reader_t::read_block(char *output_block,
+                                            uint64_t block_size,
+                                            uint64_t &actual_data_size) {
+  int err = 0;
+
+  if (!m_is_prepared) {
+    return (err = 1);
+  }
+
+  m_active_read_count.fetch_add(1, std::memory_order_relaxed);
+
+  if (m_is_stopping.load(std::memory_order_seq_cst)) {
+    m_active_read_count.fetch_sub(1, std::memory_order_relaxed);
+    return (err = 1);
+  }
+
+  err = m_read_data_forward(output_block, block_size, &actual_data_size);
+
+  m_active_read_count.fetch_sub(1, std::memory_order_relaxed);
+
+  return err;
+}
+
+int parallel_read_data_reader_t::get_data_frame(
+    parallel_reader_data_frame_t *data_frame) {
+  int err = 0;
+
+  if (!m_is_prepared) {
+    return (err = 1);
+  }
+
+  m_active_read_count.fetch_add(1, std::memory_order_relaxed);
+
+  if (m_is_stopping.load(std::memory_order_seq_cst)) {
+    m_active_read_count.fetch_sub(1, std::memory_order_relaxed);
+    return (err = 1);
+  }
+
+  err = m_get_data_frame_forward(data_frame);
+
+  if (err) {
+    m_active_read_count.fetch_sub(1, std::memory_order_relaxed);
+  }
+
+  return err;
+}
+
+int parallel_read_data_reader_t::ret_data_frame(
+    parallel_reader_data_frame_t *data_frame) {
+  int err = 0;
+
+  err = m_ret_data_frame_forward(data_frame);
+  m_active_read_count.fetch_sub(1, std::memory_order_relaxed);
+
+  return err;
+}
+
+/** need guarantee the ongoing read is not effected by the stop operation */
+
+int parallel_read_data_reader_t::stop_read_block() {
+  int err = 0;
+
+  do {
+    if (!m_is_prepared) {
+      break;
+    }
+
+    m_is_stopping.store(true, std::memory_order_seq_cst);
+
+    /** if there are no get data frame call, we can stop even if
+     *  the m_active_read_count > 0; but  we need block the
+     * call of stop read data if there is get data frame call.
+     */
+
+    while (m_active_read_count.load()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    err = m_stop_read_data_forward(this);
+
+  } while (false);
+
+  if (0 == err) {
+    m_is_prepared = false;
+  }
+
+  return err;
+}
+
+parallel_read_controller_t::parallel_read_controller_t() {}
+
+parallel_read_controller_t::~parallel_read_controller_t() {
+  check_all_reader_exit();
+}
+
+parallel_read_data_reader_t *parallel_read_controller_t::create_data_reader() {
+  parallel_read_data_reader_t *data_reader = nullptr;
+
+  data_reader = new (std::nothrow) parallel_read_data_reader_t();
+  if (nullptr != data_reader) {
+    m_reader_list.emplace_back(data_reader);
+    data_reader->m_reader_controller = this;
+  }
+  return data_reader;
+}
+
+void parallel_read_controller_t::destory_data_reader(
+    parallel_read_data_reader_t *data_reader) {
+  if (data_reader->is_prepared_for_read()) {
+    sql_print_error("the parallel reader is not stopped, can't be destroied");
+  } else {
+    auto it = m_reader_list.begin();
+
+    for (; it != m_reader_list.end(); ++it) {
+      if (*it == data_reader) {
+        break;
+      }
+    }
+    m_reader_list.erase(it);
+    delete data_reader;
+  }
+}
+
+void parallel_read_controller_t::check_all_reader_exit() {
+  if (m_reader_list.size()) {
+    sql_print_error(
+        "there are %lld reader still active, can't release the controller",
+        m_reader_list.size());
+  }
+}
+
+/*********************************************************************/
+
+ParallelReaderHandler::ParallelReaderHandler() {}
+
+ParallelReaderHandler::~ParallelReaderHandler() {}
+
+/*********************************************************************/
+
+int parallel_read_data_reader_test_t::run_test(THD *thd,
+                                               handler *target_handler) {
+  // struct key_range {
+  //   const uchar *key;
+  //   uint length;
+  //   key_part_map keypart_map;
+  //   enum ha_rkey_function flag;
+  // };
+
+  int ret = 0;
+
+  parallel_read_create_data_fetcher_ctx_t create_data_fetcher_ctx;
+
+  m_target_handler = target_handler;
+  m_thd = thd;
+  handlerton *innobase_hton = target_handler->ht;
+  m_parallel_read_data_reader = m_read_controller.create_data_reader();
+
+  m_parallel_read_data_reader->set_target_table(target_handler);
+  m_parallel_read_data_reader->set_need_keep_order(false);
+  m_parallel_read_data_reader->set_mysql_parallel_thread_count(0);
+  m_parallel_read_data_reader->set_mysql_block_size(512 * 1024);
+
+  create_data_fetcher_ctx.thd = thd;
+
+  /** create the data fetch manager which reside in the engine and
+   * Server layer need not care about what it is.
+   */
+  ret = innobase_hton->data_fetcher_interface.parallel_read_create_data_fetcher(
+      create_data_fetcher_ctx, m_handlerton_data_fetch_manager);
+
+  ret = prepare_data_reader();
+
+  /** start the data consumer*/
+
+  start_data_consumer_thread(4);
+
+  stop_data_read();
+
+  return ret;
+}
+
+int parallel_read_data_reader_test_t::prepare_data_reader() {
+  int ret = 0;
+
+  handlerton *innobase_hton = m_target_handler->ht;
+
+  /** start the table fetch operation */
+  ret = m_parallel_read_data_reader->prepare_read_block(
+      innobase_hton, m_thd, m_handlerton_data_fetch_manager);
+
+  /** acquire the read configuration from reader */
+
+  m_data_chunk_size =
+      m_parallel_read_data_reader->get_data_read_max_chunk_size();
+
+  return ret;
+}
+
+int parallel_read_data_reader_test_t::read_data_thread() {
+  int ret = 0;
+
+  uint64_t data_chunk_size = m_data_chunk_size;
+  uint64_t actual_data_size = 0;
+
+  char *data_buffer = new char[m_data_chunk_size];
+
+  do {
+    ret = m_parallel_read_data_reader->read_block(data_buffer, data_chunk_size,
+                                                  actual_data_size);
+  } while (0 != actual_data_size);
+
+  if (data_buffer) {
+    delete[] data_buffer;
+    data_buffer = nullptr;
+  }
+
+  return ret;
+}
+
+int parallel_read_data_reader_test_t::start_data_consumer_thread(
+    uint32_t thread_count) {
+  int ret = 0;
+
+  for (uint32_t i = 0; i < thread_count; ++i) {
+    m_consumer_threads.emplace_back(
+        std::thread(&parallel_read_data_reader_test_t::read_data_thread, this));
+  }
+
+  return ret;
+}
+
+int parallel_read_data_reader_test_t::stop_data_read() {
+  int ret = 0;
+
+  /** wait data consumer thread finish */
+  for (auto &thread : m_consumer_threads) {
+    if (thread.joinable()) {
+      thread.join();
+    }
+  }
+
+  m_consumer_threads.clear();
+
+  /** clear the resource */
+
+  ret = m_parallel_read_data_reader->stop_read_block();
+
+  m_read_controller.destory_data_reader(m_parallel_read_data_reader);
+
+  handlerton *innobase_hton = m_target_handler->ht;
+
+  innobase_hton->data_fetcher_interface.parallel_read_destory_data_fetcher(
+      m_handlerton_data_fetch_manager);
+
+  m_handlerton_data_fetch_manager = nullptr;
+
+  return ret;
+}
+
+/**#######################################*/
+
+int parallel_read_data_reader_range_test_t::run_range_test(
+    THD *thd, handler *target_handler,
+    parallel_read_data_reader_range_t fetch_range, uint to_use_index) {
+  // struct key_range {
+  //   const uchar *key;
+  //   uint length;
+  //   key_part_map keypart_map;
+  //   enum ha_rkey_function flag;
+  // };
+
+  int ret = 0;
+
+  m_target_handler = target_handler;
+  m_thd = thd;
+  m_fetch_range = fetch_range;
+  m_used_index = to_use_index;
+
+  auto begin_ts = std::chrono::system_clock().now();
+
+  ret = run_full_index_scan();
+
+  // ret = run_range_only_left_test();
+
+  // ret = run_range_left_right_test();
+
+  // ret = run_range_only_right_test();
+
+  // ret = run_range_left_right_order_test();
+
+  auto end_ts = std::chrono::system_clock().now();
+
+  auto duration =
+      std::chrono::duration_cast<std::chrono::microseconds>(end_ts - begin_ts);
+
+  double run_time_in_secs = double(duration.count()) *
+                            std::chrono::microseconds::period::num /
+                            std::chrono::microseconds::period::den;
+
+  sql_print_information("total parallel read range time: %0.4f secs",
+                        run_time_in_secs);
+
+  return ret;
+}
+
+/** we do this by not passing into range */
+int parallel_read_data_reader_range_test_t::run_full_index_scan() {
+  int ret = 0;
+  parallel_read_create_data_fetcher_ctx_t create_data_fetcher_ctx;
+
+  parallel_read_data_reader_range_t fetch_range;
+
+  fetch_range.m_keynr = m_fetch_range.m_keynr;
+  fetch_range.m_min_key = nullptr;
+  fetch_range.m_max_key = nullptr;
+
+  handlerton *innobase_hton = m_target_handler->ht;
+  m_parallel_read_data_reader = m_read_controller.create_data_reader();
+
+  m_parallel_read_data_reader->set_target_table(m_target_handler);
+  m_parallel_read_data_reader->set_need_keep_order(false);
+  m_parallel_read_data_reader->set_mysql_parallel_thread_count(0);
+  m_parallel_read_data_reader->set_mysql_block_size(512 * 1024);
+  m_parallel_read_data_reader->set_read_range(fetch_range);
+  m_parallel_read_data_reader->set_read_index(m_used_index);
+
+  create_data_fetcher_ctx.thd = m_thd;
+
+  /** create the data fetch manager which reside in the engine and
+   * Server layer need not care about what it is.
+   */
+  ret = innobase_hton->data_fetcher_interface.parallel_read_create_data_fetcher(
+      create_data_fetcher_ctx, m_handlerton_data_fetch_manager);
+
+  ret = prepare_data_reader();
+
+  /** start the data consumer*/
+
+  start_data_consumer_thread(4);
+
+  stop_data_read();
+
+  return ret;
+}
+
+int parallel_read_data_reader_range_test_t::run_range_only_left_test() {
+  int ret = 0;
+
+  parallel_read_create_data_fetcher_ctx_t create_data_fetcher_ctx;
+
+  parallel_read_data_reader_range_t fetch_range;
+  fetch_range.is_desc_fetch = m_fetch_range.is_desc_fetch;
+
+  fetch_range.m_keynr = m_fetch_range.m_keynr;
+  fetch_range.m_min_key = m_fetch_range.m_min_key;
+  fetch_range.m_max_key = nullptr;
+
+  if (!(ha_rkey_function::HA_READ_KEY_EXACT == fetch_range.m_min_key->flag ||
+        ha_rkey_function::HA_READ_AFTER_KEY == fetch_range.m_min_key->flag)) {
+    /**  ha_rkey_function::HA_READ_KEY_EXACT for x >= val
+     *  ha_rkey_fucntion::HA_READ_AFTER_KEY for x > val
+     */
+    abort();
+  }
+
+  handlerton *innobase_hton = m_target_handler->ht;
+  m_parallel_read_data_reader = m_read_controller.create_data_reader();
+
+  m_parallel_read_data_reader->set_target_table(m_target_handler);
+  m_parallel_read_data_reader->set_need_keep_order(false);
+  m_parallel_read_data_reader->set_mysql_parallel_thread_count(0);
+  m_parallel_read_data_reader->set_mysql_block_size(512 * 1024);
+  m_parallel_read_data_reader->set_read_range(fetch_range);
+  m_parallel_read_data_reader->set_read_index(m_used_index);
+
+  create_data_fetcher_ctx.thd = m_thd;
+
+  /** create the data fetch manager which reside in the engine and
+   * Server layer need not care about what it is.
+   */
+  ret = innobase_hton->data_fetcher_interface.parallel_read_create_data_fetcher(
+      create_data_fetcher_ctx, m_handlerton_data_fetch_manager);
+
+  ret = prepare_data_reader();
+
+  /** start the data consumer*/
+
+  start_data_consumer_thread(4);
+
+  stop_data_read();
+
+  return ret;
+}
+
+int parallel_read_data_reader_range_test_t::run_range_left_right_test() {
+  int ret = 0;
+
+  parallel_read_create_data_fetcher_ctx_t create_data_fetcher_ctx;
+
+  parallel_read_data_reader_range_t fetch_range;
+  fetch_range.is_desc_fetch = m_fetch_range.is_desc_fetch;
+  fetch_range.m_keynr = m_fetch_range.m_keynr;
+  fetch_range.m_min_key = m_fetch_range.m_min_key;
+  fetch_range.m_max_key = m_fetch_range.m_max_key;
+
+  if (fetch_range.m_min_key &&
+      !(ha_rkey_function::HA_READ_KEY_EXACT == fetch_range.m_min_key->flag ||
+        ha_rkey_function::HA_READ_AFTER_KEY == fetch_range.m_min_key->flag)) {
+    abort();
+  }
+
+  if (fetch_range.m_max_key &&
+      ha_rkey_function::HA_READ_BEFORE_KEY != fetch_range.m_max_key->flag) {
+  }
+
+  handlerton *innobase_hton = m_target_handler->ht;
+  m_parallel_read_data_reader = m_read_controller.create_data_reader();
+
+  m_parallel_read_data_reader->set_target_table(m_target_handler);
+  m_parallel_read_data_reader->set_need_keep_order(false);
+  m_parallel_read_data_reader->set_mysql_parallel_thread_count(0);
+  m_parallel_read_data_reader->set_mysql_block_size(2 * 1024 * 1024);
+  m_parallel_read_data_reader->set_read_range(fetch_range);
+  m_parallel_read_data_reader->set_read_index(m_used_index);
+
+  create_data_fetcher_ctx.thd = m_thd;
+
+  /** create the data fetch manager which reside in the engine and
+   * Server layer need not care about what it is.
+   */
+  ret = innobase_hton->data_fetcher_interface.parallel_read_create_data_fetcher(
+      create_data_fetcher_ctx, m_handlerton_data_fetch_manager);
+
+  ret = prepare_data_reader();
+
+  /** start the data consumer*/
+
+  start_data_consumer_thread(4);
+
+  stop_data_read();
+
+  return ret;
+}
+
+int parallel_read_data_reader_range_test_t::run_range_left_right_order_test() {
+  int ret = 0;
+
+  parallel_read_create_data_fetcher_ctx_t create_data_fetcher_ctx;
+
+  parallel_read_data_reader_range_t fetch_range;
+  fetch_range.is_desc_fetch = m_fetch_range.is_desc_fetch;
+
+  fetch_range.m_keynr = m_fetch_range.m_keynr;
+  fetch_range.m_min_key = m_fetch_range.m_min_key;
+  fetch_range.m_max_key = m_fetch_range.m_max_key;
+
+  if (fetch_range.m_min_key &&
+      !(ha_rkey_function::HA_READ_KEY_EXACT == fetch_range.m_min_key->flag ||
+        ha_rkey_function::HA_READ_AFTER_KEY == fetch_range.m_min_key->flag)) {
+    abort();
+  }
+
+  if (fetch_range.m_max_key &&
+      ha_rkey_function::HA_READ_BEFORE_KEY != fetch_range.m_max_key->flag) {
+  }
+
+  handlerton *innobase_hton = m_target_handler->ht;
+  m_parallel_read_data_reader = m_read_controller.create_data_reader();
+
+  m_parallel_read_data_reader->set_target_table(m_target_handler);
+  m_parallel_read_data_reader->set_need_keep_order(true);
+  m_parallel_read_data_reader->set_mysql_parallel_thread_count(0);
+  m_parallel_read_data_reader->set_mysql_block_size(2 * 1024 * 1024);
+  m_parallel_read_data_reader->set_read_range(fetch_range);
+  m_parallel_read_data_reader->set_read_index(m_used_index);
+
+  create_data_fetcher_ctx.thd = m_thd;
+
+  /** create the data fetch manager which reside in the engine and
+   * Server layer need not care about what it is.
+   */
+  ret = innobase_hton->data_fetcher_interface.parallel_read_create_data_fetcher(
+      create_data_fetcher_ctx, m_handlerton_data_fetch_manager);
+
+  ret = prepare_data_reader();
+
+  /** start the data consumer*/
+
+  start_data_consumer_thread(4);
+
+  stop_data_read();
+
+  return ret;
+}
+
+int parallel_read_data_reader_range_test_t::run_range_only_right_test() {
+  int ret = 0;
+
+  parallel_read_create_data_fetcher_ctx_t create_data_fetcher_ctx;
+
+  parallel_read_data_reader_range_t fetch_range;
+
+  fetch_range.is_desc_fetch = m_fetch_range.is_desc_fetch;
+
+  fetch_range.m_keynr = m_fetch_range.m_keynr;
+  fetch_range.m_min_key = nullptr;
+  fetch_range.m_max_key = m_fetch_range.m_max_key;
+
+  if (fetch_range.m_min_key &&
+      ha_rkey_function::HA_READ_KEY_EXACT != fetch_range.m_min_key->flag) {
+    abort();
+  }
+
+  if (fetch_range.m_max_key &&
+      ha_rkey_function::HA_READ_BEFORE_KEY != fetch_range.m_max_key->flag) {
+  }
+
+  handlerton *innobase_hton = m_target_handler->ht;
+  m_parallel_read_data_reader = m_read_controller.create_data_reader();
+
+  m_parallel_read_data_reader->set_target_table(m_target_handler);
+  m_parallel_read_data_reader->set_need_keep_order(false);
+  m_parallel_read_data_reader->set_mysql_parallel_thread_count(0);
+  m_parallel_read_data_reader->set_mysql_block_size(2 * 1024 * 1024);
+  m_parallel_read_data_reader->set_read_range(fetch_range);
+  m_parallel_read_data_reader->set_read_index(m_used_index);
+
+  create_data_fetcher_ctx.thd = m_thd;
+
+  /** create the data fetch manager which reside in the engine and
+   * Server layer need not care about what it is.
+   */
+  ret = innobase_hton->data_fetcher_interface.parallel_read_create_data_fetcher(
+      create_data_fetcher_ctx, m_handlerton_data_fetch_manager);
+
+  ret = prepare_data_reader();
+
+  /** start the data consumer*/
+
+  start_data_consumer_thread(4);
+
+  stop_data_read();
+
+  return ret;
+}
+
+int parallel_read_data_reader_range_test_t::prepare_data_reader() {
+  int ret = 0;
+
+  handlerton *innobase_hton = m_target_handler->ht;
+
+  /** start the table fetch operation */
+  ret = m_parallel_read_data_reader->prepare_read_block(
+      innobase_hton, m_thd, m_handlerton_data_fetch_manager);
+
+  /** acquire the read configuration from reader */
+
+  m_data_chunk_size =
+      m_parallel_read_data_reader->get_data_read_max_chunk_size();
+
+  return ret;
+}
+
+int parallel_read_data_reader_range_test_t::read_data_thread() {
+  int ret = 0;
+
+  uint64_t data_chunk_size = m_data_chunk_size;
+  uint64_t actual_data_size = 0;
+
+  char *data_buffer = new char[m_data_chunk_size];
+
+  do {
+    ret = m_parallel_read_data_reader->read_block(data_buffer, data_chunk_size,
+                                                  actual_data_size);
+  } while (0 != actual_data_size);
+
+  if (data_buffer) {
+    delete[] data_buffer;
+    data_buffer = nullptr;
+  }
+
+  return ret;
+}
+
+int parallel_read_data_reader_range_test_t::start_data_consumer_thread(
+    uint32_t thread_count) {
+  int ret = 0;
+
+  for (uint32_t i = 0; i < thread_count; ++i) {
+    m_consumer_threads.emplace_back(std::thread(
+        &parallel_read_data_reader_range_test_t::read_data_thread, this));
+  }
+
+  return ret;
+}
+
+int parallel_read_data_reader_range_test_t::stop_data_read() {
+  int ret = 0;
+
+  /** wait data consumer thread finish */
+  for (auto &thread : m_consumer_threads) {
+    if (thread.joinable()) {
+      thread.join();
+    }
+  }
+
+  m_consumer_threads.clear();
+
+  /** clear the resource */
+
+  ret = m_parallel_read_data_reader->stop_read_block();
+
+  m_read_controller.destory_data_reader(m_parallel_read_data_reader);
+
+  handlerton *innobase_hton = m_target_handler->ht;
+
+  innobase_hton->data_fetcher_interface.parallel_read_destory_data_fetcher(
+      m_handlerton_data_fetch_manager);
+
+  m_handlerton_data_fetch_manager = nullptr;
+
+  return ret;
+}
+
+/***********************************/

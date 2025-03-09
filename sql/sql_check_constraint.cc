@@ -1,4 +1,5 @@
 /* Copyright (c) 2019, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -116,7 +117,7 @@ bool check_constraint_expr_refers_to_only_column(Item *check_expr,
                    (uchar *)&fields);
 
   // Expression does not refer to any columns.
-  if (fields.empty()) return false;
+  if (fields.empty()) return true;
 
   for (Item_field *cur_item : fields) {
     // Expression refers to some other column.

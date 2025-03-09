@@ -124,7 +124,9 @@ INSERT INTO t set c = repeat('x',29);
 INSERT INTO t set c = concat(repeat('x',28),'r','x');
 INSERT INTO t set c = concat(repeat('x',28),'s','y');
 INSERT INTO t set c = concat(repeat('x',28),'g','w');
+--source include/disable_turbo.inc
 SELECT c from t ORDER BY c, id;
+--source include/restore_turbo.inc
 
 --echo ** Results should not be sorted **
 
@@ -148,7 +150,9 @@ INSERT INTO t set c = concat(repeat('x',28),'r','x');
 INSERT INTO t set c = concat(repeat('x',28),'s','y');
 INSERT INTO t set c = concat(repeat('x',28),'g','w');
 
+--source include/disable_turbo.inc
 SELECT c from t ORDER BY c, id;
+--source include/restore_turbo.inc
 --echo ** Results should not be sorted **
 
 
@@ -220,7 +224,9 @@ INSERT INTO t2 set c = repeat('x',29);
 INSERT INTO t2 set c = concat(repeat('x',28),'r','x');
 INSERT INTO t2 set c = concat(repeat('x',28),'s','y');
 INSERT INTO t2 set c = concat(repeat('x',28),'g','w');
+--source include/disable_turbo.inc
 SELECT c from t2 ORDER BY c, id;
+--source include/restore_turbo.inc
 --echo ** Results should not be sorted **
 
 # Setting session value of variable and inserting data in table
@@ -230,7 +236,9 @@ INSERT INTO t2 set c = repeat('x',29);
 INSERT INTO t2 set c = concat(repeat('x',28),'r','x');
 INSERT INTO t2 set c = concat(repeat('x',28),'s','y');
 INSERT INTO t2 set c = concat(repeat('x',28),'g','w');
+--source include/disable_turbo.inc
 SELECT c from t2 ORDER BY c, id;
+--source include/restore_turbo.inc
 --echo ** Results should not be sorted **
 
 

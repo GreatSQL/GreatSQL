@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -34,6 +34,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "clone0clone.h"
 #include "log0log.h" /* log_get_lsn */
 #include "page0zip.h"
+#include "sql/current_thd.h"
+#include "sql/debug_sync.h"
 #include "sql/handler.h"
 
 /** Snapshot heap initial size */
@@ -608,6 +610,11 @@ int Clone_Snapshot::change_state(Clone_Desc_State *state_desc,
       ib::info(ER_IB_CLONE_OPERATION) << "Clone State BEGIN FILE COPY";
 
       err = init_file_copy(new_state);
+
+      DBUG_SIGNAL_WAIT_FOR(current_thd, "test_rename_table_after_file_copy_1",
+                           "reach_file_copy_1", "continue_file_copy_1");
+      DBUG_SIGNAL_WAIT_FOR(current_thd, "test_rename_table_after_file_copy_2",
+                           "reach_file_copy_2", "continue_file_copy_2");
 
       DEBUG_SYNC_C("clone_start_page_archiving");
       DBUG_EXECUTE_IF("clone_crash_during_page_archiving", DBUG_SUICIDE(););

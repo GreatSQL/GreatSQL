@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd. All rights
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd. All rights
    reserved.
 
    This program is free software; you can redistribute it and/or modify
@@ -81,7 +81,7 @@ static ulong sql_get_client_capabilities(void *) {
 static int sql_get_null(void *ctx) {
   DBUG_ENTER("sql_get_null");
   auto *cb_data = static_cast<Gdb_cmd_cb_data *>(ctx);
-  cb_data->store("NULL", sizeof("NULL"));
+  cb_data->store(STRING_WITH_LEN("NULL"));
   DBUG_RETURN(false);
 }
 

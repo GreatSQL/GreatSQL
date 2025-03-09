@@ -1,5 +1,5 @@
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1661,6 +1661,11 @@ bool Sql_cmd_update::prepare_inner(THD *thd) {
 
     if (check_insert_fields(thd, insert_table_list, &insert_field_list))
       return true;
+
+    // mark query_block as merge-into stmt with a derived source table
+    if (select->leaf_tables->is_derived() &&
+        !select->leaf_tables->derived_query_expression()->is_union())
+      thd->lex->merge_into_with_derived_source_table = true;
 
     lex->insert_table_leaf->set_inserted();
   }
@@ -3628,7 +3633,7 @@ bool UpdateRowsIterator::do_inserts(THD *thd, bool *trans_safe,
   if (m_insert_found_rows == 0) return false;
 
   // since here, insert_table->write_set is changed to the bitmap for insert.
-  bitmap_copy(insert_table->write_set, merge_insert_bitmap);
+  bitmap_union(insert_table->write_set, merge_insert_bitmap);
 
   insert_table_list->table->reset_null_row();
 

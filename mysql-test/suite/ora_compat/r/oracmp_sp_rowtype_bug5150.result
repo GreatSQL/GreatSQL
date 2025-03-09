@@ -17,6 +17,7 @@ end loop;
 END;
 $$
 CALL p1();
+ERROR 02000: No data - zero rows fetched, selected, or processed
 INSERT INTO t1(col1,col2,col3) values(1,'col1',11),(2,'col2',12),(3,'col3',13),(4,'col4',14),(5,'col5',15);
 CALL p1();
 v_t_rec1(i).id	v_t_rec1(i).col1	v_t_rec1(i).col2	v_t_rec1(i).col3

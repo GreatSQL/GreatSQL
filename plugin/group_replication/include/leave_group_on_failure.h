@@ -1,5 +1,5 @@
 /* Copyright (c) 2019, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -37,6 +37,7 @@ class Group_leaving_stage_on_failure {
     START_LEAVE_VIEW_STAGE,
     KILL_BINLOG_DUMP_THREAD_STAGE,
     STOP_APPLIER_STAGE,
+    STOP_SLAVE_CHANNEL_STAGE,
     SET_READ_ONLY_STAGE,
     SET_OFFLINE_MODE_STAGE,
     WAIT_VIEW_CHANGE_STAGE,
@@ -65,6 +66,9 @@ class Group_leaving_stage_on_failure {
       } break;
       case STOP_APPLIER_STAGE: {
         str = "stop_applier_stage";
+      } break;
+      case STOP_SLAVE_CHANNEL_STAGE: {
+        str = "stop_slave_channel_stage";
       } break;
       case SET_READ_ONLY_STAGE: {
         str = "enable_super_read_only_mode_stage";

@@ -1,4 +1,5 @@
 --source include/not_hypergraph.inc  # Non-traditional formats differ in hypergraph.
+--source include/no_turbo.inc
 
 # 
 # Run explain_non_select.inc on MyISAM without any of the socalled 6.0 features.

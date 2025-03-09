@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2012, 2022, Oracle and/or its affiliates.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -184,6 +185,20 @@ void dict_stats_recalc_pool_del(
   }
 
   mutex_exit(&recalc_pool_mutex);
+}
+
+/** return the size of stats recalc pool.
+ *  there are may be duplicated item in the pool.
+ */
+static ulint dict_stats_recalc_pool_size() {
+  ulint to_recalc_count = 0;
+  ut_ad(!srv_read_only_mode);
+
+  mutex_enter(&recalc_pool_mutex);
+  to_recalc_count = recalc_pool->size();
+  mutex_exit(&recalc_pool_mutex);
+
+  return to_recalc_count;
 }
 
 /** Wait until background stats thread has stopped using the specified table.
@@ -375,6 +390,13 @@ void dict_stats_thread() {
 #endif /* UNIV_DEBUG */
 
     if (SHUTTING_DOWN()) {
+      /** before exit because of shutdown, for those tables already in the pool;
+       *  we try to calc stats to void the imprecise statistics data.
+       */
+      ulint to_update_stats_count = dict_stats_recalc_pool_size();
+      for (ulint i = 0; i < to_update_stats_count; ++i) {
+        dict_stats_process_entry_from_recalc_pool(thd);
+      }
       break;
     }
 

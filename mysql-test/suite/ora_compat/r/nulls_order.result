@@ -747,9 +747,9 @@ name	c5	my
 3	NULL	my
 8	NULL	my
 NULL	NULL	my
+NULL	NULL	my
+NULL	NULL	my
 NULL	c510	my
-NULL	NULL	my
-NULL	NULL	my
 explain format=tree select name,c5,'my' from test1 order by name;
 EXPLAIN
 -> Sort: test1."name"  (cost=*** rows=***)
@@ -757,16 +757,16 @@ EXPLAIN
 
 select name,c5,'my desc' from test1 order by name desc;
 name	c5	my desc
+1	c5	my desc
+2	NULL	my desc
+20	NULL	my desc
+3	NULL	my desc
+3	NULL	my desc
+8	NULL	my desc
+NULL	NULL	my desc
+NULL	NULL	my desc
 NULL	NULL	my desc
 NULL	c510	my desc
-NULL	NULL	my desc
-NULL	NULL	my desc
-8	NULL	my desc
-3	NULL	my desc
-3	NULL	my desc
-20	NULL	my desc
-2	NULL	my desc
-1	c5	my desc
 explain format=tree select name,c5,'my desc' from test1 order by name desc;
 EXPLAIN
 -> Sort: test1."name" DESC  (cost=*** rows=***)
@@ -774,16 +774,16 @@ EXPLAIN
 
 select name,c5,'my nf' from test1 order by name nulls first;
 name	c5	my nf
-NULL	NULL	my nf
-NULL	c510	my nf
-NULL	NULL	my nf
-NULL	NULL	my nf
 1	c5	my nf
 2	NULL	my nf
 20	NULL	my nf
 3	NULL	my nf
 3	NULL	my nf
 8	NULL	my nf
+NULL	NULL	my nf
+NULL	NULL	my nf
+NULL	NULL	my nf
+NULL	c510	my nf
 explain format=tree select name,c5,'my nf' from test1 order by name nulls first;
 EXPLAIN
 -> Sort: test1."name"  (cost=*** rows=***)
@@ -798,9 +798,9 @@ name	c5	my nl
 3	NULL	my nl
 8	NULL	my nl
 NULL	NULL	my nl
+NULL	NULL	my nl
+NULL	NULL	my nl
 NULL	c510	my nl
-NULL	NULL	my nl
-NULL	NULL	my nl
 explain format=tree select name,c5,'my nl' from test1 order by name nulls last;
 EXPLAIN
 -> Sort: test1."name"  (cost=*** rows=***)
@@ -808,16 +808,16 @@ EXPLAIN
 
 select name,c5,'my desc nf' from test1 order by name desc nulls first;
 name	c5	my desc nf
+1	c5	my desc nf
+2	NULL	my desc nf
+20	NULL	my desc nf
+3	NULL	my desc nf
+3	NULL	my desc nf
+8	NULL	my desc nf
+NULL	NULL	my desc nf
+NULL	NULL	my desc nf
 NULL	NULL	my desc nf
 NULL	c510	my desc nf
-NULL	NULL	my desc nf
-NULL	NULL	my desc nf
-8	NULL	my desc nf
-3	NULL	my desc nf
-3	NULL	my desc nf
-20	NULL	my desc nf
-2	NULL	my desc nf
-1	c5	my desc nf
 explain format=tree select name,c5,'my desc nf' from test1 order by name desc nulls first;
 EXPLAIN
 -> Sort: test1."name" DESC  (cost=*** rows=***)
@@ -825,16 +825,16 @@ EXPLAIN
 
 select name,c5,'my desc nl' from test1 order by name desc nulls last;
 name	c5	my desc nl
-8	NULL	my desc nl
-3	NULL	my desc nl
-3	NULL	my desc nl
-20	NULL	my desc nl
-2	NULL	my desc nl
 1	c5	my desc nl
+2	NULL	my desc nl
+20	NULL	my desc nl
+3	NULL	my desc nl
+3	NULL	my desc nl
+8	NULL	my desc nl
+NULL	NULL	my desc nl
+NULL	NULL	my desc nl
 NULL	NULL	my desc nl
 NULL	c510	my desc nl
-NULL	NULL	my desc nl
-NULL	NULL	my desc nl
 explain format=tree select name,c5,'my desc nl' from test1 order by name desc nulls last;
 EXPLAIN
 -> Sort: test1."name" DESC  (cost=*** rows=***)

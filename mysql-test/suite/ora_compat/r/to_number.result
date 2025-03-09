@@ -424,12 +424,12 @@ to_number(1.1000000000,'9.9EEEE')
 select to_number(10.1000000000,'9.9EEEE') FROM dual;
 ERROR 22003: NUMBER value is out of range in 'to_number'
 SELECT to_number('1e+123', '9.9EEEE') FROM DUAL;
-ERROR HY000: Invalid argument error: args 0 exponent greater than 80 in function to_number.
+ERROR HY000: Invalid argument error: Out of range value for args 0 in function to_number.
 SELECT to_number('1e+80', '9.9EEEE') FROM DUAL;
 to_number('1e+80', '9.9EEEE')
 1e80
 SELECT to_number('1e+81', '9.9EEEE') FROM DUAL;
-ERROR HY000: Invalid argument error: args 0 exponent greater than 80 in function to_number.
+ERROR HY000: Invalid argument error: Out of range value for args 0 in function to_number.
 select to_number(1,'.99') from dual;
 ERROR 22003: NUMBER value is out of range in 'to_number'
 select to_number(1,'$99') from dual;
@@ -477,7 +477,7 @@ ERROR 22003: NUMBER value is out of range in 'to_number'
 SELECT to_number('12,454.8-', '99G999D9S') FROM dual;
 ERROR 22003: NUMBER value is out of range in 'to_number'
 select to_number('1-','9999S') FROM dual;
-ERROR 22003: NUMBER value is out of range in 'to_number'
+ERROR HY000: Invalid argument error: args 0 is invald in function to_number.
 select to_number('$10','$99') from dual;
 ERROR HY000: Invalid argument error: args 0 is invald in function to_number.
 select to_number('-1','S9999') FROM dual;
@@ -572,7 +572,7 @@ select to_number('-1.6,e20,,','9.90EEEE') FROM dual;
 ERROR 22003: NUMBER value is out of range in 'to_number'
 set sql_mode = NO_BACKSLASH_ESCAPES;
 select to_number('-\,0.0','9,9.9') FROM dual;
-ERROR 22003: NUMBER value is out of range in 'to_number'
+ERROR HY000: Invalid argument error: args 0 is invald in function to_number.
 set sql_mode=DEFAULT;
 select to_number('-\,0.0','9,9.9') FROM dual;
 to_number('-\,0.0','9,9.9')
@@ -640,9 +640,9 @@ select to_number('1,f','xxx') FROM dual;
 to_number('1,f','xxx')
 31
 select to_number('-\\\,0\.0','9,9.9') FROM dual;
-ERROR 22003: NUMBER value is out of range in 'to_number'
+ERROR HY000: Invalid argument error: args 0 is invald in function to_number.
 select to_number(''',0.0','9,9.9') FROM dual;
-ERROR 22003: NUMBER value is out of range in 'to_number'
+ERROR HY000: Invalid argument error: args 0 is invald in function to_number.
 select to_number('-1.0','9999') FROM dual;
 ERROR 22003: NUMBER value is out of range in 'to_number'
 select to_number('-1.0','9,999') FROM dual;
@@ -1196,3 +1196,113 @@ select to_number(substr(NULL,2,4));//
 to_number(substr(NULL,2,4))
 NULL
 drop function my_getage;//
+SELECT to_number('ae+02','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('e+02','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('ee+02','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('e02','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('0e02 ','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('0e02','9.99EEEE') FROM dual;
+to_number('0e02','9.99EEEE')
+0
+SELECT to_number('10e02','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('1e02','9.99EEEE') FROM dual;
+to_number('1e02','9.99EEEE')
+100
+SELECT to_number('1e','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('1e-0','9.99EEEE') FROM dual;
+to_number('1e-0','9.99EEEE')
+1
+SELECT to_number('1e-0,','9.99EEEE') FROM dual;
+to_number('1e-0,','9.99EEEE')
+1
+SELECT to_number(',1e-0,','9.99EEEE') FROM dual;
+to_number(',1e-0,','9.99EEEE')
+1
+SELECT to_number('1e+a','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('1e+,','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('1e+1,','9.99EEEE') FROM dual;
+to_number('1e+1,','9.99EEEE')
+10
+SELECT to_number('1e1 ','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number(' 1e1','9.99EEEE') FROM dual;
+to_number(' 1e1','9.99EEEE')
+10
+SELECT to_number(' 1e1,,','9.99EEEE') FROM dual;
+to_number(' 1e1,,','9.99EEEE')
+10
+SELECT to_number(' 1e1,,.','9.99EEEE') FROM dual;
+to_number(' 1e1,,.','9.99EEEE')
+10
+SELECT to_number(' 1e1,,.,','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('.','9.99EEEE') FROM dual;
+to_number('.','9.99EEEE')
+0
+SELECT to_number('.,','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('. ','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('1e1,,.','9.99EEEE') FROM dual;
+to_number('1e1,,.','9.99EEEE')
+10
+SELECT to_number('1e1,,..','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('1e1.22','9.99EEEE') FROM dual;
+to_number('1e1.22','9.99EEEE')
+10
+SELECT to_number('1e1.222','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('1e1.22','9.99EEEE') FROM dual;
+to_number('1e1.22','9.99EEEE')
+10
+SELECT to_number(' ','9.99EEEE') FROM dual;
+ERROR HY000: Invalid argument error: args 0 is invald in function to_number.
+SELECT to_number(' ,','9.99EEEE') FROM dual;
+to_number(' ,','9.99EEEE')
+0
+SELECT to_number(', ','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('1e.1','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT to_number('1e0.1','9.99EEEE') FROM dual;
+to_number('1e0.1','9.99EEEE')
+1
+SELECT to_number('1e+0.1','9.99EEEE') FROM dual;
+to_number('1e+0.1','9.99EEEE')
+1
+SELECT to_number(',-1e1','9.99EEEE') FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+select to_number(-1.000,'9.9EEEe') FROM dual;
+ERROR HY000: Invalid argument error: 9.9EEEe in function to_number.
+SELECT to_number(' -,1e+11,,.1','99.99EEEE') FROM dual;
+to_number(' -,1e+11,,.1','99.99EEEE')
+-100000000000
+select to_number(-1.000,'9.9EEEE') FROM dual;
+to_number(-1.000,'9.9EEEE')
+-1
+SELECT  to_number('   ,ffff0','XXXXx')  FROM dual;
+to_number('   ,ffff0','XXXXx')
+1048560
+SELECT  to_number('   ,f,f,ff0,','XXXXx')  FROM dual;
+to_number('   ,f,f,ff0,','XXXXx')
+1048560
+SELECT  to_number('   ,f,f,f,f,0,,','XXXXx')  FROM dual;
+to_number('   ,f,f,f,f,0,,','XXXXx')
+1048560
+SELECT  to_number('   -,f,f,f,f,0,,','XXXXx')  FROM dual;
+to_number('   -,f,f,f,f,0,,','XXXXx')
+-1048560
+SELECT  to_number('   ,,,-,f,f,f,f,0,,','XXXXx')  FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'
+SELECT  to_number('   -,f,f,f,f,0,, ','XXXXx')  FROM dual;
+ERROR 22003: NUMBER value is out of range in 'to_number'

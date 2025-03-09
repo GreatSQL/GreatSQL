@@ -75,28 +75,28 @@ INSERT INTO t VALUES (1,4,4);
 SELECT k, STD(k) OVER (ROWS UNBOUNDED PRECEDING) std,
       VARIANCE(k) OVER (ROWS UNBOUNDED PRECEDING) variance FROM t; # simple
 --sorted_result
-SELECT k, STD(i), SUM(j), STD(k) OVER (ROWS UNBOUNDED PRECEDING) std_wf FROM t GROUP BY (k);
+SELECT k, STD(i), SUM(j), STD(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) std_wf FROM t GROUP BY (k);
 --sorted_result
-SELECT k, STD(i), SUM(j), VAR_POP(k) OVER (ROWS UNBOUNDED PRECEDING) variance_wf FROM t GROUP BY (k);
+SELECT k, STD(i), SUM(j), VAR_POP(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) variance_wf FROM t GROUP BY (k);
 --sorted_result
-SELECT k, STD(i), SUM(j), STD(k) OVER (ROWS UNBOUNDED PRECEDING) std_wf FROM t GROUP BY (k) ORDER BY std_wf DESC;
-SELECT k, STD(i), SUM(j), STDDEV(k) OVER (ROWS UNBOUNDED PRECEDING) std_wf FROM t GROUP BY (k) ORDER BY std_wf DESC;
-SELECT k, STD(i), SUM(j), STDDEV_POP(k) OVER (ROWS UNBOUNDED PRECEDING) std_wf FROM t GROUP BY (k) ORDER BY std_wf DESC;
-SELECT k, STD(i), SUM(j), STDDEV_SAMP(k) OVER (ROWS UNBOUNDED PRECEDING) std_wf FROM t GROUP BY (k) ORDER BY std_wf DESC;
-SELECT k, STD(i), SUM(j), VARIANCE(k) OVER (ROWS UNBOUNDED PRECEDING) variance_wf FROM t GROUP BY (k) ORDER BY variance_wf DESC;
-SELECT k, STD(i), SUM(j), VAR_POP(k) OVER (ROWS UNBOUNDED PRECEDING) variance_wf FROM t GROUP BY (k) ORDER BY variance_wf DESC;
-SELECT k, STD(i), SUM(j), VAR_SAMP(k) OVER (ROWS UNBOUNDED PRECEDING) variance_wf FROM t GROUP BY (k) ORDER BY variance_wf DESC;
+SELECT k, STD(i), SUM(j), STD(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) std_wf FROM t GROUP BY (k) ORDER BY std_wf DESC;
+SELECT k, STD(i), SUM(j), STDDEV(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) std_wf FROM t GROUP BY (k) ORDER BY std_wf DESC;
+SELECT k, STD(i), SUM(j), STDDEV_POP(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) std_wf FROM t GROUP BY (k) ORDER BY std_wf DESC;
+SELECT k, STD(i), SUM(j), STDDEV_SAMP(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) std_wf FROM t GROUP BY (k) ORDER BY std_wf DESC;
+SELECT k, STD(i), SUM(j), VARIANCE(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) variance_wf FROM t GROUP BY (k) ORDER BY variance_wf DESC;
+SELECT k, STD(i), SUM(j), VAR_POP(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) variance_wf FROM t GROUP BY (k) ORDER BY variance_wf DESC;
+SELECT k, STD(i), SUM(j), VAR_SAMP(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) variance_wf FROM t GROUP BY (k) ORDER BY variance_wf DESC;
 
 --sorted_result
-SELECT k, GROUP_CONCAT(j ORDER BY j), STD(k) OVER (ROWS UNBOUNDED PRECEDING) std,
-      VAR_SAMP(k) OVER (ROWS UNBOUNDED PRECEDING) variance FROM t GROUP BY (k); # combined with two tmp files GROUP BY
+SELECT k, GROUP_CONCAT(j ORDER BY j), STD(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) std,
+      VAR_SAMP(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) variance FROM t GROUP BY (k); # combined with two tmp files GROUP BY
 --sorted_result
-SELECT k, AVG(DISTINCT j), STD(k) OVER (ROWS UNBOUNDED PRECEDING) std,
-      VARIANCE(k) OVER (ROWS UNBOUNDED PRECEDING) variance FROM t GROUP BY (k);
+SELECT k, AVG(DISTINCT j), STD(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) std,
+      VARIANCE(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) variance FROM t GROUP BY (k);
 --sorted_result
-SELECT k, GROUP_CONCAT(j ORDER BY j), STD(k+1) OVER (ROWS UNBOUNDED PRECEDING) std FROM t GROUP BY (k); # expression argument to std
+SELECT k, GROUP_CONCAT(j ORDER BY j), STD(k+1) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) std FROM t GROUP BY (k); # expression argument to std
 --sorted_result
-SELECT k, GROUP_CONCAT(j ORDER BY j), VARIANCE(k+1) OVER (ROWS UNBOUNDED PRECEDING) variance FROM t GROUP BY (k); # expression argument to VARIANCE
+SELECT k, GROUP_CONCAT(j ORDER BY j), VARIANCE(k+1) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) variance FROM t GROUP BY (k); # expression argument to VARIANCE
 --sorted_result
 SELECT k, GROUP_CONCAT(j ORDER BY j), STD(k+1) OVER (ORDER BY k DESC ROWS UNBOUNDED PRECEDING) std FROM t GROUP BY (k);
 --sorted_result
@@ -198,7 +198,7 @@ SELECT t3_id, STD(t3_id) OVER w std,
               LEAD(t3_id, 2) OVER w lead2,
               NTH_VALUE(t3_id, 3) OVER w nth,
               k FROM t3
-       WINDOW w AS (PARTITION BY k ORDER BY t3_id);
+       WINDOW w AS (PARTITION BY k ORDER BY t3_id) ORDER BY t3_id;
 
 SELECT t3_id, STDDEV_SAMP(t3_id) OVER w std,
               VARIANCE(t3_id) OVER w variance,
@@ -206,7 +206,7 @@ SELECT t3_id, STDDEV_SAMP(t3_id) OVER w std,
               LEAD(t3_id, 2) OVER w lead2,
               NTH_VALUE(t3_id, 3) OVER w nth,
               k FROM t3
-       WINDOW w AS (PARTITION BY k ORDER BY t3_id RANGE UNBOUNDED PRECEDING);
+       WINDOW w AS (PARTITION BY k ORDER BY t3_id RANGE UNBOUNDED PRECEDING) ORDER BY t3_id;
 
 DROP TABLE t3;
 
@@ -252,9 +252,9 @@ SELECT t.*, STDDEV_POP(t.rank) OVER (ROWS UNBOUNDED PRECEDING) std,
 SELECT t1.*, RANK() OVER (ORDER BY sex) `rank`, STD(id) OVER (ORDER BY sex,id ROWS UNBOUNDED PRECEDING) std FROM t1;
 SELECT t1.*, PERCENT_RANK() OVER (ORDER BY sex) p_rank, VARIANCE(id) OVER (ORDER BY sex,id ROWS UNBOUNDED PRECEDING) variance FROM t1;
 SELECT t1.*, CUME_DIST() OVER (ORDER BY sex) c_dist, STDDEV_POP(id) OVER (ORDER BY sex,id ROWS UNBOUNDED PRECEDING) std FROM t1;
-SELECT * from (SELECT t1.*, STDDEV(id) OVER (ROWS UNBOUNDED PRECEDING) std, RANK() OVER (ORDER BY sex) `rank` FROM t1) alias ORDER BY id;
-SELECT * from (SELECT t1.*, VAR_SAMP(id) OVER (ROWS UNBOUNDED PRECEDING) variance, PERCENT_RANK() OVER (ORDER BY sex) p_rank FROM t1) alias ORDER BY id;
-SELECT * from (SELECT t1.*, VARIANCE(id) OVER (ROWS UNBOUNDED PRECEDING) variance, CUME_DIST() OVER (ORDER BY sex) c_dist FROM t1) alias ORDER BY id;
+SELECT * from (SELECT t1.*, STDDEV(id) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING) std, RANK() OVER (ORDER BY sex) `rank` FROM t1) alias ORDER BY id;
+SELECT * from (SELECT t1.*, VAR_SAMP(id) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING) variance, PERCENT_RANK() OVER (ORDER BY sex) p_rank FROM t1) alias ORDER BY id;
+SELECT * from (SELECT t1.*, VARIANCE(id) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING) variance, CUME_DIST() OVER (ORDER BY sex) c_dist FROM t1) alias ORDER BY id;
 
 SELECT t1.*, STD(id) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING) std,
        variance(id) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING) VARIANCE,
@@ -289,19 +289,19 @@ DROP TABLE t;
 --echo ----------------------------------------------------------------------
 
 SELECT AVG(id) OVER w, STD(id) OVER w std, VARIANCE(id) OVER w variance FROM t1
-       WINDOW w AS (PARTITION BY sex);
+       WINDOW w AS (PARTITION BY sex) ORDER BY id;
 
 SELECT * FROM (
 SELECT id, SUM(id) OVER w, STD(id) OVER w std, VARIANCE(id) OVER w variance, sex FROM t1
        WINDOW w AS (PARTITION BY sex)
        ) alias ORDER BY id;
 
-SELECT STD(id) OVER w std FROM t1 WINDOW w AS (PARTITION BY sex);
-SELECT VARIANCE(id) OVER w variance FROM t1 WINDOW w AS (PARTITION BY sex);
+SELECT STD(id) OVER w std FROM t1 WINDOW w AS (PARTITION BY sex) ORDER BY std;
+SELECT VARIANCE(id) OVER w variance FROM t1 WINDOW w AS (PARTITION BY sex) ORDER BY variance;
 
 SELECT id, STD(id) OVER w std, VARIANCE(id) OVER w variance, sex FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING);
+                    ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) ORDER BY id;
 
 --echo try the same as a view
 CREATE VIEW v AS
@@ -315,17 +315,17 @@ DROP VIEW v;
 SELECT SUM(id) OVER w, STDDEV(id) OVER w std,
        VARIANCE(id) OVER w variance FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING);
+                    ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) ORDER BY id;
 
 SELECT id, SUM(id) OVER w, STD(id) OVER w std,
        VARIANCE(id) OVER w variance, sex FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
+                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) ORDER BY id;
 
 SELECT SUM(id) OVER w, COUNT(*) OVER w, STD(id) OVER w std,
       VARIANCE(id) OVER w variance FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
+                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) ORDER BY id;
 
 SELECT id, AVG(id) OVER (ROWS UNBOUNDED PRECEDING) avg,
        STD(id) OVER (ROWS UNBOUNDED PRECEDING) std FROM t1;
@@ -337,6 +337,7 @@ SELECT id, AVG(id) OVER w avg, COUNT(id) OVER w count, STD(id) OVER w std,
        WINDOW w AS (ORDER BY id ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING);
 
 --echo STD/VARIANCE with double type
+--source include/disable_turbo.inc
 CREATE TABLE td(d DOUBLE);
 INSERT INTO td VALUES (2);
 INSERT INTO td VALUES (2);
@@ -376,6 +377,7 @@ SELECT d, SUM(d) OVER w sum, VARIANCE(d) OVER w variance, STD(d) OVER w std FROM
   WINDOW w AS (ORDER BY d RANGE BETWEEN CURRENT ROW AND 2 FOLLOWING);
 
 DROP TABLE td;
+--source include/restore_turbo.inc
 
 --echo ----------------------------------------------------------------------
 --echo -    STD/VARIANCE with frames in combination with non-framing window functions
@@ -383,34 +385,35 @@ DROP TABLE td;
 --echo ----------------------------------------------------------------------
 
 SELECT ROW_NUMBER() OVER w `row_number`, id, STD(id) OVER w std, VARIANCE(id) OVER w variance, sex FROM t1
-       WINDOW w AS (PARTITION BY sex ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING);
+       WINDOW w AS (PARTITION BY sex ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+       ORDER BY id;
 
 SELECT ROW_NUMBER() OVER w `row_number`, STD(id) OVER w std,
       VARIANCE(id) OVER w variance FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
+                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) ORDER BY id;
 
 INSERT INTO t1 VALUES (10, NULL);
 
 SELECT RANK() OVER w `rank`, id, STD(id) OVER w std, VARIANCE(id) OVER w variance, sex FROM t1
-       WINDOW w AS (PARTITION BY sex ORDER BY id);
+       WINDOW w AS (PARTITION BY sex ORDER BY id) ORDER BY id;
 
 SELECT RANK() OVER w `rank`, STD(id) OVER w std,
        VARIANCE(id) OVER w variance FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
+                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) ORDER BY id;
 
 SELECT id, sex, STD(id) OVER w std,
                 VARIANCE(id) OVER w variance,
                 ROW_NUMBER() OVER w `row_number`,
                 RANK() OVER w  `rank` FROM t1
-       WINDOW w AS (PARTITION BY sex ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING);
+       WINDOW w AS (PARTITION BY sex ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) ORDER BY id;
 
 SELECT id, sex, STD(id) OVER w std,
                 VARIANCE(id) OVER w variance,
                 ROW_NUMBER() OVER w `row_number`,
                 CUME_DIST() OVER w  `cume_dist` FROM t1
-       WINDOW w AS (PARTITION BY sex ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING);
+       WINDOW w AS (PARTITION BY sex ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) ORDER BY id;
 
 
 --echo ----------------------------------------------------------------------
@@ -456,7 +459,7 @@ SELECT user_id, STD(user_id) OVER w, VARIANCE(user_id) OVER w1 FROM t2
 SELECT NTILE(5) OVER w, ROW_NUMBER() OVER w, id, STD(id) OVER w FROM t1
     WINDOW w AS (ORDER BY id DESC RANGE 2 PRECEDING);
 SELECT p, NTILE(5) OVER w, ROW_NUMBER() OVER w, id, VARIANCE(id) OVER w FROM t11
-    WINDOW w AS (PARTITION BY p ORDER BY id DESC RANGE 2 PRECEDING);
+    WINDOW w AS (PARTITION BY p ORDER BY id DESC RANGE 2 PRECEDING) ORDER BY p;
 --error ER_WINDOW_RANGE_FRAME_NUMERIC_TYPE
 SELECT NTILE(5) OVER w, ROW_NUMBER() OVER w, id, STD(id) OVER w FROM t1
     WINDOW w AS (ORDER BY id DESC RANGE INTERVAL 2 MONTH PRECEDING);
@@ -550,7 +553,7 @@ CREATE TABLE t1 (i INTEGER, j INTEGER);
 INSERT INTO t1 VALUES (NULL,3),(NULL,3),(NULL,30),(NULL,30),(4,3),
        (2,5),(3,7),(1,10),(5,20),(3,30);
 
-SELECT i, j, STD(i) OVER (PARTITION BY j ORDER BY i) FROM t1;
+SELECT i, j, STD(i) OVER (PARTITION BY j ORDER BY i) FROM t1 ORDER BY i,j;
 
 DROP TABLE t1;
 
@@ -566,7 +569,9 @@ INSERT INTO t1 VALUES
   (13,1267597312),(14,93454336),(15,6),(16,-67174400),(17,10751180),
   (18,659685376),(19,-790691840),(20,882114560),(21,1952907264);
 
+--source include/disable_turbo.inc
 --replace_numeric_round 4
-SELECT  STDDEV(c2) OVER ( ROWS 2 PRECEDING ) AS std_deviation FROM t1;
+SELECT  STDDEV(c2) OVER (ORDER BY c1 ROWS 2 PRECEDING ) AS std_deviation FROM t1;
+--source include/restore_turbo.inc
 
 DROP TABLE t1;

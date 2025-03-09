@@ -1,0 +1,226 @@
+--source include/have_debug.inc
+
+connect (conn1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn2,127.0.0.1,root,,test,$SERVER_MYPORT_2,);
+connect (conn3,127.0.0.1,root,,test,$SERVER_MYPORT_3,);
+
+--disable_query_log
+connection conn1;
+call mtr.add_suppression("Operating system error number 2 in a file operation.");
+call mtr.add_suppression("The error means the system cannot find the path specified.");
+call mtr.add_suppression("File ./test/t1.ibd: 'open' returned OS error 71.");
+--enable_query_log
+
+## Install plugin
+--echo [connect conn1]
+connection conn1;
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+--echo [connect conn2]
+connection conn2;
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+--echo [connect conn3]
+connection conn3;
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+--echo [connect conn1]
+connection conn1;
+CREATE TABLE t1 (c1 INT, c2 INT);
+INSERT INTO t1 VALUES (1,1),(2,2);
+--echo [connect conn2]
+connection conn2;
+CREATE TABLE t2 (c1 INT, c2 INT);
+INSERT INTO t2 VALUES (1,1),(2,2);
+--echo [connect conn3]
+connection conn3;
+CREATE TABLE t3 (c1 INT, c2 INT);
+INSERT INTO t3 VALUES (1,1),(2,2);
+
+
+connect (conn3_1_1,127.0.0.1,root,,test,$SERVER_MYPORT_3,);
+connect (conn3_1_2,127.0.0.1,root,,test,$SERVER_MYPORT_3,);
+--echo ## test multiple clone in recipient node
+--echo [connect conn3]
+connection conn3;
+--replace_result $SERVER_MYPORT_1 PORT_1 $SERVER_MYPORT_2 PORT_2
+eval SET GLOBAL clone_valid_donor_list='127.0.0.1:$SERVER_MYPORT_1,127.0.0.1:$SERVER_MYPORT_2';
+SET GLOBAL debug='+d,clone_courrency_wait';
+--echo [connect conn3_1_1]
+connection conn3_1_1;
+--replace_result $SERVER_MYPORT_1 PORT_1 $MYSQL_TMP_DIR TMP
+send_eval CLONE INSTANCE FROM 'root'@'127.0.0.1':$SERVER_MYPORT_1 IDENTIFIED BY '' DATA DIRECTORY='$MYSQL_TMP_DIR/data_clone_1';
+--echo [connect conn3]
+connection conn3;
+SET debug_sync='now WAIT_FOR clone_courrency_wait';
+SET GLOBAL debug='-d,clone_courrency_wait';
+--echo [connect conn3_1_2]
+connection conn3_1_2;
+--replace_result $SERVER_MYPORT_2 PORT_2 $MYSQL_TMP_DIR TMP
+send_eval CLONE INSTANCE FROM 'root'@'127.0.0.1':$SERVER_MYPORT_2 IDENTIFIED BY '' DATA DIRECTORY='$MYSQL_TMP_DIR/data_clone_2';
+--echo [connect conn3]
+connection conn3;
+SET debug_sync='now SIGNAL clone_courrency_continue';
+--echo [connect conn3_1_1]
+connection conn3_1_1;
+reap;
+--echo [connect conn3_1_2]
+connection conn3_1_2;
+reap;
+--echo # Restart server3 
+connection conn3;
+--replace_result $MYSQL_TMP_DIR TMP
+--let restart_parameters="restart: --datadir=$MYSQL_TMP_DIR/data_clone_1"
+--source include/restart_mysqld.inc
+--enable_reconnect
+SELECT * FROM t1;
+--replace_result $MYSQL_TMP_DIR TMP
+--let restart_parameters="restart: --datadir=$MYSQL_TMP_DIR/data_clone_2"
+--source include/restart_mysqld.inc
+--enable_reconnect
+SELECT * FROM t2;
+--let restart_parameters="restart:"
+--source include/restart_mysqld.inc
+--enable_reconnect
+SELECT * FROM t3;
+--force-rmdir $MYSQL_TMP_DIR/data_clone_1
+--force-rmdir $MYSQL_TMP_DIR/data_clone_2
+
+
+connect (conn2_2_1,127.0.0.1,root,,test,$SERVER_MYPORT_2,);
+connect (conn3_2_1,127.0.0.1,root,,test,$SERVER_MYPORT_3,);
+--echo ## test multiple clone in donor node
+--echo [connect conn2]
+connection conn2;
+--replace_result $SERVER_MYPORT_1 PORT_1
+eval SET GLOBAL clone_valid_donor_list='127.0.0.1:$SERVER_MYPORT_1';
+--echo [connect conn3]
+connection conn3;
+--replace_result $SERVER_MYPORT_1 PORT_1
+eval SET GLOBAL clone_valid_donor_list='127.0.0.1:$SERVER_MYPORT_1';
+--echo [connect conn1]
+connection conn1;
+SET GLOBAL debug='+d,clone_courrency_wait';
+--echo [connect conn2_2_1]
+connection conn2_2_1;
+--replace_result $SERVER_MYPORT_1 PORT_1 $MYSQL_TMP_DIR TMP
+send_eval CLONE INSTANCE FROM 'root'@'127.0.0.1':$SERVER_MYPORT_1 IDENTIFIED BY '' DATA DIRECTORY='$MYSQL_TMP_DIR/data_clone_3';
+--echo [connect conn1]
+connection conn1;
+SET debug_sync='now WAIT_FOR clone_courrency_wait';
+SET GLOBAL debug='-d,clone_courrency_wait';
+--echo [connect conn3_2_1]
+connection conn3_2_1;
+--replace_result $SERVER_MYPORT_1 PORT_1 $MYSQL_TMP_DIR TMP
+send_eval CLONE INSTANCE FROM 'root'@'127.0.0.1':$SERVER_MYPORT_1 IDENTIFIED BY '' DATA DIRECTORY='$MYSQL_TMP_DIR/data_clone_4';
+--echo [connect conn1]
+connection conn1;
+SET debug_sync='now SIGNAL clone_courrency_continue';
+--echo [connect conn2_2_1]
+connection conn2_2_1;
+reap;
+--echo [connect conn3_2_1]
+connection conn3_2_1;
+--error ER_CLONE_DONOR
+reap;
+--echo # Restart server2 
+connection conn2;
+--replace_result $MYSQL_TMP_DIR TMP
+--let restart_parameters="restart: --datadir=$MYSQL_TMP_DIR/data_clone_3"
+--source include/restart_mysqld.inc
+--enable_reconnect
+SELECT * FROM t1;
+--let restart_parameters="restart:"
+--source include/restart_mysqld.inc
+--enable_reconnect
+SELECT * FROM t2;
+--force-rmdir $MYSQL_TMP_DIR/data_clone_3
+
+
+connect (conn2_3_1,127.0.0.1,root,,test,$SERVER_MYPORT_2,);
+connect (conn3_3_1,127.0.0.1,root,,test,$SERVER_MYPORT_3,);
+# test courrent DDL for file_copy
+--echo [connect conn2]
+connection conn2;
+--replace_result $SERVER_MYPORT_1 PORT_1
+eval SET GLOBAL clone_valid_donor_list='127.0.0.1:$SERVER_MYPORT_1';
+--echo [connect conn3]
+connection conn3;
+--replace_result $SERVER_MYPORT_1 PORT_1
+eval SET GLOBAL clone_valid_donor_list='127.0.0.1:$SERVER_MYPORT_1';
+--echo [connect conn1]
+connection conn1;
+SET GLOBAL debug='+d,test_multiple_clones_during_ddl';
+SET GLOBAL debug='+d,test_rename_table_after_file_copy_1';
+--echo [connect conn2_3_1]
+connection conn2_3_1;
+--replace_result $SERVER_MYPORT_1 PORT_1 $MYSQL_TMP_DIR TMP
+send_eval CLONE INSTANCE FROM 'root'@'127.0.0.1':$SERVER_MYPORT_1 IDENTIFIED BY '' DATA DIRECTORY='$MYSQL_TMP_DIR/data_clone_5';
+--echo [connect conn1]
+connection conn1;
+SET debug_sync='now WAIT_FOR reach_file_copy_1';
+SET GLOBAL debug='-d,test_rename_table_after_file_copy_1';
+SET GLOBAL debug='+d,test_rename_table_after_file_copy_2';
+--echo [connect conn3_3_1]
+connection conn3_3_1;
+--replace_result $SERVER_MYPORT_1 PORT_1 $MYSQL_TMP_DIR TMP
+send_eval CLONE INSTANCE FROM 'root'@'127.0.0.1':$SERVER_MYPORT_1 IDENTIFIED BY '' DATA DIRECTORY='$MYSQL_TMP_DIR/data_clone_6';
+--echo [connect conn1]
+connection conn1;
+SET debug_sync='now WAIT_FOR reach_file_copy_2';
+SET GLOBAL debug='-d,test_rename_table_after_file_copy_2';
+--echo [connect conn1]
+connection conn1;
+RENAME TABLE t1 TO t1_bak;
+SET debug_sync='now SIGNAL continue_file_copy_1';
+SET debug_sync='now SIGNAL continue_file_copy_2';
+--echo [connect conn2_3_1]
+connection conn2_3_1;
+reap;
+--echo [connect conn3_3_1]
+connection conn3_3_1;
+--error ER_CLONE_DONOR
+reap;
+--echo [connect conn1]
+connection conn1;
+SET GLOBAL debug='-d,test_multiple_clones_during_ddl';
+--echo # Restart server2 
+connection conn2;
+--replace_result $MYSQL_TMP_DIR TMP
+--let restart_parameters="restart: --datadir=$MYSQL_TMP_DIR/data_clone_5"
+--source include/restart_mysqld.inc
+--enable_reconnect
+SELECT * FROM t1_bak;
+--let restart_parameters="restart:"
+--source include/restart_mysqld.inc
+--enable_reconnect
+SELECT * FROM t2;
+--echo [connect conn1]
+connection conn1;
+RENAME TABLE t1_bak to t1;
+--force-rmdir $MYSQL_TMP_DIR/data_clone_5
+--force-rmdir $MYSQL_TMP_DIR/data_clone_6
+
+
+## Uninstall plugin
+--echo [connect conn1]
+connection conn1;
+UNINSTALL PLUGIN clone;
+--echo [connect conn2]
+connection conn2;
+UNINSTALL PLUGIN clone;
+--echo [connect conn3]
+connection conn3;
+UNINSTALL PLUGIN clone;
+
+## Clean
+--echo [connect conn1]
+connection conn1;
+DROP TABLE t1;
+--echo [connect conn2]
+connection conn2;
+DROP TABLE t2;
+--echo [connect conn3]
+connection conn3;
+DROP TABLE t3;

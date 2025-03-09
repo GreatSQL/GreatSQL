@@ -122,8 +122,10 @@ WHERE VARIABLE_NAME LIKE 'dummy';
 --enable_warnings
 
 FLUSH STATUS;
+--source include/disable_turbo.inc
 --sorted_result
 SELECT * FROM t1 WHERE a BETWEEN 1 AND 450 AND b BETWEEN 1 AND 10;
+--source include/restore_turbo.inc
 let $get_handler_status_counts= SELECT * FROM performance_schema.session_status
 WHERE VARIABLE_NAME LIKE 'HANDLER_%' AND VARIABLE_VALUE > 0;
 --source include/get_handler_status_counts.inc

@@ -1,5 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -4402,6 +4402,11 @@ string PrintAccessPath(const AccessPath &path, const JoinHypergraph &graph,
     case AccessPath::PQBLOCK_SCAN:
       str += "PQBLOCK_SCAN";
       break;
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+    case AccessPath::QUERY_PLAN_EXECUTE:
+      str += "QUERY_PLAN_PLUGIN_Execute";
+      break;
+#endif
   }
 
   str += StringPrintf(", cost=%.1f, init_cost=%.1f", path.cost, path.init_cost);

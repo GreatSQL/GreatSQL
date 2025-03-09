@@ -53,7 +53,7 @@ insert into t1 values (4);
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 alter table t1 rename column  id to id1, ALGORITHM=INPLACE, LOCK=NONE;;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
@@ -128,7 +128,7 @@ insert into t1 values (4);
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 alter table t1 rename to t11;;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
@@ -203,7 +203,7 @@ insert into t1 values (4);
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 alter table t1 add column name varchar(100);;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
@@ -280,7 +280,7 @@ insert into t1 values (4,'name4');
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 alter table t1 drop column name;;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
@@ -357,7 +357,7 @@ insert into t1 values (4,'name4');
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 ALTER TABLE t1 ADD PRIMARY KEY (id);;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
@@ -434,7 +434,7 @@ insert into t1 values (4,'name4');
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 alter table t1 add index index_name(name);;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
@@ -511,7 +511,7 @@ insert into t1 values (4,'name4');
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 create index index_name on t1(name);;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
@@ -589,7 +589,7 @@ insert into t1 values (4,'name4');
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 alter table t1 drop index index_name;;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
@@ -668,7 +668,7 @@ insert into t1 values (4,'name4');
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 drop index index_name on t1;;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
@@ -770,7 +770,7 @@ insert into t1 values (2,'name3',sysdate);
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 ALTER TABLE t1 ADD PARTITION (PARTITION p5 VALUES LESS THAN (2100));;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
@@ -875,7 +875,7 @@ insert into t1 values (2,'name3',sysdate);
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 ALTER TABLE t1 DROP PARTITION p0;;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
@@ -957,7 +957,7 @@ insert into t2 values (4);
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 OPTIMIZE TABLE t2;;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";
@@ -1041,7 +1041,7 @@ insert into t3 values (4);
 ----[connect addconroot]
 SET lock_wait_timeout = 5;
 SET lock_ddl_polling_mode=on;
-SET lock_ddl_polling_runtime=1000;
+SET lock_ddl_polling_runtime=500;
 TRUNCATE TABLE t3;;
 ----[connect addconroot2]
 select STATE,INFO from information_schema.processlist where state like "%Waiting for table metadata lock%";

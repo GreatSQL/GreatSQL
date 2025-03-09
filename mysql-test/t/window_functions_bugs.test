@@ -395,7 +395,7 @@ DROP TABLE t1;
 CREATE TABLE t (a BIGINT,b INT);
 INSERT INTO t VALUES (9223372036854775807,1);
 INSERT INTO t VALUES (1,2);
---error ER_DATA_OUT_OF_RANGE
+--error ER_DATA_OUT_OF_RANGE,ER_QUERY_PLAN_PLUGIN
 SELECT b, CUME_DIST() OVER (
   PARTITION BY b ORDER BY a RANGE BETWEEN CURRENT ROW AND 1 FOLLOWING
 ) FROM t;
@@ -405,11 +405,12 @@ DROP TABLE t;
 --echo # Bug#27452179: WINDOW: ASSERTION FAILED: SCALE >= 0 && PRECISION > 0
 --echo #               && SCALE <= PRECISION
 --echo #
-
 CREATE TABLE t(f1 INTEGER);
 INSERT INTO t VALUES(0),(1),(2),(3);
+--disable_warnings
 SELECT * FROM (SELECT IF(1, WEEKDAY('1'), ROW_NUMBER() OVER (PARTITION BY f1))
                FROM t) AS a;
+--enable_warnings
 DROP TABLE t;
 
 --echo #
@@ -418,9 +419,11 @@ DROP TABLE t;
 --echo #
 CREATE TABLE t(a SMALLINT);
 INSERT INTO t(a) VALUES (-32768), (-1), (32767), (32767), (1);
+--source include/disable_turbo.inc
 SELECT a, COUNT(a) OVER w, LAG(1,13) RESPECT NULLS OVER w
   FROM t
   WINDOW w AS (ORDER BY a RANGE BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING);
+--source include/restore_turbo.inc
 DROP TABLE t;
 
 --echo #
@@ -463,6 +466,7 @@ DROP TABLE t;
 CREATE TABLE t(a INTEGER);
 INSERT INTO t VALUES (1),(2),(3),(4);
 
+--source include/disable_turbo.inc
 SELECT NTILE(74) OVER(ORDER BY a ROWS BETWEEN CURRENT ROW AND
                       9223372036854775807 FOLLOWING) FROM t;
 
@@ -477,6 +481,7 @@ SELECT SUM(a) OVER(ORDER BY a ROWS BETWEEN 9223372036854775805 FOLLOWING AND
 
 SELECT SUM(a) OVER(ORDER BY a ROWS BETWEEN 9223372036854775807 FOLLOWING AND
                    9223372036854775805 FOLLOWING) as `sum` FROM t;
+--source include/restore_turbo.inc
 
 SELECT SUM(a) OVER(ORDER BY a ROWS BETWEEN 9223372036854775807 PRECEDING AND
                    9223372036854775805 PRECEDING) as `sum` FROM t;
@@ -586,7 +591,9 @@ SELECT DISTINCT
 --echo Does not use frame buffer
 CREATE TABLE t(i INT);
 INSERT INTO t VALUES (0), (0), (0), (0), (1), (0), (0), (0);
+--sorted_result
 SELECT DISTINCT i, 1 + SUM(i) OVER (ORDER BY i ROWS UNBOUNDED PRECEDING) FROM t;
+--sorted_result
 SELECT DISTINCT 1 + SUM(i) OVER (ORDER BY i ROWS UNBOUNDED PRECEDING) FROM t;
 DROP TABLE t;
 
@@ -656,9 +663,12 @@ INSERT INTO t2 VALUES (1), (2), (3), (4), (5), (6), (7);
 
 ANALYZE TABLE t1, t2;
 
+--source include/disable_turbo.inc
+--sorted_result
 SELECT 0.2 * AVG(f1) OVER w AS avg, f1
  FROM t1 JOIN t2 ON t1_partkey = t2_partkey
  WINDOW w AS (PARTITION BY t1_partkey);
+--source include/restore_turbo.inc
 
 DROP TABLE t1, t2;
 

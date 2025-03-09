@@ -235,6 +235,7 @@ SELECT c FROM t1a WHERE NOT EXISTS (SELECT c FROM t1b WHERE t1a.c = t1b.c);
 
 SELECT c FROM t2a WHERE c IN (SELECT c FROM t2b);
 SELECT c FROM t2a WHERE EXISTS (SELECT c FROM t2b WHERE t2a.c = t2b.c);
+--sorted_result
 SELECT c FROM t2a WHERE NOT EXISTS (SELECT c FROM t2b WHERE t2a.c = t2b.c);
 
 --echo 'Test for JOIN'

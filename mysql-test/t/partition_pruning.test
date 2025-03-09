@@ -295,11 +295,13 @@ ALTER TABLE t1 REMOVE PARTITIONING;
 INSERT INTO t1 VALUES ('0000-00-00'), ('0000-01-02'), ('0001-01-01'),
       ('1001-00-00'), ('1001-01-01'), ('1002-00-00'), ('2001-01-01');
 ANALYZE TABLE t1;
+--source include/disable_turbo.inc
 --source include/partition_date_range.inc
 --echo # test without index
 ALTER TABLE t1 DROP KEY a;
 ANALYZE TABLE t1;
 --source include/partition_date_range.inc
+--source include/restore_turbo.inc
 DROP TABLE t1;
 
 --echo # test of LIST and index
@@ -317,6 +319,7 @@ ALTER TABLE t1 REMOVE PARTITIONING;
 INSERT INTO t1 VALUES ('0000-00-00'), ('0000-01-02'), ('0001-01-01'),
       ('1001-00-00'), ('1001-01-01'), ('1002-00-00'), ('2001-01-01');
 ANALYZE TABLE t1;
+--source include/disable_turbo.inc
 --source include/partition_date_range.inc
 --echo # test without index
 ALTER TABLE t1 DROP KEY a;
@@ -343,6 +346,7 @@ ANALYZE TABLE t1;
 ALTER TABLE t1 DROP KEY a;
 ANALYZE TABLE t1;
 --source include/partition_date_range.inc
+--source include/restore_turbo.inc
 DROP TABLE t1;
 SET sql_mode = default;
 

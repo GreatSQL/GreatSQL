@@ -3517,8 +3517,10 @@ CREATE TABLE t1 ( pk INTEGER NOT NULL, a INTEGER );
 # Verify there's no <cache> around the 2.
 PREPARE q FROM 'EXPLAIN FORMAT=tree SELECT * FROM t1 WHERE pk = ?';
 SET @v = 2;
+--source include/disable_turbo.inc
 --replace_regex /  \(cost=.*//
 EXECUTE q USING @v;
+--source include/restore_turbo.inc
 
 DROP TABLE t1;
 

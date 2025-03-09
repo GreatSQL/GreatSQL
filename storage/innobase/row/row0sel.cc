@@ -3,7 +3,7 @@
 Copyright (c) 1997, 2022, Oracle and/or its affiliates.
 Copyright (c) 2008, Google Inc.
 Copyright (c) 2022, Huawei Technologies Co., Ltd.
-Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -74,6 +74,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 #include "ut0new.h"
+
+#include "rem0lrec.h"
 
 #include "my_dbug.h"
 
@@ -2739,14 +2741,14 @@ void row_sel_field_store_in_mysql_format_func(
     byte *mysql_rec, row_prebuilt_t *prebuilt, const rec_t *rec,
     const dict_index_t *rec_index, const dict_index_t *prebuilt_index,
     const ulint *offsets, ulint field_no, const mysql_row_templ_t *templ,
-    ulint sec_field_no, lob::undo_vers_t *lob_undo, mem_heap_t *&blob_heap) {
+    ulint sec_field_no, lob::undo_vers_t *lob_undo, mem_heap_t *&blob_heap,
+    row_prebuilt_parallel_ctx_t *parallel_ctx = nullptr) {
   DBUG_TRACE;
 
   const byte *data;
   ulint len;
   ulint clust_field_no = 0;
   bool clust_templ_for_sec = (sec_field_no != ULINT_UNDEFINED);
-
   ut_ad(templ);
   ut_ad(prebuilt->default_rec);
   ut_ad(templ >= prebuilt->mysql_template);
@@ -2757,6 +2759,9 @@ void row_sel_field_store_in_mysql_format_func(
 
   ut_ad(rec_offs_validate(
       rec, clust_templ_for_sec == true ? prebuilt_index : rec_index, offsets));
+
+  ut_a((prebuilt->is_in_ap_parallel_read_ctx && parallel_ctx) ||
+       (!prebuilt->is_in_ap_parallel_read_ctx && !parallel_ctx));
 
   /* If sec_field_no is present then extract the data from record
   using secondary field no. */
@@ -2834,9 +2839,13 @@ void row_sel_field_store_in_mysql_format_func(
 
     ut_a(rec_field_not_null_not_add_col_def(len));
 
-    row_sel_field_store_in_mysql_format(mysql_rec + templ->mysql_col_offset,
-                                        templ, rec_index, field_no, data, len,
-                                        &prebuilt->compress_heap, ULINT_UNDEFINED);
+    row_sel_field_store_in_mysql_format(
+        mysql_rec + templ->mysql_col_offset, templ, rec_index, field_no, data,
+        len,
+        (!prebuilt->is_in_ap_parallel_read_ctx
+             ? &prebuilt->compress_heap
+             : parallel_ctx->get_compress_col_heap_addr()),
+        ULINT_UNDEFINED);
 
     if (heap != blob_heap) {
       mem_heap_free(heap);
@@ -2890,9 +2899,13 @@ void row_sel_field_store_in_mysql_format_func(
       field_no = clust_field_no;
     }
 
-    row_sel_field_store_in_mysql_format(mysql_rec + templ->mysql_col_offset,
-                                        templ, rec_index, field_no, data, len,
-                                        &prebuilt->compress_heap, sec_field_no);
+    row_sel_field_store_in_mysql_format(
+        mysql_rec + templ->mysql_col_offset, templ, rec_index, field_no, data,
+        len,
+        (!prebuilt->is_in_ap_parallel_read_ctx
+             ? &prebuilt->compress_heap
+             : parallel_ctx->get_compress_col_heap_addr()),
+        sec_field_no);
   }
 
   ut_ad(rec_field_not_null_not_add_col_def(len));
@@ -2911,8 +2924,8 @@ bool row_sel_store_mysql_rec(byte *mysql_rec, row_prebuilt_t *prebuilt,
                              bool rec_clust, const dict_index_t *rec_index,
                              const dict_index_t *prebuilt_index,
                              const ulint *offsets, bool clust_templ_for_sec,
-                             lob::undo_vers_t *lob_undo,
-                             mem_heap_t *&blob_heap) {
+                             lob::undo_vers_t *lob_undo, mem_heap_t *&blob_heap,
+                             row_prebuilt_parallel_ctx_t *parallel_ctx) {
   std::vector<const dict_col_t *> template_col;
 
   DBUG_TRACE;
@@ -2926,7 +2939,8 @@ bool row_sel_store_mysql_rec(byte *mysql_rec, row_prebuilt_t *prebuilt,
     mem_heap_empty(blob_heap);
   }
 
-  if (UNIV_LIKELY_NULL(prebuilt->compress_heap))
+  if (UNIV_LIKELY_NULL(prebuilt->compress_heap) &&
+      !prebuilt->is_in_ap_parallel_read_ctx)
     row_mysql_prebuilt_free_compress_heap(prebuilt);
 
   if (clust_templ_for_sec) {
@@ -2993,7 +3007,10 @@ bool row_sel_store_mysql_rec(byte *mysql_rec, row_prebuilt_t *prebuilt,
         row_sel_field_store_in_mysql_format(
             mysql_rec + templ->mysql_col_offset, templ, rec_index,
             templ->clust_rec_field_no, (const byte *)dfield->data, dfield->len,
-            &prebuilt->compress_heap, ULINT_UNDEFINED);
+            (!prebuilt->is_in_ap_parallel_read_ctx
+                 ? &prebuilt->compress_heap
+                 : parallel_ctx->get_compress_col_heap_addr()),
+            ULINT_UNDEFINED);
         if (templ->mysql_null_bit_mask) {
           mysql_rec[templ->mysql_null_byte_offset] &=
               ~(byte)templ->mysql_null_bit_mask;
@@ -3030,9 +3047,9 @@ bool row_sel_store_mysql_rec(byte *mysql_rec, row_prebuilt_t *prebuilt,
       sec_field_no = it - template_col.begin();
     }
 
-    if (!row_sel_store_mysql_field(mysql_rec, prebuilt, rec, rec_index,
-                                   prebuilt_index, offsets, field_no, templ,
-                                   sec_field_no, lob_undo, blob_heap)) {
+    if (!row_sel_store_mysql_field(
+            mysql_rec, prebuilt, rec, rec_index, prebuilt_index, offsets,
+            field_no, templ, sec_field_no, lob_undo, blob_heap, parallel_ctx)) {
       return false;
     }
   }

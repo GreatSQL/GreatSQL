@@ -11,6 +11,7 @@ create table t1 (a int not null auto_increment, b int not null, primary key(a));
 insert into t1 (b) values (2),(3),(5),(5),(5),(6),(7),(9);
 select SQL_CALC_FOUND_ROWS * from t1;
 select found_rows();
+--source include/disable_turbo.inc
 select SQL_CALC_FOUND_ROWS * from t1 limit 1;
 select found_rows();
 select SQL_BUFFER_RESULT SQL_CALC_FOUND_ROWS * from t1 limit 1;
@@ -28,6 +29,7 @@ ANALYZE TABLE t1;
 EXPLAIN FORMAT=tree select SQL_CALC_FOUND_ROWS * from t1 limit 10 offset 100;
 select SQL_CALC_FOUND_ROWS * from t1 limit 10 offset 100;
 select found_rows();
+--source include/restore_turbo.inc
 drop table t1;
 
 #
@@ -36,10 +38,12 @@ drop table t1;
 
 create table t1 (a int not null primary key);
 insert into t1 values (1),(2),(3),(4),(5);
+--source include/disable_turbo.inc
 select sql_calc_found_rows a from t1 where a in (1,2,3) order by a desc limit 0,2;
 select FOUND_ROWS();
 select sql_calc_found_rows a from t1 where a in (1,2,3) order by a+2 desc limit 0,2;
 select FOUND_ROWS();
+--source include/restore_turbo.inc
 drop table t1;
 
 #
@@ -77,6 +81,7 @@ ANALYZE TABLE t1, t2;
 --let $query=SELECT SQL_CALC_FOUND_ROWS DISTINCT email FROM t2 LEFT JOIN t1  ON kid = t2.id WHERE t1.id IS NULL LIMIT 10
 --eval EXPLAIN $query
 FLUSH STATUS;
+--source include/disable_turbo.inc
 --disable_result_log
 --eval $query
 --enable_result_log
@@ -93,6 +98,7 @@ INSERT INTO `t1` (`id`, `kid`) VALUES ('0', '150');
 
 SELECT SQL_CALC_FOUND_ROWS DISTINCT email FROM t2 LEFT JOIN t1  ON kid = t2.id WHERE t1.id IS NULL LIMIT 10;
 SELECT FOUND_ROWS();
+--source include/restore_turbo.inc
 
 drop table t1,t2;
 
@@ -127,8 +133,10 @@ drop table t1;
 
 create table t1 (id int, primary key (id));
 insert into t1 values (1), (2), (3), (4), (5);
+--source include/disable_turbo.inc
 select SQL_CALC_FOUND_ROWS * from t1 where id > 3 limit 0, 1;
 select FOUND_ROWS();
+--source include/restore_turbo.inc
 select SQL_CALC_FOUND_ROWS * from t1 where id > 3 AND 1=2 limit 0, 1;
 select FOUND_ROWS();
 select SQL_CALC_FOUND_ROWS * from t1 where id > 6 limit 0, 1;

@@ -26,7 +26,6 @@ mysql
 mysqltest
 performance_schema
 sys
-sys_mac
 test
 USE test;
 SHOW TABLES;

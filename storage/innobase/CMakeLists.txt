@@ -1,5 +1,5 @@
 # Copyright (c) 2006, 2022, Oracle and/or its affiliates.
-# Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+# Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -225,6 +225,7 @@ SET(INNOBASE_SOURCES
   row/row0purge.cc
   row/row0pread-adapter.cc
   row/row0pread-histogram.cc
+  row/row0pread-fetcher.cc
   row/row0row.cc
   row/row0sel.cc
   row/row0uins.cc

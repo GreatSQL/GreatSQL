@@ -9,6 +9,8 @@
 # - SELECTs with subqueries test indexes with BTREE algorithm.
 #
 
+--source include/no_turbo.inc
+
 --echo #
 --echo # Prepare
 --echo #

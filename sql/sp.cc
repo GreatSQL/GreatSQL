@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2002, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -3324,6 +3324,7 @@ uint sp_get_flags_for_command(LEX *lex) {
     case SQLCOM_SHOW_STATUS_TYPE:
     case SQLCOM_SHOW_STORAGE_ENGINES:
     case SQLCOM_SHOW_SEQUENCES:
+    case SQLCOM_SHOW_SYNONYMS:
     case SQLCOM_SHOW_TABLES:
     case SQLCOM_SHOW_TABLE_STATUS:
     case SQLCOM_SHOW_VARIABLES:
@@ -3379,9 +3380,11 @@ uint sp_get_flags_for_command(LEX *lex) {
     case SQLCOM_CREATE_PACKAGE:
     case SQLCOM_CREATE_PACKAGE_BODY:
     case SQLCOM_CREATE_VIEW:
+    case SQLCOM_CREATE_SYNONYM:
     case SQLCOM_CREATE_TRIGGER:
     case SQLCOM_CREATE_TYPE:
     case SQLCOM_CREATE_USER:
+    case SQLCOM_ALTER_SYNONYM:
     case SQLCOM_GRANT:
     case SQLCOM_GRANT_ROLE:
     case SQLCOM_REVOKE:
@@ -3394,6 +3397,7 @@ uint sp_get_flags_for_command(LEX *lex) {
     case SQLCOM_DROP_DB:
     case SQLCOM_DROP_PACKAGE:
     case SQLCOM_DROP_PACKAGE_BODY:
+    case SQLCOM_DROP_SYNONYM:
     case SQLCOM_REVOKE_ALL:
     case SQLCOM_DROP_USER:
     case SQLCOM_DROP_VIEW:

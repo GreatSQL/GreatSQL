@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
    as published by the Free Software Foundation.
@@ -146,6 +146,7 @@ class Table_ref;
 struct timeval;
 struct User_level_lock;
 struct YYLTYPE;
+struct ST_QUERY_PLAN;
 
 namespace dd {
 namespace cache {
@@ -3890,6 +3891,10 @@ class THD : public MDL_context_owner,
                                         uint add_state_flags);
   void restore_backup_open_tables_state(Open_tables_backup *backup);
 
+  void reset_n_backup_open_tables_state_with_lock(Open_tables_backup *backup,
+                                                  uint add_state_flags);
+  void restore_backup_open_tables_state_with_lock(Open_tables_backup *backup);
+
   void merge_backup_open_tables_state(Open_tables_backup *backup);
   void reset_sub_statement_state(Sub_statement_state *backup, uint new_state);
   void restore_sub_statement_state(Sub_statement_state *backup);
@@ -5205,6 +5210,13 @@ class THD : public MDL_context_owner,
   */
   bool is_secondary_storage_engine_eligible() const;
 
+  /// Indicate whether secondary storage engine is forced for this execution
+  void set_secondary_engine_forced(bool forced) {
+    m_secondary_engine_forced = forced;
+  }
+
+  bool is_secondary_engine_forced() const { return m_secondary_engine_forced; }
+
  private:
   /**
     This flag tells if a secondary storage engine can be used to
@@ -5212,6 +5224,13 @@ class THD : public MDL_context_owner,
   */
   Secondary_engine_optimization m_secondary_engine_optimization =
       Secondary_engine_optimization::PRIMARY_ONLY;
+
+  /**
+    Flag that tells whether secondary storage engine is forced for execution.
+    Notice that use_secondary_engine is not reliable because it may be restored
+    early.
+  */
+  bool m_secondary_engine_forced{false};
 
   void cleanup_after_parse_error();
   /**
@@ -5309,6 +5328,34 @@ class THD : public MDL_context_owner,
   const my_decimal *get_cached_seq_currval(Gdb_sequence_entity *seq);
   void update_seq_cache_entity(Gdb_sequence_entity *seq, my_decimal &cval);
   /**  @} GreatDB Sequence cache (for compatibility with Oracle) */
+
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+  // for query plan plugin runtime
+  void *query_plan_plugin_runtime{nullptr};
+  void set_query_plan_plugin_runtime(void *runtime) {
+    query_plan_plugin_runtime = runtime;
+  }
+  void *get_query_plan_plugin_runtime() { return query_plan_plugin_runtime; }
+
+  mysql_mutex_t LOCK_thd_query_plan_plugin;
+
+  void lock_query_plan_plugin() {
+    mysql_mutex_lock(&LOCK_thd_query_plan_plugin);
+  }
+  void unlock_query_plan_plugin() {
+    mysql_mutex_unlock(&LOCK_thd_query_plan_plugin);
+  }
+
+  ST_QUERY_PLAN *query_plan_plugin_interface{nullptr};
+
+  // set
+  void set_query_plan_plugin_interface(ST_QUERY_PLAN *plan_interface) {
+    mysql_mutex_lock(&LOCK_thd_query_plan_plugin);
+    query_plan_plugin_interface = plan_interface;
+    mysql_mutex_unlock(&LOCK_thd_query_plan_plugin);
+  }
+
+#endif
 
  public:
   /**
@@ -5441,5 +5488,15 @@ inline bool is_xa_tran_detached_on_prepare(const THD *thd) {
   return thd->variables.xa_detach_on_prepare;
 }
 inline bool THD::is_worker() { return pq_leader != nullptr; }
+
+class ThdGuard {
+ public:
+  ThdGuard(THD *new_thd) {
+    ori_thd = current_thd;
+    current_thd = new_thd;
+  }
+  ~ThdGuard() { current_thd = ori_thd; }
+  THD *ori_thd;
+};
 
 #endif /* SQL_CLASS_INCLUDED */

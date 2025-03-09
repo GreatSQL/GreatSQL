@@ -207,28 +207,16 @@ col1/0
 NULL
 NULL
 NULL
-Warnings:
-Warning	1365	Division by 0
-Warning	1365	Division by 0
-Warning	1365	Division by 0
 select col2/0 from wl1612;
 col2/0
 NULL
 NULL
 NULL
-Warnings:
-Warning	1365	Division by 0
-Warning	1365	Division by 0
-Warning	1365	Division by 0
 select col3/0 from wl1612;
 col3/0
 NULL
 NULL
 NULL
-Warnings:
-Warning	1365	Division by 0
-Warning	1365	Division by 0
-Warning	1365	Division by 0
 insert into wl1612 values(5,5000.0005,5000.0005);
 insert into wl1612 values(6,5000.0005,5000.0005);
 select sum(col2),sum(col3) from wl1612;
@@ -821,12 +809,6 @@ NULL
 NULL
 NULL
 NULL
-Warnings:
-Warning	1365	Division by 0
-Warning	1365	Division by 0
-Warning	1365	Division by 0
-Warning	1365	Division by 0
-Warning	1365	Division by 0
 INSERT INTO Sow6_2f VALUES ('a59b');
 ERROR HY000: Incorrect decimal value: 'a59b' for column 'col1' at row 1
 drop table Sow6_2f;
@@ -2426,15 +2408,9 @@ INSERT INTO t2 VALUES('x1 y ', 'x1 y ');
 SELECT maketime(1, 2, a) FROM t2;
 maketime(1, 2, a)
 01:02:00.000000
-Warnings:
-Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
-Warning	1292	Truncated incorrect DECIMAL value: 'x1 y'
 SELECT maketime(1, 2, b) FROM t2;
 maketime(1, 2, b)
 01:02:00.000000
-Warnings:
-Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
-Warning	1292	Truncated incorrect DECIMAL value: 'x1 y '
 DROP TABLE t1, t2;
 #
 # Bug #34479194 Query not returning result for given DECIMAL

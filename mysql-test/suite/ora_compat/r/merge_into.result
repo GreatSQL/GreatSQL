@@ -569,6 +569,28 @@ id	bval1	bval2	bval3
 706	403	13	NULL
 709	401	12	41
 drop table t1, t2;
+set sql_mode=oracle;
+set timestamp=12345;
+CREATE TABLE test_mergeinto (
+ID int NOT NULL,
+name varchar(200) not null,
+modify_time_marker datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+PRIMARY KEY (ID)
+);
+MERGE INTO test_mergeinto t
+USING (select 1 id from dual
+union all
+select 2 id from dual) i
+on (t.id = i.id )
+when MATCHED THEN
+update set t.name = 'update'
+WHEN not MATCHED THEN
+INSERT  (id,name)  values  (4+i.id,'insert');
+select * from test_mergeinto;
+ID	name	modify_time_marker
+5	insert	1970-01-01 06:25:45
+6	insert	1970-01-01 06:25:45
+drop table test_mergeinto;
 # security check
 create table t_merge_into_target(t_id int, t_name varchar2(16), t_sale int, t_operatime int);
 insert into t_merge_into_target values(1, 'Cindy', 1000, 1000);

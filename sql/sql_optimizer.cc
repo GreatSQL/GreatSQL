@@ -1,6 +1,6 @@
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -109,7 +109,7 @@
 #include "sql/sql_join_buffer.h"  // JOIN_CACHE
 #include "sql/sql_planner.h"      // calculate_condition_filter
 #include "sql/sql_resolver.h"
-#include "sql/sql_test.h"         // print_where
+#include "sql/sql_test.h"  // print_where
 #include "sql/sql_tmp_table.h"
 #include "sql/system_variables.h"
 #include "sql/table.h"
@@ -593,6 +593,14 @@ bool JOIN::optimize(bool finalize_access_paths) {
     query_block->add_active_options(OPTION_NO_CONST_TABLES |
                                     OPTION_NO_SUBQUERY_DURING_OPTIMIZATION);
   }
+
+  /* If the source table of a merge-into stmt is derived table and not
+   * a union table, disable const table extracting and subquery evaluation
+   * during optimization.
+   * */
+  if (thd->lex->merge_into_with_derived_source_table)
+    query_block->add_active_options(OPTION_NO_CONST_TABLES |
+                                    OPTION_NO_SUBQUERY_DURING_OPTIMIZATION);
 
   has_lateral = false;
 
@@ -2602,7 +2610,10 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
     For now, filesort should be used in such case.
   */
   for (ORDER *ord = order.order; ord; ord = ord->next) {
-    if (ord->nulls_pos != NULLS_POS_MYSQL) return false;
+    const Item *order_item = (*ord->item)->real_item();
+    if ((current_thd->variables.sql_mode & MODE_ORACLE) &&
+        (order_item->is_nullable()) && (ord->nulls_pos != NULLS_POS_MYSQL))
+      return false;
   }
   /*
     Check if FT index can be used to retrieve result in the required order.
@@ -12173,6 +12184,14 @@ double EstimateRowAccesses(const AccessPath *path, double num_evaluations,
                                         kNoLimit);
             return true;
           }
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+          case AccessPath::QUERY_PLAN_EXECUTE: {
+            auto &param = subpath->query_plan_execute();
+            rows += EstimateRowAccesses(param.native_path, num_evaluations,
+                                        kNoLimit);
+            return true;
+          }
+#endif
           default:
             return false;  // Keep traversing.
         }

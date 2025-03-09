@@ -1,7 +1,7 @@
 #ifndef SQL_PREPARE_H
 #define SQL_PREPARE_H
 /* Copyright (c) 2009, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -388,6 +388,9 @@ class Prepared_statement final {
   bool dbms_fake_result{false};
   mem_root_unordered_map<longlong, Item_cache *> *m_dbms_sql_define_column{
       nullptr};
+
+  /// True if it came from open_for_ident
+  bool m_is_ref_cursor{false};
 
  private:
   /// True if statement is used with cursor, false if used in regular execution

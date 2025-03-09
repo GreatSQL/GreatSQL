@@ -73,15 +73,15 @@ id	value
 3	3
 select * from gap4 for update;
 id	value
-2	2
-4	4
 1	1
+2	2
 3	3
+4	4
 5	5
 select * from gap4 where id between 3 and 7 for update;
 id	value
-4	4
 3	3
+4	4
 5	5
 set session autocommit=1;
 select * from gap1 limit 1 for update;
@@ -146,15 +146,15 @@ id	value
 3	3
 select * from gap4 for update;
 id	value
-2	2
-4	4
 1	1
+2	2
 3	3
+4	4
 5	5
 select * from gap4 where id between 3 and 7 for update;
 id	value
-4	4
 3	3
+4	4
 5	5
 set session autocommit=0;
 select * from gap1 limit 1 lock in share mode;
@@ -219,15 +219,15 @@ id	value
 3	3
 select * from gap4 lock in share mode;
 id	value
-2	2
-4	4
 1	1
+2	2
 3	3
+4	4
 5	5
 select * from gap4 where id between 3 and 7 lock in share mode;
 id	value
-4	4
 3	3
+4	4
 5	5
 set session autocommit=1;
 select * from gap1 limit 1 lock in share mode;
@@ -292,15 +292,15 @@ id	value
 3	3
 select * from gap4 lock in share mode;
 id	value
-2	2
-4	4
 1	1
+2	2
 3	3
+4	4
 5	5
 select * from gap4 where id between 3 and 7 lock in share mode;
 id	value
-4	4
 3	3
+4	4
 5	5
 set session autocommit=0;
 select * from gap1 limit 1 ;
@@ -365,15 +365,15 @@ id	value
 3	3
 select * from gap4 ;
 id	value
-2	2
-4	4
 1	1
+2	2
 3	3
+4	4
 5	5
 select * from gap4 where id between 3 and 7 ;
 id	value
-4	4
 3	3
+4	4
 5	5
 set session autocommit=1;
 select * from gap1 limit 1 ;
@@ -438,15 +438,15 @@ id	value
 3	3
 select * from gap4 ;
 id	value
-2	2
-4	4
 1	1
+2	2
 3	3
+4	4
 5	5
 select * from gap4 where id between 3 and 7 ;
 id	value
-4	4
 3	3
+4	4
 5	5
 set session autocommit=0;
 insert into gap1 (id1, id2, id3) values (-1,-1,-1);

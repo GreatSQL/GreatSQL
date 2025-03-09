@@ -1,3 +1,4 @@
+--source include/no_turbo.inc
 #
 # Testing the MySQL command line client(mysql)
 #

@@ -23,6 +23,7 @@ ts1	147456	0
 mysql/greatdb_sequences	114688	0
 mysql/greatdb_sequences_persist	114688	0
 mysql/clone_history	114688	0
+mysql/db_object_synonyms	114688	0
 # Update autoextend_size attribute both for the implicit as
 # well as explicit tablespaces
 ALTER TABLE t5 AUTOEXTEND_SIZE 4M;
@@ -38,6 +39,7 @@ ts1	147456	4194304
 mysql/greatdb_sequences	114688	0
 mysql/greatdb_sequences_persist	114688	0
 mysql/clone_history	114688	0
+mysql/db_object_synonyms	114688	0
 # Cleanup
 # Shutdown server
 # Remove the copied files

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
-Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -966,6 +966,10 @@ class Clone_Snapshot {
   file_compress_mode_t file_compress_mode() { return m_file_compress_mode; }
 
   inline bool is_clone_page_type() { return m_snapshot_type == HA_CLONE_PAGE; }
+
+  void set_clone_type(Ha_clone_type snapshot_type) {
+    m_snapshot_type = snapshot_type;
+  }
 
  private:
   /** @name Snapshot type and ID */

@@ -4,6 +4,7 @@
 #  Mixed SE in a single statement will need to call ha_records from execute
 #  phase only.
 
+--source include/no_turbo.inc
 --source include/force_myisam_default.inc
 --source include/have_myisam.inc
 

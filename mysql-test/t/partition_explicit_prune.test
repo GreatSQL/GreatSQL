@@ -42,8 +42,10 @@ connection monitor;
 connection default;
 
 FLUSH STATUS;
+--source include/disable_turbo.inc
 --sorted_result
 SELECT a FROM t1 PARTITION (p0);
+--source include/restore_turbo.inc
 
 connection monitor;
 --source include/get_handler_status_counts.inc
@@ -73,8 +75,10 @@ connection monitor;
 connection default;
 
 FLUSH STATUS;
+--source include/disable_turbo.inc
 --sorted_result
 SELECT a FROM t1 PARTITION (p0);
+--source include/restore_turbo.inc
 
 connection monitor;
 --source include/get_handler_status_counts.inc

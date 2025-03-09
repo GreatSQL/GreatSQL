@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2022, Oracle and/or its affiliates.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -76,6 +77,8 @@ ulong srv_max_purge_lag_delay = 0;
 
 /** The global data structure coordinating a purge */
 trx_purge_t *purge_sys = nullptr;
+
+bool srv_enable_fast_purge = false;
 
 /** Wait for a short delay between checks. */
 #ifdef UNIV_DEBUG
@@ -2215,10 +2218,19 @@ void Purge_groups_t::distribute() {
 void Purge_groups_t::distribute_if_needed() {
   const uint64_t rseg_history_len = trx_sys->rseg_history_len.load();
 
-  /* If the history list length is greater than maximum allowed purge lag,
-  then distribute the workload across all purge threads. */
-  if (srv_max_purge_lag > 0 && rseg_history_len > srv_max_purge_lag) {
+  if ((0 == srv_fast_shutdown) &&
+      (SRV_SHUTDOWN_PURGE == srv_shutdown_state.load())) {
+    srv_enable_fast_purge = true;
+  }
+
+  if (srv_enable_fast_purge) {
     distribute();
+  } else {
+    /* If the history list length is greater than maximum allowed purge lag,
+    then distribute the workload across all purge threads. */
+    if (srv_max_purge_lag > 0 && rseg_history_len > srv_max_purge_lag) {
+      distribute();
+    }
   }
 }
 

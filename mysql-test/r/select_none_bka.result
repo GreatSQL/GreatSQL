@@ -181,17 +181,17 @@ Warnings:
 Note	1003	/* select#1 */ select `test`.`t2`.`fld3` AS `fld3` from `test`.`t2` where ((`test`.`t2`.`fld3` >= 'honeysuckle') and (`test`.`t2`.`fld3` <= 'honoring')) order by `test`.`t2`.`fld3`
 select fld1,fld3 from t2 where fld3="Colombo" or fld3 = "nondecreasing" order by fld3;
 fld1	fld3
-148504	Colombo
-068305	Colombo
 000000	nondecreasing
+068305	Colombo
+148504	Colombo
 select fld1,fld3 from t2 where companynr = 37 and fld3 = 'appendixes';
 fld1	fld3
-232605	appendixes
 1232605	appendixes
 1232606	appendixes
 1232607	appendixes
 1232608	appendixes
 1232609	appendixes
+232605	appendixes
 select fld1 from t2 where fld1=250501 or fld1="250502";
 fld1
 250501
@@ -386,7 +386,7 @@ unexpected
 uprisings
 versatility
 vest
-select distinct fld3 from t2 limit 10;
+select distinct fld3 from t2 order by fld3 limit 10;
 fld3
 abates
 abiding
@@ -412,19 +412,29 @@ accumulating
 accuracies
 select distinct substring(fld3,1,3) from t2 where fld3 like "A%";
 substring(fld3,1,3)
+Abr
+Ade
+Adl
+Ado
+Ald
+Ang
+Ann
+Ant
+Ara
+Arm
+Art
+Asi
+Aug
+Azt
 aba
 abi
-Abr
 abs
 abu
 acc
 acq
 acu
-Ade
 adj
-Adl
 adm
-Ado
 ads
 adv
 aer
@@ -436,7 +446,6 @@ agi
 ahe
 aim
 air
-Ald
 alg
 ali
 all
@@ -448,32 +457,23 @@ amm
 ana
 and
 ane
-Ang
 ani
-Ann
-Ant
 api
 app
 aqu
-Ara
 arc
-Arm
 arr
-Art
-Asi
 ask
 asp
 ass
 ast
 att
 aud
-Aug
 aut
 ave
 avo
 awe
 aye
-Azt
 select distinct substring(fld3,1,3) as a from t2 having a like "A%" order by a limit 10;
 a
 aba
@@ -488,15 +488,15 @@ Ade
 adj
 select distinct substring(fld3,1,3) from t2 where fld3 like "A%" limit 10;
 substring(fld3,1,3)
+Abr
+Ade
 aba
 abi
-Abr
 abs
 abu
 acc
 acq
 acu
-Ade
 adj
 select distinct substring(fld3,1,3) as a from t2 having a like "A%" limit 10;
 a
@@ -574,16 +574,16 @@ animals animals
 animized animized
 select distinct fld5 from t2 limit 10;
 fld5
-neat
 Steinberg
-jarring
-tinily
-balled
-persist
 attainments
+balled
 fanatic
+jarring
 measures
+neat
+persist
 rightfulness
+tinily
 select distinct companynr, fld3,count(*) from t2 group by companynr, fld3 order by companynr, fld3 limit 10;
 companynr	fld3	count(*)
 00	affixed	1

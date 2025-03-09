@@ -39,6 +39,11 @@ select @@greatdb_ha_vip_tope;
 
 --let $rpl_connection_name= server2
 --source include/rpl_connection.inc
+--disable_query_log
+set session sql_log_bin=0;
+CALL mtr.add_suppression("Plugin greatdb_ha reported: 'Error:greatdb ha skip invalid message.");
+set session sql_log_bin=1;
+--enable_query_log
 --eval INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so'
 set global debug = 'd,test_vip';
 --source include/start_group_replication.inc
@@ -66,6 +71,11 @@ select @@greatdb_ha_vip_tope;
 --source include/rpl_connection.inc
 --replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
 select @@greatdb_ha_vip_tope;
+
+--disable_query_log
+--error 127,1
+--exec echo | telnet localhost 3401 > /dev/null 2>&1
+--enable_query_log
 
 --echo
 --echo ############################################################

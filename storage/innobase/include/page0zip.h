@@ -2,6 +2,7 @@
 
 Copyright (c) 2005, 2022, Oracle and/or its affiliates.
 Copyright (c) 2012, Facebook Inc.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -51,6 +52,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "univ.i"
 #include "ut0crc32.h"
+
+/** page compression zstd compress level, Settable by user. */
+extern uint srv_page_zstd_compression_level;
 
 /* Compression level to be used by zlib. Settable by user. */
 extern uint page_zip_level;

@@ -1,0 +1,106 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+[on master]
+include/sync_slave_sql_with_master.inc
+[on slave]
+STOP REPLICA;
+include/wait_for_slave_to_stop.inc
+[on master]
+RESET MASTER;
+SHOW MASTER STATUS;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000001	157			
+CREATE PROCEDURE dml_insert()
+BEGIN
+DECLARE i INT DEFAULT 0;
+WHILE i < 1000 DO
+INSERT INTO tb_person SET NAME='greatdb', ADDRESS='beijing', SEX='xxx', OTHER='nothing';
+SET i = i + 1;
+END WHILE;
+END;|
+CREATE TABLE tb_person(
+id int NOT NULL AUTO_INCREMENT,
+name varchar(36) NOT NULL,
+address varchar(36) NOT NULL DEFAULT '',
+sex varchar(12) NOT NULL DEFAULT 'Man',
+other varchar(256) NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CALL dml_insert();
+DROP TABLE tb_person;
+DROP PROCEDURE dml_insert;
+SHOW MASTER STATUS;
+File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
+master-bin.000001	327379			
+[on slave]
+CREATE FUNCTION split_str(x VARCHAR(255), delim VARCHAR(12), pos INT)
+RETURNS VARCHAR(255)
+BEGIN
+RETURN REPLACE(SUBSTRING(SUBSTRING_INDEX(x, delim, pos),
+LENGTH(SUBSTRING_INDEX(x, delim, pos -1)) + 1),
+delim, '');
+END|
+CREATE PROCEDURE test_speed()
+BEGIN
+DECLARE i INT DEFAULT 0;
+DECLARE channel_count INT DEFAULT 0;
+DECLARE data_speed INT DEFAULT 0;
+DECLARE channel_name VARCHAR(255);
+DECLARE str_channel_speed VARCHAR(255);
+DECLARE str_data_speed VARCHAR(1024);
+DECLARE str_res VARCHAR(2048) DEFAULT '';
+SELECT VARIABLE_VALUE INTO str_data_speed from performance_schema.global_status where VARIABLE_NAME='Rpl_data_speed';
+IF @@rpl_read_binlog_speed_limit > 0 THEN 
+IF LENGTH(str_data_speed) > 0 THEN
+SET channel_count = CHAR_LENGTH(str_data_speed) - CHAR_LENGTH(REPLACE(str_data_speed, ',', '')) + 1;
+WHILE i < channel_count DO
+SET str_channel_speed = split_str(str_data_speed, ',', i+1);
+SET channel_name = split_str(str_channel_speed, '=', 1);
+SET data_speed = split_str(str_channel_speed, '=', 2);
+IF data_speed <= @@rpl_read_binlog_speed_limit THEN
+SET str_res = CONCAT(str_res, IF (i <> 0, ',', ''), channel_name, ': [PASS] ');
+ELSE
+SET str_res = CONCAT(str_res, IF (i <> 0, ',', ''), channel_name, ': [FAILED] ');
+END IF;
+SET i = i + 1;
+END WHILE;
+SELECT
+substring_index(substring_index(str_res,',',help_topic_id + 1),',' ,- 1) AS RESULT
+FROM
+mysql.help_topic
+WHERE
+help_topic_id < (length(str_res) - length(REPLACE (str_res, ',', '')) + 1);
+ELSE
+SELECT "No speed data";
+END IF;
+END IF;
+END;|
+SET GLOBAL rpl_read_binlog_speed_limit = 64;
+CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_PORT=MASTER_PORT, SOURCE_LOG_FILE='master-bin.000001', SOURCE_LOG_POS=157;
+RESET REPLICA;
+START REPLICA;
+include/wait_for_slave_to_start.inc
+SET @start = unix_timestamp(now());
+SET @least_expect_time = FLOOR((327379 - 157) / 1024 / @@rpl_read_binlog_speed_limit);
+SELECT @least_expect_time, SLEEP(FLOOR(1 + RAND() * @least_expect_time));
+@least_expect_time	SLEEP(FLOOR(1 + RAND() * @least_expect_time))
+4	0
+CALL test_speed();
+RESULT
+default_channel: [PASS] 
+[on master]
+include/sync_slave_io_with_master.inc
+[on slave]
+SET @end = unix_timestamp(now());
+SELECT @least_expect_time, (@end - @start) >= @least_expect_time as result;
+@least_expect_time	result
+4	1
+SET GLOBAL rpl_read_binlog_speed_limit = 0;
+DROP FUNCTION split_str;
+DROP PROCEDURE test_speed;
+[on master]
+include/sync_slave_sql_with_master.inc
+include/rpl_end.inc

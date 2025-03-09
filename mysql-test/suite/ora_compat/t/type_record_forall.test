@@ -998,6 +998,7 @@ begin
 end;
 $$
 DELIMITER ;$$
+--error ER_SP_FETCH_NO_DATA
 call p1();
 select * from t2;
 INSERT INTO t1 VALUES (null,null);

@@ -1,7 +1,7 @@
 /*****************************************************************************
 Copyright (c) 2000, 2021, Oracle and/or its affiliates.
 Copyright (c) 2022, Huawei Technologies Co., Ltd.
-Copyright (c) 2023, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -954,6 +954,9 @@ struct row_prebuilt_t {
   ulint pq_m_n_ext{ULINT_UNDEFINED};
   bool pq_requires_clust_rec{false};
 
+  /** support for ap parallel read */
+  bool is_in_ap_parallel_read_ctx{false};
+
  private:
   /** A helper function for init_search_tuples_types() which prepares the shape
   of the tuple to match the index
@@ -994,6 +997,7 @@ struct row_prebuilt_t {
   row_prebuilt_t &operator=(row_prebuilt_t &&) = delete;
   row_prebuilt_t(row_prebuilt_t &&) = delete;
 };
+
 
 /** Callback for row_mysql_sys_index_iterate() */
 struct SysIndexCallback {

@@ -43,6 +43,7 @@ SELECT * FROM t4;
 SHOW CREATE TABLE t4;
 INSERT INTO t5 VALUES(0, 1), (100, 2), (50, 3);
 INSERT INTO t5 VALUES(0, 4), (109, 5), (0, 6);
+--sorted_result
 SELECT * FROM t5;
 SHOW CREATE TABLE t5;
 
@@ -105,8 +106,10 @@ INSERT INTO t5 VALUES(0, 10), (0, 11);
 set global innodb_flush_log_at_trx_commit=1;
 
 CHECK TABLE t4;
+--source include/disable_turbo.inc
 --error ER_INDEX_CORRUPT
 SELECT b FROM t4 WHERE b > 3;
+--source include/restore_turbo.inc
 
 --echo # This should fix the corrupted index
 DROP INDEX b ON t4;
@@ -137,8 +140,10 @@ INSERT INTO t5 VALUES(0, 10), (0, 20);
 
 set global innodb_flush_log_at_trx_commit=1;
 
+--source include/disable_turbo.inc
 --error ER_INDEX_CORRUPT
 SELECT b FROM t5 WHERE b > 3;
+--source include/restore_turbo.inc
 
 --echo # This should fix the corrupted index
 DROP INDEX b ON t5;

@@ -8,6 +8,8 @@
 set @old_opt_switch=@@optimizer_switch;
 set optimizer_switch='subquery_materialization_cost_based=off';
 
+--source include/disable_turbo.inc
+
 -- disable_query_log
 -- disable_result_log
 # High values set for sampling scanning, effectively forcing full scan for
@@ -7369,3 +7371,5 @@ SET @@GLOBAL.innodb_stats_transient_sample_pages= @innodb_stats_transient_sample
 SET @@GLOBAL.innodb_stats_persistent_sample_pages= @innodb_stats_persistent_sample_pages;
 -- enable_result_log
 -- enable_query_log
+
+--source include/restore_turbo.inc

@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2011, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -145,7 +145,7 @@ struct gen_lex_token_string {
   - mode named tokens from bison (sql_yacc.yy).
   See also YYMAXUTOK.
 */
-const int MY_MAX_TOKEN = 1600;
+const int MY_MAX_TOKEN = 1700;
 
 gen_lex_token_string compiled_token_array[MY_MAX_TOKEN];
 

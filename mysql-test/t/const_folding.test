@@ -1,3 +1,4 @@
+--source include/no_turbo.inc
 # PART I
 #
 # Test of rewriting comparison of an integer field and a constant

@@ -1,5 +1,5 @@
 /* Copyright (c) 2006, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -50,6 +50,34 @@ class Server_ids;
 class THD;
 struct MYSQL;
 
+class Speed_controller {
+ public:
+  Speed_controller(Master_info *master);
+  ~Speed_controller();
+  void check_and_throttle(ulong event_len);
+  void update_data_speed(ulong event_len);
+  void reset();
+  void clean();
+
+ public:
+  static constexpr uint64_t INVALID_SPEED = UINT64_MAX;
+  static std::mutex binlog_transfer_speed_hash_lock;
+  static std::unordered_map<const char *, const uint64_t &>
+      binlog_transfer_speed_hash;
+
+ private:
+  Master_info *mi = nullptr;
+
+  // Use for speed limit.
+  uint64_t m_last_check_time = my_micro_time() / 1000;
+  uint64_t m_token_amount = 0;
+
+  // Use for speed evaluate.
+  uint64_t m_last_eval_time = m_last_check_time;
+  uint64_t m_data_inc = 0;
+  uint64_t data_speed = INVALID_SPEED;
+};
+
 #define DEFAULT_CONNECT_RETRY 60
 
 /*****************************************************************************
@@ -97,6 +125,11 @@ class Master_info : public Rpl_info {
   unsigned int io_buffered_cnt : 10;
   uint64_t total_events;
   uint64_t total_buffered_events;
+
+  /**
+    Controlling and report the transfer rate of binlog.
+  */
+  Speed_controller speed_ctrl;
 
   /*
     Check if the channel is configured.
@@ -351,10 +384,6 @@ class Master_info : public Rpl_info {
   char compression_algorithm[COMPRESSION_ALGORITHM_NAME_BUFFER_SIZE];
   int zstd_compression_level;
   NET_SERVER server_extn;  // maintain compress context info.
-  /**
-    Bytes to be transferred per second.
-  */
-  std::atomic<uint64_t> data_speed{0};
 
   int mi_init_info();
   void end_info();

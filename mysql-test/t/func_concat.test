@@ -13,19 +13,19 @@ INSERT INTO t1 VALUES (1413006,'idlfmv'),
 (1413065,'smpsfz'),(1413127,'sljrhx'),(1413304,'qerfnd');
 
 SELECT number, alpha, CONCAT_WS('<---->',number,alpha) AS new
-FROM t1 GROUP BY number;
+FROM t1 GROUP BY number ORDER BY new;
 
 SELECT CONCAT_WS('<---->',number,alpha) AS new
-FROM t1 GROUP BY new LIMIT 1;
+FROM t1 GROUP BY new ORDER BY new LIMIT 1;
 
 SELECT number, alpha, CONCAT_WS('<->',number,alpha) AS new
-FROM t1 GROUP BY new LIMIT 1;
+FROM t1 GROUP BY new ORDER BY new LIMIT 1;
 
 SELECT number, alpha, CONCAT_WS('-',number,alpha,alpha,alpha,alpha,alpha,alpha,alpha) AS new
-FROM t1 GROUP BY new LIMIT 1;
+FROM t1 GROUP BY new ORDER BY new LIMIT 1;
 
 SELECT number, alpha, CONCAT_WS('<------------------>',number,alpha) AS new
-FROM t1 GROUP BY new LIMIT 1;
+FROM t1 GROUP BY new ORDER BY new LIMIT 1;
 
 --source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 drop table t1;
@@ -36,7 +36,9 @@ drop table t1;
 
 create table t1 (a char(4), b double, c date, d tinyint(4));
 insert into t1 values ('AAAA', 105, '2003-03-01', 1);
+--source include/disable_turbo.inc
 select * from t1 where concat(A,C,B,D) = 'AAAA2003-03-011051';
+--source include/restore_turbo.inc
 drop table t1;
 
 # BUG#6825 

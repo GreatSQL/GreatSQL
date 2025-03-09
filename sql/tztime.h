@@ -3,6 +3,7 @@
 
 #include "my_config.h"
 /* Copyright (c) 2004, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -125,5 +126,5 @@ void sec_to_TIME(MYSQL_TIME *tmp, my_time_t t, int64 offset);
 */
 
 static const int MY_TZ_TABLES_COUNT = 4;
-
+bool is_dst_TZ(Time_zone *tz);
 #endif /* TZTIME_INCLUDED */

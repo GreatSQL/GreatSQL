@@ -2,6 +2,7 @@
 --echo # Bug 20219846: EXPLAIN FOR LIMIT QUERY SHOWS FILESORT BUT EXECUTION
 --echo #               IS DONE WITH INDEX ONLY
 --echo #
+--source include/no_turbo.inc
 
 CREATE TABLE t0 (
   i0 INTEGER NOT NULL

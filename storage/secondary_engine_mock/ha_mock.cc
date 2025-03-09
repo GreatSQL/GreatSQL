@@ -1,4 +1,5 @@
 /* Copyright (c) 2018, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -231,6 +232,10 @@ static bool PrepareSecondaryEngine(THD *thd, LEX *lex) {
     my_error(ER_SECONDARY_ENGINE_PLUGIN, MYF(0), "");
     return true;
   });
+
+  if (lex->secondary_engine_execution_context() != nullptr) {
+    return false;
+  }
 
   auto context = new (thd->mem_root) Mock_execution_context;
   if (context == nullptr) return true;

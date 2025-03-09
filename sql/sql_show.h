@@ -1,5 +1,5 @@
 /* Copyright (c) 2005, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -347,6 +347,22 @@ class Sql_cmd_show_create_package_body : public Sql_cmd_show_noplan {
   bool execute_inner(THD *thd) override;
 };
 
+/// Represents SHOW CREATE SYNONYM statement
+
+class Sql_cmd_show_create_synonym : public Sql_cmd_show_noplan {
+ public:
+  Sql_cmd_show_create_synonym(Table_ident *table_ident, bool is_public)
+      : Sql_cmd_show_noplan(SQLCOM_SHOW_CREATE),
+        m_table_ident(table_ident),
+        m_is_public(is_public) {}
+  bool check_privileges(THD *thd) override;
+  bool execute_inner(THD *thd) override;
+
+ private:
+  Table_ident *const m_table_ident;
+  bool m_is_public;
+};  // class Sql_cmd_show_create_synonym : public Sql_cmd_show_noplan
+
 /// Represents SHOW CREATE TYPE statement.
 
 class Sql_cmd_show_create_type : public Sql_cmd_show_noplan {
@@ -690,6 +706,13 @@ class Sql_cmd_show_sequences : public Sql_cmd_show_schema_base {
  public:
   Sql_cmd_show_sequences() : Sql_cmd_show_schema_base(SQLCOM_SHOW_SEQUENCES) {}
 };
+
+/// Represents SHOW SYNONYMS statement.
+
+class Sql_cmd_show_synonyms : public Sql_cmd_show {
+ public:
+  Sql_cmd_show_synonyms() : Sql_cmd_show(SQLCOM_SHOW_SYNONYMS) {}
+};  // class Sql_cmd_show_synonyms : public Sql_cmd_show
 
 /// Represents SHOW TABLES statement.
 

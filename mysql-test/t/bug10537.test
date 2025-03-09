@@ -1,0 +1,119 @@
+create table t1(ida int, age int);
+insert into t1 values(1, 1), (2, 2), (1, 1), (2, 2);
+
+create table t2(ida int, age int);
+insert into t2 values(2, 2), (3,3);
+
+create table t3(ida int, age int);
+insert into t3 values(1, 1), (2, 2);
+
+SELECT * from t1 minus select * from t3;
+SELECT * from t1 minus select * from t2;
+SELECT * from t1 except select * from t2;
+
+WITH my_cte AS  (
+SELECT * from t1
+minus   
+select * from t2
+)    
+select * from my_cte s1 union all select * from my_cte s2;
+
+WITH my_cte AS  (
+SELECT * from t1
+minus   
+select * from t2
+)    
+select * from my_cte s1 union all select * from my_cte s2 union all select * from my_cte s3;
+
+
+WITH my_cte AS  (
+SELECT * from t1
+minus   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida ;
+
+--replace_regex /cost=\d+.\d+..\d+.\d+/cost=***/ /cost=\d+.\d+/cost=***/ /rows=\d+.\d+/rows=***/ /rows=\d+/rows=***/
+explain format=tree WITH my_cte AS  (
+SELECT * from t1
+minus   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida ;
+
+WITH my_cte AS  (
+SELECT * from t1
+minus   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida 
+union all 
+select * from my_cte s2 join t3 on s2.ida = t3.ida;
+
+SELECT * from t1
+intersect   
+select * from t2;
+
+WITH my_cte AS  (
+SELECT * from t1
+intersect   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida ;
+
+WITH my_cte AS  (
+SELECT * from t1
+intersect   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida 
+union all 
+select * from my_cte s2 join t3 on s2.ida = t3.ida;
+
+--replace_regex /cost=\d+.\d+..\d+.\d+/cost=***/ /cost=\d+.\d+/cost=***/ /rows=\d+.\d+/rows=***/ /rows=\d+/rows=***/
+explain format=tree WITH my_cte AS  (
+SELECT * from t1
+intersect   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida ;
+
+SELECT * from t1 union select * from t2;
+WITH my_cte AS  (
+SELECT * from t1
+union   
+select * from t2
+)    
+select * from my_cte s1 union all select * from my_cte s2;
+
+WITH my_cte AS  (
+SELECT * from t1
+union   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida ;
+
+WITH my_cte AS  (
+SELECT * from t1
+union   
+select * from t2
+)    
+select * from my_cte s1 join my_cte t3 on s1.ida = t3.ida ;
+
+--replace_regex /cost=\d+.\d+..\d+.\d+/cost=***/ /cost=\d+.\d+/cost=***/ /rows=\d+.\d+/rows=***/ /rows=\d+/rows=***/
+explain format=tree WITH my_cte AS  (
+SELECT * from t1
+union   
+select * from t2
+)    
+select * from my_cte s1 join my_cte t3 on s1.ida = t3.ida ;
+
+--replace_regex /cost=\d+.\d+..\d+.\d+/cost=***/ /cost=\d+.\d+/cost=***/ /rows=\d+.\d+/rows=***/ /rows=\d+/rows=***/
+explain format=tree WITH my_cte AS  (
+SELECT * from t1
+union   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida ;
+
+drop table t1, t2, t3;

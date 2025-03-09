@@ -1,0 +1,175 @@
+create table t1(ida int, age int);
+insert into t1 values(1, 1), (2, 2), (1, 1), (2, 2);
+create table t2(ida int, age int);
+insert into t2 values(2, 2), (3,3);
+create table t3(ida int, age int);
+insert into t3 values(1, 1), (2, 2);
+SELECT * from t1 minus select * from t3;
+ida	age
+SELECT * from t1 minus select * from t2;
+ida	age
+1	1
+SELECT * from t1 except select * from t2;
+ida	age
+1	1
+WITH my_cte AS  (
+SELECT * from t1
+minus   
+select * from t2
+)    
+select * from my_cte s1 union all select * from my_cte s2;
+ida	age
+1	1
+1	1
+WITH my_cte AS  (
+SELECT * from t1
+minus   
+select * from t2
+)    
+select * from my_cte s1 union all select * from my_cte s2 union all select * from my_cte s3;
+ida	age
+1	1
+1	1
+1	1
+WITH my_cte AS  (
+SELECT * from t1
+minus   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida ;
+ida	age	ida	age
+1	1	1	1
+explain format=tree WITH my_cte AS  (
+SELECT * from t1
+minus   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida ;
+EXPLAIN
+-> Inner hash join (s1.ida = t3.ida)  (cost=*** rows=***)
+    -> Table scan on s1  (cost=*** rows=***)
+        -> Materialize union CTE my_cte with deduplication  (cost=*** rows=***)
+            -> Table scan on t1  (cost=*** rows=***)
+            -> Table scan on t2  (cost=*** rows=***)
+    -> Hash
+        -> Table scan on t3  (cost=*** rows=***)
+
+WITH my_cte AS  (
+SELECT * from t1
+minus   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida 
+union all 
+select * from my_cte s2 join t3 on s2.ida = t3.ida;
+ida	age	ida	age
+1	1	1	1
+1	1	1	1
+SELECT * from t1
+intersect   
+select * from t2;
+ida	age
+2	2
+WITH my_cte AS  (
+SELECT * from t1
+intersect   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida ;
+ida	age	ida	age
+2	2	2	2
+WITH my_cte AS  (
+SELECT * from t1
+intersect   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida 
+union all 
+select * from my_cte s2 join t3 on s2.ida = t3.ida;
+ida	age	ida	age
+2	2	2	2
+2	2	2	2
+explain format=tree WITH my_cte AS  (
+SELECT * from t1
+intersect   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida ;
+EXPLAIN
+-> Inner hash join (s1.ida = t3.ida)  (cost=*** rows=***)
+    -> Table scan on s1  (cost=*** rows=***)
+        -> Materialize union CTE my_cte with deduplication  (cost=*** rows=***)
+            -> Table scan on t1  (cost=*** rows=***)
+            -> Table scan on t2  (cost=*** rows=***)
+    -> Hash
+        -> Table scan on t3  (cost=*** rows=***)
+
+SELECT * from t1 union select * from t2;
+ida	age
+1	1
+2	2
+3	3
+WITH my_cte AS  (
+SELECT * from t1
+union   
+select * from t2
+)    
+select * from my_cte s1 union all select * from my_cte s2;
+ida	age
+1	1
+2	2
+3	3
+1	1
+2	2
+3	3
+WITH my_cte AS  (
+SELECT * from t1
+union   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida ;
+ida	age	ida	age
+1	1	1	1
+2	2	2	2
+WITH my_cte AS  (
+SELECT * from t1
+union   
+select * from t2
+)    
+select * from my_cte s1 join my_cte t3 on s1.ida = t3.ida ;
+ida	age	ida	age
+1	1	1	1
+2	2	2	2
+3	3	3	3
+explain format=tree WITH my_cte AS  (
+SELECT * from t1
+union   
+select * from t2
+)    
+select * from my_cte s1 join my_cte t3 on s1.ida = t3.ida ;
+EXPLAIN
+-> Nested loop inner join  (cost=*** rows=***)
+    -> Filter: (s1.ida is not null)  (cost=*** rows=***)
+        -> Table scan on s1  (cost=*** rows=***)
+            -> Materialize union CTE my_cte if needed with deduplication  (cost=*** rows=***)
+                -> Table scan on t1  (cost=*** rows=***)
+                -> Table scan on t2  (cost=*** rows=***)
+    -> Index lookup on t3 using <auto_key1> (ida=s1.ida)  (cost=*** rows=***)
+        -> Materialize union CTE my_cte if needed (query plan printed elsewhere) with deduplication  (cost=*** rows=***)
+
+explain format=tree WITH my_cte AS  (
+SELECT * from t1
+union   
+select * from t2
+)    
+select * from my_cte s1 join t3 on s1.ida = t3.ida ;
+EXPLAIN
+-> Nested loop inner join  (cost=*** rows=***)
+    -> Filter: (t3.ida is not null)  (cost=*** rows=***)
+        -> Table scan on t3  (cost=*** rows=***)
+    -> Index lookup on s1 using <auto_key1> (ida=t3.ida)  (cost=*** rows=***)
+        -> Materialize union CTE my_cte with deduplication  (cost=*** rows=***)
+            -> Table scan on t1  (cost=*** rows=***)
+            -> Table scan on t2  (cost=*** rows=***)
+
+drop table t1, t2, t3;

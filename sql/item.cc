@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -814,6 +814,90 @@ bool Item::check_function_as_value_generator(uchar *checker_args) {
   }
   func_arg->err_code = func_arg->get_unnamed_function_error_code();
   return true;
+}
+
+static void resolve_pushed_cond(Item *item) {
+  const Item::Type item_type = item->type();
+  switch (item_type) {
+    case Item::FUNC_ITEM: {
+      auto *item_func = down_cast<Item_func *>(item);
+      Item **args = item_func->arguments();
+      for (uint i = 0; i < item_func->arg_count; i++) {
+        args[i]->quick_fix_field();
+      }
+      switch (item_func->functype()) {
+        case Item_func::GE_FUNC:
+        case Item_func::GT_FUNC:
+        case Item_func::LT_FUNC:
+        case Item_func::LE_FUNC:
+        case Item_func::EQ_FUNC:
+        case Item_func::NE_FUNC:
+        case Item_func::EQUAL_FUNC:
+          down_cast<Item_bool_func2 *>(item_func)->set_cmp_func();
+        default:
+          break;
+      }
+      break;
+    }
+    case Item::COND_ITEM: {
+      List_iterator<Item> li(*((Item_cond *)item)->argument_list());
+      Item *cond_item;
+      while ((cond_item = li++)) {
+        resolve_pushed_cond(cond_item);
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  item->quick_fix_field();
+}
+
+Item *Item::clone_pushed_cond(THD *thd, TABLE *table,
+                              mem_root_deque<Item_field *> **all_item_fields) {
+  *all_item_fields =
+      new (thd->mem_root) mem_root_deque<Item_field *>(thd->mem_root);
+
+  MEM_ROOT *ori_pq_mem_root = thd->pq_mem_root;
+  thd->pq_mem_root = thd->mem_root;
+  Item *new_cond = pq_clone(thd, nullptr);
+  if (new_cond == nullptr || (*all_item_fields == nullptr)) return nullptr;
+
+  new_cond->walk(&Item::collect_all_item_fields_processor, enum_walk::POSTFIX,
+                 (uchar *)*all_item_fields);
+  thd->pq_mem_root = ori_pq_mem_root;
+  for (auto &i_field : **all_item_fields) {
+    Field *ori_field = i_field->original_field;
+    Field *new_field = ori_field->clone(thd->mem_root);
+    new_field->init(table);
+    uchar *ptr = (uchar *)thd->mem_root->Alloc(table->s->rec_buff_length);
+    new_field->move_field(ptr, nullptr, 0);
+    new_field->gcol_info = ori_field->gcol_info;
+    new_field->set_field_index(ori_field->field_index());
+    new_field->table->mark_column_used(new_field, MARK_COLUMNS_READ);
+    new_field->null_bit = ori_field->null_bit;
+    i_field->field = new_field;
+    i_field->fixed = true;
+  }
+  resolve_pushed_cond(new_cond);
+  new_cond->update_used_tables();
+  return new_cond;
+}
+
+void Item::set_field_ptr(mem_root_deque<Item_field *> *all_item_fields,
+                         uchar *buf, const ulong *col_offsets,
+                         const ulong *null_byte_offsets,
+                         const ulong *null_bitmasks) {
+  for (auto &i_field : *all_item_fields) {
+    Field *field = i_field->field;
+    uint16 col_inex = field->field_index();
+    uchar *new_ptr = buf + col_offsets[col_inex];
+    if (null_bitmasks[col_inex]) {
+      field->set_null_ptr(buf + null_byte_offsets[col_inex],
+                          null_bitmasks[col_inex]);
+    }
+    field->set_field_ptr(new_ptr);
+  }
 }
 
 bool Item_ident::update_depended_from(uchar *arg) {
@@ -1959,6 +2043,13 @@ bool Item_field_refcursor::row_create_items(THD *thd,
   return get_refcursor_field()->m_return_table->make_return_table(thd, list);
 }
 
+bool Item_field_refcursor::modify_item_field_about_cursor(THD *,
+                                                          List<Create_field> *,
+                                                          sp_cursor *c) {
+  get_refcursor_field()->m_return_table = c->m_result.m_return_table;
+  return false;
+}
+
 type_conversion_status Item_field_refcursor::save_in_field_inner(Field *to,
                                                                  bool) {
   type_conversion_status ret = TYPE_OK;
@@ -1980,8 +2071,6 @@ bool Item_field_refcursor::set_cursor_rowtype_table(THD *thd, Item *item_to,
   Item_field_refcursor *item_cursor =
       dynamic_cast<Item_field_refcursor *>(item_to);
   Item_field_row *item_row = dynamic_cast<Item_field_row *>(item_to);
-  Item_field_row_table *item_row_table =
-      dynamic_cast<Item_field_row_table *>(item_to);
   /*e.g:
     TYPE ref_rs2 IS REF CURSOR RETURN c%rowtype;
     c ref_rs2;*/
@@ -2004,12 +2093,8 @@ bool Item_field_refcursor::set_cursor_rowtype_table(THD *thd, Item *item_to,
     thd->swap_query_arena(*thd->sp_runtime_ctx->callers_arena, &old_arena);
     List<Create_field> defs;
     bool ret = false;
-    if (!get_refcursor_field()->val_udt()->export_structure(thd, &defs)) {
-      if (!item_row_table) { /*e.g: a1 cursor%rowtype;*/
-        ret = item_row->row_create_items(thd, &defs);
-      } else { /*e.g: type is table of ref cursor%rowtype;*/
-        ret = item_row_table->modify_row_field_table_definitions(thd, &defs);
-      }
+    if (!get_refcursor_field()->val_udt()->s->export_structure(thd, &defs)) {
+      ret = item_to->modify_item_field_about_cursor(thd, &defs, nullptr);
     } else
       ret = true;
     thd->swap_query_arena(old_arena, thd->sp_runtime_ctx->callers_arena);
@@ -2056,6 +2141,12 @@ bool Item_field_row::find_duplicate_def_name(uint arg_count, Create_field *def,
     }
   }
   return false;
+}
+
+bool Item_field_row::modify_item_field_about_cursor(THD *thd,
+                                                    List<Create_field> *defs,
+                                                    sp_cursor *) {
+  return row_create_items(thd, defs);
 }
 
 bool Item_field_row::row_create_items(THD *thd, List<Create_field> *list) {
@@ -2600,8 +2691,8 @@ bool Item_field_row_table::update_table_value(THD *thd, Item **value,
 
 /*type tklist is table of cursor%rowtype index by binary_integer;
 make tklist->field->table_record*/
-bool Item_field_row_table::modify_row_field_table_definitions(
-    THD *thd, List<Create_field> *defs) {
+bool Item_field_row_table::modify_item_field_about_cursor(
+    THD *thd, List<Create_field> *defs, sp_cursor *) {
   Field_row_table *field_table = dynamic_cast<Field_row_table *>(field);
   int length = field_table->get_index_length();
   Row_definition_list *rdl = new (thd->mem_root) Row_definition_list();
@@ -5767,7 +5858,12 @@ const String *Item_param::query_val_str(const THD *thd, String *str) const {
       str->set_real(value.real, DECIMAL_NOT_SPECIFIED, &my_charset_bin);
       break;
     case DECIMAL_VALUE:
-      if (my_decimal2string(E_DEC_FATAL_ERROR, &decimal_value, str) > 1)
+      // The swap_parameter_array operation is not performed during the
+      // reprepare phase, print the decimal value error
+      if ((likely(thd->opt_trace.support_I_S()) &&
+           thd->stmt_arena->is_stmt_prepare() &&
+           thd->stmt_arena->is_repreparing) ||
+          (my_decimal2string(E_DEC_FATAL_ERROR, &decimal_value, str) > 1))
         return &my_null_string;
       break;
     case TIME_VALUE: {
@@ -6780,7 +6876,7 @@ int Item_field::fix_outer_field(THD *thd, Field **from_field,
           if ((!last_checked_context->query_block->having_fix_field &&
                select->group_list.elements &&
                (place == CTX_SELECT_LIST || place == CTX_HAVING)) ||
-              select->has_connect_by) {
+              (select->has_connect_by && place != CTX_DERIVED)) {
             Item_outer_ref *rf;
             /*
               If an outer field is resolved in a grouping select then it
@@ -8933,41 +9029,50 @@ bool Item::send(Protocol *protocol, String *buffer) {
       }
       const String *res = val_str(buffer);
       assert(null_value == (res == nullptr));
-      if (res != nullptr)
-        return protocol->store_string(res->ptr(), res->length(),
-                                      res->charset());
+      if (res != nullptr) {
+        size_t len = res->length();
+        if (m_fake_cast_length >= 0 && (size_t)m_fake_cast_length < len) {
+          return protocol->store_string(res->ptr(), m_fake_cast_length,
+                                        res->charset());
+        } else {
+          return protocol->store_string(res->ptr(), len, res->charset());
+        }
+      }
       break;
     }
     case MYSQL_TYPE_TINY: {
       longlong nr = val_int();
-      if (!null_value) return protocol->store_tiny(nr);
+      if (!null_value) return protocol->store_tiny(nr, m_fake_field_length);
       break;
     }
     case MYSQL_TYPE_SHORT:
     case MYSQL_TYPE_YEAR: {
       longlong nr = val_int();
-      if (!null_value) return protocol->store_short(nr);
+      if (!null_value) return protocol->store_short(nr, m_fake_field_length);
       break;
     }
     case MYSQL_TYPE_INT24:
     case MYSQL_TYPE_LONG: {
       longlong nr = val_int();
-      if (!null_value) return protocol->store_long(nr);
+      if (!null_value) return protocol->store_long(nr, m_fake_field_length);
       break;
     }
     case MYSQL_TYPE_LONGLONG: {
       longlong nr = val_int();
-      if (!null_value) return protocol->store_longlong(nr, unsigned_flag);
+      if (!null_value)
+        return protocol->store_longlong(nr, unsigned_flag, m_fake_field_length);
       break;
     }
     case MYSQL_TYPE_FLOAT: {
       float nr = static_cast<float>(val_real());
-      if (!null_value) return protocol->store_float(nr, decimals, 0);
+      if (!null_value)
+        return protocol->store_float(nr, decimals, m_fake_field_length);
       break;
     }
     case MYSQL_TYPE_DOUBLE: {
       double nr = val_real();
-      if (!null_value) return protocol->store_double(nr, decimals, 0);
+      if (!null_value)
+        return protocol->store_double(nr, decimals, m_fake_field_length);
       break;
     }
     case MYSQL_TYPE_DATE: {
@@ -9161,6 +9266,7 @@ bool Item::clean_up_after_removal(uchar *arg) {
 
   if (reference_count() > 1) {
     (void)decrement_ref_count();
+    ctx->stop_at(this);
   }
   return false;
 }

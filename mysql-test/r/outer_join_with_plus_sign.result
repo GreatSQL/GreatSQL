@@ -91,9 +91,9 @@ select * from t1 left join (t2 left join t3 on t2.ida < t3.ida) on t2.name = t1.
 ida	age	name	ida	age	name	ida	age	name
 1	2		1	2		2	3	a
 1	2		1	2		5	NULL	
-NULL	2	a	2	2	a	5	NULL	
 3	2	b	3	1	b	5	NULL	
 3	4	b	3	1	b	5	NULL	
+NULL	2	a	2	2	a	5	NULL	
 select * from t1, t2, t3, t4 where t1.ida > t2.ida(+) and t3.age = t4.age(+);
 ida	age	name	ida	age	name	ida	age	name	ida	age	name
 1	2		NULL	NULL	NULL	5	NULL		NULL	NULL	NULL
@@ -138,16 +138,16 @@ NULL	2	a	1	2		2	3	a
 3	4	b	NULL	NULL	NULL	NULL	NULL	NULL
 select * from t1 left join (t2 left join t3 on t2.ida < t3.ida) on t1.age = t2.age;
 ida	age	name	ida	age	name	ida	age	name
-1	2		2	2	a	5	NULL	
 1	2		1	2		2	3	a
 1	2		1	2		5	NULL	
-NULL	2	a	2	2	a	5	NULL	
-NULL	2	a	1	2		2	3	a
-NULL	2	a	1	2		5	NULL	
-3	2	b	2	2	a	5	NULL	
+1	2		2	2	a	5	NULL	
 3	2	b	1	2		2	3	a
 3	2	b	1	2		5	NULL	
+3	2	b	2	2	a	5	NULL	
 3	4	b	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	2	a	1	2		2	3	a
+NULL	2	a	1	2		5	NULL	
+NULL	2	a	2	2	a	5	NULL	
 select * from t1, t2, t3, t4 where t2.ida(+) = t3.ida and t3.age(+) = t4.age and t1.name < 'cc';
 ida	age	name	ida	age	name	ida	age	name	ida	age	name
 3	4	b	2	2	a	2	3	a	2	3	a
@@ -160,14 +160,14 @@ NULL	2	a	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL
 1	2		NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
 select t1.*, t2.*, t3.*, t4.* from t4 left join ( t3 left join t2 on t2.ida=t3.ida) on t3.age = t4.age, t1 where t1.name < 'cc';
 ida	age	name	ida	age	name	ida	age	name	ida	age	name
-3	4	b	2	2	a	2	3	a	2	3	a
-3	2	b	2	2	a	2	3	a	2	3	a
-NULL	2	a	2	2	a	2	3	a	2	3	a
 1	2		2	2	a	2	3	a	2	3	a
-3	4	b	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
-3	2	b	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
-NULL	2	a	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
 1	2		NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+3	2	b	2	2	a	2	3	a	2	3	a
+3	2	b	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+3	4	b	2	2	a	2	3	a	2	3	a
+3	4	b	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
+NULL	2	a	2	2	a	2	3	a	2	3	a
+NULL	2	a	NULL	NULL	NULL	NULL	NULL	NULL	5	NULL	
 select * from t1, t2, t3, t4 where t2.ida(+) = t3.ida and t3.age(+) = t4.age and t1.age < 3;
 ida	age	name	ida	age	name	ida	age	name	ida	age	name
 3	2	b	2	2	a	2	3	a	2	3	a
@@ -185,9 +185,9 @@ NULL	2	a	NULL	NULL
 select * from t1 left join (select ida, count(*) from t2 group by ida) t2 on t1.ida = t2.ida;
 ida	age	name	ida	count(*)
 1	2		1	1
-NULL	2	a	NULL	NULL
 3	2	b	3	1
 3	4	b	3	1
+NULL	2	a	NULL	NULL
 select * from t1 where t1.ida(+) <5;
 ida	age	name
 1	2	

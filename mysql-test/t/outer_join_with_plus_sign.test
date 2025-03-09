@@ -23,16 +23,20 @@ insert into t4 values(2, 3, 'a'), (5, NULL, '');
 select * from t1, t2, t3 where t2.age(+) = t1.age and t2.ida < t3.ida(+) and t3.age < 5;
 select * from t1, t2, t3 where t2.age(+) = t1.age and t2.ida < t3.ida(+);
 select * from t1, t2, t3 where t2.ida < t3.ida(+) and t2.name(+) = t1.name;
+--sorted_result
 select * from t1 left join (t2 left join t3 on t2.ida < t3.ida) on t2.name = t1.name;
 select * from t1, t2, t3, t4 where t1.ida > t2.ida(+) and t3.age = t4.age(+);
 select * from t1, t2, t3 where t1.ida = t2.ida(+) and t3.age = t1.age(+);
 select * from t1, t2, t3 where t2.ida < t3.ida(+) and t2.age(+) = t1.age;
 select * from t1, t2, t3 where t2.age(+) = t1.age and t2.ida < t3.ida(+);
+--sorted_result
 select * from t1 left join (t2 left join t3 on t2.ida < t3.ida) on t1.age = t2.age;
 select * from t1, t2, t3, t4 where t2.ida(+) = t3.ida and t3.age(+) = t4.age and t1.name < 'cc';
+--sorted_result
 select t1.*, t2.*, t3.*, t4.* from t4 left join ( t3 left join t2 on t2.ida=t3.ida) on t3.age = t4.age, t1 where t1.name < 'cc';
 select * from t1, t2, t3, t4 where t2.ida(+) = t3.ida and t3.age(+) = t4.age and t1.age < 3;
 select * from t1, (select ida, count(*) from t2 group by ida) t2 where t1.ida = t2.ida(+);
+--sorted_result
 select * from t1 left join (select ida, count(*) from t2 group by ida) t2 on t1.ida = t2.ida;
 select * from t1 where t1.ida(+) <5;
 select * from t1, t2 where t1.ida <3 and t2.age(+)> 5;

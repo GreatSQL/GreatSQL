@@ -706,13 +706,13 @@ SELECT * FROM t1 WHERE f1 IN
 (3305028,3353871,3772880,3346860,4228206,3336022,
  3470988,3305175,3329875,3817277,3856380,3796193,
  3784744,4180925,4559596,3963734,3856391,4494153)
-AND f5 = 'abcdefghijklmnopwrst' AND f2 = 1221457 AND f4 = 0 ;
+AND f5 = 'abcdefghijklmnopwrst' AND f2 = 1221457 AND f4 = 0 order by f1;
 
 EXPLAIN SELECT * FROM t1 WHERE f1 IN
 (3305028,3353871,3772880,3346860,4228206,3336022,
  3470988,3305175,3329875,3817277,3856380,3796193,
  3784744,4180925,4559596,3963734,3856391,4494153)
-AND f5 = 'abcdefghijklmnopwrst' AND f2 = 1221457 AND f4 = 0 ;
+AND f5 = 'abcdefghijklmnopwrst' AND f2 = 1221457 AND f4 = 0 order by f1;
 
 DROP TABLE t1;
 
@@ -957,14 +957,14 @@ ANALYZE TABLE t1;
 --echo
 SELECT v2
 FROM t1
-WHERE v1  IN  ('f', 'd', 'h', 'u' ) AND i  =  2;
+WHERE v1  IN  ('f', 'd', 'h', 'u' ) AND i  =  2 order by v1 desc;
 
 --echo
 --echo # Should not use index_merge
 EXPLAIN
 SELECT v2
 FROM t1
-WHERE v1  IN  ('f', 'd', 'h', 'u' ) AND i  =  2;
+WHERE v1  IN  ('f', 'd', 'h', 'u' ) AND i  =  2 order by v1 desc;
 
 DROP TABLE t1;
 

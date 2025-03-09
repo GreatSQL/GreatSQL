@@ -98,8 +98,8 @@ explain format = json select * from t1 union all select * from t2;
 select * from t1 union all select * from t2;
 
 # union distinct with global order by filesort
-explain format = json select * from t1 union select * from t2 order by b;
-select * from t1 union select * from t2 order by b;
+explain format = json select * from t1 union select * from t2 order by b,a;
+select * from t1 union select * from t2 order by b,a;
 
 #
 # select with a single derived table

@@ -3194,10 +3194,12 @@ EXECUTE s3 USING @i3_max;
 EXECUTE s4 USING @i4_max;
 --error ER_DATA_OUT_OF_RANGE
 EXECUTE s5 USING @i8_max;
+--source include/disable_turbo.inc
 EXECUTE s6 USING @dc1_max;
 EXECUTE s7 USING @dc2_max;
 EXECUTE s6 USING @dc1_ext;
 EXECUTE s7 USING @dc2_ext;
+--source include/restore_turbo.inc
 
 DEALLOCATE PREPARE s1;
 DEALLOCATE PREPARE s2;

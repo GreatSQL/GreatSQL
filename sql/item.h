@@ -2,7 +2,7 @@
 #define ITEM_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -93,6 +93,7 @@ class PT_type;
 class Row_definition_table_list;
 struct ora_simple_ident_def;
 class sp_pcontext;
+class sp_cursor;
 
 typedef Bounds_checked_array<Item *> Ref_item_array;
 
@@ -925,7 +926,7 @@ class Item : public Parse_tree_node {
     for new item.
   */
   Item *origin_item{nullptr};
-
+  THD *thd_belonged_to{nullptr};
   /**
     During create_tmp_table, const_item can be skipped when hidden_field_count
     <= 0; and thus, these skipped items will not create result_field in tmp
@@ -1175,6 +1176,13 @@ class Item : public Parse_tree_node {
   virtual bool pq_copy_from(THD *thd, Query_block *select, Item *item);
 
   virtual size_t pq_extra_len(bool) { return 0; }
+
+  Item *clone_pushed_cond(THD *thd, TABLE *table,
+                          mem_root_deque<Item_field *> **all_item_fields);
+
+  void set_field_ptr(mem_root_deque<Item_field *> *all_item_fields, uchar *buf,
+                     const ulong *col_offsets, const ulong *null_byte_offsets,
+                     const ulong *null_bitmasks);
 
   virtual const uchar *val_extra(uint32 *len) {
     assert(len != nullptr);
@@ -2552,7 +2560,8 @@ class Item : public Parse_tree_node {
 
   virtual bool walk(Item_processor processor, enum_walk walk [[maybe_unused]],
                     uchar *arg) {
-    return (this->*processor)(arg);
+    return ((walk & enum_walk::PREFIX) && (this->*processor)(arg)) ||
+           ((walk & enum_walk::POSTFIX) && (this->*processor)(arg));
   }
 
   /** @see WalkItem, CompileItem, TransformItem */
@@ -3110,6 +3119,10 @@ class Item : public Parse_tree_node {
   virtual List<Create_field> *get_field_create_field_list() { return nullptr; }
   virtual bool has_assignment_list() { return false; }
   virtual TABLE *get_udt_table() { return nullptr; }
+  virtual bool modify_item_field_about_cursor(THD *, List<Create_field> *,
+                                              sp_cursor *) {
+    return false;
+  }
 
   virtual bool check_cols(uint c);
   // It is not row => null inside is impossible
@@ -3694,6 +3707,8 @@ class Item : public Parse_tree_node {
       2. Item::save_in_field()
   */
   bool m_is_dk_null_value{false};
+  uint32 m_fake_field_length{0};
+  longlong m_fake_cast_length{-1};
   /**
     If the item is in a SELECT list (Query_block::fields) and hidden is true,
     the item wasn't actually in the list as given by the user (it was added
@@ -4507,16 +4522,6 @@ class Item_ident : public Item {
   /// Marks that this Item's name is alias of SELECT expression
   void set_alias_of_expr() { m_alias_of_expr = true; }
 
-  bool walk(Item_processor processor, enum_walk walk, uchar *arg) override {
-    /*
-      Item_ident processors like aggregate_check*() use
-      enum_walk::PREFIX|enum_walk::POSTFIX and depend on the processor being
-      called twice then.
-    */
-    return ((walk & enum_walk::PREFIX) && (this->*processor)(arg)) ||
-           ((walk & enum_walk::POSTFIX) && (this->*processor)(arg));
-  }
-
   /**
     Argument structure for walk processor Item::update_depended_from
   */
@@ -4610,6 +4615,7 @@ class Item_field : public Item_ident {
   Table_ref *table_ref;
   /// Source field
   Field *field;
+  Field *original_field{nullptr};
   const char *ref_col_name{nullptr};
   bool ref{false};
 
@@ -4930,6 +4936,8 @@ class Item_field_refcursor : public Item_field {
   bool is_ora_refcursor() const override { return true; }
   bool set_cursor_rowtype_table(THD *thd, Item *item_to, bool has_return_type,
                                 uint spv_offset);
+  bool modify_item_field_about_cursor(THD *thd, List<Create_field> *defs,
+                                      sp_cursor *c) override;
   double val_real() override {
     assert(0);
     return 0;
@@ -5021,6 +5029,8 @@ class Item_field_row : public Item_field {
   Field_refcursor *get_refcursor_field() {
     return dynamic_cast<Field_refcursor *>(field);
   }
+  bool modify_item_field_about_cursor(THD *thd, List<Create_field> *defs,
+                                      sp_cursor *c) override;
 
  protected:
   Item **args, *tmp_arg[2];
@@ -5078,7 +5088,8 @@ class Item_field_row_table : public Item_field_row {
    * create this field, so it needs to create table_record->table after got the
    * cursor's structure.
    */
-  bool modify_row_field_table_definitions(THD *thd, List<Create_field> *defs);
+  bool modify_item_field_about_cursor(THD *thd, List<Create_field> *defs,
+                                      sp_cursor *c) override;
 };
 
 /**
@@ -6447,7 +6458,9 @@ class Item_ref : public Item_ident {
     return ref_item()->get_udt_name();
   }
 
-  TABLE *get_udt_table() override { return ref_item()->get_udt_table(); }
+  TABLE *get_udt_table() override {
+    return ref_item() ? ref_item()->get_udt_table() : nullptr;
+  }
 
   Item_result result_type() const override { return ref_item()->result_type(); }
 
@@ -7633,7 +7646,15 @@ class Item_cache_str final : public Item_cache {
   LEX_STRING get_udt_db_name() const override { return m_db_name; }
   LEX_STRING get_udt_name() const override { return m_udt_name; }
   List<Create_field> *get_field_create_field_list() override;
-  TABLE *get_udt_table() override { return example->get_udt_table(); }
+  /*cached_field is the origin Item_field,it will never be changed.
+  example comes from send_data(),it may changed to temp table's Item_field by
+  change_to_use_tmp_fields() when optimize. So use cached_field instead of
+  example.
+  For update set (col1,col2)=(select stmt),select stmt uses example.*/
+  TABLE *get_udt_table() override {
+    Item *result = cached_field ? cached_field : example;
+    return result ? result->get_udt_table() : nullptr;
+  }
 
   Item *pq_clone(THD *thd, Query_block *select) override;
 };

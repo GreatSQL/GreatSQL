@@ -1,5 +1,5 @@
 /* Copyright (c) 2014, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1176,6 +1176,16 @@ int leave_group_and_terminate_plugin_modules(
   mysql_mutex_unlock(&lv.plugin_modules_termination_mutex);
 
   return error;
+}
+
+// only when shutdown server
+void plugin_unlock_waitting_transactions() {
+  bool already_locked = shared_plugin_stop_lock->try_grab_write_lock();
+  if (!transactions_latch->empty()) {
+    // if they are blocked, kill them
+    blocked_transaction_handler->unblock_waiting_transactions();
+  }
+  if (!already_locked) shared_plugin_stop_lock->release_write_lock();
 }
 
 int plugin_group_replication_leave_group() { return leave_group(); }

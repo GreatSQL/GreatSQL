@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -128,6 +128,28 @@ Query_block *build_show_databases_query(const POS &pos, THD *thd, String *wild,
 // Add for GreatDB: Build a substitute query for SHOW SEQUENCES
 Query_block *build_show_sequences_query(const POS &pos, THD *thd, String *wild,
                                         Item *where_cond);
+
+/**
+ * @brief Build a substitute query for SHOW SYNONYMS STATUS.
+ *
+ * FOR command like,
+ * @code
+ *  SHOW SYNONYMS
+ * @endcode
+ *
+ * We build following,
+ * @code
+ *  SELECT
+ *
+ * @param pos
+ * @param thd
+ * @param wild
+ * @param where_cond
+ *
+ * @return
+ */
+Query_block *build_show_synonyms_query(const POS &pos, THD *thd, String *wild,
+                                       Item *where_cond);
 
 /**
   Build a substitute query for SHOW TABLES / TABLE STATUS.

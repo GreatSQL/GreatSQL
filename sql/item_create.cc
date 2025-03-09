@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2164,7 +2164,7 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"SOURCE_POS_WAIT", SQL_FN_V(Item_source_pos_wait, 2, 4)},
     {"SPACE", SQL_FN(Item_func_space, 1)},
     {"START_SECONDARY_ENGINE_INCREMENT_LOAD_TASK",
-     SQL_FN_V(Item_func_start_secondary_engine_increment_load_task, 2, 3)},
+     SQL_FN_V(Item_func_start_secondary_engine_increment_load_task, 2, 4)},
     {"STATEMENT_DIGEST", SQL_FN(Item_func_statement_digest, 1)},
     {"STATEMENT_DIGEST_TEXT", SQL_FN(Item_func_statement_digest_text, 1)},
     {"STOP_SECONDARY_ENGINE_INCREMENT_LOAD_TASK",

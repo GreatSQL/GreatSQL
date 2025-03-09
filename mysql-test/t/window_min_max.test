@@ -9,6 +9,7 @@ INSERT INTO t VALUES (1,4);
 
 ANALYZE TABLE t;
 
+--source include/disable_turbo.inc
 --echo Single partition, no sorting
 SELECT i, j, MIN(i) OVER (ROWS UNBOUNDED PRECEDING) min,
       MAX(j) OVER (ROWS UNBOUNDED PRECEDING) max FROM t;
@@ -22,6 +23,8 @@ SELECT i, j, MAX(i+j) OVER (ROWS UNBOUNDED PRECEDING) max FROM t ORDER BY j;
 SELECT i, j, MIN(i+j) OVER (ROWS UNBOUNDED PRECEDING) min FROM t ORDER BY j DESC;
 --skip_if_hypergraph  # Nondeterministic query, hypergraph optimizer gives different result.
 SELECT i, j, MAX(i+j) OVER (ROWS UNBOUNDED PRECEDING) max FROM t ORDER BY j DESC;
+--source include/restore_turbo.inc
+
 --echo Single ordered partition
 SELECT i, j, MIN(i) OVER (ORDER BY j ROWS UNBOUNDED PRECEDING) min,
       MAX(j) OVER (ORDER BY j ROWS UNBOUNDED PRECEDING) max FROM t;
@@ -32,6 +35,7 @@ SELECT i, j, MAX(i+j) OVER (ORDER BY j ROWS UNBOUNDED PRECEDING) max FROM t ORDE
 SELECT i, j, MIN(i+j) OVER (ORDER BY j DESC ROWS UNBOUNDED PRECEDING) min FROM t ORDER BY j DESC;
 SELECT i, j, MAX(i+j) OVER (ORDER BY j DESC ROWS UNBOUNDED PRECEDING) max FROM t ORDER BY j DESC;
 
+--source include/disable_turbo.inc
 --echo Check that we eliminate redundant sorting in ORDER BY even with wfs
 SELECT i, j, MIN(i+j) OVER (ROWS UNBOUNDED PRECEDING) min FROM t ORDER BY NULL DESC;
 --skip_if_hypergraph  # Depends on the query plan.
@@ -39,6 +43,7 @@ EXPLAIN FORMAT=JSON SELECT i, j, MIN(i+j) OVER (ROWS UNBOUNDED PRECEDING) min FR
 --echo With LIMIT
 --skip_if_hypergraph  # Nondeterministic query, hypergraph optimizer gives different result.
 SELECT i, j, MIN(i+j) OVER (ROWS UNBOUNDED PRECEDING) min FROM t ORDER BY j DESC LIMIT 3;
+--source include/restore_turbo.inc
 
 --echo Min/Max with View
 CREATE VIEW v AS
@@ -81,19 +86,21 @@ INSERT INTO t VALUES (1,4,4);
 SELECT k, MIN(k) OVER (ROWS UNBOUNDED PRECEDING) min,
       MAX(k) OVER (ROWS UNBOUNDED PRECEDING) max FROM t; # simple
 --sorted_result
-SELECT k, MIN(i), SUM(j), MIN(k) OVER (ROWS UNBOUNDED PRECEDING) min_wf FROM t GROUP BY (k);
-SELECT k, MIN(i), SUM(j), MAX(k) OVER (ROWS UNBOUNDED PRECEDING) max_wf FROM t GROUP BY (k);
+SELECT k, MIN(i), SUM(j), MIN(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) min_wf FROM t GROUP BY (k);
+SELECT k, MIN(i), SUM(j), MAX(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) max_wf FROM t GROUP BY (k);
 --sorted_result
-SELECT k, MIN(i), SUM(j), MIN(k) OVER (ROWS UNBOUNDED PRECEDING) min_wf FROM t GROUP BY (k) ORDER BY min_wf DESC;
+SELECT k, MIN(i), SUM(j), MIN(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) min_wf FROM t GROUP BY (k) ORDER BY min_wf DESC;
 --sorted_result
-SELECT k, MIN(i), SUM(j), MAX(k) OVER (ROWS UNBOUNDED PRECEDING) max_wf FROM t GROUP BY (k) ORDER BY max_wf DESC;
+SELECT k, MIN(i), SUM(j), MAX(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) max_wf FROM t GROUP BY (k) ORDER BY max_wf DESC;
 
-SELECT k, GROUP_CONCAT(j ORDER BY j), MIN(k) OVER (ROWS UNBOUNDED PRECEDING) min,
-      MAX(k) OVER (ROWS UNBOUNDED PRECEDING) max FROM t GROUP BY (k); # combined with two tmp files GROUP BY
-SELECT k, AVG(DISTINCT j), MIN(k) OVER (ROWS UNBOUNDED PRECEDING) min,
-      MAX(k) OVER (ROWS UNBOUNDED PRECEDING) max FROM t GROUP BY (k);
+SELECT k, GROUP_CONCAT(j ORDER BY j), MIN(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) min,
+      MAX(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) max FROM t GROUP BY (k); # combined with two tmp files GROUP BY
+SELECT k, AVG(DISTINCT j), MIN(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) min,
+      MAX(k) OVER (ORDER BY k ROWS UNBOUNDED PRECEDING) max FROM t GROUP BY (k);
+--source include/disable_turbo.inc
 SELECT k, GROUP_CONCAT(j ORDER BY j), MIN(k+1) OVER (ROWS UNBOUNDED PRECEDING) min FROM t GROUP BY (k); # expression argument to SUM
 SELECT k, GROUP_CONCAT(j ORDER BY j), MAX(k+1) OVER (ROWS UNBOUNDED PRECEDING) max FROM t GROUP BY (k); # expression argument to SUM
+--source include/restore_turbo.inc
 SELECT k, GROUP_CONCAT(j ORDER BY j), MIN(k+1) OVER (ORDER BY k DESC ROWS UNBOUNDED PRECEDING) min FROM t GROUP BY (k);
 SELECT k, GROUP_CONCAT(j ORDER BY j), MAX(k+1) OVER (ORDER BY k DESC ROWS UNBOUNDED PRECEDING) max FROM t GROUP BY (k);
 
@@ -194,7 +201,7 @@ SELECT t3_id, MIN(t3_id) OVER w min,
               LEAD(t3_id, 2) OVER w lead2,
               NTH_VALUE(t3_id, 3) OVER w nth,
               k FROM t3
-       WINDOW w AS (PARTITION BY k ORDER BY t3_id);
+       WINDOW w AS (PARTITION BY k ORDER BY t3_id) ORDER BY t3_id;
 
 SELECT t3_id, MIN(t3_id) OVER w min,
               MAX(t3_id) OVER w max,
@@ -202,7 +209,7 @@ SELECT t3_id, MIN(t3_id) OVER w min,
               LEAD(t3_id, 2) OVER w lead2,
               NTH_VALUE(t3_id, 3) OVER w nth,
               k FROM t3
-       WINDOW w AS (PARTITION BY k ORDER BY t3_id RANGE UNBOUNDED PRECEDING);
+       WINDOW w AS (PARTITION BY k ORDER BY t3_id RANGE UNBOUNDED PRECEDING) ORDER BY t3_id;
 
 DROP TABLE t3;
 
@@ -248,9 +255,9 @@ SELECT t.*, MIN(t.rank) OVER (ROWS UNBOUNDED PRECEDING) min,
 SELECT t1.*, RANK() OVER (ORDER BY sex) `rank`, MIN(id) OVER (ORDER BY sex,id ROWS UNBOUNDED PRECEDING) min FROM t1;
 SELECT t1.*, PERCENT_RANK() OVER (ORDER BY sex) p_rank, MAX(id) OVER (ORDER BY sex,id ROWS UNBOUNDED PRECEDING) max FROM t1;
 SELECT t1.*, CUME_DIST() OVER (ORDER BY sex) c_dist, MIN(id) OVER (ORDER BY sex,id ROWS UNBOUNDED PRECEDING) min FROM t1;
-SELECT * from (SELECT t1.*, MIN(id) OVER (ROWS UNBOUNDED PRECEDING) min, RANK() OVER (ORDER BY sex) `rank` FROM t1) alias ORDER BY id;
-SELECT * from (SELECT t1.*, MAX(id) OVER (ROWS UNBOUNDED PRECEDING) max, PERCENT_RANK() OVER (ORDER BY sex) p_rank FROM t1) alias ORDER BY id;
-SELECT * from (SELECT t1.*, MAX(id) OVER (ROWS UNBOUNDED PRECEDING) max, CUME_DIST() OVER (ORDER BY sex) c_dist FROM t1) alias ORDER BY id;
+SELECT * from (SELECT t1.*, MIN(id) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING) min, RANK() OVER (ORDER BY sex) `rank` FROM t1) alias ORDER BY id;
+SELECT * from (SELECT t1.*, MAX(id) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING) max, PERCENT_RANK() OVER (ORDER BY sex) p_rank FROM t1) alias ORDER BY id;
+SELECT * from (SELECT t1.*, MAX(id) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING) max, CUME_DIST() OVER (ORDER BY sex) c_dist FROM t1) alias ORDER BY id;
 
 SELECT t1.*, MIN(id) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING) min,
        MAX(id) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING) max,
@@ -285,25 +292,25 @@ DROP TABLE t;
 --echo ----------------------------------------------------------------------
 
 SELECT AVG(id) OVER w, MIN(id) OVER w min, MAX(id) OVER w max FROM t1
-       WINDOW w AS (PARTITION BY sex);
+       WINDOW w AS (PARTITION BY sex) ORDER BY sex;
 
 SELECT * FROM (
 SELECT id, SUM(id) OVER w, MIN(id) OVER w min, MAX(id) OVER w max, sex FROM t1
        WINDOW w AS (PARTITION BY sex)
        ) alias ORDER BY id;
 
-SELECT MIN(id) OVER w min FROM t1 WINDOW w AS (PARTITION BY sex);
-SELECT MAX(id) OVER w max FROM t1 WINDOW w AS (PARTITION BY sex);
+SELECT MIN(id) OVER w min FROM t1 WINDOW w AS (PARTITION BY sex) ORDER BY sex;
+SELECT MAX(id) OVER w max FROM t1 WINDOW w AS (PARTITION BY sex) ORDER BY sex;
 
 SELECT id, MIN(id) OVER w min, MAX(id) OVER w max, sex FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING);
+                    ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) ORDER BY sex;
 
 --echo try the same as a view
 CREATE VIEW v AS
 SELECT id, SUM(id) OVER w, MIN(id) OVER w min, MAX(id) OVER w max, sex FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING);
+                    ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) ORDER BY sex;
 SHOW CREATE VIEW v;
 SELECT * FROM v;
 DROP VIEW v;
@@ -311,17 +318,17 @@ DROP VIEW v;
 SELECT SUM(id) OVER w, MIN(id) OVER w min,
        MAX(id) OVER w max FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING);
+                    ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) ORDER BY sex;
 
 SELECT id, SUM(id) OVER w, MIN(id) OVER w min,
        MAX(id) OVER w max, sex FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
+                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) ORDER BY sex;
 
 SELECT SUM(id) OVER w, COUNT(*) OVER w, MIN(id) OVER w min,
       MAX(id) OVER w max FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
+                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) ORDER BY sex;
 
 SELECT id, AVG(id) OVER (ROWS UNBOUNDED PRECEDING) avg,
        MIN(id) OVER (ROWS UNBOUNDED PRECEDING) min FROM t1;
@@ -333,6 +340,7 @@ SELECT id, AVG(id) OVER w avg, COUNT(id) OVER w count, MIN(id) OVER w min,
        WINDOW w AS (ORDER BY id ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING);
 
 --echo MIN/MAX with double type
+--source include/disable_turbo.inc
 CREATE TABLE td(d DOUBLE);
 INSERT INTO td VALUES (2);
 INSERT INTO td VALUES (2);
@@ -372,6 +380,7 @@ SELECT d, SUM(d) OVER w sum, MAX(d) OVER w max, MIN(d) OVER w min FROM td
   WINDOW w AS (ORDER BY d RANGE BETWEEN CURRENT ROW AND 2 FOLLOWING);
 
 DROP TABLE td;
+--source include/restore_turbo.inc
 
 --echo ----------------------------------------------------------------------
 --echo -    Min/Max with frames in combination with non-framing window functions
@@ -379,34 +388,35 @@ DROP TABLE td;
 --echo ----------------------------------------------------------------------
 
 SELECT ROW_NUMBER() OVER w `row_number`, id, MIN(id) OVER w min, MAX(id) OVER w max, sex FROM t1
-       WINDOW w AS (PARTITION BY sex ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING);
+       WINDOW w AS (PARTITION BY sex ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+       ORDER BY id;
 
 SELECT ROW_NUMBER() OVER w `row_number`, MIN(id) OVER w min,
       MAX(id) OVER w max FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
+                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) ORDER BY id;
 
 INSERT INTO t1 VALUES (10, NULL);
 
 SELECT RANK() OVER w `rank`, id, MIN(id) OVER w min, MAX(id) OVER w max, sex FROM t1
-       WINDOW w AS (PARTITION BY sex ORDER BY id);
+       WINDOW w AS (PARTITION BY sex ORDER BY id) ORDER BY id;
 
 SELECT RANK() OVER w `rank`, MIN(id) OVER w min,
        MAX(id) OVER w max FROM t1
        WINDOW w AS (PARTITION BY sex ORDER BY id
-                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
+                    ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) ORDER BY id;
 
 SELECT id, sex, MIN(id) OVER w min,
                 MAX(id) OVER w max,
                 ROW_NUMBER() OVER w `row_number`,
                 RANK() OVER w  `rank` FROM t1
-       WINDOW w AS (PARTITION BY sex ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING);
+       WINDOW w AS (PARTITION BY sex ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) ORDER BY id;
 
 SELECT id, sex, MIN(id) OVER w min,
                 MAX(id) OVER w max,
                 ROW_NUMBER() OVER w `row_number`,
                 CUME_DIST() OVER w  `cume_dist` FROM t1
-       WINDOW w AS (PARTITION BY sex ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING);
+       WINDOW w AS (PARTITION BY sex ORDER BY id ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) ORDER BY id;
 
 
 --echo ----------------------------------------------------------------------
@@ -452,7 +462,7 @@ SELECT user_id, MIN(user_id) OVER w, MAX(user_id) OVER w1 FROM t2
 SELECT NTILE(5) OVER w, ROW_NUMBER() OVER w, id, MIN(id) OVER w FROM t1
     WINDOW w AS (ORDER BY id DESC RANGE 2 PRECEDING);
 SELECT p, NTILE(5) OVER w, ROW_NUMBER() OVER w, id, MAX(id) OVER w FROM t11
-    WINDOW w AS (PARTITION BY p ORDER BY id DESC RANGE 2 PRECEDING);
+    WINDOW w AS (PARTITION BY p ORDER BY id DESC RANGE 2 PRECEDING) ORDER BY p;
 --error ER_WINDOW_RANGE_FRAME_NUMERIC_TYPE
 SELECT NTILE(5) OVER w, ROW_NUMBER() OVER w, id, MIN(id) OVER w FROM t1
     WINDOW w AS (ORDER BY id DESC RANGE INTERVAL 2 MONTH PRECEDING);
@@ -534,7 +544,7 @@ CREATE TABLE t1 (i INTEGER, j INTEGER);
 INSERT INTO t1 VALUES (NULL,3),(NULL,3),(NULL,30),(NULL,30),(4,3),
        (2,5),(3,7),(1,10),(5,20),(3,30);
 
-SELECT i, j, MIN(i) OVER (PARTITION BY j ORDER BY i) FROM t1;
+SELECT i, j, MIN(i) OVER (PARTITION BY j ORDER BY i) FROM t1 ORDER BY i,j;
 
 DROP TABLE t1;
 

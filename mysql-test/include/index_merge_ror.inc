@@ -192,12 +192,16 @@ if (!$skip_ror_EXPLAIN_for_MyRocks)
 {
   explain select key1,key2,key3,key4 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
 }
+--source include/disable_turbo.inc
 select key1,key2,key3,key4 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
+--source include/restore_turbo.inc
 if (!$skip_ror_EXPLAIN_for_MyRocks)
 {
   explain select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
 }
+--source include/disable_turbo.inc
 select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=100 and key4=100;
+--source include/restore_turbo.inc
 
 --echo #  3-way ROR-intersection
 if (!$skip_ror_EXPLAIN_for_MyRocks)
@@ -212,7 +216,9 @@ if (!$skip_ror_EXPLAIN_for_MyRocks)
 {
   explain select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=101;
 }
+--source include/disable_turbo.inc
 select key1,key2,key3,key4,filler1 from t1 where key1=100 and key2=100 or key3=101;
+--source include/restore_turbo.inc
 
 --echo # Run some ROR updates/deletes
 select key1,key2, filler1 from t1 where key1=100 and key2=100;
@@ -335,7 +341,9 @@ if (!$skip_ror_EXPLAIN_for_MyRocks)
 {
   explain select key1,key2,key3,key4,filler1 from t1 where key3=200 or (key1=100 and key2=100) or key4=200;
 }
+--source include/disable_turbo.inc
 select key1,key2,key3,key4,filler1 from t1 where key3=200 or (key1=100 and key2=100) or key4=200;
+--source include/restore_turbo.inc
 
 --echo ##
 --echo ## Optimizer tests

@@ -64,6 +64,8 @@ MYSQL.DB
 ERROR
 Storage engine 'MyISAM' does not support system tables. [mysql.db]
 @table_name
+MYSQL.DB_OBJECT_SYNONYMS
+@table_name
 MYSQL.DEFAULT_ROLES
 ERROR
 Storage engine 'MyISAM' does not support system tables. [mysql.default_roles]

@@ -254,7 +254,9 @@ while ($i < 19)
          i8 = $s_value AS e,
          u8 = $s_value AS eu
   FROM t1;
+  --source include/disable_turbo.inc
   eval $query;
+  --source include/restore_turbo.inc
 --disable_query_log
   eval prepare s1 from "$prep_query1";
 --enable_query_log
@@ -326,7 +328,9 @@ while ($i < 19)
          i8 <> $s_value AS e,
          u8 <> $s_value AS eu
   FROM t1;
+  --source include/disable_turbo.inc
   eval $query;
+  --source include/restore_turbo.inc
 --disable_query_log
   eval prepare s2 from "$prep_query2";
 --enable_query_log
@@ -398,7 +402,9 @@ while ($i < 19)
          i8 < $s_value AS e,
          u8 < $s_value AS eu
   FROM t1;
+  --source include/disable_turbo.inc
   eval $query;
+  --source include/restore_turbo.inc
 --disable_query_log
   eval prepare s3 from "$prep_query3";
 --enable_query_log
@@ -469,7 +475,9 @@ while ($i < 19)
          i8 >= $s_value AS e,
          u8 >= $s_value AS eu
   FROM t1;
+  --source include/disable_turbo.inc
   eval $query;
+  --source include/restore_turbo.inc
 --disable_query_log
   eval prepare s4 from "$prep_query4";
 --enable_query_log
@@ -541,7 +549,9 @@ while ($i < 19)
          i8 <= $s_value AS e,
          u8 <= $s_value AS eu
   FROM t1;
+  --source include/disable_turbo.inc
   eval $query;
+  --source include/restore_turbo.inc
 --disable_query_log
   eval prepare s5 from "$prep_query5";
 --enable_query_log
@@ -613,7 +623,9 @@ while ($i < 19)
          i8 > $s_value AS e,
          u8 > $S_value AS eu
   FROM t1;
+  --source include/disable_turbo.inc
   eval $query;
+  --source include/restore_turbo.inc
 --disable_query_log
   eval prepare s6 from "$prep_query6";
 --enable_query_log

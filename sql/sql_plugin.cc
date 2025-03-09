@@ -1,4 +1,5 @@
 /* Copyright (c) 2005, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -355,11 +356,14 @@ const LEX_CSTRING plugin_type_names[MYSQL_MAX_PLUGIN_TYPE_NUM] = {
     {STRING_WITH_LEN("VALIDATE PASSWORD")},
     {STRING_WITH_LEN("GROUP REPLICATION")},
     {STRING_WITH_LEN("KEYRING")},
-    {STRING_WITH_LEN("CLONE")}};
+    {STRING_WITH_LEN("CLONE")},
+    {STRING_WITH_LEN("QUERY PLAN")},
+};
 
 extern int initialize_schema_table(st_plugin_int *plugin);
 extern int finalize_schema_table(st_plugin_int *plugin);
-
+extern int initialize_query_plan_plugin(st_plugin_int *plugin);
+extern int finalize_query_plan_plugin(st_plugin_int *plugin);
 /*
   The number of elements in both plugin_type_initialize and
   plugin_type_deinitialize should equal to the number of plugins
@@ -374,7 +378,12 @@ plugin_type_init plugin_type_initialize[MYSQL_MAX_PLUGIN_TYPE_NUM] = {
     initialize_audit_plugin,
     nullptr,
     nullptr,
-    nullptr};
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    initialize_query_plan_plugin,
+};
 
 plugin_type_init plugin_type_deinitialize[MYSQL_MAX_PLUGIN_TYPE_NUM] = {
     nullptr,
@@ -385,7 +394,12 @@ plugin_type_init plugin_type_deinitialize[MYSQL_MAX_PLUGIN_TYPE_NUM] = {
     finalize_audit_plugin,
     nullptr,
     nullptr,
-    nullptr};
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    finalize_query_plan_plugin, /* MYSQL_QUERY_PLAN_INTERFACE_VERSION */
+};
 
 static const char *plugin_interface_version_sym =
     "_mysql_plugin_interface_version_";
@@ -411,7 +425,9 @@ static int min_plugin_info_interface_version[MYSQL_MAX_PLUGIN_TYPE_NUM] = {
     MYSQL_VALIDATE_PASSWORD_INTERFACE_VERSION,
     MYSQL_GROUP_REPLICATION_INTERFACE_VERSION,
     MYSQL_KEYRING_INTERFACE_VERSION,
-    MYSQL_CLONE_INTERFACE_VERSION};
+    MYSQL_CLONE_INTERFACE_VERSION,
+    MYSQL_QUERY_PLAN_INTERFACE_VERSION,
+};
 static int cur_plugin_info_interface_version[MYSQL_MAX_PLUGIN_TYPE_NUM] = {
     0x0000, /* UDF: not implemented */
     MYSQL_HANDLERTON_INTERFACE_VERSION,
@@ -424,7 +440,9 @@ static int cur_plugin_info_interface_version[MYSQL_MAX_PLUGIN_TYPE_NUM] = {
     MYSQL_VALIDATE_PASSWORD_INTERFACE_VERSION,
     MYSQL_GROUP_REPLICATION_INTERFACE_VERSION,
     MYSQL_KEYRING_INTERFACE_VERSION,
-    MYSQL_CLONE_INTERFACE_VERSION};
+    MYSQL_CLONE_INTERFACE_VERSION,
+    MYSQL_QUERY_PLAN_INTERFACE_VERSION,
+};
 
 /* support for Services */
 
@@ -2399,6 +2417,11 @@ static bool mysql_install_plugin(THD *thd, LEX_CSTRING name,
     }
   }
 
+  DBUG_EXECUTE_IF("query_plugin_debug_install", {
+    error = true;
+    my_error(ER_CANT_INITIALIZE_UDF, MYF(0), name.str,
+             "Plugin initialization debug failed.");
+  });
   /*
     We do not replicate the INSTALL PLUGIN statement. Disable binlogging
     of the insert into the plugin table, so that it is not replicated in

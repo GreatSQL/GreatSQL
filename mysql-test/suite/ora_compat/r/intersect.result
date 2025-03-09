@@ -819,14 +819,14 @@ Slow_queries	0
 flush status;
 select a from t1 where b not in (1,2,3) intersect select a from t1 where b not in (4,5,6);
 a
+10
+3
 4
 5
-3
 6
 7
 8
 9
-10
 show status like 'Slow_queries';
 Variable_name	Value
 Slow_queries	0

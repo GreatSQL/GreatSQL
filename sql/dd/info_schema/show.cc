@@ -1,5 +1,5 @@
 /* Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -620,6 +620,23 @@ Query_block *build_show_sequences_query(const POS &pos, THD *thd, String *wild,
 
   return sl;
 }
+
+Query_block *build_show_synonyms_query(const POS &pos [[maybe_unused]],
+                                       THD *thd [[maybe_unused]],
+                                       String *wild [[maybe_unused]],
+                                       Item *where_cond [[maybe_unused]]) {
+  DBUG_ENTER("build_show_synonyms_query");
+
+  const LEX_CSTRING system_tbl_name = {STRING_WITH_LEN("db_object_synonyms")};
+
+  Select_lex_builder top_query(&pos, thd);
+  top_query.add_star_select_item();
+  top_query.add_from_item(MYSQL_SCHEMA_NAME, system_tbl_name);
+  Query_block *qb = top_query.prepare_query_block();
+  thd->lex->sql_command = SQLCOM_SHOW_SYNONYMS;
+
+  DBUG_RETURN(qb);
+}  // Query_block *build_show_synonyms_query(pos, thd, wild, where_cond)
 
 // Build a substitute query for SHOW TABLES / TABLE STATUS.
 

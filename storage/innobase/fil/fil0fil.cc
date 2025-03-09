@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1995, 2022, Oracle and/or its affiliates. All rights reserved.
-Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -8979,6 +8979,7 @@ dberr_t fil_set_compression(space_id_t space_id, const char *algorithm) {
     switch (srv_debug_compress) {
       case Compression::LZ4:
       case Compression::ZLIB:
+      case Compression::ZSTD:
       case Compression::NONE:
 
         compression.m_type = static_cast<Compression::Type>(srv_debug_compress);

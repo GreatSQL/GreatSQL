@@ -1462,7 +1462,7 @@ a	b
 4	f
 4	f
 5	e
-explain format = json select * from t1 union select * from t2 order by b;
+explain format = json select * from t1 union select * from t2 order by b,a;
 EXPLAIN
 {
   "query_block": {
@@ -1532,8 +1532,8 @@ EXPLAIN
   }
 }
 Warnings:
-Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` union /* select#2 */ select `test`.`t2`.`a` AS `a`,`test`.`t2`.`b` AS `b` from `test`.`t2` order by `b`
-select * from t1 union select * from t2 order by b;
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` union /* select#2 */ select `test`.`t2`.`a` AS `a`,`test`.`t2`.`b` AS `b` from `test`.`t2` order by `b`,`a`
+select * from t1 union select * from t2 order by b,a;
 a	b
 1	a
 2	b
@@ -3354,7 +3354,7 @@ a	b
 10	f
 10	f
 10	e
-explain format = json select * from t1 union select * from t2 order by b;
+explain format = json select * from t1 union select * from t2 order by b,a;
 EXPLAIN
 {
   "query_block": {
@@ -3424,8 +3424,8 @@ EXPLAIN
   }
 }
 Warnings:
-Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` union /* select#2 */ select `test`.`t2`.`a` AS `a`,`test`.`t2`.`b` AS `b` from `test`.`t2` order by `b`
-select * from t1 union select * from t2 order by b;
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` union /* select#2 */ select `test`.`t2`.`a` AS `a`,`test`.`t2`.`b` AS `b` from `test`.`t2` order by `b`,`a`
+select * from t1 union select * from t2 order by b,a;
 a	b
 9	a
 2	b

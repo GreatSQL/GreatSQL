@@ -2,7 +2,7 @@
 #define ITEM_SUM_INCLUDED
 
 /* Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2295,6 +2295,7 @@ class Item_func_group_concat final : public Item_sum {
     return get_time_from_string(ltime);
   }
 
+  uint get_field_arg_count() { return m_field_arg_count; }
   bool has_distinct() const noexcept { return distinct; }
   const String *get_separator_str() const noexcept { return separator; }
   uint32_t get_group_concat_max_len() const noexcept {

@@ -180,7 +180,9 @@ insert into my_data(id,a) select  1,f01 from my_misc_data where id=1;
 insert into my_data(id,a) select  2,f02 from my_misc_data where id=1;
 insert into my_data(id,a) select  3,f03 from my_misc_data where id=1;
 insert into my_data(id,a) select  4,f04 from my_misc_data where id=1;
+--source include/disable_turbo.inc
 insert into my_data(id,a) select  5,f05 from my_misc_data where id=1;
+--source include/restore_turbo.inc
 insert into my_data(id,a) select  6,f06 from my_misc_data where id=1;
 insert into my_data(id,a) select  7,f07 from my_misc_data where id=1;
 insert into my_data(id,a) select  8,f08 from my_misc_data where id=1;
@@ -481,7 +483,9 @@ insert into my_data(id,a) select  1,f01 from my_misc_data where id=1;
 insert into my_data(id,a) select  2,f02 from my_misc_data where id=1;
 insert into my_data(id,a) select  3,f03 from my_misc_data where id=1;
 insert into my_data(id,a) select  4,f04 from my_misc_data where id=1;
+--source include/disable_turbo.inc
 insert into my_data(id,a) select  5,f05 from my_misc_data where id=1;
+--source include/restore_turbo.inc
 insert into my_data(id,a) select  6,f06 from my_misc_data where id=1;
 insert into my_data(id,a) select  7,f07 from my_misc_data where id=1;
 insert into my_data(id,a) select  8,f08 from my_misc_data where id=1;

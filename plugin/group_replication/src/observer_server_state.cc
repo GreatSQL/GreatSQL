@@ -1,4 +1,5 @@
 /* Copyright (c) 2013, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -47,6 +48,7 @@ int group_replication_after_recovery(Server_state_param *) { return 0; }
 int group_replication_before_server_shutdown(Server_state_param *) {
   enable_server_shutdown_status();
   plugin_group_replication_leave_group();
+  plugin_unlock_waitting_transactions();
 
   return 0;
 }

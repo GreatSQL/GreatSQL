@@ -1,5 +1,5 @@
 /* Copyright (c) 2020, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -42,6 +42,7 @@
 #include "sql/range_optimizer/range_optimizer.h"
 #include "sql/sql_array.h"
 #include "sql/sql_class.h"
+#include "sql/sql_lex.h"
 #include "sql/sql_select.h"
 #include "sql/table.h"
 
@@ -72,6 +73,13 @@ struct TABLE;
 struct TABLE_REF;
 struct Select_limit_counters;
 class Connect_by_param;
+
+enum query_result_type {
+  QUERY_RESULT_NONE,
+  QUERY_RESULT_INSERT,
+  QUERY_RESULT_UPDATE,
+  QUERY_RESULT_DELETE,
+};
 
 /**
   A specification that two specific relational expressions
@@ -260,7 +268,9 @@ struct AccessPath {
     REMOVE_DUPLICATES_ON_INDEX,
     ALTERNATIVE,
     CACHE_INVALIDATOR,
-
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+    QUERY_PLAN_EXECUTE,
+#endif
     // Access paths that modify tables.
     DELETE_ROWS,
     UPDATE_ROWS,
@@ -496,6 +506,7 @@ struct AccessPath {
   /// destroyed.
   void *secondary_engine_data{nullptr};
 
+  uint32_t id{0};
   // Accessors for the union below.
   auto &table_scan() {
     assert(type == TABLE_SCAN);
@@ -882,7 +893,16 @@ struct AccessPath {
     assert(type == PQBLOCK_SCAN);
     return u.pqblock_scan;
   }
-
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+  auto &query_plan_execute() {
+    assert(type == QUERY_PLAN_EXECUTE);
+    return u.query_plan_execute;
+  }
+  const auto &query_plan_execute() const {
+    assert(type == QUERY_PLAN_EXECUTE);
+    return u.query_plan_execute;
+  }
+#endif
   double num_output_rows() const { return m_num_output_rows; }
 
   void set_num_output_rows(double val) { m_num_output_rows = val; }
@@ -1297,6 +1317,12 @@ struct AccessPath {
       Gather_operator *gather;
       bool need_rowid;
     } pqblock_scan;
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+    struct {
+      AccessPath *native_path;
+      mem_root_deque<Item *> *native_outlist;
+    } query_plan_execute;
+#endif
   } u;
 };
 static_assert(std::is_trivially_destructible<AccessPath>::value,
@@ -1982,6 +2008,17 @@ inline AccessPath *NewInvalidatorAccessPath(THD *thd, AccessPath *child,
   path->cache_invalidator().name = name;
   return path;
 }
+
+#ifdef HAVE_QUERY_PLAN_PLUGIN
+inline AccessPath *NewExecuteAccessPath(
+    THD *thd, AccessPath *native_path, mem_root_deque<Item *> *native_outlist) {
+  AccessPath *path = new (thd->mem_root) AccessPath;
+  path->type = AccessPath::QUERY_PLAN_EXECUTE;
+  path->query_plan_execute().native_path = native_path;
+  path->query_plan_execute().native_outlist = native_outlist;
+  return path;
+}
+#endif
 
 AccessPath *NewDeleteRowsAccessPath(THD *thd, AccessPath *child,
                                     table_map delete_tables,

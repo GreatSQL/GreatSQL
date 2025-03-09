@@ -11,6 +11,7 @@ insert into join_bb values(4, 3);
 insert into join_bb values(null, 7);
 insert into join_bb values(null, 7);
 
+--sorted_result
 select t1.* from join_aa t1 left join join_bb t2 on t1.ida = t2.ida;
 
 
@@ -209,11 +210,15 @@ create table x3 as select * from x1;
 EXPLAIN format=tree update x3 set a=a+200 where a in (select x1.a from x1 left join x2 on x1.id=x2.id);
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 EXPLAIN format=tree delete from  x3 where a in (select x1.a from x1 left join x2 on x1.id=x2.id);
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 EXPLAIN format=tree select * from  x3 where a in (select x1.a from x1 left join x2 on x1.id=x2.id);
+--source include/restore_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 EXPLAIN format=tree insert into x3 select * from x1 where a in (select x1.a from x1 left join x2 on x1.id=x2.id);
+--source include/disable_turbo.inc
 --replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
 EXPLAIN format=tree select x1.a from x1 left join x2 on x1.id=x2.id;
+--source include/restore_turbo.inc
 
 drop table x1, x2, x3;

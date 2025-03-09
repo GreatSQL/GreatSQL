@@ -91,6 +91,7 @@ set max_heap_table_size= @save_max_heap_table_size;
 # O2I join orders, with shortcutting: 
 explain select * from t1 where a in (select b from t2);
 select * from t1;
+--sorted_result
 select * from t1 where a in (select b from t2);
 
 drop table t0, t1, t2, t3;

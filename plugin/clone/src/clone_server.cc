@@ -1,5 +1,5 @@
 /* Copyright (c) 2017, 2022, Oracle and/or its affiliates.
-   Copyright (c) 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2024, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +31,7 @@ Clone Plugin: Server implementation
 #include "plugin/clone/include/clone_status.h"
 
 #include "my_byteorder.h"
+#include "sql/debug_sync.h"
 
 /* Namespace for all clone data types */
 namespace myclone {
@@ -175,6 +176,10 @@ int Server::init_storage(Ha_clone_mode mode, uchar *com_buf, size_t com_len) {
   err = hton_clone_begin(get_thd(), get_storage_vector(), m_tasks,
                          m_start_id ? HA_CLONE_PAGE : HA_CLONE_HYBRID, mode,
                          m_start_id, m_enable_page_track, m_file_compress_mode);
+
+  DBUG_SIGNAL_WAIT_FOR(m_server_thd, "clone_courrency_wait",
+                       "clone_courrency_wait", "clone_courrency_continue");
+
   if (err != 0) {
     clone_ddl_timeout = saved_donor_timeout;
     return (err);

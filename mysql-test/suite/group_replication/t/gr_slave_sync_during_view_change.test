@@ -1,0 +1,105 @@
+--let $group_replication_group_name= 8a94f357-aab4-11df-86ab-c80aa9429573
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_server_count= 4
+--source include/group_replication.inc
+
+#
+# a counter to be used with source include/gr_error_out.inc
+#
+--let $group_replication_error_connection_number= 3
+
+
+connect (conn1,127.0.0.1,root,,test,$MASTER_MYPORT,);
+connect (conn2,127.0.0.1,root,,test,$SLAVE_MYPORT,);
+connect (conn3,127.0.0.1,root,,test,$SERVER_MYPORT_3,);
+
+
+connection conn1;
+SET SESSION sql_log_bin=0;
+call mtr.add_suppression("Plugin group_replication reported: 'Timeout when waiting for the server to execute local transactions in order assure the group change proper logging'");
+call mtr.add_suppression("Plugin group_replication reported: 'Unable to log the group change View log event in its exaction position in the log. This will not however affect the group replication recovery process or the overall plugin process.'");
+SET SESSION sql_log_bin=1;
+connection conn2;
+SET SESSION sql_log_bin=0;
+call mtr.add_suppression("Plugin group_replication reported: '.*' was already used, the transaction will rollback.");
+SET SESSION sql_log_bin=1;
+connection conn3;
+SET SESSION sql_log_bin=0;
+call mtr.add_suppression("Plugin group_replication reported: '.*' was already used, the transaction will rollback.");
+SET SESSION sql_log_bin=1;
+
+
+--connection server4
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+CREATE TABLE t2 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+
+--connection server1
+--source include/start_and_bootstrap_group_replication.inc
+--replace_result $SERVER_MYPORT_4 PORT_4
+eval CHANGE REPLICATION SOURCE TO SOURCE_USER='root',SOURCE_HOST='127.0.0.1',SOURCE_PORT=$SERVER_MYPORT_4,SOURCE_AUTO_POSITION=1;
+START REPLICA;
+
+--connection server4
+--let $sync_slave_connection= server1
+--source include/sync_slave_sql_with_master.inc
+
+--connection server1
+CREATE TABLE t3 (c1 INT PRIMARY KEY, c2 INT);
+INSERT INTO t3 VALUES (1,1);
+SHOW TABLES;
+LOCK TABLE t1 READ;
+
+--connection server4
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t2 VALUES (1,1);
+
+--connection server1
+--let $wait_condition=select count(*)=1 from information_schema.processlist where state='Waiting for table metadata lock'
+--source include/wait_condition.inc
+--let $wait_condition=select count(*)=1 from information_schema.processlist where state='Waiting for preceding transaction to commit'
+--source include/wait_condition.inc
+
+--let $group_replication_start_member_state= RECOVERING
+--connection server2
+--source include/start_group_replication.inc
+--let $group_replication_start_member_state= RECOVERING
+--connection server3
+--source include/start_group_replication.inc
+
+--connection server1
+UNLOCK TABLES;
+
+connection conn1;
+DELETE FROM t3 WHERE c1=1;
+INSERT INTO t3 VALUES (2,2);
+SELECT * FROM t3;
+--let $sync_slave_connection= server2
+--source include/sync_slave_sql_with_master.inc
+--let $sync_slave_connection= server3
+--source include/sync_slave_sql_with_master.inc
+connection conn2;
+SELECT * FROM t3;
+connection conn3;
+SELECT * FROM t3;
+
+#
+#  Cleanup
+#
+--connection server4
+DROP TABLE t1;
+DROP TABLE t2;
+--let $sync_slave_connection= server1
+--source include/sync_slave_sql_with_master.inc
+
+connection conn1;
+STOP REPLICA FOR CHANNEL '';
+RESET REPLICA FOR CHANNEL '';
+CHANGE REPLICATION SOURCE TO SOURCE_AUTO_POSITION= 0 FOR CHANNEL '';
+DROP TABLE t3;
+--let $sync_slave_connection= server2
+--source include/sync_slave_sql_with_master.inc
+--let $sync_slave_connection= server3
+--source include/sync_slave_sql_with_master.inc
+
+--source include/group_replication_end.inc

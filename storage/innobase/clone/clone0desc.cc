@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
-Copyright (c) 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2024, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -920,8 +920,11 @@ static const uint CLONE_DESC_FINISH_CLONE_LSN = CLONE_DESC_PAGE_TRACK_LSN + 8;
 static const uint CLONE_DESC_FILE_COMPRESS_MODE =
     CLONE_DESC_FINISH_CLONE_LSN + 8;
 
+/** Clone type: change clone type in compress clone */
+static const uint CLONE_HANDLE_TYPE = CLONE_DESC_FILE_COMPRESS_MODE + 8;
+
 /** Clone State: flags in 2 byte [max 16 flags] */
-static const uint CLONE_DESC_STATE_FLAGS = CLONE_DESC_FILE_COMPRESS_MODE + 8;
+static const uint CLONE_DESC_STATE_FLAGS = CLONE_HANDLE_TYPE + 8;
 
 /** Clone State: Total length */
 static const uint CLONE_DESC_STATE_LEN = CLONE_DESC_STATE_FLAGS + 2;
@@ -967,7 +970,7 @@ void Clone_Desc_State::serialize(byte *&desc_state, uint &len,
   mach_write_to_8(desc_state + CLONE_DESC_FINISH_CLONE_LSN, m_end_lsn);
   mach_write_to_8(desc_state + CLONE_DESC_FILE_COMPRESS_MODE,
                   m_file_compress_mode);
-
+  mach_write_to_8(desc_state + CLONE_HANDLE_TYPE, m_snapshot_type);
   ulint state_flags = 0;
 
   if (m_is_start) {
@@ -1007,6 +1010,8 @@ bool Clone_Desc_State::deserialize(const byte *desc_state, uint desc_len) {
   m_end_lsn = mach_read_from_8(desc_state + CLONE_DESC_FINISH_CLONE_LSN);
   m_file_compress_mode = static_cast<file_compress_mode_t>(
       mach_read_from_8(desc_state + CLONE_DESC_FILE_COMPRESS_MODE));
+  m_snapshot_type = static_cast<Ha_clone_type>(
+      mach_read_from_8(desc_state + CLONE_HANDLE_TYPE));
   auto state_flags =
       static_cast<ulint>(mach_read_from_2(desc_state + CLONE_DESC_STATE_FLAGS));
 

@@ -2,7 +2,7 @@
 
 Copyright (c) 1997, 2021, Oracle and/or its affiliates.
 Copyright (c) 2022, Huawei Technologies Co., Ltd.
-Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -110,15 +110,16 @@ be needed in the query.
                                     is used only for end range comparison
 @param[in]      lob_undo            the LOB undo information.
 @param[in,out]  blob_heap           If not null then use this heap for BLOBs
+@param[in]      parallel_ctx        provide the ctx in the parallel read ctx.
 @return true on success, false if not all columns could be retrieved */
 // clang-format on
-bool row_sel_store_mysql_rec(byte *mysql_rec, row_prebuilt_t *prebuilt,
-                             const rec_t *rec, const dtuple_t *vrow,
-                             bool rec_clust, const dict_index_t *rec_index,
-                             const dict_index_t *prebuilt_index,
-                             const ulint *offsets, bool clust_templ_for_sec,
-                             lob::undo_vers_t *lob_undo,
-                             mem_heap_t *&blob_heap);
+bool row_sel_store_mysql_rec(
+    byte *mysql_rec, row_prebuilt_t *prebuilt, const rec_t *rec,
+    const dtuple_t *vrow, bool rec_clust, const dict_index_t *rec_index,
+    const dict_index_t *prebuilt_index, const ulint *offsets,
+    bool clust_templ_for_sec, lob::undo_vers_t *lob_undo,
+    mem_heap_t *&blob_heap,
+    row_prebuilt_parallel_ctx_t *parallel_ctx = nullptr);
 
 void pq_row_sel_store_row_id_to_prebuilt(
     row_prebuilt_t *prebuilt,  /*!< in/out: prebuilt */

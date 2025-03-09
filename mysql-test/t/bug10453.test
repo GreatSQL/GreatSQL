@@ -1,0 +1,55 @@
+## fix sql_mode hint failure.
+## http://zbox.greatdb.com/zentao/bug-view-10453.html
+
+
+create table t1(ida decimal(22,0) NOT NULL, age int, RECDATE datetime, primary key(ida));
+INSERT INTO t1 VALUES (1,8,'1000-01-01'),(2, 4,'1999-12-31'),(3, 3, '2000-01-01'),(4, 4, '2006-12-25'), (5, 6, '2008-02-29');
+INSERT INTO t1 VALUES (6,8,'1000-01-01'),(7, 4,'1999-12-31'),(8, 3, '2000-01-01'),(9, 4, '2006-12-25'), (10, 6, '2008-02-29');
+INSERT INTO t1 VALUES (11,8,'1000-01-01'),(12, 4,'1999-12-31'),(13, 3, '2000-01-01'),(14, 4, '2006-12-25'), (15, 6, '2008-02-29');
+INSERT INTO t1 VALUES (16,8,'1000-01-01'),(17, 4,'1999-12-31'),(18, 3, '2000-01-01'),(19, 4, '2006-12-25'), (20, 6, '2008-02-29');
+insert into t1 select ida*32, age , recdate from t1;
+insert into t1 select ida*64+1, age , recdate from t1;
+insert into t1 select ida*70, age , recdate from t1;
+insert into t1 select ida*78, age , recdate from t1;
+insert into t1 select ida*82, age , recdate from t1;
+insert into t1 select ida*86, age , recdate from t1;
+insert into t1 select ida*89, age , recdate from t1;
+insert into t1 select ida*92, age , recdate from t1;
+insert into t1 select ida*93, age , recdate from t1;
+insert into t1 select ida*94, age , recdate from t1;
+insert into t1 select ida*(-9), age , recdate from t1;
+
+alter table t1 add key(recdate);
+
+analyze table t1;
+select @@sql_mode;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select * from t1 where recdate is not null order by recdate  limit 3;
+
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select * from t1 order by recdate  limit 3;
+
+set sql_mode=oracle;
+select @@sql_mode;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select * from t1 order by recdate  limit 3;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select * from t1 where recdate is not null order by recdate  limit 3;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select /*+ SET_VAR(sql_mode='ONLY_FULL_GROUP_BY') */ * from t1 where recdate is not null order by recdate  limit 3;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select /*+ SET_VAR(sql_mode='') */ * from t1 where recdate is not null order by recdate  limit 3;
+show warnings;
+select @@sql_mode;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select /*+ SET_VAR(sql_mode=' ') */ * from t1 where recdate is not null order by recdate  limit 3;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select /*+ SET_VAR(sql_mode=' ') */ * from t1 order by recdate limit 3;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree select /*+ SET_VAR(sql_mode='default') */ * from t1 where recdate is not null order by recdate  limit 3;
+show warnings;
+
+drop table t1;
+
+
+

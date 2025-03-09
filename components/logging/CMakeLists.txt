@@ -1,4 +1,5 @@
 # Copyright (c) 2017, 2022, Oracle and/or its affiliates.
+# Copyright (c) 2025, GreatDB Software Co., Ltd.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -33,6 +34,10 @@ MYSQL_ADD_COMPONENT(log_filter_dragnet
   MODULE_ONLY
   )
 
+MYSQL_ADD_COMPONENT(log_sink_rotate
+  log_sink_rotate.cc
+  MODULE_ONLY
+  )
 # We are not interesting in profiling tests.
 DISABLE_MISSING_PROFILE_WARNING()
 

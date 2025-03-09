@@ -4121,3 +4121,65 @@ Warnings:
 Warning	1287	'@@profiling' is deprecated and will be removed in a future release.
 drop table t1;
 drop table t2;
+create table t1 (c1 int primary key, c2 varchar(32),date1 datetime);
+insert into t1 values (1,'aaa','2021-03-25 16:44:00.123456'),(2,'bbb','2022-03-25 16:44:00.123456'),(3,'ccc','2023-03-25 16:44:00.123456');
+select c2,sum(c1) from t1 connect by level<2 group by c2 with rollup;
+c2	sum(c1)
+aaa	1
+bbb	2
+ccc	3
+NULL	6
+drop table t1;
+CREATE TABLE t1(id int, type char(1));
+INSERT INTO t1 VALUES
+(1,"A"),(2,"C"),(3,"A"),(4,"A"),(5,"B"),
+(6,"B"),(7,"A"),(8,"C"),(9,"A"),(10,"C");
+CREATE VIEW v1 AS SELECT * FROM t1;
+SELECT type FROM v1 connect by level<1  GROUP BY type WITH ROLLUP;
+ERROR HY000: Argument #1 of GROUPING function is not in GROUP BY
+drop view v1;
+drop table t1;
+CREATE TABLE t1 (
+pk INTEGER NOT NULL AUTO_INCREMENT,
+col_int INTEGER DEFAULT NULL,
+PRIMARY KEY (pk)
+);
+INSERT INTO t1 VALUES (1,1);
+SELECT ((table1.col_int) * (table1.col_int)) AS field2 FROM (t1 AS table1)   WHERE (table1.col_int != 1 OR table1.pk) connect by level<1
+GROUP BY field2 WITH ROLLUP   HAVING (field2 <> 239 ) ORDER BY GROUPING(field2);
+ERROR HY000: Invalid use of group function
+drop table t1;
+CREATE TABLE t1 (a INTEGER);
+CREATE TABLE t2 (c INTEGER);
+INSERT INTO t1 VALUES (7),(8);
+INSERT INTO t2 VALUES (-3);
+SELECT c, a, SUM(c) OVER () FROM t1,t2 connect by level<1 GROUP BY c,a WITH ROLLUP;
+ERROR 42000: This version of MySQL doesn't yet support 'CONNECT BY with ROLLUP window functions'
+drop table t1;
+drop table t2;
+CREATE TABLE t1 (
+f1 INTEGER
+);
+INSERT INTO t1 VALUES (1), (2), (3);
+CREATE TABLE t2 (
+pk INTEGER,
+blobfield LONGTEXT
+);
+INSERT INTO t2 VALUES (4, '');
+SELECT * FROM t1, t2, LATERAL (   SELECT pk, blobfield   GROUP BY pk, blobfield WITH ROLLUP ) AS d1 connect by level<1 ORDER BY t1.f1, t2.pk;
+ERROR 42000: This version of MySQL doesn't yet support 'CONNECT BY with LATERAL'
+drop table t1;
+drop table t2;
+CREATE TABLE t (a varchar(10), FULLTEXT (a));
+INSERT INTO t VALUES ('abc'), ('xyz');
+SELECT 1 FROM t WHERE MATCH (a) AGAINST ('abc') connect by level<1 GROUP BY a WITH ROLLUP;
+ERROR 42000: This version of MySQL doesn't yet support 'CONNECT BY with fulltext search'
+drop table t;
+CREATE TABLE t1 (pk INTEGER, PRIMARY KEY (pk));
+CREATE TABLE t2 (pk INTEGER, PRIMARY KEY (pk));
+INSERT INTO t2 VALUES (1),(2);
+SELECT GROUPING(alias2.pk) AS field2 FROM t2 AS alias1 LEFT JOIN t1 AS alias2  
+ON 0 connect by level<1 GROUP BY alias2.pk WITH ROLLUP ORDER BY GROUPING(alias2.pk);
+ERROR HY000: Invalid use of group function
+drop table t1;
+drop table t2;

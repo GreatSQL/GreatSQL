@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2000, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -13870,6 +13870,12 @@ static bool mysql_inplace_alter_table(
     reopen_tables = true;
   } else if (inplace_supported == HA_ALTER_INPLACE_SHARED_LOCK_AFTER_PREPARE ||
              inplace_supported == HA_ALTER_INPLACE_NO_LOCK_AFTER_PREPARE) {
+    DBUG_EXECUTE_IF("gdb_mdl_upgrade_or_downgrade", {
+      const char action[] =
+          "now SIGNAL gdb_mdl_upgrade_begin WAIT_FOR "
+          "gdb_mdl_upgrade_continue";
+      assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(action)));
+    };);
     /*
       Storage engine has requested exclusive lock only for prepare phase
       and we are not under LOCK TABLES.
@@ -14051,7 +14057,21 @@ static bool mysql_inplace_alter_table(
         table->mdl_ticket->downgrade_lock(MDL_SHARED_NO_WRITE);
       else {
         assert(inplace_supported == HA_ALTER_INPLACE_NO_LOCK_AFTER_PREPARE);
+        DBUG_EXECUTE_IF("gdb_mdl_upgrade_or_downgrade", {
+          const char action[] =
+              "now SIGNAL gdb_mdl_downgrade_begin WAIT_FOR "
+              "gdb_mdl_downgrade_continue";
+          assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(action)));
+        };);
+
         table->mdl_ticket->downgrade_lock(MDL_SHARED_UPGRADABLE);
+
+        DBUG_EXECUTE_IF("gdb_mdl_upgrade_or_downgrade", {
+          const char action[] =
+              "now SIGNAL gdb_mdl_downgrade_end WAIT_FOR "
+              "gdb_mdl_downgrade_continue";
+          assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(action)));
+        };);
       }
     }
 

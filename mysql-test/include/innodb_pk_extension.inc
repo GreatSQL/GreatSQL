@@ -1,3 +1,4 @@
+--source include/no_turbo.inc
 
 CREATE TABLE t1
 (

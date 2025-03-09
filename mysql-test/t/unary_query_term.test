@@ -21,9 +21,11 @@ ANALYZE TABLE r, s, t;
 --echo # and no tmp table (collapsing outer unary level).
 let $query = (SELECT * FROM r ORDER BY a LIMIT 2) LIMIT 4;
 eval $query;
+--source include/disable_turbo.inc
 --skip_if_hypergraph  # Hypergraph elides Limit iterator
 --replace_regex $elide_costs
 eval EXPLAIN FORMAT = tree $query;
+--source include/restore_turbo.inc
 eval PREPARE q FROM "$query";
 EXECUTE q;
 EXECUTE q;
@@ -81,9 +83,11 @@ INSERT INTO t1 VALUES (11);
 
 let $query = ((SELECT a AS c FROM t1 LIMIT 10) LIMIT 6) ORDER BY c+1 LIMIT 5;
 eval $query;
+--source include/disable_turbo.inc
 --replace_regex $elide_costs
 --skip_if_hypergraph
 eval EXPLAIN FORMAT = tree $query;
+--source include/restore_turbo.inc
 DROP TABLE t1;
 
 --echo #
@@ -120,9 +124,11 @@ eval EXPLAIN FORMAT = tree $query;
 
 let $query = (SELECT * FROM r ORDER BY a LIMIT 5) ORDER BY -a LIMIT 4;
 eval $query;
+--source include/disable_turbo.inc
 --replace_regex $elide_costs
 --skip_if_hypergraph
 eval EXPLAIN FORMAT = tree $query;
+--source include/restore_turbo.inc
 eval EXPLAIN $query;
 eval PREPARE q FROM "$query";
 EXECUTE q;
@@ -134,9 +140,11 @@ let $query =
     ((SELECT * FROM r ORDER BY a LIMIT 5) ORDER BY -a LIMIT 4)
     ORDER BY a LIMIT 3;
 eval $query;
+--source include/disable_turbo.inc
 --replace_regex $elide_costs
 --skip_if_hypergraph
 eval EXPLAIN FORMAT = tree $query;
+--source include/restore_turbo.inc
 eval PREPARE q FROM "$query";
 EXECUTE q;
 EXECUTE q;
@@ -154,9 +162,11 @@ let $query =
       ORDER BY a LIMIT 3)
     ORDER BY -a LIMIT 2;
 eval $query;
+--source include/disable_turbo.inc
 --replace_regex $elide_costs
 --skip_if_hypergraph
 eval EXPLAIN FORMAT = tree $query;
+--source include/restore_turbo.inc
 eval PREPARE q FROM "$query";
 EXECUTE q;
 EXECUTE q;
@@ -168,9 +178,11 @@ let $query =
       ORDER BY c LIMIT 3)
     ORDER BY -c LIMIT 2;
 eval $query;
+--source include/disable_turbo.inc
 --replace_regex $elide_costs
 --skip_if_hypergraph
 eval EXPLAIN FORMAT = tree $query;
+--source include/restore_turbo.inc
 eval PREPARE q FROM "$query";
 EXECUTE q;
 EXECUTE q;
@@ -211,9 +223,11 @@ let $query =
     UNION ALL
     (SELECT * FROM r UNION ALL SELECT * FROM s ORDER BY a LIMIT 5) LIMIT 7;
 eval $query;
+--source include/disable_turbo.inc
 --replace_regex $elide_costs
 --skip_if_hypergraph
 eval EXPLAIN FORMAT = tree $query;
+--source include/restore_turbo.inc
 
 --echo # [NEW]
 --echo # Two union materialized tmp tables, 2nd w/dedup, 1st is
@@ -224,18 +238,22 @@ let $query =
     UNION ALL
     (SELECT * FROM r UNION DISTINCT SELECT * FROM s) LIMIT 7;
 eval $query;
+--source include/disable_turbo.inc
 --replace_regex $elide_costs
 --skip_if_hypergraph
 eval EXPLAIN FORMAT = tree $query;
+--source include/restore_turbo.inc
 
 --echo #
 --echo # Bug in contexualize: missing add of unary node
 --echo #
+--source include/disable_turbo.inc
 let $query =
     (((SELECT * from r UNION SELECT * FROM s UNION ALL SELECT * from t) LIMIT 3) LIMIT 5);
 eval $query;
 --replace_regex $elide_costs
 eval EXPLAIN FORMAT = tree $query;
+--source include/restore_turbo.inc
 
 
 --echo #
@@ -253,9 +271,11 @@ while ($1)
 }
 
 eval $query;
+--source include/disable_turbo.inc
 --replace_regex $elide_costs
 --skip_if_hypergraph
 eval EXPLAIN FORMAT = tree $query;
+--source include/restore_turbo.inc
 
 let $query =
     ($query
@@ -342,8 +362,10 @@ SELECT * FROM t4;
 --echo #
 --echo # Bug fix: SQL_CALC_FOUND_ROWS
 --echo #
+--source include/disable_turbo.inc
 (SELECT SQL_CALC_FOUND_ROWS a,b FROM t1 LIMIT 2) UNION ALL
 (SELECT a,b FROM t2 ORDER BY a) LIMIT 2;
+--source include/restore_turbo.inc
 SELECT FOUND_ROWS();
 
 DROP TABLE t1, t2, t4;

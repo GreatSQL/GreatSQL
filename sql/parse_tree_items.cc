@@ -1,5 +1,5 @@
 /* Copyright (c) 2013, 2022, Oracle and/or its affiliates. All rights reserved.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -472,6 +472,13 @@ bool PTI_simple_ident_ident::itemize(Parse_context *pc, Item **res) {
   const Sp_rcontext_handler *rh = nullptr;
   sp_variable *spv;
 
+  if (lex->for_i_ident.str) {
+    if (my_strcasecmp(system_charset_info, ident.str, lex->for_i_ident.str) ==
+        0) {
+      my_error(ER_CANT_USE_OPTION_HERE, MYF(0), ident.str);
+      return true;
+    }
+  }
   if ((spv = lex->find_variable(ident.str, ident.length, &rh))) {
     sp_head *sp = lex->sphead;
 

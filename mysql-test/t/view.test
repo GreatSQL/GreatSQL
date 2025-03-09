@@ -558,6 +558,7 @@ drop table t1;
 create table t1 (col1 char(5),col2 char(5));
 create view v1 (col1,col2) as select col1,col2 from t1;
 insert into v1 values('s1','p1'),('s1','p2'),('s1','p3'),('s1','p4'),('s2','p1'),('s3','p2'),('s4','p4');
+--sorted_result
 select distinct first.col2 from t1 first where first.col2 in (select second.col2 from t1 second where second.col1<>first.col1);
 select distinct first.col2 from v1 first where first.col2 in (select second.col2 from t1 second where second.col1<>first.col1);
 drop view v1;
@@ -695,7 +696,7 @@ insert into t1 values (1),(1),(2),(2),(3),(3);
 create view v1 as select a from t1;
 select distinct a from v1;
 select distinct a from v1 limit 2;
-select distinct a from t1 limit 2;
+select distinct a from t1 order by a limit 2;
 prepare stmt1 from "select distinct a from v1 limit 2";
 execute stmt1;
 execute stmt1;
@@ -2486,6 +2487,7 @@ INSERT INTO t1 VALUES (null), ('foo'), ('bar'), (null);
 CREATE VIEW v1 AS SELECT * FROM t1;
 
 SELECT IF(x IS NULL, 'blank', 'not blank') FROM v1 GROUP BY x;
+--sorted_result
 SELECT IF(x IS NULL, 'blank', 'not blank') AS x FROM t1 GROUP BY x;
 SELECT IF(x IS NULL, 'blank', 'not blank') AS x FROM v1;
 SELECT IF(x IS NULL, 'blank', 'not blank') AS y FROM v1 GROUP BY y;
@@ -4766,7 +4768,9 @@ SELECT * FROM v1;
 let $q=
 SELECT * FROM $derived;
 
+--sorted_result
 eval $qv;
+--sorted_result
 eval $q;
 --replace_column 10 # 11 #
 eval explain $qv;
@@ -4812,7 +4816,9 @@ SELECT * FROM v1;
 let $q=
 SELECT * FROM $derived;
 
+--sorted_result
 eval $qv;
+--sorted_result
 eval $q;
 --replace_column 10 # 11 #
 eval explain $qv;
@@ -5239,6 +5245,7 @@ eval CREATE VIEW v1 AS $q;
 
 eval $qv;
 eval $qva;
+--sorted_result
 eval $q;
 --replace_column 10 # 11 #
 eval explain $qv;
@@ -5260,6 +5267,7 @@ eval CREATE VIEW v1 AS $q;
 
 eval $qv;
 eval $qva;
+--sorted_result
 eval $q;
 --replace_column 10 # 11 #
 eval explain $qv;

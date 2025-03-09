@@ -226,9 +226,11 @@ EXPLAIN FORMAT=tree
 TRUNCATE performance_schema.file_summary_by_event_name;
 
 eval $hash_join_file_operations;
+--source include/disable_turbo.inc
 SELECT SUM(t1.col1), SUM(t2.col1) FROM t1, t2 WHERE t1.col1 = t2.col1;
 --skip_if_hypergraph  # Chooses different plan.
 eval $hash_join_file_operations;
+--source include/restore_turbo.inc
 
 SET join_buffer_size = DEFAULT;
 DROP TABLE t1,t2;
@@ -397,12 +399,14 @@ EXPLAIN FORMAT=tree
 TRUNCATE performance_schema.file_summary_by_event_name;
 
 eval $hash_join_file_operations;
+--source include/disable_turbo.inc
 SELECT COUNT(*) FROM t2 WHERE (t2.i) IN (SELECT t1.i FROM t1);
 --skip_if_hypergraph  # Does not use weedout, so does not need row ID, and thus does not spill to disk.
 if (!$PQ_TEST)
 {
   eval $hash_join_file_operations;
 }
+--source include/restore_turbo.inc
 DROP TABLE t1, t2;
 SET join_buffer_size = DEFAULT;
 SET optimizer_switch = DEFAULT;
@@ -559,10 +563,12 @@ DROP TABLE t1;
 
 --echo # Test that comparison between FLOAT and DOUBLE works as expected if
 --echo # given an explicit number of decimals.
+--source include/disable_turbo.inc
 CREATE TABLE t1 (col1 FLOAT(5,2), col2 DOUBLE(15,2));
 INSERT INTO t1 VALUES (1.01, 1.01);
 SELECT * FROM t1 a, t1 b WHERE a.col1 = b.col2;
 DROP TABLE t1;
+--source include/restore_turbo.inc
 
 --echo # The point of the following test is to see that if the innermost hash
 --echo # join returns zero rows, the outermost hash join should not scan the
@@ -583,6 +589,7 @@ let $query = SELECT STRAIGHT_JOIN * FROM t1
 --skip_if_hypergraph  # Depends on the query plan.
 eval EXPLAIN FORMAT=tree $query;
 
+--source include/disable_turbo.inc
 --disable_query_log
 --disable_result_log
 # The first time we query session_status, the server will query additional
@@ -602,7 +609,7 @@ eval $query;
 SELECT SUM(variable_value) AS Total_handler_reads
    FROM performance_schema.session_status
    WHERE variable_name LIKE 'Handler_read%';
-
+--source include/restore_turbo.inc
 DROP TABLE t1, t2, t3;
 
 --echo #
@@ -1341,9 +1348,11 @@ let $hash_join_file_operations =
 --echo # This should spill to disk since we do not have any LIMIT.
 --disable_result_log
 TRUNCATE performance_schema.file_summary_by_event_name;
+--source include/disable_turbo.inc
 SELECT * FROM t1, t2 WHERE t1.col1 = t2.col1;
 --enable_result_log
 eval $hash_join_file_operations;
+--source include/restore_turbo.inc
 
 --echo # This should NOT spill to disk since we have a LIMIT.
 --disable_result_log
@@ -1354,14 +1363,18 @@ eval $hash_join_file_operations;
 
 --echo # This should spill to disk since we have sorting.
 TRUNCATE performance_schema.file_summary_by_event_name;
+--source include/disable_turbo.inc
 SELECT * FROM t1, t2 WHERE t1.col1 = t2.col1 ORDER BY t1.col1 LIMIT 1;
 --skip_if_hypergraph  # Chooses different plan.
 eval $hash_join_file_operations;
+--source include/restore_turbo.inc
 
 --echo # This should spill to disk since we have (implicit) grouping.
 TRUNCATE performance_schema.file_summary_by_event_name;
+--source include/disable_turbo.inc
 SELECT SUM(t1.col1) FROM t1, t2 WHERE t1.col1 = t2.col1 LIMIT 10;
 eval $hash_join_file_operations;
+--source include/restore_turbo.inc
 
 SET join_buffer_size = DEFAULT;
 DROP TABLE t1,t2;
@@ -2460,7 +2473,9 @@ INSERT INTO t1 VALUES('-0');
 INSERT INTO t2 VALUES('+0');
 
 SELECT * FROM t0, t1 WHERE t0.c0 = t1.c0;
+--source include/disable_turbo.inc
 SELECT * FROM t1, t2 WHERE t1.c0 = t2.c0;
+--source include/restore_turbo.inc
 SELECT * FROM t0, t2 WHERE t0.c0 = t2.c0;
 
 DROP TABLE t0, t1, t2;

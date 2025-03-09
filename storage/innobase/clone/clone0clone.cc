@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2017, 2022, Oracle and/or its affiliates.
-Copyright (c) 2024, GreatDB Software Co., Ltd.
+Copyright (c) 2025, GreatDB Software Co., Ltd.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -149,11 +149,18 @@ int Clone_Sys::find_free_index(Clone_Handle_Type hdl_type, uint &free_index) {
     }
   }
 
+  uint max_allow_clones =
+      (hdl_type == CLONE_HDL_COPY ? MAX_CLONES : MAX_APPLY_CLONES);
+  if (DBUG_EVALUATE_IF("test_multiple_clones_during_ddl", true, false)) {
+    if (hdl_type == CLONE_HDL_COPY) {
+      max_allow_clones = 2;
+    }
+  }
   if (free_index == CLONE_ARR_SIZE ||
-      (hdl_type == CLONE_HDL_COPY && m_num_clones == MAX_CLONES) ||
-      (hdl_type == CLONE_HDL_APPLY && m_num_apply_clones == MAX_CLONES)) {
+      (hdl_type == CLONE_HDL_COPY && m_num_clones == max_allow_clones) ||
+      (hdl_type == CLONE_HDL_APPLY && m_num_apply_clones == max_allow_clones)) {
     if (target_clone == nullptr) {
-      my_error(ER_CLONE_TOO_MANY_CONCURRENT_CLONES, MYF(0), MAX_CLONES);
+      my_error(ER_CLONE_TOO_MANY_CONCURRENT_CLONES, MYF(0), max_allow_clones);
       return (ER_CLONE_TOO_MANY_CONCURRENT_CLONES);
     }
   } else {
@@ -230,7 +237,7 @@ int Clone_Sys::add_clone(const byte *loc, Clone_Handle_Type hdl_type,
                          Clone_Handle *&clone_hdl, uint32_t max_concurrency) {
   ut_ad(mutex_own(&m_clone_sys_mutex));
   ut_ad(m_num_clones <= MAX_CLONES);
-  ut_ad(m_num_apply_clones <= MAX_CLONES);
+  ut_ad(m_num_apply_clones <= MAX_APPLY_CLONES);
 
   auto version = choose_desc_version(loc);
 
@@ -331,10 +338,18 @@ int Clone_Sys::attach_snapshot(Clone_Handle_Type hdl_type,
     }
   }
 
+  uint max_allow_snapshots =
+      (hdl_type == CLONE_HDL_COPY ? MAX_SNAPSHOTS : MAX_APPLY_SNAPSHOTS);
+  if (DBUG_EVALUATE_IF("test_multiple_clones_during_ddl", true, false)) {
+    if (hdl_type == CLONE_HDL_COPY) {
+      max_allow_snapshots = 2;
+    }
+  }
   if (free_idx == SNAPSHOT_ARR_SIZE ||
-      (hdl_type == CLONE_HDL_COPY && m_num_snapshots == MAX_SNAPSHOTS) ||
-      (hdl_type == CLONE_HDL_APPLY && m_num_apply_snapshots == MAX_SNAPSHOTS)) {
-    my_error(ER_CLONE_TOO_MANY_CONCURRENT_CLONES, MYF(0), MAX_SNAPSHOTS);
+      (hdl_type == CLONE_HDL_COPY && m_num_snapshots == max_allow_snapshots) ||
+      (hdl_type == CLONE_HDL_APPLY &&
+       m_num_apply_snapshots == max_allow_snapshots)) {
+    my_error(ER_CLONE_TOO_MANY_CONCURRENT_CLONES, MYF(0), max_allow_snapshots);
     return (ER_CLONE_TOO_MANY_CONCURRENT_CLONES);
   }
 
@@ -2048,7 +2063,7 @@ int Clone_Handle::init(const byte *ref_loc, uint ref_len, Ha_clone_type type,
   } else {
     /* We don't provision instance on which active clone is running. */
     if (replace_datadir() && clone_sys->check_active_clone(false)) {
-      my_error(ER_CLONE_TOO_MANY_CONCURRENT_CLONES, MYF(0), MAX_CLONES);
+      my_error(ER_CLONE_TOO_MANY_CONCURRENT_CLONES, MYF(0), MAX_APPLY_CLONES);
       return (ER_CLONE_TOO_MANY_CONCURRENT_CLONES);
     }
     /* Return keeping the clone in INIT state. The locator
@@ -2307,7 +2322,9 @@ int Clone_Handle::open_file(Clone_Task *task, const Clone_file_ctx *file_ctx,
     option = exists ? OS_FILE_OPEN : OS_FILE_CREATE_PATH;
     read_only = false;
   } else {
-    ut_ad(exists);
+    if (DBUG_EVALUATE_IF("test_multiple_clones_during_ddl", false, true)) {
+      ut_ad(exists);
+    }
     option = OS_FILE_OPEN;
     read_only = true;
   }

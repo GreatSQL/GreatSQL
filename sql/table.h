@@ -3,7 +3,7 @@
 
 /* Copyright (c) 2000, 2021, Oracle and/or its affiliates.
    Copyright (c) 2022, Huawei Technologies Co., Ltd.
-   Copyright (c) 2023, 2024, GreatDB Software Co., Ltd.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1488,7 +1488,6 @@ struct TABLE {
   bool sp_find_field_by_name_or_error(uint *idx, const LEX_CSTRING &var_name,
                                       const LEX_CSTRING &field_name) const;
   bool sp_find_field_by_name(uint *idx, const LEX_CSTRING &name) const;
-  bool export_structure(THD *thd, List<Create_field> *defs);
 
   /**
     A bitmap marking the hidden generated columns that exists for functional

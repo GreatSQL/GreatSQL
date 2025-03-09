@@ -1,5 +1,6 @@
 
 -- source include/have_innodb_max_16k.inc
+--source include/no_turbo.inc
 
 let $MYSQLD_DATADIR= `select @@datadir`;
 # Save the original values of some variables in order to be able to

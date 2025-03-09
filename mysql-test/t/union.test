@@ -39,11 +39,15 @@ select 't1',b,count(*) from t1 group by b UNION select 't2',b,count(*) from t2 g
 explain (select a,b from t1 limit 2)  union all (select a,b from t2 order by a limit 1) order by b desc;
 select count(*) from (
 (select                      a,b from t1 limit 2)  union all (select a,b from t2 order by a)) q;
+--source include/disable_turbo.inc
 (select sql_calc_found_rows  a,b from t1 limit 2)  union all (select a,b from t2 order by a) limit 2;
+--source include/restore_turbo.inc
 select found_rows();
 select count(*) from (
 select                      a,b from t1  union all select a,b from t2) q;
+--source include/disable_turbo.inc
 select sql_calc_found_rows  a,b from t1  union all select a,b from t2 limit 2;
+--source include/restore_turbo.inc
 select found_rows();
 --replace_column 10 # 11 #
 explain
@@ -117,6 +121,7 @@ create table t1 (a int);
 create table t2 (a int);
 insert into t1 values (1),(2),(3),(4),(5);
 insert into t2 values (11),(12),(13),(14),(15);
+--source include/disable_turbo.inc
 (select * from t1 limit 2) union (select * from t2 limit 3) limit 4;
 (select * from t1 limit 2) union (select * from t2 limit 3);
 (select * from t1 limit 2) union (select * from t2 limit 20,3);
@@ -124,6 +129,7 @@ set SQL_SELECT_LIMIT=2;
 (select * from t1 limit 1) union (select * from t2 limit 3);
 (select * from t1 limit 3) intersect (select * from t1 limit 3);
 (select * from t1 limit 4) except (select * from t1 limit 1);
+--source include/restore_turbo.inc
 set SQL_SELECT_LIMIT=DEFAULT;
 drop table t1,t2;
 
@@ -212,11 +218,15 @@ insert into t2 values (3),(4),(5);
 # Test global limits
 SELECT COUNT(*) FROM (
 (SELECT                     * FROM t1) UNION all (SELECT * FROM t2)) q;
+--source include/disable_turbo.inc
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1) UNION all (SELECT * FROM t2) LIMIT 1;
+--source include/restore_turbo.inc
 select found_rows();
 SELECT COUNT(*) FROM (
 (SELECT                     * FROM t1 LIMIT 1) UNION all (SELECT * FROM t2)) q;
+--source include/disable_turbo.inc
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1) UNION all (SELECT * FROM t2) LIMIT 2;
+--source include/restore_turbo.inc
 select found_rows();
 
 # Test cases where found_rows() should return number of returned rows
@@ -230,7 +240,9 @@ SELECT COUNT(*) FROM (
 select found_rows();
 SELECT COUNT(*) FROM (
 (SELECT                     * FROM t1 LIMIT 1) UNION SELECT * FROM t2) q;
+--source include/disable_turbo.inc
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1) UNION SELECT * FROM t2 LIMIT 1;
+--source include/restore_turbo.inc
 select found_rows();
 
 # In these case found_rows() should work
@@ -238,49 +250,67 @@ select found_rows();
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1 UNION all SELECT * FROM t2 LIMIT 2;
 SELECT COUNT(*) FROM (
 (SELECT                     * FROM t1 LIMIT 1) UNION all SELECT * FROM t2) q;
+--source include/disable_turbo.inc
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1) UNION all SELECT * FROM t2 LIMIT 2;
+--source include/restore_turbo.inc
 select found_rows();
 SELECT COUNT(*) FROM (
 SELECT                     * FROM t1 UNION all SELECT * FROM t2) q;
+--source include/disable_turbo.inc
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 UNION all SELECT * FROM t2 LIMIT 2;
+--source include/restore_turbo.inc
 select found_rows();
 
 # The following examples will not be exact
 SELECT COUNT(*) FROM (
 SELECT                     * FROM t1 UNION SELECT * FROM t2) q;
+--source include/disable_turbo.inc
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 UNION SELECT * FROM t2 LIMIT 2;
+--source include/restore_turbo.inc
 select found_rows();
 SELECT COUNT(*) FROM (
 SELECT                     * FROM t1 UNION SELECT * FROM t2) q;
+--source include/disable_turbo.inc
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 UNION SELECT * FROM t2 LIMIT 100;
+--source include/restore_turbo.inc
 select found_rows();
 --error ER_PARSE_ERROR
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 100 UNION SELECT * FROM t2;
 SELECT COUNT(*) FROM (
 (SELECT                     * FROM t1 LIMIT 100) UNION SELECT * FROM t2) q;
+--source include/disable_turbo.inc
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 100) UNION SELECT * FROM t2;
+--source include/restore_turbo.inc
 select found_rows();
 --error ER_PARSE_ERROR
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1 UNION SELECT * FROM t2;
 SELECT COUNT(*) FROM (
 (SELECT                     * FROM t1 LIMIT 1) UNION SELECT * FROM t2) q;
+--source include/disable_turbo.inc
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1) UNION SELECT * FROM t2;
+--source include/restore_turbo.inc
 select found_rows();
 --error ER_PARSE_ERROR
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1 UNION SELECT * FROM t2 LIMIT 2;
 SELECT COUNT(*) FROM (
 (SELECT                     * FROM t1 LIMIT 1) UNION SELECT * FROM t2) q;
+--source include/disable_turbo.inc
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1 LIMIT 1) UNION SELECT * FROM t2 LIMIT 2;
+--source include/restore_turbo.inc
 select found_rows();
 SELECT COUNT(*) FROM (
 SELECT                     * FROM t1 UNION SELECT * FROM t2) q;
+--source include/disable_turbo.inc
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 UNION SELECT * FROM t2 LIMIT 2,2;
+--source include/restore_turbo.inc
 select found_rows();
 --error ER_PARSE_ERROR
 SELECT SQL_CALC_FOUND_ROWS * FROM t1 limit 2,2 UNION SELECT * FROM t2;
 SELECT COUNT(*) FROM (
 (SELECT                     * FROM t1 limit 2,2) UNION SELECT * FROM t2) q;
+--source include/disable_turbo.inc
 (SELECT SQL_CALC_FOUND_ROWS * FROM t1 limit 2,2) UNION SELECT * FROM t2;
+--source include/restore_turbo.inc
 select found_rows();
 
 # Test some limits with ORDER BY
@@ -329,11 +359,15 @@ analyze table t1;
 
 explain (select * from t1 where a=1) union (select * from t2 where a=1);
 --skip_if_hypergraph  # No support for const tables.
+--source include/disable_turbo.inc
 explain format=tree (select * from t1 where a=5) union (select * from t2 where a=1);  # Tests printing of ZeroRowsIterator.
+--source include/restore_turbo.inc
 (select * from t1 where a=5) union (select * from t2 where a=1);
 (select * from t1 where a=5 and a=6) union (select * from t2 where a=1);
 (select t1.a,t1.b from t1,t2 where t1.a=5) union (select * from t2 where a=1);
+--source include/disable_turbo.inc
 (select * from t1 where a=1) union (select t1.a,t2.a from t1,t2 where t1.a=t2.a);
+--source include/restore_turbo.inc
 --replace_column 10 #
 explain (select * from t1 where a=1 and b=10) union (select straight_join t1.a,t2.a from t1,t2 where t1.a=t2.a);
 --replace_column 10 # 11 #
@@ -502,6 +536,8 @@ show status like 'Slow_queries';
 select count(*) from t1 where b=13;
 --skip_if_hypergraph  # Depends on the query plan; all queries use table scans.
 show status like 'Slow_queries';
+--source include/disable_turbo.inc
+--sorted_result
 select count(*) from t1 where b=13 union select count(*) from t1 where a=7;
 --skip_if_hypergraph  # Depends on the query plan; all queries use table scans.
 show status like 'Slow_queries';
@@ -511,6 +547,7 @@ show status like 'Slow_queries';
 # additional test for examined rows
 flush status;
 select a from t1 where b not in (1,2,3) union select a from t1 where b not in (4,5,6);
+--source include/restore_turbo.inc
 --skip_if_hypergraph  # Depends on the query plan; all queries use table scans.
 show status like 'Slow_queries';
 drop table t1;
