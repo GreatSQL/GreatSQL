@@ -1,0 +1,321 @@
+set global synonym_translation_enabled=ON;
+create table t(id int primary key auto_increment, val varchar(100) character set utf8mb4 default "你好世界");
+create view v as select * from t where id % 2 = 0;
+create database another_db;
+use another_db;
+create table t(id int primary key auto_increment, val varchar(100) character set utf8mb4 default "你好世界");
+create view v as select * from t where id % 2 = 0;
+use test;
+select * from t;
+id	val
+1	你好世界
+2	你好世界
+3	你好世界
+4	你好世界
+5	你好世界
+6	你好世界
+7	你好世界
+8	你好世界
+9	你好世界
+10	你好世界
+select * from v;
+id	val
+2	你好世界
+4	你好世界
+6	你好世界
+8	你好世界
+10	你好世界
+use another_db;
+select * from t;
+id	val
+1	你好世界
+2	你好世界
+3	你好世界
+4	你好世界
+5	你好世界
+6	你好世界
+7	你好世界
+8	你好世界
+9	你好世界
+10	你好世界
+select * from v;
+id	val
+2	你好世界
+4	你好世界
+6	你好世界
+8	你好世界
+10	你好世界
+[Checking synonym DDL operation...]
+use test;
+create synonym syn_t for t;
+alter synonym syn_t;
+ERROR HY000: Unsupporetd synonym operation 'ALTER'
+drop synonym syn_t;
+create public synonym syn_t for t;
+create public synonym syn_v for v;
+drop synonym syn_t;
+ERROR HY000: Synonym '`test`.`syn_t`' does not exist
+drop synonym syn_v;
+ERROR HY000: Synonym '`test`.`syn_v`' does not exist
+drop public synonym syn_v;
+drop public synonym syn_t;
+create public synonym psyn_t for t;
+create public synonym psyn_v for v;
+alter synonym psyn_t;
+ERROR HY000: Unsupporetd synonym operation 'ALTER'
+alter synonym psyn_v;
+ERROR HY000: Unsupporetd synonym operation 'ALTER'
+drop synonym psyn_t;
+ERROR HY000: Synonym '`test`.`psyn_t`' does not exist
+drop synonym psyn_t;
+ERROR HY000: Synonym '`test`.`psyn_t`' does not exist
+use another_db;
+drop public synonym psyn_t;
+drop public synonym psyn_v;
+[Checking synonym on different targets...]
+use test;
+create synonym syn_t for t;
+create synonym syn_v for v;
+create synonym syn_st for syn_t;
+create synonym syn_sv for syn_v;
+create synonym syn_sst for syn_st;
+create synonym syn_ssv for syn_sv;
+create synonym syn_ssst for syn_sst;
+create synonym syn_sssv for syn_ssv;
+create synonym syn_sssst for syn_ssst;
+create synonym syn_ssssv for syn_sssv;
+create public synonym psyn_ta for another_db.t;
+create public synonym psyn_va for another_db.v;
+create public synonym psyn_t for test.t;
+create public synonym psyn_v for test.v;
+use another_db;
+create synonym syn_t_a for t;
+create synonym syn_v_a for v;
+[Checking synonym DML operation...]
+use test;
+select * from syn_t;
+id	val
+1	你好世界
+2	你好世界
+3	你好世界
+4	你好世界
+5	你好世界
+6	你好世界
+7	你好世界
+8	你好世界
+9	你好世界
+10	你好世界
+select * from syn_v;
+id	val
+2	你好世界
+4	你好世界
+6	你好世界
+8	你好世界
+10	你好世界
+select * from syn_st;
+id	val
+1	你好世界
+2	你好世界
+3	你好世界
+4	你好世界
+5	你好世界
+6	你好世界
+7	你好世界
+8	你好世界
+9	你好世界
+10	你好世界
+select * from syn_sv;
+id	val
+2	你好世界
+4	你好世界
+6	你好世界
+8	你好世界
+10	你好世界
+select * from syn_sst;
+id	val
+1	你好世界
+2	你好世界
+3	你好世界
+4	你好世界
+5	你好世界
+6	你好世界
+7	你好世界
+8	你好世界
+9	你好世界
+10	你好世界
+select * from syn_ssv;
+id	val
+2	你好世界
+4	你好世界
+6	你好世界
+8	你好世界
+10	你好世界
+select * from syn_ssst;
+id	val
+1	你好世界
+2	你好世界
+3	你好世界
+4	你好世界
+5	你好世界
+6	你好世界
+7	你好世界
+8	你好世界
+9	你好世界
+10	你好世界
+select * from syn_sssv;
+id	val
+2	你好世界
+4	你好世界
+6	你好世界
+8	你好世界
+10	你好世界
+select * from syn_sssst;
+id	val
+1	你好世界
+2	你好世界
+3	你好世界
+4	你好世界
+5	你好世界
+6	你好世界
+7	你好世界
+8	你好世界
+9	你好世界
+10	你好世界
+select * from syn_ssssv;
+id	val
+2	你好世界
+4	你好世界
+6	你好世界
+8	你好世界
+10	你好世界
+select * from psyn_t;
+id	val
+1	你好世界
+2	你好世界
+3	你好世界
+4	你好世界
+5	你好世界
+6	你好世界
+7	你好世界
+8	你好世界
+9	你好世界
+10	你好世界
+select * from psyn_v;
+id	val
+2	你好世界
+4	你好世界
+6	你好世界
+8	你好世界
+10	你好世界
+select * from psyn_ta;
+id	val
+1	你好世界
+2	你好世界
+3	你好世界
+4	你好世界
+5	你好世界
+6	你好世界
+7	你好世界
+8	你好世界
+9	你好世界
+10	你好世界
+select * from psyn_va;
+id	val
+2	你好世界
+4	你好世界
+6	你好世界
+8	你好世界
+10	你好世界
+[# if db_name was assigned, should not treat as public synonym]
+select * from test.psyn_t;
+ERROR 42S02: Table 'test.psyn_t' doesn't exist
+select * from test.psyn_v;
+ERROR 42S02: Table 'test.psyn_v' doesn't exist
+select * from test.psyn_ta;
+ERROR 42S02: Table 'test.psyn_ta' doesn't exist
+select * from test.psyn_va;
+ERROR 42S02: Table 'test.psyn_va' doesn't exist
+prepare p from "select * from syn_t";
+execute p;
+id	val
+1	你好世界
+2	你好世界
+3	你好世界
+4	你好世界
+5	你好世界
+6	你好世界
+7	你好世界
+8	你好世界
+9	你好世界
+10	你好世界
+drop prepare p;
+[Show synonyms]
+show synonyms;
+schema	name	target_type	target_schema	target_name	db_link
+	psyn_t	TABLE	test	t	
+	psyn_ta	TABLE	another_db	t	
+	psyn_v	TABLE	test	v	
+	psyn_va	TABLE	another_db	v	
+another_db	syn_t_a	TABLE	another_db	t	
+another_db	syn_v_a	TABLE	another_db	v	
+test	syn_sssst	SYNONYM	test	syn_ssst	
+test	syn_ssssv	SYNONYM	test	syn_sssv	
+test	syn_ssst	SYNONYM	test	syn_sst	
+test	syn_sssv	SYNONYM	test	syn_ssv	
+test	syn_sst	SYNONYM	test	syn_st	
+test	syn_ssv	SYNONYM	test	syn_sv	
+test	syn_st	SYNONYM	test	syn_t	
+test	syn_sv	SYNONYM	test	syn_v	
+test	syn_t	TABLE	test	t	
+test	syn_v	TABLE	test	v	
+[Show create synonym]
+show create synonym syn_t;
+Synonym	Create Synonym
+syn_t	CREATE SYNONYM `test`.`syn_t` FOR `test`.`t`
+show create synonym syn_v;
+Synonym	Create Synonym
+syn_v	CREATE SYNONYM `test`.`syn_v` FOR `test`.`v`
+show create synonym syn_st;
+Synonym	Create Synonym
+syn_st	CREATE SYNONYM `test`.`syn_st` FOR `test`.`syn_t`
+show create synonym syn_sv;
+Synonym	Create Synonym
+syn_sv	CREATE SYNONYM `test`.`syn_sv` FOR `test`.`syn_v`
+show create synonym syn_sst;
+Synonym	Create Synonym
+syn_sst	CREATE SYNONYM `test`.`syn_sst` FOR `test`.`syn_st`
+show create synonym syn_ssv;
+Synonym	Create Synonym
+syn_ssv	CREATE SYNONYM `test`.`syn_ssv` FOR `test`.`syn_sv`
+show create synonym syn_ssst;
+Synonym	Create Synonym
+syn_ssst	CREATE SYNONYM `test`.`syn_ssst` FOR `test`.`syn_sst`
+show create synonym syn_sssv;
+Synonym	Create Synonym
+syn_sssv	CREATE SYNONYM `test`.`syn_sssv` FOR `test`.`syn_ssv`
+show create synonym syn_sssst;
+Synonym	Create Synonym
+syn_sssst	CREATE SYNONYM `test`.`syn_sssst` FOR `test`.`syn_ssst`
+show create synonym syn_ssssv;
+Synonym	Create Synonym
+syn_ssssv	CREATE SYNONYM `test`.`syn_ssssv` FOR `test`.`syn_sssv`
+[Cleaning test data...]
+drop synonym syn_t;
+drop synonym syn_v;
+drop synonym syn_st;
+drop synonym syn_sv;
+drop synonym syn_sst;
+drop synonym syn_ssv;
+drop synonym syn_ssst;
+drop synonym syn_sssv;
+drop synonym syn_sssst;
+drop synonym syn_ssssv;
+drop public synonym psyn_t;
+drop public synonym psyn_v;
+drop public synonym psyn_ta;
+drop public synonym psyn_va;
+drop view v;
+drop table t;
+drop database another_db;
+# restart
+set global synonym_translation_enabled=1;

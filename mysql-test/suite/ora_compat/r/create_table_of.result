@@ -1,0 +1,373 @@
+SET sql_mode=ORACLE;
+SET SESSION debug='+d,skip_dd_table_access_check';
+set @@udt_format_result='DBA';
+#
+# test of create type
+#
+create or replace type t_air as object(id int,type varchar(20));
+create database db2;
+use db2;
+create or replace type t_air as object(id int,type varchar(20));
+create table tabl1 (id int, u1 t_air);
+insert into tabl1 values(1,t_air(10,'aqwer1'));
+insert into tabl1 values(2,t_air(11,'aqwer2'));
+insert into tabl1 values(3,t_air(12,'aqwer3'));
+insert into tabl1 values(4,t_air(12,'aqwer4'));
+create table tt_air(id int,name t_air);
+insert into tt_air values(10,t_air(10,'aabb'));
+use test;
+#
+# test of create table of
+#
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=0;udt_size=86;
+t_air	TYPE	ref_count=2;udt_size=86;
+create table table_of of t_air ENGINE=myisam AVG_ROW_LENGTH=1;
+ERROR 42000: This version of MySQL doesn't yet support 'create table of type with this table option'
+create table table_of of t_air ENGINE=myisam 
+DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+MAX_ROWS=500 PACK_KEYS=1 COMMENT='create_of'
+  MIN_ROWS= 1 CHECKSUM= 1 STATS_PERSISTENT=1 STATS_AUTO_RECALC=0;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=1;udt_size=86;
+t_air	TYPE	ref_count=2;udt_size=86;
+select options from mysql.tables where name='table_of';
+options
+avg_row_length=0;checksum=32;explicit_encryption=0;key_block_size=0;keys_disabled=0;max_rows=500;min_rows=1;pack_keys=2;pack_record=1;stats_auto_recalc=2;stats_persistent=4096;stats_sample_pages=0;udt_name=t_air;
+show create table table_of;
+Table	Create Table
+table_of	CREATE TABLE "table_of" (
+  "id" int DEFAULT NULL,
+  "type" varchar(20) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci MIN_ROWS=1 MAX_ROWS=500 PACK_KEYS=1 STATS_PERSISTENT=1 STATS_AUTO_RECALC=0 CHECKSUM=1 COMMENT='create_of'
+#
+# test of insert
+#
+insert into table_of values(1,'asdf');
+select * from table_of;
+id	type
+1	asdf
+insert into table_of select t_air(10,'qqqq');
+insert into table_of select db2.t_air(10,'qqqq');
+ERROR HY000: inconsistent datatypes: expected 'test'.'t_air' got 'db2'.'t_air'
+select * from table_of;
+id	type
+1	asdf
+10	qqqq
+create table tabl1 (id int, u1 t_air);
+insert into tabl1 values(1,t_air(10,'aqwer1'));
+insert into tabl1 values(2,t_air(11,'aqwer2'));
+insert into tabl1 values(3,t_air(12,'aqwer3'));
+insert into tabl1 values(4,t_air(12,'aqwer4'));
+insert into tabl1 values(5,null);
+insert into tabl1 values(6,t_air(12,null));
+insert into tabl1 values(7,t_air(null,null));
+INSERT INTO table_of SELECT u1 FROM tabl1 where u1 is not null;
+INSERT INTO table_of SELECT u1 FROM db2.tabl1;
+ERROR HY000: inconsistent datatypes: expected 'test'.'t_air' got 'db2'.'t_air'
+INSERT INTO table_of(id,type) SELECT u1 FROM tabl1;
+ERROR 21S01: Column count doesn't match value count at row 1
+INSERT INTO table_of(id) SELECT u1 FROM tabl1;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+create table tt_air(id int,name t_air);
+insert into tt_air values(10,t_air(10,'aabb'));
+update tabl1 set (u1)=(select name from tt_air where id=10) where id=1;
+update tabl1 set (u1)=(select name from db2.tt_air where id=10) where id=1;
+ERROR HY000: inconsistent datatypes: expected 'test'.'t_air' got 'db2'.'t_air'
+update tabl1 set (id,u1)=(select id,name from db2.tt_air where id=10) where id=1;
+ERROR HY000: inconsistent datatypes: expected 'test'.'t_air' got 'db2'.'t_air'
+update tabl1 set (id)=(select name from tt_air where id=10) where id=2;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+update tabl1 set (u1)=db2.t_air(10,'www') where id=3;
+ERROR HY000: inconsistent datatypes: expected 'test'.'t_air' got 'db2'.'t_air'
+update tabl1 set (u1)=t_air(10,'www') where id=3;
+update tabl1 set (id)=t_air(10,'www') where id=4;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+update tabl1 set (id,u1)=(1,db2.t_air(10,'www')) where id=1;
+ERROR HY000: inconsistent datatypes: expected 'test'.'t_air' got 'db2'.'t_air'
+select * from tabl1;
+id	u1
+1	id:10 | type:aabb
+2	id:11 | type:aqwer2
+3	id:10 | type:www
+4	id:12 | type:aqwer4
+5	NULL
+6	id:12 | type:NULL
+7	id:NULL | type:NULL
+#
+# test of merge into
+#
+insert into tt_air values(1,t_air(111,'aabb111'));
+insert into tt_air values(2,t_air(112,'aabb112'));
+select * from tt_air;
+id	name
+10	id:10 | type:aabb
+1	id:111 | type:aabb111
+2	id:112 | type:aabb112
+MERGE INTO tabl1 t1
+USING tt_air t2
+ON ( t2.id = t1.id )
+WHEN MATCHED THEN
+UPDATE SET t1.u1=t2.name
+WHEN NOT MATCHED THEN
+INSERT (t1.id, t1.u1)
+VALUES (t2.id, t2.name);
+select * from tabl1;
+id	u1
+1	id:111 | type:aabb111
+2	id:112 | type:aabb112
+3	id:10 | type:www
+4	id:12 | type:aqwer4
+5	NULL
+6	id:12 | type:NULL
+7	id:NULL | type:NULL
+10	id:10 | type:aabb
+drop table tt_air;
+select * from table_of;
+id	type
+1	asdf
+10	qqqq
+10	aqwer1
+11	aqwer2
+12	aqwer3
+12	aqwer4
+12	NULL
+NULL	NULL
+INSERT INTO table_of(type) SELECT 'qwer' FROM dual;
+select * from table_of;
+id	type
+1	asdf
+10	qqqq
+10	aqwer1
+11	aqwer2
+12	aqwer3
+12	aqwer4
+12	NULL
+NULL	NULL
+NULL	qwer
+INSERT INTO table_of(id,type) SELECT id,u1 FROM tabl1;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+INSERT INTO table_of(type) SELECT u1 FROM tabl1;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+update table_of set (id,type)=(t_air(10,'')) where type is not null;
+ERROR 21000: Operand should contain 2 column(s)
+update table_of set (id,type)=(1,t_air(10,'')) where type is not null;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+update table_of set id=t_air(10,'') where type is not null;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+drop table tabl1;
+create table tab12(a int,b varchar(10));
+insert into tab12 values(1,'aaa'),(2,'bbb'),(3,'ccc'),(null,null);
+INSERT INTO table_of SELECT t_air(a,b) FROM tab12;
+select * from table_of;
+id	type
+1	asdf
+10	qqqq
+10	aqwer1
+11	aqwer2
+12	aqwer3
+12	aqwer4
+12	NULL
+NULL	NULL
+NULL	qwer
+1	aaa
+2	bbb
+3	ccc
+NULL	NULL
+INSERT INTO table_of SELECT a FROM tab12;
+ERROR 21S01: Column count doesn't match value count at row 1
+#
+# test of create type with 1 argument
+#
+create or replace type t_air1 as object(type varchar(20));
+create table tab2 of t_air1;
+INSERT INTO tab2 SELECT t_air1('aa') FROM dual;
+INSERT INTO tab2 SELECT b FROM tab12;
+INSERT INTO tab2 SELECT t_air1(b) FROM tab12;
+INSERT INTO tab2(type) SELECT t_air1(b) FROM tab12;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+INSERT INTO tab2(type) SELECT t_air1('a');
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+select * from tab2;
+type
+aa
+aaa
+bbb
+ccc
+NULL
+aaa
+bbb
+ccc
+NULL
+drop table tab2;
+drop type t_air1;
+drop table tab12;
+#
+# test of alter table
+#
+ALTER TABLE table_of ADD i int;
+ERROR HY000: cannot alter column from an object type table
+ALTER TABLE table_of DROP COLUMN id;
+ERROR HY000: cannot alter column from an object type table
+ALTER TABLE table_of modify i char;
+ERROR HY000: cannot alter column from an object type table
+alter table table_of comment ='123';
+show create table table_of;
+Table	Create Table
+table_of	CREATE TABLE "table_of" (
+  "id" int DEFAULT NULL,
+  "type" varchar(20) DEFAULT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci MIN_ROWS=1 MAX_ROWS=500 PACK_KEYS=1 STATS_PERSISTENT=1 STATS_AUTO_RECALC=0 CHECKSUM=1 COMMENT='123'
+alter table table_of ENGINE=Innodb;
+show create table table_of;
+Table	Create Table
+table_of	CREATE TABLE "table_of" (
+  "id" int DEFAULT NULL,
+  "type" varchar(20) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci MIN_ROWS=1 MAX_ROWS=500 PACK_KEYS=1 STATS_PERSISTENT=1 STATS_AUTO_RECALC=0 CHECKSUM=1 COMMENT='123'
+alter table table_of rename table_of1;
+alter table table_of1 rename table_of;
+CREATE INDEX idx11 ON table_of(id,type);
+ALTER TABLE table_of alter INDEX idx11 INVISIBLE;
+drop index idx11 on table_of;
+#
+# test of drop type
+#
+drop type t_air;
+ERROR HY000: Failed to drop or replace type t_air with type or table dependents.
+drop table table_of;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+name	type	options
+t_air	TYPE	ref_count=0;udt_size=86;
+t_air	TYPE	ref_count=2;udt_size=86;
+drop type t_air;
+#
+# test of create index
+#
+create or replace type t_air as object(id int,type varchar(20));
+create table table_of of t_air;
+CREATE INDEX idx ON table_of(type,id);
+#
+# test of rename table
+#
+ALTER TABLE table_of RENAME table_of1;
+select options from mysql.tables where name='table_of1';
+options
+avg_row_length=0;encrypt_type=N;explicit_encryption=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;udt_name=t_air;
+ALTER TABLE table_of1 RENAME table_of;
+#
+# test of create view
+#
+CREATE VIEW vv1 as SELECT * FROM table_of;
+select * from vv1;
+id	type
+drop VIEW vv1;
+#
+# test of create temporary table of
+#
+create temporary table table_of1 of t_air;
+ERROR 42000: This version of MySQL doesn't yet support 'create temporary table of.'
+drop table table_of;
+drop type t_air;
+#
+# test of create table of db1.type
+#
+use test;
+create table table_of of db2.t_air;
+ERROR HY000: inconsistent datatypes: expected 'test'.'t_air' got 'db2'.'t_air'
+create table db2.table_of of db2.t_air;
+insert into db2.table_of values(1,'aaa');
+#
+# test of alter db1.table
+#
+alter table db2.table_of add u2 t_air;
+ERROR HY000: inconsistent datatypes: expected 'db2'.'t_air' got 'test'.'t_air'
+alter table db2.table_of add u2 db2.t_air;
+ERROR HY000: cannot alter column from an object type table
+drop database db2;
+#
+# test of create table of same structure types
+#
+create type t_air10 as object (c1 int, c2 int);
+create type t_air12 as object (c1 int, c2 int);
+create table t_type1 of t_air10;
+create table t_type2 of t_air12;
+insert into t_type1 values (1,1);
+select * from t_type1;
+c1	c2
+1	1
+insert into t_type1 select t_air12(1,1);
+ERROR HY000: inconsistent datatypes: expected 'test'.'t_air10' got 'test'.'t_air12'
+insert into t_type2 select * from t_type1;
+select * from t_type2;
+c1	c2
+1	1
+drop table t_type1;
+drop table t_type2;
+drop type t_air10;
+drop type t_air12;
+#
+# test of prepare stmt
+#
+create or replace type t_air as object(id int,type int);
+create table table_of of t_air;
+prepare ps1 from 'insert into table_of select t_air(?,?)';
+set @a=1;
+set @b=11;
+execute ps1 using @a,@b;
+select * from table_of;
+id	type
+1	11
+insert into table_of select t_air(2,'123456');
+select * from table_of;
+id	type
+1	11
+2	123456
+insert into table_of values(3,'333');
+select * from table_of;
+id	type
+1	11
+2	123456
+3	333
+INSERT INTO table_of select null;
+ERROR 21S01: Column count doesn't match value count at row 1
+create table tabl1 (id int, u1 t_air);
+insert into tabl1 values(1,t_air(10,100));
+insert into tabl1 values(2,t_air(11,110));
+insert into tabl1 values(3,t_air(12,120));
+insert into tabl1 values(4,t_air(12,130));
+insert into tabl1 values(5,null);
+insert into tabl1 values(6,t_air(12,null));
+insert into tabl1 values(7,t_air(null,13));
+insert into tabl1 values(8,t_air(null,null));
+select * from tabl1;
+id	u1
+1	id:10 | type:100
+2	id:11 | type:110
+3	id:12 | type:120
+4	id:12 | type:130
+5	NULL
+6	id:12 | type:NULL
+7	id:NULL | type:13
+8	id:NULL | type:NULL
+prepare ps2 from 'INSERT INTO table_of SELECT u1 FROM tabl1 where id>3';
+execute ps2;
+ERROR HY000: cannot insert NULL object into object tables or nested tables
+delete from tabl1 where id=5;
+execute ps2;
+select * from table_of;
+id	type
+1	11
+2	123456
+3	333
+12	130
+12	NULL
+NULL	13
+NULL	NULL
+DEALLOCATE PREPARE ps1;
+DEALLOCATE PREPARE ps2;
+drop table tabl1;
+drop table table_of;
+drop type t_air;

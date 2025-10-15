@@ -1,0 +1,1245 @@
+set sql_mode=oracle;
+set @@udt_format_result='DBA';
+CREATE TABLE emp (empno NUMBER, ename VARCHAR2(100), job VARCHAR2(100), sal NUMBER);
+INSERT INTO emp VALUES (7369, 'SMITH', 'CLERK', 800);
+INSERT INTO emp VALUES (7370, 'Judy', 'MANAGER', 8000);
+INSERT INTO emp VALUES (7371, 'Will', 'CEO', 80000);
+COMMIT;
+
+[### test execute immediate into record variable in sp]
+CREATE OR REPLACE PROCEDURE dynamic_record_demo AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+v_emp_record emp_record_type;
+v_sql        VARCHAR2(500);
+v_emp_id     NUMBER := 7369;
+BEGIN  
+EXECUTE IMMEDIATE 'SELECT * FROM emp WHERE empno = ?;' INTO v_emp_record USING v_emp_id;
+SELECT v_emp_record.empno, v_emp_record.ename, v_emp_record.job, v_emp_record.salary;
+END;
+$$
+call dynamic_record_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job	v_emp_record.salary
+7369	SMITH	CLERK	800
+call dynamic_record_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job	v_emp_record.salary
+7369	SMITH	CLERK	800
+DROP PROCEDURE dynamic_record_demo$$
+
+[### test execute immediate into field of record variable in sp]
+CREATE OR REPLACE PROCEDURE dynamic_record_demo AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+v_emp_record emp_record_type;
+v_sql        VARCHAR2(500);
+v_emp_id     NUMBER := 7369;
+BEGIN  
+EXECUTE IMMEDIATE 'SELECT * FROM emp WHERE empno = ?;' INTO v_emp_record.empno, v_emp_record.ename, v_emp_record.job, v_emp_record.salary USING v_emp_id;
+SELECT v_emp_record.empno, v_emp_record.ename, v_emp_record.job, v_emp_record.salary;
+END;
+$$
+call dynamic_record_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job	v_emp_record.salary
+7369	SMITH	CLERK	800
+call dynamic_record_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job	v_emp_record.salary
+7369	SMITH	CLERK	800
+DROP PROCEDURE dynamic_record_demo$$
+
+[### test fetch static cursor into record variable in sp]
+CREATE OR REPLACE PROCEDURE static_cursor_demo AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+v_emp emp_record_type;
+CURSOR emp_cur IS SELECT * FROM emp WHERE empno = 7369;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_emp;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT v_emp.empno, v_emp.ename, v_emp.job, v_emp.salary;
+END LOOP;
+CLOSE emp_cur;
+END static_cursor_demo;
+$$
+call static_cursor_demo$$
+v_emp.empno	v_emp.ename	v_emp.job	v_emp.salary
+7369	SMITH	CLERK	800
+call static_cursor_demo$$
+v_emp.empno	v_emp.ename	v_emp.job	v_emp.salary
+7369	SMITH	CLERK	800
+DROP PROCEDURE static_cursor_demo$$
+
+[### test fetch static cursor into field of record variable in sp]
+CREATE OR REPLACE PROCEDURE static_cursor_demo AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+v_emp emp_record_type;
+CURSOR emp_cur IS SELECT * FROM emp;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_emp.empno, v_emp.ename, v_emp.job, v_emp.salary;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT v_emp.empno, v_emp.ename, v_emp.job, v_emp.salary;
+END LOOP;
+CLOSE emp_cur;
+END static_cursor_demo;
+$$
+call static_cursor_demo$$
+v_emp.empno	v_emp.ename	v_emp.job	v_emp.salary
+7369	SMITH	CLERK	800
+v_emp.empno	v_emp.ename	v_emp.job	v_emp.salary
+7370	Judy	MANAGER	8000
+v_emp.empno	v_emp.ename	v_emp.job	v_emp.salary
+7371	Will	CEO	80000
+call static_cursor_demo$$
+v_emp.empno	v_emp.ename	v_emp.job	v_emp.salary
+7369	SMITH	CLERK	800
+v_emp.empno	v_emp.ename	v_emp.job	v_emp.salary
+7370	Judy	MANAGER	8000
+v_emp.empno	v_emp.ename	v_emp.job	v_emp.salary
+7371	Will	CEO	80000
+DROP PROCEDURE static_cursor_demo$$
+
+[### test fetch ref cursor into record variable in sp]
+CREATE OR REPLACE PROCEDURE strong_dynamic_cursor_demo AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+TYPE emp_cur_type IS REF CURSOR RETURN emp%ROWTYPE;
+v_emp_cursor emp_cur_type;
+v_emp_record emp_record_type;
+BEGIN
+OPEN v_emp_cursor FOR  SELECT * FROM emp;
+LOOP
+FETCH v_emp_cursor INTO v_emp_record;
+EXIT WHEN v_emp_cursor%NOTFOUND;
+SELECT v_emp_record.empno, v_emp_record.ename, v_emp_record.job;
+END LOOP;
+CLOSE v_emp_cursor;
+END strong_dynamic_cursor_demo;
+$$
+call strong_dynamic_cursor_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job
+7369	SMITH	CLERK
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job
+7370	Judy	MANAGER
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job
+7371	Will	CEO
+call strong_dynamic_cursor_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job
+7369	SMITH	CLERK
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job
+7370	Judy	MANAGER
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job
+7371	Will	CEO
+DROP PROCEDURE strong_dynamic_cursor_demo$$
+
+[### test fetch ref cursor into field of record variable in sp]
+CREATE OR REPLACE PROCEDURE strong_dynamic_cursor_demo AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+TYPE emp_cur_type IS REF CURSOR RETURN emp%ROWTYPE;
+v_emp_cursor emp_cur_type;
+v_emp_record emp_record_type;
+BEGIN
+OPEN v_emp_cursor FOR  SELECT * FROM emp;
+LOOP
+FETCH v_emp_cursor INTO v_emp_record.empno, v_emp_record.ename, v_emp_record.job, v_emp_record.salary;
+EXIT WHEN v_emp_cursor%NOTFOUND;
+SELECT v_emp_record.empno, v_emp_record.ename, v_emp_record.job;
+END LOOP;
+CLOSE v_emp_cursor;
+END strong_dynamic_cursor_demo;
+$$
+call strong_dynamic_cursor_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job
+7369	SMITH	CLERK
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job
+7370	Judy	MANAGER
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job
+7371	Will	CEO
+call strong_dynamic_cursor_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job
+7369	SMITH	CLERK
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job
+7370	Judy	MANAGER
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job
+7371	Will	CEO
+DROP PROCEDURE strong_dynamic_cursor_demo$$
+
+[### test fetch sys ref cursor into record variable in sp]
+CREATE OR REPLACE PROCEDURE weak_dynamic_cursor_demo AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+v_emp_cursor  SYS_REFCURSOR;
+v_emp_record  emp_record_type;
+BEGIN
+OPEN v_emp_cursor FOR SELECT * FROM emp;
+LOOP
+FETCH v_emp_cursor INTO v_emp_record;
+EXIT WHEN v_emp_cursor%NOTFOUND;
+SELECT v_emp_record.empno, v_emp_record.ename, v_emp_record.salary;
+END LOOP;
+CLOSE v_emp_cursor;
+END weak_dynamic_cursor_demo;
+$$
+call weak_dynamic_cursor_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.salary
+7369	SMITH	800
+v_emp_record.empno	v_emp_record.ename	v_emp_record.salary
+7370	Judy	8000
+v_emp_record.empno	v_emp_record.ename	v_emp_record.salary
+7371	Will	80000
+call weak_dynamic_cursor_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.salary
+7369	SMITH	800
+v_emp_record.empno	v_emp_record.ename	v_emp_record.salary
+7370	Judy	8000
+v_emp_record.empno	v_emp_record.ename	v_emp_record.salary
+7371	Will	80000
+DROP PROCEDURE weak_dynamic_cursor_demo$$
+
+[### test fetch sys ref cursor into field of record variable in sp]
+CREATE OR REPLACE PROCEDURE weak_dynamic_cursor_demo AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+v_emp_cursor  SYS_REFCURSOR;
+v_emp_record  emp_record_type;
+BEGIN
+OPEN v_emp_cursor FOR SELECT * FROM emp;
+LOOP
+FETCH v_emp_cursor INTO v_emp_record.empno, v_emp_record.ename, v_emp_record.job, v_emp_record.salary;
+EXIT WHEN v_emp_cursor%NOTFOUND;
+SELECT v_emp_record.empno, v_emp_record.ename, v_emp_record.salary;
+END LOOP;
+CLOSE v_emp_cursor;
+END weak_dynamic_cursor_demo;
+$$
+call weak_dynamic_cursor_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.salary
+7369	SMITH	800
+v_emp_record.empno	v_emp_record.ename	v_emp_record.salary
+7370	Judy	8000
+v_emp_record.empno	v_emp_record.ename	v_emp_record.salary
+7371	Will	80000
+call weak_dynamic_cursor_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.salary
+7369	SMITH	800
+v_emp_record.empno	v_emp_record.ename	v_emp_record.salary
+7370	Judy	8000
+v_emp_record.empno	v_emp_record.ename	v_emp_record.salary
+7371	Will	80000
+DROP PROCEDURE weak_dynamic_cursor_demo$$
+
+[### test fetch cursor into field of nested record variable in sp]
+CREATE OR REPLACE PROCEDURE fetch_into_field_of_nested_record_var AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+v_emp     emp_record_type
+);
+v_record record_type;
+CURSOR emp_cur IS SELECT empno FROM emp;
+BEGIN
+v_record.record_id := 1001;
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_record.v_emp.empno;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT v_record;
+END LOOP;
+CLOSE emp_cur;
+END fetch_into_field_of_nested_record_var;
+$$
+call fetch_into_field_of_nested_record_var$$
+v_record
+record_id:1001 | v_emp:empno:7369 | ename:NULL | job:NULL | salary:NULL
+v_record
+record_id:1001 | v_emp:empno:7370 | ename:NULL | job:NULL | salary:NULL
+v_record
+record_id:1001 | v_emp:empno:7371 | ename:NULL | job:NULL | salary:NULL
+call fetch_into_field_of_nested_record_var$$
+v_record
+record_id:1001 | v_emp:empno:7369 | ename:NULL | job:NULL | salary:NULL
+v_record
+record_id:1001 | v_emp:empno:7370 | ename:NULL | job:NULL | salary:NULL
+v_record
+record_id:1001 | v_emp:empno:7371 | ename:NULL | job:NULL | salary:NULL
+DROP PROCEDURE fetch_into_field_of_nested_record_var$$
+
+[### test fetch cursor into nested record variable in sp]
+CREATE OR REPLACE PROCEDURE fetch_into_nested_record_var AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+v_emp     emp_record_type
+);
+v_record record_type;
+CURSOR emp_cur IS SELECT * FROM emp;
+BEGIN
+v_record.record_id := 1001;
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_record.v_emp;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT v_record;
+END LOOP;
+CLOSE emp_cur;
+END fetch_into_nested_record_var;
+$$
+call fetch_into_nested_record_var$$
+v_record
+record_id:1001 | v_emp:empno:7369 | ename:SMITH | job:CLERK | salary:800.00
+v_record
+record_id:1001 | v_emp:empno:7370 | ename:Judy | job:MANAGER | salary:8000.00
+v_record
+record_id:1001 | v_emp:empno:7371 | ename:Will | job:CEO | salary:80000.00
+call fetch_into_nested_record_var$$
+v_record
+record_id:1001 | v_emp:empno:7369 | ename:SMITH | job:CLERK | salary:800.00
+v_record
+record_id:1001 | v_emp:empno:7370 | ename:Judy | job:MANAGER | salary:8000.00
+v_record
+record_id:1001 | v_emp:empno:7371 | ename:Will | job:CEO | salary:80000.00
+DROP PROCEDURE fetch_into_nested_record_var$$
+
+[### test select into field of nested record variable in sp]
+CREATE OR REPLACE PROCEDURE fetch_into_field_of_nested_record_var AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+v_emp     emp_record_type
+);
+v_record record_type;
+CURSOR emp_cur IS SELECT empno FROM emp WHERE empno = 7369;
+BEGIN
+v_record.record_id := 1001;
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_record.v_emp.empno;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT v_record;
+END LOOP;
+CLOSE emp_cur;
+END fetch_into_field_of_nested_record_var;
+$$
+call fetch_into_field_of_nested_record_var$$
+v_record
+record_id:1001 | v_emp:empno:7369 | ename:NULL | job:NULL | salary:NULL
+call fetch_into_field_of_nested_record_var$$
+v_record
+record_id:1001 | v_emp:empno:7369 | ename:NULL | job:NULL | salary:NULL
+DROP PROCEDURE fetch_into_field_of_nested_record_var$$
+
+[### test select into record variable in sp]
+CREATE OR REPLACE PROCEDURE select_into_record_demo AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER,
+ename  VARCHAR2(50),
+job   VARCHAR2(50),
+salary   NUMBER
+);
+v_emp_record emp_record_type;
+BEGIN
+SELECT * INTO v_emp_record FROM emp WHERE empno = 7369;
+SELECT v_emp_record.empno, v_emp_record.ename, v_emp_record.job, v_emp_record.salary;
+END select_into_record_demo;
+$$
+call select_into_record_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job	v_emp_record.salary
+7369	SMITH	CLERK	800
+call select_into_record_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job	v_emp_record.salary
+7369	SMITH	CLERK	800
+DROP PROCEDURE select_into_record_demo$$
+
+[### test select into field of record variable in sp]
+CREATE OR REPLACE PROCEDURE select_into_record_demo AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER,
+ename  VARCHAR2(50),
+job   VARCHAR2(50),
+salary   NUMBER
+);
+v_emp_record emp_record_type;
+BEGIN
+SELECT * INTO v_emp_record.empno, v_emp_record.ename, v_emp_record.job, v_emp_record.salary FROM emp WHERE empno = 7369;
+SELECT v_emp_record.empno, v_emp_record.ename, v_emp_record.job, v_emp_record.salary;
+END select_into_record_demo;
+$$
+call select_into_record_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job	v_emp_record.salary
+7369	SMITH	CLERK	800
+call select_into_record_demo$$
+v_emp_record.empno	v_emp_record.ename	v_emp_record.job	v_emp_record.salary
+7369	SMITH	CLERK	800
+DROP PROCEDURE select_into_record_demo$$
+
+[### test select into nested record variable in sp]
+CREATE OR REPLACE PROCEDURE select_into_nested_record_var AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+m_emp     emp_record_type
+);
+v_record record_type;
+BEGIN
+v_record.record_id := 1001;
+SELECT * INTO v_record.m_emp FROM emp WHERE empno = 7369;
+SELECT v_record.record_id, v_record.m_emp.empno, v_record.m_emp.ename, v_record.m_emp.job, v_record.m_emp.salary;
+END select_into_nested_record_var;
+$$
+call select_into_nested_record_var$$
+v_record.record_id	v_record.m_emp.empno	v_record.m_emp.ename	v_record.m_emp.job	v_record.m_emp.salary
+1001	7369	SMITH	CLERK	800
+call select_into_nested_record_var$$
+v_record.record_id	v_record.m_emp.empno	v_record.m_emp.ename	v_record.m_emp.job	v_record.m_emp.salary
+1001	7369	SMITH	CLERK	800
+DROP PROCEDURE select_into_nested_record_var$$
+
+[### test select into field of nested record variable in sp]
+CREATE OR REPLACE PROCEDURE select_into_field_of_nested_record_var AS
+TYPE emp_record_type IS RECORD (
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+m_emp     emp_record_type
+);
+v_record record_type;
+BEGIN
+v_record.record_id := 1001;
+SELECT * INTO v_record.m_emp.empno, v_record.m_emp.ename, v_record.m_emp.job, v_record.m_emp.salary FROM emp WHERE empno = 7369;
+SELECT v_record.record_id, v_record.m_emp.empno, v_record.m_emp.ename, v_record.m_emp.job, v_record.m_emp.salary;
+END select_into_field_of_nested_record_var;
+$$
+call select_into_field_of_nested_record_var$$
+v_record.record_id	v_record.m_emp.empno	v_record.m_emp.ename	v_record.m_emp.job	v_record.m_emp.salary
+1001	7369	SMITH	CLERK	800
+call select_into_field_of_nested_record_var$$
+v_record.record_id	v_record.m_emp.empno	v_record.m_emp.ename	v_record.m_emp.job	v_record.m_emp.salary
+1001	7369	SMITH	CLERK	800
+DROP PROCEDURE select_into_field_of_nested_record_var$$
+[### test select into assoc array in sp]
+CREATE OR REPLACE PROCEDURE select_into_assoc_array AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50) INDEX BY PLS_INTEGER;
+m_names emp_name_tab;
+BEGIN
+SELECT ename INTO m_names FROM emp WHERE empno = 7369;
+SELECT m_names;
+END select_into_assoc_array;
+$$
+call select_into_assoc_array$$
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+DROP PROCEDURE select_into_assoc_array$$
+[### test select into assoc array with index in sp]
+CREATE OR REPLACE PROCEDURE select_into_assoc_array AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50) INDEX BY PLS_INTEGER;
+m_names emp_name_tab;
+BEGIN
+SELECT ename INTO m_names(0) FROM emp WHERE empno = 7369;
+SELECT m_names;
+END select_into_assoc_array;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'm_names(0) FROM emp WHERE empno = 7369;
+SELECT m_names;
+END select_into_assoc_ar' at line 5
+[### test select into nested assoc array in sp]
+CREATE OR REPLACE PROCEDURE select_into_nested_assoc_array AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50) INDEX BY PLS_INTEGER;
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+m_names     emp_name_tab
+);
+v_record record_type;
+BEGIN
+v_record.record_id := 1001;
+SELECT ename INTO v_record.m_names FROM emp WHERE empno = 7369;
+SELECT v_record;
+END select_into_nested_assoc_array;
+$$
+call select_into_nested_assoc_array$$
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+DROP PROCEDURE select_into_nested_assoc_array$$
+[### test select into nested assoc array with index in sp]
+CREATE OR REPLACE PROCEDURE select_into_nested_assoc_array AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50) INDEX BY PLS_INTEGER;
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+m_names     emp_name_tab
+);
+v_record record_type;
+BEGIN
+v_record.record_id := 1001;
+SELECT ename INTO v_record.m_names(0) FROM emp WHERE empno = 7369;
+SELECT v_record;
+END select_into_nested_assoc_array;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FROM emp WHERE empno = 7369;
+SELECT v_record;
+END select_into_nested_assoc_array' at line 10
+[### test fetch into assoc array in sp]
+CREATE OR REPLACE PROCEDURE fetch_into_assoc_array AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50) INDEX BY PLS_INTEGER;
+m_names emp_name_tab;
+CURSOR emp_cur IS SELECT ename FROM emp WHERE empno = 7369;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO m_names;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT m_names;
+END LOOP;
+CLOSE emp_cur;
+END fetch_into_assoc_array;
+$$
+call fetch_into_assoc_array$$
+m_names
+emp_name_tab(SMITH)
+call fetch_into_assoc_array$$
+m_names
+emp_name_tab(SMITH)
+DROP PROCEDURE fetch_into_assoc_array$$
+[### test fetch into assoc array with index in sp]
+CREATE OR REPLACE PROCEDURE fetch_into_assoc_array AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50) INDEX BY PLS_INTEGER;
+m_names emp_name_tab;
+CURSOR emp_cur IS SELECT ename FROM emp;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO m_names(0);
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT m_names;
+END LOOP;
+CLOSE emp_cur;
+END fetch_into_assoc_array;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'm_names(0);
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT m_names;
+END LOOP;
+CLOSE emp_cur;' at line 8
+[### test fetch into nested assoc array with index in sp]
+CREATE OR REPLACE PROCEDURE fetch_into_nested_assoc_array AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50) INDEX BY PLS_INTEGER;
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+m_names     emp_name_tab
+);
+v_record record_type;
+CURSOR emp_cur IS SELECT ename FROM emp;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_record.m_names(0);
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT m_names;
+END LOOP;
+CLOSE emp_cur;
+END fetch_into_nested_assoc_array;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ';
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT m_names;
+END LOOP;
+CLOSE emp_cur;
+END fetch' at line 12
+[### test fetch into nested assoc array in sp]
+CREATE OR REPLACE PROCEDURE fetch_into_nested_assoc_array AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50) INDEX BY PLS_INTEGER;
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+m_names     emp_name_tab
+);
+v_record record_type;
+CURSOR emp_cur IS SELECT ename FROM emp;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_record.m_names;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT m_names;
+END LOOP;
+CLOSE emp_cur;
+END fetch_into_nested_assoc_array;
+$$
+call fetch_into_nested_assoc_array$$
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+DROP PROCEDURE fetch_into_nested_assoc_array$$
+[### test select into nested table in sp]
+CREATE OR REPLACE PROCEDURE select_into_nested_table AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50);
+m_names emp_name_tab := emp_name_tab('NULL');
+BEGIN
+SELECT ename INTO m_names FROM emp WHERE empno = 7369;
+SELECT m_names;
+END select_into_nested_table;
+$$
+call select_into_nested_table$$
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+DROP PROCEDURE select_into_nested_table$$
+[### test select into nested table with index in sp]
+CREATE OR REPLACE PROCEDURE select_into_nested_table AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50);
+m_names emp_name_tab := emp_name_tab('NULL');
+BEGIN
+SELECT ename INTO m_names(1) FROM emp WHERE empno = 7369;
+SELECT m_names;
+END select_into_nested_table;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'm_names(1) FROM emp WHERE empno = 7369;
+SELECT m_names;
+END select_into_nested_t' at line 5
+[### test select into nested nested table in sp]
+CREATE OR REPLACE PROCEDURE select_into_nested_table AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50);
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+m_names emp_name_tab := emp_name_tab('NULL')
+);
+v_record record_type;
+BEGIN
+SELECT ename INTO v_record.m_names FROM emp WHERE empno = 7369;
+SELECT m_names;
+END select_into_nested_table;
+$$
+call select_into_nested_table$$
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+DROP PROCEDURE select_into_nested_table$$
+[### test select into nested nested table with index in sp]
+CREATE OR REPLACE PROCEDURE select_into_nested_table AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50);
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+m_names emp_name_tab := emp_name_tab('NULL')
+);
+v_record record_type;
+BEGIN
+SELECT ename INTO v_record.m_names(1) FROM emp WHERE empno = 7369;
+SELECT m_names;
+END select_into_nested_table;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FROM emp WHERE empno = 7369;
+SELECT m_names;
+END select_into_nested_table' at line 9
+[### test fetch into nested table in sp]
+CREATE OR REPLACE PROCEDURE fetch_into_nested_table AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50);
+m_names emp_name_tab := emp_name_tab('NULL');
+CURSOR emp_cur IS SELECT ename FROM emp;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO m_names;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT m_names;
+END LOOP;
+CLOSE emp_cur;
+END fetch_into_nested_table;
+$$
+call fetch_into_nested_table$$
+m_names
+emp_name_tab(NULL)
+m_names
+emp_name_tab(NULL)
+m_names
+emp_name_tab(NULL)
+call fetch_into_nested_table$$
+m_names
+emp_name_tab(NULL)
+m_names
+emp_name_tab(NULL)
+m_names
+emp_name_tab(NULL)
+DROP PROCEDURE fetch_into_nested_table$$
+[### test fetch into nested table with index in sp]
+CREATE OR REPLACE PROCEDURE fetch_into_nested_table AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50);
+m_names emp_name_tab := emp_name_tab('NULL');
+CURSOR emp_cur IS SELECT ename FROM emp;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO m_names(1);
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT m_names;
+END LOOP;
+CLOSE emp_cur;
+END fetch_into_nested_table;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'm_names(1);
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT m_names;
+END LOOP;
+CLOSE emp_cur;' at line 8
+[### test fetch into nested nested table in sp]
+CREATE OR REPLACE PROCEDURE fetch_into_nested_nested_table AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50);
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+m_names emp_name_tab := emp_name_tab('NULL')
+);
+v_record record_type;
+CURSOR emp_cur IS SELECT ename FROM emp;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_record.m_names;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT m_names;
+END LOOP;
+CLOSE emp_cur;
+END fetch_into_nested_nested_table;
+$$
+call fetch_into_nested_nested_table$$
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+DROP PROCEDURE fetch_into_nested_nested_table$$
+[### test fetch into nested nested table with index in sp]
+CREATE OR REPLACE PROCEDURE fetch_into_nested_nested_table AS
+TYPE emp_name_tab IS TABLE OF VARCHAR2(50);
+TYPE record_type IS RECORD (
+record_id NUMBER(6),
+m_names emp_name_tab := emp_name_tab('NULL')
+);
+v_record record_type;
+CURSOR emp_cur IS SELECT ename FROM emp;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_record.m_names(1);
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT m_names;
+END LOOP;
+CLOSE emp_cur;
+END fetch_into_nested_nested_table;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ';
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT m_names;
+END LOOP;
+CLOSE emp_cur;
+END fetch' at line 12
+CREATE OR REPLACE TYPE t_air AS OBJECT(id INT, text VARCHAR(20));$$
+CREATE TABLE tt_air(id INT, air t_air);$$
+INSERT INTO tt_air VALUES(1, t_air(1, 'aabb'));$$
+INSERT INTO tt_air VALUES(2, t_air(2,'qwed'));$$
+
+[### test select into udt variable]
+CREATE OR REPLACE PROCEDURE select_into_udt() AS
+v_id  INT;
+v_air t_air;
+BEGIN  
+SELECT id, air INTO v_id, v_air FROM tt_air WHERE id = 1;
+SELECT v_id, v_air;
+END;
+$$
+CALL select_into_udt()$$
+v_id	v_air
+1	id:1 | text:aabb
+CALL select_into_udt()$$
+v_id	v_air
+1	id:1 | text:aabb
+DROP PROCEDURE select_into_udt$$
+
+[### test select into nested udt variable]
+CREATE OR REPLACE PROCEDURE select_into_nested_udt() AS
+TYPE air_record_type IS RECORD (
+id    INT,
+m_air  t_air
+);
+v_air air_record_type;
+BEGIN  
+SELECT id, air INTO v_air.id, v_air.m_air FROM tt_air WHERE id = 1;
+SELECT v_air.id, v_air.m_air;
+END;
+$$
+CALL select_into_nested_udt()$$
+v_air.id	v_air.m_air
+1	id:1 | text:aabb
+CALL select_into_nested_udt()$$
+v_air.id	v_air.m_air
+1	id:1 | text:aabb
+DROP PROCEDURE select_into_nested_udt$$
+
+[### test fetch into udt variable]
+CREATE OR REPLACE PROCEDURE fetch_into_udt AS
+v_id  INT;
+v_air t_air;
+CURSOR emp_cur IS SELECT * FROM tt_air;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_id, v_air;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT v_id, v_air;
+END LOOP;
+CLOSE emp_cur;
+END;
+$$
+CALL fetch_into_udt()$$
+v_id	v_air
+1	id:1 | text:aabb
+v_id	v_air
+2	id:2 | text:qwed
+CALL fetch_into_udt()$$
+v_id	v_air
+1	id:1 | text:aabb
+v_id	v_air
+2	id:2 | text:qwed
+DROP PROCEDURE fetch_into_udt$$
+
+[### test fetch into nested udt variable]
+CREATE OR REPLACE PROCEDURE fetch_into_nested_udt AS
+TYPE air_record_type IS RECORD (
+id    INT,
+m_air  t_air
+);
+v_air air_record_type;
+CURSOR emp_cur IS SELECT * FROM tt_air;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_air.id, v_air.m_air;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT v_air;
+END LOOP;
+CLOSE emp_cur;
+END;
+$$
+CALL fetch_into_nested_udt()$$
+v_air
+id:1 | m_air:id:1 | text:aabb
+v_air
+id:2 | m_air:id:2 | text:qwed
+CALL fetch_into_nested_udt()$$
+v_air
+id:1 | m_air:id:1 | text:aabb
+v_air
+id:2 | m_air:id:2 | text:qwed
+DROP PROCEDURE fetch_into_nested_udt$$
+DROP TABLE tt_air;$$
+DROP TYPE t_air;$$
+
+[### test select into object udt variable]
+CREATE OR REPLACE TYPE T_OBJECT_EMP AS OBJECT(
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+CREATE OR REPLACE PROCEDURE select_into_object_udt() AS
+v_emp T_OBJECT_EMP := T_OBJECT_EMP(0, 'unknown' , 'unknown', 0.0);
+BEGIN
+SELECT * INTO v_emp FROM emp WHERE empno = 7369;
+SELECT v_emp;
+END;
+$$
+CALL select_into_object_udt()$$
+v_emp
+empno:7369 | ename:SMITH | job:CLERK | salary:800.00
+CALL select_into_object_udt()$$
+v_emp
+empno:7369 | ename:SMITH | job:CLERK | salary:800.00
+DROP PROCEDURE select_into_object_udt$$
+DROP TYPE T_OBJECT_EMP$$
+
+[### test select into field of object udt variable]
+CREATE OR REPLACE TYPE T_OBJECT_EMP AS OBJECT(
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+CREATE OR REPLACE PROCEDURE select_into_object_udt_field() AS
+v_emp T_OBJECT_EMP := T_OBJECT_EMP(0, 'unknown' , 'unknown', 0.0);
+BEGIN
+SELECT empno,ename,job,sal INTO v_emp.empno, v_emp.ename, v_emp.job, v_emp.salary FROM emp WHERE empno = 7369;
+SELECT v_emp;
+END;
+$$
+CALL select_into_object_udt_field()$$
+v_emp
+empno:7369 | ename:SMITH | job:CLERK | salary:800.00
+CALL select_into_object_udt_field()$$
+v_emp
+empno:7369 | ename:SMITH | job:CLERK | salary:800.00
+DROP PROCEDURE select_into_object_udt_field$$
+DROP TYPE T_OBJECT_EMP$$
+
+[### test fetch into object udt variable]
+CREATE OR REPLACE TYPE T_OBJECT_EMP AS OBJECT(
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+CREATE OR REPLACE PROCEDURE fetch_into_object_udt() AS
+v_emp T_OBJECT_EMP := T_OBJECT_EMP(0, 'unknown' , 'unknown', 0.0);
+CURSOR emp_cur IS SELECT * FROM emp;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_emp;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT v_emp;
+END LOOP;
+CLOSE emp_cur;
+END;
+$$
+CALL fetch_into_object_udt()$$
+v_emp
+empno:7369 | ename:SMITH | job:CLERK | salary:800.00
+v_emp
+empno:7370 | ename:Judy | job:MANAGER | salary:8000.00
+v_emp
+empno:7371 | ename:Will | job:CEO | salary:80000.00
+CALL fetch_into_object_udt()$$
+v_emp
+empno:7369 | ename:SMITH | job:CLERK | salary:800.00
+v_emp
+empno:7370 | ename:Judy | job:MANAGER | salary:8000.00
+v_emp
+empno:7371 | ename:Will | job:CEO | salary:80000.00
+DROP PROCEDURE fetch_into_object_udt$$
+DROP TYPE T_OBJECT_EMP$$
+
+[### test fetch into field of object udt variable]
+CREATE OR REPLACE TYPE T_OBJECT_EMP AS OBJECT(
+empno    NUMBER(6),
+ename    VARCHAR2(50),
+job      VARCHAR2(50),
+salary   NUMBER(8,2)
+);
+CREATE OR REPLACE PROCEDURE fetch_into_object_udt_field() AS
+v_emp T_OBJECT_EMP := T_OBJECT_EMP(0, 'unknown' , 'unknown', 0.0);
+CURSOR emp_cur IS SELECT * FROM emp;
+BEGIN
+OPEN emp_cur;
+LOOP
+FETCH emp_cur INTO v_emp.empno, v_emp.ename, v_emp.job, v_emp.salary;
+EXIT WHEN emp_cur%NOTFOUND;
+SELECT v_emp;
+END LOOP;
+CLOSE emp_cur;
+END;
+$$
+CALL fetch_into_object_udt_field()$$
+v_emp
+empno:7369 | ename:SMITH | job:CLERK | salary:800.00
+v_emp
+empno:7370 | ename:Judy | job:MANAGER | salary:8000.00
+v_emp
+empno:7371 | ename:Will | job:CEO | salary:80000.00
+CALL fetch_into_object_udt_field()$$
+v_emp
+empno:7369 | ename:SMITH | job:CLERK | salary:800.00
+v_emp
+empno:7370 | ename:Judy | job:MANAGER | salary:8000.00
+v_emp
+empno:7371 | ename:Will | job:CEO | salary:80000.00
+DROP PROCEDURE fetch_into_object_udt_field$$
+DROP TYPE T_OBJECT_EMP$$
+CREATE OR REPLACE PROCEDURE p1() as
+v_emp emp%rowtype;
+cursor c is select ename from emp;
+BEGIN
+open c;
+loop
+fetch c into v_emp.ename;
+exit when c%notfound;
+select v_emp;
+end loop;
+END;
+$$
+CALL p1()$$
+v_emp
+empno:NULL | ename:SMITH | job:NULL | sal:NULL
+v_emp
+empno:NULL | ename:Judy | job:NULL | sal:NULL
+v_emp
+empno:NULL | ename:Will | job:NULL | sal:NULL
+CALL p1()$$
+v_emp
+empno:NULL | ename:SMITH | job:NULL | sal:NULL
+v_emp
+empno:NULL | ename:Judy | job:NULL | sal:NULL
+v_emp
+empno:NULL | ename:Will | job:NULL | sal:NULL
+DROP PROCEDURE p1$$
+CREATE TYPE udt_emp is object ( empno int, ename VARCHAR2(100));$$
+CREATE OR REPLACE PROCEDURE p1() as
+v_emp udt_emp := udt_emp(1001, 'root');
+cursor c is select empno, ename from emp;
+BEGIN
+open c;
+loop
+fetch c into v_emp.empno, v_emp.ename;
+exit when c%notfound;
+select v_emp;
+end loop;
+END;
+$$
+CALL p1()$$
+v_emp
+empno:7369 | ename:SMITH
+v_emp
+empno:7370 | ename:Judy
+v_emp
+empno:7371 | ename:Will
+CALL p1()$$
+v_emp
+empno:7369 | ename:SMITH
+v_emp
+empno:7370 | ename:Judy
+v_emp
+empno:7371 | ename:Will
+DROP PROCEDURE p1$$
+CREATE OR REPLACE PROCEDURE p1() as
+v_emp emp%rowtype;
+cursor c is select ename from emp;
+BEGIN
+open c;
+loop
+fetch c into v_emp.notexist;
+exit when c%notfound;
+select v_emp;
+end loop;
+END;
+$$
+CALL p1()$$
+ERROR HY000: Row variable 'v_emp' does not have a field 'notexist'
+DROP PROCEDURE p1$$
+CREATE OR REPLACE PROCEDURE p1() as
+v_emp udt_emp := udt_emp(1001, 'root');
+cursor c is select empno, ename from emp;
+BEGIN
+open c;
+loop
+fetch c into v_emp.empno, v_emp.notexist;
+exit when c%notfound;
+select v_emp;
+end loop;
+END;
+$$
+ERROR HY000: Row variable 'v_emp' does not have a field 'notexist'
+DROP TYPE udt_emp;
+DROP TABLE emp;
+
+[### test select or fetch into row table type variable]
+CREATE TABLE t1(id INT, name1 VARCHAR(20));
+INSERT INTO t1 VALUES(1,'aabb');
+INSERT INTO t1 VALUES(2,'qwed');
+INSERT INTO t1 VALUES(2,'qwssq');
+CREATE OR REPLACE PROCEDURE p1() AS
+TYPE tklist IS TABLE OF t1%ROWTYPE INDEX BY PLS_INTEGER;
+stu_record_val tklist;
+stu_record2 t1%ROWTYPE;
+TYPE stu_record1 IS RECORD(
+id INT := 1,
+name_d tklist
+);
+TYPE stu_record IS RECORD(
+id INT := -1,
+name_d  stu_record1,
+score FLOAT := 0
+);
+stu stu_record;
+CURSOR cc IS SELECT * FROM t1;
+BEGIN
+SELECT * INTO stu_record2 FROM t1 LIMIT 1;
+SELECT stu;
+OPEN cc;
+FETCH cc INTO stu.name_d.name_d;
+SELECT stu;
+FETCH cc INTO stu.name_d.name_d.id, stu.name_d.name_d.name1;
+SELECT stu;
+END;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'variable tklist or variable of type tklist used in 'into list''
+DROP TABLE t1;
+CREATE OR REPLACE TYPE t_air AS OBJECT(id INT, type VARCHAR(20));
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+CREATE TABLE t1(id INT, name1 VARCHAR(20));
+INSERT INTO t1 VALUES(1,'aabb');
+INSERT INTO t1 VALUES(2,'qwed');
+INSERT INTO t1 VALUES(2,'qwssq');
+CREATE TABLE tt_air(id int,air t_air);
+INSERT INTO tt_air VALUES(1,t_air(1,'aabb'));
+INSERT INTO tt_air VALUES(2,t_air(2,'qwed'));
+CREATE OR REPLACE PROCEDURE p1() AS
+TYPE TKLIST IS TABLE OF tt_air%ROWTYPE INDEX BY PLS_INTEGER;
+stu_record_val tklist;
+stu_record2 t1%ROWTYPE;
+TYPE stu_record1 IS RECORD(
+id INT := 1,
+name_d  tklist
+);
+TYPE stu_record IS RECORD(
+id INT := -1,
+name_d  stu_record1,
+score FLOAT := 0
+);
+stu stu_record;
+CURSOR cc IS SELECT * FROM tt_air;
+BEGIN
+SELECT * INTO stu.name_d.name_d(0).air.id, stu.name_d.name_d(0).air.type from t1 limit 1;
+SELECT stu;
+OPEN cc;
+FETCH cc INTO stu.name_d.name_d(0).id, stu.name_d.name_d(0).air;
+SELECT stu;
+FETCH cc INTO stu.name_d.name_d(0).id, stu.name_d.name_d(0).air;
+SELECT stu;
+END;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'variable tklist or variable of type tklist used in 'into list''
+DROP TABLE t1;
+DROP TABLE tt_air;
+DROP TYPE t_air_table;
+DROP TYPE t_air;
+
+[### test select into TYPE]
+CREATE OR REPLACE PROCEDURE p1() as
+TYPE t_air IS RECORD(
+nm INT,
+str VARCHAR(100)
+);
+TYPE stu_record IS RECORD(
+nm INT,
+t_air t_air,
+score FLOAT := 0.1
+);
+stu_record1 stu_record;
+BEGIN
+SELECT 'xxx' INTO stu_record1.t_air.str;
+SELECT stu_record1;
+END;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'variable t_air or variable of type t_air used in 'into list''
+CREATE OR REPLACE PROCEDURE p1() as
+TYPE t_air IS RECORD(
+nm INT,
+str VARCHAR(100)
+);
+TYPE stu_record IS RECORD(
+nm INT,
+air t_air,
+score FLOAT := 0.1
+);
+stu_record1 stu_record;
+BEGIN
+SELECT 'xxx' INTO stu_record1.air.str;
+SELECT stu_record1;
+END;
+$$
+CALL p1()$$
+stu_record1
+nm:NULL | air:nm:NULL | str:xxx | score:0.1
+CALL p1()$$
+stu_record1
+nm:NULL | air:nm:NULL | str:xxx | score:0.1
+DROP PROCEDURE p1$$
+CREATE OR REPLACE PROCEDURE p1() as
+TYPE t_air IS RECORD(
+nm INT,
+str VARCHAR(100)
+);
+TYPE stu_record IS RECORD(
+nm INT,
+air t_air,
+score FLOAT := 0.1
+);
+stu_record1 stu_record;
+air INT := 0;
+BEGIN
+SELECT 'xxx' INTO stu_record1.air.str;
+SELECT stu_record1;
+END;
+$$
+CALL p1()$$
+stu_record1
+nm:NULL | air:nm:NULL | str:xxx | score:0.1
+CALL p1()$$
+stu_record1
+nm:NULL | air:nm:NULL | str:xxx | score:0.1
+DROP PROCEDURE p1$$
+CREATE OR REPLACE PROCEDURE p1() as
+TYPE t_air IS RECORD(
+nm INT,
+str VARCHAR(100)
+);
+TYPE stu_record IS RECORD(
+nm INT,
+air t_air,
+score FLOAT := 0.1
+);
+stu_record1 stu_record;
+air t_air;
+BEGIN
+SELECT 'xxx' INTO stu_record1.air.str;
+SELECT stu_record1;
+END;
+$$
+CALL p1()$$
+stu_record1
+nm:NULL | air:nm:NULL | str:xxx | score:0.1
+CALL p1()$$
+stu_record1
+nm:NULL | air:nm:NULL | str:xxx | score:0.1
+DROP PROCEDURE p1$$

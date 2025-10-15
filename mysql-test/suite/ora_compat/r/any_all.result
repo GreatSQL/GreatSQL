@@ -1,0 +1,292 @@
+set sql_mode=oracle;
+create table t1 (name varchar(50) primary key, salary int,department int);
+insert into t1 values ('John',5000,50);
+insert into t1 values ('Jane', 6000,50);
+insert into t1 values ('Bob',7000,60);
+insert into t1 values ('Sue',8000,70);
+operator = ALL
+SELECT * FROM t1 WHERE salary = ALL (5000);
+name	salary	department
+John	5000	50
+SELECT * FROM t1 WHERE salary = ALL (5000, 6000);
+name	salary	department
+SELECT * FROM t1 WHERE salary = ALL (5000, 6000,7000);
+name	salary	department
+SELECT * FROM t1 WHERE salary = ALL ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+SELECT * FROM t1 WHERE (salary,department)  = ALL ((select 5000,50 from dual), (6000,50), (7000,60));
+name	salary	department
+operator = ANY
+SELECT * FROM t1 WHERE salary = ANY (5000);
+name	salary	department
+John	5000	50
+SELECT * FROM t1 WHERE salary = ANY (5000, 6000);
+name	salary	department
+Jane	6000	50
+John	5000	50
+SELECT * FROM t1 WHERE salary = ANY (5000, 6000,7000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+SELECT * FROM t1 WHERE salary = ANY ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+SELECT * FROM t1 WHERE (salary,department)  = ANY ((select 5000,50 from dual), (6000,50), (7000,60));
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+operator != ALL
+SELECT * FROM t1 WHERE salary != ALL (5000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary != ALL (5000, 6000);
+name	salary	department
+Bob	7000	60
+Sue	8000	70
+SELECT * FROM t1 WHERE salary != ALL (5000, 6000,7000);
+name	salary	department
+Sue	8000	70
+SELECT * FROM t1 WHERE salary != ALL ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+Sue	8000	70
+SELECT * FROM t1 WHERE (salary,department)  != ALL ((select 5000,50 from dual), (6000,50), (7000,60));
+name	salary	department
+Sue	8000	70
+operator != ANY
+SELECT * FROM t1 WHERE salary != ANY (5000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary != ANY (5000, 6000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary != ANY (5000, 6000,7000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary != ANY ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE (salary,department)  != ANY ((select 5000,50 from dual), (6000,50), (7000,60));
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+operator <> ALL
+SELECT * FROM t1 WHERE salary <> ALL (5000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary <> ALL (5000, 6000);
+name	salary	department
+Bob	7000	60
+Sue	8000	70
+SELECT * FROM t1 WHERE salary <> ALL (5000, 6000,7000);
+name	salary	department
+Sue	8000	70
+SELECT * FROM t1 WHERE salary <> ALL ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+Sue	8000	70
+SELECT * FROM t1 WHERE (salary,department)  <> ALL ((select 5000,50 from dual), (6000,50), (7000,60));
+name	salary	department
+Sue	8000	70
+operator <> ANY
+SELECT * FROM t1 WHERE salary <> ANY (5000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary <> ANY (5000, 6000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary <> ANY (5000, 6000,7000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary <> ANY ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE (salary,department)  <> ANY ((select 5000,50 from dual), (6000,50), (7000,60));
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+operator < ALL
+SELECT * FROM t1 WHERE salary < ALL (5000);
+name	salary	department
+SELECT * FROM t1 WHERE salary < ALL (5000, 6000);
+name	salary	department
+SELECT * FROM t1 WHERE salary < ALL (5000, 6000,7000);
+name	salary	department
+SELECT * FROM t1 WHERE salary < ALL ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+SELECT * FROM t1 WHERE (salary,department)  < ALL ((select 5000,50 from dual), (6000,50), (7000,60));
+ERROR 21000: Operand should contain 1 column(s)
+operator < ANY
+SELECT * FROM t1 WHERE salary < ANY (5000);
+name	salary	department
+SELECT * FROM t1 WHERE salary < ANY (5000, 6000);
+name	salary	department
+John	5000	50
+SELECT * FROM t1 WHERE salary < ANY (5000, 6000,7000);
+name	salary	department
+Jane	6000	50
+John	5000	50
+SELECT * FROM t1 WHERE salary < ANY ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+Jane	6000	50
+John	5000	50
+SELECT * FROM t1 WHERE (salary,department)  < ANY ((select 5000,50 from dual), (6000,50), (7000,60));
+ERROR 21000: Operand should contain 1 column(s)
+operator > ALL
+SELECT * FROM t1 WHERE salary > ALL (5000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary > ALL (5000, 6000);
+name	salary	department
+Bob	7000	60
+Sue	8000	70
+SELECT * FROM t1 WHERE salary > ALL (5000, 6000,7000);
+name	salary	department
+Sue	8000	70
+SELECT * FROM t1 WHERE salary > ALL ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+Sue	8000	70
+SELECT * FROM t1 WHERE (salary,department)  > ALL ((select 5000,50 from dual), (6000,50), (7000,60));
+ERROR 21000: Operand should contain 1 column(s)
+operator > ANY
+SELECT * FROM t1 WHERE salary > ANY (5000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary > ANY (5000, 6000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary > ANY (5000, 6000,7000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary > ANY ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE (salary,department)  > ANY ((select 5000,50 from dual), (6000,50), (7000,60));
+ERROR 21000: Operand should contain 1 column(s)
+operator <= ALL
+SELECT * FROM t1 WHERE salary <= ALL (5000);
+name	salary	department
+John	5000	50
+SELECT * FROM t1 WHERE salary <= ALL (5000, 6000);
+name	salary	department
+John	5000	50
+SELECT * FROM t1 WHERE salary <= ALL (5000, 6000,7000);
+name	salary	department
+John	5000	50
+SELECT * FROM t1 WHERE salary <= ALL ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+John	5000	50
+SELECT * FROM t1 WHERE (salary,department)  <= ALL ((select 5000,50 from dual), (6000,50), (7000,60));
+ERROR 21000: Operand should contain 1 column(s)
+operator <= ANY
+SELECT * FROM t1 WHERE salary <= ANY (5000);
+name	salary	department
+John	5000	50
+SELECT * FROM t1 WHERE salary <= ANY (5000, 6000);
+name	salary	department
+Jane	6000	50
+John	5000	50
+SELECT * FROM t1 WHERE salary <= ANY (5000, 6000,7000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+SELECT * FROM t1 WHERE salary <= ANY ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+SELECT * FROM t1 WHERE (salary,department)  <= ANY ((select 5000,50 from dual), (6000,50), (7000,60));
+ERROR 21000: Operand should contain 1 column(s)
+operator >= ALL
+SELECT * FROM t1 WHERE salary >= ALL (5000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary >= ALL (5000, 6000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary >= ALL (5000, 6000,7000);
+name	salary	department
+Bob	7000	60
+Sue	8000	70
+SELECT * FROM t1 WHERE salary >= ALL ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+Bob	7000	60
+Sue	8000	70
+SELECT * FROM t1 WHERE (salary,department)  >= ALL ((select 5000,50 from dual), (6000,50), (7000,60));
+ERROR 21000: Operand should contain 1 column(s)
+operator >= ANY
+SELECT * FROM t1 WHERE salary >= ANY (5000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary >= ANY (5000, 6000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary >= ANY (5000, 6000,7000);
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE salary >= ANY ((select 5000 from dual), (select 6000 from dual),(select 7000 from dual));
+name	salary	department
+Bob	7000	60
+Jane	6000	50
+John	5000	50
+Sue	8000	70
+SELECT * FROM t1 WHERE (salary,department)  >= ANY ((select 5000,50 from dual), (6000,50), (7000,60));
+ERROR 21000: Operand should contain 1 column(s)
+drop table t1;

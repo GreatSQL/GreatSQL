@@ -1,0 +1,113 @@
+CREATE TABLE t1 (c1 int);
+INSERT INTO t1 VALUES(162);
+INSERT INTO t1 VALUES(163);
+explain SELECT nchr(c1) FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	<gather2>	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Parallel execute (1 workers)
+2	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select nchr(`test`.`t1`.`c1`) AS `nchr(c1)` from `test`.`t1`
+SELECT nchr(c1) FROM t1;
+nchr(c1)
+¢
+£
+create table t2(c1 varchar2(64));
+INSERT INTO t2 VALUES('aaa');
+set sql_mode='oracle,EMPTYSTRING_EQUAL_NULL';
+explain select utl_encode.base64_encode(utl_raw.cast_to_raw(c1)) from t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1585	This function 'BIT_AND' has the same name as a native function
+Note	1585	This function 'BIT_OR' has the same name as a native function
+Note	1585	This function 'BIT_XOR' has the same name as a native function
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Warning	3720	NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.
+Note	1585	This function 'CONCAT' has the same name as a native function
+Note	1585	This function 'CONVERT' has the same name as a native function
+Note	1585	This function 'LENGTH' has the same name as a native function
+Note	1585	This function 'REVERSE' has the same name as a native function
+Note	1585	This function 'SUBSTR' has the same name as a native function
+Note	1585	This function 'TRANSLATE' has the same name as a native function
+Note	1003	/* select#1 */ select "test"."utl_encode.base64_encode"("test"."utl_raw.cast_to_raw"("test"."t2"."c1")) AS "utl_encode.base64_encode(utl_raw.cast_to_raw(c1))" from "test"."t2"
+explain select utl_encode.base64_decode(utl_encode.base64_encode(utl_raw.cast_to_raw(c1))) from t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select "test"."utl_encode.base64_decode"("test"."utl_encode.base64_encode"("test"."utl_raw.cast_to_raw"("test"."t2"."c1"))) AS "utl_encode.base64_decode(utl_encode.base64_encode(utl_raw.cast_to_raw(c1)))" from "test"."t2"
+explain select utl_encode.quoted_printable_encode(utl_raw.cast_to_raw(c1)) from t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select "test"."utl_encode.quoted_printable_encode"("test"."utl_raw.cast_to_raw"("test"."t2"."c1")) AS "utl_encode.quoted_printable_encode(utl_raw.cast_to_raw(c1))" from "test"."t2"
+explain select utl_encode.quoted_printable_decode(utl_encode.quoted_printable_encode(utl_raw.cast_to_raw(c1))) from t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select "test"."utl_encode.quoted_printable_decode"("test"."utl_encode.quoted_printable_encode"("test"."utl_raw.cast_to_raw"("test"."t2"."c1"))) AS "utl_encode.quoted_printable_decode(utl_encode.quoted_printable_encode(utl_raw.cast_to_raw(c1)))" from "test"."t2"
+explain select utl_encode.text_encode(c1) from t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select "test"."utl_encode.text_encode"("test"."t2"."c1",NULL,NULL) AS "utl_encode.text_encode(c1)" from "test"."t2"
+explain select utl_encode.text_decode(utl_encode.text_encode(c1)) from t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select "test"."utl_encode.text_decode"("test"."utl_encode.text_encode"("test"."t2"."c1",NULL,NULL),NULL,NULL) AS "utl_encode.text_decode(utl_encode.text_encode(c1))" from "test"."t2"
+explain select utl_encode.mimeheader_encode(c1) from t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select "test"."utl_encode.mimeheader_encode"("test"."t2"."c1",NULL,NULL) AS "utl_encode.mimeheader_encode(c1)" from "test"."t2"
+explain select utl_encode.mimeheader_decode(utl_encode.mimeheader_encode(c1)) from t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select "test"."utl_encode.mimeheader_decode"("test"."utl_encode.mimeheader_encode"("test"."t2"."c1",NULL,NULL)) AS "utl_encode.mimeheader_decode(utl_encode.mimeheader_encode(c1))" from "test"."t2"
+explain select utl_encode.uuencode(utl_raw.cast_to_raw(c1)) from t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select "test"."utl_encode.uuencode"("test"."utl_raw.cast_to_raw"("test"."t2"."c1"),1,NULL,NULL) AS "utl_encode.uuencode(utl_raw.cast_to_raw(c1))" from "test"."t2"
+explain select utl_encode.uudecode(utl_encode.uuencode(utl_raw.cast_to_raw(c1))) from t2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select "test"."utl_encode.uudecode"("test"."utl_encode.uuencode"("test"."utl_raw.cast_to_raw"("test"."t2"."c1"),1,NULL,NULL)) AS "utl_encode.uudecode(utl_encode.uuencode(utl_raw.cast_to_raw(c1)))" from "test"."t2"
+select utl_encode.base64_encode(utl_raw.cast_to_raw(c1)) from t2;
+utl_encode.base64_encode(utl_raw.cast_to_raw(c1))
+YWFh
+select utl_encode.base64_decode(utl_encode.base64_encode(utl_raw.cast_to_raw(c1))) from t2;
+utl_encode.base64_decode(utl_encode.base64_encode(utl_raw.cast_to_raw(c1)))
+aaa
+select utl_encode.quoted_printable_encode(utl_raw.cast_to_raw(c1)) from t2;
+utl_encode.quoted_printable_encode(utl_raw.cast_to_raw(c1))
+aaa
+select utl_encode.quoted_printable_decode(utl_encode.quoted_printable_encode(utl_raw.cast_to_raw(c1))) from t2;
+utl_encode.quoted_printable_decode(utl_encode.quoted_printable_encode(utl_raw.cast_to_raw(c1)))
+aaa
+select utl_encode.text_encode(c1) from t2;
+utl_encode.text_encode(c1)
+aaa
+select utl_encode.text_decode(utl_encode.text_encode(c1)) from t2;
+utl_encode.text_decode(utl_encode.text_encode(c1))
+aaa
+select utl_encode.mimeheader_encode(c1) from t2;
+utl_encode.mimeheader_encode(c1)
+=?utf8mb4?Q?aaa?=
+select utl_encode.mimeheader_decode(utl_encode.mimeheader_encode(c1)) from t2;
+utl_encode.mimeheader_decode(utl_encode.mimeheader_encode(c1))
+aaa
+select utl_encode.uuencode(utl_raw.cast_to_raw(c1)) from t2;
+utl_encode.uuencode(utl_raw.cast_to_raw(c1))
+begin 0 uuencode.txt
+#86%A
+`
+end
+select utl_encode.uudecode(utl_encode.uuencode(utl_raw.cast_to_raw(c1))) from t2;
+utl_encode.uudecode(utl_encode.uuencode(utl_raw.cast_to_raw(c1)))
+aaa
+drop table t1;
+drop table t2;

@@ -1,0 +1,206 @@
+SET SQL_MODE=DEFAULT;
+set @@udt_format_result='DBA';
+
+--echo # in default mode, type is used as ident
+--error 1064
+GRANT EXECUTE ON type test.typ TO u1@localhost;
+
+--error 1144
+GRANT EXECUTE ON TYPE TO u1@localhost;
+
+--echo # should be syntax error
+--error 1064
+DROP TYPE typ;
+
+SET sql_mode=ORACLE;
+
+CREATE DATABASE db1;
+CREATE USER u1@localhost IDENTIFIED BY '';
+GRANT SELECT ON db1.* TO u1@localhost;
+
+connect (conn1,localhost,u1,,db1);
+SELECT CURRENT_USER;
+SET sql_mode=ORACLE;
+
+--echo #
+--echo # User u1 cannot drop TYPE by default
+--echo #
+
+--error ER_PROCACCESS_DENIED_ERROR
+DROP TYPE t_air;
+--error ER_DBACCESS_DENIED_ERROR
+create or replace type t_air as object(id int,type char(5));
+
+--echo #
+--echo # Now create a type by root
+--echo #
+
+connection default;
+USE db1;
+
+create or replace type t_air as object(id int,type char(5));
+SELECT t_air(1+1,'aabb') FROM dual;
+SHOW CREATE type t_air;
+
+--echo #
+--echo # u1 cannot SHOW yet:
+--echo # - the standalone procedure earlier created by root
+--echo # - the type specifications earlier create by root
+--echo #
+
+connection conn1;
+--error ER_SP_DOES_NOT_EXIST
+SHOW CREATE type t_air;
+--error ER_SP_DOES_NOT_EXIST
+SHOW CREATE type t_air;
+
+
+--echo #
+--echo # User u1 still cannot create a type
+--echo #
+
+connection conn1;
+--error ER_DBACCESS_DENIED_ERROR
+create or replace type t_air as object(id int,type char(5));
+
+
+--echo #
+--echo # Now grant EXECUTE:
+--echo # - on the standalone procedure earlier created by root
+--echo # - on the type specification earlier created by root
+--echo #
+connection default;
+GRANT EXECUTE ON type db1.t_air TO u1@localhost;
+
+--echo #
+--echo # Now u1 can do SHOW for:
+--echo # - the standalone procedure earlier created by root
+--echo # - the type specification earlier created by root
+--echo #
+
+disconnect conn1;
+connect (conn1,localhost,u1,,db1);
+SET sql_mode=ORACLE;
+SHOW CREATE type db1.t_air;
+
+--echo #
+--echo # Now revoke EXECUTE and grant CREATE ROUTINE instead
+--echo #
+
+connection default;
+REVOKE EXECUTE ON type db1.t_air FROM u1@localhost;
+GRANT CREATE ROUTINE ON db1.* TO u1@localhost;
+
+--echo #
+--echo # Reconnect u1 to make new grants have effect
+--echo #
+
+disconnect conn1;
+connect (conn1,localhost,u1,,db1);
+SET sql_mode=ORACLE;
+
+--echo #
+--echo # Now u1 can also CREATE, DROP its own type specifications
+--echo #
+create or replace type t_air1 as object(id int,type varchar(15));
+SHOW CREATE type t_air1;
+SHOW GRANTS;
+
+create or replace type t_air_table as table of t_air1;
+SHOW CREATE type t_air_table;
+SHOW GRANTS;
+
+create or replace type t_air_array as varray(1) of raw;
+SHOW CREATE type t_air_array;
+SHOW GRANTS;
+
+DROP type t_air_table;
+DROP type t_air_array;
+DROP type t_air1;
+SHOW GRANTS;
+
+--echo #
+--echo # Now create a type by root.
+--echo # u1 does not have EXECUTE access by default.
+--echo #
+
+connection default;
+create or replace type t_air2 as object(id int,type varchar(15));
+create or replace type t_air_table as table of t_air2;
+create or replace type t_air_array as varray(1) of raw;
+
+connection conn1;
+SHOW CREATE type t_air2;
+SHOW CREATE type t_air_table;
+SHOW CREATE type t_air_array;
+--error ER_PROCACCESS_DENIED_ERROR
+SELECT t_air2(1+1,'aabb') FROM dual;
+--error ER_PROCACCESS_DENIED_ERROR
+SELECT t_air_table(t_air2(1,'aa'),t_air2(2,'bb')) FROM dual;
+--error ER_PROCACCESS_DENIED_ERROR
+SELECT t_air_array(null) FROM dual;
+
+connection default;
+drop type t_air_table;
+drop type t_air_array;
+DROP type t_air2;
+
+
+--echo #
+--echo # u1 still cannot DROP the type specification earlier created by root.
+--echo #
+
+connection conn1;
+--error ER_PROCACCESS_DENIED_ERROR
+DROP type t_air;
+
+--echo #
+--echo # Grant ALTER ROUTINE to u1
+--echo #
+
+connection default;
+GRANT ALTER ROUTINE ON db1.* TO u1@localhost;
+FLUSH PRIVILEGES;
+
+DROP USER u1@localhost;
+DROP DATABASE db1;
+USE test;
+
+
+--echo #
+--echo # Creator=root, definer=xxx
+--echo #
+
+CREATE USER xxx@localhost;
+create or replace DEFINER=xxx@localhost type t_air3 as object(id int,type char(4));
+create or replace DEFINER=xxx@localhost type t_air_table as table of t_air3;
+create or replace DEFINER=xxx@localhost type t_air_array as varray(1) of raw;
+
+--echo # no support now, should be: error ER_PROCACCESS_DENIED_ERROR
+SELECT t_air3(1+1,'aabb') FROM dual;
+SELECT t_air_table(t_air3(1,'aa'),t_air3(2,'bb')) FROM dual;
+SELECT t_air_array(null) FROM dual;
+GRANT EXECUTE ON type t_air3 TO xxx@localhost;
+GRANT EXECUTE ON type t_air_table TO xxx@localhost;
+GRANT EXECUTE ON type t_air_table TO xxx@localhost;
+FLUSH PRIVILEGES;
+SELECT t_air3(1+1,'aabb') FROM dual;
+SELECT t_air_table(t_air3(1,'aa'),t_air3(2,'bb')) FROM dual;
+SELECT t_air_array(null) FROM dual;
+drop type t_air_table;
+drop type t_air_array;
+DROP type t_air3;
+DROP USER xxx@localhost;
+
+--echo #
+--echo # Creator=root, definer=xxx, SQL SECURITY INVOKER
+--echo #
+
+CREATE USER xxx@localhost;
+create or replace DEFINER=xxx@localhost type t_air4 as object(id int,type char(4)) SQL SECURITY INVOKER;
+
+SELECT t_air4(1+1,'aabb') FROM dual;
+DROP type t_air4;
+DROP USER xxx@localhost;
+--echo # DONE
+

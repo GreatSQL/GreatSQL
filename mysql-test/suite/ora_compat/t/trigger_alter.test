@@ -1,0 +1,174 @@
+#
+# Test of oracle trigger
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS `trg`;
+CREATE TABLE `trg` (
+  `id` int DEFAULT NULL,
+  `name` varchar(200) DEFAULT NULL
+);
+
+DROP TABLE IF EXISTS `trg_0`;
+CREATE TABLE `trg_0` (
+  `id` int DEFAULT NULL,
+  `name` varchar(200) DEFAULT NULL
+);
+
+set sql_mode=oracle;
+DELIMITER $$;
+CREATE  TRIGGER trg1 BEFORE insert 
+ON trg FOR EACH ROW
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.name:=  '-insert'||:NEW.name;
+    END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+DELIMITER $$;
+CREATE  TRIGGER trg2 BEFORE update 
+ON trg FOR EACH ROW
+BEGIN
+    IF :NEW.id < 0 THEN
+       :NEW.name:=  '-update'||:old.name;
+    END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+DELIMITER $$;
+CREATE  TRIGGER trg3 BEFORE delete 
+ON trg FOR EACH ROW
+BEGIN
+    IF :old.id < 0 THEN
+     insert into trg_0 values(:old.id,'-delete'||:old.name);
+    END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+--replace_column 7 <0>
+show create trigger trg1;
+--replace_column 7 <0>
+show create trigger trg2;
+--replace_column 7 <0>
+show create trigger trg3;
+
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+
+select * from trg;
+
+update trg set name ='name_1' where id=-1;
+
+select * from trg;
+
+delete from trg where id=-1;
+
+select * from trg_0;
+
+delete from trg;
+delete from trg_0;
+
+set sql_mode=default;
+alter trigger trg1 disable;
+alter trigger trg2 disable;
+alter trigger trg3 disable;
+
+--replace_column 7 <0>
+show create trigger trg1;
+--replace_column 7 <0>
+show create trigger trg2;
+--replace_column 7 <0>
+show create trigger trg3;
+
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+
+select * from trg;
+
+update trg set name ='name_1' where id=-1;
+
+select * from trg;
+
+delete from trg where id=-1;
+
+select * from trg_0;
+
+delete from trg;
+delete from trg_0;
+
+drop trigger if exists trg0;
+DELIMITER $$;
+CREATE  TRIGGER trg0 BEFORE insert  
+ON trg FOR EACH ROW  FOLLOWS trg1
+BEGIN
+    IF NEW.id < 0 THEN
+      SET NEW.id = - NEW.id;
+      SET NEW.name = concat('trg0',NEW.name );
+    END IF;
+END$$
+DELIMITER ;$$
+do sleep(0.01);
+
+--replace_column 7 <0>
+show create trigger trg0;
+
+insert into trg values(-1,'-name1');
+select * from trg;
+
+alter trigger trg0 disable;
+
+--replace_column 7 <0>
+show create trigger trg0;
+
+insert into trg values(-2,'-name2');
+select * from trg;
+
+
+set sql_mode=oracle;
+DELIMITER $$;
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+create or replace function f1() return int deterministic is
+f_var int;
+begin
+  alter  trigger trg disable ;
+return f_var;
+END$$
+DELIMITER ;$$
+
+--replace_column 7 <0>
+show create trigger trg0;
+
+DELIMITER $$;
+create or replace PROCEDURE p1() as
+    v_run_number   integer;
+    v_temp1        integer;
+ BEGIN
+    alter trigger trg0 enable;
+END$$
+DELIMITER ;$$
+
+call p1();
+--replace_column 7 <0>
+show create trigger trg0;
+
+execute immediate 'alter trigger trg0 disable';
+--replace_column 7 <0>
+show create trigger trg0;
+
+--error ER_PARSE_ERROR
+alter trigger trg3 ;
+
+--error ER_PARSE_ERROR
+alter trigger trg3 ena;
+
+drop procedure if exists p1;
+drop trigger if exists trg0;
+drop trigger if exists trg1;
+drop trigger if exists trg2;
+drop trigger if exists trg3;
+
+drop table if exists trg;
+drop table if exists trg_0;
+--enable_warnings

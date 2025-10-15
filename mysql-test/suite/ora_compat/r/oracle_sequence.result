@@ -1,0 +1,442 @@
+
+[### test select sequence col parser]
+create table t1 (c1 int primary key, c2 int) engine=innodb;
+insert into t1 values (1,1);
+create sequence seq;
+select test.seq.currval from t1;
+ERROR HY000: read sequence value failed, cause currval is not yet defined in this session
+select test.seq.nextval from t1;
+nextval
+1
+select test.seq.currval from t1;
+currval
+1
+select TEST.seq.currval from t1;
+ERROR 42S22: Unknown column 'TEST.seq.currval' in 'field list'
+select TEST.seq.nextval from t1;
+ERROR 42S22: Unknown column 'TEST.seq.nextval' in 'field list'
+select test.seq.currval from t1;
+currval
+1
+select test.seq.nextval from t1;
+nextval
+2
+select seq.currval from t1;
+currval
+2
+select seq.nextval from t1;
+nextval
+3
+select SEQ.currval from t1;
+ERROR 42S22: Unknown column 'SEQ.currval' in 'field list'
+select SEQ.nextval from t1;
+ERROR 42S22: Unknown column 'SEQ.nextval' in 'field list'
+select seq.currval from t1;
+currval
+3
+select seq.nextval from t1;
+nextval
+4
+select seq.CURRVAL from t1;
+CURRVAL
+4
+select seq.NEXTVAL from t1;
+NEXTVAL
+5
+select hex(seq.currval) from t1;
+hex(seq.currval)
+5
+select test.seq from t1;
+ERROR 42S22: Unknown column 'test.seq' in 'field list'
+select test.seq.errval from t1;
+ERROR 42S22: Unknown column 'test.seq.errval' in 'field list'
+select seq.errval from t1;
+ERROR 42S22: Unknown column 'seq.errval' in 'field list'
+select currval from t1;
+ERROR 42S22: Unknown column 'currval' in 'field list'
+select nextval from t1;
+ERROR 42S22: Unknown column 'nextval' in 'field list'
+drop sequence seq;
+
+[### test decimal number with fraction]
+create sequence seq minvalue 10.1;
+ERROR HY000: Only integers allowed as number here
+create sequence seq minvalue 1000000000000000000000000.1;
+ERROR HY000: Only integers allowed as number here
+create sequence seq maxvalue 10.1;
+ERROR HY000: Only integers allowed as number here
+create sequence seq maxvalue 1000000000000000000000000.1;
+ERROR HY000: Only integers allowed as number here
+create sequence seq start with 10.1;
+ERROR HY000: Only integers allowed as number here
+create sequence seq start with 1000000000000000000000000.1;
+ERROR HY000: Only integers allowed as number here
+create sequence seq increment by 10.1;
+ERROR HY000: Only integers allowed as number here
+create sequence seq increment by 1000000000000000000000000.1;
+ERROR HY000: Only integers allowed as number here
+
+[### test "increment" cannot be zero]
+create sequence seq increment by 0;
+ERROR HY000: create sequence failed, cause INCREMENT can not be zero!
+
+[### test "max <= min"]
+create sequence seq maxvalue 9 minvalue 10;
+ERROR HY000: create sequence failed, cause MAXVALUE should greater than MINVALUE!
+create sequence seq maxvalue 10 minvalue 10;
+ERROR HY000: create sequence failed, cause MAXVALUE should greater than MINVALUE!
+create sequence seq maxvalue -10 minvalue -9;
+ERROR HY000: create sequence failed, cause MAXVALUE should greater than MINVALUE!
+create sequence seq maxvalue -10 minvalue -10;
+ERROR HY000: create sequence failed, cause MAXVALUE should greater than MINVALUE!
+
+[### test "max-min" < "increment"]
+create sequence seq maxvalue 100 minvalue 90 increment by 11;
+ERROR HY000: create sequence failed, cause INCREMENT should not greater than "MAXVALUE - MINVALUE"!
+
+[### test truncate of "min/max"]
+create sequence seq maxvalue 10000000000000000000000000000 start with 9999999999999999999999999999;
+Warnings:
+Warning	1292	Truncated incorrect MAXVALUE value: '10000000000000000000000000000'
+select seq.nextval;
+nextval
+9999999999999999999999999999
+drop sequence seq;
+create sequence seq minvalue -10000000000000000000000000000 start with -999999999999999999999999999 increment by -1;
+Warnings:
+Warning	1292	Truncated incorrect MINVALUE value: '-10000000000000000000000000000'
+select seq.nextval;
+nextval
+-999999999999999999999999999
+drop sequence seq;
+
+[### test seq: start with]
+create sequence seq start with 2;
+select seq.nextval;
+nextval
+2
+drop sequence seq;
+
+[### test seq: increment by negative-number]
+create sequence seq start with 1000 increment by -2;
+ERROR HY000: create sequence failed, cause START WITH should between MINVALUE and MAXVALUE!
+create sequence seq maxvalue 1024 start with 1000 increment by -2;
+select seq.nextval;
+nextval
+1000
+select seq.nextval;
+nextval
+998
+select seq.nextval;
+nextval
+996
+drop sequence seq;
+
+[### test seq: values used up]
+create sequence seq maxvalue 2;
+select seq.nextval;
+nextval
+1
+select seq.nextval;
+nextval
+2
+select seq.nextval;
+ERROR HY000: read sequence value failed, cause sequence's value used up!
+drop sequence seq;
+create sequence seq minvalue -1 maxvalue 2 start with 2 increment by -2;
+select seq.nextval;
+nextval
+2
+select seq.nextval;
+nextval
+0
+select seq.nextval;
+ERROR HY000: read sequence value failed, cause sequence's value used up!
+drop sequence seq;
+
+[### test seq: values used up and cycled]
+create sequence seq maxvalue 3 cycle start with 2 cache 2;
+select seq.nextval;
+nextval
+2
+select seq.nextval;
+nextval
+3
+select seq.nextval;
+nextval
+1
+select seq.nextval;
+nextval
+2
+select seq.nextval;
+nextval
+3
+drop sequence seq;
+create sequence seq minvalue -1 maxvalue 5 cycle start with 3 increment by -2 cache 3;
+select seq.nextval;
+nextval
+3
+select seq.nextval;
+nextval
+1
+select seq.nextval;
+nextval
+-1
+select seq.nextval;
+nextval
+5
+select seq.nextval;
+nextval
+3
+drop sequence seq;
+
+[### test seq: cache num]
+create sequence seq cache 3;
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	-1000000000000000000000000000
+select seq.nextval;
+nextval
+1
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	3
+select seq.nextval;
+nextval
+2
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	3
+select seq.nextval;
+nextval
+3
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	3
+select seq.nextval;
+nextval
+4
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	6
+drop sequence seq;
+
+[### test_seq: order]
+[#cache num disabled]
+create sequence seq cache 3 order;
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	-1000000000000000000000000000
+select seq.nextval;
+nextval
+1
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	1
+select seq.nextval;
+nextval
+2
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	2
+select seq.nextval;
+nextval
+3
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	3
+drop sequence seq;
+
+[### test 28 digits boundary(pos) and 27 digits boundary(neg)]
+create sequence seq start with 9999999999999999999999999998;
+select seq.nextval;
+nextval
+9999999999999999999999999998
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	9999999999999999999999999999
+select seq.nextval;
+nextval
+9999999999999999999999999999
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	9999999999999999999999999999
+select seq.nextval;
+ERROR HY000: read sequence value failed, cause sequence's value used up!
+drop sequence seq;
+create sequence seq start with -999999999999999999999999998 increment by -1;
+select seq.nextval;
+nextval
+-999999999999999999999999998
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	-999999999999999999999999999
+select seq.nextval;
+nextval
+-999999999999999999999999999
+select * from mysql.greatdb_sequences_persist;
+db	name	currval
+test	seq	-999999999999999999999999999
+select seq.nextval;
+ERROR HY000: read sequence value failed, cause sequence's value used up!
+drop sequence seq;
+
+[### test procedure options]
+drop procedure if exists tpp;
+drop procedure if exists tpp_d;
+create sequence test_seq;
+create procedure tpp()
+begin
+select test_seq.nextval;
+end//
+create procedure tpp_d()
+begin
+select test_seq.currval;
+end//
+call tpp();
+nextval
+1
+call tpp_d();
+currval
+1
+call tpp_d();
+currval
+1
+call tpp_d();
+currval
+1
+call tpp();
+nextval
+2
+call tpp();
+nextval
+3
+call tpp_d();
+currval
+3
+drop procedure tpp;
+drop procedure tpp_d;
+drop sequence test_seq;
+
+[### test case of parse database name]
+create sequence test.seq_test_id minvalue 10 maxvalue 9999999999999999999999999999 increment by 1 start with 1037991429 cache 20 noorder nocycle;
+select test.seq_test_id.nextval from dual;
+nextval
+1037991429
+select TEST.seq_test_id.nextval from dual;
+ERROR 42S02: Unknown table 'TEST.seq_test_id' in field list
+select test.seq_test_id.nextval from dual;
+nextval
+1037991430
+select TeSt.seq_test_id.nextval from dual;
+ERROR 42S02: Unknown table 'TeSt.seq_test_id' in field list
+select test.seq_test_id.nextval from dual;
+nextval
+1037991431
+select teSt.seq_test_id.nextval from dual;
+ERROR 42S02: Unknown table 'teSt.seq_test_id' in field list
+select test.seq_test_id.nextval from dual;
+nextval
+1037991432
+drop sequence TEST.seq_test_id;
+ERROR HY000: drop sequence failed, cause sequence 'TEST.seq_test_id' not exists
+drop sequence test.seq_test_id;
+CREATE SEQUENCE TEST.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+SELECT TEST.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+NEXTVAL
+1037991429
+SELECT Test.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+ERROR 42S02: Unknown table 'Test.SEQ_TEST_ID' in field list
+SELECT TEST.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+NEXTVAL
+1037991430
+SELECT test.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+ERROR 42S02: Unknown table 'test.SEQ_TEST_ID' in field list
+SELECT TEST.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+NEXTVAL
+1037991431
+SELECT TesT.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+ERROR 42S02: Unknown table 'TesT.SEQ_TEST_ID' in field list
+SELECT TEST.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+NEXTVAL
+1037991432
+drop SEQUENCE TeST.SEQ_TEST_ID;
+ERROR HY000: drop sequence failed, cause sequence 'TeST.SEQ_TEST_ID' not exists
+drop SEQUENCE TEST.SEQ_TEST_ID;
+CREATE SEQUENCE SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence SEQ_TEST_ID;
+CREATE SEQUENCE SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence test.SEQ_TEST_ID;
+CREATE SEQUENCE SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence SEQ_TEST_ID;
+CREATE SEQUENCE SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence TEST.SEQ_TEST_ID;
+ERROR HY000: drop sequence failed, cause sequence 'TEST.SEQ_TEST_ID' not exists
+drop sequence test.SEQ_TEST_ID;
+CREATE SEQUENCE SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence TeSt.seq_test_id;
+ERROR HY000: drop sequence failed, cause sequence 'TeSt.seq_test_id' not exists
+drop sequence test.SEQ_TEST_ID;
+CREATE SEQUENCE test.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence SEQ_TEST_ID;
+CREATE SEQUENCE Test.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence seq_test_id;
+ERROR HY000: drop sequence failed, cause sequence 'test.seq_test_id' not exists
+drop sequence Test.SEQ_TEST_ID;
+CREATE SEQUENCE Test.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence test.seq_test_id;
+ERROR HY000: drop sequence failed, cause sequence 'test.seq_test_id' not exists
+drop sequence Test.SEQ_TEST_ID;
+CREATE SEQUENCE test.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence TEST.seq_test_id;
+ERROR HY000: drop sequence failed, cause sequence 'TEST.seq_test_id' not exists
+drop sequence test.SEQ_TEST_ID;
+CREATE SEQUENCE TEST.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence test.seq_test_id;
+ERROR HY000: drop sequence failed, cause sequence 'test.seq_test_id' not exists
+drop sequence TEST.SEQ_TEST_ID;
+CREATE SEQUENCE TEST.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence TeSt.seq_test_id;
+ERROR HY000: drop sequence failed, cause sequence 'TeSt.seq_test_id' not exists
+drop sequence TEST.SEQ_TEST_ID;
+
+[### test alias of sequence column currval and nextval]
+create sequence seq_test minvalue 1 maxvalue 9999999999 increment by 1;
+create table tt (c1 int primary key, c2 varchar(50))engine = innodb;
+insert into tt values (1, "rr"), (2, "tt"), (3, "yy");
+select * from tt;
+c1	c2
+1	rr
+2	tt
+3	yy
+select seq_test.nextval;
+nextval
+1
+select seq_test.currval;
+currval
+1
+select seq_test.nextval a from dual;
+a
+2
+select seq_test.nextval as aaa from dual;
+aaa
+3
+select seq_test.nextval;
+nextval
+4
+select seq_test.currval aaa, 1+1 as bbb from dual;
+aaa	bbb
+4	2
+select seq_test.nextval "a", c1 from tt;
+a	c1
+5	1
+6	2
+7	3
+select seq_test.nextval as "a", c1 from tt;
+a	c1
+8	1
+9	2
+10	3
+drop table tt;
+drop sequence seq_test;
+drop table t1;

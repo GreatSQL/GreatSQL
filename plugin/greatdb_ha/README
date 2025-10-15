@@ -1,0 +1,19 @@
+MGR支持内置VIP说明
+配置参数
+plugin_load_add=greatdb_ha.so 或者 install plugin greatdb_ha soname 'greatdb_ha.so';
+loose-greatdb_ha_mgr_vip_ip = 192.168.2.125  配置浮动ip
+loose-greatdb_ha_enable_mgr_vip = 1 配置开启浮动ip功能
+loose-greatdb_ha_mgr_vip_nic = 'eno1' 配置网卡， 为了防止网卡原有的ip被覆盖,会将vip绑定到网卡:0上,比如配置为eno1, 实际会绑定为eno1:0
+loose-greatdb_ha_mgr_vip_mask = '255.255.255.0' 配置掩码
+上述参数没有配置或者配置格式不对功能会失效(目前没有格式检查报错的功能)。
+上述参数支持动态修改
+
+当mgr主的浮动ip被手动删除或者出现异常配置不对时，可以通过在mgr主上set greatdb_ha_force_change_mgr_vip = on命令去重新获取mgr拓扑结构从而绑定新的浮动ip。
+
+目前只支持单主，所以需要设置
+loose-group_replication_single_primary_mode= TRUE
+loose-group_replication_enforce_update_everywhere_checks= FALSE
+启动说明：
+配置浮动ip需要内核权限， 可以给mysql启动用户设置root权限或者通过setcap，为mysqld可执行文件添加CAP_NET_ADMIN的Capability。具体命令：
+Sudo setcap CAP_NET_ADMIN,CAP_NET_RAW+ep mysqld/greatdbd
+目前setcap以后，只能通过查找系统动态库来找对应的动态库， export LD_LIBRARY_PATH也不会生效，因此需要把非系统目录下的动态库添加软链接到系统库或者在/etc/ld.so.conf.d/ 下添加mysql.conf文件，并添加非系统库路径，一般是/mysqlinstallldir/bin/../lib/private， 可以通过ldd mysqld查看

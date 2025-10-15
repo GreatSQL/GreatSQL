@@ -1,0 +1,28 @@
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+create type mydata as object(x int, y int);
+create table t1(id int, c mydata);
+insert into t1 values(1, mydata(5,6));
+insert into t1 values(2, mydata(4,7));
+create view v1 as select * from t1;
+select * from t1 where c = (select c from v1 where id = 1);
+id	c
+1	x:5 | y:6
+create procedure p1()
+AS
+val mydata;
+BEGIN
+val := (select c from v1 where id = 1);
+select val;
+end;
+//
+call p1();
+val
+x:5 | y:6
+call p1();
+val
+x:5 | y:6
+drop procedure p1;
+drop view v1;
+drop table t1;
+drop type mydata;

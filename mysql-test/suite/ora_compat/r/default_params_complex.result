@@ -1,0 +1,157 @@
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a INT DEFAULT 1, b INT DEFAULT 2, c INT DEFAULT 3)
+AS BEGIN
+SELECT a, b, c;
+END|
+CREATE FUNCTION f1(a INT DEFAULT 1, b INT DEFAULT 2, c INT DEFAULT 3) RETURN INT
+AS BEGIN
+RETURN a;
+END|
+CALL p1(100, 200, 300);
+a	b	c
+100	200	300
+CALL p1(100, 200);
+a	b	c
+100	200	3
+CALL p1(100);
+a	b	c
+100	2	3
+CALL p1();
+a	b	c
+1	2	3
+CALL p1(a=>100, b=>200, c=>300);
+a	b	c
+100	200	300
+CALL p1(a=>100, b=>200);
+a	b	c
+100	200	3
+CALL p1(b=>200, c=>300);
+a	b	c
+1	200	300
+CALL p1(a=>100, c=>300);
+a	b	c
+100	2	300
+CALL p1(a=>100);
+a	b	c
+100	2	3
+CALL p1(b=>200);
+a	b	c
+1	200	3
+CALL p1(c=>300);
+a	b	c
+1	2	300
+CALL p1(100, b=>200, c=>300);
+a	b	c
+100	200	300
+CALL p1(100, 200, c=>300);
+a	b	c
+100	200	300
+CALL p1(100, b=>200);
+a	b	c
+100	200	3
+CALL p1(b=>200, c=>300);
+a	b	c
+1	200	300
+CALL p1(100, c=>300);
+a	b	c
+100	2	300
+CALL p1();
+a	b	c
+1	2	3
+SELECT f1(100, 200, 300);
+f1(100, 200, 300)
+100
+SELECT f1(100, 200);
+f1(100, 200)
+100
+SELECT f1(100);
+f1(100)
+100
+SELECT f1();
+f1()
+1
+SELECT f1(a=>100, b=>200, c=>300);
+f1(a=>100, b=>200, c=>300)
+100
+SELECT f1(a=>100, b=>200);
+f1(a=>100, b=>200)
+100
+SELECT f1(b=>200, c=>300);
+f1(b=>200, c=>300)
+1
+SELECT f1(a=>100, c=>300);
+f1(a=>100, c=>300)
+100
+SELECT f1(a=>100);
+f1(a=>100)
+100
+SELECT f1(b=>200);
+f1(b=>200)
+1
+SELECT f1(c=>300);
+f1(c=>300)
+1
+SELECT f1(100, b=>200, c=>300);
+f1(100, b=>200, c=>300)
+100
+SELECT f1(100, 200, c=>300);
+f1(100, 200, c=>300)
+100
+SELECT f1(100, b=>200);
+f1(100, b=>200)
+100
+SELECT f1(b=>200, c=>300);
+f1(b=>200, c=>300)
+1
+SELECT f1(100, c=>300);
+f1(100, c=>300)
+100
+SELECT f1();
+f1()
+1
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a INT DEFAULT 1, b INT, c INT)
+AS BEGIN
+SELECT a, b, c;
+END|
+CREATE FUNCTION f1(a INT DEFAULT 1, b INT, c INT) RETURN INT
+AS BEGIN
+RETURN a;
+END|
+CALL p1(100, 200, 300);
+a	b	c
+100	200	300
+CALL p1(a=>100, b=>200, c=>300);
+a	b	c
+100	200	300
+CALL p1(b=>200, c=>300);
+a	b	c
+1	200	300
+CALL p1(100, b=>200, c=>300);
+a	b	c
+100	200	300
+CALL p1(100, 200, c=>300);
+a	b	c
+100	200	300
+SELECT f1(100, 200, 300);
+f1(100, 200, 300)
+100
+SELECT f1(a=>100, b=>200, c=>300);
+f1(a=>100, b=>200, c=>300)
+100
+SELECT f1(b=>200, c=>300);
+f1(b=>200, c=>300)
+1
+SELECT f1(100, b=>200, c=>300);
+f1(100, b=>200, c=>300)
+100
+SELECT f1(100, 200, c=>300);
+f1(100, 200, c=>300)
+100
+SELECT f1(b=>200, c=>300);
+f1(b=>200, c=>300)
+1
+DROP PROCEDURE p1;
+DROP FUNCTION f1;

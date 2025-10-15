@@ -1,0 +1,182 @@
+DROP TABLE IF EXISTS t1;
+DROP PROCEDURE IF EXISTS p1;
+create table t1 (id int,a char(10),b char(10));
+insert into t1 values (1,'しa','树开');
+insert into t1 values (2,'しa','''.');
+set sql_mode='';
+select lpad(a,1) from t1;
+ERROR 42000: Incorrect parameter count in the call to native function 'lpad'
+select lpad(a,0,b) from t1;
+lpad(a,0,b)
+
+
+select lpad(a,2,b) from t1;
+lpad(a,2,b)
+しa
+しa
+select lpad(a,3,b) from t1;
+lpad(a,3,b)
+树しa
+'しa
+select lpad(a,4,b) from t1;
+lpad(a,4,b)
+树开しa
+'.しa
+select lpad(a,5,b) from t1;
+lpad(a,5,b)
+树开树しa
+'.'しa
+select lpad(a,6,b) from t1;
+lpad(a,6,b)
+树开树开しa
+'.'.しa
+select lpad(a,7,b) from t1;
+lpad(a,7,b)
+树开树开树しa
+'.'.'しa
+select lpad(a,8,b) from t1;
+lpad(a,8,b)
+树开树开树开しa
+'.'.'.しa
+select lpad_oracle(a,0) from t1;
+lpad_oracle(a,0)
+NULL
+NULL
+select lpad_oracle(a,1) from t1;
+lpad_oracle(a,1)
+ 
+ 
+select lpad_oracle(a,2,b) from t1;
+lpad_oracle(a,2,b)
+し
+し
+select lpad_oracle(a,3,b) from t1;
+lpad_oracle(a,3,b)
+しa
+しa
+select lpad_oracle(a,4,b) from t1;
+lpad_oracle(a,4,b)
+ しa
+'しa
+select lpad_oracle(a,5,b) from t1;
+lpad_oracle(a,5,b)
+树しa
+'.しa
+select lpad_oracle(a,6,b) from t1;
+lpad_oracle(a,6,b)
+ 树しa
+'.'しa
+select lpad_oracle(a,7,b) from t1;
+lpad_oracle(a,7,b)
+树开しa
+'.'.しa
+select lpad_oracle(a,8,b) from t1;
+lpad_oracle(a,8,b)
+ 树开しa
+'.'.'しa
+set sql_mode='oracle';
+select lpad(a,0) from t1;
+lpad(a,0)
+NULL
+NULL
+select lpad(a,1) from t1;
+lpad(a,1)
+ 
+ 
+select lpad(a,0,b) from t1;
+lpad(a,0,b)
+NULL
+NULL
+select lpad(a,2,b) from t1;
+lpad(a,2,b)
+し
+し
+select lpad(a,3,b) from t1;
+lpad(a,3,b)
+しa
+しa
+select lpad(a,4,b) from t1;
+lpad(a,4,b)
+ しa
+'しa
+select lpad(a,5,b) from t1;
+lpad(a,5,b)
+树しa
+'.しa
+select lpad(a,6,b) from t1;
+lpad(a,6,b)
+ 树しa
+'.'しa
+select lpad(a,7,b) from t1;
+lpad(a,7,b)
+树开しa
+'.'.しa
+select lpad(a,8,b) from t1;
+lpad(a,8,b)
+ 树开しa
+'.'.'しa
+drop table t1;
+set sql_mode='';
+select lpad('しa長',5);
+ERROR 42000: Incorrect parameter count in the call to native function 'lpad'
+select lpad('しa長',4,'.');
+lpad('しa長',4,'.')
+.しa長
+select lpad('しa長',6,'树');
+lpad('しa長',6,'树')
+树树树しa長
+select lpad('万a',6,'树开');
+lpad('万a',6,'树开')
+树开树开万a
+select lpad('しa長',7,'树');
+lpad('しa長',7,'树')
+树树树树しa長
+select lpad('しa長',9,'树a');
+lpad('しa長',9,'树a')
+树a树a树aしa長
+select lpad_oracle('1234', 12, null);
+lpad_oracle('1234', 12, null)
+NULL
+select lpad_oracle('1234', 12);
+lpad_oracle('1234', 12)
+        1234
+set sql_mode='oracle';
+select lpad('しa長',4);
+lpad('しa長',4)
+ しa
+select lpad('しa長',5);
+lpad('しa長',5)
+しa長
+select lpad('しa長',4,'.');
+lpad('しa長',4,'.')
+ しa
+select lpad('しa長',6,'树');
+lpad('しa長',6,'树')
+ しa長
+select lpad('万a',6,'树开');
+lpad('万a',6,'树开')
+ 树万a
+select lpad('しa長',7,'树');
+lpad('しa長',7,'树')
+树しa長
+select lpad('しa長',9,'树a');
+lpad('しa長',9,'树a')
+ 树aしa長
+set sql_mode='';
+CREATE PROCEDURE p1(a varchar(255),c int,b varchar(255))
+SET @query = lpad(a,c,b);
+CALL p1('万里',10,'开源.');
+SELECT @query;
+@query
+开源.开源.开源万里
+DROP PROCEDURE p1;
+set sql_mode='oracle';
+CREATE PROCEDURE p1(a varchar(255),c int,b varchar(255)) as
+begin 
+SET @query = lpad(a,c,b);
+END//
+CALL p1('万里',10,'开源.');
+SELECT @query;
+@query
+ 开源.万里
+DROP PROCEDURE p1;

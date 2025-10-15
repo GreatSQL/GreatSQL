@@ -1,0 +1,61 @@
+--echo # 1. Test local clone print error
+
+--source include/have_debug.inc
+--source include/have_innodb_default_undo_tablespaces.inc
+--source ../include/clone_connection_begin.inc
+
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/data_new
+
+## Install plugin
+
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+truncate mysql.clone_history;
+
+## Create test schema
+CREATE TABLE t1(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB);
+insert into t1 values(1,1,1,"aaa");
+insert into t1 values(2,2,2,"aaa");
+insert into t1 values(3,3,3,"aaa");
+insert into t1 values(4,4,4,"aaa");
+insert into t1 values(5,5,5,"aaa");
+
+--echo # In connection con1 - Running Insert
+connect (con1,localhost,root,,);
+begin;
+--send insert into t1 values(120,120,120,"aaa")
+
+--echo # In connection default - Cloning database
+--connection clone_conn_1
+
+SET GLOBAL DEBUG = '+d,simulate_clone_linux_system_error';
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+--error ER_ERROR_ON_WRITE
+--eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR';
+--echo # In connection default - Finished Cloning
+
+--echo # In connection con1 - Waiting
+connection con1;
+--reap
+commit;
+
+--echo # In connection default
+connection default;
+disconnect con1;
+
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+select ID, STAGE, STATE  from performance_schema.clone_progress;
+
+
+--connection default
+
+drop table t1;
+
+SET GLOBAL DEBUG = '-d,simulate_clone_linux_system_error';
+
+# Clean recipient by cloning the cleaned up donor
+
+--source ../include/clone_connection_end.inc
+
+UNINSTALL PLUGIN clone;

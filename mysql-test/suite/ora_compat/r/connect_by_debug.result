@@ -1,0 +1,40 @@
+CREATE TABLE student (
+id       INT,
+name  VARCHAR(10),
+grade INT
+);
+INSERT INTO student VALUES(1, 'John', NULL);
+INSERT INTO student VALUES(2, 'Paul', 1);
+INSERT INTO student VALUES(3, 'Nancy', 1);
+INSERT INTO student VALUES(4, 'Sarah', 3);
+SELECT VARIABLE_VALUE INTO @v1
+FROM performance_schema.global_status 
+WHERE VARIABLE_NAME = 'Created_tmp_disk_tables';
+SELECT id, name, grade, level FROM student CONNECT BY PRIOR id = grade ORDER BY id;
+id	name	grade	level
+1	John	NULL	1
+2	Paul	1	2
+2	Paul	1	1
+3	Nancy	1	2
+3	Nancy	1	1
+4	Sarah	3	3
+4	Sarah	3	2
+4	Sarah	3	1
+set debug='+d,connect_by_force_write_after_postion';
+SELECT id, name, grade, level FROM student CONNECT BY PRIOR id = grade ORDER BY id;
+id	name	grade	level
+1	John	NULL	1
+2	Paul	1	2
+2	Paul	1	1
+3	Nancy	1	2
+3	Nancy	1	1
+4	Sarah	3	3
+4	Sarah	3	2
+4	Sarah	3	1
+SELECT VARIABLE_VALUE INTO @v2
+FROM performance_schema.global_status 
+WHERE VARIABLE_NAME = 'Created_tmp_disk_tables';
+select @v2 > @v1;
+@v2 > @v1
+1
+drop table student;

@@ -1,0 +1,23 @@
+#Bugfix #4783: oracle mode negative decimal display error when going to zero
+
+--disable_warnings
+create table test (
+    c1 decimal(10,6) default '-100.12',
+    c2 decimal(10,6) default '-100.123',
+    c3 decimal(10,6) default '-100.1234',
+    c4 decimal(10,6) default '100.12345',
+    c5 decimal(10,6) default '100.123456',
+    c6 decimal(10,6) default '100.1234567'
+    );
+
+insert into test values();
+insert into test values(1.1,2.123,3.1234,-4.123456,-5.1234567,-6.1234567);
+
+select * from test;
+
+set sql_mode=oracle;
+
+select * from test;
+
+drop table test;
+--enable_warnings

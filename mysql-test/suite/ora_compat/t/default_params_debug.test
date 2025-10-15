@@ -1,0 +1,29 @@
+--source include/have_debug.inc
+--source include/count_sessions.inc
+
+# ----------------------------------------------------------------------------
+# Test for default parameters is saved 
+# ----------------------------------------------------------------------------
+
+SET sql_mode=ORACLE;
+
+SET SESSION debug='+d,skip_dd_table_access_check';
+
+DELIMITER |;
+CREATE PROCEDURE p1(a INT DEFAULT 12345)
+AS BEGIN
+  SELECT a, b, c;
+END|
+
+CREATE FUNCTION f1(a INT DEFAULT 54321) RETURN INT
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+
+SELECT b.options FROM mysql.parameters b, mysql.routines a WHERE a.id=b.routine_id AND a.name LIKE 'p1' ;
+SELECT b.options FROM mysql.parameters b, mysql.routines a WHERE a.id=b.routine_id AND a.name LIKE 'f1' ;
+
+DROP PROCEDURE p1;
+DROP FUNCTION f1;

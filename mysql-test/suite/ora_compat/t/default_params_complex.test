@@ -1,0 +1,102 @@
+# ----------------------------------------------------------------------------
+# Test for default parameters in procedure and function under sql_mode = oracle
+# ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# integrated with named parameter
+# ----------------------------------------------------------------------------
+#
+# all parameters has default
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+CREATE PROCEDURE p1(a INT DEFAULT 1, b INT DEFAULT 2, c INT DEFAULT 3)
+AS BEGIN
+  SELECT a, b, c;
+END|
+
+CREATE FUNCTION f1(a INT DEFAULT 1, b INT DEFAULT 2, c INT DEFAULT 3) RETURN INT
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+
+CALL p1(100, 200, 300);
+CALL p1(100, 200);
+CALL p1(100);
+CALL p1();
+CALL p1(a=>100, b=>200, c=>300);
+CALL p1(a=>100, b=>200);
+CALL p1(b=>200, c=>300);
+CALL p1(a=>100, c=>300);
+CALL p1(a=>100);
+CALL p1(b=>200);
+CALL p1(c=>300);
+
+CALL p1(100, b=>200, c=>300);
+CALL p1(100, 200, c=>300);
+CALL p1(100, b=>200);
+CALL p1(b=>200, c=>300);
+CALL p1(100, c=>300);
+
+CALL p1();
+
+SELECT f1(100, 200, 300);
+SELECT f1(100, 200);
+SELECT f1(100);
+SELECT f1();
+SELECT f1(a=>100, b=>200, c=>300);
+SELECT f1(a=>100, b=>200);
+SELECT f1(b=>200, c=>300);
+SELECT f1(a=>100, c=>300);
+SELECT f1(a=>100);
+SELECT f1(b=>200);
+SELECT f1(c=>300);
+
+SELECT f1(100, b=>200, c=>300);
+SELECT f1(100, 200, c=>300);
+SELECT f1(100, b=>200);
+SELECT f1(b=>200, c=>300);
+SELECT f1(100, c=>300);
+
+SELECT f1();
+
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+
+#
+# first parameters has default
+#------------------------------------
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+CREATE PROCEDURE p1(a INT DEFAULT 1, b INT, c INT)
+AS BEGIN
+  SELECT a, b, c;
+END|
+
+CREATE FUNCTION f1(a INT DEFAULT 1, b INT, c INT) RETURN INT
+AS BEGIN
+  RETURN a;
+END|
+
+DELIMITER ;|
+
+CALL p1(100, 200, 300);
+CALL p1(a=>100, b=>200, c=>300);
+CALL p1(b=>200, c=>300);
+
+CALL p1(100, b=>200, c=>300);
+CALL p1(100, 200, c=>300);
+
+SELECT f1(100, 200, 300);
+SELECT f1(a=>100, b=>200, c=>300);
+SELECT f1(b=>200, c=>300);
+
+SELECT f1(100, b=>200, c=>300);
+SELECT f1(100, 200, c=>300);
+SELECT f1(b=>200, c=>300);
+
+DROP PROCEDURE p1;
+DROP FUNCTION f1;

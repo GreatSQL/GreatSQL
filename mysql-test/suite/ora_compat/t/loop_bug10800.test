@@ -1,0 +1,166 @@
+#
+# Test of problem with loop bug10800
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS t;
+DROP PROCEDURE IF EXISTS p1;
+--enable_warnings
+
+CREATE TABLE t1 (s1 INT, s2 char(100),PRIMARY KEY (s1));
+INSERT INTO t1 values(1,'a,aa');
+INSERT INTO t1 values(2,'bb,b');
+INSERT INTO t1 values(3,'c,c,c');
+
+set sql_mode="oracle";
+delimiter $$;
+CREATE or replace PROCEDURE p1()
+IS
+begin
+  FOR i IN (SELECT s2 FROM t1) LOOP
+  begin
+    select i.s2;
+    FOR p IN 0 .. REGEXP_INSTR(i.s2,',') LOOP
+      select p;
+    END LOOP;
+    END;
+  END LOOP;
+END$$
+delimiter ;$$
+CALL p1();
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+#
+# Test of cursor with parameters.
+#
+delimiter $$;
+CREATE or replace PROCEDURE p1()
+IS
+begin
+  FOR i IN (SELECT s2 FROM t1) LOOP
+  begin
+    select i.s2;
+    FOR p IN 0 .. REGEXP_COUNT(i.s2,',') LOOP
+      select p;
+    END LOOP;
+    END;
+  END LOOP;
+END$$
+delimiter ;$$
+CALL p1();
+CALL p1();
+DROP PROCEDURE p1;
+
+#
+# Test of cursor with parameters.
+#
+delimiter $$;
+CREATE or replace PROCEDURE p1()
+IS
+begin
+  FOR i IN (SELECT s2 FROM t1) LOOP
+  begin
+    select i.s2;
+    FOR p IN reverse 0 .. REGEXP_COUNT(i.s2,',') LOOP
+      select p;
+    END LOOP;
+    END;
+  END LOOP;
+END$$
+delimiter ;$$
+CALL p1();
+CALL p1();
+DROP PROCEDURE p1;
+
+#
+# Test of BUG11171
+#
+delimiter $$;
+--error ER_CANT_USE_OPTION_HERE
+CREATE or replace PROCEDURE p1() IS
+f2 int default 5;
+begin
+  FOR f1 IN 1..f2/f1  LOOP
+    select f1;
+  END LOOP;
+END$$
+
+--error ER_CANT_USE_OPTION_HERE
+CREATE or replace PROCEDURE p1() IS
+begin
+  FOR f1 IN f1..22  LOOP
+    select f1;
+  END LOOP;
+END$$
+
+--error ER_CANT_USE_OPTION_HERE
+CREATE or replace PROCEDURE p1() IS
+begin
+  FOR f1 IN 1..f1+2  LOOP
+    select f1;
+  END LOOP;
+END$$
+
+--error ER_CANT_USE_OPTION_HERE
+CREATE or replace PROCEDURE p1() IS
+begin
+  FOR f1 IN 1..to_number(f1+f1)  LOOP
+    select f1;
+  END LOOP;
+END$$
+
+--error ER_CANT_USE_OPTION_HERE
+CREATE PROCEDURE p1(a_a INT) as
+type dr_type is table of t1%ROWTYPE index by binary_integer;
+dr_table dr_type;
+begin
+dr_table(100).a := 100;
+select dr_table(100).a;
+select * BULK COLLECT into dr_table from t1;
+FORALL i IN 1 .. i+i+1/i
+insert into t2 values dr_table (i);
+end$$
+
+--error ER_CANT_USE_OPTION_HERE
+CREATE PROCEDURE p1(a_a INT) as
+type dr_type is table of t1%ROWTYPE index by binary_integer;
+dr_table dr_type;
+begin
+dr_table(100).a := 100;
+select dr_table(100).a;
+select * BULK COLLECT into dr_table from t1;
+FORALL i IN i*i .. 10
+insert into t2 values dr_table (i);
+end$$
+delimiter ;$$
+
+alter table t1 change s1 f1 int;
+delimiter $$;
+CREATE or replace PROCEDURE p1() IS
+f2 int default 5;
+begin
+FOR f1 IN (select f1 as f1 from t1)  LOOP
+  select f1.f1;
+END LOOP;
+END$$
+delimiter ;$$
+CALL p1();
+CALL p1();
+DROP PROCEDURE p1;
+
+delimiter $$;
+CREATE or replace PROCEDURE p1() IS
+id int default 5;
+begin
+FOR f1 IN (select f1 from t1)  LOOP
+select f1.f1;
+END LOOP;
+END$$
+delimiter ;$$
+CALL p1();
+CALL p1();
+DROP PROCEDURE p1;
+
+
+drop table t1;

@@ -1,0 +1,207 @@
+# 1. Test local increment clone
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+truncate mysql.clone_history;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR' ENABLE PAGE TRACK;;
+CREATE TABLE t1(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB);
+CREATE TABLE t2(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB)
+PARTITION BY KEY(col1) PARTITIONS 5;
+insert into t1 values(1,1,1,"aaa");
+insert into t1 values(2,2,2,"aaa");
+insert into t1 values(3,3,3,"aaa");
+insert into t1 values(4,4,4,"aaa");
+insert into t1 values(5,5,5,"aaa");
+insert into t1 values(6,6,6,"aaa");
+insert into t2 values(1,1,1,"aaa");
+insert into t2 values(2,2,2,"aaa");
+insert into t2 values(3,3,3,"aaa");
+insert into t2 values(4,4,4,"aaa");
+CREATE INDEX index_col2 ON t1 (col2);
+CREATE INDEX index_col2 ON t2 (col2);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` varchar(64) DEFAULT NULL,
+  `col4` blob,
+  PRIMARY KEY (`col1`),
+  KEY `index_col2` (`col2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT count(*) from t1;
+count(*)
+6
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+col1	col2	col3
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	5	5
+6	6	6
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+col1	col2	col3
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	5	5
+6	6	6
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` varchar(64) DEFAULT NULL,
+  `col4` blob,
+  PRIMARY KEY (`col1`),
+  KEY `index_col2` (`col2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY KEY (col1)
+PARTITIONS 5 */
+SELECT count(*) from t2;
+count(*)
+4
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+col1	col2	col3
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+SELECT col1, col2, col3 FROM t2 ORDER BY col1 DESC;
+col1	col2	col3
+4	4	4
+3	3	3
+2	2	2
+1	1	1
+# In connection con1 - Running Insert
+begin;
+insert into t1 values(120,120,120,"aaa");
+# In connection default - Cloning database
+SELECT count(*) from t1;
+count(*)
+6
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+col1	col2	col3
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	5	5
+6	6	6
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+col1	col2	col3
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	5	5
+6	6	6
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` varchar(64) DEFAULT NULL,
+  `col4` blob,
+  PRIMARY KEY (`col1`),
+  KEY `index_col2` (`col2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY KEY (col1)
+PARTITIONS 5 */
+SELECT count(*) from t2;
+count(*)
+4
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+col1	col2	col3
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+col1	col2	col3
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR1' ENABLE PAGE TRACK START_LSN=PAGE_TRACK_LSN;;
+# In connection default - Finished Cloning
+# In connection con1 - Waiting
+commit;
+# In connection default
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+0	Completed	0
+1	Completed	0
+select ID, STAGE, STATE  from performance_schema.clone_progress;
+ID	STAGE	STATE
+0	DROP DATA	Completed
+0	FILE COPY	Completed
+0	PAGE COPY	Completed
+0	REDO COPY	Completed
+0	FILE SYNC	Completed
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+drop table t1;
+drop table t2;
+UNINSTALL PLUGIN clone;
+# 2. Test remote increment clone
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+truncate mysql.clone_history;
+SET GLOBAL clone_valid_donor_list = 'HOST:PORT';
+CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATADIR' ENABLE PAGE TRACK;;
+CREATE TABLE t1(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB);
+CREATE TABLE t2(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB)
+PARTITION BY KEY(col1) PARTITIONS 5;
+insert into t1 values(1,1,1,"aaa");
+insert into t1 values(2,2,2,"aaa");
+insert into t1 values(3,3,3,"aaa");
+insert into t1 values(4,4,4,"aaa");
+insert into t1 values(5,5,5,"aaa");
+insert into t1 values(6,6,6,"aaa");
+insert into t1 values(7,7,7,"aaa");
+insert into t1 values(8,8,8,"aaa");
+insert into t1 values(9,9,9,"aaa");
+insert into t2 values(1,1,1,"aaa");
+insert into t2 values(2,2,2,"aaa");
+insert into t2 values(3,3,3,"aaa");
+insert into t2 values(4,4,4,"aaa");
+insert into t2 values(5,5,5,"aaa");
+insert into t2 values(6,6,6,"aaa");
+insert into t2 values(7,7,7,"aaa");
+insert into t2 values(8,8,8,"aaa");
+insert into t2 values(9,9,9,"aaa");
+CREATE INDEX index_col2 ON t1 (col2);
+CREATE INDEX index_col2 ON t2 (col2);
+CLONE INSTANCE FROM USER@HOST:PORT IDENTIFIED BY '' DATA DIRECTORY = 'CLONE_DATADIR1' ENABLE PAGE TRACK START_LSN=PAGE_TRACK_LSN;;
+# In connection default - Finished Cloning
+# In connection default
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+0	Completed	0
+1	Completed	0
+select ID, STAGE, STATE  from performance_schema.clone_progress;
+ID	STAGE	STATE
+0	DROP DATA	Completed
+0	FILE COPY	Completed
+0	PAGE COPY	Completed
+0	REDO COPY	Completed
+0	FILE SYNC	Completed
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+drop table t1;
+drop table t2;
+UNINSTALL PLUGIN clone;

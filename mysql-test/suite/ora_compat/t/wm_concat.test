@@ -1,0 +1,1033 @@
+##################################
+#test case from group_concat
+##################################
+
+ #Get deafult engine value
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
+
+#
+# simple test of wm_concat function
+#
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+
+create table t1 (grp int, a bigint unsigned, c char(10) not null, d char(10) not null);
+insert into t1 values (1,1,"a","a");
+insert into t1 values (2,2,"b","a");
+insert into t1 values (2,3,"c","b");
+insert into t1 values (3,4,"E","a");
+insert into t1 values (3,5,"C","b");
+insert into t1 values (3,6,"D","b");
+insert into t1 values (3,7,"d","d");
+insert into t1 values (3,8,"d","d");
+insert into t1 values (3,9,"D","c");
+
+############################################################
+# this part: add user test case and simple wm_concat test
+
+select wm_concat(c) from t1;
+select replace(wm_concat(c),',','|') from t1;
+select grp,wm_concat(c) c from t1 group by grp;
+select grp,d,wm_concat(c) from t1 group BY grp,d;
+select grp,d,wm_concat(c) from t1 group BY grp,d order by d;
+select grp,wm_concat(to_char(a/10)) tmpa, wm_concat(c) tmpc FROM t1 group by grp,d order by grp;
+set sql_mode = 'oracle';
+select wm_concat(grp || '_'|| c ||'_'|| d) FROM t1;
+set sql_mode = '';
+############################################################
+
+
+# Test of MySQL simple request
+select grp,wm_concat(c) from t1 group by grp;
+--replace_column 10 9
+explain select grp,wm_concat(c) from t1 group by grp;
+select grp,wm_concat(a,c) from t1 group by grp;
+select grp,wm_concat("(",a,":",c,")") from t1 group by grp;
+select grp,wm_concat(null) from t1 group by grp;
+select grp,wm_concat(a,null) from t1 group by grp;
+select wm_concat(null) from t1;
+select wm_concat(a,c,null) from t1;
+
+
+
+# Test of MySQL with options
+select grp,wm_concat(c separator ",") from t1 group by grp;
+select grp,wm_concat(c separator "---->") from t1 group by grp;
+select grp,wm_concat(c order by c) from t1 group by grp;
+select grp,wm_concat(c order by c desc) from t1 group by grp;
+select grp,wm_concat(d order by a) from t1 group by grp;
+select grp,wm_concat(d order by a desc) from t1 group by grp;
+--disable_warnings
+select grp,wm_concat(a order by a,d+c-ascii(c)-a) from t1 group by grp;
+select grp,wm_concat(a order by d+c-ascii(c),a) from t1 group by grp;
+--enable_warnings
+select grp,wm_concat(c order by 1) from t1 group by grp;
+select grp,wm_concat(distinct c order by c) from t1 group by grp;
+select grp,wm_concat(distinct c order by c desc) from t1 group by grp;
+--replace_column 10 9
+explain select grp,wm_concat(distinct c order by c desc) from t1 group by grp;
+select grp,wm_concat(c order by c separator ",") from t1 group by grp;
+select grp,wm_concat(c order by c desc separator ",") from t1 group by grp;
+select grp,wm_concat(distinct c order by c separator ",") from t1 group by grp;
+--replace_column 10 9
+explain select grp,wm_concat(distinct c order by c separator ",") from t1 group by grp;
+select grp,wm_concat(distinct c order by c desc separator ",") from t1 group by grp;
+
+# Test of SQL_LIST objects
+select grp,wm_concat(c order by grp desc) from t1 group by grp order by grp;
+
+
+# Test transfer to real values
+
+select grp, wm_concat(a separator "")+0 from t1 group by grp;
+select grp, wm_concat(a separator "")+0.0 from t1 group by grp;
+select grp, ROUND(wm_concat(a separator "")) from t1 group by grp;
+drop table t1;
+
+# Test NULL values
+
+create table t1 (grp int, c char(10));
+insert into t1 values (1,NULL),(2,"b"),(2,NULL),(3,"E"),(3,NULL),(3,"D"),(3,NULL),(3,NULL),(3,"D"),(4,""),(5,NULL);
+select grp,wm_concat(c order by c) from t1 group by grp;
+
+# Test warnings
+
+set group_concat_max_len = 4;
+select grp,wm_concat(c order by c) from t1 group by grp;
+show warnings;
+set group_concat_max_len = 1024;
+
+# Test errors
+
+--error 1111
+select wm_concat(sum(c)) from t1 group by grp;
+--error 1054
+select grp,wm_concat(c order by 2) from t1 group by grp;
+
+drop table t1;
+
+# Test variable length
+
+create table t1 ( URL_ID int(11), URL varchar(80));
+create table t2 ( REQ_ID int(11), URL_ID int(11));
+insert into t1 values (4,'www.host.com'), (5,'www.google.com'),(5,'www.help.com');
+insert into t2 values (1,4), (5,4), (5,5);
+# Make this order independent
+--replace_result www.help.com X www.host.com X www.google.com X
+select REQ_ID, wm_concat(URL) as URL from t1, t2 where
+t2.URL_ID = t1.URL_ID group by REQ_ID;
+# check min/max function
+--replace_result www.help.com X www.host.com X www.google.com X
+select REQ_ID, wm_concat(URL) as URL, Min(t1.URL_ID) urll,
+Max(t1.URL_ID) urlg from t1, t2 where t2.URL_ID = t1.URL_ID group by REQ_ID;
+
+drop table t1;
+drop table t2;
+
+create table t1 (id int, name varchar(16));
+insert into t1 values (1,'longername'),(1,'evenlongername');
+select ifnull(wm_concat(concat(t1.id, ':', t1.name)), 'shortname') as 'without distinct: how it should be' from t1;
+select distinct ifnull(wm_concat(concat(t1.id, ':', t1.name)), 'shortname') as 'with distinct: cutoff at length of shortname' from t1;
+drop table t1;
+
+# check zero rows (bug#836)
+create table t1(id int);
+create table t2(id int);
+insert into t1 values(0),(1);
+select wm_concat(t1.id) FROM t1,t2;
+drop table t1;
+drop table t2;
+
+# check having
+create table t1 (bar varchar(32));
+insert into t1 values('test1'),('test2');
+select wm_concat(bar order by concat(bar,bar)) from t1;
+select wm_concat(bar order by concat(bar,bar) desc) from t1;
+
+--source include/turn_off_only_full_group_by.inc
+
+select bar from t1 having wm_concat(bar)='';
+select bar from t1 having instr(wm_concat(bar), "test") > 0;
+select bar from t1 having instr(wm_concat(bar order by concat(bar,bar) desc), "test2,test1") > 0;
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+drop table t1;
+
+# ORDER BY fix_fields()
+create table t1 (a int, a1 varchar(10));
+create table t2 (a0 int);
+insert into t1 values (0,"a"),(0,"b"),(1,"c");
+insert into t2 values (1),(2),(3);
+select  wm_concat(a1 order by (t1.a IN (select a0 from t2))) from t1;
+select  wm_concat(a1 order by (t1.a)) from t1;
+drop table t1, t2;
+
+#
+# Problem with GROUP BY (Bug #2695)
+#
+
+CREATE TABLE t1 (id1 tinyint(4) NOT NULL, id2 tinyint(4) NOT NULL);
+INSERT INTO t1 VALUES (1, 1),(1, 2),(1, 3),(1, 4),(1, 5),(2, 1),(2, 2),(2, 3);
+CREATE TABLE t2 (id1 tinyint(4) NOT NULL);
+INSERT INTO t2 VALUES (1),(2),(3),(4),(5);
+SELECT t1.id1, wm_concat(t1.id2 ORDER BY t1.id2 ASC) AS concat_id FROM t1, t2 WHERE t1.id1 = t2.id1 AND t1.id1=1 GROUP BY t1.id1;
+SELECT t1.id1, wm_concat(t1.id2 ORDER BY t1.id2 ASC) AS concat_id FROM t1, t2 WHERE t1.id1 = t2.id1 GROUP BY t1.id1;
+SELECT t1.id1, wm_concat(t1.id2 ORDER BY t1.id2 DESC) AS concat_id FROM t1, t2 WHERE t1.id1 = t2.id1 GROUP BY t1.id1;
+SELECT t1.id1, wm_concat(t1.id2 ORDER BY 6-t1.id2 ASC) AS concat_id FROM t1, t2 WHERE t1.id1 = t2.id1 GROUP BY t1.id1;
+
+# The following failed when it was run twice:
+SELECT t1.id1, wm_concat(t1.id2,6-t1.id2 ORDER BY 6-t1.id2 ASC) AS concat_id FROM t1, t2 WHERE t1.id1 = t2.id1 GROUP BY t1.id1;
+SELECT t1.id1, wm_concat(t1.id2,6-t1.id2 ORDER BY 6-t1.id2 ASC) AS concat_id FROM t1, t2 WHERE t1.id1 = t2.id1 GROUP BY t1.id1;
+
+SELECT t1.id1, wm_concat(t1.id2,"/",6-t1.id2 ORDER BY 1+0,6-t1.id2,t1.id2 ASC) AS concat_id FROM t1, t2 WHERE t1.id1 = t2.id1 GROUP BY t1.id1;
+drop table t1,t2;
+
+#
+# Problem with distinct (Bug #3381)
+#
+
+create table t1 (s1 char(10), s2 int not null);
+insert into t1 values ('a',2),('b',2),('c',1),('a',3),('b',4),('c',4);
+
+--source include/turn_off_only_full_group_by.inc
+select distinct s1 from t1 order by s2,s1;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+
+select wm_concat(distinct s1) from t1;
+select wm_concat(distinct s1 order by s2) from t1 where s2 < 4;
+# The following is wrong and needs to be fixed ASAP
+select wm_concat(distinct s1 order by s2) from t1;
+drop table t1;
+
+#
+# Test with subqueries (Bug #3319)
+#
+
+create table t1 (a int, c int);
+insert into t1 values (1, 2), (2, 3), (2, 4), (3, 5);
+create table t2 (a int, c int);
+insert into t2 values (1, 5), (2, 4), (3, 3), (3,3);
+select wm_concat(c) from t1;
+select wm_concat(c order by (select c from t2 where t2.a=t1.a limit 1)) as grp from t1;
+select wm_concat(c order by (select mid(wm_concat(c order by a),1,5) from t2 where t2.a=t1.a)) as grp from t1;
+select wm_concat(c order by (select mid(wm_concat(c order by a),1,5) from t2 where t2.a=t1.a) desc) as grp from t1;
+select t1.a, wm_concat(c order by (select c from t2 where t2.a=t1.a limit 1)) as grp from t1 group by 1;
+select t1.a, wm_concat(c order by (select mid(wm_concat(c order by a),1,5) from t2 where t2.a=t1.a)) as grp from t1 group by 1;
+select t1.a, wm_concat(c order by (select mid(wm_concat(c order by a),1,5) from t2 where t2.a=t1.a) desc) as grp from t1 group by 1;
+
+# The following returns random results as we are sorting on blob addresses
+select wm_concat(c order by (select concat(5-t1.c,wm_concat(c order by a)) from t2 where t2.a=t1.a)) as grp from t1;
+select wm_concat(c order by (select concat(t1.c,wm_concat(c)) from t2 where a=t1.a)) as grp from t1;
+
+select a,c,(select wm_concat(c order by a) from t2 where a=t1.a) as grp from t1 order by grp;
+drop table t1,t2;
+
+#
+# wm_concat of expression with GROUP BY and external GROUP BY
+#
+CREATE TABLE t1 ( a int );
+CREATE TABLE t2 ( a int );
+INSERT INTO t1 VALUES (1), (2);
+INSERT INTO t2 VALUES (1), (2);
+SELECT wm_concat(t1.a*t2.a ORDER BY t2.a) FROM t1, t2 GROUP BY t1.a;
+DROP TABLE t1, t2;
+
+#
+# Bug #4035: wm_concat() and HAVING
+#
+
+CREATE TABLE t1 (a char(4));
+INSERT INTO t1 VALUES ('John'), ('Anna'), ('Bill');
+SELECT wm_concat(a SEPARATOR '||') AS names FROM t1 
+  HAVING names LIKE '%An%';
+SELECT wm_concat(a SEPARATOR '###') AS names FROM t1 
+  HAVING LEFT(names, 1) ='J';
+DROP TABLE t1;
+
+#
+# check blobs
+#
+
+CREATE TABLE t1 ( a int, b TEXT );
+INSERT INTO t1 VALUES (1,'First Row'), (2,'Second Row');
+SELECT wm_concat(b ORDER BY b) FROM t1 GROUP BY a;
+DROP TABLE t1;
+
+#
+# check null values #2
+#
+
+CREATE TABLE t1 (A_ID INT NOT NULL,A_DESC CHAR(3) NOT NULL,PRIMARY KEY (A_ID));
+INSERT INTO t1 VALUES (1,'ABC'), (2,'EFG'), (3,'HIJ');
+CREATE TABLE t2 (A_ID INT NOT NULL,B_DESC CHAR(3) NOT NULL,PRIMARY KEY (A_ID,B_DESC));
+INSERT INTO t2 VALUES (1,'A'),(1,'B'),(3,'F');
+# Order is undefined.
+--replace_result B,A A,B
+SELECT t1.A_ID, wm_concat(t2.B_DESC) AS B_DESC FROM t1 LEFT JOIN t2 ON t1.A_ID=t2.A_ID GROUP BY t1.A_ID ORDER BY t1.A_DESC;
+DROP TABLE t1;
+DROP TABLE t2;
+
+#
+# blobs
+#
+
+create table t1 (a int, b text);
+insert into t1 values (1, 'bb'), (1, 'ccc'), (1, 'a'), (1, 'bb'), (1, 'ccc');
+insert into t1 values (2, 'BB'), (2, 'CCC'), (2, 'A'), (2, 'BB'), (2, 'CCC');
+select wm_concat(b) from t1 group by a;
+select wm_concat(distinct b) from t1 group by a;
+select wm_concat(b order by b) from t1 group by a;
+select wm_concat(distinct b order by b) from t1 group by a;
+set local group_concat_max_len=4;
+select wm_concat(b) from t1 group by a;
+select wm_concat(distinct b) from t1 group by a;
+select wm_concat(b order by b) from t1 group by a;
+select wm_concat(distinct b order by b) from t1 group by a;
+
+#
+# long blobs
+#
+
+insert into t1 values (1, concat(repeat('1', 300), '2')), 
+(1, concat(repeat('1', 300), '2')), (1, concat(repeat('0', 300), '1')), 
+(2, concat(repeat('1', 300), '2')), (2, concat(repeat('1', 300), '2')), 
+(2, concat(repeat('0', 300), '1'));
+set local group_concat_max_len=1024;
+select wm_concat(b) from t1 group by a;
+select wm_concat(distinct b) from t1 group by a;
+select wm_concat(b order by b) from t1 group by a;
+select wm_concat(distinct b order by b) from t1 group by a;
+set local group_concat_max_len=400;
+select wm_concat(b) from t1 group by a;
+select wm_concat(distinct b) from t1 group by a;
+select wm_concat(b order by b) from t1 group by a;
+select wm_concat(distinct b order by b) from t1 group by a;
+
+drop table t1;
+
+#
+# Bug#10201
+#
+create table t1 (a varchar(255) character set cp1250 collate cp1250_general_ci,
+                 b varchar(255) character set koi8r);
+insert into t1 values ('xxx','yyy');
+select collation(a) from t1;
+select collation(wm_concat(a)) from t1;
+create table t2 select wm_concat(a) as a from t1;
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
+show create table t2;
+select collation(wm_concat(a,_koi8r'test')) from t1;
+--error 1267
+select collation(wm_concat(a,_koi8r 0xC1C2)) from t1;
+--error 1267
+select collation(wm_concat(a,b)) from t1;
+drop table t1;
+drop table t2;
+
+#
+# Bug #12829
+# Cannot convert the charset of a wm_concat result
+#
+CREATE TABLE t1 (a CHAR(10) CHARACTER SET cp850);
+INSERT INTO t1 VALUES ('À');
+SELECT a FROM t1;
+SELECT wm_concat(a) FROM t1;
+DROP TABLE t1;
+
+#
+# bug #7769: wm_concat returning null is checked in having
+#
+CREATE TABLE t1 (id int);
+SELECT wm_concat(id) AS gc FROM t1 HAVING gc IS NULL;
+DROP TABLE t1;
+
+#
+# Bug #8656: Crash with wm_concat on alias in outer table
+#
+create table t2 (a int, b int);
+insert into t2 values (1,1), (2,2);
+select  b x, (select wm_concat(b) from t2) from  t2;
+drop table t2;
+
+#
+# Bug #7405: problems with rollup
+#
+
+create table t1 (d int not null auto_increment,primary key(d), a int, b int, c int);
+insert into t1(a,b) values (1,3), (1,4), (1,2), (2,7), (1,1), (1,2), (2,3), (2,3);
+
+--disable_query_log
+--disable_result_log
+ANALYZE TABLE t1;
+--enable_result_log
+--enable_query_log
+
+select d,a,b from t1 order by a;
+explain select a, wm_concat(b) from t1 group by a with rollup;
+select a, wm_concat(b) from t1 group by a with rollup;
+select a, wm_concat(distinct b) from t1 group by a with rollup;
+select a, wm_concat(b order by b) from t1 group by a with rollup;
+select a, wm_concat(distinct b order by b) from t1 group by a with rollup;
+drop table t1;
+
+#
+# Bug #6475
+#
+create table t1 (a char(3), b char(20), primary key (a, b));
+insert into t1 values ('ABW', 'Dutch'), ('ABW', 'English');
+select wm_concat(a) from t1 group by b;
+drop table t1;
+#
+# Bug #12095: wm_concat for one row table 
+#
+
+CREATE TABLE t1 (
+  aID smallint(5) unsigned NOT NULL auto_increment,
+  sometitle varchar(255) NOT NULL default '',
+  bID smallint(5) unsigned NOT NULL,
+  PRIMARY KEY  (aID),
+  UNIQUE KEY sometitle (sometitle)
+);
+INSERT INTO t1 SET sometitle = 'title1', bID = 1;
+INSERT INTO t1 SET sometitle = 'title2', bID = 1;
+
+CREATE TABLE t2 (
+  bID smallint(5) unsigned NOT NULL auto_increment,
+  somename varchar(255) NOT NULL default '',
+  PRIMARY KEY  (bID),
+  UNIQUE KEY somename (somename)
+);
+INSERT INTO t2 SET somename = 'test';
+
+SELECT COUNT(*), wm_concat(DISTINCT t2.somename SEPARATOR ' |')
+  FROM t1 JOIN t2 ON t1.bID = t2.bID;
+INSERT INTO t2 SET somename = 'test2';
+SELECT COUNT(*), wm_concat(DISTINCT t2.somename SEPARATOR ' |')
+  FROM t1 JOIN t2 ON t1.bID = t2.bID;
+DELETE FROM t2 WHERE somename = 'test2';
+SELECT COUNT(*), wm_concat(DISTINCT t2.somename SEPARATOR ' |')
+  FROM t1 JOIN t2 ON t1.bID = t2.bID;
+
+DROP TABLE t1,t2;
+
+#
+# Bug #12861 hang with wm_concat insubquery FROM DUAL
+#
+select * from (select wm_concat('c') from DUAL) t;
+
+#
+# Bug #12859 wm_concat in subquery cause incorrect not null
+#
+create table t1 ( a int not null default 0);
+select * from (select wm_concat(a) from t1) t2;
+select wm_concat('x') UNION ALL select 1;
+drop table t1;
+
+#
+# Bug #12863 : missing separators after first empty cancatanated elements
+#
+
+CREATE TABLE t1 (id int, a varchar(9));
+INSERT INTO t1 VALUES
+  (2, ''), (1, ''), (2, 'x'), (1, 'y'), (3, 'z'), (3, '');
+
+SELECT wm_concat(a) FROM t1;
+SELECT wm_concat(a ORDER BY a) FROM t1;
+
+SELECT wm_concat(a) FROM t1 GROUP BY id;
+SELECT wm_concat(a ORDER BY a) FROM t1 GROUP BY id;
+
+DROP TABLE t1;
+
+#
+# Bug #15560: wm_concat wasn't ready for WITH ROLLUP queries
+#
+create table t1(f1 int);
+insert into t1 values(1),(2),(3);
+select f1, wm_concat(f1+1) from t1 group by f1 with rollup;
+select count(distinct (f1+1)) from t1 group by f1 with rollup;
+drop table t1;
+
+#
+# Bug#14169 type of wm_concat() result changed to blob if tmp_table was used
+#
+create table t1 (f1 int unsigned, f2 varchar(255));
+insert into t1 values (1,repeat('a',255)),(2,repeat('b',255));
+--enable_metadata
+select f2,wm_concat(f1) from t1 group by f2;
+--disable_metadata
+drop table t1;
+
+# End of 4.1 tests
+
+#
+# Bug#8568 "wm_concat returns string, unless in a UNION in which case
+# returns BLOB": add a test case, the bug can not be repeated any more.
+#
+
+set names latin1;
+create table t1 (a char, b char);
+insert into t1 values ('a', 'a'), ('a', 'b'), ('b', 'a'), ('b', 'b');
+create table t2 select wm_concat(b) as a from t1 where a = 'a';
+create table t3 (select wm_concat(a) as a from t1 where a = 'a') union
+                (select wm_concat(b) as a from t1 where a = 'b');
+select charset(a) from t2;
+select charset(a) from t3;
+drop table t1, t2, t3;
+set names default;
+
+#
+# Bug#18281 wm_concat changes charset to binary
+#
+create table t1 (c1 varchar(10), c2 int);
+select charset(wm_concat(c1 order by c2)) from t1;
+drop table t1;
+
+#
+# Bug #16712: wm_concat returns odd string instead of intended result
+#
+CREATE TABLE t1 (a INT(10), b LONGTEXT, PRIMARY KEY (a));
+
+SET group_concat_MAX_LEN = 20000000;
+
+INSERT INTO t1 VALUES (1,REPEAT(CONCAT('A',CAST(CHAR(0) AS BINARY),'B'), 40000));
+INSERT INTO t1 SELECT a + 1, b FROM t1;
+
+SELECT a, CHAR_LENGTH(b) FROM t1;
+SELECT CHAR_LENGTH( wm_concat(b) ) FROM t1;
+SET group_concat_MAX_LEN = 1024;
+DROP TABLE t1;
+
+#
+# Bug #22015: crash with wm_concat over a derived table that 
+#             returns the results of aggregation by wm_concat  
+#
+
+CREATE TABLE t1 (a int, b int);
+
+INSERT INTO t1 VALUES (2,1), (1,2), (2,2), (1,3);
+
+SELECT wm_concat(a), x 
+  FROM (SELECT a, wm_concat(b) x FROM t1 GROUP BY a) AS s
+    GROUP BY x;
+
+DROP TABLE t1;
+#
+# Bug#23451 wm_concat truncates a multibyte utf8 character
+#
+set names utf8;
+create table t1
+(
+  x text character set utf8 not null,
+  y integer not null
+);
+insert into t1 values (repeat('a', 1022), 0), (repeat(_utf8 0xc3b7, 4), 0);
+let $1= 10;
+while ($1)
+{
+  eval set group_concat_max_len= 1022 + $1;
+  --disable_result_log
+  select @x:=wm_concat(x) from t1 group by y;
+  --enable_result_log
+  select @@group_concat_max_len, length(@x), char_length(@x), right(@x,12), right(HEX(@x),12);
+  dec $1;
+}
+drop table t1;
+set group_concat_max_len=1024;
+set names latin1;
+
+#
+# Bug#14169 type of wm_concat() result changed to blob if tmp_table was used
+#
+create table t1 (f1 int unsigned, f2 varchar(255));
+insert into t1 values (1,repeat('a',255)),(2,repeat('b',255));
+--enable_metadata
+select f2,wm_concat(f1) from t1 group by f2;
+--disable_metadata
+drop table t1;
+
+#
+# Bug #26815: Unexpected built-in function behavior: wm_concat(distinct
+# substring_index())
+# 
+CREATE TABLE t1(a TEXT, b CHAR(20));
+INSERT INTO t1 VALUES ("one.1","one.1"),("two.2","two.2"),("one.3","one.3");
+SELECT wm_concat(DISTINCT UCASE(a)) FROM t1;
+SELECT wm_concat(DISTINCT UCASE(b)) FROM t1;
+DROP TABLE t1;
+
+#
+# Bug #28273: wm_concat and ORDER BY: No warning when result gets truncated.
+#
+CREATE TABLE t1( a VARCHAR( 10 ), b INT );
+INSERT INTO t1 VALUES ( repeat( 'a', 10 ), 1), 
+                      ( repeat( 'b', 10 ), 2);
+SET group_concat_max_len = 20;
+SELECT wm_concat( a ) FROM t1;
+SELECT wm_concat( DISTINCT a ) FROM t1;  
+SELECT wm_concat( a ORDER BY b ) FROM t1;          
+SELECT wm_concat( DISTINCT a ORDER BY b ) FROM t1; 
+SET group_concat_max_len = DEFAULT;
+DROP TABLE t1;
+# Bug #23856:wm_concat and ORDER BY: junk from previous rows for query on I_S
+#
+SET group_concat_max_len= 65535;
+CREATE TABLE t1( a TEXT, b INTEGER );
+INSERT INTO t1 VALUES ( 'a', 0 ), ( 'b', 1 );
+SELECT wm_concat( a ORDER BY b ) FROM t1;
+SELECT wm_concat(DISTINCT a ORDER BY b) FROM t1;
+SELECT wm_concat(DISTINCT a) FROM t1;
+SET group_concat_max_len= 10;
+SELECT wm_concat(a ORDER BY b) FROM t1;
+SELECT wm_concat(DISTINCT a ORDER BY b) FROM t1;
+SELECT wm_concat(DISTINCT a) FROM t1;
+
+SET group_concat_max_len= 65535;
+CREATE TABLE t2( a TEXT );
+INSERT INTO t2 VALUES( REPEAT( 'a', 5000 ) );
+INSERT INTO t2 VALUES( REPEAT( 'b', 5000 ) );
+INSERT INTO t2 VALUES( REPEAT( 'a', 5000 ) );
+SELECT LENGTH( wm_concat( DISTINCT a ) ) FROM t2;
+
+CREATE TABLE t3( a TEXT, b INT  );
+INSERT INTO t3 VALUES( REPEAT( 'a', 65534 ), 1 );
+INSERT INTO t3 VALUES( REPEAT( 'a', 65535 ), 2 );
+INSERT IGNORE INTO t3 VALUES( REPEAT( 'a', 65536 ), 3 );
+SELECT LENGTH( wm_concat( a ) ) FROM t3 WHERE b = 1;
+SELECT LENGTH( wm_concat( a ) ) FROM t3 WHERE b = 2;
+SELECT LENGTH( wm_concat( a ) ) FROM t3 WHERE b = 3;
+
+SET group_concat_max_len= DEFAULT;
+DROP TABLE t1, t2, t3;
+
+#
+# Bug#29850: Wrong charset of the wm_concat result when the select employs
+#            a temporary table.
+#
+set names latin1;
+create table t1 (id int, name varchar(20)) DEFAULT CHARSET=utf8;
+insert into t1 (id, name) values (1, "óra");
+insert into t1 (id, name) values (2, "óra");
+select b.id, wm_concat(b.name) from t1 a, t1 b group by b.id;
+drop table t1;
+
+#
+# Bug #31154: wm_concat() and bit fields;
+#
+create table t1(a bit not null);
+insert ignore into t1 values (), (), ();
+select wm_concat(distinct a) from t1;
+select wm_concat(distinct a order by a) from t1;
+drop table t1;
+
+create table t1(a bit(2) not null);
+insert into t1 values (1), (0), (0), (3), (1);
+select wm_concat(distinct a) from t1;
+select wm_concat(distinct a order by a) from t1;
+select wm_concat(distinct a order by a desc) from t1;
+drop table t1;
+
+create table t1(a bit(2), b varchar(10), c bit);
+insert into t1 values (1, 'a', 0), (0, 'b', 1), (0, 'c', 0), (3, 'd', 1),
+(1, 'e', 1), (3, 'f', 1), (0, 'g', 1);
+select wm_concat(distinct a, c) from t1;
+select wm_concat(distinct a, c order by a) from t1;
+select wm_concat(distinct a, c) from t1;
+select wm_concat(distinct a, c order by a, c) from t1;
+select wm_concat(distinct a, c order by a desc, c desc) from t1;
+
+drop table t1;
+
+
+#
+# Bug#30897 wm_concat returns extra comma on empty fields
+#
+create table t1 (f1 char(20));
+insert into t1 values (''),('');
+select wm_concat(distinct f1) from t1;
+select wm_concat(f1) from t1;
+drop table t1;
+# Bug#32798: DISTINCT in wm_concat clause fails when ordering by a column
+# with null values
+#'
+CREATE TABLE t1 (a INT, b INT);
+
+INSERT INTO t1 VALUES (1, 1), (2, 2), (2, 3);
+
+SELECT wm_concat(DISTINCT a ORDER BY b) FROM t1;
+SELECT wm_concat(DISTINCT a ORDER BY b DESC) FROM t1;
+SELECT wm_concat(DISTINCT a) FROM t1;
+
+SELECT wm_concat(DISTINCT a + 1 ORDER BY 3 - b) FROM t1;
+SELECT wm_concat(DISTINCT a + 1 ORDER BY b) FROM t1;
+SELECT wm_concat(a ORDER BY 3 - b) FROM t1;
+
+CREATE TABLE t2 (a INT, b INT, c INT, d INT);
+
+# There is one duplicate in the expression list: 1,10
+# There is one duplicate in ORDER BY list, but that shouldnt matter: 1,10
+INSERT INTO t2 VALUES (1,1, 1,1), (1,1, 2,2), (1,2, 2,1), (2,1, 1,2);
+
+SELECT wm_concat(DISTINCT a, b ORDER BY c, d) FROM t2;
+SELECT wm_concat(DISTINCT a, b ORDER BY d, c) FROM t2;
+
+CREATE TABLE t3 (a INT, b INT, c INT);
+
+INSERT INTO t3 VALUES (1, 1, 1), (2, 1, 2), (3, 2, 1);
+
+SELECT wm_concat(DISTINCT a, b ORDER BY b, c) FROM t3;
+SELECT wm_concat(DISTINCT a, b ORDER BY c, b) FROM t3;
+
+SELECT wm_concat(DISTINCT a, b ORDER BY a, b) FROM t1;
+SELECT wm_concat(DISTINCT b, a ORDER BY a, b) FROM t1;
+SELECT wm_concat(DISTINCT a, b ORDER BY b, a) FROM t1;
+SELECT wm_concat(DISTINCT b, a ORDER BY a, b) FROM t1;
+SELECT wm_concat(DISTINCT a ORDER BY a, b) FROM t1;
+SELECT wm_concat(DISTINCT b ORDER BY b, a) FROM t1;
+SELECT wm_concat(DISTINCT a, b ORDER BY a) FROM t1;
+SELECT wm_concat(DISTINCT b, a ORDER BY b) FROM t1;
+
+DROP TABLE t1, t2, t3;
+
+#
+# Bug #34747: crash in debug assertion check after derived table
+#
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES (),();
+SELECT s1.d1 FROM
+(
+ SELECT
+  t1.a as d1,
+  wm_concat(DISTINCT t1.a) AS d2
+ FROM
+  t1 AS t1,
+  t1 AS t2
+ GROUP BY 1
+) AS s1;
+DROP TABLE t1;
+
+#
+# Bug #35298: wm_concat with DISTINCT can crash the server
+#
+
+CREATE TABLE t1 (a INT);
+CREATE TABLE t2 (a INT);
+
+INSERT INTO t1 VALUES(1);
+
+SELECT wm_concat(DISTINCT t2.a) FROM t1 LEFT JOIN t2 ON t2.a = t1.a GROUP BY t1.a;
+
+DROP TABLE t1, t2;
+
+#
+# Bug #36024: wm_concat distinct in subquery crash
+#
+
+CREATE TABLE t1 (a INT, KEY(a));
+CREATE TABLE t2 (b INT);
+
+INSERT INTO t1 VALUES (NULL), (8), (2);
+INSERT INTO t2 VALUES (4), (10);
+
+SELECT 1 FROM t1 WHERE t1.a NOT IN
+(
+  SELECT wm_concat(DISTINCT t1.a)
+  FROM  t1 WHERE t1.a IN   
+  (
+    SELECT b FROM t2
+  ) 
+  AND NOT t1.a >= (SELECT t1.a FROM t1 LIMIT 1)
+  GROUP BY t1.a
+);
+
+DROP TABLE t1, t2;
+
+#
+# Bug #49487: crash with explain and wm_concat in a derived table
+#
+
+CREATE TABLE t1 (f1 INT);
+INSERT INTO t1 VALUES (),();
+
+EXPLAIN SELECT 1 FROM
+ (SELECT DISTINCT wm_concat(td.f1) FROM t1,t1 AS td GROUP BY td.f1) AS d,t1;
+
+SELECT 1 FROM
+ (SELECT DISTINCT wm_concat(td.f1) FROM t1,t1 AS td GROUP BY td.f1) AS d,t1;
+
+DROP TABLE t1;
+
+--echo End of 5.0 tests
+
+--echo #
+--echo # Bug #52397: another crash with explain and wm_concat
+--echo #
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (0), (0);
+EXPLAIN SELECT 1 FROM
+  (SELECT wm_concat(t1.a ORDER BY t1.a ASC) FROM 
+    t1 t2, t1 GROUP BY t1.a) AS d;
+DROP TABLE t1;
+
+
+--echo End of 5.0 tests
+
+
+--echo #
+--echo # Bug #54476: crash when wm_concat and 'with rollup' in prepared statements
+--echo # 
+
+CREATE TABLE t1 (a INT);
+INSERT INTO t1 VALUES (1), (2);
+
+PREPARE stmt FROM "SELECT wm_concat(t1.a ORDER BY t1.a) FROM t1 JOIN t1 t2 GROUP BY t1.a WITH ROLLUP";
+EXECUTE stmt;
+EXECUTE stmt;
+
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#57194 wm_concat cause crash and/or invalid memory reads with type errors
+--echo #
+
+CREATE TABLE t1(f1 int);
+INSERT INTO t1 values (0),(0);
+--disable_ps_protocol
+--error ER_ILLEGAL_VALUE_FOR_TYPE
+SELECT POLYGON((SELECT 1 FROM (SELECT 1 IN (wm_concat(t1.f1)) FROM t1, t1 t GROUP BY t.f1 ) d));
+--enable_ps_protocol
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#58396 wm_concat and explain are still crashy
+--echo #
+
+CREATE TABLE t1(a INT);
+--error ER_UNKNOWN_ERROR
+EXPLAIN SELECT UPDATEXML('1', a, '1')
+FROM t1 ORDER BY (SELECT wm_concat(1) FROM t1);
+SHOW WARNINGS;
+DROP TABLE t1;
+
+--echo End of 5.1 tests
+
+
+#
+# Bug#36785: Wrong error message when wm_concat() exceeds max length
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2;
+--enable_warnings
+
+CREATE TABLE t1 (a VARCHAR(6), b INT);
+CREATE TABLE t2 (a VARCHAR(6), b INT);
+
+INSERT INTO t1 VALUES ('111111', 1);
+INSERT INTO t1 VALUES ('222222', 2);
+INSERT INTO t1 VALUES ('333333', 3);
+INSERT INTO t1 VALUES ('444444', 4);
+INSERT INTO t1 VALUES ('555555', 5);
+
+SET group_concat_max_len = 5;
+SET @old_sql_mode = @@sql_mode, @@sql_mode = 'traditional';
+
+SELECT wm_concat(a), b FROM t1 GROUP BY b LIMIT 3;
+--error ER_CUT_VALUE_GROUP_CONCAT
+INSERT INTO t2 SELECT wm_concat(a), b FROM t1 GROUP BY b;
+UPDATE t1 SET a = '11111' WHERE b = 1;
+UPDATE t1 SET a = '22222' WHERE b = 2;
+--error ER_CUT_VALUE_GROUP_CONCAT
+INSERT INTO t2 SELECT wm_concat(a), b FROM t1 GROUP BY b;
+
+SET group_concat_max_len = DEFAULT;
+SET @@sql_mode = @old_sql_mode;
+DROP TABLE t1, t2;
+
+--echo #
+--echo #  WL#6098 Eliminate wm_concat intermediate result limitation.
+--echo #  Bug#13387020 wm_concat WITH ORDER BY RESULTS ARE TRUNCATED.
+--echo #
+
+
+SET group_concat_max_len= 9999999;
+CREATE TABLE t1 (f1 LONGTEXT , f2  INTEGER);
+INSERT INTO t1 VALUES (REPEAT('a', 500000), 0), (REPEAT('b', 500000), 1), (REPEAT('c', 500000), 2);
+
+SELECT LENGTH(wm_concat(f1 ORDER BY f2)) FROM t1;
+SELECT LENGTH(wm_concat(DISTINCT f1 ORDER BY f1 DESC)) FROM t1;
+SELECT SUBSTRING(wm_concat(DISTINCT f1 ORDER BY f1 DESC), 1, 5) FROM t1;
+SELECT LENGTH(wm_concat(DISTINCT f1)) FROM t1;
+
+SELECT LENGTH(wm_concat(UPPER(f1) ORDER BY f2)) FROM t1;
+SELECT LENGTH(wm_concat(DISTINCT UPPER(f1) ORDER BY f1)) FROM t1;
+SELECT SUBSTRING(wm_concat(DISTINCT UPPER(f1) ORDER BY f1), 1, 5) FROM t1;
+SELECT LENGTH(wm_concat(DISTINCT UPPER(f1))) FROM t1;
+
+CREATE TABLE t2 SELECT wm_concat(f1 order by f2) FROM t1;
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
+SHOW CREATE TABLE t2;
+DROP TABLE t2;
+
+CREATE TABLE t2 SELECT wm_concat(UPPER(f1) ORDER BY f2) FROM t1;
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
+SHOW CREATE TABLE t2;
+DROP TABLE t2;
+
+SET group_concat_max_len= DEFAULT;
+SELECT LENGTH(wm_concat(f1 ORDER BY f2)) FROM t1;
+
+SET group_concat_max_len= 499999;
+SELECT LENGTH(wm_concat(f1 ORDER BY f2)) FROM t1 WHERE f2 = 0;
+SELECT LENGTH(wm_concat(f1 ORDER BY f2)) FROM t1 GROUP BY f2;
+
+INSERT INTO t1 VALUES (REPEAT('a', 499999), 3), (REPEAT('b', 500000), 4);
+SELECT LENGTH(wm_concat(f1 ORDER BY f2)) FROM t1 GROUP BY f2;
+
+DROP TABLE t1;
+SET group_concat_max_len= DEFAULT;
+
+--echo End of 5.6 tests
+
+--echo #
+--echo # Bug #25331425: DISTINCT CLAUSE DOES NOT WORK IN wm_concat
+--echo #
+
+CREATE TABLE t1 (a VARCHAR(1000), b INT);
+INSERT INTO t1 VALUES ('a', 1), ('b', 2), ('a', 3), ('b', 5), ('c', 5);
+
+let query1= SELECT wm_concat(DISTINCT a) FROM t1;
+let query2= SELECT wm_concat(DISTINCT a), b FROM t1 GROUP BY b;
+
+eval $query1;
+eval $query2;
+
+SET @@tmp_table_size=1024;
+eval $query1;
+eval $query2;
+
+SET @@tmp_table_size=default;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #25050090: LIMITATION @@group_concat_MAX_LEN IS NOT RESPECTED
+--echo #
+
+SET group_concat_max_len= 50;
+CREATE TABLE t1 (c VARCHAR(40) NULL DEFAULT NULL) CHARACTER SET utf8mb4;
+
+CREATE TABLE t2 AS SELECT wm_concat(t.c) as c FROM t1 t;
+SHOW CREATE TABLE t2;
+
+CREATE TABLE t3 AS SELECT wm_concat(t.c) as c
+FROM t1 t
+UNION
+SELECT '' as c;
+SHOW CREATE TABLE t3;
+
+
+INSERT INTO t1 VALUES ('abcdefghijk'), ('pqrstuvwxyz'), ('124567890'), ('010011000111');
+INSERT INTO t1 VALUES ('abcdefghijk'), ('pqrstuvwxyz'), ('124567890'), ('010011000111');
+
+SELECT wm_concat(t.c) as c
+FROM t1 t;
+
+SELECT wm_concat(t.c) as c
+FROM t1 t
+UNION
+SELECT '' as c;
+
+
+SET group_concat_max_len= DEFAULT;
+DROP TABLE t1, t2, t3;
+
+--echo #
+--echo # Bug #32118201 GET RID OF MY_ATOF
+--echo #
+
+CREATE TABLE t2 (grp INT, a CHAR(2));
+INSERT INTO t2 VALUES (1,"a"), (2,"2"), (2,"4"), (3,"c");
+SELECT grp, wm_concat(a SEPARATOR "") + 1.0  FROM t2 GROUP BY grp;
+DROP TABLE t2;
+
+--echo # Bug#32053547: Assertion `item->hidden == hidden' failed.
+--echo #               wm_concat with ORDER BY clause
+
+prepare s from 'DO wm_concat((SELECT COUNT(1)) ORDER BY 1)';
+execute s;
+execute s;
+deallocate prepare s;
+
+--echo # Bug#31947466: Assertion failure with wm_concat(... ORDER BY)
+--echo #               and prepared statements
+
+CREATE TABLE t1 (name VARCHAR(100), square GEOMETRY);
+
+INSERT INTO t1 VALUES
+  ("center", ST_GeomFromText('POLYGON (( 0 0, 0 2, 2 2, 2 0, 0 0))')),
+  ("small",  ST_GeomFromText('POLYGON (( 0 0, 0 1, 1 1, 1 0, 0 0))')),
+  ("big",    ST_GeomFromText('POLYGON (( 0 0, 0 3, 3 3, 3 0, 0 0))')),
+  ("up",     ST_GeomFromText('POLYGON (( 0 1, 0 3, 2 3, 2 1, 0 1))')),
+  ("up2",    ST_GeomFromText('POLYGON (( 0 2, 0 4, 2 4, 2 2, 0 2))')),
+  ("up3",    ST_GeomFromText('POLYGON (( 0 3, 0 5, 2 5, 2 3, 0 3))')),
+  ("down",   ST_GeomFromText('POLYGON (( 0 -1, 0  1, 2  1, 2 -1, 0 -1))')),
+  ("down2",  ST_GeomFromText('POLYGON (( 0 -2, 0  0, 2  0, 2 -2, 0 -2))')),
+  ("down3",  ST_GeomFromText('POLYGON (( 0 -3, 0 -1, 2 -1, 2 -3, 0 -3))')),
+  ("right",  ST_GeomFromText('POLYGON (( 1 0, 1 2, 3 2, 3 0, 1 0))')),
+  ("right2", ST_GeomFromText('POLYGON (( 2 0, 2 2, 4 2, 4 0, 2 0))')),
+  ("right3", ST_GeomFromText('POLYGON (( 3 0, 3 2, 5 2, 5 0, 3 0))')),
+  ("left",   ST_GeomFromText('POLYGON (( -1 0, -1 2,  1 2,  1 0, -1 0))')),
+  ("left2",  ST_GeomFromText('POLYGON (( -2 0, -2 2,  0 2,  0 0, -2 0))')),
+  ("left3",  ST_GeomFromText('POLYGON (( -3 0, -3 2, -1 2, -1 0, -3 0))'));
+
+CREATE VIEW v AS SELECT * FROM t1;
+prepare s from '
+SELECT wm_concat(a2.name ORDER BY a2.name) AS mbrcontains
+FROM v a1 JOIN v a2 ON MBRContains(a1.square, a2.square)
+WHERE a1.name = "center"
+GROUP BY a1.name';
+execute s;
+execute s;
+deallocate prepare s;
+DROP VIEW v;
+DROP TABLE t1;
+
+--echo # wm_concat with order-by in windowing clause.
+create table schoolgrade (schooltype varchar(20), gradeno integer, gradenm varchar(20));
+insert into schoolgrade values ('elementroy school', 101, 'first');
+insert into schoolgrade values ('elementroy school', 102, 'second');
+insert into schoolgrade values ('elementroy school', 103, 'third');
+insert into schoolgrade values ('elementroy school', 104, 'fourth');
+insert into schoolgrade values ('elementroy school', 105, 'fifth');
+insert into schoolgrade values ('elementroy school', 106, 'sixth');
+insert into schoolgrade values ('junior high school', 201, 'seventh');
+insert into schoolgrade values ('junior high school', 202, 'eighth');
+insert into schoolgrade values ('junior high school', 203, 'ninth');
+insert into schoolgrade values ('senior high school', 301, 'tenth');
+insert into schoolgrade values ('senior high school', 302, 'eleventh');
+insert into schoolgrade values ('senior high school', 303, 'twelfth');
+
+select schooltype, gradeno, wm_concat(gradenm) over (partition by schooltype order by gradeno) grade from schoolgrade a;
+select schooltype, gradeno, wm_concat(gradenm order by gradeno) over (partition by schooltype) grade from schoolgrade a;
+
+select schooltype, wm_concat(gradenm) grade from schoolgrade a group by schooltype;
+select schooltype, wm_concat(gradenm order by gradeno) grade from schoolgrade a group by schooltype;
+
+explain select schooltype, gradeno, wm_concat(gradenm) over (partition by schooltype order by gradeno) grade from schoolgrade a;
+show warnings;
+explain select schooltype, gradeno, wm_concat(gradenm order by gradeno) over (partition by schooltype) grade from schoolgrade a;
+show warnings;
+explain select schooltype, wm_concat(gradenm) grade from schoolgrade a group by schooltype;
+show warnings;
+explain select schooltype, wm_concat(gradenm order by gradeno) grade from schoolgrade a group by schooltype;
+show warnings;
+
+drop table schoolgrade;

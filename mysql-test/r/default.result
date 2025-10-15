@@ -1,0 +1,576 @@
+drop table if exists t1,t2,t3,t4,t5,t6;
+drop database if exists mysqltest;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+CREATE TABLE t1 (a varchar(30) binary NOT NULL DEFAULT ' ',
+b varchar(1) binary NOT NULL DEFAULT ' ',
+c varchar(4) binary NOT NULL DEFAULT '0000',
+d tinyblob NULL,
+e tinyblob NULL,
+f tinyblob NULL,
+g tinyblob NULL,
+h tinyblob NULL,
+i tinyblob NULL,
+j tinyblob NULL,
+k tinyblob NULL,
+l tinyblob NULL,
+m tinyblob NULL,
+n tinyblob NULL,
+o tinyblob NULL,
+p tinyblob NULL,
+q varchar(30) binary NOT NULL DEFAULT ' ',
+r varchar(30) binary NOT NULL DEFAULT ' ',
+s tinyblob NULL,
+t varchar(4) binary NOT NULL DEFAULT ' ',
+u varchar(1) binary NOT NULL DEFAULT ' ',
+v varchar(30) binary NOT NULL DEFAULT ' ',
+w varchar(30) binary NOT NULL DEFAULT ' ',
+x tinyblob NULL,
+y varchar(5) binary NOT NULL DEFAULT ' ',
+z varchar(20) binary NOT NULL DEFAULT ' ',
+a1 varchar(30) binary NOT NULL DEFAULT ' ',
+b1 tinyblob NULL)
+ENGINE=InnoDB DEFAULT CHARACTER SET = latin1 COLLATE latin1_bin;
+INSERT into t1 (b) values ('1');
+SHOW WARNINGS;
+Level	Code	Message
+SELECT * from t1;
+a	b	c	d	e	f	g	h	i	j	k	l	m	n	o	p	q	r	s	t	u	v	w	x	y	z	a1	b1
+ 	1	0000	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	 	 	NULL	 	 	 	 	NULL	 	 	 	NULL
+CREATE TABLE t2 (a varchar(30) binary NOT NULL DEFAULT ' ',
+b varchar(1) binary NOT NULL DEFAULT ' ',
+c varchar(4) binary NOT NULL DEFAULT '0000',
+d tinyblob NULL,
+e tinyblob NULL,
+f tinyblob NULL,
+g tinyblob NULL,
+h tinyblob NULL,
+i tinyblob NULL,
+j tinyblob NULL,
+k tinyblob NULL,
+l tinyblob NULL,
+m tinyblob NULL,
+n tinyblob NULL,
+o tinyblob NULL,
+p tinyblob NULL,
+q varchar(30) binary NOT NULL DEFAULT ' ',
+r varchar(30) binary NOT NULL DEFAULT ' ',
+s tinyblob NULL,
+t varchar(4) binary NOT NULL DEFAULT ' ',
+u varchar(1) binary NOT NULL DEFAULT ' ',
+v varchar(30) binary NOT NULL DEFAULT ' ',
+w varchar(30) binary NOT NULL DEFAULT ' ',
+x tinyblob NULL,
+y varchar(5) binary NOT NULL DEFAULT ' ',
+z varchar(20) binary NOT NULL DEFAULT ' ',
+a1 varchar(30) binary NOT NULL DEFAULT ' ',
+b1 tinyblob NULL)
+DEFAULT CHARACTER SET = latin1 COLLATE latin1_bin;
+Warnings:
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
+Warning	1287	'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `a` varchar(30) COLLATE latin1_bin NOT NULL DEFAULT ' ',
+  `b` varchar(1) COLLATE latin1_bin NOT NULL DEFAULT ' ',
+  `c` varchar(4) COLLATE latin1_bin NOT NULL DEFAULT '0000',
+  `d` tinyblob,
+  `e` tinyblob,
+  `f` tinyblob,
+  `g` tinyblob,
+  `h` tinyblob,
+  `i` tinyblob,
+  `j` tinyblob,
+  `k` tinyblob,
+  `l` tinyblob,
+  `m` tinyblob,
+  `n` tinyblob,
+  `o` tinyblob,
+  `p` tinyblob,
+  `q` varchar(30) COLLATE latin1_bin NOT NULL DEFAULT ' ',
+  `r` varchar(30) COLLATE latin1_bin NOT NULL DEFAULT ' ',
+  `s` tinyblob,
+  `t` varchar(4) COLLATE latin1_bin NOT NULL DEFAULT ' ',
+  `u` varchar(1) COLLATE latin1_bin NOT NULL DEFAULT ' ',
+  `v` varchar(30) COLLATE latin1_bin NOT NULL DEFAULT ' ',
+  `w` varchar(30) COLLATE latin1_bin NOT NULL DEFAULT ' ',
+  `x` tinyblob,
+  `y` varchar(5) COLLATE latin1_bin NOT NULL DEFAULT ' ',
+  `z` varchar(20) COLLATE latin1_bin NOT NULL DEFAULT ' ',
+  `a1` varchar(30) COLLATE latin1_bin NOT NULL DEFAULT ' ',
+  `b1` tinyblob
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+INSERT into t2 (b) values ('1');
+SHOW WARNINGS;
+Level	Code	Message
+SELECT * from t2;
+a	b	c	d	e	f	g	h	i	j	k	l	m	n	o	p	q	r	s	t	u	v	w	x	y	z	a1	b1
+ 	1	0000	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	 	 	NULL	 	 	 	 	NULL	 	 	 	NULL
+drop table t1;
+drop table t2;
+create table bug20691 (i int, d datetime NOT NULL, dn datetime not null default '0000-00-00 00:00:00');
+insert into bug20691 values (1, DEFAULT, DEFAULT), (1, '1975-07-10 07:10:03', '1978-01-13 14:08:51'), (1, DEFAULT, DEFAULT);
+Warnings:
+Warning	1364	Field 'd' doesn't have a default value
+Warning	1364	Field 'd' doesn't have a default value
+insert into bug20691 (i) values (2);
+Warnings:
+Warning	1364	Field 'd' doesn't have a default value
+desc bug20691;
+Field	Type	Null	Key	Default	Extra
+i	int	YES		NULL	
+d	datetime	NO		NULL	
+dn	datetime	NO		0000-00-00 00:00:00	
+insert into bug20691 values (3, DEFAULT, DEFAULT), (3, '1975-07-10 07:10:03', '1978-01-13 14:08:51'), (3, DEFAULT, DEFAULT);
+Warnings:
+Warning	1364	Field 'd' doesn't have a default value
+Warning	1364	Field 'd' doesn't have a default value
+insert into bug20691 (i) values (4);
+Warnings:
+Warning	1364	Field 'd' doesn't have a default value
+insert into bug20691 values (5, DEFAULT, DEFAULT), (5, '1975-07-10 07:10:03', '1978-01-13 14:08:51'), (5, DEFAULT, DEFAULT);
+Warnings:
+Warning	1364	Field 'd' doesn't have a default value
+Warning	1364	Field 'd' doesn't have a default value
+SET sql_mode = 'ALLOW_INVALID_DATES';
+insert into bug20691 values (6, DEFAULT, DEFAULT), (6, '1975-07-10 07:10:03', '1978-01-13 14:08:51'), (6, DEFAULT, DEFAULT);
+Warnings:
+Warning	1364	Field 'd' doesn't have a default value
+Warning	1364	Field 'd' doesn't have a default value
+SET sql_mode = default;
+insert into bug20691 values (7, DEFAULT, DEFAULT), (7, '1975-07-10 07:10:03', '1978-01-13 14:08:51'), (7, DEFAULT, DEFAULT);
+ERROR HY000: Field 'd' doesn't have a default value
+select * from bug20691 order by i asc;
+i	d	dn
+1	0000-00-00 00:00:00	0000-00-00 00:00:00
+1	1975-07-10 07:10:03	1978-01-13 14:08:51
+1	0000-00-00 00:00:00	0000-00-00 00:00:00
+2	0000-00-00 00:00:00	0000-00-00 00:00:00
+3	0000-00-00 00:00:00	0000-00-00 00:00:00
+3	1975-07-10 07:10:03	1978-01-13 14:08:51
+3	0000-00-00 00:00:00	0000-00-00 00:00:00
+4	0000-00-00 00:00:00	0000-00-00 00:00:00
+5	0000-00-00 00:00:00	0000-00-00 00:00:00
+5	1975-07-10 07:10:03	1978-01-13 14:08:51
+5	0000-00-00 00:00:00	0000-00-00 00:00:00
+6	0000-00-00 00:00:00	0000-00-00 00:00:00
+6	1975-07-10 07:10:03	1978-01-13 14:08:51
+6	0000-00-00 00:00:00	0000-00-00 00:00:00
+drop table bug20691;
+SET sql_mode = '';
+create table bug20691 (
+a set('one', 'two', 'three') not null,
+b enum('small', 'medium', 'large', 'enormous', 'ellisonego') not null,
+c time not null,
+d date not null,
+e int not null,
+f long not null,
+g blob not null,
+h datetime not null,
+i decimal not null,
+x int);
+insert into bug20691 values (2, 3, 5, '0007-01-01', 11, 13, 17, '0019-01-01 00:00:00', 23, 1);
+insert into bug20691 (x) values (2);
+Warnings:
+Warning	1364	Field 'a' doesn't have a default value
+Warning	1364	Field 'c' doesn't have a default value
+Warning	1364	Field 'd' doesn't have a default value
+Warning	1364	Field 'e' doesn't have a default value
+Warning	1364	Field 'f' doesn't have a default value
+Warning	1364	Field 'g' doesn't have a default value
+Warning	1364	Field 'h' doesn't have a default value
+Warning	1364	Field 'i' doesn't have a default value
+insert into bug20691 values (2, 3, 5, '0007-01-01', 11, 13, 17, '0019-01-01 00:00:00', 23, 3);
+insert into bug20691 values (DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, 4);
+Warnings:
+Warning	1364	Field 'a' doesn't have a default value
+Warning	1364	Field 'c' doesn't have a default value
+Warning	1364	Field 'd' doesn't have a default value
+Warning	1364	Field 'e' doesn't have a default value
+Warning	1364	Field 'f' doesn't have a default value
+Warning	1364	Field 'g' doesn't have a default value
+Warning	1364	Field 'h' doesn't have a default value
+Warning	1364	Field 'i' doesn't have a default value
+select * from bug20691 order by x asc;
+a	b	c	d	e	f	g	h	i	x
+two	large	00:00:05	0007-01-01	11	13	17	0019-01-01 00:00:00	23	1
+	small	00:00:00	0000-00-00	0			0000-00-00 00:00:00	0	2
+two	large	00:00:05	0007-01-01	11	13	17	0019-01-01 00:00:00	23	3
+	small	00:00:00	0000-00-00	0			0000-00-00 00:00:00	0	4
+drop table bug20691;
+create table t1 (id int not null);
+insert into t1 values(default);
+Warnings:
+Warning	1364	Field 'id' doesn't have a default value
+create view v1 (c) as select id from t1;
+insert into t1 values(default);
+Warnings:
+Warning	1364	Field 'id' doesn't have a default value
+drop view v1;
+drop table t1;
+create table t1 (a int unique);
+create table t2 (b int default 10);
+insert into t1 (a) values (1);
+insert into t2 (b) values (1);
+insert into t1 (a) select b from t2 on duplicate key update a=default;
+select * from t1;
+a
+NULL
+insert into t1 (a) values (1);
+insert into t1 (a) select b from t2 on duplicate key update a=default(b);
+select * from t1;
+a
+NULL
+10
+drop table t1, t2;
+SET sql_mode = default;
+End of 5.0 tests.
+CREATE TABLE ts(ts TIMESTAMP DEFAULT TIMESTAMP'2019-10-01 01:02:03');
+ERROR 42000: Invalid default value for 'ts'
+CREATE TABLE dt(dt DATETIME DEFAULT TIMESTAMP'2019-10-01 01:02:03');
+ERROR 42000: Invalid default value for 'dt'
+CREATE TABLE ints(a INT DEFAULT TIMESTAMP'2019-10-01 01:02:03');
+ERROR 42000: Invalid default value for 'a'
+CREATE TABLE t(t TIME DEFAULT TIME'01:02:03');
+ERROR 42000: Invalid default value for 't'
+CREATE TABLE d(d DATE DEFAULT DATE'2019-10-01');
+ERROR 42000: Invalid default value for 'd'
+set timestamp=1681438146;
+set sql_mode = oracle;
+select current_timestamp, current_timestamp(0), current_timestamp(5);
+current_timestamp	current_timestamp(0)	current_timestamp(5)
+14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06 AM +03:00	14-04-23 05:09:06.00000 AM +03:00
+create table t1 (
+id int,
+c1 varchar(64) default current_timestamp
+);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE "t1" (
+  "id" int DEFAULT NULL,
+  "c1" varchar(64) DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t1(id) values(1);
+select * from t1;
+id	c1
+1	14-04-23 05:09:06.000000 AM +03:00
+alter table t1 add column c2 varchar(64) default current_timestamp(1);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE "t1" (
+  "id" int DEFAULT NULL,
+  "c1" varchar(64) DEFAULT CURRENT_TIMESTAMP,
+  "c2" varchar(64) DEFAULT CURRENT_TIMESTAMP(1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from t1;
+id	c1	c2
+1	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+insert into t1(id) values(2);
+insert into t1 values(3, current_timestamp(2), current_timestamp(4));
+insert into t1 values(4, current_timestamp, current_timestamp(1));
+select * from t1;
+id	c1	c2
+1	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+2	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+3	14-04-23 05:09:06.00 AM +03:00	14-04-23 05:09:06.0000 AM +03:00
+4	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+set sql_mode=default;
+select current_timestamp, current_timestamp(0), current_timestamp(5);
+current_timestamp	current_timestamp(0)	current_timestamp(5)
+2023-04-14 05:09:06	2023-04-14 05:09:06	2023-04-14 05:09:06.00000
+insert into t1(id) values(5);
+insert into t1 values(6, current_timestamp, current_timestamp(1));
+select * from t1;
+id	c1	c2
+1	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+2	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+3	14-04-23 05:09:06.00 AM +03:00	14-04-23 05:09:06.0000 AM +03:00
+4	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+5	2023-04-14 05:09:06	2023-04-14 05:09:06.0
+6	2023-04-14 05:09:06	2023-04-14 05:09:06.0
+create table t11(
+id int,
+c1 varchar(64) default current_timestamp
+);
+show create table t11;
+Table	Create Table
+t11	CREATE TABLE `t11` (
+  `id` int DEFAULT NULL,
+  `c1` varchar(64) DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t11(id) values(1);
+insert into t11 values(2, current_timestamp);
+set sql_mode=oracle;
+show create table t11;
+Table	Create Table
+t11	CREATE TABLE "t11" (
+  "id" int DEFAULT NULL,
+  "c1" varchar(64) DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t11(id) values(3);
+insert into t11 values(4, current_timestamp);
+select * from t11;
+id	c1
+1	2023-04-14 05:09:06
+2	2023-04-14 05:09:06
+3	14-04-23 05:09:06.000000 AM +03:00
+4	14-04-23 05:09:06.000000 AM +03:00
+create table t12(
+id int,
+c1 varchar(64) default current_timestamp(0)
+);
+show create table t12;
+Table	Create Table
+t12	CREATE TABLE "t12" (
+  "id" int DEFAULT NULL,
+  "c1" varchar(64) DEFAULT CURRENT_TIMESTAMP(0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t12(id) values(1);
+insert into t12 values(2, current_timestamp);
+insert into t12 values(4, current_timestamp(0));
+set sql_mode=default;
+show create table t12;
+Table	Create Table
+t12	CREATE TABLE `t12` (
+  `id` int DEFAULT NULL,
+  `c1` varchar(64) DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t12(id) values(4);
+insert into t12 values(5, current_timestamp);
+select * from t12;
+id	c1
+1	14-04-23 05:09:06 AM +03:00
+2	14-04-23 05:09:06.000000 AM +03:00
+4	14-04-23 05:09:06 AM +03:00
+4	2023-04-14 05:09:06
+5	2023-04-14 05:09:06
+create table t13(
+id int,
+c1 varchar(64) default now(0)
+);
+show create table t13;
+Table	Create Table
+t13	CREATE TABLE `t13` (
+  `id` int DEFAULT NULL,
+  `c1` varchar(64) DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t13(id) values(1);
+insert into t13 values(2, current_timestamp);
+set sql_mode=oracle;
+show create table t13;
+Table	Create Table
+t13	CREATE TABLE "t13" (
+  "id" int DEFAULT NULL,
+  "c1" varchar(64) DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t13(id) values(3);
+insert into t13 values(4, current_timestamp);
+select * from t13;
+id	c1
+1	2023-04-14 05:09:06
+2	2023-04-14 05:09:06
+3	2023-04-14 05:09:06
+4	14-04-23 05:09:06.000000 AM +03:00
+create table t2 (
+id int,
+c1 varchar(4) default current_timestamp
+);
+ERROR 42000: Invalid default value for 'c1'
+create table t2 (
+id int,
+c1 varchar(64) default current_timestamp(9)
+);
+ERROR 42000: Too-big precision 9 specified for 'c1'. Maximum is 6.
+create table t2 (
+id int,
+id2 int,
+c1 varchar(48) default current_timestamp(2)
+);
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE "t2" (
+  "id" int DEFAULT NULL,
+  "id2" int DEFAULT NULL,
+  "c1" varchar(48) DEFAULT CURRENT_TIMESTAMP(2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+alter table t2 add column c2 varchar(4) default current_timestamp(3);
+ERROR 42000: Invalid default value for 'c2'
+alter table t2 add column c2 varchar(64) default current_timestamp(8);
+ERROR 42000: Too-big precision 8 specified for 'c2'. Maximum is 6.
+alter table t2 modify column id2 varchar(4) default current_timestamp(3);
+ERROR 42000: Invalid default value for 'id2'
+alter table t2 change id2 col3 varchar(4) default current_timestamp(3);
+ERROR 42000: Invalid default value for 'col3'
+create table t3 (
+id int,
+c1 varchar(16)
+);
+insert into t3 values(1, 'hi1');
+insert into t3 values(2, 'hi2');
+insert into t3 values(3, now());
+ERROR 22001: Data too long for column 'c1' at row 1
+alter table t3 modify column c1 varchar(64) default current_timestamp(4);
+insert into t3(id) values(3);
+select * from t3;
+id	c1
+1	hi1
+2	hi2
+3	14-04-23 05:09:06.0000 AM +03:00
+create table t4 (
+id int,
+c1 int
+);
+insert into t4 values(1,1);
+insert into t4 values(1,2);
+select * from t4;
+id	c1
+1	1
+1	2
+alter table t4 change c1 col1 varchar(64) default current_timestamp(5);
+insert into t4(id) values(3);
+select * from t4;
+id	col1
+1	1
+1	2
+3	14-04-23 05:09:06.00000 AM +03:00
+create table t5 (
+id int,
+c0 varchar(64) default current_timestamp,
+c1 varchar(64) default current_timestamp(1),
+c2 varchar(64) default current_timestamp(2),
+c3 varchar(64) default current_timestamp(3),
+c4 varchar(64) default current_timestamp(4),
+c5 varchar(64) default current_timestamp(5),
+c6 varchar(64) default current_timestamp(6)
+);
+insert into t5(id) values(1);
+select * from t5;
+id	c0	c1	c2	c3	c4	c5	c6
+1	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00	14-04-23 05:09:06.00 AM +03:00	14-04-23 05:09:06.000 AM +03:00	14-04-23 05:09:06.0000 AM +03:00	14-04-23 05:09:06.00000 AM +03:00	14-04-23 05:09:06.000000 AM +03:00
+select @@time_zone into @tz;
+set time_zone='+08:00';
+insert into t5(id) values(2);
+select * from t5;
+id	c0	c1	c2	c3	c4	c5	c6
+1	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00	14-04-23 05:09:06.00 AM +03:00	14-04-23 05:09:06.000 AM +03:00	14-04-23 05:09:06.0000 AM +03:00	14-04-23 05:09:06.00000 AM +03:00	14-04-23 05:09:06.000000 AM +03:00
+2	14-04-23 10:09:06.000000 AM +08:00	14-04-23 10:09:06.0 AM +08:00	14-04-23 10:09:06.00 AM +08:00	14-04-23 10:09:06.000 AM +08:00	14-04-23 10:09:06.0000 AM +08:00	14-04-23 10:09:06.00000 AM +08:00	14-04-23 10:09:06.000000 AM +08:00
+set time_zone=@tz;
+set sql_mode=oracle;
+create table t6 as select * from t1;
+show create table t6;
+Table	Create Table
+t6	CREATE TABLE "t6" (
+  "id" int DEFAULT NULL,
+  "c1" varchar(64) DEFAULT CURRENT_TIMESTAMP,
+  "c2" varchar(64) DEFAULT CURRENT_TIMESTAMP(1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t6(id) values(9);
+select * from t6;
+id	c1	c2
+1	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+2	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+3	14-04-23 05:09:06.00 AM +03:00	14-04-23 05:09:06.0000 AM +03:00
+4	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+5	2023-04-14 05:09:06	2023-04-14 05:09:06.0
+6	2023-04-14 05:09:06	2023-04-14 05:09:06.0
+9	14-04-23 05:09:06.000000 AM +03:00	14-04-23 05:09:06.0 AM +03:00
+drop table t1;
+drop table t11;
+drop table t12;
+drop table t13;
+drop table t2;
+drop table t3;
+drop table t4;
+drop table t5;
+drop table t6;
+set sql_mode = default;
+# Bug#33322551: hex-blob not respected in DDL during mysqldump
+#
+
+# Create a table with a binary default that is not valid UTF-8.
+CREATE TABLE t1 (f1 BINARY(6)  NOT NULL DEFAULT 0x414243FAFA00,
+f2 VARCHAR(6) CHARACTER SET ujis DEFAULT 0xA4A2,
+f3 BIT(4) DEFAULT b'1101');
+
+# Let's see what SHOW CREATE TABLE makes of it.
+# Should look like 'ABC' followed by binary garbage on unpatched server.
+# On a patched server, it should show the same value prefixed by its
+# charset ('_binary' in this case), or show a hex-value.
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `f1` binary(6) NOT NULL DEFAULT 0x414243FAFA00,
+  `f2` varchar(6) CHARACTER SET ujis COLLATE ujis_japanese_ci DEFAULT 'あ',
+  `f3` bit(4) DEFAULT b'1101'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+# Show that we do not erraneously print the character set designator
+# ("_binary", etc.) when printing the default as a field (rather than
+# as part of a statement).
+SELECT data_type,character_set_name,
+column_default
+FROM information_schema.columns
+WHERE table_name='t1'
+   AND column_name='f1';
+DATA_TYPE	CHARACTER_SET_NAME	COLUMN_DEFAULT
+binary	NULL	0x414243FAFA
+SELECT data_type,
+character_set_name,HEX(CONVERT(column_default USING ujis)),
+column_default
+FROM information_schema.columns
+WHERE table_name='t1'
+   AND column_name='f2';
+DATA_TYPE	CHARACTER_SET_NAME	HEX(CONVERT(column_default USING ujis))	COLUMN_DEFAULT
+varchar	ujis	A4A2	あ
+SELECT data_type,
+character_set_name,
+column_default
+FROM information_schema.columns
+WHERE table_name='t1'
+   AND column_name='f3';
+DATA_TYPE	CHARACTER_SET_NAME	COLUMN_DEFAULT
+bit	NULL	b'1101'
+
+# INSERT the defined DEFAULT into the table, then retrieve it.
+# When we hexify the result, the value should be the same as
+# in the original CREATE TABLE statement.
+INSERT INTO t1 VALUES(DEFAULT,DEFAULT,DEFAULT);
+SELECT "--base--";
+--base--
+--base--
+SELECT HEX(f1),HEX(f2),HEX(f3) FROM t1;
+HEX(f1)	HEX(f2)	HEX(f3)
+414243FAFA00	A4A2	D
+
+# mysqldump the table. In the unpatched server, this will dump a
+# CREATE TABLE statement with a broken default value.
+
+# Drop the table,
+DROP TABLE t1;
+# then recreate it from the dumped file.
+
+# Add another row with the DEFAULT, then retrieve both rows.
+# If their hex values are not the same, we broke the DEFAULT
+# in mysqldump (on account of SHOW CREATE TABLE printing the
+# DEFAULT clause wrong).
+INSERT INTO t1 VALUES(DEFAULT,DEFAULT,DEFAULT);
+SELECT "--base,dump--";
+--base,dump--
+--base,dump--
+SELECT HEX(f1),HEX(f2),HEX(f3) FROM t1;
+HEX(f1)	HEX(f2)	HEX(f3)
+414243FAFA00	A4A2	D
+414243FAFA00	A4A2	D
+
+# Clean up.
+DROP TABLE t1;

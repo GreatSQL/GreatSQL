@@ -1,0 +1,89 @@
+set sql_mode="oracle";
+#
+# type column
+#
+CREATE TABLE t1(type int);
+INSERT INTO t1 VALUES (1);
+select type from t1;
+type
+1
+select 'aa' as type from dual;
+type
+aa
+DROP TABLE t1;
+#
+# table type
+#
+create table type(id int);
+insert into type values(1);
+DROP TABLE type;
+#
+# type sp
+#
+create or replace procedure p1 as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'aaa',
+score float := 0.1
+);
+type stu_record1 is record(
+ii int := 1,
+stu_record_val1 stu_record
+);
+type stu_record2 is record(
+stu_record_val2 stu_record1,
+jj int := 1
+);
+stu_record_val stu_record2;
+id float := 10;
+begin
+select stu_record_val.stu_record_val2.stu_record_val1.id,stu_record_val.stu_record_val2.stu_record_val1.name_d,stu_record_val.stu_record_val2.stu_record_val1.score;
+stu_record_val.stu_record_val2.stu_record_val1.id := 2;
+stu_record_val.stu_record_val2.stu_record_val1.name_d := 'bbb';
+select stu_record_val.stu_record_val2.stu_record_val1.id,stu_record_val.stu_record_val2.stu_record_val1.name_d;
+stu_record_val.jj := 100;
+stu_record_val.stu_record_val2.ii := 200;
+id := stu_record_val.stu_record_val2.stu_record_val1.id + stu_record_val.stu_record_val2.stu_record_val1.score;
+select id,stu_record_val.jj,stu_record_val.stu_record_val2.ii;
+end;
+$$
+CALL p1();
+stu_record_val.stu_record_val2.stu_record_val1.id	stu_record_val.stu_record_val2.stu_record_val1.name_d	stu_record_val.stu_record_val2.stu_record_val1.score
+1	aaa	0.1
+stu_record_val.stu_record_val2.stu_record_val1.id	stu_record_val.stu_record_val2.stu_record_val1.name_d
+2	bbb
+id	stu_record_val.jj	stu_record_val.stu_record_val2.ii
+2.1	100	200
+DROP PROCEDURE p1;
+#
+# type sp
+#
+create or replace procedure p1 as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) ,
+score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+ii int := 1,
+stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+id int;
+begin
+stu_record_val.stu_record_val1(1).id := 1;
+stu_record_val.stu_record_val1(2).name_d := 'aaa';
+stu_record_val.stu_record_val1(0).id := 2;
+stu_record_val.stu_record_val1(3).score := 3.22;
+select stu_record_val.stu_record_val1(1).id,stu_record_val.stu_record_val1(2).name_d,stu_record_val.stu_record_val1(0).id,stu_record_val.stu_record_val1(3).score;
+id := stu_record_val.stu_record_val1(1).id+stu_record_val.stu_record_val1(3).score;
+select id,stu_record_val.ii;
+end;
+$$
+CALL p1();
+stu_record_val.stu_record_val1(1).id	stu_record_val.stu_record_val1(2).name_d	stu_record_val.stu_record_val1(0).id	stu_record_val.stu_record_val1(3).score
+1	aaa	2	3.22
+id	stu_record_val.ii
+4	1
+DROP PROCEDURE p1;

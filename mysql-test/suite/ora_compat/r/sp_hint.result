@@ -1,0 +1,12 @@
+set sql_mode=oracle;
+create table t1 as select 1 as a;
+CREATE OR REPLACE PROCEDURE p1() AS
+BEGIN
+select /*+ SET_VAR(sql_mode=oracle)*/ * from t1;
+END;
+//
+call p1;
+a
+1
+drop procedure p1;
+drop table t1;

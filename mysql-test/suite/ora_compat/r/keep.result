@@ -1,0 +1,324 @@
+create table t1 (
+id INT,
+dept_id INT,
+age INT,
+name varchar(64),
+salary INT
+);
+insert into t1 values
+(1, 1, 22, 'zs1', 8000),
+(2, 1, 30, 'zs2', 7000),
+(3, 1, 27, 'zs3', 9000),
+(4, 1, 25, 'zs4', 6000),
+(5, 1, 22, 'zs5', 5000),
+(6, 1, 30, 'zs6', 12000),
+(7, 1, 30, 'zs7', 9000),
+(101, 2, 27, 'zs101', 8000),
+(102, 2, 24, 'zs102', 5000),
+(103, 2, 24, 'zs103', 6000),
+(104, 2, 26, 'zs104', 6000),
+(105, 2, 27, 'zs105', 6000),
+(106, 2, 25, 'zs106', 3000),
+(201, 3, 28, 'zs201', 8000),
+(301, 4, 26, 'zs301', 9000),
+(302, 4, 29, 'zs302', 7000);
+select id, dept_id, age, salary, sum(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary from t1;
+id	dept_id	age	salary	aggrsalary
+1	1	22	8000	13000
+5	1	22	5000	13000
+4	1	25	6000	13000
+3	1	27	9000	13000
+2	1	30	7000	13000
+6	1	30	12000	13000
+7	1	30	9000	13000
+102	2	24	5000	11000
+103	2	24	6000	11000
+106	2	25	3000	11000
+104	2	26	6000	11000
+101	2	27	8000	11000
+105	2	27	6000	11000
+201	3	28	8000	8000
+301	4	26	9000	9000
+302	4	29	7000	9000
+select id, dept_id, age, salary, sum(salary) keep(dense_rank first order by age desc) over(partition by dept_id) aggrsalary from t1;
+id	dept_id	age	salary	aggrsalary
+2	1	30	7000	28000
+6	1	30	12000	28000
+7	1	30	9000	28000
+3	1	27	9000	28000
+4	1	25	6000	28000
+1	1	22	8000	28000
+5	1	22	5000	28000
+101	2	27	8000	14000
+105	2	27	6000	14000
+104	2	26	6000	14000
+106	2	25	3000	14000
+102	2	24	5000	14000
+103	2	24	6000	14000
+201	3	28	8000	8000
+302	4	29	7000	7000
+301	4	26	9000	7000
+select id, dept_id, age, salary, sum(salary) keep(dense_rank last order by age) over(partition by dept_id) aggrsalary from t1;
+id	dept_id	age	salary	aggrsalary
+1	1	22	8000	28000
+5	1	22	5000	28000
+4	1	25	6000	28000
+3	1	27	9000	28000
+2	1	30	7000	28000
+6	1	30	12000	28000
+7	1	30	9000	28000
+102	2	24	5000	14000
+103	2	24	6000	14000
+106	2	25	3000	14000
+104	2	26	6000	14000
+101	2	27	8000	14000
+105	2	27	6000	14000
+201	3	28	8000	8000
+301	4	26	9000	7000
+302	4	29	7000	7000
+select id, dept_id, age, salary, sum(salary) keep(dense_rank last order by age desc) over(partition by dept_id) aggrsalary from t1;
+id	dept_id	age	salary	aggrsalary
+2	1	30	7000	13000
+6	1	30	12000	13000
+7	1	30	9000	13000
+3	1	27	9000	13000
+4	1	25	6000	13000
+1	1	22	8000	13000
+5	1	22	5000	13000
+101	2	27	8000	11000
+105	2	27	6000	11000
+104	2	26	6000	11000
+106	2	25	3000	11000
+102	2	24	5000	11000
+103	2	24	6000	11000
+201	3	28	8000	8000
+302	4	29	7000	9000
+301	4	26	9000	9000
+select id, dept_id, age, salary, count(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary from t1;
+id	dept_id	age	salary	aggrsalary
+1	1	22	8000	2
+5	1	22	5000	2
+4	1	25	6000	2
+3	1	27	9000	2
+2	1	30	7000	2
+6	1	30	12000	2
+7	1	30	9000	2
+102	2	24	5000	2
+103	2	24	6000	2
+106	2	25	3000	2
+104	2	26	6000	2
+101	2	27	8000	2
+105	2	27	6000	2
+201	3	28	8000	1
+301	4	26	9000	1
+302	4	29	7000	1
+select id, dept_id, age, salary, count(salary) keep(dense_rank last order by age) over(partition by dept_id) aggrsalary from t1;
+id	dept_id	age	salary	aggrsalary
+1	1	22	8000	3
+5	1	22	5000	3
+4	1	25	6000	3
+3	1	27	9000	3
+2	1	30	7000	3
+6	1	30	12000	3
+7	1	30	9000	3
+102	2	24	5000	2
+103	2	24	6000	2
+106	2	25	3000	2
+104	2	26	6000	2
+101	2	27	8000	2
+105	2	27	6000	2
+201	3	28	8000	1
+301	4	26	9000	1
+302	4	29	7000	1
+select id, dept_id, age, salary, avg(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary from t1;
+id	dept_id	age	salary	aggrsalary
+1	1	22	8000	6500.0000
+5	1	22	5000	6500.0000
+4	1	25	6000	6500.0000
+3	1	27	9000	6500.0000
+2	1	30	7000	6500.0000
+6	1	30	12000	6500.0000
+7	1	30	9000	6500.0000
+102	2	24	5000	5500.0000
+103	2	24	6000	5500.0000
+106	2	25	3000	5500.0000
+104	2	26	6000	5500.0000
+101	2	27	8000	5500.0000
+105	2	27	6000	5500.0000
+201	3	28	8000	8000.0000
+301	4	26	9000	9000.0000
+302	4	29	7000	9000.0000
+select id, dept_id, age, salary, avg(salary) keep(dense_rank last order by age) over(partition by dept_id) aggrsalary from t1;
+id	dept_id	age	salary	aggrsalary
+1	1	22	8000	9333.3333
+5	1	22	5000	9333.3333
+4	1	25	6000	9333.3333
+3	1	27	9000	9333.3333
+2	1	30	7000	9333.3333
+6	1	30	12000	9333.3333
+7	1	30	9000	9333.3333
+102	2	24	5000	7000.0000
+103	2	24	6000	7000.0000
+106	2	25	3000	7000.0000
+104	2	26	6000	7000.0000
+101	2	27	8000	7000.0000
+105	2	27	6000	7000.0000
+201	3	28	8000	8000.0000
+301	4	26	9000	7000.0000
+302	4	29	7000	7000.0000
+select id, dept_id, age, salary, min(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary from t1;
+id	dept_id	age	salary	aggrsalary
+1	1	22	8000	5000
+5	1	22	5000	5000
+4	1	25	6000	5000
+3	1	27	9000	5000
+2	1	30	7000	5000
+6	1	30	12000	5000
+7	1	30	9000	5000
+102	2	24	5000	5000
+103	2	24	6000	5000
+106	2	25	3000	5000
+104	2	26	6000	5000
+101	2	27	8000	5000
+105	2	27	6000	5000
+201	3	28	8000	8000
+301	4	26	9000	9000
+302	4	29	7000	9000
+select id, dept_id, age, salary, min(salary) keep(dense_rank last order by age) over(partition by dept_id) aggrsalary from t1;
+id	dept_id	age	salary	aggrsalary
+1	1	22	8000	7000
+5	1	22	5000	7000
+4	1	25	6000	7000
+3	1	27	9000	7000
+2	1	30	7000	7000
+6	1	30	12000	7000
+7	1	30	9000	7000
+102	2	24	5000	6000
+103	2	24	6000	6000
+106	2	25	3000	6000
+104	2	26	6000	6000
+101	2	27	8000	6000
+105	2	27	6000	6000
+201	3	28	8000	8000
+301	4	26	9000	7000
+302	4	29	7000	7000
+select id, dept_id, age, salary, max(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary from t1;
+id	dept_id	age	salary	aggrsalary
+1	1	22	8000	8000
+5	1	22	5000	8000
+4	1	25	6000	8000
+3	1	27	9000	8000
+2	1	30	7000	8000
+6	1	30	12000	8000
+7	1	30	9000	8000
+102	2	24	5000	6000
+103	2	24	6000	6000
+106	2	25	3000	6000
+104	2	26	6000	6000
+101	2	27	8000	6000
+105	2	27	6000	6000
+201	3	28	8000	8000
+301	4	26	9000	9000
+302	4	29	7000	9000
+select id, dept_id, age, salary, max(salary) keep(dense_rank last order by age) over(partition by dept_id) aggrsalary from t1;
+id	dept_id	age	salary	aggrsalary
+1	1	22	8000	12000
+5	1	22	5000	12000
+4	1	25	6000	12000
+3	1	27	9000	12000
+2	1	30	7000	12000
+6	1	30	12000	12000
+7	1	30	9000	12000
+102	2	24	5000	8000
+103	2	24	6000	8000
+106	2	25	3000	8000
+104	2	26	6000	8000
+101	2	27	8000	8000
+105	2	27	6000	8000
+201	3	28	8000	8000
+301	4	26	9000	7000
+302	4	29	7000	7000
+select id, dept_id, age, salary, 
+sum(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary1,
+count(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary2,
+avg(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary3,
+min(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary4,
+max(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary5,
+sum(salary) over(partition by dept_id order by age) aggrsalary6
+from t1;
+id	dept_id	age	salary	aggrsalary1	aggrsalary2	aggrsalary3	aggrsalary4	aggrsalary5	aggrsalary6
+1	1	22	8000	13000	2	6500.0000	5000	8000	13000
+5	1	22	5000	13000	2	6500.0000	5000	8000	13000
+4	1	25	6000	13000	2	6500.0000	5000	8000	19000
+3	1	27	9000	13000	2	6500.0000	5000	8000	28000
+2	1	30	7000	13000	2	6500.0000	5000	8000	56000
+6	1	30	12000	13000	2	6500.0000	5000	8000	56000
+7	1	30	9000	13000	2	6500.0000	5000	8000	56000
+102	2	24	5000	11000	2	5500.0000	5000	6000	11000
+103	2	24	6000	11000	2	5500.0000	5000	6000	11000
+106	2	25	3000	11000	2	5500.0000	5000	6000	14000
+104	2	26	6000	11000	2	5500.0000	5000	6000	20000
+101	2	27	8000	11000	2	5500.0000	5000	6000	34000
+105	2	27	6000	11000	2	5500.0000	5000	6000	34000
+201	3	28	8000	8000	1	8000.0000	8000	8000	8000
+301	4	26	9000	9000	1	9000.0000	9000	9000	9000
+302	4	29	7000	9000	1	9000.0000	9000	9000	16000
+select dept_id, sum(salary) keep(dense_rank first order by age) from t1 group by dept_id;
+dept_id	sum(salary) keep(dense_rank first order by age)
+1	13000
+2	11000
+3	8000
+4	9000
+select dept_id, sum(salary) keep(dense_rank last order by age) from t1 group by dept_id;
+dept_id	sum(salary) keep(dense_rank last order by age)
+1	28000
+2	14000
+3	8000
+4	7000
+select dept_id, sum(age) keep(dense_rank first order by age) from t1 group by dept_id;
+dept_id	sum(age) keep(dense_rank first order by age)
+1	44
+2	48
+3	28
+4	26
+select dept_id, sum(salary) keep(dense_rank first order by age) c1, 
+sum(age) keep(dense_rank first order by age) c2 from t1 group by dept_id;
+dept_id	c1	c2
+1	13000	44
+2	11000	48
+3	8000	28
+4	9000	26
+select dept_id, age, sum(salary) keep(dense_rank first order by age) from t1 group by dept_id, age;
+dept_id	age	sum(salary) keep(dense_rank first order by age)
+1	22	13000
+1	25	6000
+1	27	9000
+1	30	28000
+2	24	11000
+2	25	3000
+2	26	6000
+2	27	14000
+3	28	8000
+4	26	9000
+4	29	7000
+select dept_id,age,salary,AVG(salary) keep(dense_rank first order by age) over(partition by dept_id) aggrsalary from t1 group by dept_id,age,salary;
+dept_id	age	salary	aggrsalary
+1	22	8000	6500.0000
+1	22	5000	6500.0000
+1	25	6000	6500.0000
+1	27	9000	6500.0000
+1	30	7000	6500.0000
+1	30	12000	6500.0000
+1	30	9000	6500.0000
+2	24	5000	5500.0000
+2	24	6000	5500.0000
+2	25	3000	5500.0000
+2	26	6000	5500.0000
+2	27	8000	5500.0000
+2	27	6000	5500.0000
+3	28	8000	8000.0000
+4	26	9000	9000.0000
+4	29	7000	9000.0000
+select id,dept_id,age,AVG(id) keep(dense_rank first order by age) over(partition by dept_id order by age) aggrsalary from t1;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'over(partition by dept_id order by age) aggrsalary from t1' at line 1
+drop table t1;

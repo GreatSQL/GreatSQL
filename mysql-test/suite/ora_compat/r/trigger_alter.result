@@ -1,0 +1,203 @@
+DROP TABLE IF EXISTS `trg`;
+CREATE TABLE `trg` (
+`id` int DEFAULT NULL,
+`name` varchar(200) DEFAULT NULL
+);
+DROP TABLE IF EXISTS `trg_0`;
+CREATE TABLE `trg_0` (
+`id` int DEFAULT NULL,
+`name` varchar(200) DEFAULT NULL
+);
+set sql_mode=oracle;
+CREATE  TRIGGER trg1 BEFORE insert 
+ON trg FOR EACH ROW
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-insert'||:NEW.name;
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER trg2 BEFORE update 
+ON trg FOR EACH ROW
+BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-update'||:old.name;
+END IF;
+END$$
+do sleep(0.01);
+CREATE  TRIGGER trg3 BEFORE delete 
+ON trg FOR EACH ROW
+BEGIN
+IF :old.id < 0 THEN
+insert into trg_0 values(:old.id,'-delete'||:old.name);
+END IF;
+END$$
+do sleep(0.01);
+show create trigger trg1;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+trg1	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="root"@"localhost" TRIGGER "trg1" BEFORE INSERT ON "trg" FOR EACH ROW BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-insert'||:NEW.name;
+END IF;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	<0>	ENABLED
+show create trigger trg2;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+trg2	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="root"@"localhost" TRIGGER "trg2" BEFORE UPDATE ON "trg" FOR EACH ROW BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-update'||:old.name;
+END IF;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	<0>	ENABLED
+show create trigger trg3;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+trg3	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="root"@"localhost" TRIGGER "trg3" BEFORE DELETE ON "trg" FOR EACH ROW BEGIN
+IF :old.id < 0 THEN
+insert into trg_0 values(:old.id,'-delete'||:old.name);
+END IF;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	<0>	ENABLED
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	-insertname1
+-2	-insertname2
+-3	-insertname3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	-update-insertname1
+-2	-insertname2
+-3	-insertname3
+delete from trg where id=-1;
+select * from trg_0;
+id	name
+-1	-delete-update-insertname1
+delete from trg;
+delete from trg_0;
+set sql_mode=default;
+alter trigger trg1 disable;
+alter trigger trg2 disable;
+alter trigger trg3 disable;
+show create trigger trg1;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+trg1	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `trg1` BEFORE INSERT ON `trg` FOR EACH ROW BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-insert'||:NEW.name;
+END IF;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	<0>	DISABLED
+show create trigger trg2;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+trg2	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `trg2` BEFORE UPDATE ON `trg` FOR EACH ROW BEGIN
+IF :NEW.id < 0 THEN
+:NEW.name:=  '-update'||:old.name;
+END IF;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	<0>	DISABLED
+show create trigger trg3;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+trg3	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `trg3` BEFORE DELETE ON `trg` FOR EACH ROW BEGIN
+IF :old.id < 0 THEN
+insert into trg_0 values(:old.id,'-delete'||:old.name);
+END IF;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	<0>	DISABLED
+insert into trg values (-1,'name1'),(-2,'name2'),(-3,'name3');
+select * from trg;
+id	name
+-1	name1
+-2	name2
+-3	name3
+update trg set name ='name_1' where id=-1;
+select * from trg;
+id	name
+-1	name_1
+-2	name2
+-3	name3
+delete from trg where id=-1;
+select * from trg_0;
+id	name
+delete from trg;
+delete from trg_0;
+drop trigger if exists trg0;
+CREATE  TRIGGER trg0 BEFORE insert  
+ON trg FOR EACH ROW  FOLLOWS trg1
+BEGIN
+IF NEW.id < 0 THEN
+SET NEW.id = - NEW.id;
+SET NEW.name = concat('trg0',NEW.name );
+END IF;
+END$$
+do sleep(0.01);
+show create trigger trg0;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+trg0	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `trg0` BEFORE INSERT ON `trg` FOR EACH ROW BEGIN
+IF NEW.id < 0 THEN
+SET NEW.id = - NEW.id;
+SET NEW.name = concat('trg0',NEW.name );
+END IF;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	<0>	ENABLED
+insert into trg values(-1,'-name1');
+select * from trg;
+id	name
+1	trg0-name1
+alter trigger trg0 disable;
+show create trigger trg0;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+trg0	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` TRIGGER `trg0` BEFORE INSERT ON `trg` FOR EACH ROW BEGIN
+IF NEW.id < 0 THEN
+SET NEW.id = - NEW.id;
+SET NEW.name = concat('trg0',NEW.name );
+END IF;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	<0>	DISABLED
+insert into trg values(-2,'-name2');
+select * from trg;
+id	name
+1	trg0-name1
+-2	-name2
+set sql_mode=oracle;
+create or replace function f1() return int deterministic is
+f_var int;
+begin
+alter  trigger trg disable ;
+return f_var;
+END$$
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+show create trigger trg0;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+trg0	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="root"@"localhost" TRIGGER "trg0" BEFORE INSERT ON "trg" FOR EACH ROW BEGIN
+IF NEW.id < 0 THEN
+SET NEW.id = - NEW.id;
+SET NEW.name = concat('trg0',NEW.name );
+END IF;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	<0>	DISABLED
+create or replace PROCEDURE p1() as
+v_run_number   integer;
+v_temp1        integer;
+BEGIN
+alter trigger trg0 enable;
+END$$
+call p1();
+show create trigger trg0;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+trg0	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="root"@"localhost" TRIGGER "trg0" BEFORE INSERT ON "trg" FOR EACH ROW BEGIN
+IF NEW.id < 0 THEN
+SET NEW.id = - NEW.id;
+SET NEW.name = concat('trg0',NEW.name );
+END IF;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	<0>	ENABLED
+execute immediate 'alter trigger trg0 disable';
+show create trigger trg0;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created	Status
+trg0	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="root"@"localhost" TRIGGER "trg0" BEFORE INSERT ON "trg" FOR EACH ROW BEGIN
+IF NEW.id < 0 THEN
+SET NEW.id = - NEW.id;
+SET NEW.name = concat('trg0',NEW.name );
+END IF;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci	<0>	DISABLED
+alter trigger trg3 ;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1
+alter trigger trg3 ena;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ena' at line 1
+drop procedure if exists p1;
+drop trigger if exists trg0;
+drop trigger if exists trg1;
+drop trigger if exists trg2;
+drop trigger if exists trg3;
+drop table if exists trg;
+drop table if exists trg_0;

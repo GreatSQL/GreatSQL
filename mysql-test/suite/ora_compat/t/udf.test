@@ -1,0 +1,133 @@
+--source include/have_udf.inc
+#
+# To run this test, "sql/udf_example.cc" need to be compiled into
+# udf_example.so and LD_LIBRARY_PATH should be setup to point out where
+# the library are. The regular CMake build system takes care of this
+# automatically.
+#
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+#
+# Create the example functions from udf_example
+#
+
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval CREATE FUNCTION metaphon RETURNS STRING SONAME "$UDF_EXAMPLE_LIB";
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval CREATE OR REPLACE FUNCTION metaphon RETURNS STRING SONAME "$UDF_EXAMPLE_LIB";
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval CREATE FUNCTION myfunc_double RETURNS REAL SONAME "$UDF_EXAMPLE_LIB";
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval CREATE OR REPLACE FUNCTION myfunc_double RETURNS REAL SONAME "$UDF_EXAMPLE_LIB";
+
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+--error ER_CANT_FIND_DL_ENTRY
+eval CREATE OR REPLACE FUNCTION myfunc_nonexist RETURNS INTEGER SONAME "$UDF_EXAMPLE_LIB";
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval CREATE OR REPLACE FUNCTION myfunc_int RETURNS INTEGER SONAME "$UDF_EXAMPLE_LIB";
+# `sequence` is a keyword now.
+#--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+#eval CREATE OR REPLACE FUNCTION sequence RETURNS INTEGER SONAME "$UDF_EXAMPLE_LIB";
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval CREATE OR REPLACE FUNCTION lookup RETURNS STRING SONAME "$UDF_EXAMPLE_LIB";
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval CREATE OR REPLACE FUNCTION reverse_lookup
+        RETURNS STRING SONAME "$UDF_EXAMPLE_LIB";
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval CREATE OR REPLACE AGGREGATE FUNCTION avgcost
+        RETURNS REAL SONAME "$UDF_EXAMPLE_LIB";
+
+--echo # Should get 7 rows 1 aggregate
+--replace_result $UDF_EXAMPLE_LIB UDF_EXAMPLE_LIB
+eval SELECT * FROM performance_schema.user_defined_functions
+  WHERE udf_library='$UDF_EXAMPLE_LIB'
+  ORDER BY UDF_NAME;
+
+--echo # Should get an index lookup
+EXPLAIN
+SELECT udf_type FROM performance_schema.user_defined_functions
+  WHERE udf_name = 'metaphon';
+
+--error ER_CANT_INITIALIZE_UDF
+select myfunc_double();
+select myfunc_double(1);
+select myfunc_double(78654);
+--error 1305
+select myfunc_nonexist();
+select myfunc_int();
+--error ER_CANT_INITIALIZE_UDF
+select lookup();
+select lookup("127.0.0.1");
+--error ER_CANT_INITIALIZE_UDF
+select lookup(127,0,0,1);
+select lookup("localhost");
+--error ER_CANT_INITIALIZE_UDF
+select reverse_lookup();
+
+prepare s from "select myfunc_double(?)";
+set @one = 1;
+execute s using @one;
+deallocate prepare s;
+
+# These two function calls should return "localhost", but it's
+# depending on configuration, so just call them and don't log the result
+--disable_result_log
+select reverse_lookup("127.0.0.1");
+select reverse_lookup(127,0,0,1);
+
+# This function call may return different results depending on platform,
+# so ignore results (see Bug#52060).
+select reverse_lookup("localhost");
+--enable_result_log
+
+--error ER_CANT_INITIALIZE_UDF
+select avgcost();
+--error ER_CANT_INITIALIZE_UDF
+select avgcost(100,23.76);
+create table t1(sum int, price float(24));
+insert into t1 values(100, 50.00), (100, 100.00);
+select avgcost(sum, price) from t1;
+delete from t1;
+insert into t1 values(100, 54.33), (200, 199.99);
+select avgcost(sum, price) from t1;
+drop table t1;
+
+#
+# DEFINER-clause is not allowed for UDF-functions
+#
+
+--error ER_PARSE_ERROR
+CREATE OR REPLACE DEFINER=CURRENT_USER() FUNCTION should_not_parse
+RETURNS STRING SONAME "should_not_parse.so";
+
+--error ER_PARSE_ERROR
+CREATE OR REPLACE DEFINER=someone@somewhere FUNCTION should_not_parse
+RETURNS STRING SONAME "should_not_parse.so";
+
+#
+# BUG#18239: Possible to overload internal functions with stored functions
+#
+
+--disable_warnings
+drop function if exists pi;
+--enable_warnings
+
+--error ER_NATIVE_FCT_NAME_COLLISION
+CREATE OR REPLACE FUNCTION pi RETURNS STRING SONAME "should_not_parse.so";
+
+#
+# Drop the example functions from udf_example
+#
+
+DROP FUNCTION metaphon;
+DROP FUNCTION myfunc_double;
+--error ER_SP_DOES_NOT_EXIST
+DROP FUNCTION myfunc_nonexist;
+DROP FUNCTION myfunc_int;
+#DROP FUNCTION sequence;
+DROP FUNCTION lookup;
+DROP FUNCTION reverse_lookup;
+DROP FUNCTION avgcost;

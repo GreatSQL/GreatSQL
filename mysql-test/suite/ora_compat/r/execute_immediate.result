@@ -1,0 +1,420 @@
+EXECUTE IMMEDIATE 'DROP TABLE IF EXISTS t1;';
+Warnings:
+Note	1051	Unknown table 'test.t1'
+EXECUTE IMMEDIATE 'CREATE  TABLE t1 (a INT DEFAULT 10, b varchar(255) NOT NULL DEFAULT 1);';
+EXECUTE IMMEDIATE 'set @a=1;';
+EXECUTE IMMEDIATE 'INSERT INTO t1 VALUES (?,1)' USING @a;
+EXECUTE IMMEDIATE 'INSERT INTO t1 VALUES (2,3)';
+EXECUTE IMMEDIATE 'UPDATE  t1 set a=3 where a=2;';
+EXECUTE IMMEDIATE 'DELETE  from t1 where a=2;';
+EXECUTE IMMEDIATE 'SELECT * FROM t1;';
+a	b
+1	1
+3	3
+EXECUTE IMMEDIATE  'ALTER TABLE \`t1\` ADD COLUMN \`c\` varchar(255) NOT NULL DEFAULT 1;';
+EXECUTE IMMEDIATE 'create view  test_t1  as  select * from t1;';
+EXECUTE IMMEDIATE 'select * from test_t1;';
+a	b	c
+1	1	1
+3	3	1
+EXECUTE IMMEDIATE 'DROP view IF EXISTS test_t1;';
+SET @stmt=(SELECT 'SELECT * from t1;');
+EXECUTE IMMEDIATE @stmt;
+a	b	c
+1	1	1
+3	3	1
+EXECUTE IMMEDIATE 'CREATE  TABLE t2 (a INT DEFAULT 10);';
+EXECUTE IMMEDIATE  'ALTER TABLE \`t2\` ADD COLUMN \`b\` varchar(255) NOT NULL DEFAULT 1;';
+EXECUTE IMMEDIATE 'INSERT INTO t2 VALUES (2,\'3\')';
+EXECUTE IMMEDIATE 'WITH  cte1 AS (SELECT b FROM t1),  cte2 AS (SELECT a FROM t2) SELECT a,b FROM cte1 JOIN cte2 WHERE cte1.b = cte2.a;';
+a	b
+EXECUTE IMMEDIATE 'ALTER TABLE t1 ADD INDEX a_index (a) ;';
+EXECUTE IMMEDIATE 'DROP INDEX a_index ON t1;';
+EXECUTE IMMEDIATE 'DESCRIBE t1;';
+Field	Type	Null	Key	Default	Extra
+a	int	YES		10	
+b	varchar(255)	NO		1	
+c	varchar(255)	NO		1	
+EXECUTE IMMEDIATE 'explain select * from t1;';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1`
+EXECUTE IMMEDIATE 'set @a=2;';
+EXECUTE IMMEDIATE 'set @b=\'3\';';
+EXECUTE IMMEDIATE 'SELECT * FROM t1 WHERE a = (SELECT b FROM t2 where a=? and b=?);' using @a,@b;
+a	b	c
+3	3	1
+CREATE PROCEDURE p1 (x int)
+BEGIN
+set @a=x;
+execute immediate 'select * from t1 where a=?;' using @a;
+execute immediate 'ALTER TABLE \`t1\` ADD COLUMN \`d\` varchar(255) NOT NULL DEFAULT 123456;';
+execute immediate 'select * from t1 where a=?;' using @a;
+END//
+call p1(1);
+a	b	c
+1	1	1
+a	b	c	d
+1	1	1	123456
+drop PROCEDURE p1;
+CREATE PROCEDURE p2(OUT a INT)
+BEGIN
+SET a:= 10;
+END//
+SET @a=2;
+EXECUTE IMMEDIATE 'CALL p2(?);' USING @a;
+SELECT @a;
+@a
+2
+drop PROCEDURE p2;
+CREATE PROCEDURE p3(x int)
+BEGIN
+set @a=x;
+EXECUTE IMMEDIATE 'select ?' using @a;
+END//
+CALL p3(3);
+?
+3
+drop PROCEDURE p3;
+CREATE PROCEDURE p4(x int)
+BEGIN
+set @a=x;
+EXECUTE IMMEDIATE 'do sleep(?)' using @a;
+END//
+CALL p4(3);
+drop PROCEDURE p4;
+EXECUTE IMMEDIATE 'select * from t1;';
+a	b	c	d
+1	1	1	123456
+3	3	1	123456
+CREATE PROCEDURE p9(x int)
+BEGIN
+DECLARE done INT DEFAULT 0;
+DECLARE pc0 int;
+DECLARE pc1 varchar(255);
+DECLARE cur1 CURSOR FOR SELECT a,b FROM t1 where a=x;
+DECLARE CONTINUE HANDLER FOR SQLSTATE '02000' SET done = 1;
+OPEN cur1;
+REPEAT
+FETCH cur1 INTO pc0, pc1;
+IF NOT done THEN
+INSERT INTO t2 VALUES (pc0,pc1);
+EXECUTE IMMEDIATE 'select * from t2;';
+INSERT INTO t2 VALUES (pc0,pc1);
+EXECUTE IMMEDIATE 'select * from t2;';
+END IF;
+UNTIL done END REPEAT;
+CLOSE cur1;
+END//
+call p9(3);
+a	b
+2	3
+3	3
+a	b
+2	3
+3	3
+3	3
+drop PROCEDURE p9;
+EXECUTE IMMEDIATE 'ROLLBACK';
+EXECUTE IMMEDIATE 'COMMIT;';
+set sql_mode=oracle;
+create PROCEDURE p1(i out int)
+as
+begin
+i:= 10;
+end//
+declare
+a int;
+begin
+a:=1;
+execute immediate 'call p1(?)' using out a;
+select a;
+end//
+a
+10
+execute immediate 'call p1(?)' using out @v;
+select @v;
+@v
+10
+drop PROCEDURE p1;
+create PROCEDURE p1(i in out int)
+as
+begin
+i:= i+2;
+end
+//
+declare
+a int;
+begin
+a:=1;
+execute immediate 'call p1(?)' using in out a;
+select a;
+end
+//
+a
+3
+execute immediate 'call p1(?)' using in out @v1;
+select @v1;
+@v1
+NULL
+set @v2=2;
+execute immediate 'call p1(?)' using in out @v2;
+select @v2;
+@v2
+4
+drop PROCEDURE p1;
+execute immediate 'select ?' using 1;
+?
+1
+execute immediate 'select ?' using to_char(1);
+?
+1
+execute immediate 'select ?' into @v using to_char(1);
+select @v;
+@v
+1
+execute immediate 'select ? into @v' using 123;
+ERROR HY000: Misplaced INTO clause, INTO is not allowed inside EXECUTE IMMEDIATE query string
+declare
+x int;
+v int;
+cc varchar(100);
+begin
+select * from t1;
+execute immediate 'select ?, c,d from t1 where a=3 ' into x,v,cc  using 123;
+select x,v,cc;
+execute immediate 'select ?' into cc using  'test';
+select cc;
+end;
+//
+a	b	c	d
+1	1	1	123456
+3	3	1	123456
+x	v	cc
+123	1	123456
+cc
+test
+create PROCEDURE p1(i in int)
+as
+begin
+i:= i+2;
+end
+//
+set @a2=1;
+execute immediate 'call p1(?)' using out @a2;
+select @a2;
+@a2
+1
+drop PROCEDURE p1;
+set @stmt := 'execute immediate \'SELECT 1;\'';
+execute immediate @stmt;
+ERROR HY000: This command is not supported in the prepared statement protocol yet
+execute immediate 'select ?' using out @a;
+ERROR HY000: Incorrect arguments to using OUT param var only use for call
+drop table if exists t1;
+drop table if exists t2;
+set sql_mode=oracle;
+CREATE TABLE t2(
+id int,
+comp_name  varchar(50),
+version   varchar(50)
+) partition by hash(id) partitions 15  ;
+insert into t2 values (1,'HONEY','11.1.2.20');
+insert into t2 values (2,'HONEY','11.1.2.2');
+insert into t2 values (3,'JOHNNY','11.1.2.220');
+insert into t2 values (4,'JOHNNY','211.1.2.3.0');
+insert into t2 values (5,'JOHN','11.1.2.390');
+CREATE TABLE t1(
+id int,
+comp_name  varchar(50)
+) partition by hash(id) partitions 15  ;
+insert into t1 values (1,'HONEY');
+insert into t1 values (2,'JOHNNY');
+insert into t1 values (3,'JOHN');
+CREATE OR REPLACE PROCEDURE  p1 AS
+V_MAX   NUMBER;   -- 444449
+V_BEGIN NUMBER;   -- 1
+V_SQL   VARCHAR2(1000) := 'select id,comp_name   from t1 where id = ?' ;
+V_SQL2  VARCHAR2(1111) := 'select id,comp_name,version from t2 where id >= ? and id<=?';
+BEGIN
+SELECT MAX(id) INTO V_MAX FROM t2;
+SELECT MIN(id) INTO V_BEGIN FROM t2;
+FOR C_OR IN (SELECT ID FROM t1  WHERE id  >= V_BEGIN AND id  < V_BEGIN + 50000 ORDER by id)
+LOOP
+EXECUTE IMMEDIATE V_SQL  USING C_OR.ID;
+END LOOP;
+EXECUTE IMMEDIATE V_SQL2  USING V_BEGIN, V_BEGIN + 50000;
+END;
+//
+call p1;
+id	comp_name
+1	HONEY
+id	comp_name
+2	JOHNNY
+id	comp_name
+3	JOHN
+id	comp_name	version
+1	HONEY	11.1.2.20
+2	HONEY	11.1.2.2
+3	JOHNNY	11.1.2.220
+4	JOHNNY	211.1.2.3.0
+5	JOHN	11.1.2.390
+drop procedure p1;
+drop table t1;
+drop table t2;
+CREATE TABLE employees (EMPLOYEE_ID int, FIRST_NAME VARCHAR2(20), LAST_NAME VARCHAR2(25), EMAIL VARCHAR2(25), PHONE_NUMBER VARCHAR2(20), HIRE_DATE DATE, JOB_ID VARCHAR2(10), SALARY NUMBER(8,2), COMMISSION_PCT NUMBER(2,2), MANAGER_ID NUMBER(6,0), DEPARTMENT_ID NUMBER(4,0)) partition by hash(employee_id) partitions 15  ;
+Insert into employees values (145,'John','Russell','JRUSSEL','011.44.1344.429268','2020-3-1','SA_MAN',14000,0.4,100,80);
+Insert into employees values (146,'Karen','Partners','KPARTNER','011.44.1344.467268','2020-4-1','SA_MAN',13500,0.3,100,80);
+Insert into employees  values (147,'Alberto','Errazuriz','AERRAZUR','011.44.1344.429278','2020-5-1','SA_MAN',12000,0.3,100,80);
+DECLARE
+v_sql VARCHAR2(1000);
+BEGIN
+v_sql:='SELECT a.employee_id, a.salary, a.department_id,a.HIRE_DATE FROM employees a WHERE a.HIRE_DATE>? AND a.HIRE_DATE<?;';
+execUTE IMMEDIATE v_sql USING TO_DATE('2020-03-01','YYYY-MM-DD'),TO_DATE('2023-03-01','YYYY-MM-DD');
+END;
+//
+employee_id	salary	department_id	HIRE_DATE
+146	13500	80	2020-04-01
+147	12000	80	2020-05-01
+drop table employees;
+Execute immediate 'select ? as a' using JSON_OBJECT('test',123);
+a
+{"test": 123}
+execute immediate 'select ? as a' using to_date('2020-05-01 23:22:11', 'YYYY-MM-DD HH24:MI:SS');
+a
+2020-05-01 23:22:11
+declare
+v datetime;
+begin
+v:= to_date('22:31:23', 'HH24:MI:SS');
+execute immediate 'select to_char(cast( ? as datetime) , ''HH24:MI'')' using v;
+end;
+//
+to_char(cast( ? as datetime) , 'HH24:MI')
+22:31
+create table t1(a int, b int);
+insert into t1 values( 1, 2);
+execute immediate 'select ? ' using (SELECT a FROM t1);
+?
+1
+EXECUTE IMMEDIATE 'create table tt1 as select ?' using (select a from t1);
+insert into t1 values( 2, 3);
+execute immediate 'select ? ' using (SELECT a FROM t1);
+ERROR 21000: Subquery returns more than 1 row
+drop table t1;
+drop table tt1;
+create table t1(a int primary key, b int);
+insert into t1 values( 1, 2);
+execute immediate 'select ? ' using (SELECT a FROM t1);
+?
+1
+EXECUTE IMMEDIATE 'create table tt2 as select ?' using (select a from t1);
+drop table tt2;
+begin
+execute immediate 'select ? ' using (SELECT a FROM t1);
+end;//
+?
+1
+begin
+EXECUTE IMMEDIATE 'create table tt3 as select ?' using (select a from t1);
+end; //
+DECLARE
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0
+);
+stu_record_val1 stu_record;
+V_SQL   VARCHAR2(1000) := 'select ?' ;
+begin
+EXECUTE IMMEDIATE V_SQL  USING  stu_record_val1;
+end;
+//
+ERROR HY000: Incorrect arguments to EXECUTE ROW RESULT
+CREATE or replace function f1() RETURN varchar(20) no SQL
+AS
+r_rec int := 10;
+begin
+RETURN r_rec;
+end;
+//
+EXECUTE IMMEDIATE 'select ?'  USING f1();
+?
+10
+drop function f1;
+CREATE or replace PROCEDURE p1() as  
+a int := 1;
+begin  
+execute immediate 'select * from t1 where ?' using case 0 when a=1 then a=10 end;
+end;
+//
+call p1;
+a	b
+call p1;
+a	b
+call p1;
+a	b
+drop table t1;
+drop table tt3;
+drop PROCEDURE p1;
+create temporary table t12 (a int primary key, b int);
+EXECUTE IMMEDIATE 'create table tt2 as select ?' using (select a from t12);
+drop table t12;
+drop table tt2;
+create table t1(a int, b int);
+CREATE or replace PROCEDURE p1() as
+c int := 1;
+d int:= 10;
+begin
+execute immediate 'select * from t1 where ?' using c in (select * from t1);
+end;
+//
+CREATE or replace PROCEDURE p2() as
+c int := 1;
+d int:= 10;
+begin
+execute immediate 'select * from t1 where ?' using c in (select a from t1);
+end;
+//
+call p1;
+ERROR 21000: Operand should contain 1 column(s)
+call p1;
+ERROR 21000: Operand should contain 1 column(s)
+call p1;
+ERROR 21000: Operand should contain 1 column(s)
+call p2;
+a	b
+call p2;
+a	b
+drop PROCEDURE p1;
+drop PROCEDURE p2;
+drop table t1;
+create temporary table t11 (a int visible, b varchar(20), unique index idx (b) visible);
+insert into t11 values(1,'aa'),(2,'bb'),(3,'cc'),(4,'0cc'),(5,'1cc'),(6,null);
+execute immediate 'select * from t11 where ?' using 1 in (select a from t11);
+ERROR HY000: Can't reopen table: 't11'
+drop table t11;
+create table t1(a int);
+insert into t1 values (1);
+CREATE or replace PROCEDURE p1() as
+begin
+for i in 1 .. 10 loop
+execute immediate 'insert into t1 values(?)' using (select * from t1 where a=i limit 1);
+end loop;
+end;
+//
+call p1;
+call p1;
+call p1;
+drop PROCEDURE p1;
+drop table t1;
+create table t11 (a int , b int);
+create table t1 (a int , b int);
+insert into t11 values (0, 10),(1, 11),(5, 12);
+insert into t1 values (1, 21),(2, 12),(3, 23);
+EXECUTE IMMEDIATE 'select ? ' using  (select t11.a from t11 inner join t1 on t11.a = t1.a AND ROWNUM < 2);
+?
+1
+drop table t1;
+drop table t11;

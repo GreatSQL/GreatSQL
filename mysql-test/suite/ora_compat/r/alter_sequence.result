@@ -1,0 +1,350 @@
+
+[### create sequence]
+create sequence seq_err start with 2 increment by 2 minvalue -1000 maxvalue 1000000 cycle cache 10 order;
+select * from mysql.greatdb_sequences order by db,name;
+db	name	start_with	minvalue	maxvalue	increment	cycle_flag	cache_num	order_flag
+test	seq_err	2	-1000	1000000	2	1	10	1
+select * from mysql.greatdb_sequences_persist order by db,name;
+db	name	currval
+test	seq_err	-1000000000000000000000000000
+[### not support alter start with value]
+alter sequence seq_err start with 100;
+ERROR HY000: alter sequence failed, cause can not modify START WITH
+alter sequence seq_err start with 100 start with 100;
+ERROR HY000: duplicate option: start with
+[### test duplicate options]
+alter sequence seq_err increment by 2 increment by 12;
+ERROR HY000: duplicate option: increment by
+alter sequence seq_err minvalue 10000 minvalue 20000;
+ERROR HY000: duplicate option: minvalue/nominvalue
+alter sequence seq_err minvalue 10000 nominvalue;
+ERROR HY000: duplicate option: minvalue/nominvalue
+alter sequence seq_err nominvalue nominvalue;
+ERROR HY000: duplicate option: minvalue/nominvalue
+alter sequence seq_err maxvalue 4 maxvalue 41;
+ERROR HY000: duplicate option: maxvalue/nomaxvalue
+alter sequence seq_err maxvalue 10000 maxvalue 20000;
+ERROR HY000: duplicate option: maxvalue/nomaxvalue
+alter sequence seq_err maxvalue 10000 nomaxvalue;
+ERROR HY000: duplicate option: maxvalue/nomaxvalue
+alter sequence seq nomaxvalue nomaxvalue;
+ERROR HY000: duplicate option: maxvalue/nomaxvalue
+alter sequence seq_err cycle cycle;
+ERROR HY000: duplicate option: cycle/nocycle
+alter sequence seq_err cycle nocycle;
+ERROR HY000: duplicate option: cycle/nocycle
+alter sequence seq_err nocycle nocycle;
+ERROR HY000: duplicate option: cycle/nocycle
+alter sequence seq_err cache 10 cache 100;
+ERROR HY000: duplicate option: cache/nocache
+alter sequence seq_err cache 10 nocache;
+ERROR HY000: duplicate option: cache/nocache
+alter sequence seq_err nocache nocache;
+ERROR HY000: duplicate option: cache/nocache
+alter sequence seq_err order order;
+ERROR HY000: duplicate option: order/noorder
+alter sequence seq_err order noorder;
+ERROR HY000: duplicate option: order/noorder
+alter sequence seq_err noorder noorder;
+ERROR HY000: duplicate option: order/noorder
+alter sequence seq_err;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1
+
+[### alter sequence]
+select seq_err.currval;
+ERROR HY000: read sequence value failed, cause currval is not yet defined in this session
+select seq_err.nextval;
+nextval
+2
+select seq_err.nextval;
+nextval
+4
+select seq_err.nextval;
+nextval
+6
+alter sequence seq_err increment by 4;
+select seq_err.currval;
+currval
+6
+select seq_err.nextval;
+nextval
+10
+select seq_err.nextval;
+nextval
+14
+select seq_err.nextval;
+nextval
+18
+alter sequence seq_err minvalue 100;
+ERROR HY000: alter sequence failed, cause "currval" should between MINVALUE and MAXVALUE!
+select seq_err.currval;
+currval
+18
+select seq_err.nextval;
+nextval
+22
+select seq_err.nextval;
+nextval
+26
+select seq_err.nextval;
+nextval
+30
+alter sequence seq_err maxvalue 4000000;
+select seq_err.currval;
+currval
+30
+select seq_err.nextval;
+nextval
+34
+select seq_err.nextval;
+nextval
+38
+select seq_err.nextval;
+nextval
+42
+drop sequence seq_err;
+[###test duplciated attributes]
+create sequence seq1 start with 3 increment by 4 minvalue 1 maxvalue 50 cycle cache 10 order;
+select seq1.nextval;
+nextval
+3
+select seq1.currval;
+currval
+3
+alter sequence seq1 increment by 4;
+alter sequence seq1 minvalue 1;
+alter sequence seq1 maxvalue 50;
+alter sequence seq1 cycle;
+alter sequence seq1 cache 10;
+alter sequence seq1 order;
+alter sequence seq1 increment by 4 minvalue 1;
+alter sequence seq1 increment by 4 minvalue 1 maxvalue 50;
+alter sequence seq1 increment by 4 minvalue 1 maxvalue 50 cycle;
+alter sequence seq1 increment by 4 minvalue 1 maxvalue 50 cycle cache 10;
+alter sequence seq1 increment by 4 minvalue 1 maxvalue 50 cycle cache 10 order;
+alter sequence seq1 minvalue 1 maxvalue 50;
+alter sequence seq1 minvalue 1 maxvalue 50 cycle;
+alter sequence seq1 minvalue 1 maxvalue 50 cycle cache 10;
+alter sequence seq1 minvalue 1 maxvalue 50 cycle cache 10 order;
+alter sequence seq1 maxvalue 50 cycle;
+alter sequence seq1 maxvalue 50 cycle cache 10;
+alter sequence seq1 maxvalue 50 cycle cache 10 order;
+alter sequence seq1 cycle;
+alter sequence seq1 cycle cache 10;
+alter sequence seq1 cycle cache 10 order;
+drop sequence seq1;
+
+[###test cycle]
+create sequence seq1 start with 3 increment by 4 minvalue 1 maxvalue 100 cycle cache 2 order;
+select seq1.nextval;
+nextval
+3
+select seq1.currval;
+currval
+3
+select seq1.nextval;
+nextval
+7
+select seq1.nextval;
+nextval
+11
+alter sequence seq1 maxvalue 11;
+select seq1.currval;
+currval
+11
+select seq1.nextval;
+nextval
+1
+select seq1.nextval;
+nextval
+5
+select seq1.nextval;
+nextval
+9
+select seq1.nextval;
+nextval
+1
+drop sequence seq1;
+
+[###test nocycle]
+create sequence seq1 start with 3 increment by 4 minvalue 1 maxvalue 10 nocycle cache 10 order;
+select seq1.nextval;
+nextval
+3
+select seq1.currval;
+currval
+3
+select seq1.nextval;
+nextval
+7
+select seq1.nextval;
+ERROR HY000: read sequence value failed, cause sequence's value used up!
+drop sequence seq1;
+
+[###test nocycle --> cycle]
+create sequence seq1 start with 3 increment by 4 minvalue 1 maxvalue 10 nocycle cache 10 order;
+select seq1.nextval;
+nextval
+3
+select seq1.currval;
+currval
+3
+select seq1.nextval;
+nextval
+7
+select seq1.nextval;
+ERROR HY000: read sequence value failed, cause sequence's value used up!
+alter sequence seq1 cycle maxvalue 40;
+select seq1.nextval;
+nextval
+11
+select seq1.nextval;
+nextval
+15
+select seq1.nextval;
+nextval
+19
+drop sequence seq1;
+
+[###test cycle --> nocycle]
+create sequence seq1 start with 3 increment by 4 minvalue 1 maxvalue 10 cycle cache 2 order;
+select seq1.nextval;
+nextval
+3
+select seq1.currval;
+currval
+3
+select seq1.nextval;
+nextval
+7
+select seq1.nextval;
+nextval
+1
+select seq1.nextval;
+nextval
+5
+select seq1.nextval;
+nextval
+9
+alter sequence seq1 nocycle;
+select seq1.currval;
+currval
+9
+select seq1.nextval;
+ERROR HY000: read sequence value failed, cause sequence's value used up!
+drop sequence seq1;
+
+[###test cache && nocache]
+create sequence seq1 start with 2 increment by 4 minvalue 1 maxvalue 10 cycle cache 2 order;
+select seq1.nextval;
+nextval
+2
+select seq1.currval;
+currval
+2
+select seq1.nextval;
+nextval
+6
+select seq1.nextval;
+nextval
+10
+select seq1.nextval;
+nextval
+1
+select seq1.nextval;
+nextval
+5
+select seq1.nextval;
+nextval
+9
+alter sequence seq1 maxvalue 20;
+select seq1.currval;
+currval
+9
+select seq1.nextval;
+nextval
+13
+select seq1.nextval;
+nextval
+17
+select seq1.nextval;
+nextval
+1
+alter sequence seq1 nocache;
+select seq1.currval;
+currval
+1
+select seq1.nextval;
+nextval
+5
+select seq1.nextval;
+nextval
+9
+select seq1.nextval;
+nextval
+13
+select seq1.nextval;
+nextval
+17
+select seq1.nextval;
+nextval
+1
+drop sequence seq1;
+
+[###test cache <-- && --> nocache]
+create sequence seq1 start with 2 increment by 4 minvalue 1 maxvalue 10 cycle cache 2 order;
+select seq1.nextval;
+nextval
+2
+select seq1.currval;
+currval
+2
+select seq1.nextval;
+nextval
+6
+select seq1.nextval;
+nextval
+10
+select seq1.nextval;
+nextval
+1
+alter sequence seq1 maxvalue 100 nocache;
+select seq1.currval;
+currval
+1
+select seq1.nextval;
+nextval
+5
+select seq1.nextval;
+nextval
+9
+select seq1.nextval;
+nextval
+13
+select seq1.nextval;
+nextval
+17
+alter sequence seq1 maxvalue 20 nocache;
+select seq1.currval;
+currval
+17
+select seq1.nextval;
+nextval
+1
+select seq1.nextval;
+nextval
+5
+select seq1.nextval;
+nextval
+9
+drop sequence seq1;
+
+[###test alter cache less than on cycle]
+create sequence seq1 minvalue 0 maxvalue 5 cycle start with 3 increment by -2 cache 3;
+alter sequence seq1 minvalue 1;
+ERROR HY000: alter sequence failed, cause number to CACHE must be less than one cycle!
+drop sequence seq1;
+create sequence seq1 minvalue 0 maxvalue 5 cycle start with 3 increment by 2 cache 3;
+alter sequence seq1 minvalue 1;
+ERROR HY000: alter sequence failed, cause number to CACHE must be less than one cycle!
+drop sequence seq1;

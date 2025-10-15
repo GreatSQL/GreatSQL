@@ -1,0 +1,9 @@
+CREATE TABLE t1
+(
+c1 INT PRIMARY KEY,
+c2 INT DEFAULT 10,
+c3 INT DEFAULT 0 CHECK (c3 < 100)
+);
+INSERT INTO t1(c1, c2) VALUES (1,1);
+UPDATE t1 set c2=c2+1 where c1 < 99 order by c1,c2,c3;
+DROP TABLE t1;

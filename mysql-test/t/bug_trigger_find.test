@@ -1,0 +1,196 @@
+connect (con1,localhost,root,,);
+create user 'u1'@'%';
+create database product;
+GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,ALTER,DROP,REFERENCES,INDEX,CREATE VIEW,SHOW VIEW,CREATE ROUTINE,ALTER ROUTINE,EXECUTE,trigger,event ON product.* TO u1;
+use product;
+CREATE TABLE pm_product_def (
+  PRODUCT_ID decimal(30,0) NOT NULL COMMENT '产品编码',
+  NAME varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '产品名称',
+  PRODUCT_CODE varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '产品code编码',
+  DESCRIPTION varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '产品描述',
+  STATUS decimal(2,0) DEFAULT NULL COMMENT '0 已失效 1 已生效 2 待生效 3 待上架 4 已下架',
+  PRODUCT_TYPE decimal(4,0) DEFAULT NULL COMMENT '产品类别： 8001  普通产品 8002  附加产品 8003  附加产品包 8004  组合产品包 8005 打折优惠产品',
+  INURE_TIME datetime DEFAULT NULL COMMENT '生效时间',
+  EXPIRE_TIME datetime DEFAULT NULL COMMENT '失效时间',
+  SUB_PRODUCT_TYPE varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '产品平台类型,用于实现服务开通的分类 dict_type=1000 and class=10',
+  PRODUCT_CLASS varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '产品大类,用于实现统计分类 dict_type=3000 and class=1',
+  PRODUCT_MANAGER_ID varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '产品负责人工号',
+  PRODUCT_SUPPORT_ID varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '产品支持负责人工号',
+  PRODUCT_FILE varchar(2000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '产品附件，存放产品的说明、操作流程等等信息',
+  PRODUCT_LOGO_FILE varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '产品logo文件名',
+  DOMAIN_BASE_FLAG decimal(65,30) DEFAULT '0.000000000000000000000000000000',
+  OPERATOR_ID varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '配置人员',
+  UPDATE_TIME datetime DEFAULT NULL COMMENT '修改时间',
+  PRODUCT_BILL_TYPE decimal(2,0) DEFAULT NULL COMMENT '产品计费方式（枚举值 1-集团统付成员订购计费 2-个人本月计费 3-极端统付成员数量计费 4-个人次月计费）',
+  BUSINESS_MARKET_NAME varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '市场段名称',
+  BUSINESS_MARKET_ID varchar(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '市场段ID',
+  DEPARTMENT varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '归属部门',
+  PRODUCT_DATA_ID varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '局数据编码字段',
+  TO_JKDT_FLAG varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '迁移前该产品的产品大类',
+  PRIMARY KEY (PRODUCT_ID)
+)  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin COMMENT='产品定义';
+
+insert into product.pm_product_def values(1,'asd',101,'asd',1,8001,'2022-04-05','2023-04-05','asd','fdsf',020,030,'sdasdf','sdadf',0.000000,'sad','2022-04-06',3,'sda','sad','saad','asdf','sdf');
+
+CREATE TABLE pm_product_def_sync (
+  PRODUCT_ID decimal(12,0) NOT NULL COMMENT '空表（没注释）',
+  NAME varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '空表（没注释）',
+  PRODUCT_CODE varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '空表（没注释）',
+  DESCRIPTION varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '空表（没注释）',
+  STATUS decimal(2,0) DEFAULT NULL COMMENT '空表（没注释）',
+  PRODUCT_TYPE decimal(4,0) DEFAULT NULL COMMENT '空表（没注释）',
+  INURE_TIME datetime DEFAULT NULL COMMENT '空表（没注释）',
+  EXPIRE_TIME datetime DEFAULT NULL COMMENT '空表（没注释）',
+  SUB_PRODUCT_TYPE varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '空表（没注释）',
+  PRODUCT_CLASS varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '空表（没注释）',
+  PRODUCT_MANAGER_ID varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '空表（没注释）',
+  PRODUCT_SUPPORT_ID varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '空表（没注释）',
+  PRODUCT_FILE varchar(2000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '空表（没注释）',
+  PRODUCT_LOGO_FILE varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '空表（没注释）',
+  DOMAIN_BASE_FLAG decimal(65,0) DEFAULT '0' COMMENT '空表（没注释）',
+  OPERATOR_ID varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '空表（没注释）',
+  UPDATE_TIME datetime DEFAULT NULL COMMENT '空表（没注释）',
+  PRODUCT_BILL_TYPE decimal(2,0) DEFAULT NULL COMMENT '空表（没注释）',
+  SYNC_TIMESTAMP datetime(6) DEFAULT CURRENT_TIMESTAMP(6) COMMENT '空表（没注释）',
+  SYNC_TYPE decimal(2,0) DEFAULT NULL COMMENT '空表（没注释）',
+  SYNC_MONTH_NUMBER decimal(2,0) DEFAULT NULL COMMENT '空表（没注释）',
+  SYNC_CREATE_DATE datetime DEFAULT NULL COMMENT '空表（没注释）',
+  SYNC_ID varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+  PRIMARY KEY (SYNC_ID)
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+
+CREATE SEQUENCE /*BACKEND*/ `seq_pm_product_def_sync` START WITH 261 MINVALUE 1 MAXVALUE 9999999999999999 INCREMENT BY 1 CYCLE CACHE 20 NOORDER;
+set global log_bin_trust_function_creators = ON;
+connect (con2,localhost,u1,,);
+use product;
+set sql_mode=oracle;
+delimiter ||;
+CREATE TRIGGER TR_PM_PRODUCT_DEF_SYNC AFTER INSERT OR UPDATE OR DELETE ON pm_product_def FOR EACH ROW 
+declare nType number; 
+begin
+  
+  if INSERTING then
+    nType := 1;
+  elsif UPDATING then
+    nType := 2;
+  else
+    nType := 3;
+  end if;
+  
+  if (nType = 1) or (nType = 2) then
+    insert into pm_product_def_sync
+      (product_id,
+       name,
+       product_code,
+       description,
+       status,
+       product_type,
+       inure_time,
+       expire_time,
+       sub_product_type,
+       product_class,
+       product_manager_id,
+       product_support_id,
+       product_file,
+       product_logo_file,
+       domain_base_flag,
+       operator_id,
+       update_time,
+       product_bill_type,
+       sync_timestamp,
+       sync_type,
+       sync_month_number,
+       sync_create_date,
+       SYNC_ID)
+    values
+      (:new.product_id,
+       :new.name,
+       :new.product_code,
+       :new.description,
+       :new.status,
+       :new.product_type,
+       :new.inure_time,
+       :new.expire_time,
+       :new.sub_product_type,
+       :new.product_class,
+       :new.product_manager_id,
+       :new.product_support_id,
+       :new.product_file,
+       :new.product_logo_file,
+       :new.domain_base_flag,
+       :new.operator_id,
+       :new.update_time,
+       :new.product_bill_type,
+       systimestamp,
+       nType,
+       mod(convert(date_format(now(),'%Y%m'),SIGNED),2) + 1,
+          now(),
+  product.seq_pm_product_def_sync.nextval);
+    
+  else
+    insert into pm_product_def_sync
+      (product_id,
+       name,
+       product_code,
+       description,
+       status,
+       product_type,
+       inure_time,
+       expire_time,
+       sub_product_type,
+       product_class,
+       product_manager_id,
+       product_support_id,
+       product_file,
+       product_logo_file,
+       domain_base_flag,
+       operator_id,
+       update_time,
+       product_bill_type,
+       sync_timestamp,
+       sync_type,
+       sync_month_number,
+       sync_create_date,
+       SYNC_ID)
+    values
+      (:old.product_id,
+       :old.name,
+       :old.product_code,
+       :old.description,
+       :old.status,
+       :old.product_type,
+       :old.inure_time,
+       :old.expire_time,
+       :old.sub_product_type,
+       :old.product_class,
+       :old.product_manager_id,
+       :old.product_support_id,
+       :old.product_file,
+       :old.product_logo_file,
+       :old.domain_base_flag,
+       :old.operator_id,
+       :old.update_time,
+       :old.product_bill_type,
+       systimestamp,
+       nType,
+       mod(convert(date_format(now(),'%Y%m'),SIGNED),2) + 1,
+          now(),
+  product.seq_pm_product_def_sync.nextval);
+  end if;
+end||
+delimiter ;||
+update product.pm_product_def set product_id = 1, name = 'ppp' where product_id = 1;
+drop sequence seq_pm_product_def_sync;
+CREATE SEQUENCE /*BACKEND*/ `seq_pm_product_def_sync` START WITH 261 MINVALUE 1 MAXVALUE 9999999999999999 INCREMENT BY 1 CYCLE CACHE 20 NOORDER;
+-- error ER_DUP_ENTRY
+update product.pm_product_def set product_id = 1, name = 'ppp' where product_id = 1;
+update product.pm_product_def set product_id = 1, name = 'ppp' where product_id = 1;
+alter trigger TR_PM_PRODUCT_DEF_SYNC enable; 
+--disconnect con2
+
+--connection con1
+drop user u1;
+drop trigger TR_PM_PRODUCT_DEF_SYNC;
+drop sequence seq_pm_product_def_sync;
+drop database product;
+SET sql_mode = DEFAULT;

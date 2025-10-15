@@ -1,0 +1,123 @@
+[************** normal test: unlink data file directly]
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+set innodb_data_file_async_purge=OFF;
+set global debug='+d,innodb_do_not_purge_file';
+drop table t1;
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+log_id	start_time	original_path	original_size	temporary_path	current_size	message
+set global debug='-d,innodb_do_not_purge_file';
+show tables;
+Tables_in_test
+[************** normal test: innodb_data_file_async_purge]
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+set innodb_data_file_async_purge=ON;
+set global debug='+d,innodb_do_not_purge_file';
+drop table t1;
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+log_id	start_time	original_path	original_size	temporary_path	current_size	message
+LOG_ID	START_TIME	./test/t1.ibd	114688	TEMP_PATH	114688	NULL
+set global debug='-d,innodb_do_not_purge_file';
+show tables;
+Tables_in_test
+[************** normal test: innodb_data_force_async_purge_file_size]
+set innodb_data_file_async_purge=OFF;
+set global innodb_data_force_async_purge_file_size=51200;
+## generate table t1 which data file size is 112KB
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+set global debug='+d,innodb_do_not_purge_file';
+drop table t1;
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+log_id	start_time	original_path	original_size	temporary_path	current_size	message
+LOG_ID	START_TIME	./test/t1.ibd	114688	TEMP_PATH	114688	NULL
+set global debug='-d,innodb_do_not_purge_file';
+show tables;
+Tables_in_test
+[************** normal test: innodb_data_file_async_purge_all_at_shutdown]
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+set innodb_data_file_async_purge=ON;
+set global innodb_data_file_async_purge_all_at_shutdown=ON;
+set global innodb_data_file_async_purge_max_size=51200;
+set global innodb_data_file_async_purge_interval=5000;
+set global debug='+d,innodb_do_not_purge_file';
+drop table t1;
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+log_id	start_time	original_path	original_size	temporary_path	current_size	message
+LOG_ID	START_TIME	./test/t1.ibd	114688	TEMP_PATH	114688	NULL
+## shutdown mysql
+shutdown;
+## wait pid_file deleted
+# restart
+show tables;
+Tables_in_test
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+log_id	start_time	original_path	original_size	temporary_path	current_size	message
+[************** normal test: partition table file purge]
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30)) partition by hash(c1) partitions 2;
+set innodb_data_file_async_purge=ON;
+set global debug='+d,innodb_do_not_purge_file';
+drop table t1;
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+log_id	start_time	original_path	original_size	temporary_path	current_size	message
+LOG_ID	START_TIME	./test/t1#p#p1.ibd	114688	TEMP_PATH	114688	NULL
+LOG_ID	START_TIME	./test/t1#p#p0.ibd	114688	TEMP_PATH	114688	NULL
+set global debug='-d,innodb_do_not_purge_file';
+show tables;
+Tables_in_test
+[************** normal test: truncate table]
+create table t1(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30)) partition by hash(c1) partitions 2;
+set innodb_data_file_async_purge=ON;
+set global debug='+d,innodb_do_not_purge_file';
+truncate table t1;
+select * from information_schema.innodb_async_purge_files order by log_id asc;
+log_id	start_time	original_path	original_size	temporary_path	current_size	message
+LOG_ID	START_TIME	ORIGINAL_PATH	114688	TEMP_PATH	114688	NULL
+LOG_ID	START_TIME	ORIGINAL_PATH	114688	TEMP_PATH	114688	NULL
+set global debug='-d,innodb_do_not_purge_file';
+show tables;
+Tables_in_test
+t1
+[************** normal test: drop database]
+create table t8(c1 int primary key, c2 int, c3 varchar(20), c4 varchar(20), c5 char(30));
+create table t9(c1 int primary key, c2 int, c3 varchar(20));
+create table t10(c1 int, c2 text, c3 text);
+set innodb_data_file_async_purge=ON;
+set global debug='+d,innodb_do_not_purge_file';
+drop database test;
+select * from information_schema.innodb_async_purge_files order by original_path asc;
+log_id	start_time	original_path	original_size	temporary_path	current_size	message
+LOG_ID	START_TIME	./test/t1#p#p0.ibd	114688	TEMP_PATH	114688	NULL
+LOG_ID	START_TIME	./test/t1#p#p1.ibd	114688	TEMP_PATH	114688	NULL
+LOG_ID	START_TIME	./test/t10.ibd	114688	TEMP_PATH	114688	NULL
+LOG_ID	START_TIME	./test/t8.ibd	114688	TEMP_PATH	114688	NULL
+LOG_ID	START_TIME	./test/t9.ibd	114688	TEMP_PATH	114688	NULL
+set global debug='-d,innodb_do_not_purge_file';
+show databases like 'test';
+Database (test)
+create database test;
+[************** normal test: drop/truncate partition]
+use test;
+create table t3(c1 int primary key, c2 varchar(30), c3 text) engine=innodb partition by hash(c1) partitions 2;
+create table t4(c1 int primary key, c2 varchar(30), c3 text) engine=innodb PARTITION BY RANGE (c1) (PARTITION p0 VALUES LESS THAN (2), PARTITION p1 VALUES LESS THAN (3), PARTITION p2 VALUES LESS THAN (4), PARTITION p3 VALUES LESS THAN (5));
+set innodb_data_file_async_purge=ON;
+set global debug='+d,innodb_do_not_purge_file';
+truncate table t3;
+alter table t4 drop partition p1;
+alter table t4 truncate partition p3;
+select * from t3;
+c1	c2	c3
+select * from t4;
+c1	c2	c3
+1	zxcvbnm,.	2345612345
+3	zxcvbnm,.	2345612345
+select * from information_schema.innodb_async_purge_files;
+log_id	start_time	original_path	original_size	temporary_path	current_size	message
+LOG_ID	START_TIME	ORIGINAL_PATH	114688	TEMP_PATH	114688	NULL
+LOG_ID	START_TIME	ORIGINAL_PATH	114688	TEMP_PATH	114688	NULL
+LOG_ID	START_TIME	ORIGINAL_PATH	114688	TEMP_PATH	114688	NULL
+LOG_ID	START_TIME	ORIGINAL_PATH	114688	TEMP_PATH	114688	NULL
+set global debug='-d,innodb_do_not_purge_file';
+drop table t3,t4;
+set innodb_data_file_async_purge=OFF;
+set global innodb_data_file_async_purge_error_retry_count=10;
+set global innodb_data_file_async_purge_max_size=268435456;
+set global innodb_data_file_async_purge_all_at_shutdown=OFF;

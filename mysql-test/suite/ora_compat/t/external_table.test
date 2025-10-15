@@ -1,0 +1,554 @@
+--echo #
+--echo # external table related tests.
+--echo #
+
+copy_file $MYSQLTEST_VARDIR/std_data/external_table.csv $MYSQL_TMP_DIR/external_table.csv;
+
+let $default_directory = '$MYSQL_TMP_DIR';
+let $location_file = 'external_table.csv';
+
+###################################################
+#
+#  fix bug: After the database starts, the external table is created
+#  and the aggregate function is found to have no results
+#
+###################################################
+write_file $MYSQL_TMP_DIR/t1.csv;
+1,"test1","test11"
+2,"test2","test22"
+3,"test3","test33"
+4,"test4","test44"
+EOF
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ('t1.csv'));
+SELECT c1 , CUME_DIST() OVER (ORDER BY c3) cume_dist_val from external_t1;
+SELECT c1 , CUME_DIST() OVER (ORDER BY c3) cume_dist_val from external_t1;
+drop table external_t1;
+remove_file $MYSQL_TMP_DIR/t1.csv;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null) 
+organization external ( DEFAULT DIRECTORY $default_directory LOCATION ($location_file));
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--error ER_TABLE_EXISTS_ERROR
+eval CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null)
+organization external ( DEFAULT DIRECTORY $default_directory LOCATION ($location_file));
+
+select c1,c2,c3 from external_t2;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+show create table external_t2;
+
+drop table external_t2;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null) 
+organization external ( DEFAULT DIRECTORY '/my_tmp' LOCATION ($default_directory: $location_file));
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+show create table external_t2;
+
+drop table external_t2;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null) 
+organization external ( LOCATION ($default_directory: $location_file));
+
+--error ER_ILLEGAL_HA
+create index i on external_t2(c1);
+
+--error ER_ILLEGAL_HA
+alter table external_t2 add index i(c1);
+
+--error ER_ILLEGAL_HA
+alter table external_t2 add c4 int not null first;
+
+--error ER_ILLEGAL_HA
+alter table external_t2 drop column c3;
+
+drop table external_t2;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null) 
+organization external ( DEFAULT DIRECTORY $default_directory LOCATION ($location_file));
+
+--error ER_ILLEGAL_HA
+INSERT INTO external_t2 VALUES (7,'test7','external_test7');
+
+select c1,c2,c3 from external_t2;
+
+select c1,c2,c3 from external_t2 where c2 like '%test%';
+
+select c1,c2,c3 from external_t2 where c1 = 10;
+
+--error ER_ILLEGAL_HA
+delete from external_t2 where c3 = 'external_test10';
+
+select c1,c2,c3 from external_t2;
+
+--error ER_ILLEGAL_HA
+delete from external_t2 where c1 > 6;
+
+select c1,c2,c3 from external_t2;
+
+--error ER_ILLEGAL_HA
+update external_t2 set c2 = 'test' where c1 = 2;
+
+--error ER_ILLEGAL_HA
+truncate table external_t2;
+
+--error ER_ILLEGAL_HA
+delete from external_t2;
+
+select c1,c2,c3 from external_t2;
+
+drop table external_t2;
+
+--echo #
+--echo # test for the column string length of CSV exceeds the defined length
+--echo #
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 char(10) not null) 
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ($location_file));
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--error ER_CRASHED_ON_USAGE
+select c1,c2,c3 from external_t1;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+show create table external_t1;
+
+drop table external_t1;
+
+--echo #
+--echo # The external table columns are inconsistent with the external CSV data.
+--echo #   The test of more columns and less columns
+
+remove_file $MYSQL_TMP_DIR/external_table.csv;
+copy_file $MYSQLTEST_VARDIR/std_data/external_table.csv $MYSQL_TMP_DIR/external_table.csv;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null) 
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ($location_file));
+
+select c1,c2 from external_t1;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+show create table external_t1;
+
+drop table external_t1;
+
+write_file $MYSQL_TMP_DIR/t2.csv;
+6,"test6","external_test6"
+EOF
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null,c4 char(20) not null) 
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ('t2.csv'));
+
+--error ER_CRASHED_ON_USAGE
+select c1,c2,c3,c4 from external_t2;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+show create table external_t2;
+
+check table external_t2;
+
+remove_file $MYSQL_TMP_DIR/t2.csv;
+write_file $MYSQL_TMP_DIR/t2.csv;
+6,"test6","external_test6","repair"
+EOF
+
+repair table external_t2;
+
+select c1,c2,c3,c4 from external_t2;
+
+drop table external_t2;
+
+remove_file $MYSQL_TMP_DIR/t2.csv;
+
+--echo #
+--echo # The external table no CSV file test.
+--echo # 
+
+let $location_file = 'tmp.csv';
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null) 
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ($location_file));
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--error 13
+select c1,c2,c3 from external_t1;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+show create table external_t1;
+
+drop table external_t1;
+
+--echo #
+--echo # Test for the validation of the file location
+--echo #
+
+--error ER_PATH_LENGTH
+CREATE TABLE external_t1 (c1 INT not null,
+c2 varchar(10) not null,
+c3 char(20) not null) organization external ( DEFAULT DIRECTORY 'a#######################################################b#######################################################################################b#####################################################################################b######################################################################################b######################################################################################b#############################################################################################################' LOCATION ('external_table.csv') );
+
+--error ER_WRONG_VALUE
+CREATE TABLE external_t1 (c1 INT not null,
+c2 varchar(10) not null,
+c3 char(20) not null) organization external ( DEFAULT DIRECTORY 'test' LOCATION ('external_table.csv') );
+
+CREATE TABLE external_t1 (c1 INT not null,
+c2 varchar(10) not null,
+c3 char(20) not null) organization external ( DEFAULT DIRECTORY '/my_tmp' LOCATION ('external_table.csv') );
+
+--replace_regex /OS errno [0-9]+/Errcode: ##/  /@0023/#/ /Filename/File name/
+--error 13
+select * from external_t1;
+
+drop table external_t1;
+remove_file $MYSQL_TMP_DIR/external_table.csv;
+
+let $location_file = 'external_table.csv';
+
+eval CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 char(20) not null) 
+organization external ( LOCATION ($location_file));
+
+--replace_regex /OS errno [0-9]+/Errcode: ##/  /@0023/#/ /Filename/File name/
+--error 13
+select * from external_t2;
+
+--let $MYSQL_DATA_DIR= `select @@datadir`
+copy_file $MYSQLTEST_VARDIR/std_data/external_table.csv $MYSQL_DATA_DIR/test/external_table.csv;
+
+repair table external_t2;
+
+select * from external_t2;
+
+show create table external_t2;
+
+drop table external_t2;
+remove_file $MYSQL_DATA_DIR/test/external_table.csv;
+
+
+create table t1( EXTERNAL int); select EXTERNAL from t1;
+
+create table t2( LOCATION int); select LOCATION from t2;
+
+create table LOCATION ( EXTERNAL int); select EXTERNAL from  LOCATION; 
+
+create table EXTERNAL ( LOCATION int); select  LOCATION from EXTERNAL;
+
+
+drop table t1;
+drop table t2;
+drop table EXTERNAL;
+drop table LOCATION;
+
+###################################################
+#Test different data types of create external tables
+#and test data is null
+###################################################
+
+write_file $MYSQL_TMP_DIR/t1.csv;
+1,"test1","a"
+2,"test2","b"
+3,"test3","c"
+4,"test4","a"
+5,"test5","b"
+6,"test6","c"
+7,"test7","a"
+EOF
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 set('a','b','c') not null)
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ('t1.csv'));
+
+select c1,c2,c3 from external_t1;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+show create table external_t1;
+
+drop table external_t1;
+remove_file $MYSQL_TMP_DIR/t1.csv;
+
+write_file $MYSQL_TMP_DIR/t1.csv;
+1,,"a"
+2,"","b"
+EOF
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 set('a','b','c') not null)
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ('t1.csv'));
+
+select c1,c2,c3 from external_t1;
+
+drop table external_t1;
+remove_file $MYSQL_TMP_DIR/t1.csv;
+
+write_file $MYSQL_TMP_DIR/t2.csv;
+1,"test1","2030-10-27 16:40:24"
+2,"test2","2031-10-27 16:40:24"
+3,"test3","2032-10-27 16:40:24"
+4,"test4","2033-10-27 16:40:24"
+EOF
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP not null)
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ('t2.csv'));
+
+select c1,c2,c3 from external_t2;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+show create table external_t2;
+
+drop table external_t2;
+remove_file $MYSQL_TMP_DIR/t2.csv;
+
+write_file $MYSQL_TMP_DIR/t2.csv;
+1,"test1",""
+2,"test2","2031-10-27 16:40:24"
+3,"test3","2032-10-27 16:40:24"
+4,"test4","2033-10-27 16:40:24"
+EOF
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t2 (c1 INT not null,c2 varchar(10) not null,c3 timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP not null)
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ('t2.csv'));
+
+--error ER_CRASHED_ON_USAGE
+select c1,c2,c3 from external_t2;
+
+drop table external_t2;
+remove_file $MYSQL_TMP_DIR/t2.csv;
+
+#--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+copy_file $MYSQLTEST_VARDIR/std_data/external_table_bit.csv $MYSQL_TMP_DIR/t3.csv;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t3 (c1 bit(15) not null)
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ('t3.csv'));
+
+select c1 from external_t3;
+select bin(c1) from external_t3;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+show create table external_t3;
+
+drop table external_t3;
+remove_file $MYSQL_TMP_DIR/t3.csv;
+
+#The terminal copies bit-type data（external_table_bit.csv）, which increases bytes and causes errors
+write_file $MYSQL_TMP_DIR/bit.csv;
+""
+"a�"
+"b�"
+EOF
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t3 (c1 bit(15) not null)
+organization external (DEFAULT DIRECTORY '$MYSQL_TMP_DIR' LOCATION ('bit.csv'));
+
+--error ER_CRASHED_ON_USAGE
+select * from external_t3;
+drop table external_t3;
+
+remove_file $MYSQL_TMP_DIR/bit.csv;
+
+write_file $MYSQL_TMP_DIR/bit.csv;
+""
+"2"
+"a"
+EOF
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t3 (c1 bit(15) not null)
+organization external (DEFAULT DIRECTORY '$MYSQL_TMP_DIR' LOCATION ('bit.csv'));
+
+select * from external_t3;
+select bin(c1) from external_t3;
+drop table external_t3;
+
+remove_file $MYSQL_TMP_DIR/bit.csv;
+
+###################################################
+#  The path is incorrect, and repeated creation of an external table needs to report error:
+#  The table already exists
+###################################################
+
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 blob not null)
+organization external (DEFAULT DIRECTORY '/my_tmp' LOCATION ('t1.CSV'));
+--error ER_TABLE_EXISTS_ERROR
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 blob not null)
+organization external (DEFAULT DIRECTORY '/my_tmp' LOCATION ('t1.CSV'));
+drop table external_t1;
+
+###################################################
+#
+#  fix repair
+# 
+###################################################
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY '/my_tmp' LOCATION ('t1.CSV'));
+
+show create table external_t1;
+
+--error 13
+select * from external_t1;
+
+check table external_t1;
+REPAIR TABLE external_t1;
+
+drop table external_t1;
+
+CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY '/my_tmp' LOCATION ('t1.CSV'));
+
+--error 13
+select * from external_t1;
+
+check table external_t1;
+REPAIR TABLE external_t1;
+
+drop table external_t1;
+
+write_file $MYSQL_TMP_DIR/t1.csv;
+a,"test1","test11"
+2,"test2","test22"
+3,"test3","test33"
+4,"test4","test44"
+EOF
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ('t1.csv'));
+
+--error ER_CRASHED_ON_USAGE
+select * from external_t1;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+show create table external_t1;
+
+remove_file $MYSQL_TMP_DIR/t1.csv;
+write_file $MYSQL_TMP_DIR/t1.csv;
+1,"test1","test11"
+2,"test2","test22"
+3,"test3","test33"
+4,"test4","test44"
+EOF
+
+check table external_t1;
+REPAIR TABLE external_t1;
+
+select * from external_t1;
+
+drop table external_t1;
+remove_file $MYSQL_TMP_DIR/t1.csv;
+
+###################################################
+#
+#  External tables do not support temporary tables
+#
+###################################################
+write_file $MYSQL_TMP_DIR/t1.csv;
+1,"test1","test11"
+2,"test2","test22"
+3,"test3","test33"
+4,"test4","test44"
+EOF
+
+--error ER_NOT_SUPPORTED_YET
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ('t1.csv'));
+
+drop table if exists external_t1;
+remove_file $MYSQL_TMP_DIR/t1.csv;
+
+###################################################
+#
+#  Testing between different sessions
+#
+###################################################
+CREATE USER user1@localhost;
+CREATE USER user2@localhost;
+grant all on *.* to user1@localhost;
+grant all on *.* to user2@localhost;
+
+connect (user1, localhost, user1, ,);
+connect (user2, localhost, user2, ,);
+
+
+write_file $MYSQL_TMP_DIR/t1.csv;
+1,"test1","test11"
+2,"test2","test22"
+3,"test3","test33"
+4,"test4","test44"
+EOF
+
+#  Testing case one
+connection user1;
+use test;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ('t1.csv'));
+
+connection user2;
+use test;
+select * from external_t1;
+
+connection user1;
+use test;
+check TABLE external_t1;
+check TABLE external_t1;
+drop table external_t1;
+
+#  Testing case two
+connection user2;
+use test;
+set global log_bin_trust_function_creators=TRUE;
+set sql_mode=oracle;
+delimiter //;
+create or replace function f2() return int as
+ str varchar(100);
+ a int;
+cursor ref_rs is select c1 from external_t1;
+  begin
+  open ref_rs;
+ fetch ref_rs into a;
+return a;
+end;//
+delimiter ;//
+--error ER_NO_SUCH_TABLE
+select f2();
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE external_t1 (c1 INT not null,c2 varchar(10) not null,c3 varchar(20) not null)
+organization external (DEFAULT DIRECTORY $default_directory LOCATION ('t1.csv'));
+
+connection user1;
+use test;
+set sql_mode=oracle;
+select f2();
+select f2();
+
+connection user2;
+use test;
+set sql_mode=oracle;
+REPAIR TABLE external_t1;
+REPAIR TABLE external_t1;
+drop function f2;
+drop table external_t1;
+
+connection default;
+disconnect user1;
+drop user user1@localhost;
+disconnect user2;
+drop user user2@localhost;
+
+remove_file $MYSQL_TMP_DIR/t1.csv;

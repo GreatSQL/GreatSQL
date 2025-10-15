@@ -1,0 +1,174 @@
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a BIT DEFAULT 2)
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+CREATE FUNCTION f1(a BIT DEFAULT 2) RETURN BIT
+AS BEGIN
+RETURN a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a BOOL DEFAULT '')
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+CREATE FUNCTION f1(a BOOL DEFAULT '') RETURN BOOL
+AS BEGIN
+RETURN a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a TINYINT DEFAULT '')
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+CREATE FUNCTION f1(a TINYINT DEFAULT '') RETURN TINYINT
+AS BEGIN
+RETURN a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a INT DEFAULT '')
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+CREATE FUNCTION f1(a INT DEFAULT '') RETURN INT
+AS BEGIN
+RETURN a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a BIGINT DEFAULT '')
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+CREATE FUNCTION f1(a BIGINT DEFAULT '') RETURN BIGINT
+AS BEGIN
+RETURN a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a CHAR(2) DEFAULT '123')
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+CREATE FUNCTION f1(a CHAR(2) DEFAULT '123') RETURN CHAR(2)
+AS BEGIN
+RETURN a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a VARCHAR(2) DEFAULT '123')
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+CREATE FUNCTION f1(a VARCHAR(2) DEFAULT '123') RETURN VARCHAR(2)
+AS BEGIN
+RETURN a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a DATE DEFAULT '')
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+CREATE FUNCTION f1(a DATE DEFAULT '') RETURN DATE
+AS BEGIN
+RETURN a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a TIMESTAMP DEFAULT '')
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+CREATE FUNCTION f1(a TIMESTAMP DEFAULT '') RETURN TIMESTAMP
+AS BEGIN
+RETURN a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a YEAR DEFAULT '')
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+CREATE FUNCTION f1(a YEAR DEFAULT '') RETURN YEAR
+AS BEGIN
+RETURN a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a DATETIME DEFAULT '')
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+CREATE FUNCTION f1(a DATETIME DEFAULT '') RETURN DATETIME
+AS BEGIN
+RETURN a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+DROP PROCEDURE IF EXISTS p1;
+DROP FUNCTION IF EXISTS f1;
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a IN OUT INT DEFAULT 1)
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' is invalid for not IN mode.
+CREATE DATABASE test_charset CHARACTER SET gbk;
+USE test_charset;
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a VARCHAR(10) DEFAULT '开源')
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' is invalid for mismatched connection and db charset.
+CREATE FUNCTION f1(a VARCHAR(10) DEFAULT '开源') RETURN VARCHAR(10)
+AS BEGIN
+RETURN a;
+END|
+ERROR HY000: Parameter 'a' is invalid for mismatched connection and db charset.
+DROP DATABASE test_charset;
+CREATE DATABASE d00;
+USE d00;
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a INT :=1, b INT :=2) IS BEGIN
+SELECT a, b;
+END|
+CALL p1(aa=>10);
+ERROR HY000: Parameter 'aa' is invalid for wrong name.
+DROP PROCEDURE p1;
+CREATE PROCEDURE p1(a) IS BEGIN END;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ') IS BEGIN END' at line 1
+CALL p1;
+ERROR 42000: PROCEDURE d00.p1 does not exist
+CREATE PROCEDURE p1() IS BEGIN a END;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'END' at line 1
+CALL p1;
+ERROR 42000: PROCEDURE d00.p1 does not exist
+CREATE PROCEDURE p1(a INT := 1, b) IS BEGIN END;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ') IS BEGIN END' at line 1
+CALL p1;
+ERROR 42000: PROCEDURE d00.p1 does not exist
+CREATE PROCEDURE p1(a, b) IS BEGIN END;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ', b) IS BEGIN END' at line 1
+CALL p1;
+ERROR 42000: PROCEDURE d00.p1 does not exist
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a VARCHAR(10) := '🀀') IS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' is invalid for unsupport character.
+DROP DATABASE d00;

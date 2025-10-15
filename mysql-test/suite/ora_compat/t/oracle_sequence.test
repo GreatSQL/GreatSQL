@@ -1,0 +1,319 @@
+--echo
+--echo [### test select sequence col parser]
+create table t1 (c1 int primary key, c2 int) engine=innodb;
+insert into t1 values (1,1);
+create sequence seq;
+--error ER_GDB_READ_SEQUENCE
+select test.seq.currval from t1;
+select test.seq.nextval from t1;
+select test.seq.currval from t1;
+--error ER_BAD_FIELD_ERROR
+select TEST.seq.currval from t1;
+--error ER_BAD_FIELD_ERROR
+select TEST.seq.nextval from t1;
+select test.seq.currval from t1;
+select test.seq.nextval from t1;
+select seq.currval from t1;
+select seq.nextval from t1;
+--error ER_BAD_FIELD_ERROR
+select SEQ.currval from t1;
+--error ER_BAD_FIELD_ERROR
+select SEQ.nextval from t1;
+select seq.currval from t1;
+select seq.nextval from t1;
+select seq.CURRVAL from t1;
+select seq.NEXTVAL from t1;
+select hex(seq.currval) from t1;
+
+--error ER_BAD_FIELD_ERROR
+select test.seq from t1;
+--error ER_BAD_FIELD_ERROR
+select test.seq.errval from t1;
+--error ER_BAD_FIELD_ERROR
+select seq.errval from t1;
+--error ER_BAD_FIELD_ERROR
+select currval from t1;
+--error ER_BAD_FIELD_ERROR
+select nextval from t1;
+drop sequence seq;
+
+--echo
+--echo [### test decimal number with fraction]
+--error ER_ONLY_INTEGERS_ALLOWED
+create sequence seq minvalue 10.1;
+--error ER_ONLY_INTEGERS_ALLOWED
+create sequence seq minvalue 1000000000000000000000000.1;
+--error ER_ONLY_INTEGERS_ALLOWED
+create sequence seq maxvalue 10.1;
+--error ER_ONLY_INTEGERS_ALLOWED
+create sequence seq maxvalue 1000000000000000000000000.1;
+--error ER_ONLY_INTEGERS_ALLOWED
+create sequence seq start with 10.1;
+--error ER_ONLY_INTEGERS_ALLOWED
+create sequence seq start with 1000000000000000000000000.1;
+--error ER_ONLY_INTEGERS_ALLOWED
+create sequence seq increment by 10.1;
+--error ER_ONLY_INTEGERS_ALLOWED
+create sequence seq increment by 1000000000000000000000000.1;
+
+--echo
+--echo [### test "increment" cannot be zero]
+--error ER_GDB_CREATE_SEQUENCE
+create sequence seq increment by 0;
+
+--echo
+--echo [### test "max <= min"]
+--error ER_GDB_CREATE_SEQUENCE
+create sequence seq maxvalue 9 minvalue 10;
+--error ER_GDB_CREATE_SEQUENCE
+create sequence seq maxvalue 10 minvalue 10;
+--error ER_GDB_CREATE_SEQUENCE
+create sequence seq maxvalue -10 minvalue -9;
+--error ER_GDB_CREATE_SEQUENCE
+create sequence seq maxvalue -10 minvalue -10;
+
+--echo
+--echo [### test "max-min" < "increment"]
+--error ER_GDB_CREATE_SEQUENCE
+create sequence seq maxvalue 100 minvalue 90 increment by 11;
+
+--echo
+--echo [### test truncate of "min/max"]
+create sequence seq maxvalue 10000000000000000000000000000 start with 9999999999999999999999999999;
+select seq.nextval;
+drop sequence seq;
+create sequence seq minvalue -10000000000000000000000000000 start with -999999999999999999999999999 increment by -1;
+select seq.nextval;
+drop sequence seq;
+
+--echo
+--echo [### test seq: start with]
+create sequence seq start with 2;
+select seq.nextval;
+drop sequence seq;
+
+--echo
+--echo [### test seq: increment by negative-number]
+--error ER_GDB_CREATE_SEQUENCE
+create sequence seq start with 1000 increment by -2;
+create sequence seq maxvalue 1024 start with 1000 increment by -2;
+select seq.nextval;
+select seq.nextval;
+select seq.nextval;
+drop sequence seq;
+
+--echo
+--echo [### test seq: values used up]
+create sequence seq maxvalue 2;
+select seq.nextval;
+select seq.nextval;
+--error ER_GDB_READ_SEQUENCE
+select seq.nextval;
+drop sequence seq;
+
+create sequence seq minvalue -1 maxvalue 2 start with 2 increment by -2;
+select seq.nextval;
+select seq.nextval;
+--error ER_GDB_READ_SEQUENCE
+select seq.nextval;
+drop sequence seq;
+
+--echo
+--echo [### test seq: values used up and cycled]
+create sequence seq maxvalue 3 cycle start with 2 cache 2;
+select seq.nextval;
+select seq.nextval;
+select seq.nextval;
+select seq.nextval;
+select seq.nextval;
+drop sequence seq;
+
+create sequence seq minvalue -1 maxvalue 5 cycle start with 3 increment by -2 cache 3;
+select seq.nextval;
+select seq.nextval;
+select seq.nextval;
+select seq.nextval;
+select seq.nextval;
+drop sequence seq;
+
+--echo
+--echo [### test seq: cache num]
+create sequence seq cache 3;
+select * from mysql.greatdb_sequences_persist;
+select seq.nextval;
+select * from mysql.greatdb_sequences_persist;
+select seq.nextval;
+select * from mysql.greatdb_sequences_persist;
+select seq.nextval;
+select * from mysql.greatdb_sequences_persist;
+select seq.nextval;
+select * from mysql.greatdb_sequences_persist;
+drop sequence seq;
+
+--echo
+--echo [### test_seq: order]
+--echo [#cache num disabled]
+create sequence seq cache 3 order;
+select * from mysql.greatdb_sequences_persist;
+select seq.nextval;
+select * from mysql.greatdb_sequences_persist;
+select seq.nextval;
+select * from mysql.greatdb_sequences_persist;
+select seq.nextval;
+select * from mysql.greatdb_sequences_persist;
+drop sequence seq;
+
+--echo
+--echo [### test 28 digits boundary(pos) and 27 digits boundary(neg)]
+create sequence seq start with 9999999999999999999999999998;
+select seq.nextval;
+select * from mysql.greatdb_sequences_persist;
+select seq.nextval;
+select * from mysql.greatdb_sequences_persist;
+--error ER_GDB_READ_SEQUENCE
+select seq.nextval;
+drop sequence seq;
+
+create sequence seq start with -999999999999999999999999998 increment by -1;
+select seq.nextval;
+select * from mysql.greatdb_sequences_persist;
+select seq.nextval;
+select * from mysql.greatdb_sequences_persist;
+--error ER_GDB_READ_SEQUENCE
+select seq.nextval;
+drop sequence seq;
+
+--echo
+--echo [### test procedure options]
+--disable_warnings
+drop procedure if exists tpp;
+drop procedure if exists tpp_d;
+--enable_warnings
+
+create sequence test_seq;
+delimiter //;
+create procedure tpp()
+begin
+  select test_seq.nextval;
+end//
+delimiter ;//
+
+delimiter //;
+create procedure tpp_d()
+begin
+  select test_seq.currval;
+end//
+delimiter ;//
+
+call tpp();
+call tpp_d();
+call tpp_d();
+call tpp_d();
+call tpp();
+call tpp();
+call tpp_d();
+
+drop procedure tpp;
+drop procedure tpp_d;
+drop sequence test_seq;
+
+--echo
+--echo [### test case of parse database name]
+create sequence test.seq_test_id minvalue 10 maxvalue 9999999999999999999999999999 increment by 1 start with 1037991429 cache 20 noorder nocycle;
+select test.seq_test_id.nextval from dual;
+--error ER_UNKNOWN_TABLE
+select TEST.seq_test_id.nextval from dual;
+select test.seq_test_id.nextval from dual;
+--error ER_UNKNOWN_TABLE
+select TeSt.seq_test_id.nextval from dual;
+select test.seq_test_id.nextval from dual;
+--error ER_UNKNOWN_TABLE
+select teSt.seq_test_id.nextval from dual;
+select test.seq_test_id.nextval from dual;
+--error ER_GDB_DROP_SEQUENCE
+drop sequence TEST.seq_test_id;
+drop sequence test.seq_test_id;
+
+CREATE SEQUENCE TEST.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+SELECT TEST.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+--error ER_UNKNOWN_TABLE
+SELECT Test.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+SELECT TEST.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+--error ER_UNKNOWN_TABLE
+SELECT test.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+SELECT TEST.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+--error ER_UNKNOWN_TABLE
+SELECT TesT.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+SELECT TEST.SEQ_TEST_ID.NEXTVAL FROM DUAL;
+--error ER_GDB_DROP_SEQUENCE
+drop SEQUENCE TeST.SEQ_TEST_ID;
+drop SEQUENCE TEST.SEQ_TEST_ID;
+
+CREATE SEQUENCE SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence SEQ_TEST_ID;
+
+CREATE SEQUENCE SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence test.SEQ_TEST_ID;
+
+CREATE SEQUENCE SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence SEQ_TEST_ID;
+
+CREATE SEQUENCE SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+--error ER_GDB_DROP_SEQUENCE
+drop sequence TEST.SEQ_TEST_ID;
+drop sequence test.SEQ_TEST_ID;
+
+CREATE SEQUENCE SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+--error ER_GDB_DROP_SEQUENCE
+drop sequence TeSt.seq_test_id;
+drop sequence test.SEQ_TEST_ID;
+
+CREATE SEQUENCE test.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+drop sequence SEQ_TEST_ID;
+
+CREATE SEQUENCE Test.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+--error ER_GDB_DROP_SEQUENCE
+drop sequence seq_test_id;
+drop sequence Test.SEQ_TEST_ID;
+
+CREATE SEQUENCE Test.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+--error ER_GDB_DROP_SEQUENCE
+drop sequence test.seq_test_id;
+drop sequence Test.SEQ_TEST_ID;
+
+CREATE SEQUENCE test.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+--error ER_GDB_DROP_SEQUENCE
+drop sequence TEST.seq_test_id;
+drop sequence test.SEQ_TEST_ID;
+
+CREATE SEQUENCE TEST.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+--error ER_GDB_DROP_SEQUENCE
+drop sequence test.seq_test_id;
+drop sequence TEST.SEQ_TEST_ID;
+
+CREATE SEQUENCE TEST.SEQ_TEST_ID MINVALUE 10 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1037991429 CACHE 20 NOORDER NOCYCLE;
+--error ER_GDB_DROP_SEQUENCE
+drop sequence TeSt.seq_test_id;
+drop sequence TEST.SEQ_TEST_ID;
+
+--echo
+--echo [### test alias of sequence column currval and nextval]
+create sequence seq_test minvalue 1 maxvalue 9999999999 increment by 1;
+create table tt (c1 int primary key, c2 varchar(50))engine = innodb;
+insert into tt values (1, "rr"), (2, "tt"), (3, "yy");
+select * from tt;
+select seq_test.nextval;
+select seq_test.currval;
+select seq_test.nextval a from dual;
+select seq_test.nextval as aaa from dual;
+select seq_test.nextval;
+select seq_test.currval aaa, 1+1 as bbb from dual;
+
+select seq_test.nextval "a", c1 from tt;
+select seq_test.nextval as "a", c1 from tt;
+
+drop table tt;
+drop sequence seq_test;
+
+## clean
+drop table t1;

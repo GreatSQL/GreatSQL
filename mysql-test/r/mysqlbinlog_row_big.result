@@ -1,0 +1,228 @@
+#
+# Preparatory cleanup.
+#
+DROP TABLE IF EXISTS t1;
+#
+# We need a fixed timestamp to avoid varying results.
+#
+SET timestamp=1000000000;
+#
+# We need big packets.
+#
+# Capture initial value to reset at the end of the test
+# Now adjust max_allowed_packet
+SET @@global.max_allowed_packet= 1024*1024*1024;
+max_allowed_packet is a global variable.
+In order for the preceding change in max_allowed_packets' value
+to be seen and used, we must start a new connection.
+The change does not take effect with the current one.
+For simplicity, we just disconnect / reconnect connection default here.
+Disconnecting default connection...
+Reconnecting default connection...
+default connection established, continuing with the test
+#
+# Delete all existing binary logs.
+#
+RESET BINARY LOGS AND GTIDS;
+#
+# Create a test table.
+#
+CREATE TABLE t1 (
+c1 LONGTEXT
+) ENGINE=MyISAM DEFAULT CHARSET latin1;
+#
+# Show how many rows are affected by each statement.
+#
+#
+# Insert some big rows.
+#
+64MB
+INSERT INTO t1 VALUES (REPEAT('ManyMegaByteBlck', 4194304));
+affected rows: 1
+32MB
+INSERT INTO t1 VALUES (REPEAT('ManyMegaByteBlck', 2097152));
+affected rows: 1
+4MB
+INSERT INTO t1 VALUES (REPEAT('ManyMegaByteBlck', 262144));
+affected rows: 1
+512KB
+INSERT INTO t1 VALUES (REPEAT('ManyMegaByteBlck', 32768));
+affected rows: 1
+#
+# Show what we have in the table.
+# Do not display the column value itself, just its length.
+#
+SELECT LENGTH(c1) FROM t1;
+LENGTH(c1)	67108864
+LENGTH(c1)	33554432
+LENGTH(c1)	4194304
+LENGTH(c1)	524288
+affected rows: 4
+#
+# Grow the rows by updating.
+#
+UPDATE t1 SET c1 = CONCAT(c1, c1);
+affected rows: 4
+info: Rows matched: 4  Changed: 4  Warnings: 0
+#
+# Show what we have in the table.
+# Do not display the column value itself, just its length.
+#
+SELECT LENGTH(c1) FROM t1;
+LENGTH(c1)	134217728
+LENGTH(c1)	1048576
+LENGTH(c1)	67108864
+LENGTH(c1)	8388608
+affected rows: 4
+#
+# Delete the rows.
+#
+DELETE FROM t1 WHERE c1 >= 'ManyMegaByteBlck';
+affected rows: 4
+#
+# Hide how many rows are affected by each statement.
+#
+#
+# Flush all log buffers to the log file.
+#
+FLUSH LOGS;
+#
+# Call mysqlbinlog to display the log file contents.
+# NOTE: The output of mysqlbinlog is redirected to
+#       $MYSQLTEST_VARDIR/tmp/mysqlbinlog_big_1.out
+#       If you want to examine it, disable remove_file
+#       at the bottom of the test script.
+#
+#
+# Cleanup.
+#
+# reset variable value to pass testcase checks
+SET @@global.max_allowed_packet = 67108864;
+DROP TABLE t1;
+flush logs;
+set global max_allowed_packet = 12288;
+set global net_buffer_length = 12288;
+CREATE TABLE `t1` (
+`c1` int NOT NULL AUTO_INCREMENT,
+`c2` int DEFAULT NULL,
+PRIMARY KEY (`c1`)
+) ENGINE=InnoDB AUTO_INCREMENT=10001 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE `t2` (
+`c1` int NOT NULL AUTO_INCREMENT,
+`c2` int DEFAULT NULL,
+PRIMARY KEY (`c1`)
+) ENGINE=InnoDB AUTO_INCREMENT=10001 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE PROCEDURE prepare_data(IN table_name varchar(20))
+BEGIN
+set @sql = CONCAT(
+'INSERT INTO ', table_name, ' (c2)
+  SELECT NULL FROM (
+      SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION
+      SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10
+  ) a JOIN (
+      SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION
+      SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10
+  ) b JOIN (
+      SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION
+      SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10
+  ) c JOIN (
+      SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION
+      SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10
+  ) d
+  LIMIT 10000;'
+);
+prepare stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+END |
+flush logs;
+[insert data]
+call prepare_data('t1');
+flush logs;
+[test split update events]
+update t1 set c2 = 5 where c1 > 1;
+update t1 set c2 = 6 where c1 > 1;
+select * from t1 order by c1 limit 5;
+c1	c2
+10001	6
+10002	6
+10003	6
+10004	6
+10005	6
+select * from t1 order by c1 limit 5;
+c1	c2
+10001	5
+10002	5
+10003	5
+10004	5
+10005	5
+truncate table t1;
+call prepare_data('t1');
+flush logs;
+[test split delete events]
+delete from t1 where c1 > 1;
+[prepare some data]
+set session sql_log_bin = 0;
+truncate table t1;
+call prepare_data('t1');
+set session sql_log_bin = 1;
+select count(*) from t1;
+count(*)
+10000
+select count(*) from t1;
+count(*)
+1
+[test split insert events]
+truncate table t1;
+select count(*) from t1;
+count(*)
+10000
+truncate table t1;
+[test split update multi tables]
+truncate table t2;
+set global max_allowed_packet = 32768;
+set global net_buffer_length = 32768;
+call prepare_data('t1');
+call prepare_data('t2');
+flush logs;
+update t1,t2 set t1.c2=1,t2.c2=2 where t1.c1=t2.c1 and t1.c1 > 1;
+select * from t1 limit 5;
+c1	c2
+1	NULL
+2	1
+3	1
+4	1
+5	1
+select * from t2 limit 5;
+c1	c2
+1	NULL
+2	2
+3	2
+4	2
+5	2
+truncate table t1;
+truncate table t2;
+set session sql_log_bin = 0;
+call prepare_data('t1');
+call prepare_data('t2');
+set session sql_log_bin = 1;
+select * from t1 limit 5;
+c1	c2
+1	NULL
+2	1
+3	1
+4	1
+5	1
+select * from t2 limit 5;
+c1	c2
+1	NULL
+2	2
+3	2
+4	2
+5	2
+drop table t2;
+drop table t1;
+drop procedure prepare_data;
+set global max_allowed_packet = 67108864;
+set global net_buffer_length = 16384;
+remove_file $MYSQLTEST_VARDIR/tmp/mysqlbinlog_big_1.out

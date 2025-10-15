@@ -1,0 +1,69 @@
+--source include/have_debug.inc
+--let $group_replication_group_name= 8a94f357-aab4-11df-86ab-c80aa9429573
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_server_count= 4
+--source include/group_replication.inc
+
+#
+# a counter to be used with source include/gr_error_out.inc
+#
+--let $group_replication_error_connection_number= 3
+
+
+connect (conn1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn2,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn3,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+--connection server4
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+CREATE TABLE t2 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+
+--connection server1
+SET GLOBAL DEBUG='+d,group_replication_version_with_vcle';
+--source include/start_and_bootstrap_group_replication.inc
+eval CHANGE REPLICATION SOURCE TO SOURCE_USER='root',SOURCE_HOST='127.0.0.1',SOURCE_PORT=$SERVER_MYPORT_4,SOURCE_AUTO_POSITION=1;
+START REPLICA;
+
+--connection server4
+--let $sync_slave_connection= server1
+--source include/rpl/sync_to_replica.inc
+
+--connection server1
+SHOW TABLES;
+LOCK TABLE t1 READ;
+
+--connection server4
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t2 VALUES (1,1);
+
+--connection server1
+--let $wait_condition=select count(*)=1 from information_schema.processlist where state='Waiting for table metadata lock'
+--source include/wait_condition.inc
+--let $wait_condition=select count(*)=1 from information_schema.processlist where state='Waiting for preceding transaction to commit'
+--source include/wait_condition.inc
+
+--let $group_replication_start_member_state= RECOVERING
+--connection server2
+SET GLOBAL DEBUG='+d,group_replication_version_with_vcle';
+--source include/start_group_replication.inc
+--let $group_replication_start_member_state= RECOVERING
+--connection server3
+SET GLOBAL DEBUG='+d,group_replication_version_with_vcle';
+--source include/start_group_replication.inc
+
+--connection server1
+UNLOCK TABLES;
+
+connection conn1;
+CREATE TABLE t3 (c1 INT PRIMARY KEY);
+DROP TABLE t3;
+
+#
+#  Cleanup
+#
+--connection server4
+DROP TABLE t1;
+DROP TABLE t2;
+
+--source include/group_replication_end.inc

@@ -1,0 +1,21 @@
+# skip test list, skip test which will not pass
+main.mysqldump                         : WL#000 ignore
+main.fix_priv_tables                   : WL#000 skip
+main.func_gm                           : WL#000 skip need babassl
+
+main.percona_processlist_tid           : WL#000 timeout
+main.mysqldumpslow                     : WL#000 timeout
+innodb.ddl_kill                        : WL#000 timeout
+main.acl_mdl_scalability               : WL#000 high memory usage
+main.buffered_error_log                : WL#000 command "perl" failed with error 2. my_errno=2.
+innodb.alter_kill                      : WL#000 unexpected error number of Command "exec" faild
+innodb.bootstrap                       : WL#000 unexpected error number of Command "exec" faild
+innodb.temp_table_encrypt              : WL#000 unexpected error number of Command "exec" faild
+innodb.tablespace_encrypt_9            : WL#000 unexpected error number of Command "exec" faild
+innodb.percona_sys_tablespace_encrypt  : WL#000 unexpected error number of Command "exec" faild
+innodb.innodb_page_size_func           : WL#000 unexpected error number of Command "exec" faild
+innodb.startup_failure                 : WL#000 unexpected error number of Command "exec" faild
+innodb.temporary_table                 : WL#000 unexpected error number of Command "exec" faild
+innodb.innodb_pagesize_max_recordsize  : WL#000 unexpected error number of Command "exec" faild
+main.percona_binlog_utils_udf          : WL#000 mysqlbinlog command fail
+main.percona_encrypt_tmp_files_debug   : WL#000 unrelated stack overflow

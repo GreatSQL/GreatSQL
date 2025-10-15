@@ -1,0 +1,123 @@
+SET innodb_lock_wait_timeout=50;
+
+SET sql_mode=ORACLE;
+
+CREATE TABLE t1(c1 int, c2 CHAR(10),PRIMARY KEY (c1));
+INSERT INTO t1 VALUES (10, 'aa'), (12, null), (15, 'ccc');
+CREATE TABLE t2 (c1 int, c2 CHAR(10),PRIMARY KEY (c1));
+INSERT INTO t2 VALUES (10, 't2'), (11, 'c 1'), (12, null), (16, 'null c1');
+
+--echo #
+--echo # test of table
+--echo #
+start transaction;
+select * from t1 where c1=10 for update of c1;
+
+connect (conn1,localhost,root,,test);
+connection conn1;
+SET sql_mode=ORACLE;
+SHOW VARIABLES LIKE 'innodb_lock_wait_timeout';
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t1 where c1=10 for update of c1 wait 3;
+--error ER_DUPLICATE_COLUMN_LOCK
+select * from (select * from t1 for update) a,t2 where c1=10 for update of a.c1;
+SHOW VARIABLES LIKE 'innodb_lock_wait_timeout';
+select * from t1 where c1=12 for update of c1 wait 3;
+select * from t1 where c1=12 for update wait 3;
+--error ER_WRONG_ARGUMENTS
+select * from t1 where c1=12 for update wait 31536001;
+
+connection default;
+commit;
+
+--echo #
+--echo # test of muiti table
+--echo #
+start transaction;
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1 wait 4;
+connection conn1;
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 >1 for update of a.c1,b.c1 wait 2;
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 >1 for update wait 2;
+
+connection default;
+commit;
+
+--echo #
+--echo # test of tmp table
+--echo #
+CREATE TEMPORARY TABLE tmp(c1 int, c2 CHAR(10),PRIMARY KEY (c1));
+INSERT INTO tmp VALUES (10, 'aa'), (12, null), (15, 'ccc');
+start transaction;
+select * from tmp a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1 wait 3;
+
+connection default;
+commit;
+
+--echo #
+--echo # test of view
+--echo #
+CREATE VIEW v_1 AS SELECT * FROM t1;
+start transaction;
+select * from v_1 a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1 nowait;
+connection conn1;
+--error ER_LOCK_WAIT_TIMEOUT
+select * from v_1 a join t2 b on a.c1=b.c1 where a.c1 >1 for update of a.c1,b.c1 wait 6;
+
+connection default;
+commit;
+
+--echo #
+--echo # test of sp
+--echo #
+SHOW VARIABLES LIKE 'innodb_lock_wait_timeout';
+DELIMITER //;
+CREATE or replace PROCEDURE p1root() AS
+  id int;
+BEGIN
+  select c1 from t1 where c1=10 into id for update of t1.c1 wait 3;
+  select id;
+  select c1 from t1 where c1=12 for update of t1.c1 wait 5 into id;
+  select id;
+END;
+//
+DELIMITER ;//
+SHOW VARIABLES LIKE 'innodb_lock_wait_timeout';
+call p1root();
+SHOW VARIABLES LIKE 'innodb_lock_wait_timeout';
+drop PROCEDURE p1root;
+
+--echo #
+--echo # test of alter view
+--echo #
+alter table t1 add c3 int;
+start transaction;
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 = 12 for update of a.c1 wait 1;
+connection conn1;
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t1 a join t2 b on a.c1=b.c1 where a.c1 >1 for update of a.c1,b.c1 wait 1;
+
+connection default;
+commit;
+
+drop table t1,t2,tmp;
+drop view v_1;
+
+--echo #
+--echo # test of bug6388
+--echo #
+create database AUTOTEST;
+use AUTOTEST;
+CREATE TABLE "AUTOTEST"."T1" (c1 int, c2 CHAR(10));
+INSERT INTO "AUTOTEST"."T1" VALUES (11, 'c 1');
+INSERT INTO "AUTOTEST"."T1" VALUES (12, 'c2');
+INSERT INTO "AUTOTEST"."T1" VALUES (13, 'null c1');
+SELECT * FROM `AUTOTEST`.`T1` WHERE `C1`=11 FOR UPDATE OF  `AUTOTEST`.`t1`.`c1` WAIT 3;
+SELECT * FROM `AUTOTEST`.`T1` WHERE `C1`=11 FOR UPDATE OF  `autotest`.`t1`.`c1` WAIT 3;
+SELECT * FROM `AUTOTEST`.`T1` WHERE `C1`=11 FOR UPDATE OF  `AUTOTEST`.`T1`.`c1` WAIT 3;
+SELECT * FROM `AUTOTEST`.`T1` WHERE `C1`=11 FOR UPDATE OF  `autotest`.`T1`.`c1` WAIT 3;
+drop table T1;
+drop database AUTOTEST;
+
+--echo # DONE

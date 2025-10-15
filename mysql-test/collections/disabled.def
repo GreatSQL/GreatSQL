@@ -1,0 +1,308 @@
+##############################################################################
+#
+# List the test cases that are to be disabled temporarily.
+#
+# Separate the test case name and the comment with ':'.
+#   <suite>.<test> [@platform|@!platform] : <BUG|WL>#<XXXX> [<comment>]
+#
+# You can also include a disabled file into another using the @import keyword
+# as following:
+#
+# @import <disabled_file>
+#
+# Note:
+#   - Do not use any TAB characters for whitespace.
+#   - Length of a comment section must not be more than 80 characters.
+#   - <disabled_file> could be the file name or a valid path. It should
+#     not be followed by a comment on that line.
+#
+##############################################################################
+
+# audit_log
+audit_log.audit_log_prune_seconds_var_cnf @windows : BUG#32245509 Test lets mysqltest crash only on windows.
+
+# audit_null
+audit_null.audit_plugin_bugs : BUG#28080637 Test fails consistently
+
+# auth_sec
+
+# binlog suite tests
+binlog.binlog_mysqlbinlog_rewrite_db @windows     : BUG#26717205 Requires a debug client binary and fails consistently.
+binlog.binlog_mysqlbinlog_4g_start_position       : BUG#0000 PS-9381 Requires too much memory/space in Jenkins
+binlog_gtid.binlog_xa_select_gtid_executed_explicitly_crash : Bug#28588717 Fails both on FreeBSD and other platforms
+# func1 suite tests
+funcs_1.is_basics_mixed @darwin  : BUG#25882809 INCORRECT RESULT WHEN USING SUBQUERY ON TOP OF VIEW.
+funcs_1.is_basics_mixed @windows : BUG#25882809 INCORRECT RESULT WHEN USING SUBQUERY ON TOP OF VIEW.
+
+# innodb suite tests
+innodb.analyze_table @solaris                     : BUG#22607584 Failing too often on PB2 due to timeout.
+innodb.log_corruption @darwin                     : BUG#27760219 Test fails consistently on freebsd and Mac after WL#11009.
+innodb.log_corruption @freebsd                    : BUG#27760219 Test fails consistently on freebsd and Mac after WL#11009.
+innodb.create_tablespace_partition                : WL#12034 Enable again once shared tablespaces are allowed in partitioned table.
+innodb.alter_tablespace_partition                 : WL#12034 Enable again once shared tablespaces are allowed in partitioned table.
+innodb.truncate                                   : WL#12034 Enable again once shared tablespaces are allowed in partitioned table.
+innodb.subpartition                               : WL#12034 Enable again once shared tablespaces are allowed in partitioned table.
+innodb.ddl_crash_alter_table_partition_tablespace : WL#12034 Enable again once shared tablespaces are allowed in partitioned table.
+innodb.innodb_bug14676111                         : BUG#18200831 The test has never worked correctly
+innodb.fts_exec_interrupt                         : Bug#28534199 The test is unstable and should be rewritten
+innodb.slow_shutdown                              : Bug#31763837 mtr hits this debug assert post test run cleanup
+innodb.instant_ddl_recovery_old                   : WL#12527 Redo format has changed - crashed_datadir.zip needs to be recreated.
+innodb.log_logical_size                           : Bug#35543413 Test is shaky - needs to be fixed.
+innodb.set_concurrency_in_readonly                : Bug#35573783 innodb.set_concurrency_in_readonly is failing in trunk
+
+# innodb_fts suite test
+innodb_fts.sync_block : BUG#2232 percona https://jira.percona.com/browse/PS-2232
+
+# Tests that run ALTER on the "mysql" database
+innodb.mysql_ts_alter_encrypt_1                 : BUG#29531106 - ATTACHABLE_TRX(): ASSERTION `!M_THD->TRANSACTION_ROLLBACK_REQUEST' FAILED
+component_keyring_file.mysql_ts_alter_encrypt_1 : BUG#29531106 - ATTACHABLE_TRX(): ASSERTION `!M_THD->TRANSACTION_ROLLBACK_REQUEST' FAILED
+
+
+# main suite tests
+main.ds_mrr-big @solaris : BUG#14168107 Test leads to timeout on Solaris on slow sparc servers.
+main.print_stacktrace : Bug#36027494 Add mtr test for my_print_stacktrace
+
+# Disabled due to InnoDB issues
+
+main.events_time_zone         : BUG#2179 percona https://jira.percona.com/browse/PS-2179
+
+# max_parts suite tests
+max_parts.innodb-import-partition-1                         : BUG#27413612 Fails consistently on hudson jobs. Disabled until bug is fixed.
+max_parts.innodb_partition_open_files_limit @solaris        : BUG#27423163 Times out on Solaris platform on Hudson. Disabled until bug is fixed.
+max_parts.partition_max_parts_hash_innodb @windows          : BUG#27681900 Disabling max_parts tests on windows.
+max_parts.partition_max_parts_inv_innodb @windows           : BUG#27681900 Disabling max_parts tests on windows.
+max_parts.partition_max_parts_key_innodb @windows           : BUG#27681900 Disabling max_parts tests on windows.
+max_parts.partition_max_parts_list_innodb @windows          : BUG#27681900 Disabling max_parts tests on windows.
+max_parts.partition_max_parts_range_innodb @windows         : BUG#27681900 Disabling max_parts tests on windows.
+max_parts.partition_max_sub_parts_key_list_innodb @windows  : BUG#27681900 Disabling max_parts tests on windows.
+max_parts.partition_max_sub_parts_key_range_innodb @windows : BUG#27681900 Disabling max_parts tests on windows.
+max_parts.partition_max_sub_parts_list_innodb @windows      : BUG#27681900 Disabling max_parts tests on windows.
+max_parts.partition_max_sub_parts_range_innodb @windows     : BUG#27681900 Disabling max_parts tests on windows.
+max_parts.innodb_partition_open_files_limit                 : BUG#27423163 Test times out consistently on Hudson.
+
+# percona suite test
+percona.bug100352 : BUG#100352 https://bugs.mysql.com/bug.php?id=100352
+percona.backup_safe_binlog_info : BUG#0000 - PS-8897 Test for broken and unused functionality.
+
+# perfschema suite test
+perfschema.threads_history      : BUG#27712231
+perfschema.idx_compare_events_waits_current : BUG#27865960
+perfschema.idx_compare_ews_by_thread_by_event_name : BUG#31041671
+perfschema.idx_compare_ews_by_instance : BUG#31791537
+perfschema.idx_compare_rwlock_instances : BUG#31791537
+
+# rocksdb suite tests
+rocksdb.non_blocking_manual_compaction : BUG#0000 PS-9381 Often fails in Jenkins due to races.
+
+# rocksdb_stress suite tests
+rocksdb_stress.drop_cf_stress : BUG#0000 PS-9381 Often fails in Jenkins due to races.
+
+# rpl_gtid suite tests
+rpl_gtid.rpl_async_conn_failover_restart @windows : BUG#34132168 Disabled until bug is fixed
+rpl_gtid.rpl_gtid_truncate_memory_table_after_start_server : BUG#24351040
+rpl_gtid.rpl_gtid_perfschema_applier_xa_status           : BUG#27914287 Disabled until the WL#9075 (Performance Schema, XA Transactions) be implemented
+rpl_gtid.rpl_gtid_mts_spco_deadlock_other_locks          : Bug#32499883 RPL_GTID.RPL_GTID_MTS_SPCO_DEADLOCK_OTHER_LOCKS FAILS ON PB2
+rpl_gtid.rpl_master_errors : BUG#4797 percona https://jira.percona.com/browse/PS-4797
+rpl_gtid.rpl_start_replica_until_pos_with_gtid_only      : Bug#33119241 START REPLICA UNTIL SOURCE_LOG_POS SHOULD NOT STOP ON REPLICA EVENTS
+
+# rpl_nogtid suite tests
+rpl_nogtid.rpl_perfschema_applier_xa_status_check : BUG#27914287 Disabled until the WL#9075 (Performance Schema, XA Transactions) be implemented
+rpl_nogtid.rpl_semi_sync_group_commit_deadlock : BUG#80581 percona https://bugs.mysql.com/bug.php?id=80581
+rpl_nogtid.rpl_semi_sync_non_group_commit_deadlock : BUG#80581 percona https://bugs.mysql.com/bug.php?id=80581
+rpl_nogtid.rpl_binlog_format_errors               : BUG#29776083 EXPLICIT BINLOG INJECTION WITH SELF LOGGING ENGINES IS BROKEN
+rpl_nogtid.rpl_nogtid_encryption_read             : Bug#36172046 Update rpl_nogtid.rpl_nogtid_encryption_read test to not use keyring_file
+
+# rpl suite tests
+rpl.rpl_io_thd_wait_for_disk_space_stress : BUG#23581287 Disabled until bug is fixed.
+rpl.rpl_writeset_add_unique_key : Bug#33134835 RPL_WRITESET_ADD_UNIQUE_KEY FAILS SPORADICALLY
+
+# secondary_engine tests
+secondary_engine.query_preparation : BUG#36306426 Disabled until bug is fixed
+
+# sys_vars tests
+sys_vars.max_execution_time_basic @freebsd : BUG#31041720
+sys_vars.innodb_log_writer_threads_basic : Bug#32129814 SYS_VARS.INNODB_LOG_WRITER_THREADS_BASIC TIMES OUT SPORADICALLY ON PB2
+
+# sysschema suite tests
+sysschema.v_wait_classes_global_by_avg_latency : BUG#21550054 Test fails too often.
+
+# x plugin suite tests
+
+# rocksdb suite tests
+rocksdb.cons_snapshot_serializable : BUG#0 MyRocks does not yet support ISO serializable
+rocksdb.level_read_uncommitted : BUG#0 MyRocks does not yet suppore ISO read uncommitted
+rocksdb.level_serializable : BUG#0 MyRocks does not yet support ISO serializable
+rocksdb.slow_query_log : BUG#26 MYR-26
+# 8.0
+rocksdb.allow_to_start_after_corruption : BUG#4584 PS-4584
+
+# rocksdb_rpl suite tests
+rocksdb_rpl.rpl_rocksdb_snapshot : BUG#0 LOCK BINLOG FOR BACKUP
+
+# Group Replication tests.
+
+# These will only run in XCom because of the following issue:
+group_replication.gr_join_with_suspect_member : BUG#31704262 XCOM CREATES NODES WITH PAST GHOST VIEWS
+group_replication.gr_leave_with_suspect_member : BUG#31704262 XCOM CREATES NODES WITH PAST GHOST VIEWS
+group_replication.gr_majority_loss_restored_after_timeout : BUG#31704262 XCOM CREATES NODES WITH PAST GHOST VIEWS
+group_replication.gr_primary_manual_failover_vs_dcl_rename_user : BUG#36020917 Disabled until bug is fixed
+group_replication.gr_primary_mode_group_operations_41_1 : BUG#35527247 Disabled until bug is fixed
+group_replication.gr_primary_mode_group_operations_joining_during_election @windows : BUG#33679225 Disabled until bug is fixed
+group_replication.gr_primary_mode_group_operations_net_partition_4 @windows : BUG#34673762 Disabled until bug is fixed
+group_replication.gr_suspect_member_resumes_after_crash_join_retries : BUG#32458239 GR_SUSPECT_MEMBER_RESUMES_AFTER_CRASH_JOIN_RETRIES IS NOT STABLE
+group_replication.gr_xa_commit_failure_before_gtid_externalization @windows : BUG#34155238 Disabled until bug is fixed
+group_replication.gr_xa_commit_one_phase_failure_before_gtid_externalization @windows : BUG#34155238 Disabled until bug is fixed
+group_replication.gr_xa_prepare_failure_before_gtid_externalization @windows : BUG#34155238 Disabled until bug is fixed
+group_replication.gr_xa_rollback_failure_before_gtid_externalization @windows : BUG#34155238 Disabled until bug is fixed
+group_replication.gr_member_status_applier_error_bug              : BUG#0 skip
+group_replication.gr_parallel_applier_indexes_commit_order        : BUG#0 skip since garbage logical changed
+group_replication.gr_switch_primary_timeout_node_kill             : BUG#0 skip online primary change logic changed
+group_replication.gr_startup_check_node_seed_skips_own_address_v6 : BUG#0 skip ipv6 test for docker
+group_replication.gr_startup_check_node_seed_skips_own_address    : BUG#0 skip ipv6 test for docker
+group_replication.gr_singlewriter_enabled_on_mode_switch          : BUG#0 skip singlewriter
+group_replication.gr_multi_level_foreign_key                      : BUG#0 skip
+group_replication.gr_nullable_unique_key_conflict                 : BUG#0 skip unstable in ci
+group_replication.gr_force_error_on_before_commit_listener        : BUG#0 skip unstable in ci
+
+
+# GreatDB-Server-5 tests
+main.basedir      : BUG#0 disable the testcase
+main.persisted_variables_bugs_fast : BUG#0 disabled, failed when run as root
+main.resource_group_thr_prio_unsupported : BUG#0 disabled, failed when run as root
+main.restart_server : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_applier_reset : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_basics : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_basics_with_ssl : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_clone_on_server_start : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_clone_operations_on_runnning_member : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_different_recovery_user : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_no_managed_restart : BUG#0 disabled, unstable
+#group_replication.gr_clone_integration_no_privileges : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_purged_donor : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_with_consistency_after : BUG#0 disabled, failed when run as root
+#group_replication.gr_member_status_applier_error_bug  : BUG#0 disabled, unstable
+#group_replication.gr_recovery_endpoints_invalid_donor : BUG#0 disabled, failed when run as root
+#group_replication.gr_recovery_endpoints_iterate_list_clone : BUG#0 disabled, failed when run as root
+#group_replication.gr_recovery_endpoints_multiple_valid : BUG#0 disabled, failed when run as root
+#group_replication.gr_recovery_endpoints_no_fallback : BUG#0 disabled, failed when run as root
+#group_replication.gr_recovery_endpoints_retry_clone : BUG#0 disabled, failed when run as root
+#group_replication.gr_start_gr_credential_options_clone : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_stop_primary_member : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_stop_joiner_during_clone : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_start_gr_during_user_clone : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_basics_with_ssl_mysql : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_ddl_error : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_clone_on_rejoin : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_stop_donor_during_clone : BUG#0 disabled, failed when run as root
+#group_replication.gr_autorejoin_with_clone_while_recovery_locked : BUG#0 disabled, failed when run as root
+#group_replication.gr_multiple_starts_after_clone : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_applier_stop : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_stop_donor_during_clone_failover : BUG#0 disabled, failed when run as root
+#group_replication.gr_acf_receiver_clone_on_rejoin : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_kill_donor_during_clone : BUG#0 disabled, failed when run as root
+#group_replication.gr_clone_integration_recovery_priv_user_preservation : BUG#0 disabled, failed when run as root
+#group_replication.gr_certifier_garbage_collection_with_clone : BUG#0 disabled, failed when run as root
+group_replication.gr_switch_primary_timeout_node_kill: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_check_count_tx_remote_applier_queue_2 : BUG#0 disable, unstable, TODO fix it
+main.dd_bootstrap : BUG#0 disabled, failed when run as root
+main.read_only_ddl : BUG#0 disabled, failed when run as root
+main.upgrade : BUG#0 disabled, failed when run as root
+main.mysql_57_inplace_upgrade : BUG#0 disabled, failed when run as root
+main.mysql_80_inplace_upgrade : BUG#0 disabled, failed when run as root
+main.mysql_upgrade : BUG#0 disabled, failed when run as root
+sys_vars.proxy_protocol_networks_malformed : BUG#0 disabled, failed when run as root
+innodb.ibd2sdi : BUG#0 disable, ci no openssl
+
+auth_sec.openssl_cert_generation_subject :  BUG#0 no openssl tool installed
+lock_order.cycle : BUG#0 disabled, also cannot be passed with official code
+
+# tests that cannot be passed with bugs, need to be fixed
+information_schema.i_s_schema_definition_debug : BUG#0 disabled, needs to upgrade IS_DD_VERSION
+
+innodb.innodb_read_only-2 : BUG#0 disabled
+innodb.log_file_size : BUG#0 disabled
+
+clone.remote_dml_recovery : BUG#0 disabled
+clone.remote_boundary : BUG#0 disabled
+
+component_keyring_file.keyring_encryption_test : BUG#0 disabled
+
+perfschema.hostcache_ipv4_addrinfo_noname_deny : BUG#0 disabled
+perfschema.hostcache_ipv4_addrinfo_again_deny : BUG#0 disabled
+perfschema.hostcache_ipv4_addrinfo_bad_deny : BUG#0 disabled
+perfschema.hostcache_ipv4_format : BUG#0 disabled
+perfschema.hostcache_ipv4_addrinfo_good_deny : BUG#0 disabled
+perfschema.hostcache_ipv4_nameinfo_again_deny : BUG#0 disabled
+perfschema.hostcache_ipv4_nameinfo_noname_deny : BUG#0 disabled
+
+special.innodb_dedicated_server : BUG#0 disabled, does not has Sys::MemInfo module
+
+group_replication.gr_primary_manual_failover_vs_dcl_alter_user: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_dcl_create_role: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_dcl_create_user: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_dcl_drop_role: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_dcl_drop_user: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_dcl_grant: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_dcl_revoke: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_dcl_set_password: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_dcl_set_role: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_alter_database: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_alter_event: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_alter_function: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_alter_instance: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_alter_procedure: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_alter_server: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_alter_table: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_alter_tablespace: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_alter_table_tablespace: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_alter_view: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_analyze_table: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_check_table: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_database: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_event: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_function: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_index: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_procedure: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_server: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_so_function: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_spatial: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_table: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_table_tablespace: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_tablespace: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_trigger: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_create_view: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_drop_database: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_drop_event: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_drop_function: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_drop_index: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_drop_procedure: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_drop_server: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_drop_so_function: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_drop_spatial: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_drop_table: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_drop_tablespace: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_drop_trigger: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_drop_view: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_optimize_table: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_rename_table: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_ddl_truncate_table: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+group_replication.gr_primary_manual_failover_vs_explicit_transaction: BUG#0 disabled, conflict logic for mysql offical of online change primary key
+
+group_replication.gr_wait_for_view_change  : BUG#0 AFTER problem
+group_replication.gr_prepare_wait_for_view_change : BUG#0 AFTER problem
+group_replication.gr_one_more_remote_prepared_msg_when_onenode_rejoin : BUG#0 AFTER problem
+group_replication.gr_certifier_garbage_collection_metrics: BUG#0 metrics status problem 
+group_replication.gr_certifier_garbage_collection_counter_overflow: BUG#0 metrics status problem
+group_replication.gr_concurrent_ticket_pop_with_channel_2: BUG#0 MySQL offical problem, gcs should after applier error
+group_replication.gr_slave_sync_during_view_change: BUG#0 revert 96d79178 remove this case 
+
+rpl.rpl_eventlog_psi_memory: BUG#0 unstable from MySQL
+rpl_gtid.rpl_gtids_table_disable_binlog_on_slave: BUG#0 unstable from MySQL
+binlog_gtid.binlog_check_gtid_persistor_compatibility: BUG#0 ustable from MySQL
+binlog_gtid.bug93631: BUG#0 unstable from percona-server
+rpl_gtid.rpl_stop_slave_partial_trx: BUG#0 ustable from percona-server
+clone.error_ddl_lock: BUG#0 unstable for debug_sync
+clone.remote_error_ddl_lock: BUG#0 unstable for debug_sync
+
+main.temptable_bug11839 : BUG#0 The TEMPTABLE engine requires at least 1MiB table size @wuyy
+innodb.missing_redologs : BUG#0 unstable in ci

@@ -1,0 +1,842 @@
+--echo # 1. Test local increment clone
+
+--source include/have_debug.inc
+--source include/have_innodb_default_undo_tablespaces.inc
+--source ../include/clone_connection_begin.inc
+
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/data_new
+--let $CLONE_DATADIR1 = $MYSQL_TMP_DIR/data_new1
+--let $TEST_DATABASE= `SELECT DATABASE()`
+
+--source include/count_sessions.inc
+
+## Install plugin
+
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+truncate mysql.clone_history;
+
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+--eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR' ENABLE PAGE TRACK;
+
+--let PAGE_TRACK_LSN =`select PAGE_TRACK_LSN from mysql.clone_history`
+
+
+## Create test schema
+CREATE TABLE t1(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB);
+
+CREATE TABLE t2(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB)
+PARTITION BY KEY(col1) PARTITIONS 5;
+
+CREATE TABLE `l#g/l'g.`(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB);
+
+insert into t1 values(1,1,1,"aaa");
+insert into t1 values(2,2,2,"aaa");
+insert into t1 values(3,3,3,"aaa");
+insert into t1 values(4,4,4,"aaa");
+insert into t1 values(5,5,5,"aaa");
+insert into t1 values(6,6,6,"aaa");
+insert into t1 values(7,7,7,"aaa");
+insert into t1 values(8,8,8,"aaa");
+insert into t1 values(9,9,9,"aaa");
+insert into t1 values(10,10,10,"aaa");
+insert into t1 values(11,11,11,"aaa");
+insert into t1 values(12,12,12,"aaa");
+insert into t1 values(13,13,13,"aaa");
+insert into t1 values(14,14,14,"aaa");
+insert into t1 values(15,15,15,"aaa");
+insert into t1 values(16,16,16,"aaa");
+insert into t1 values(17,17,17,"aaa");
+insert into t1 values(18,18,18,"aaa");
+insert into t1 values(19,19,19,"aaa");
+insert into t1 values(20,20,20,"aaa");
+
+insert into t2 values(1,1,1,"aaa");
+insert into t2 values(2,2,2,"aaa");
+insert into t2 values(3,3,3,"aaa");
+insert into t2 values(4,4,4,"aaa");
+insert into t2 values(5,5,5,"aaa");
+insert into t2 values(6,6,6,"aaa");
+insert into t2 values(7,7,7,"aaa");
+insert into t2 values(8,8,8,"aaa");
+insert into t2 values(9,9,9,"aaa");
+insert into t2 values(10,10,10,"aaa");
+insert into t2 values(11,11,11,"aaa");
+insert into t2 values(12,12,12,"aaa");
+insert into t2 values(13,13,13,"aaa");
+insert into t2 values(14,14,14,"aaa");
+insert into t2 values(15,15,15,"aaa");
+insert into t2 values(16,16,16,"aaa");
+insert into t2 values(17,17,17,"aaa");
+insert into t2 values(18,18,18,"aaa");
+insert into t2 values(19,19,19,"aaa");
+insert into t2 values(20,20,20,"aaa");
+
+insert into `l#g/l'g.` values(1,1,1,"aaa");
+insert into `l#g/l'g.` values(2,2,2,"aaa");
+insert into `l#g/l'g.` values(3,3,3,"aaa");
+insert into `l#g/l'g.` values(4,4,4,"aaa");
+insert into `l#g/l'g.` values(5,5,5,"aaa");
+insert into `l#g/l'g.` values(6,6,6,"aaa");
+insert into `l#g/l'g.` values(7,7,7,"aaa");
+insert into `l#g/l'g.` values(8,8,8,"aaa");
+insert into `l#g/l'g.` values(9,9,9,"aaa");
+insert into `l#g/l'g.` values(10,10,10,"aaa");
+insert into `l#g/l'g.` values(11,11,11,"aaa");
+insert into `l#g/l'g.` values(12,12,12,"aaa");
+insert into `l#g/l'g.` values(13,13,13,"aaa");
+insert into `l#g/l'g.` values(14,14,14,"aaa");
+insert into `l#g/l'g.` values(15,15,15,"aaa");
+insert into `l#g/l'g.` values(16,16,16,"aaa");
+insert into `l#g/l'g.` values(17,17,17,"aaa");
+insert into `l#g/l'g.` values(18,18,18,"aaa");
+insert into `l#g/l'g.` values(19,19,19,"aaa");
+insert into `l#g/l'g.` values(20,20,20,"aaa");
+
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+
+
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+
+CREATE INDEX index_col2 ON t1 (col2);
+CREATE INDEX index_col2 ON t2 (col2);
+
+# Check base rows
+SHOW CREATE TABLE t1;
+SELECT count(*) from t1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+
+SHOW CREATE TABLE t2;
+SELECT count(*) from t2;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1 DESC;
+
+SHOW CREATE TABLE `l#g/l'g.`;
+SELECT count(*) from `l#g/l'g.`;
+SELECT col1, col2, col3 FROM `l#g/l'g.` ORDER BY col1;
+SELECT col1, col2, col3 FROM `l#g/l'g.` ORDER BY col1 DESC;
+
+--echo # In connection con1 - Running Insert
+connect (con1,localhost,root,,);
+begin;
+--send insert into t1 values(120,120,120,"aaa")
+
+
+--echo # In connection default - Cloning database
+--connection clone_conn_1
+
+SELECT count(*) from t1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+
+SHOW CREATE TABLE t2;
+SELECT count(*) from t2;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+
+--echo # enable encryption function
+--replace_result $MYSQL_TEST_DIR MYSQL_TEST_DIR
+--eval set global clone_encrypt_key_path= '$MYSQL_TEST_DIR/std_data/mysql_clone_key'
+
+--replace_result $CLONE_DATADIR1 CLONE_DATADIR1 $PAGE_TRACK_LSN PAGE_TRACK_LSN
+--eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR1' ENABLE PAGE TRACK START_LSN=$PAGE_TRACK_LSN;
+--echo # In connection default - Finished Cloning
+
+--echo # In connection con1 - Waiting
+connection con1;
+--reap
+commit;
+
+--echo # In connection default
+connection default;
+disconnect con1;
+
+
+--source include/wait_until_count_sessions.inc
+
+--echo # apply delta file from increment clone datadir to full clone
+
+--exec $MYSQL_DECRYPT --clone-decrypt --clone-decrypt-key=$MYSQL_TEST_DIR/std_data/mysql_clone_key --clone-decrypt-dir=$CLONE_DATADIR1 --remove-original=true >> /tmp/null
+
+--connection default
+
+drop table t1;
+drop table t2;
+drop table `l#g/l'g.`;
+
+--force-rmdir $CLONE_DATADIR
+--force-rmdir $CLONE_DATADIR1
+
+# Clean recipient by cloning the cleaned up donor
+
+--source ../include/clone_connection_end.inc
+
+UNINSTALL PLUGIN clone;
+
+
+--echo # 2. Test remote increment clone
+
+--let $HOST = 127.0.0.1
+--let $PORT =`select @@port`
+--let $USER = root
+
+--source include/have_innodb_default_undo_tablespaces.inc
+--source ../include/clone_connection_begin.inc
+
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/data_new
+--let $CLONE_DATADIR1 = $MYSQL_TMP_DIR/data_new1
+
+--source include/count_sessions.inc
+
+## Install plugin
+
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+truncate mysql.clone_history;
+
+--replace_result $HOST HOST $PORT PORT
+--eval SET GLOBAL clone_valid_donor_list = '$HOST:$PORT'
+
+--replace_result $CLONE_DATADIR CLONE_DATADIR $HOST HOST $PORT PORT $USER USER
+--eval CLONE INSTANCE FROM $USER@$HOST:$PORT IDENTIFIED BY '' DATA DIRECTORY = '$CLONE_DATADIR' ENABLE PAGE TRACK;
+
+--let PAGE_TRACK_LSN =`select PAGE_TRACK_LSN from mysql.clone_history`
+
+
+## Create test schema
+CREATE TABLE t1(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB);
+
+CREATE TABLE t2(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB)
+PARTITION BY KEY(col1) PARTITIONS 5;
+
+insert into t1 values(1,1,1,"aaa");
+insert into t1 values(2,2,2,"aaa");
+insert into t1 values(3,3,3,"aaa");
+insert into t1 values(4,4,4,"aaa");
+insert into t1 values(5,5,5,"aaa");
+insert into t1 values(6,6,6,"aaa");
+insert into t1 values(7,7,7,"aaa");
+insert into t1 values(8,8,8,"aaa");
+insert into t1 values(9,9,9,"aaa");
+insert into t1 values(10,10,10,"aaa");
+insert into t1 values(11,11,11,"aaa");
+insert into t1 values(12,12,12,"aaa");
+insert into t1 values(13,13,13,"aaa");
+insert into t1 values(14,14,14,"aaa");
+insert into t1 values(15,15,15,"aaa");
+insert into t1 values(16,16,16,"aaa");
+insert into t1 values(17,17,17,"aaa");
+insert into t1 values(18,18,18,"aaa");
+insert into t1 values(19,19,19,"aaa");
+insert into t1 values(20,20,20,"aaa");
+
+insert into t2 values(1,1,1,"aaa");
+insert into t2 values(2,2,2,"aaa");
+insert into t2 values(3,3,3,"aaa");
+insert into t2 values(4,4,4,"aaa");
+insert into t2 values(5,5,5,"aaa");
+insert into t2 values(6,6,6,"aaa");
+insert into t2 values(7,7,7,"aaa");
+insert into t2 values(8,8,8,"aaa");
+insert into t2 values(9,9,9,"aaa");
+insert into t2 values(10,10,10,"aaa");
+insert into t2 values(11,11,11,"aaa");
+insert into t2 values(12,12,12,"aaa");
+insert into t2 values(13,13,13,"aaa");
+insert into t2 values(14,14,14,"aaa");
+insert into t2 values(15,15,15,"aaa");
+insert into t2 values(16,16,16,"aaa");
+insert into t2 values(17,17,17,"aaa");
+insert into t2 values(18,18,18,"aaa");
+insert into t2 values(19,19,19,"aaa");
+insert into t2 values(20,20,20,"aaa");
+
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+
+
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+
+CREATE INDEX index_col2 ON t1 (col2);
+CREATE INDEX index_col2 ON t2 (col2);
+
+# Check base rows
+SHOW CREATE TABLE t1;
+SELECT count(*) from t1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+
+SHOW CREATE TABLE t2;
+SELECT count(*) from t2;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1 DESC;
+
+--echo # In connection con1 - Running Insert
+connect (con1,localhost,root,,);
+begin;
+--send insert into t1 values(120,120,120,"aaa")
+
+
+--echo # In connection default - Cloning database
+--connection clone_conn_1
+
+SELECT count(*) from t1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+
+SHOW CREATE TABLE t2;
+SELECT count(*) from t2;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+
+--echo # enable encryption function
+--replace_result $MYSQL_TEST_DIR MYSQL_TEST_DIR
+--eval set global clone_encrypt_key_path= '$MYSQL_TEST_DIR/std_data/mysql_clone_key'
+
+--replace_result $CLONE_DATADIR1 CLONE_DATADIR1 $HOST HOST $PORT PORT $USER USER $PAGE_TRACK_LSN PAGE_TRACK_LSN
+--eval CLONE INSTANCE FROM $USER@$HOST:$PORT IDENTIFIED BY '' DATA DIRECTORY = '$CLONE_DATADIR1' ENABLE PAGE TRACK START_LSN=$PAGE_TRACK_LSN;
+
+--echo # In connection default - Finished Cloning
+
+--echo # In connection con1 - Waiting
+connection con1;
+--reap
+commit;
+
+--echo # In connection default
+connection default;
+disconnect con1;
+
+
+--source include/wait_until_count_sessions.inc
+
+--echo # apply delta file from increment clone datadir to full clone
+
+--exec $MYSQL_DECRYPT --clone-decrypt --clone-decrypt-key=$MYSQL_TEST_DIR/std_data/mysql_clone_key --clone-decrypt-dir=$CLONE_DATADIR1 --remove-original=true >> /tmp/null
+
+
+--connection default
+
+drop table t1;
+drop table t2;
+
+--force-rmdir $CLONE_DATADIR
+--force-rmdir $CLONE_DATADIR1
+
+# Clean recipient by cloning the cleaned up donor
+
+--source ../include/clone_connection_end.inc
+
+UNINSTALL PLUGIN clone;
+
+
+--echo # 3. Test only create databas between full clone and increment
+
+--source include/have_innodb_default_undo_tablespaces.inc
+--source ../include/clone_connection_begin.inc
+
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/data_new
+--let $CLONE_DATADIR1 = $MYSQL_TMP_DIR/data_new1
+
+--source include/count_sessions.inc
+
+## Install plugin
+
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+truncate mysql.clone_history;
+
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+--eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR' ENABLE PAGE TRACK;
+
+--let PAGE_TRACK_LSN =`select PAGE_TRACK_LSN from mysql.clone_history`
+
+
+## Create database `l#g/l'g.`
+create database `l#g/l'g.`;
+
+--replace_result $CLONE_DATADIR1 CLONE_DATADIR1 $PAGE_TRACK_LSN PAGE_TRACK_LSN
+--eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR1' ENABLE PAGE TRACK START_LSN=$PAGE_TRACK_LSN;
+--echo # In connection default - Finished Cloning
+
+--echo # In connection default
+connection default;
+
+--source include/wait_until_count_sessions.inc
+
+--echo # apply delta file from increment clone datadir to full clone
+
+
+--connection default
+
+--replace_result $TEST_DATABASE TEST_DATABASE
+--eval use `$TEST_DATABASE`;
+
+drop database `l#g/l'g.`;
+
+--force-rmdir $CLONE_DATADIR
+--force-rmdir $CLONE_DATADIR1
+
+# Clean recipient by cloning the cleaned up donor
+
+--source ../include/clone_connection_end.inc
+
+UNINSTALL PLUGIN clone;
+
+
+
+--echo  # 4. Test do nothing between full clone and increment
+
+--source include/have_innodb_default_undo_tablespaces.inc
+--source ../include/clone_connection_begin.inc
+
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/data_new
+--let $CLONE_DATADIR1 = $MYSQL_TMP_DIR/data_new1
+
+--source include/count_sessions.inc
+
+## Install plugin
+
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+truncate mysql.clone_history;
+
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+--eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR' ENABLE PAGE TRACK;
+
+--let PAGE_TRACK_LSN =`select PAGE_TRACK_LSN from mysql.clone_history`
+
+
+--replace_result $CLONE_DATADIR1 CLONE_DATADIR1 $PAGE_TRACK_LSN PAGE_TRACK_LSN
+--eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR1' ENABLE PAGE TRACK START_LSN=$PAGE_TRACK_LSN;
+--echo # In connection default - Finished Cloning
+
+--echo # In connection default
+connection default;
+
+--source include/wait_until_count_sessions.inc
+
+
+--force-rmdir $CLONE_DATADIR
+--force-rmdir $CLONE_DATADIR1
+
+# Clean recipient by cloning the cleaned up donor
+
+--source ../include/clone_connection_end.inc
+
+UNINSTALL PLUGIN clone;
+
+
+--echo # 5. Test local increment clone by using based datadir
+
+--source include/have_innodb_default_undo_tablespaces.inc
+--source ../include/clone_connection_begin.inc
+
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/data_new
+--let $CLONE_DATADIR1 = $MYSQL_TMP_DIR/data_new1
+
+--source include/count_sessions.inc
+
+## Install plugin
+
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+truncate mysql.clone_history;
+
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+--eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR' ENABLE PAGE TRACK;
+
+--let PAGE_TRACK_LSN =`select PAGE_TRACK_LSN from mysql.clone_history`
+
+
+## Create test schema
+use test;
+CREATE TABLE t1(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB);
+
+CREATE TABLE t2(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB)
+PARTITION BY KEY(col1) PARTITIONS 5;
+
+CREATE TABLE `l#g/l'g.`(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB);
+
+insert into t1 values(1,1,1,"aaa");
+insert into t1 values(2,2,2,"aaa");
+insert into t1 values(3,3,3,"aaa");
+insert into t1 values(4,4,4,"aaa");
+insert into t1 values(5,5,5,"aaa");
+insert into t1 values(6,6,6,"aaa");
+insert into t1 values(7,7,7,"aaa");
+insert into t1 values(8,8,8,"aaa");
+insert into t1 values(9,9,9,"aaa");
+insert into t1 values(10,10,10,"aaa");
+insert into t1 values(11,11,11,"aaa");
+insert into t1 values(12,12,12,"aaa");
+insert into t1 values(13,13,13,"aaa");
+insert into t1 values(14,14,14,"aaa");
+insert into t1 values(15,15,15,"aaa");
+insert into t1 values(16,16,16,"aaa");
+insert into t1 values(17,17,17,"aaa");
+insert into t1 values(18,18,18,"aaa");
+insert into t1 values(19,19,19,"aaa");
+insert into t1 values(20,20,20,"aaa");
+
+insert into t2 values(1,1,1,"aaa");
+insert into t2 values(2,2,2,"aaa");
+insert into t2 values(3,3,3,"aaa");
+insert into t2 values(4,4,4,"aaa");
+insert into t2 values(5,5,5,"aaa");
+insert into t2 values(6,6,6,"aaa");
+insert into t2 values(7,7,7,"aaa");
+insert into t2 values(8,8,8,"aaa");
+insert into t2 values(9,9,9,"aaa");
+insert into t2 values(10,10,10,"aaa");
+insert into t2 values(11,11,11,"aaa");
+insert into t2 values(12,12,12,"aaa");
+insert into t2 values(13,13,13,"aaa");
+insert into t2 values(14,14,14,"aaa");
+insert into t2 values(15,15,15,"aaa");
+insert into t2 values(16,16,16,"aaa");
+insert into t2 values(17,17,17,"aaa");
+insert into t2 values(18,18,18,"aaa");
+insert into t2 values(19,19,19,"aaa");
+insert into t2 values(20,20,20,"aaa");
+
+insert into `l#g/l'g.` values(1,1,1,"aaa");
+insert into `l#g/l'g.` values(2,2,2,"aaa");
+insert into `l#g/l'g.` values(3,3,3,"aaa");
+insert into `l#g/l'g.` values(4,4,4,"aaa");
+insert into `l#g/l'g.` values(5,5,5,"aaa");
+insert into `l#g/l'g.` values(6,6,6,"aaa");
+insert into `l#g/l'g.` values(7,7,7,"aaa");
+insert into `l#g/l'g.` values(8,8,8,"aaa");
+insert into `l#g/l'g.` values(9,9,9,"aaa");
+insert into `l#g/l'g.` values(10,10,10,"aaa");
+insert into `l#g/l'g.` values(11,11,11,"aaa");
+insert into `l#g/l'g.` values(12,12,12,"aaa");
+insert into `l#g/l'g.` values(13,13,13,"aaa");
+insert into `l#g/l'g.` values(14,14,14,"aaa");
+insert into `l#g/l'g.` values(15,15,15,"aaa");
+insert into `l#g/l'g.` values(16,16,16,"aaa");
+insert into `l#g/l'g.` values(17,17,17,"aaa");
+insert into `l#g/l'g.` values(18,18,18,"aaa");
+insert into `l#g/l'g.` values(19,19,19,"aaa");
+insert into `l#g/l'g.` values(20,20,20,"aaa");
+
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+
+
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+
+CREATE INDEX index_col2 ON t1 (col2);
+CREATE INDEX index_col2 ON t2 (col2);
+
+# Check base rows
+SHOW CREATE TABLE t1;
+SELECT count(*) from t1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+
+SHOW CREATE TABLE t2;
+SELECT count(*) from t2;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1 DESC;
+
+SHOW CREATE TABLE `l#g/l'g.`;
+SELECT count(*) from `l#g/l'g.`;
+SELECT col1, col2, col3 FROM `l#g/l'g.` ORDER BY col1;
+SELECT col1, col2, col3 FROM `l#g/l'g.` ORDER BY col1 DESC;
+
+--echo # In connection con1 - Running Insert
+connect (con1,localhost,root,,);
+begin;
+--send insert into t1 values(120,120,120,"aaa")
+
+
+--echo # In connection default - Cloning database
+--connection clone_conn_1
+
+SELECT count(*) from t1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+
+SHOW CREATE TABLE t2;
+SELECT count(*) from t2;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+
+--echo # enable encryption function
+--replace_result $MYSQL_TEST_DIR MYSQL_TEST_DIR
+--eval set global clone_encrypt_key_path= '$MYSQL_TEST_DIR/std_data/mysql_clone_key'
+
+--replace_result $CLONE_DATADIR1 CLONE_DATADIR1 $CLONE_DATADIR CLONE_DATADIR
+--eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR1' ENABLE PAGE TRACK INCREMENT BASED DIRECTORY = '$CLONE_DATADIR';
+--echo # In connection default - Finished Cloning
+
+--echo # In connection con1 - Waiting
+connection con1;
+--reap
+commit;
+
+--echo # In connection default
+connection default;
+disconnect con1;
+
+
+--source include/wait_until_count_sessions.inc
+
+--echo # apply delta file from increment clone datadir to full clone
+
+--exec $MYSQL_DECRYPT --clone-decrypt --clone-decrypt-key=$MYSQL_TEST_DIR/std_data/mysql_clone_key --clone-decrypt-dir=$CLONE_DATADIR1 --remove-original=true >> /tmp/null
+
+
+--connection default
+
+drop table t1;
+drop table t2;
+drop table `l#g/l'g.`;
+
+--force-rmdir $CLONE_DATADIR
+--force-rmdir $CLONE_DATADIR1
+
+# Clean recipient by cloning the cleaned up donor
+
+--source ../include/clone_connection_end.inc
+
+UNINSTALL PLUGIN clone;
+
+
+--echo # 6. Test remote increment clone by using based datadir
+
+--let $HOST = 127.0.0.1
+--let $PORT =`select @@port`
+--let $USER = root
+
+--source include/have_innodb_default_undo_tablespaces.inc
+--source ../include/clone_connection_begin.inc
+
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/data_new
+--let $CLONE_DATADIR1 = $MYSQL_TMP_DIR/data_new1
+
+--source include/count_sessions.inc
+
+## Install plugin
+
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+
+truncate mysql.clone_history;
+
+--replace_result $HOST HOST $PORT PORT
+--eval SET GLOBAL clone_valid_donor_list = '$HOST:$PORT'
+
+--replace_result $CLONE_DATADIR CLONE_DATADIR $HOST HOST $PORT PORT $USER USER
+--eval CLONE INSTANCE FROM $USER@$HOST:$PORT IDENTIFIED BY '' DATA DIRECTORY = '$CLONE_DATADIR' ENABLE PAGE TRACK;
+
+--let PAGE_TRACK_LSN =`select PAGE_TRACK_LSN from mysql.clone_history`
+
+
+## Create test schema
+CREATE TABLE t1(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB);
+
+CREATE TABLE t2(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB)
+PARTITION BY KEY(col1) PARTITIONS 5;
+
+insert into t1 values(1,1,1,"aaa");
+insert into t1 values(2,2,2,"aaa");
+insert into t1 values(3,3,3,"aaa");
+insert into t1 values(4,4,4,"aaa");
+insert into t1 values(5,5,5,"aaa");
+insert into t1 values(6,6,6,"aaa");
+insert into t1 values(7,7,7,"aaa");
+insert into t1 values(8,8,8,"aaa");
+insert into t1 values(9,9,9,"aaa");
+insert into t1 values(10,10,10,"aaa");
+insert into t1 values(11,11,11,"aaa");
+insert into t1 values(12,12,12,"aaa");
+insert into t1 values(13,13,13,"aaa");
+insert into t1 values(14,14,14,"aaa");
+insert into t1 values(15,15,15,"aaa");
+insert into t1 values(16,16,16,"aaa");
+insert into t1 values(17,17,17,"aaa");
+insert into t1 values(18,18,18,"aaa");
+insert into t1 values(19,19,19,"aaa");
+insert into t1 values(20,20,20,"aaa");
+
+insert into t2 values(1,1,1,"aaa");
+insert into t2 values(2,2,2,"aaa");
+insert into t2 values(3,3,3,"aaa");
+insert into t2 values(4,4,4,"aaa");
+insert into t2 values(5,5,5,"aaa");
+insert into t2 values(6,6,6,"aaa");
+insert into t2 values(7,7,7,"aaa");
+insert into t2 values(8,8,8,"aaa");
+insert into t2 values(9,9,9,"aaa");
+insert into t2 values(10,10,10,"aaa");
+insert into t2 values(11,11,11,"aaa");
+insert into t2 values(12,12,12,"aaa");
+insert into t2 values(13,13,13,"aaa");
+insert into t2 values(14,14,14,"aaa");
+insert into t2 values(15,15,15,"aaa");
+insert into t2 values(16,16,16,"aaa");
+insert into t2 values(17,17,17,"aaa");
+insert into t2 values(18,18,18,"aaa");
+insert into t2 values(19,19,19,"aaa");
+insert into t2 values(20,20,20,"aaa");
+
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+update t1 set col2=col2+100;
+update t2 set col2=col2+100;
+
+
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+update t1 set col3=col3+100;
+update t2 set col3=col3+100;
+
+CREATE INDEX index_col2 ON t1 (col2);
+CREATE INDEX index_col2 ON t2 (col2);
+
+# Check base rows
+SHOW CREATE TABLE t1;
+SELECT count(*) from t1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+
+SHOW CREATE TABLE t2;
+SELECT count(*) from t2;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1 DESC;
+
+--echo # In connection con1 - Running Insert
+connect (con1,localhost,root,,);
+begin;
+--send insert into t1 values(120,120,120,"aaa")
+
+
+--echo # In connection default - Cloning database
+--connection clone_conn_1
+
+SELECT count(*) from t1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+SELECT col1, col2, col3 FROM t1 ORDER BY col1;
+
+SHOW CREATE TABLE t2;
+SELECT count(*) from t2;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+SELECT col1, col2, col3 FROM t2 ORDER BY col1;
+
+--echo # enable encryption function
+--replace_result $MYSQL_TEST_DIR MYSQL_TEST_DIR
+--eval set global clone_encrypt_key_path= '$MYSQL_TEST_DIR/std_data/mysql_clone_key'
+
+--replace_result $CLONE_DATADIR1 CLONE_DATADIR1 $HOST HOST $PORT PORT $USER USER $CLONE_DATADIR CLONE_DATADIR
+--eval CLONE INSTANCE FROM $USER@$HOST:$PORT IDENTIFIED BY '' DATA DIRECTORY = '$CLONE_DATADIR1' ENABLE PAGE TRACK INCREMENT BASED DIRECTORY = '$CLONE_DATADIR';
+
+--echo # In connection default - Finished Cloning
+
+--echo # In connection con1 - Waiting
+connection con1;
+--reap
+commit;
+
+--echo # In connection default
+connection default;
+disconnect con1;
+
+
+--source include/wait_until_count_sessions.inc
+
+--echo # apply delta file from increment clone datadir to full clone
+
+--exec $MYSQL_DECRYPT --clone-decrypt --clone-decrypt-key=$MYSQL_TEST_DIR/std_data/mysql_clone_key --clone-decrypt-dir=$CLONE_DATADIR1 --remove-original=true >> /tmp/null
+
+
+--connection default
+
+drop table t1;
+drop table t2;
+
+INSTALL COMPONENT "file://component_mysqlbackup";
+--replace_column 1 XXXX
+SELECT mysqlbackup_page_track_set(false);
+UNINSTALL COMPONENT "file://component_mysqlbackup";
+
+--force-rmdir $CLONE_DATADIR
+--force-rmdir $CLONE_DATADIR1
+
+# Clean recipient by cloning the cleaned up donor
+
+--source ../include/clone_connection_end.inc
+
+UNINSTALL PLUGIN clone;

@@ -1,0 +1,30 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+
+[connection server2]
+SET GLOBAL group_replication_group_name= "group_name";
+SET DEBUG='+d,group_replication_status_when_terminal_applier';
+START GROUP_REPLICATION;
+[connect conn2_1]
+SET DEBUG_SYNC='now WAIT_FOR reach_before_terminate_applier_sync';
+[connect conn2_2]
+SET DEBUG='+d,group_replication_status_when_terminal_applier';
+SELECT * FROM performance_schema.replication_group_member_stats;
+[connect conn2_1]
+SET DEBUG_SYNC='now WAIT_FOR reach_get_member_status_sync';
+SET DEBUG_SYNC='now SIGNAL end_before_terminate_applier_sync';
+SET DEBUG_SYNC='now WAIT_FOR reach_after_terminate_applier_sync';
+SET DEBUG_SYNC='now SIGNAL end_after_terminate_applier_sync';
+SET DEBUG_SYNC='now SIGNAL end_get_member_status_sync';
+[connect conn2_2]
+CHANNEL_NAME	VIEW_ID	MEMBER_ID	COUNT_TRANSACTIONS_IN_QUEUE	COUNT_TRANSACTIONS_CHECKED	COUNT_CONFLICTS_DETECTED	COUNT_TRANSACTIONS_ROWS_VALIDATING	TRANSACTIONS_COMMITTED_ALL_MEMBERS	LAST_CONFLICT_FREE_TRANSACTION	COUNT_TRANSACTIONS_REMOTE_IN_APPLIER_QUEUE	COUNT_TRANSACTIONS_REMOTE_APPLIED	COUNT_TRANSACTIONS_LOCAL_PROPOSED	COUNT_TRANSACTIONS_LOCAL_ROLLBACK
+group_replication_applier		#	0	0	0	0			0	0	0	0
+[connection server2]
+ERROR HY000: The server is not configured properly to be an active member of the group. Please see more details on error log.
+include/group_replication_end.inc

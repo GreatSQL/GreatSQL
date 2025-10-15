@@ -1,0 +1,575 @@
+#
+# test unambiguous
+#
+drop table if exists raw;
+Warnings:
+Note	1051	Unknown table 'test.raw'
+create table raw (
+raw int default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+show create table raw;
+Table	Create Table
+raw	CREATE TABLE `raw` (
+  `raw` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into raw values (1);
+insert into raw values (2);
+insert into raw values (3);
+select * from raw;
+raw
+1
+2
+3
+set @raw = '';
+select raw into @raw from raw where raw = '1';
+select @raw;
+@raw
+1
+drop table if exists raw;
+create table raw (
+n int default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+show create table raw;
+Table	Create Table
+raw	CREATE TABLE `raw` (
+  `n` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into raw values (1);
+insert into raw values (2);
+insert into raw values (3);
+select * from raw;
+n
+1
+2
+3
+select n as raw from raw;
+raw
+1
+2
+3
+alter table raw change n raw int default null;
+show create table raw;
+Table	Create Table
+raw	CREATE TABLE `raw` (
+  `raw` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+select * from raw;
+raw
+1
+2
+3
+drop table if exists raw;
+create table raw (
+raw raw default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai' at line 2
+drop procedure if exists raw$$
+Warnings:
+Note	1305	PROCEDURE test.raw does not exist
+create procedure raw()
+begin
+declare raw int default 10;
+select raw;
+end;
+$$
+call raw()$$
+raw
+10
+call raw()$$
+raw
+10
+drop procedure if exists raw$$
+create procedure raw(in raw int)
+begin
+select raw;
+end;
+$$
+call raw(10)$$
+raw
+10
+call raw(11)$$
+raw
+11
+drop procedure raw$$
+drop function if exists raw$$
+Warnings:
+Note	1305	FUNCTION test.raw does not exist
+create function raw() returns int
+deterministic
+begin
+declare raw int default 10;
+return raw;
+end;
+$$
+Warnings:
+Note	1585	This function 'raw' has the same name as a native function
+select test.raw()$$
+test.raw()
+10
+Warnings:
+Note	1585	This function 'raw' has the same name as a native function
+select test.raw()$$
+test.raw()
+10
+drop function if exists raw$$
+create function raw(raw int) returns int
+deterministic
+begin
+return raw;
+end;
+$$
+Warnings:
+Note	1585	This function 'raw' has the same name as a native function
+select test.raw(10)$$
+test.raw(10)
+10
+Warnings:
+Note	1585	This function 'raw' has the same name as a native function
+select test.raw(11)$$
+test.raw(11)
+11
+drop function raw$$
+set sql_mode = oracle;
+drop table if exists raw;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw' at line 1
+create table raw (
+n int default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw (
+n int default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4' at line 1
+drop table if exists tr;
+Warnings:
+Note	1051	Unknown table 'test.tr'
+create table tr (
+n int default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+show create table tr;
+Table	Create Table
+tr	CREATE TABLE "tr" (
+  "n" int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into tr values (1);
+insert into tr values (2);
+insert into tr values (3);
+select * from tr;
+n
+1
+2
+3
+select n as raw from raw;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw from raw' at line 1
+alter table tr change n raw int default null;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw int default null' at line 1
+drop table if exists tr;
+create table tr (
+raw raw default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw raw default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_090' at line 2
+create table tr (
+r raw default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+show create table tr;
+Table	Create Table
+tr	CREATE TABLE "tr" (
+  "r" blob
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into tr values ('1');
+insert into tr values ('2');
+insert into tr values ('3');
+select * from tr;
+r
+1
+2
+3
+drop table tr;
+drop procedure if exists raw$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw' at line 1
+create procedure raw() as
+begin
+select 10;
+end;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw() as
+begin
+select 10;
+end' at line 1
+create procedure p1(raw int) as
+begin
+select raw;
+end;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw int) as
+begin
+select raw;
+end' at line 1
+create procedure p1() as
+raw int default 10;
+begin
+select raw;
+end;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw int default 10;
+begin
+select raw;
+end' at line 2
+drop function if exists raw$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw' at line 1
+create function raw() return int
+deterministic
+as 
+begin
+return 10;
+end;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw() return int
+deterministic
+as 
+begin
+return 10;
+end' at line 1
+create function f1(raw int) return int
+deterministic
+as 
+begin
+return raw;
+end;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw int) return int
+deterministic
+as 
+begin
+return raw;
+end' at line 1
+create function f1() return int
+deterministic
+as 
+raw int default 10;
+begin
+return raw;
+end;
+$$
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw int default 10;
+begin
+return raw;
+end' at line 4
+#
+# test type
+#
+set sql_mode = oracle;
+drop table if exists t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+create table t1 (
+c0 int default null,
+c1 raw default null,
+c2 raw(8) not null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE "t1" (
+  "c0" int DEFAULT NULL,
+  "c1" blob,
+  "c2" tinyblob NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t1 values (1, 'aa', '01');
+insert into t1 values (2, 'bb', '02');
+insert into t1 values (3, 'cc', '03');
+select * from t1;
+c0	c1	c2
+1	aa	01
+2	bb	02
+3	cc	03
+update t1 set c1='ab' where c0 = 1;
+update t1 set c1='bc' where c0 = 2;
+update t1 set c1='cd' where c0 = 3;
+select * from t1;
+c0	c1	c2
+1	ab	01
+2	bc	02
+3	cd	03
+delete from t1 where c1 = 'cd';
+select * from t1;
+c0	c1	c2
+1	ab	01
+2	bc	02
+alter table t1 add column c3 raw(8) not null default 'aabbccdd';
+ERROR 42000: BLOB, TEXT, GEOMETRY or JSON column 'c3' can't have a default value
+alter table t1 add column c3 raw(8);
+update t1 set c3='aabb';
+select * from t1;
+c0	c1	c2	c3
+1	ab	01	aabb
+2	bc	02	aabb
+alter table t1 drop column c3;
+select * from t1;
+c0	c1	c2
+1	ab	01
+2	bc	02
+create temporary table temp_test (c0 int default null ,c1 raw default null,  c2 raw(8) default null);
+insert into temp_test (c0,c1,c2) values (1, 'a', 'b');
+select * from temp_test;
+c0	c1	c2
+1	a	b
+drop table temp_test;
+select * from t1;
+c0	c1	c2
+1	ab	01
+2	bc	02
+select c1,length(c1) ,length(c2) from t1;
+c1	length(c1)	length(c2)
+ab	2	2
+bc	2	2
+select c1,concat(c1) ,concat(c2) from t1;
+c1	concat(c1)	concat(c2)
+ab	ab	01
+bc	bc	02
+select c1,concat(c1,'2') ,concat(c2,'2') from t1;
+c1	concat(c1,'2')	concat(c2,'2')
+ab	ab2	012
+bc	bc2	022
+select c1,insert(c1,1,1,'+') ,insert(c2,1,1,'+')  from t1;
+c1	insert(c1,1,1,'+')	insert(c2,1,1,'+')
+ab	+b	+1
+bc	+c	+2
+select c1,lower(c1) ,lower(c2) from t1;
+c1	lower(c1)	lower(c2)
+ab	ab	01
+bc	bc	02
+select c1,upper(c1) ,upper(c2) from t1;
+c1	upper(c1)	upper(c2)
+ab	ab	01
+bc	bc	02
+select c1,left(c1,1) ,left(c2,1) from t1;
+c1	left(c1,1)	left(c2,1)
+ab	a	0
+bc	b	0
+select c1,right(c1,1) ,right(c2,1) from t1;
+c1	right(c1,1)	right(c2,1)
+ab	b	1
+bc	c	2
+select c1,trim(c1) ,trim(c2) from t1;
+c1	trim(c1)	trim(c2)
+ab	ab	01
+bc	bc	02
+select c1,replace(c1,'a','z') ,replace(c2,'0','9') from t1;
+c1	replace(c1,'a','z')	replace(c2,'0','9')
+ab	zb	91
+bc	bc	92
+select c1,substring(c1,2) ,substring(c2,2) from t1;
+c1	substring(c1,2)	substring(c2,2)
+ab	b	1
+bc	c	2
+select c1,reverse(c1) ,reverse(c2) from t1;
+c1	reverse(c1)	reverse(c2)
+ab	ba	10
+bc	cb	20
+select cast('ab' as raw) from dual;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw) from dual' at line 1
+select convert('ab', raw) from dual ;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'raw) from dual' at line 1
+select c1,c2 ,if(c1='ab','y','n'), if(c2='01','y','n') from t1;
+c1	c2	if(c1='ab','y','n')	if(c2='01','y','n')
+ab	01	y	y
+bc	02	n	n
+select c1,c2 ,ifnull(c1,'y'),ifnull(c2,'y') from t1;
+c1	c2	ifnull(c1,'y')	ifnull(c2,'y')
+ab	01	ab	01
+bc	02	bc	02
+select case c1 when 'ab' then 'ab' when 'bc' then 'bc' else 'other' end as c1,case c2 when '01' then '01' when '02' then '02' else 'other' end as c2 from t1;
+c1	c2
+ab	01
+bc	02
+drop table if exists t2;
+Warnings:
+Note	1051	Unknown table 'test.t2'
+create table t2 (
+c0 int default null,
+c1 raw default null,
+c2 raw(8) not null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE "t2" (
+  "c0" int DEFAULT NULL,
+  "c1" blob,
+  "c2" tinyblob NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t2 values (1, 'az', '09');
+select * from t2;
+c0	c1	c2
+1	az	09
+select * from t1 union select * from t2;
+c0	c1	c2
+1	ab	01
+2	bc	02
+1	az	09
+select * from t1 join          t2 on t1.c0 = t2.c0;
+c0	c1	c2	c0	c1	c2
+1	ab	01	1	az	09
+select * from t1 inner join    t2 on t1.c0 = t2.c0;
+c0	c1	c2	c0	c1	c2
+1	ab	01	1	az	09
+select * from t1 cross join    t2 on t1.c0 = t2.c0;
+c0	c1	c2	c0	c1	c2
+1	ab	01	1	az	09
+select * from t1 straight_join t2 on t1.c0 = t2.c0;
+c0	c1	c2	c0	c1	c2
+1	ab	01	1	az	09
+select * from t1 left join     t2 on t1.c0 = t2.c0;
+c0	c1	c2	c0	c1	c2
+1	ab	01	1	az	09
+2	bc	02	NULL	NULL	NULL
+select * from t1 right join    t2 on t1.c0 = t2.c0;
+c0	c1	c2	c0	c1	c2
+1	ab	01	1	az	09
+insert into t2 values (1, 'az', '09');
+select * from t2;
+c0	c1	c2
+1	az	09
+1	az	09
+insert into t2 select * from t1;
+select * from t2;
+c0	c1	c2
+1	az	09
+1	az	09
+1	ab	01
+2	bc	02
+select distinct c0, c1, c2 from t2;
+c0	c1	c2
+1	az	09
+1	ab	01
+2	bc	02
+select c0, c1, c2 from t2 where c1 in ('ab', 'bc');
+c0	c1	c2
+1	ab	01
+2	bc	02
+select * from t1;
+c0	c1	c2
+1	ab	01
+2	bc	02
+select * from t2;
+c0	c1	c2
+1	az	09
+1	az	09
+1	ab	01
+2	bc	02
+select * from t2 where c1 = (select c1 from t1 where c0=1);
+c0	c1	c2
+1	ab	01
+start transaction;
+delete from t1;
+select * from t1;
+c0	c1	c2
+rollback;
+commit;
+select * from t1;
+c0	c1	c2
+1	ab	01
+2	bc	02
+create view  test_view  as  select * from t1;
+select * from  test_view;
+c0	c1	c2
+1	ab	01
+2	bc	02
+drop view test_view;
+create or replace function f1(a int, b raw, c raw(8)) return raw 
+deterministic 
+as 
+begin 
+return concat(a, b, c); 
+end;
+//
+select f1(0, 'a', 'b')//
+f1(0, 'a', 'b')
+0ab
+select f1(0, 'a', 'b')//
+f1(0, 'a', 'b')
+0ab
+drop function f1//
+create or replace function f1(a int, b raw, c raw(8)) return raw(8)
+deterministic 
+as 
+begin 
+return concat(a, b, c); 
+end;
+//
+select f1(0, 'a', 'b')//
+f1(0, 'a', 'b')
+0ab
+select f1(0, 'a', 'b')//
+f1(0, 'a', 'b')
+0ab
+drop function f1//
+create or replace function f1(a int, b raw, c raw(8)) return raw
+deterministic 
+as 
+r raw default '';
+begin 
+r := concat(a, b, c); 
+return r;
+end;
+//
+select f1(0, 'a', 'b')//
+f1(0, 'a', 'b')
+0ab
+select f1(0, 'a', 'b')//
+f1(0, 'a', 'b')
+0ab
+drop function f1//
+create or replace function f1(a int, b raw, c raw(8)) return raw
+deterministic 
+as 
+r raw(8) default '';
+begin 
+r := concat(a, b, c); 
+return r;
+end;
+//
+select f1(0, 'a', 'b')//
+f1(0, 'a', 'b')
+0ab
+select f1(0, 'a', 'b')//
+f1(0, 'a', 'b')
+0ab
+drop function f1//
+create or replace procedure p1(a int, b raw, c raw(8))
+as 
+begin 
+select concat(a, b, c); 
+end;
+//
+call p1(0, 'a', 'b')//
+concat(a, b, c)
+0ab
+call p1(0, 'a', 'b')//
+concat(a, b, c)
+0ab
+drop procedure p1//
+create or replace procedure p1(a int, b raw, c raw(8))
+deterministic 
+as 
+r raw(8) default '';
+begin 
+r := concat(a, b, c); 
+select r;
+end;
+//
+call p1(0, 'a', 'b')//
+r
+0ab
+call p1(0, 'a', 'b')//
+r
+0ab
+drop procedure p1//
+set @sum=0;
+create trigger test_tri before insert on t2 for each row set @sum = concat(:new.c0, :new.c1, :new.c2);
+insert into t2(c0, c1, c2) values(9, 'a', 'b');
+select @sum;
+@sum
+9ab
+drop trigger if exists test_tri;
+drop table t1;
+drop table t2;

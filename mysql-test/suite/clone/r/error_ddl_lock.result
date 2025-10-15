@@ -1,0 +1,1060 @@
+# In connection CON1
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+SHOW VARIABLES LIKE 'clone_ddl_timeout';
+Variable_name	Value
+clone_ddl_timeout	300
+SHOW VARIABLES LIKE 'clone_block_ddl';
+Variable_name	Value
+clone_block_ddl	OFF
+# Set backup lock timeout to 1 sec
+SET GLOBAL clone_block_ddl = true;
+SET GLOBAL clone_ddl_timeout = 1;
+SHOW VARIABLES LIKE 'clone_block_ddl';
+Variable_name	Value
+clone_block_ddl	ON
+SHOW VARIABLES LIKE 'clone_ddl_timeout';
+Variable_name	Value
+clone_ddl_timeout	1
+SHOW VARIABLES LIKE "lock_wait_timeout";
+Variable_name	Value
+lock_wait_timeout	1
+# In connection DEFAULT
+# 1A. Clone while CREATE TABLE in progress
+# In connection CON1
+SET DEBUG_SYNC = 'clone_notify_ddl SIGNAL resume_clone WAIT_FOR resume_ddl';
+CREATE TABLE t1 (col1 INT PRIMARY KEY);
+# In connection DEFAULT
+SET DEBUG_SYNC = 'now WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+0	Failed	1205
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+0	DROP DATA	Failed
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
+# In connection CON1
+# In connection DEFAULT
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  PRIMARY KEY (`col1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# 1B. CREATE TABLE while clone in progress
+SET DEBUG_SYNC = 'clone_file_copy SIGNAL start_ddl WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+# In connection CON1
+SET DEBUG_SYNC = 'now WAIT_FOR start_ddl';
+CREATE TABLE t2 (col1 INT PRIMARY KEY);
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET DEBUG_SYNC = 'now SIGNAL resume_clone';
+# In connection DEFAULT
+SET DEBUG_SYNC = 'RESET';
+# 1C. ALTER INSTANCE while clone in progress
+SET DEBUG_SYNC = 'clone_file_copy SIGNAL start_ddl WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+# In connection CON1
+SET DEBUG_SYNC = 'now WAIT_FOR start_ddl';
+ALTER INSTANCE DISABLE INNODB REDO_LOG;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET DEBUG_SYNC = 'now SIGNAL resume_clone';
+# In connection DEFAULT
+SET DEBUG_SYNC = 'RESET';
+SHOW STATUS LIKE 'innodb_redo_log_enabled';
+Variable_name	Value
+Innodb_redo_log_enabled	ON
+# 1C. Clone while ALTER INSTANCE in progress
+# In connection CON1
+SET DEBUG_SYNC = 'clone_notify_ddl SIGNAL resume_clone WAIT_FOR resume_ddl';
+ALTER INSTANCE DISABLE INNODB REDO_LOG;
+# In connection DEFAULT
+SET DEBUG_SYNC = 'now WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+0	Failed	1205
+1	Completed	0
+2	Completed	0
+3	Failed	1205
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+0	DROP DATA	Failed
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+2	DROP DATA	Completed
+2	FILE COPY	Completed
+2	PAGE COPY	Completed
+2	REDO COPY	Completed
+2	FILE SYNC	Completed
+2	RESTART	Not Started
+2	RECOVERY	Not Started
+3	DROP DATA	Failed
+3	FILE COPY	Not Started
+3	PAGE COPY	Not Started
+3	REDO COPY	Not Started
+3	FILE SYNC	Not Started
+3	RESTART	Not Started
+3	RECOVERY	Not Started
+SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
+# In connection CON1
+# In connection DEFAULT
+SHOW STATUS LIKE 'innodb_redo_log_enabled';
+Variable_name	Value
+Innodb_redo_log_enabled	OFF
+ALTER INSTANCE ENABLE INNODB REDO_LOG;
+# 2A. Clone while ALTER TABLE ADD COLUMN [COPY] in progress
+INSERT INTO t1 values(10), (20), (30);
+SELECT * FROM t1 ORDER BY col1;
+col1
+10
+20
+30
+# In connection CON1
+SET DEBUG_SYNC = 'clone_notify_ddl SIGNAL resume_clone WAIT_FOR resume_ddl';
+ALTER TABLE t1 ADD COLUMN col2 int, ALGORITHM=COPY;
+# In connection DEFAULT
+SET DEBUG_SYNC = 'now WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+0	Failed	1205
+1	Completed	0
+2	Completed	0
+3	Failed	1205
+4	Failed	1205
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+0	DROP DATA	Failed
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+2	DROP DATA	Completed
+2	FILE COPY	Completed
+2	PAGE COPY	Completed
+2	REDO COPY	Completed
+2	FILE SYNC	Completed
+2	RESTART	Not Started
+2	RECOVERY	Not Started
+3	DROP DATA	Failed
+3	FILE COPY	Not Started
+3	PAGE COPY	Not Started
+3	REDO COPY	Not Started
+3	FILE SYNC	Not Started
+3	RESTART	Not Started
+3	RECOVERY	Not Started
+4	DROP DATA	Failed
+4	FILE COPY	Not Started
+4	PAGE COPY	Not Started
+4	REDO COPY	Not Started
+4	FILE SYNC	Not Started
+4	RESTART	Not Started
+4	RECOVERY	Not Started
+SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
+# In connection CON1
+# In connection DEFAULT
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  PRIMARY KEY (`col1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1 ORDER BY col1;
+col1	col2
+10	NULL
+20	NULL
+30	NULL
+UPDATE t1 SET col2 = col1 + 1000;
+# 2B. ALTER TABLE ADD COLUMN [COPY] while clone in progress
+SET DEBUG_SYNC = 'clone_file_copy SIGNAL start_ddl WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+# In connection CON1
+SET DEBUG_SYNC = 'now WAIT_FOR start_ddl';
+ALTER TABLE t1 ADD COLUMN col3 int, ALGORITHM=COPY;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET DEBUG_SYNC = 'now SIGNAL resume_clone';
+# In connection DEFAULT
+SET DEBUG_SYNC = 'RESET';
+# 2C. Clone while ALTER TABLE ADD COLUMN [INPLACE] in progress
+SELECT * FROM t1 ORDER BY col1;
+col1	col2
+10	1010
+20	1020
+30	1030
+# In connection CON1
+SET DEBUG_SYNC = 'clone_notify_ddl SIGNAL resume_clone WAIT_FOR resume_ddl';
+ALTER TABLE t1 ADD COLUMN col3 int, ALGORITHM=INPLACE;
+# In connection DEFAULT
+SET DEBUG_SYNC = 'now WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+0	Failed	1205
+1	Completed	0
+2	Completed	0
+3	Failed	1205
+4	Failed	1205
+5	Completed	0
+6	Failed	1205
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+0	DROP DATA	Failed
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+2	DROP DATA	Completed
+2	FILE COPY	Completed
+2	PAGE COPY	Completed
+2	REDO COPY	Completed
+2	FILE SYNC	Completed
+2	RESTART	Not Started
+2	RECOVERY	Not Started
+3	DROP DATA	Failed
+3	FILE COPY	Not Started
+3	PAGE COPY	Not Started
+3	REDO COPY	Not Started
+3	FILE SYNC	Not Started
+3	RESTART	Not Started
+3	RECOVERY	Not Started
+4	DROP DATA	Failed
+4	FILE COPY	Not Started
+4	PAGE COPY	Not Started
+4	REDO COPY	Not Started
+4	FILE SYNC	Not Started
+4	RESTART	Not Started
+4	RECOVERY	Not Started
+5	DROP DATA	Completed
+5	FILE COPY	Completed
+5	PAGE COPY	Completed
+5	REDO COPY	Completed
+5	FILE SYNC	Completed
+5	RESTART	Not Started
+5	RECOVERY	Not Started
+6	DROP DATA	Failed
+6	FILE COPY	Not Started
+6	PAGE COPY	Not Started
+6	REDO COPY	Not Started
+6	FILE SYNC	Not Started
+6	RESTART	Not Started
+6	RECOVERY	Not Started
+SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
+# In connection CON1
+# In connection DEFAULT
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` int DEFAULT NULL,
+  PRIMARY KEY (`col1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1 ORDER BY col1;
+col1	col2	col3
+10	1010	NULL
+20	1020	NULL
+30	1030	NULL
+UPDATE t1 SET col3 = col2 + 1000;
+# 2D. ALTER TABLE ADD COLUMN [INPLACE] while clone in progress
+SET DEBUG_SYNC = 'clone_file_copy SIGNAL start_ddl WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+# In connection CON1
+SET DEBUG_SYNC = 'now WAIT_FOR start_ddl';
+ALTER TABLE t1 ADD COLUMN col4 int, ALGORITHM=INPLACE;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET DEBUG_SYNC = 'now SIGNAL resume_clone';
+# In connection DEFAULT
+SET DEBUG_SYNC = 'RESET';
+# 3A. Clone while ADD INDEX [COPY] in progress
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` int DEFAULT NULL,
+  PRIMARY KEY (`col1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# In connection CON1
+SET DEBUG_SYNC = 'clone_notify_ddl SIGNAL resume_clone WAIT_FOR resume_ddl';
+ALTER TABLE t1 ADD INDEX col2_idx(col2), ALGORITHM=COPY;
+# In connection DEFAULT
+SET DEBUG_SYNC = 'now WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+0	Failed	1205
+1	Completed	0
+2	Completed	0
+3	Failed	1205
+4	Failed	1205
+5	Completed	0
+6	Failed	1205
+7	Completed	0
+8	Failed	1205
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+0	DROP DATA	Failed
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+2	DROP DATA	Completed
+2	FILE COPY	Completed
+2	PAGE COPY	Completed
+2	REDO COPY	Completed
+2	FILE SYNC	Completed
+2	RESTART	Not Started
+2	RECOVERY	Not Started
+3	DROP DATA	Failed
+3	FILE COPY	Not Started
+3	PAGE COPY	Not Started
+3	REDO COPY	Not Started
+3	FILE SYNC	Not Started
+3	RESTART	Not Started
+3	RECOVERY	Not Started
+4	DROP DATA	Failed
+4	FILE COPY	Not Started
+4	PAGE COPY	Not Started
+4	REDO COPY	Not Started
+4	FILE SYNC	Not Started
+4	RESTART	Not Started
+4	RECOVERY	Not Started
+5	DROP DATA	Completed
+5	FILE COPY	Completed
+5	PAGE COPY	Completed
+5	REDO COPY	Completed
+5	FILE SYNC	Completed
+5	RESTART	Not Started
+5	RECOVERY	Not Started
+6	DROP DATA	Failed
+6	FILE COPY	Not Started
+6	PAGE COPY	Not Started
+6	REDO COPY	Not Started
+6	FILE SYNC	Not Started
+6	RESTART	Not Started
+6	RECOVERY	Not Started
+7	DROP DATA	Completed
+7	FILE COPY	Completed
+7	PAGE COPY	Completed
+7	REDO COPY	Completed
+7	FILE SYNC	Completed
+7	RESTART	Not Started
+7	RECOVERY	Not Started
+8	DROP DATA	Failed
+8	FILE COPY	Not Started
+8	PAGE COPY	Not Started
+8	REDO COPY	Not Started
+8	FILE SYNC	Not Started
+8	RESTART	Not Started
+8	RECOVERY	Not Started
+SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
+# In connection CON1
+# In connection DEFAULT
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` int DEFAULT NULL,
+  PRIMARY KEY (`col1`),
+  KEY `col2_idx` (`col2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# 3B. ADD INDEX [COPY] while clone in progress
+SET DEBUG_SYNC = 'clone_file_copy SIGNAL start_ddl WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+# In connection CON1
+SET DEBUG_SYNC = 'now WAIT_FOR start_ddl';
+ALTER TABLE t1 ADD INDEX col3_idx(col3), ALGORITHM=COPY;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET DEBUG_SYNC = 'now SIGNAL resume_clone';
+# In connection DEFAULT
+SET DEBUG_SYNC = 'RESET';
+# 3C. Clone while ADD INDEX [INPLACE] in progress
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` int DEFAULT NULL,
+  PRIMARY KEY (`col1`),
+  KEY `col2_idx` (`col2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# In connection CON1
+SET DEBUG_SYNC = 'clone_notify_ddl SIGNAL resume_clone WAIT_FOR resume_ddl';
+ALTER TABLE t1 ADD INDEX col3_idx(col3), ALGORITHM=INPLACE;
+# In connection DEFAULT
+SET DEBUG_SYNC = 'now WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+10	Failed	1205
+1	Completed	0
+2	Completed	0
+3	Failed	1205
+4	Failed	1205
+5	Completed	0
+6	Failed	1205
+7	Completed	0
+8	Failed	1205
+9	Completed	0
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+10	DROP DATA	Failed
+10	FILE COPY	Not Started
+10	PAGE COPY	Not Started
+10	REDO COPY	Not Started
+10	FILE SYNC	Not Started
+10	RESTART	Not Started
+10	RECOVERY	Not Started
+1	DROP DATA	Completed
+1	FILE COPY	Completed
+1	PAGE COPY	Completed
+1	REDO COPY	Completed
+1	FILE SYNC	Completed
+1	RESTART	Not Started
+1	RECOVERY	Not Started
+2	DROP DATA	Completed
+2	FILE COPY	Completed
+2	PAGE COPY	Completed
+2	REDO COPY	Completed
+2	FILE SYNC	Completed
+2	RESTART	Not Started
+2	RECOVERY	Not Started
+3	DROP DATA	Failed
+3	FILE COPY	Not Started
+3	PAGE COPY	Not Started
+3	REDO COPY	Not Started
+3	FILE SYNC	Not Started
+3	RESTART	Not Started
+3	RECOVERY	Not Started
+4	DROP DATA	Failed
+4	FILE COPY	Not Started
+4	PAGE COPY	Not Started
+4	REDO COPY	Not Started
+4	FILE SYNC	Not Started
+4	RESTART	Not Started
+4	RECOVERY	Not Started
+5	DROP DATA	Completed
+5	FILE COPY	Completed
+5	PAGE COPY	Completed
+5	REDO COPY	Completed
+5	FILE SYNC	Completed
+5	RESTART	Not Started
+5	RECOVERY	Not Started
+6	DROP DATA	Failed
+6	FILE COPY	Not Started
+6	PAGE COPY	Not Started
+6	REDO COPY	Not Started
+6	FILE SYNC	Not Started
+6	RESTART	Not Started
+6	RECOVERY	Not Started
+7	DROP DATA	Completed
+7	FILE COPY	Completed
+7	PAGE COPY	Completed
+7	REDO COPY	Completed
+7	FILE SYNC	Completed
+7	RESTART	Not Started
+7	RECOVERY	Not Started
+8	DROP DATA	Failed
+8	FILE COPY	Not Started
+8	PAGE COPY	Not Started
+8	REDO COPY	Not Started
+8	FILE SYNC	Not Started
+8	RESTART	Not Started
+8	RECOVERY	Not Started
+9	DROP DATA	Completed
+9	FILE COPY	Completed
+9	PAGE COPY	Completed
+9	REDO COPY	Completed
+9	FILE SYNC	Completed
+9	RESTART	Not Started
+9	RECOVERY	Not Started
+SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
+# In connection CON1
+# In connection DEFAULT
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` int DEFAULT NULL,
+  PRIMARY KEY (`col1`),
+  KEY `col2_idx` (`col2`),
+  KEY `col3_idx` (`col3`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# 3D. ADD INDEX [INPLACE] while clone in progress
+SET DEBUG_SYNC = 'clone_file_copy SIGNAL start_ddl WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+# In connection CON1
+SET DEBUG_SYNC = 'now WAIT_FOR start_ddl';
+ALTER TABLE t1 ADD INDEX col1_idx(col1), ALGORITHM=COPY;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET DEBUG_SYNC = 'now SIGNAL resume_clone';
+# In connection DEFAULT
+SET DEBUG_SYNC = 'RESET';
+# 4A. DROP INDEX [COPY] while clone in progress
+SET DEBUG_SYNC = 'clone_file_copy SIGNAL start_ddl WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+# In connection CON1
+SET DEBUG_SYNC = 'now WAIT_FOR start_ddl';
+ALTER TABLE t1 DROP INDEX col3_idx, ALGORITHM=COPY;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET DEBUG_SYNC = 'now SIGNAL resume_clone';
+# In connection DEFAULT
+SET DEBUG_SYNC = 'RESET';
+# 4B. Clone while DROP INDEX [COPY] in progress
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` int DEFAULT NULL,
+  PRIMARY KEY (`col1`),
+  KEY `col2_idx` (`col2`),
+  KEY `col3_idx` (`col3`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# In connection CON1
+SET DEBUG_SYNC = 'clone_notify_ddl SIGNAL resume_clone WAIT_FOR resume_ddl';
+ALTER TABLE t1 DROP INDEX col3_idx, ALGORITHM=COPY;
+# In connection DEFAULT
+SET DEBUG_SYNC = 'now WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+10	Failed	1205
+11	Completed	0
+12	Completed	0
+13	Failed	1205
+4	Failed	1205
+5	Completed	0
+6	Failed	1205
+7	Completed	0
+8	Failed	1205
+9	Completed	0
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+10	DROP DATA	Failed
+10	FILE COPY	Not Started
+10	PAGE COPY	Not Started
+10	REDO COPY	Not Started
+10	FILE SYNC	Not Started
+10	RESTART	Not Started
+10	RECOVERY	Not Started
+11	DROP DATA	Completed
+11	FILE COPY	Completed
+11	PAGE COPY	Completed
+11	REDO COPY	Completed
+11	FILE SYNC	Completed
+11	RESTART	Not Started
+11	RECOVERY	Not Started
+12	DROP DATA	Completed
+12	FILE COPY	Completed
+12	PAGE COPY	Completed
+12	REDO COPY	Completed
+12	FILE SYNC	Completed
+12	RESTART	Not Started
+12	RECOVERY	Not Started
+13	DROP DATA	Failed
+13	FILE COPY	Not Started
+13	PAGE COPY	Not Started
+13	REDO COPY	Not Started
+13	FILE SYNC	Not Started
+13	RESTART	Not Started
+13	RECOVERY	Not Started
+4	DROP DATA	Failed
+4	FILE COPY	Not Started
+4	PAGE COPY	Not Started
+4	REDO COPY	Not Started
+4	FILE SYNC	Not Started
+4	RESTART	Not Started
+4	RECOVERY	Not Started
+5	DROP DATA	Completed
+5	FILE COPY	Completed
+5	PAGE COPY	Completed
+5	REDO COPY	Completed
+5	FILE SYNC	Completed
+5	RESTART	Not Started
+5	RECOVERY	Not Started
+6	DROP DATA	Failed
+6	FILE COPY	Not Started
+6	PAGE COPY	Not Started
+6	REDO COPY	Not Started
+6	FILE SYNC	Not Started
+6	RESTART	Not Started
+6	RECOVERY	Not Started
+7	DROP DATA	Completed
+7	FILE COPY	Completed
+7	PAGE COPY	Completed
+7	REDO COPY	Completed
+7	FILE SYNC	Completed
+7	RESTART	Not Started
+7	RECOVERY	Not Started
+8	DROP DATA	Failed
+8	FILE COPY	Not Started
+8	PAGE COPY	Not Started
+8	REDO COPY	Not Started
+8	FILE SYNC	Not Started
+8	RESTART	Not Started
+8	RECOVERY	Not Started
+9	DROP DATA	Completed
+9	FILE COPY	Completed
+9	PAGE COPY	Completed
+9	REDO COPY	Completed
+9	FILE SYNC	Completed
+9	RESTART	Not Started
+9	RECOVERY	Not Started
+SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
+# In connection CON1
+# In connection DEFAULT
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` int DEFAULT NULL,
+  PRIMARY KEY (`col1`),
+  KEY `col2_idx` (`col2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# 4C. DROP INDEX [INPLACE] while clone in progress
+SET DEBUG_SYNC = 'clone_file_copy SIGNAL start_ddl WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+# In connection CON1
+SET DEBUG_SYNC = 'now WAIT_FOR start_ddl';
+ALTER TABLE t1 DROP INDEX col2_idx, ALGORITHM=INPLACE;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET DEBUG_SYNC = 'now SIGNAL resume_clone';
+# In connection DEFAULT
+SET DEBUG_SYNC = 'RESET';
+# 4D. Clone while DROP INDEX [INPLACE] in progress
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` int DEFAULT NULL,
+  PRIMARY KEY (`col1`),
+  KEY `col2_idx` (`col2`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# In connection CON1
+SET DEBUG_SYNC = 'clone_notify_ddl SIGNAL resume_clone WAIT_FOR resume_ddl';
+ALTER TABLE t1 DROP INDEX col2_idx, ALGORITHM=INPLACE;
+# In connection DEFAULT
+SET DEBUG_SYNC = 'now WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+10	Failed	1205
+11	Completed	0
+12	Completed	0
+13	Failed	1205
+14	Completed	0
+15	Failed	1205
+6	Failed	1205
+7	Completed	0
+8	Failed	1205
+9	Completed	0
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+10	DROP DATA	Failed
+10	FILE COPY	Not Started
+10	PAGE COPY	Not Started
+10	REDO COPY	Not Started
+10	FILE SYNC	Not Started
+10	RESTART	Not Started
+10	RECOVERY	Not Started
+11	DROP DATA	Completed
+11	FILE COPY	Completed
+11	PAGE COPY	Completed
+11	REDO COPY	Completed
+11	FILE SYNC	Completed
+11	RESTART	Not Started
+11	RECOVERY	Not Started
+12	DROP DATA	Completed
+12	FILE COPY	Completed
+12	PAGE COPY	Completed
+12	REDO COPY	Completed
+12	FILE SYNC	Completed
+12	RESTART	Not Started
+12	RECOVERY	Not Started
+13	DROP DATA	Failed
+13	FILE COPY	Not Started
+13	PAGE COPY	Not Started
+13	REDO COPY	Not Started
+13	FILE SYNC	Not Started
+13	RESTART	Not Started
+13	RECOVERY	Not Started
+14	DROP DATA	Completed
+14	FILE COPY	Completed
+14	PAGE COPY	Completed
+14	REDO COPY	Completed
+14	FILE SYNC	Completed
+14	RESTART	Not Started
+14	RECOVERY	Not Started
+15	DROP DATA	Failed
+15	FILE COPY	Not Started
+15	PAGE COPY	Not Started
+15	REDO COPY	Not Started
+15	FILE SYNC	Not Started
+15	RESTART	Not Started
+15	RECOVERY	Not Started
+6	DROP DATA	Failed
+6	FILE COPY	Not Started
+6	PAGE COPY	Not Started
+6	REDO COPY	Not Started
+6	FILE SYNC	Not Started
+6	RESTART	Not Started
+6	RECOVERY	Not Started
+7	DROP DATA	Completed
+7	FILE COPY	Completed
+7	PAGE COPY	Completed
+7	REDO COPY	Completed
+7	FILE SYNC	Completed
+7	RESTART	Not Started
+7	RECOVERY	Not Started
+8	DROP DATA	Failed
+8	FILE COPY	Not Started
+8	PAGE COPY	Not Started
+8	REDO COPY	Not Started
+8	FILE SYNC	Not Started
+8	RESTART	Not Started
+8	RECOVERY	Not Started
+9	DROP DATA	Completed
+9	FILE COPY	Completed
+9	PAGE COPY	Completed
+9	REDO COPY	Completed
+9	FILE SYNC	Completed
+9	RESTART	Not Started
+9	RECOVERY	Not Started
+SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
+# In connection CON1
+# In connection DEFAULT
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` int DEFAULT NULL,
+  PRIMARY KEY (`col1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# 5A. TRUNCATE TABLE while clone in progress
+SET DEBUG_SYNC = 'clone_file_copy SIGNAL start_ddl WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+# In connection CON1
+SET DEBUG_SYNC = 'now WAIT_FOR start_ddl';
+TRUNCATE TABLE t1;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET DEBUG_SYNC = 'now SIGNAL resume_clone';
+# In connection DEFAULT
+SET DEBUG_SYNC = 'RESET';
+# 5B. Clone while TRUNCATE TABLE in progress
+SELECT * FROM t1 ORDER BY col1;
+col1	col2	col3
+10	1010	2010
+20	1020	2020
+30	1030	2030
+# In connection CON1
+SET DEBUG_SYNC = 'clone_notify_ddl SIGNAL resume_clone WAIT_FOR resume_ddl';
+TRUNCATE TABLE t1;
+# In connection DEFAULT
+SET DEBUG_SYNC = 'now WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+10	Failed	1205
+11	Completed	0
+12	Completed	0
+13	Failed	1205
+14	Completed	0
+15	Failed	1205
+16	Completed	0
+17	Failed	1205
+8	Failed	1205
+9	Completed	0
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+10	DROP DATA	Failed
+10	FILE COPY	Not Started
+10	PAGE COPY	Not Started
+10	REDO COPY	Not Started
+10	FILE SYNC	Not Started
+10	RESTART	Not Started
+10	RECOVERY	Not Started
+11	DROP DATA	Completed
+11	FILE COPY	Completed
+11	PAGE COPY	Completed
+11	REDO COPY	Completed
+11	FILE SYNC	Completed
+11	RESTART	Not Started
+11	RECOVERY	Not Started
+12	DROP DATA	Completed
+12	FILE COPY	Completed
+12	PAGE COPY	Completed
+12	REDO COPY	Completed
+12	FILE SYNC	Completed
+12	RESTART	Not Started
+12	RECOVERY	Not Started
+13	DROP DATA	Failed
+13	FILE COPY	Not Started
+13	PAGE COPY	Not Started
+13	REDO COPY	Not Started
+13	FILE SYNC	Not Started
+13	RESTART	Not Started
+13	RECOVERY	Not Started
+14	DROP DATA	Completed
+14	FILE COPY	Completed
+14	PAGE COPY	Completed
+14	REDO COPY	Completed
+14	FILE SYNC	Completed
+14	RESTART	Not Started
+14	RECOVERY	Not Started
+15	DROP DATA	Failed
+15	FILE COPY	Not Started
+15	PAGE COPY	Not Started
+15	REDO COPY	Not Started
+15	FILE SYNC	Not Started
+15	RESTART	Not Started
+15	RECOVERY	Not Started
+16	DROP DATA	Completed
+16	FILE COPY	Completed
+16	PAGE COPY	Completed
+16	REDO COPY	Completed
+16	FILE SYNC	Completed
+16	RESTART	Not Started
+16	RECOVERY	Not Started
+17	DROP DATA	Failed
+17	FILE COPY	Not Started
+17	PAGE COPY	Not Started
+17	REDO COPY	Not Started
+17	FILE SYNC	Not Started
+17	RESTART	Not Started
+17	RECOVERY	Not Started
+8	DROP DATA	Failed
+8	FILE COPY	Not Started
+8	PAGE COPY	Not Started
+8	REDO COPY	Not Started
+8	FILE SYNC	Not Started
+8	RESTART	Not Started
+8	RECOVERY	Not Started
+9	DROP DATA	Completed
+9	FILE COPY	Completed
+9	PAGE COPY	Completed
+9	REDO COPY	Completed
+9	FILE SYNC	Completed
+9	RESTART	Not Started
+9	RECOVERY	Not Started
+SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
+# In connection CON1
+# In connection DEFAULT
+SELECT * FROM t1 ORDER BY col1;
+col1	col2	col3
+# 6A. DROP TABLE while clone in progress
+SET DEBUG_SYNC = 'clone_file_copy SIGNAL start_ddl WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+# In connection CON1
+SET DEBUG_SYNC = 'now WAIT_FOR start_ddl';
+DROP TABLE t1;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET DEBUG_SYNC = 'now SIGNAL resume_clone';
+# In connection DEFAULT
+SET DEBUG_SYNC = 'RESET';
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` int NOT NULL,
+  `col2` int DEFAULT NULL,
+  `col3` int DEFAULT NULL,
+  PRIMARY KEY (`col1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# 6B. Clone while DROP TABLE in progress
+# In connection CON1
+SET DEBUG_SYNC = 'clone_notify_ddl SIGNAL resume_clone WAIT_FOR resume_ddl';
+DROP TABLE t1;
+# In connection DEFAULT
+SET DEBUG_SYNC = 'now WAIT_FOR resume_clone';
+SET GLOBAL clone_autotune_concurrency = OFF;
+SET GLOBAL clone_max_concurrency = 8;
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+10	Failed	1205
+11	Completed	0
+12	Completed	0
+13	Failed	1205
+14	Completed	0
+15	Failed	1205
+16	Completed	0
+17	Failed	1205
+18	Completed	0
+19	Failed	1205
+select ID, STAGE, STATE from performance_schema.clone_progress;
+ID	STAGE	STATE
+10	DROP DATA	Failed
+10	FILE COPY	Not Started
+10	PAGE COPY	Not Started
+10	REDO COPY	Not Started
+10	FILE SYNC	Not Started
+10	RESTART	Not Started
+10	RECOVERY	Not Started
+11	DROP DATA	Completed
+11	FILE COPY	Completed
+11	PAGE COPY	Completed
+11	REDO COPY	Completed
+11	FILE SYNC	Completed
+11	RESTART	Not Started
+11	RECOVERY	Not Started
+12	DROP DATA	Completed
+12	FILE COPY	Completed
+12	PAGE COPY	Completed
+12	REDO COPY	Completed
+12	FILE SYNC	Completed
+12	RESTART	Not Started
+12	RECOVERY	Not Started
+13	DROP DATA	Failed
+13	FILE COPY	Not Started
+13	PAGE COPY	Not Started
+13	REDO COPY	Not Started
+13	FILE SYNC	Not Started
+13	RESTART	Not Started
+13	RECOVERY	Not Started
+14	DROP DATA	Completed
+14	FILE COPY	Completed
+14	PAGE COPY	Completed
+14	REDO COPY	Completed
+14	FILE SYNC	Completed
+14	RESTART	Not Started
+14	RECOVERY	Not Started
+15	DROP DATA	Failed
+15	FILE COPY	Not Started
+15	PAGE COPY	Not Started
+15	REDO COPY	Not Started
+15	FILE SYNC	Not Started
+15	RESTART	Not Started
+15	RECOVERY	Not Started
+16	DROP DATA	Completed
+16	FILE COPY	Completed
+16	PAGE COPY	Completed
+16	REDO COPY	Completed
+16	FILE SYNC	Completed
+16	RESTART	Not Started
+16	RECOVERY	Not Started
+17	DROP DATA	Failed
+17	FILE COPY	Not Started
+17	PAGE COPY	Not Started
+17	REDO COPY	Not Started
+17	FILE SYNC	Not Started
+17	RESTART	Not Started
+17	RECOVERY	Not Started
+18	DROP DATA	Completed
+18	FILE COPY	Completed
+18	PAGE COPY	Completed
+18	REDO COPY	Completed
+18	FILE SYNC	Completed
+18	RESTART	Not Started
+18	RECOVERY	Not Started
+19	DROP DATA	Failed
+19	FILE COPY	Not Started
+19	PAGE COPY	Not Started
+19	REDO COPY	Not Started
+19	FILE SYNC	Not Started
+19	RESTART	Not Started
+19	RECOVERY	Not Started
+SET DEBUG_SYNC = 'now SIGNAL resume_ddl';
+# In connection CON1
+# In connection DEFAULT
+#Cleanup
+SET DEBUG_SYNC = 'RESET';
+UNINSTALL PLUGIN clone;

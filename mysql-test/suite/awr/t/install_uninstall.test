@@ -1,0 +1,15 @@
+--source suite/awr/include/install.inc
+
+--source suite/awr/include/uninstall.inc
+
+--source suite/awr/include/install.inc
+
+--source suite/awr/include/uninstall.inc
+
+--source suite/awr/include/install.inc
+
+--source suite/awr/include/uninstall.inc
+
+--source suite/awr/include/install.inc
+
+--source suite/awr/include/uninstall.inc

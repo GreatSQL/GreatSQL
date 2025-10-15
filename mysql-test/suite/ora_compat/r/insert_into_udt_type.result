@@ -1,0 +1,282 @@
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+#
+# test of create type
+#
+create or replace type t_air as object(id int,type varchar(20));
+#
+# test of create table with udt column
+#
+create table t1(a int,b varchar(100));
+create table t2(a int,b varchar(100));
+create table tt_air(id int,name1 t_air);
+insert into tt_air values(1,t_air(10,'aabb'));
+insert into tt_air values(2,t_air(20,'qwed'));
+select * from tt_air;
+id	name1
+1	id:10 | type:aabb
+2	id:20 | type:qwed
+#
+# test of insert into cursor%rowtype
+#
+CREATE or replace PROCEDURE p1(min INT,max INT) as
+CURSOR cur(pmin INT, pmax INT) is SELECT * FROM t1 WHERE a BETWEEN pmin AND pmax;
+v_t1_rec cur%ROWTYPE;
+BEGIN
+insert into t1 values v_t1_rec;
+v_t1_rec.a:=1;
+v_t1_rec.b:='dd';
+insert into t1 values v_t1_rec;
+FOR i IN cur(min,max) loop
+insert into t2 values i;
+END LOOP;
+END;
+$$
+call p1(1,10);
+call p1(1,10);
+table t1;
+a	b
+NULL	NULL
+1	dd
+NULL	NULL
+1	dd
+delete from t1;
+table t2;
+a	b
+1	dd
+1	dd
+1	dd
+drop PROCEDURE p1;
+#
+# test of insert into table%rowtype
+#
+CREATE or replace PROCEDURE p1() as
+v_t1_rec t1%ROWTYPE;
+BEGIN
+v_t1_rec.a:=1;
+v_t1_rec.b:='dd';
+insert into t1 values v_t1_rec;
+END;
+$$
+call p1();
+call p1();
+table t1;
+a	b
+1	dd
+1	dd
+delete from t1;
+drop PROCEDURE p1;
+#
+# test of insert into udt
+#
+CREATE or replace PROCEDURE p3() as
+v_t1_rec tt_air.name1%TYPE;
+BEGIN
+v_t1_rec := t_air(10,'qqq');
+v_t1_rec.id:=1;
+v_t1_rec.type:='dd';
+insert into t1 values v_t1_rec;
+END;
+$$
+call p3;
+call p3;
+table t1;
+a	b
+1	dd
+1	dd
+delete from t1;
+drop PROCEDURE p3;
+#
+# test of insert into udt
+#
+CREATE or replace PROCEDURE p3() as
+v_t1_rec t_air;
+v_t1_rec2 v_t1_rec%TYPE;
+BEGIN
+v_t1_rec2 := null;
+insert into t1 values v_t1_rec2;
+v_t1_rec2 := t_air(1,'qwer');
+v_t1_rec2.id:=1;
+v_t1_rec2.type:='dd';
+insert into t1 values v_t1_rec2;
+END;
+$$
+call p3;
+call p3;
+table t1;
+a	b
+NULL	NULL
+1	dd
+NULL	NULL
+1	dd
+delete from t1;
+drop PROCEDURE p3;
+#
+# test of insert into udt
+#
+CREATE or replace PROCEDURE p4() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a'
+  );
+v_t1_rec stu_record;
+begin
+insert into t1 values v_t1_rec;
+v_t1_rec.id:=10;
+v_t1_rec.name_d:='dd';
+insert into t1 values v_t1_rec;
+end;
+$$
+call p4;
+call p4;
+table t1;
+a	b
+1	a
+10	dd
+1	a
+10	dd
+delete from t1;
+drop PROCEDURE p4;
+#
+# test of insert into udt table(index)
+#
+delete from t2;
+INSERT INTO t2 VALUES (1,'12');
+INSERT INTO t2 VALUES (2,'22');
+INSERT INTO t2 VALUES (3,'31');
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a'
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+select * bulk collect into stu_record_val from t2;
+forall i in stu_record_val.first .. stu_record_val.last
+insert into t1 values stu_record_val(i);
+end;
+$$
+call p1;
+call p1;
+table t1;
+a	b
+1	12
+2	22
+3	31
+1	12
+2	22
+3	31
+delete from t1;
+drop PROCEDURE p1;
+#
+# test of insert into udt table(index)
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a'
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+stu_record_val(0).id := 2;
+stu_record_val(0).name_d := 1;
+insert into t1 values stu_record_val(0);
+end;
+$$
+call p1;
+call p1;
+table t1;
+a	b
+2	1
+2	1
+delete from t1;
+drop PROCEDURE p1;
+#
+# test of insert into udt table(index)
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a'
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+stu_record_val(0).id := 2;
+stu_record_val(0).name_d := 1;
+insert into t1 values stu_record_val(j);
+end;
+$$
+ERROR 42000: Undeclared variable: j
+#
+# test of insert into udt table(index)
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a'
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+j int:=0;
+begin
+stu_record_val(0).id := 2;
+stu_record_val(0).name_d := 1;
+insert into t1 values stu_record_val(j);
+end;
+$$
+call p1;
+call p1;
+table t1;
+a	b
+2	1
+2	1
+delete from t1;
+drop PROCEDURE p1;
+#
+# test of insert into udt table error
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a'
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+stu_record_val(0).id := 2;
+stu_record_val(0).name_d := 1;
+insert into t1 values stu_record_val;
+end;
+$$
+ERROR HY000: The variable: stu_record_val is not record type.
+#
+# test of insert into udt error
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score float := 0.1
+);
+stu_record_val stu_record;
+begin
+stu_record_val.id := 2;
+stu_record_val.name_d := 1;
+insert into t1 values stu_record_val;
+end;
+$$
+call p1;
+ERROR 21S01: Column count doesn't match value count at row 1
+drop PROCEDURE p1;
+#
+# test of error
+#
+insert into t1 values a;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'a' at line 1
+drop table t1;
+drop table t2;
+drop table tt_air;
+drop type t_air;

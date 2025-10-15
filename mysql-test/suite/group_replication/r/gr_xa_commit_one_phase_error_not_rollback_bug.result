@@ -1,0 +1,40 @@
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+INSERT INTO t1 VALUES (1,1),(2,2),(3,3),(4,4),(5,5);
+SET debug='+d,xa_commit_one_phase_error';
+XA START '1';
+UPDATE t1 SET c2=c2+1;
+XA END '1';
+XA COMMIT '1' ONE PHASE;
+ERROR XA100: XA_RBROLLBACK: Transaction branch was rolled back
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+SET debug='-d,xa_commit_one_phase_error';
+UPDATE t1 SET c2=c2+1;
+SELECT * FROM t1;
+c1	c2
+1	2
+2	3
+3	4
+4	5
+5	6
+XA START '1';
+UPDATE t1 SET c2=c2+1;
+XA END '1';
+XA COMMIT '1' ONE PHASE;
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+SELECT * FROM t1;
+c1	c2
+1	3
+2	4
+3	5
+4	6
+5	7
+DROP TABLE t1;

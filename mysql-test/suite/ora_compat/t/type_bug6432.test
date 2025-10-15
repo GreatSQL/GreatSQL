@@ -1,0 +1,199 @@
+--source include/have_debug.inc
+SET sql_mode=ORACLE;
+
+show variables like '%udt_format_result%';
+set @@udt_format_result='DBA';
+
+CREATE TABLE `t` (
+  `order_id` int DEFAULT NULL,
+  `cp_arg_name` varchar(20) DEFAULT NULL,
+  `parameter_value` varchar(20) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+insert into t values(1,'aa1','bb2');
+insert into t values(2,'aa1','bb2');
+
+--echo #
+--echo # test of for in inner layer of sp
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1(nReturn OUT NUMBER(2)) As
+TYPE param_rec_type IS RECORD 
+  (
+    param_name  VARCHAR2(5),
+    param_value VARCHAR2(20) 
+  );
+  TYPE array_param_type IS TABLE OF param_rec_type index by BINARY_INTEGER; 
+  param_array array_param_type; 
+BEGIN
+insert into t values(3,'c',1);
+   begin
+    SELECT cp_arg_name, parameter_value
+      BULK COLLECT
+      INTO param_array
+      FROM t t
+     WHERE t.order_id = 1; 
+   FOR i IN param_array.first .. param_array.last LOOP 
+  select param_array(i).param_name as param_name, param_array(i).param_value as param_value;
+    END LOOP;
+exception when no_data_found THEN
+  nReturn:=-1;
+end;
+exception when others THEN
+   nReturn:=-1;
+   rollback;
+end;
+$$
+DELIMITER ;$$
+set @a=1;
+call p1(@a);
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of forall in inner layer of sp
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score varchar(20) := 'a'
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>stu_record(10,'bb','cc'));
+BEGIN
+  select * from t;
+  begin
+    FORALL i IN stu_record_val.first .. stu_record_val.last
+      insert into t values stu_record_val (i);
+    select * from t;
+  end;
+END;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+
+--echo #
+--echo # test of for in inner layer of sp
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score varchar(20) := 'a'
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>stu_record(10,'bb','cc'));
+BEGIN
+  begin
+    stu_record_val(2) := stu_record(11,'bb1','cc1');
+    select stu_record_val(2);
+  end;
+END;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of for in inner layer of sp
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score varchar(20) := 'a'
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>stu_record(10,'bb','cc'));
+BEGIN
+  declare stu_record_val tklist:= tklist(1=>stu_record(10,'bb','cc'));
+  begin
+    stu_record_val(1) := stu_record(11,'bb1','cc1');
+    select stu_record_val(1);
+  end;
+END;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of for in inner layer of sp
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>'aa');
+BEGIN
+  begin
+    stu_record_val(2) := 'bb';
+    select stu_record_val(2);
+  end;
+END;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+drop table t;
+
+--echo #
+--echo # test of bug9483
+--echo #
+create or replace type type1 as object(id int,type varchar(20));
+create or replace type type2 is object(id2 int,name2 varchar(20));
+create table t1(id int AUTO_INCREMENT,f1 type1 default null,f2 type2,primary key (id));
+insert into t1 select 4,null,null;
+insert into t1 select 5,type1(null,'awed'),type2(22,null);
+insert into t1 select 6,type1(NULL,'null'),type2(null,'fffff');
+insert into t1 select 7,type1(1,'null'),type2(22,'fffff');
+insert into t1 select 8,type1(1,'ssss'),type2(33,'wwqq');
+insert into t1 select 9,type1(null,null),type2(null,null);
+insert into t1 select 10,type1(2,null),type2(null,null);
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  stu_record_val type1 := type1(1,'ssss');
+BEGIN
+ select * from t1 where stu_record_val=f1;
+END;
+$$
+DELIMITER ;$$
+call p1();
+drop PROCEDURE p1;
+
+drop table t1;
+drop type type1;
+drop type type2;
+
+--echo #
+--echo # test of bug10351
+--echo #
+drop database test;
+--error ER_WRONG_UDT_DATA_TYPE
+create table test.qqq(id aaa , cname varchar(10));
+set sql_mode=default;
+--error ER_PARSE_ERROR
+create table test.qqq(id aaa , cname varchar(10));
+create database test;
+
+--echo #
+--echo # test of bug10599
+--echo #
+use test;
+create table t1 (c1 int primary key, c2 varchar(32),date1 datetime);
+create table t2 (c1 int primary key, c3 varchar(32));
+
+insert into t1 values (1,'aaa','2021-03-25 16:44:00.123456'),(2,'bbb','2022-03-25 16:44:00.123456'),(3,'ccc','2023-03-25 16:44:00.123456');
+insert into t2 values (1,'aaa'),(2,'bbb');
+prepare stmt1 from 'update t1 a set c2=(select distinct c2 from t2 c where c1=a.c1 and date1 BETWEEN ''2020-03-25 16:44:00.123456'' and ''2024-03-25 16:44:00.123456'')';
+EXECUTE stmt1;
+EXECUTE stmt1;
+EXECUTE stmt1;
+DEALLOCATE PREPARE stmt1;
+
+drop table t1;
+drop table t2;

@@ -1,0 +1,122 @@
+[### test common failure]
+create sequence seq1;
+create sequence seq2 start with 2000 increment by 2 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+create sequence seq3 maxvalue 2000000 start with 1000000 increment by -1 nominvalue  nocycle nocache noorder;
+create sequence seq3;
+ERROR HY000: create sequence failed, cause sequence 'seq3' already exists
+select * from mysql.greatdb_sequences order by db,name;
+db	name	start_with	minvalue	maxvalue	increment	cycle_flag	cache_num	order_flag
+test	seq1	1	1	9999999999999999999999999999	1	0	20	0
+test	seq2	2000	1000	1000000	2	1	10	1
+test	seq3	1000000	-999999999999999999999999999	2000000	-1	0	0	0
+select * from mysql.greatdb_sequences_persist order by db,name;
+db	name	currval
+test	seq1	-1000000000000000000000000000
+test	seq2	-1000000000000000000000000000
+test	seq3	-1000000000000000000000000000
+drop sequence seq_error;
+ERROR HY000: drop sequence failed, cause sequence 'test.seq_error' not exists
+update mysql.greatdb_sequences set name='seq11' where name='seq1';
+drop sequence seq1;
+ERROR HY000: Can't find record in 'greatdb_sequences'
+update mysql.greatdb_sequences set name='seq1' where name='seq11';
+drop sequence seq1;
+drop sequence seq2;
+drop sequence seq3;
+select * from mysql.greatdb_sequences order by db,name;
+db	name	start_with	minvalue	maxvalue	increment	cycle_flag	cache_num	order_flag
+select * from mysql.greatdb_sequences_persist order by db,name;
+db	name	currval
+
+[### test duplicate options]
+create sequence seq_err start with 1 start with 2;
+ERROR HY000: duplicate option: start with
+create sequence seq_err increment by 1 increment by 2;
+ERROR HY000: duplicate option: increment by
+create sequence seq_err minvalue 10000 minvalue 20000;
+ERROR HY000: duplicate option: minvalue/nominvalue
+create sequence seq_err minvalue 10000 nominvalue;
+ERROR HY000: duplicate option: minvalue/nominvalue
+create sequence seq_err nominvalue nominvalue;
+ERROR HY000: duplicate option: minvalue/nominvalue
+create sequence seq_err maxvalue 10000 maxvalue 20000;
+ERROR HY000: duplicate option: maxvalue/nomaxvalue
+create sequence seq_err maxvalue 10000 nomaxvalue;
+ERROR HY000: duplicate option: maxvalue/nomaxvalue
+create sequence seq_err nomaxvalue nomaxvalue;
+ERROR HY000: duplicate option: maxvalue/nomaxvalue
+create sequence seq_err cycle cycle;
+ERROR HY000: duplicate option: cycle/nocycle
+create sequence seq_err cycle nocycle;
+ERROR HY000: duplicate option: cycle/nocycle
+create sequence seq_err nocycle nocycle;
+ERROR HY000: duplicate option: cycle/nocycle
+create sequence seq_err cache 10 cache 100;
+ERROR HY000: duplicate option: cache/nocache
+create sequence seq_err cache 10 nocache;
+ERROR HY000: duplicate option: cache/nocache
+create sequence seq_err nocache nocache;
+ERROR HY000: duplicate option: cache/nocache
+create sequence seq_err order order;
+ERROR HY000: duplicate option: order/noorder
+create sequence seq_err order noorder;
+ERROR HY000: duplicate option: order/noorder
+create sequence seq_err noorder noorder;
+ERROR HY000: duplicate option: order/noorder
+
+[### check parse keyword]
+create table t1 (c1 int primary key) engine = innodb;
+alter table t1 add column sequence int;
+alter table t1 add column increment int;
+alter table t1 add column minvalue int;
+alter table t1 add column nocache int;
+alter table t1 add column nocycle int;
+alter table t1 add column nomaxvalue int;
+alter table t1 add column nominvalue int;
+alter table t1 add column noorder int;
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int NOT NULL,
+  `sequence` int DEFAULT NULL,
+  `increment` int DEFAULT NULL,
+  `minvalue` int DEFAULT NULL,
+  `nocache` int DEFAULT NULL,
+  `nocycle` int DEFAULT NULL,
+  `nomaxvalue` int DEFAULT NULL,
+  `nominvalue` int DEFAULT NULL,
+  `noorder` int DEFAULT NULL,
+  PRIMARY KEY (`c1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+drop table t1;
+
+[### create sequence if not exists seq_name and drop sequence if exists seq_name]
+drop sequence seq;
+ERROR HY000: drop sequence failed, cause sequence 'test.seq' not exists
+drop sequence if exists seq;
+Warnings:
+Note	8583	sequence 'test.seq' not exists
+create sequence if not exists seq start with 1 increment by 4 minvalue 1 maxvalue 10 cache 3 order;
+create sequence seq start with 1000 increment by 1 minvalue 1000 maxvalue 1000000 cycle cache 10 order;
+ERROR HY000: create sequence failed, cause sequence 'seq' already exists
+drop sequence if exists seq;
+drop sequence if exists seq_test;
+Warnings:
+Note	8583	sequence 'test.seq_test' not exists
+create sequence seq_test start with 50 increment by 1 minvalue 10 maxvalue 1000000 cycle cache 10 order;
+create sequence if not exists seq_test start with 1 increment by 4 minvalue 1 maxvalue 10 cache 3 order;
+Warnings:
+Note	8582	sequence 'seq_test' already exists
+create sequence seq_test start with 10 increment by 12 minvalue 10 maxvalue 1000000 cycle cache 10 order;
+ERROR HY000: create sequence failed, cause sequence 'seq_test' already exists
+drop sequence if exists seq_test;
+drop sequence seq_test;
+ERROR HY000: drop sequence failed, cause sequence 'test.seq_test' not exists
+
+[test zentao bug 5136: alter table rename to an existing sequence]
+create table t1 (c1 int)engine=innodb;
+create sequence seq1 start with 1 increment by 1;
+alter table t1 rename to seq1;
+ERROR HY000: duplicated name with sequence: seq1
+drop table t1;
+drop sequence seq1;

@@ -1,0 +1,440 @@
+--echo #
+--echo # test unambiguous
+--echo #
+#
+# default mode: create table and insert data
+#
+drop table if exists raw;
+create table raw (
+  raw int default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+show create table raw;
+insert into raw values (1);
+insert into raw values (2);
+insert into raw values (3);
+select * from raw;
+set @raw = '';
+select raw into @raw from raw where raw = '1';
+select @raw;
+
+#
+# default mode: alter table and insert data
+#
+drop table if exists raw;
+create table raw (
+  n int default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+show create table raw;
+insert into raw values (1);
+insert into raw values (2);
+insert into raw values (3);
+select * from raw;
+select n as raw from raw;
+
+alter table raw change n raw int default null;
+show create table raw;
+select * from raw;
+
+#
+# default mode: use raw type
+#
+drop table if exists raw;
+--error 1064
+create table raw (
+  raw raw default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+
+
+#
+# default mode: create store routine
+#
+delimiter $$;
+
+drop procedure if exists raw$$
+create procedure raw()
+begin
+  declare raw int default 10;
+  select raw;
+end;
+$$
+call raw()$$
+call raw()$$
+
+drop procedure if exists raw$$
+create procedure raw(in raw int)
+begin
+  select raw;
+end;
+$$
+call raw(10)$$
+call raw(11)$$
+
+drop procedure raw$$
+
+drop function if exists raw$$
+create function raw() returns int
+deterministic
+begin
+  declare raw int default 10;
+  return raw;
+end;
+$$
+select test.raw()$$
+select test.raw()$$
+
+drop function if exists raw$$
+create function raw(raw int) returns int
+deterministic
+begin
+  return raw;
+end;
+$$
+select test.raw(10)$$
+select test.raw(11)$$
+
+drop function raw$$
+
+delimiter ;$$
+
+set sql_mode = oracle;
+
+#
+# oracle mode
+#
+--error 1064
+drop table if exists raw;
+--error 1064
+create table raw (
+  n int default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+
+#
+# default mode: alter table and insert data
+#
+drop table if exists tr;
+create table tr (
+  n int default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+show create table tr;
+insert into tr values (1);
+insert into tr values (2);
+insert into tr values (3);
+select * from tr;
+--error 1064
+select n as raw from raw;
+
+--error 1064
+alter table tr change n raw int default null;
+
+#
+# oracle mode: use raw type
+#
+drop table if exists tr;
+--error 1064
+create table tr (
+  raw raw default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+
+create table tr (
+  r raw default null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+show create table tr;
+insert into tr values ('1');
+insert into tr values ('2');
+insert into tr values ('3');
+select * from tr;
+drop table tr;
+
+delimiter $$;
+
+#
+# oracle mode: create store routine
+#
+--error 1064
+drop procedure if exists raw$$
+
+--error 1064
+create procedure raw() as
+begin
+  select 10;
+end;
+$$
+
+--error 1064
+create procedure p1(raw int) as
+begin
+  select raw;
+end;
+$$
+
+--error 1064
+create procedure p1() as
+  raw int default 10;
+begin
+  select raw;
+end;
+$$
+
+--error 1064
+drop function if exists raw$$
+
+--error 1064
+create function raw() return int
+deterministic
+as 
+begin
+  return 10;
+end;
+$$
+
+--error 1064
+create function f1(raw int) return int
+deterministic
+as 
+begin
+  return raw;
+end;
+$$
+
+--error 1064
+create function f1() return int
+deterministic
+as 
+  raw int default 10;
+begin
+  return raw;
+end;
+$$
+
+delimiter ;$$
+
+--echo #
+--echo # test type
+--echo #
+set sql_mode = oracle;
+
+#
+# create test table and insert data 
+#
+drop table if exists t1;
+create table t1 (
+  c0 int default null,
+  c1 raw default null,
+  c2 raw(8) not null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+show create table t1;
+insert into t1 values (1, 'aa', '01');
+insert into t1 values (2, 'bb', '02');
+insert into t1 values (3, 'cc', '03');
+select * from t1;
+
+#
+# test update alter delete
+#
+update t1 set c1='ab' where c0 = 1;
+update t1 set c1='bc' where c0 = 2;
+update t1 set c1='cd' where c0 = 3;
+select * from t1;
+
+delete from t1 where c1 = 'cd';
+select * from t1;
+
+--error 1101
+alter table t1 add column c3 raw(8) not null default 'aabbccdd';
+alter table t1 add column c3 raw(8);
+update t1 set c3='aabb';
+select * from t1;
+alter table t1 drop column c3;
+select * from t1;
+
+#
+# temp table
+#
+create temporary table temp_test (c0 int default null ,c1 raw default null,  c2 raw(8) default null);
+insert into temp_test (c0,c1,c2) values (1, 'a', 'b');
+select * from temp_test;
+drop table temp_test;
+
+#
+# test string procedure
+#
+select * from t1;
+select c1,length(c1) ,length(c2) from t1;
+select c1,concat(c1) ,concat(c2) from t1;
+select c1,concat(c1,'2') ,concat(c2,'2') from t1;
+select c1,insert(c1,1,1,'+') ,insert(c2,1,1,'+')  from t1;
+select c1,lower(c1) ,lower(c2) from t1;
+select c1,upper(c1) ,upper(c2) from t1;
+select c1,left(c1,1) ,left(c2,1) from t1;
+select c1,right(c1,1) ,right(c2,1) from t1;
+select c1,trim(c1) ,trim(c2) from t1;
+select c1,replace(c1,'a','z') ,replace(c2,'0','9') from t1;
+select c1,substring(c1,2) ,substring(c2,2) from t1;
+select c1,reverse(c1) ,reverse(c2) from t1;
+
+#
+# test cast and convert
+#
+--error 1064
+select cast('ab' as raw) from dual;
+--error 1064
+select convert('ab', raw) from dual ;
+
+#
+# test if ,ifnull ,case when
+#
+select c1,c2 ,if(c1='ab','y','n'), if(c2='01','y','n') from t1;
+select c1,c2 ,ifnull(c1,'y'),ifnull(c2,'y') from t1;
+select case c1 when 'ab' then 'ab' when 'bc' then 'bc' else 'other' end as c1,case c2 when '01' then '01' when '02' then '02' else 'other' end as c2 from t1;
+
+#
+# test union、 join
+#
+drop table if exists t2;
+create table t2 (
+  c0 int default null,
+  c1 raw default null,
+  c2 raw(8) not null
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_0900_ai_ci;
+show create table t2;
+insert into t2 values (1, 'az', '09');
+select * from t2;
+select * from t1 union select * from t2;
+select * from t1 join          t2 on t1.c0 = t2.c0;
+select * from t1 inner join    t2 on t1.c0 = t2.c0;
+select * from t1 cross join    t2 on t1.c0 = t2.c0;
+select * from t1 straight_join t2 on t1.c0 = t2.c0;
+select * from t1 left join     t2 on t1.c0 = t2.c0;
+select * from t1 right join    t2 on t1.c0 = t2.c0;
+
+#
+# test distinct、insert into、in
+#
+insert into t2 values (1, 'az', '09');
+select * from t2;
+
+insert into t2 select * from t1;
+select * from t2;
+
+select distinct c0, c1, c2 from t2;
+
+select c0, c1, c2 from t2 where c1 in ('ab', 'bc');
+
+#
+# test subquery
+#
+select * from t1;
+select * from t2;
+select * from t2 where c1 = (select c1 from t1 where c0=1);
+
+#
+# test transaction
+#
+start transaction;
+delete from t1;
+select * from t1;
+rollback;
+commit;
+select * from t1;
+
+#
+# test view
+#
+create view  test_view  as  select * from t1;
+select * from  test_view;
+drop view test_view;
+
+#
+# test create function
+#
+delimiter //;
+create or replace function f1(a int, b raw, c raw(8)) return raw 
+deterministic 
+as 
+begin 
+  return concat(a, b, c); 
+end;
+//
+select f1(0, 'a', 'b')//
+select f1(0, 'a', 'b')//
+drop function f1//
+
+create or replace function f1(a int, b raw, c raw(8)) return raw(8)
+deterministic 
+as 
+begin 
+  return concat(a, b, c); 
+end;
+//
+select f1(0, 'a', 'b')//
+select f1(0, 'a', 'b')//
+drop function f1//
+
+create or replace function f1(a int, b raw, c raw(8)) return raw
+deterministic 
+as 
+  r raw default '';
+begin 
+  r := concat(a, b, c); 
+  return r;
+end;
+//
+select f1(0, 'a', 'b')//
+select f1(0, 'a', 'b')//
+drop function f1//
+
+create or replace function f1(a int, b raw, c raw(8)) return raw
+deterministic 
+as 
+  r raw(8) default '';
+begin 
+  r := concat(a, b, c); 
+  return r;
+end;
+//
+select f1(0, 'a', 'b')//
+select f1(0, 'a', 'b')//
+drop function f1//
+
+delimiter ;//
+
+#
+# test create procedure
+#
+delimiter //;
+create or replace procedure p1(a int, b raw, c raw(8))
+as 
+begin 
+  select concat(a, b, c); 
+end;
+//
+call p1(0, 'a', 'b')//
+call p1(0, 'a', 'b')//
+drop procedure p1//
+
+create or replace procedure p1(a int, b raw, c raw(8))
+deterministic 
+as 
+  r raw(8) default '';
+begin 
+  r := concat(a, b, c); 
+  select r;
+end;
+//
+call p1(0, 'a', 'b')//
+call p1(0, 'a', 'b')//
+drop procedure p1//
+
+delimiter ;//
+
+#
+# test trigger
+#
+set @sum=0;
+create trigger test_tri before insert on t2 for each row set @sum = concat(:new.c0, :new.c1, :new.c2);
+insert into t2(c0, c1, c2) values(9, 'a', 'b');
+select @sum;
+drop trigger if exists test_tri;
+
+drop table t1;
+drop table t2;

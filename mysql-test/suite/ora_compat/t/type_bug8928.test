@@ -1,0 +1,38 @@
+SET  sql_mode=oracle;
+SET @@udt_format_result=dba;
+
+CREATE DATABASE tt1;
+CREATE DATABASE tt2;
+
+USE tt1;
+CREATE OR REPLACE TYPE mydata AS OBJECT(x int, y int);
+delimiter //;
+
+create or replace function fr_object1(x int, y int) return mydata
+as
+begin
+	return mydata(x,y);
+end;
+//
+
+create or replace function fr_object2(x int, y int) return mydata
+as
+begin
+	return tt1.mydata(x,y);
+end;
+//
+
+delimiter ;//
+
+USE tt2;
+
+select tt1.fr_object1(5,6) from dual;
+select tt1.fr_object2(5,6) from dual;
+select tt1.fr_object1(5,6), tt1.fr_object1(3,4)  from dual ; 
+select tt1.fr_object1(5,6), tt1.fr_object1(3,4)  from dual ; 
+select tt1.fr_object2(5,6) from dual;
+select tt1.fr_object1(5,6) from dual;
+
+use test;
+drop DATABASE tt1;
+drop DATABASE tt2;

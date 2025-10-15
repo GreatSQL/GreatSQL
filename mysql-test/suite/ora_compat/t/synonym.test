@@ -1,0 +1,185 @@
+# # dblink
+# --echo [Preparing dblink]
+# INSTALL PLUGIN dblink SONAME 'ha_dblink.so';
+# INSERT INTO `mysql`.`servers` (`Server_name`, `Host`, `Db`, `Username`, `Password`, `Port`, `Socket`, `Wrapper`, `Owner`) VALUES ('mysql', '127.0.0.1', 'mysql', 'root', '', @@port, '', 'test', '');
+# flush privileges;
+
+--let $translation_old = `select @@synonym_translation_enabled`
+set global synonym_translation_enabled=ON;
+create table t(id int primary key auto_increment, val varchar(100) character set utf8mb4 default "你好世界");
+create view v as select * from t where id % 2 = 0;
+--disable_query_log
+--disable_result_log
+--let $rownum= 10
+while ($rownum) {
+  insert into t values (default, default);
+  --dec $rownum
+}
+--enable_result_log
+--enable_query_log
+
+create database another_db;
+use another_db;
+create table t(id int primary key auto_increment, val varchar(100) character set utf8mb4 default "你好世界");
+create view v as select * from t where id % 2 = 0;
+--disable_query_log
+--disable_result_log
+--let $rownum= 10
+while ($rownum) {
+  insert into t values (default, default);
+  --dec $rownum
+}
+--enable_result_log
+--enable_query_log
+
+use test;
+select * from t;
+select * from v;
+
+use another_db;
+select * from t;
+select * from v;
+
+# # mysql
+# select * from t@mysql;
+# select * from v@mysql;
+
+--echo [Checking synonym DDL operation...]
+use test;
+create synonym syn_t for t;
+--error ER_SYNONYM_UNSUPPORTED_OPERATION
+alter synonym syn_t;
+drop synonym syn_t;
+create public synonym syn_t for t;
+create public synonym syn_v for v;
+--error ER_SYNONYM_DOES_NOT_EXIST
+drop synonym syn_t;
+--error ER_SYNONYM_DOES_NOT_EXIST
+drop synonym syn_v;
+drop public synonym syn_v;
+drop public synonym syn_t;
+
+create public synonym psyn_t for t;
+create public synonym psyn_v for v;
+--error ER_SYNONYM_UNSUPPORTED_OPERATION
+alter synonym psyn_t;
+--error ER_SYNONYM_UNSUPPORTED_OPERATION
+alter synonym psyn_v;
+--error ER_SYNONYM_DOES_NOT_EXIST
+drop synonym psyn_t;
+--error ER_SYNONYM_DOES_NOT_EXIST
+drop synonym psyn_t;
+use another_db;
+drop public synonym psyn_t;
+drop public synonym psyn_v;
+
+--echo [Checking synonym on different targets...]
+use test;
+create synonym syn_t for t;
+create synonym syn_v for v;
+create synonym syn_st for syn_t;
+create synonym syn_sv for syn_v;
+create synonym syn_sst for syn_st;
+create synonym syn_ssv for syn_sv;
+create synonym syn_ssst for syn_sst;
+create synonym syn_sssv for syn_ssv;
+create synonym syn_sssst for syn_ssst;
+create synonym syn_ssssv for syn_sssv;
+
+create public synonym psyn_ta for another_db.t;
+create public synonym psyn_va for another_db.v;
+create public synonym psyn_t for test.t;
+create public synonym psyn_v for test.v;
+
+# # dblink
+# create synonym syn_tdb for t@mysql;
+# create synonym syn_vdb for v@mysql;
+
+use another_db;
+create synonym syn_t_a for t;
+create synonym syn_v_a for v;
+
+
+--echo [Checking synonym DML operation...]
+use test;
+select * from syn_t;
+select * from syn_v;
+select * from syn_st;
+select * from syn_sv;
+select * from syn_sst;
+select * from syn_ssv;
+select * from syn_ssst;
+select * from syn_sssv;
+select * from syn_sssst;
+select * from syn_ssssv;
+
+select * from psyn_t;
+select * from psyn_v;
+select * from psyn_ta;
+select * from psyn_va;
+
+--echo [# if db_name was assigned, should not treat as public synonym]
+--error ER_NO_SUCH_TABLE
+select * from test.psyn_t;
+--error ER_NO_SUCH_TABLE
+select * from test.psyn_v;
+--error ER_NO_SUCH_TABLE
+select * from test.psyn_ta;
+--error ER_NO_SUCH_TABLE
+select * from test.psyn_va;
+
+prepare p from "select * from syn_t";
+execute p;
+drop prepare p;
+
+# # dblink
+# select * from syn_tdb;
+# select * from syn_vdb;
+
+-- echo [Show synonyms]
+show synonyms;
+
+-- echo [Show create synonym]
+show create synonym syn_t;
+show create synonym syn_v;
+show create synonym syn_st;
+show create synonym syn_sv;
+show create synonym syn_sst;
+show create synonym syn_ssv;
+show create synonym syn_ssst;
+show create synonym syn_sssv;
+show create synonym syn_sssst;
+show create synonym syn_ssssv;
+
+--echo [Cleaning test data...]
+drop synonym syn_t;
+drop synonym syn_v;
+drop synonym syn_st;
+drop synonym syn_sv;
+drop synonym syn_sst;
+drop synonym syn_ssv;
+drop synonym syn_ssst;
+drop synonym syn_sssv;
+drop synonym syn_sssst;
+drop synonym syn_ssssv;
+
+drop public synonym psyn_t;
+drop public synonym psyn_v;
+drop public synonym psyn_ta;
+drop public synonym psyn_va;
+
+# # dblink
+# drop synonym syn_tdb;
+# drop synonym syn_vdb;
+drop view v;
+drop table t;
+
+# # dblink
+# delete from mysql.servers where Server_name='mysql';
+drop database another_db;
+
+--source include/restart_mysqld.inc
+# # dblink
+# uninstall plugin dblink;
+
+--eval set global synonym_translation_enabled=$translation_old

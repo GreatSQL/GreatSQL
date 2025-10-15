@@ -1,0 +1,415 @@
+diff --git a/client/CMakeLists.txt b/client/CMakeLists.txt
+index bc914d7df2f..d55b13b32f6 100644
+--- a/client/CMakeLists.txt
++++ b/client/CMakeLists.txt
+@@ -41,7 +41,7 @@ MYSQL_ADD_EXECUTABLE(mysql
+   multi_option.cc
+   ${CMAKE_CURRENT_SOURCE_DIR}/common/user_registration.cc
+   ${CMAKE_SOURCE_DIR}/sql-common/sql_string.cc
+-  LINK_LIBRARIES perconaserverclient ${EDITLINE_LIBRARY}
++  LINK_LIBRARIES mysqlclient ${EDITLINE_LIBRARY}
+   )
+ 
+ MYSQL_ADD_EXECUTABLE(mysqltest
+@@ -58,7 +58,7 @@ MYSQL_ADD_EXECUTABLE(mysqltest
+   COMPONENT Test
+   DEPENDENCIES GenError GenClientError
+   ENABLE_EXPORTS
+-  LINK_LIBRARIES perconaserverclient
++  LINK_LIBRARIES mysqlclient
+   )
+ 
+ IF(MY_COMPILER_IS_GNU AND (WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO))
+@@ -73,30 +73,30 @@ MYSQL_ADD_EXECUTABLE(mysqlcheck
+   check/mysqlcheck.cc
+   check/mysqlcheck_core.cc
+   multi_factor_passwordopt-vars.cc
+-  LINK_LIBRARIES perconaserverclient
++  LINK_LIBRARIES mysqlclient
+   )
+ MYSQL_ADD_EXECUTABLE(mysqldump
+   mysqldump.cc
+   mysql_dump_encrypt.cc
+   multi_factor_passwordopt-vars.cc
+   multi_option.cc
+-  LINK_LIBRARIES perconaserverclient
++  LINK_LIBRARIES mysqlclient
+   )
+ MYSQL_ADD_EXECUTABLE(mysqldecrypt
+   ../sql/encrypt.cc
+   path.cc
+   mysqldecrypt.cc
+-  LINK_LIBRARIES perconaserverclient
++  LINK_LIBRARIES mysqlclient
+   )
+ MYSQL_ADD_EXECUTABLE(mysqlimport
+   mysqlimport.cc
+   multi_factor_passwordopt-vars.cc
+-  LINK_LIBRARIES perconaserverclient
++  LINK_LIBRARIES mysqlclient
+   )
+ MYSQL_ADD_EXECUTABLE(mysqlshow
+   mysqlshow.cc
+   multi_factor_passwordopt-vars.cc
+-  LINK_LIBRARIES perconaserverclient
++  LINK_LIBRARIES mysqlclient
+   )
+ 
+ OPTION(WITH_JSON_BINLOG_LIBRARY
+@@ -263,7 +263,7 @@ ENDIF()
+ 
+ SET(MYSQLBINLOG_LIBRARIES
+   mysql_binlog_event
+-  perconaserverclient
++  mysqlclient
+   )
+ 
+ IF(WITH_JSON_BINLOG_LIBRARY)
+@@ -305,20 +305,20 @@ TARGET_INCLUDE_DIRECTORIES(mysqlbinlog PRIVATE ${CMAKE_SOURCE_DIR}/sql)
+ MYSQL_ADD_EXECUTABLE(mysqladmin
+   mysqladmin.cc
+   multi_factor_passwordopt-vars.cc
+-  LINK_LIBRARIES perconaserverclient
++  LINK_LIBRARIES mysqlclient
+   )
+ MYSQL_ADD_EXECUTABLE(mysqlslap
+   mysqlslap.cc
+   multi_factor_passwordopt-vars.cc
+-  LINK_LIBRARIES perconaserverclient
++  LINK_LIBRARIES mysqlclient
+   )
+ MYSQL_ADD_EXECUTABLE(mysql_config_editor
+   mysql_config_editor.cc
+-  LINK_LIBRARIES perconaserverclient
++  LINK_LIBRARIES mysqlclient
+   )
+ MYSQL_ADD_EXECUTABLE(mysql_secure_installation
+   mysql_secure_installation.cc
+-  LINK_LIBRARIES perconaserverclient
++  LINK_LIBRARIES mysqlclient
+   )
+ 
+ # "WIN32" also covers 64 bit. "echo" is used in some files below "mysql-test/".
+diff --git a/client/migrate_keyring/CMakeLists.txt b/client/migrate_keyring/CMakeLists.txt
+index 6a1a84930f4..0732706256b 100644
+--- a/client/migrate_keyring/CMakeLists.txt
++++ b/client/migrate_keyring/CMakeLists.txt
+@@ -41,7 +41,7 @@ SET(MIGRATE_KEYRING_LIBRARIES
+   ${CMAKE_DL_LIBS}
+   minchassis
+   mysys
+-  perconaserverclient
++  mysqlclient
+   OpenSSL::SSL OpenSSL::Crypto
+ )
+ 
+diff --git a/include/mysql.h b/include/mysql.h
+index a9b54a38dd1..30ee50b7c41 100644
+--- a/include/mysql.h
++++ b/include/mysql.h
+@@ -29,7 +29,7 @@
+ /**
+   @file include/mysql.h
+   This file defines the client API to MySQL and also the ABI of the
+-  dynamically linked libperconaserverclient.
++  dynamically linked libmysqlclient.
+ 
+   The ABI should never be changed in a released product of MySQL,
+   thus you need to take great care when changing the file. In case
+@@ -436,12 +436,12 @@ void STDCALL mysql_server_end(void);
+ 
+ /*
+   mysql_server_init/end need to be called when using libmysqld or
+-  libperconaserverclient (exactly, mysql_server_init() is called by
++  libmysqlclient (exactly, mysql_server_init() is called by
+   mysql_init() so you don't need to call it explicitly; but you need to call
+   mysql_server_end() to free memory). The names are a bit misleading
+   (mysql_SERVER* to be used when using libmysqlCLIENT). So we add more general
+   names which suit well whether you're using libmysqld or
+-  libperconaserverclient. We intend to promote these aliases over the
++  libmysqlclient. We intend to promote these aliases over the
+   mysql_server* ones.
+ */
+ #define mysql_library_init mysql_server_init
+diff --git a/libchangestreams/src/tests/CMakeLists.txt b/libchangestreams/src/tests/CMakeLists.txt
+index 2e6145fa709..bddb319fa36 100644
+--- a/libchangestreams/src/tests/CMakeLists.txt
++++ b/libchangestreams/src/tests/CMakeLists.txt
+@@ -39,7 +39,7 @@ SET(TESTS "")
+ SET(TEST_LINK_LIBRARIES
+   changestreams_standalone_static
+   mysql_binlog_event_standalone
+-  perconaserverclient
++  mysqlclient
+   ${GTEST_LIBRARIES})
+ 
+ # If we are using the protobuf extensions
+diff --git a/libmysql/CMakeLists.txt b/libmysql/CMakeLists.txt
+index 5ef413d70d4..1db9696424e 100644
+--- a/libmysql/CMakeLists.txt
++++ b/libmysql/CMakeLists.txt
+@@ -309,15 +309,15 @@ ADD_SUBDIRECTORY(authentication_oci_client)
+ # Fido and Webauthn clients
+ ADD_SUBDIRECTORY(fido_client)
+ 
+-# Merge several convenience libraries into one big perconaserverclient
+-MERGE_CONVENIENCE_LIBRARIES(perconaserverclient ${LIBS_TO_MERGE}
++# Merge several convenience libraries into one big mysqlclient
++MERGE_CONVENIENCE_LIBRARIES(mysqlclient ${LIBS_TO_MERGE}
+   COMPONENT Development
+   LINK_LIBRARIES ${LIBS_TO_LINK}
+   )
+ 
+ # Visual Studio users need debug  static library for debug projects
+ IF(MSVC)
+-  INSTALL_DEBUG_TARGET(perconaserverclient DESTINATION ${INSTALL_LIBDIR}/debug)
++  INSTALL_DEBUG_TARGET(mysqlclient DESTINATION ${INSTALL_LIBDIR}/debug)
+ 
+   INSTALL_DEBUG_TARGET(auth_win_client DESTINATION ${INSTALL_LIBDIR}/debug)
+   INSTALL_DEBUG_TARGET(clientlib DESTINATION ${INSTALL_LIBDIR}/debug)
+@@ -352,13 +352,13 @@ IF(UNIX)
+     STRING_APPEND(OS_SHARED_LIB_VERSION
+       ".${SHARED_LIB_MINOR_VERSION}.${SHARED_LIB_PATCH_VERSION}")
+   ENDIF()
+-  # Name of shared library is libperconaserverclient on Unix
+-  SET(UNIX_OUTPUT_NAME OUTPUT_NAME perconaserverclient)
++  # Name of shared library is libmysqlclient on Unix
++  SET(UNIX_OUTPUT_NAME OUTPUT_NAME mysqlclient)
+   SET(UNIX_VERSION     VERSION     "${OS_SHARED_LIB_VERSION}")
+   SET(UNIX_SOVERSION   SOVERSION   "${SHARED_LIB_MAJOR_VERSION}")
+ ENDIF()
+ 
+-# Merge several convenience libraries into one big perconaserverclient
++# Merge several convenience libraries into one big mysqlclient
+ # and link them together into shared library.
+ MERGE_LIBRARIES_SHARED(libmysql ${LIBS_TO_MERGE}
+   EXPORTS
+@@ -379,7 +379,7 @@ ENDIF()
+ 
+ IF(LINUX_STANDALONE AND KERBEROS_CUSTOM_LIBRARY)
+   ADD_DEPENDENCIES(libmysql ${kerberos_target})
+-  ADD_DEPENDENCIES(perconaserverclient ${kerberos_target})
++  ADD_DEPENDENCIES(mysqlclient ${kerberos_target})
+ ENDIF()
+ 
+ IF(UNIX)
+@@ -394,8 +394,8 @@ IF(UNIX)
+   ENDIF()
+ 
+   # clean direct output needs to be set several targets have the same name
+-  #(perconaserverclient in this case)
+-  SET_TARGET_PROPERTIES(perconaserverclient PROPERTIES CLEAN_DIRECT_OUTPUT 1)
++  #(mysqlclient in this case)
++  SET_TARGET_PROPERTIES(mysqlclient PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+   SET_TARGET_PROPERTIES(libmysql PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+ ENDIF()
+ 
+diff --git a/libmysql/authentication_kerberos/CMakeLists.txt b/libmysql/authentication_kerberos/CMakeLists.txt
+index edb27e782a8..f84e8a7e80f 100644
+--- a/libmysql/authentication_kerberos/CMakeLists.txt
++++ b/libmysql/authentication_kerberos/CMakeLists.txt
+@@ -66,7 +66,7 @@ IF(KERBEROS_LIB_SSPI)
+   LIST(APPEND UTILITY "sspi_utility.cc")
+ ENDIF()
+ 
+-SET(MY_SQL "perconaserverclient")
++SET(MY_SQL "mysqlclient")
+ 
+ DISABLE_MISSING_PROFILE_WARNING()
+ 
+diff --git a/libmysql/fido_client/common/CMakeLists.txt b/libmysql/fido_client/common/CMakeLists.txt
+index 3515ffd5c80..7810a8ce7e0 100644
+--- a/libmysql/fido_client/common/CMakeLists.txt
++++ b/libmysql/fido_client/common/CMakeLists.txt
+@@ -45,6 +45,6 @@ ADD_CONVENIENCE_LIBRARY(
+   fido_client_common
+   ${FIDO_COMMON_SOURCES}
+   LINK_LIBRARIES
+-  perconaserverclient
++  mysqlclient
+   ext::fido
+ )
+diff --git a/libmysql/libmysql.ver.in b/libmysql/libmysql.ver.in
+index 00c1bd2679d..588e8681a31 100644
+--- a/libmysql/libmysql.ver.in
++++ b/libmysql/libmysql.ver.in
+@@ -22,5 +22,5 @@
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+ 
+ 
+-libperconaserverclient_@SHARED_LIB_MAJOR_VERSION@.0
++libmysqlclient_@SHARED_LIB_MAJOR_VERSION@.0
+ { global: ${CLIENT_API_FUNCTIONS};${CLIENT_API_FUNCTIONS_UNDOCUMENTED}; ${CLIENT_API_NONBLOCKING_FUNCTIONS}; local: *; };
+diff --git a/plugin/percona-pam-for-mysql/CMakeLists.txt b/plugin/percona-pam-for-mysql/CMakeLists.txt
+index d1c7ebb48c2..cff07ab755e 100644
+--- a/plugin/percona-pam-for-mysql/CMakeLists.txt
++++ b/plugin/percona-pam-for-mysql/CMakeLists.txt
+@@ -36,7 +36,7 @@ IF(HAVE_PAM AND HAVE_GETPWNAM_R AND HAVE_GETGRGID_R AND HAVE_DLFCN_H)
+   MYSQL_ADD_PLUGIN(dialog
+                    src/dialog.cc
+                    ../../sql-common/get_password.cc
+-                   LINK_LIBRARIES perconaserverclient
++                   LINK_LIBRARIES mysqlclient
+                    MODULE_ONLY)
+ 
+   IF(UNIX)
+diff --git a/plugin/x/tests/driver/CMakeLists.txt b/plugin/x/tests/driver/CMakeLists.txt
+index 3d237507d52..2c0cd2c3224 100644
+--- a/plugin/x/tests/driver/CMakeLists.txt
++++ b/plugin/x/tests/driver/CMakeLists.txt
+@@ -42,7 +42,7 @@ MYSQL_ADD_EXECUTABLE(mysqlxtest
+   LINK_LIBRARIES
+   mysys
+   strings
+-  perconaserverclient
++  mysqlclient
+   ${MYSQLX_CLIENT_FULL_LIB}
+   ${MYSQLX_PROTOCOL_FULL_LIB}
+   ext::libprotobuf
+diff --git a/router/src/router/src/CMakeLists.txt b/router/src/router/src/CMakeLists.txt
+index 821a008ab97..8485f8676df 100644
+--- a/router/src/router/src/CMakeLists.txt
++++ b/router/src/router/src/CMakeLists.txt
+@@ -53,7 +53,7 @@ ROUTER_ADD_SHARED_LIBRARY(router_mysql
+   PUBLIC
+   harness_stdx
+   harness-library  # log_debug
+-  perconaserverclient
++  mysqlclient
+   )
+ IF(MY_COMPILER_IS_GNU AND (WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO))
+   TARGET_LINK_OPTIONS(router_mysql PRIVATE -Wno-error=stringop-overflow)
+diff --git a/scripts/CMakeLists.txt b/scripts/CMakeLists.txt
+index 9e64871d21a..acbc376a2b3 100644
+--- a/scripts/CMakeLists.txt
++++ b/scripts/CMakeLists.txt
+@@ -384,7 +384,7 @@ ELSE()
+ ENDIF()
+ 
+ # Use cmake variables to inspect dependencies for
+-# perconaserverclient library (add -l stuff)
++# mysqlclient library (add -l stuff)
+ SET(CLIENT_LIBS "")
+ SET(LIBS "")
+ 
+@@ -444,11 +444,11 @@ MACRO(EXTRACT_LINK_LIBRARIES target var)
+   STRING(REGEX REPLACE "[ ]+$" "" ${var} "${${var}}")
+ ENDMACRO()
+ 
+-EXTRACT_LINK_LIBRARIES(perconaserverclient CLIENT_LIBS)
++EXTRACT_LINK_LIBRARIES(mysqlclient CLIENT_LIBS)
+ 
+ IF(MSVC)
+-  GET_TARGET_PROPERTY(LIBMYSQL_OS_SHLIB_VERSION perconaserverclient VERSION)
+-  GET_TARGET_PROPERTY(LIBMYSQL_OS_OUTPUT_NAME perconaserverclient OUTPUT_NAME)
++  GET_TARGET_PROPERTY(LIBMYSQL_OS_SHLIB_VERSION mysqlclient VERSION)
++  GET_TARGET_PROPERTY(LIBMYSQL_OS_OUTPUT_NAME mysqlclient OUTPUT_NAME)
+ ELSE()
+   GET_TARGET_PROPERTY(LIBMYSQL_OS_SHLIB_VERSION libmysql VERSION)
+   GET_TARGET_PROPERTY(LIBMYSQL_OS_OUTPUT_NAME libmysql OUTPUT_NAME)
+diff --git a/storage/ndb/test/run-test/CMakeLists.txt b/storage/ndb/test/run-test/CMakeLists.txt
+index a764694a28e..930bf0856e5 100644
+--- a/storage/ndb/test/run-test/CMakeLists.txt
++++ b/storage/ndb/test/run-test/CMakeLists.txt
+@@ -48,7 +48,7 @@ MYSQL_ADD_EXECUTABLE(atrt
+   test_execution_resources.cpp
+   DESTINATION mysql-test/ndb
+   ENABLE_EXPORTS
+-  LINK_LIBRARIES ndbNDBT ndbclient_static perconaserverclient
++  LINK_LIBRARIES ndbNDBT ndbclient_static mysqlclient
+   )
+ 
+ IF(MY_COMPILER_IS_CLANG)
+diff --git a/storage/ndb/tools/CMakeLists.txt b/storage/ndb/tools/CMakeLists.txt
+index e28169d664f..63bd165fda4 100644
+--- a/storage/ndb/tools/CMakeLists.txt
++++ b/storage/ndb/tools/CMakeLists.txt
+@@ -253,10 +253,10 @@ IF(NOT WIN32)
+       COMPONENT ClusterTools
+       )
+     IF(NCURSES_HAS_STDSCR)
+-      TARGET_LINK_LIBRARIES(ndb_top perconaserverclient ${NCURSESW_LIB})
++      TARGET_LINK_LIBRARIES(ndb_top mysqlclient ${NCURSESW_LIB})
+     ELSE()
+       TARGET_LINK_LIBRARIES(ndb_top
+-        perconaserverclient
++        mysqlclient
+         ${NCURSESW_LIB}
+         ${NCURSES_TINFO_LIB})
+     ENDIF()
+diff --git a/testclients/CMakeLists.txt b/testclients/CMakeLists.txt
+index 8346c512868..cce6817e9df 100644
+--- a/testclients/CMakeLists.txt
++++ b/testclients/CMakeLists.txt
+@@ -24,7 +24,7 @@
+ ADD_WSHADOW_WARNING()
+ 
+ MYSQL_ADD_EXECUTABLE(mysql_client_test mysql_client_test.cc COMPONENT Test)
+-TARGET_LINK_LIBRARIES(mysql_client_test perconaserverclient extra::rapidjson)
++TARGET_LINK_LIBRARIES(mysql_client_test mysqlclient extra::rapidjson)
+ 
+ # We *do* calculate that there is space, see:
+ # printf("Warning: MYSQL_TMP_DIR is too long. Logging is disabled.\n");
+@@ -35,8 +35,8 @@ ENDIF()
+ 
+ IF(WITH_UNIT_TESTS)
+   MYSQL_ADD_EXECUTABLE(bug25714 bug25714.cc SKIP_INSTALL EXCLUDE_FROM_PGO)
+-  TARGET_LINK_LIBRARIES(bug25714 perconaserverclient)
++  TARGET_LINK_LIBRARIES(bug25714 mysqlclient)
+ ENDIF()
+ 
+ MYSQL_ADD_EXECUTABLE(mysql_client_load_balance_test mysql_client_load_balance_test.cc COMPONENT Test)
+-TARGET_LINK_LIBRARIES(mysql_client_load_balance_test perconaserverclient)
++TARGET_LINK_LIBRARIES(mysql_client_load_balance_test mysqlclient)
+diff --git a/unittest/gunit/changestreams/CMakeLists.txt b/unittest/gunit/changestreams/CMakeLists.txt
+index 2ff4143d32a..9a96491b34e 100644
+--- a/unittest/gunit/changestreams/CMakeLists.txt
++++ b/unittest/gunit/changestreams/CMakeLists.txt
+@@ -37,7 +37,7 @@ SET(TESTS
+ SET(TESTS_LINK_LIBRARIES
+   changestreams_standalone_static
+   mysql_binlog_event_standalone
+-  perconaserverclient
++  mysqlclient
+   gunit_small)
+ 
+ IF (WITH_CS_PROTOBUF)
+diff --git a/unittest/gunit/group_replication/CMakeLists.txt b/unittest/gunit/group_replication/CMakeLists.txt
+index 01f1ff8ea58..34092038c39 100644
+--- a/unittest/gunit/group_replication/CMakeLists.txt
++++ b/unittest/gunit/group_replication/CMakeLists.txt
+@@ -50,7 +50,7 @@ FOREACH(test ${TESTS})
+     gr_unit_test_resource
+     gunit_large
+     server_unittest_library
+-    perconaserverclient
++    mysqlclient
+     mysqlgcs
+     mysql_gtid
+     )
+diff --git a/unittest/gunit/xplugin/xcl/CMakeLists.txt b/unittest/gunit/xplugin/xcl/CMakeLists.txt
+index c396193bcef..f03fcb229a2 100644
+--- a/unittest/gunit/xplugin/xcl/CMakeLists.txt
++++ b/unittest/gunit/xplugin/xcl/CMakeLists.txt
+@@ -70,7 +70,7 @@ TARGET_LINK_LIBRARIES(${XCL_UNIT_TESTS}
+   harness_net_ts
+   ext::libprotobuf
+   ext::lz4
+-  perconaserverclient
++  mysqlclient
+   gtest
+   gmock
+ )
+diff --git a/unittest/gunit/xplugin/xpl/CMakeLists.txt b/unittest/gunit/xplugin/xpl/CMakeLists.txt
+index 3f09416ba7b..8d4b16d288a 100644
+--- a/unittest/gunit/xplugin/xpl/CMakeLists.txt
++++ b/unittest/gunit/xplugin/xpl/CMakeLists.txt
+@@ -81,7 +81,7 @@ TARGET_LINK_LIBRARIES(xplugin_unit_tests
+   ${GCOV_LDFLAGS}
+   ${MYSQLX_CLIENT_LIB}
+   mysqlx
+-  perconaserverclient
++  mysqlclient
+   gtest
+   gmock
+ )

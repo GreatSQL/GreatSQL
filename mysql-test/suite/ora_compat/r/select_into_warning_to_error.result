@@ -1,0 +1,133 @@
+SET sql_mode=ORACLE;
+create table t1(
+id int primary key, 
+name varchar(100)
+);
+insert into t1 values(1,'aa'),(2,'bb'),(3,'cc'),(4,'dd');
+select * from t1;
+id	name
+1	aa
+2	bb
+3	cc
+4	dd
+#
+# test of create view on nested column 
+#
+select @@ora_warning_as_error;
+@@ora_warning_as_error
+1
+set session ora_warning_as_error = off;
+select @@ora_warning_as_error;
+@@ora_warning_as_error
+0
+set global ora_warning_as_error = off;
+select @@global.ora_warning_as_error;
+@@global.ora_warning_as_error
+0
+set global ora_warning_as_error = on;
+select @@global.ora_warning_as_error;
+@@global.ora_warning_as_error
+1
+set session ora_warning_as_error = on;
+select @@ora_warning_as_error;
+@@ora_warning_as_error
+1
+#
+# test of oracle mode
+#
+CREATE or replace PROCEDURE p1(v_id int) as
+bb varchar(100);
+BEGIN
+select name into bb from t1 where id=v_id;
+select bb;
+END;
+$$
+call p1(3);
+bb
+cc
+call p1(5);
+ERROR 02000: No data - zero rows fetched, selected, or processed
+call p1(6);
+ERROR 02000: No data - zero rows fetched, selected, or processed
+set session ora_warning_as_error = off;
+call p1(5);
+bb
+NULL
+call p1(6);
+bb
+NULL
+drop PROCEDURE p1;
+#
+# test of default mode
+#
+set sql_mode=default;
+set session ora_warning_as_error = on;
+CREATE PROCEDURE p1(v_id int)
+BEGIN
+declare bb varchar(100);
+select name into bb from t1 where id=v_id;
+select bb;
+END;
+$$
+call p1(3);
+bb
+cc
+call p1(5);
+bb
+NULL
+call p1(6);
+bb
+NULL
+set session ora_warning_as_error = off;
+call p1(3);
+bb
+cc
+call p1(6);
+bb
+NULL
+drop PROCEDURE p1;
+#
+# test of function
+#
+set sql_mode=oracle;
+set session ora_warning_as_error = on;
+CREATE or replace function f1(v_id int) RETURN varchar2 no SQL
+AS
+bb varchar(100);
+BEGIN
+select name into bb from t1 where id=v_id;
+RETURN bb;
+end;
+$$
+select f1(1);
+f1(1)
+aa
+select f1(5);
+f1(5)
+NULL
+drop function f1;
+#
+# test of trigger
+#
+CREATE or REPLACE TRIGGER trg1 before insert or update
+ON t1 FOR EACH ROW
+declare
+v_day int;
+BEGIN
+select id into v_day FROM t1 WHERE id=5;
+END;
+$$
+UPDATE t1 SET name ='cc' WHERE id=1;
+ERROR 02000: No data - zero rows fetched, selected, or processed
+drop TRIGGER trg1;
+#
+# test of sql
+#
+set sql_mode=oracle;
+set session ora_warning_as_error = on;
+set @aa=1;
+select name into @aa from t1 where id=1;
+select name into @aa from t1 where id=5;
+Warnings:
+Warning	1329	No data - zero rows fetched, selected, or processed
+drop table t1;

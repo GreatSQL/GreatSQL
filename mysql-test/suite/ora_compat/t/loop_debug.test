@@ -1,0 +1,249 @@
+--source include/have_debug.inc
+--source include/count_sessions.inc
+#
+# Test of problem with for loop exit/exit when and long separators.
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS t;
+DROP PROCEDURE IF EXISTS p1;
+--enable_warnings
+
+CREATE TABLE t (s1 INT, s2 char(100),PRIMARY KEY (s1));
+INSERT INTO t values(1,'aaa');
+INSERT INTO t values(2,'bbb');
+INSERT INTO t values(3,'ccc');
+
+set sql_mode="oracle";
+delimiter //;
+CREATE PROCEDURE p1() as
+BEGIN
+	DECLARE CURSOR stuCursor is SELECT s1,s2 FROM t;
+  begin
+    for rec in  stuCursor loop
+        select rec.s1,rec.s2;
+        exit when rec.s1=2;
+    END LOOP;
+  end;
+  select 'after loop';
+END//
+delimiter ;//
+show PROCEDURE code p1;
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+#
+# Test of cursor with parameters.
+#
+delimiter //;
+CREATE or replace PROCEDURE p1(p_a INT)
+AS
+  v_a INT:=NULL;
+  p_a INT:=NULL;
+  CURSOR c (p_a VARCHAR(10)) IS SELECT s1 FROM t WHERE p_a IS NOT NULL;
+BEGIN
+  OPEN c(p_a);
+  FETCH c INTO v_a;
+  IF c%NOTFOUND THEN
+    BEGIN
+      SELECT 'No records found' AS msg;
+      RETURN;
+    END;
+  END IF;
+  CLOSE c;
+  SELECT 'Fetched a record a='||v_a AS msg;
+END//
+delimiter ;//
+show PROCEDURE code p1;
+CALL p1(1);
+show PROCEDURE code p1;
+CALL p1(1);
+DROP PROCEDURE p1;
+
+drop table t;
+
+--echo #
+--echo # record type select/set
+--echo #
+
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'aaa',
+  score float := 0.1
+);
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 stu_record
+);
+type stu_record2 is record(
+  jj int := 1,
+  stu_record_val2 stu_record1
+);
+stu_record_val stu_record2;
+id float := 10;
+begin
+  select stu_record_val.stu_record_val2.stu_record_val1.id,stu_record_val.stu_record_val2.stu_record_val1.name_d,stu_record_val.stu_record_val2.stu_record_val1.score;
+  stu_record_val.stu_record_val2.stu_record_val1.id := 2;
+  stu_record_val.stu_record_val2.stu_record_val1.name_d := 'bbb';
+  select stu_record_val.stu_record_val2.stu_record_val1.id,stu_record_val.stu_record_val2.stu_record_val1.name_d;
+  stu_record_val.jj := 100;
+  stu_record_val.stu_record_val2.ii := 200;
+  id := stu_record_val.stu_record_val2.stu_record_val1.id + stu_record_val.stu_record_val2.stu_record_val1.score;
+  select id,stu_record_val.jj,stu_record_val.stu_record_val2.ii;
+end;
+$$
+DELIMITER ;$$
+show PROCEDURE code p1;
+CALL p1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # record type table select/set
+--echo #
+
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) ,
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+begin
+  select stu_record_val.stu_record_val1(1).id;
+  stu_record_val.stu_record_val1(1).id := 1;
+  stu_record_val.stu_record_val1(2).name_d := 'aaa';
+  stu_record_val.stu_record_val1(0).id := 2;
+  stu_record_val.stu_record_val1(3).score := 3.22;
+  select stu_record_val.stu_record_val1(1).id,stu_record_val.stu_record_val1(1).name_d,stu_record_val.stu_record_val1(0).id,stu_record_val.stu_record_val1(3).score;
+  select stu_record_val.ii;
+end;
+$$
+DELIMITER ;$$
+show PROCEDURE code p1;
+
+--echo #
+--echo # record type table select/set
+--echo #
+
+DELIMITER $$;
+create or replace procedure p1 as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) ,
+  score float := 0
+);
+type tklist is table of stu_record index by binary_integer;
+type stu_record1 is record(
+  ii int := 1,
+  stu_record_val1 tklist
+);
+stu_record_val stu_record1;
+id int;
+begin
+  stu_record_val.stu_record_val1(1).id := 1;
+  stu_record_val.stu_record_val1(2).name_d := 'aaa';
+  stu_record_val.stu_record_val1(0).id := 2;
+  stu_record_val.stu_record_val1(3).score := 3.22;
+  select stu_record_val.stu_record_val1(1).id,stu_record_val.stu_record_val1(2).name_d,stu_record_val.stu_record_val1(0).id,stu_record_val.stu_record_val1(3).score;
+  id := stu_record_val.stu_record_val1(1).id+stu_record_val.stu_record_val1(3).score;
+  select id,stu_record_val.ii;
+end;
+$$
+DELIMITER ;$$
+show PROCEDURE code p1;
+CALL p1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # record type table select/set
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  type stu_record is record(
+    id int := 1,
+    value1  varchar(20) :='aaa',
+    value2 varchar(20) :='bbb'
+  );
+  type tklist is table of stu_record index by binary_integer;
+  value1 tklist;
+BEGIN
+  value1(1).id := 100;
+ select value1(1).id , value1(1).value1,value1(1).value2;
+end;
+$$
+DELIMITER ;$$
+show PROCEDURE code p1;
+CALL p1;
+DROP PROCEDURE p1;
+
+--echo #
+--echo # test of table().table()
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  TYPE rec1 IS RECORD (
+    col1  varchar(30) := 'col1',
+    col2   varchar(30) := 'col2',
+    col3   varchar(30) := 'col3'
+  ); 
+  TYPE t_rec1 IS TABLE OF rec1 index by binary_integer; 
+  
+  TYPE rec2 IS RECORD (
+    v_t_rec1  t_rec1,  
+    col4 varchar(30) := 'col4'
+  );
+  TYPE t_rec2 IS TABLE OF rec2 index by binary_integer; 
+
+  TYPE rec3 IS RECORD (
+    v_t_rec2  t_rec2,  
+    col5 varchar(30) := 'col5'
+  );
+  TYPE t_rec3 IS TABLE OF rec3 index by binary_integer; 
+     
+  v_t_rec3 rec3;
+  
+BEGIN
+  v_t_rec3.col5 := 'abc';
+  select v_t_rec3.v_t_rec2(0).col4,v_t_rec3.col5;
+  v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1 :='abc';
+  v_t_rec3.v_t_rec2(0).v_t_rec1(1).col2 :='123qwe';
+  v_t_rec3.v_t_rec2(1).v_t_rec1(0).col2 :='qqqq';
+  select v_t_rec3.v_t_rec2(0).v_t_rec1(0).col1,v_t_rec3.v_t_rec2(0).v_t_rec1(0).col2,
+  v_t_rec3.v_t_rec2(0).v_t_rec1(0).col3 ;
+  select v_t_rec3.v_t_rec2(1).v_t_rec1(0).col1,v_t_rec3.v_t_rec2(1).v_t_rec1(0).col2,
+  v_t_rec3.v_t_rec2(1).v_t_rec1(0).col3 ;
+  select v_t_rec3.v_t_rec2(0).v_t_rec1(1).col1,v_t_rec3.v_t_rec2(0).v_t_rec1(1).col2,
+  v_t_rec3.v_t_rec2(0).v_t_rec1(1).col3 ;
+END;
+$$
+DELIMITER ;$$
+show PROCEDURE code p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # bugfix6944
+--echo #
+DELIMITER $$;
+CREATE OR REPLACE PROCEDURE p1(f1 float,f2 float) as
+i int:=10;
+BEGIN
+  FOR i IN f1 .. f2 LOOP
+     select i ;
+   END LOOP;
+ end;
+$$
+DELIMITER ;$$
+CALL p1(1.0,2.0);
+DROP PROCEDURE p1;
+
+

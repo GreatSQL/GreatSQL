@@ -1,0 +1,640 @@
+set sql_mode=oracle;
+set names utf8mb4;
+select rawtohex(NULL), lengthb(rawtohex(NULL))  from dual;
+rawtohex(NULL)	lengthb(rawtohex(NULL))
+NULL	NULL
+select rawtohex('1'), lengthb(rawtohex('1'))  from dual;
+rawtohex('1')	lengthb(rawtohex('1'))
+31	2
+select rawtohex('abc'), lengthb(rawtohex('abc')) from dual;
+rawtohex('abc')	lengthb(rawtohex('abc'))
+616263	6
+select rawtohex('gggg') from dual;
+rawtohex('gggg')
+67676767
+select rawtohex('🍣🍣🍣') from dual;
+rawtohex('???')
+F09F8DA3F09F8DA3F09F8DA3
+create table rawtohex_t(id int, r raw);
+select * from rawtohex_t;
+id	r
+insert into rawtohex_t values (1, unhex('abc'));
+insert into rawtohex_t values (1, convert('abc' using binary));
+select rawtohex(r), lengthb(rawtohex(r)) from rawtohex_t;
+rawtohex(r)	lengthb(rawtohex(r))
+0ABC	4
+616263	6
+drop table rawtohex_t;
+select rawtohex(1) from dual;
+ERROR HY000: Incorrect type for argument args 0 in function rawtohex.
+select rawtohex(3.14) from dual;
+ERROR HY000: Incorrect type for argument args 0 in function rawtohex.
+select rawtohex(sysdate) from dual;
+ERROR HY000: Incorrect type for argument args 0 in function rawtohex.
+create procedure p1() as 
+s varchar2(64);
+begin
+s := rawtohex('AB');
+select s, lengthb(s);
+select rawtohex('AB') into s from dual;
+select s, lengthb(s);
+end;|
+call p1()|
+s	lengthb(s)
+AB	2
+s	lengthb(s)
+4142	4
+call p1()|
+s	lengthb(s)
+AB	2
+s	lengthb(s)
+4142	4
+drop procedure p1|
+create procedure p1() as 
+s varchar2(64);
+begin
+s := rawtohex(NULL);
+select s, lengthb(s);
+select rawtohex(NULL) into s from dual;
+select s, lengthb(s);
+end;|
+call p1()|
+s	lengthb(s)
+NULL	NULL
+s	lengthb(s)
+NULL	NULL
+call p1()|
+s	lengthb(s)
+NULL	NULL
+s	lengthb(s)
+NULL	NULL
+drop procedure p1|
+create procedure p1() as 
+begin
+if rawtohex('AB') = 'AB' then 
+select 'if rawtohex(ab) = ab';
+end if;
+if rawtohex('AB') = '4142' then 
+select  'if rawtohex(ab) = 4142';
+end if;
+end;|
+call p1()|
+if rawtohex(ab) = ab
+if rawtohex(ab) = ab
+call p1()|
+if rawtohex(ab) = ab
+if rawtohex(ab) = ab
+drop procedure p1|
+create procedure p1() as
+begin
+case rawtohex('AB')
+when 'AB' then select 'AB';
+when '4142' then select '4142';
+else select 'Other';
+end case;
+end;|
+call p1()|
+AB
+AB
+call p1()|
+AB
+AB
+drop procedure p1|
+create table rawtohex_t(id int, r varchar2(64))|
+create procedure p1() as 
+begin
+insert into rawtohex_t values(1, rawtohex('AB'));
+select * from rawtohex_t;
+end;|
+call p1()|
+id	r
+1	4142
+call p1()|
+id	r
+1	4142
+1	4142
+drop procedure p1|
+drop table rawtohex_t|
+CREATE or replace PROCEDURE p1() as
+begin
+for dr_type in (select rawtohex('AB') AS r from dual) loop
+select dr_type.r;
+end loop;
+end;|
+call p1()|
+dr_type.r
+4142
+call p1()|
+dr_type.r
+4142
+drop procedure p1|
+create or replace procedure p1 as
+n int := 0;
+begin
+while rawtohex('AB') = 'AB' and n < 3 loop
+n := n + 1;
+end loop;
+select n;
+n := 0;
+while rawtohex('AB') = '4142' and  n < 3 LOOP
+n := n + 1;
+end loop;
+select n;
+end;|
+call p1();|
+n
+3
+n
+0
+call p1();|
+n
+3
+n
+0
+drop procedure p1|
+create procedure p1(a varchar2) as
+begin
+select a, lengthb(a);
+end;|
+call p1(rawtohex('AB'))|
+a	lengthb(a)
+4142	4
+call p1(rawtohex('AB'))|
+a	lengthb(a)
+4142	4
+drop procedure p1|
+create procedure p1(s varchar2) as
+a varchar2(8);
+begin
+a := rawtohex(s);
+select s, a, lengthb(a);	
+select rawtohex(s) into a from dual;
+select s, a, lengthb(a);
+end;|
+call p1('AB')|
+s	a	lengthb(a)
+AB	AB	2
+s	a	lengthb(a)
+AB	4142	4
+call p1('AB')|
+s	a	lengthb(a)
+AB	AB	2
+s	a	lengthb(a)
+AB	4142	4
+call p1(convert('AB' using binary))|
+s	a	lengthb(a)
+AB	AB	2
+s	a	lengthb(a)
+AB	4142	4
+call p1(convert('AB' using binary))|
+s	a	lengthb(a)
+AB	AB	2
+s	a	lengthb(a)
+AB	4142	4
+drop procedure p1|
+create procedure p1() as
+a varchar2(8);
+begin
+a := rawtohex('AB');
+select 'AB', lengthb('AB'), a, lengthb(a);	
+a := rawtohex(convert('AB' using binary));
+select convert('AB' using binary), lengthb(convert('AB' using binary)), a, lengthb(a);	
+end;
+call p1()|
+AB	lengthb('AB')	a	lengthb(a)
+AB	2	AB	2
+convert('AB' using binary)	lengthb(convert('AB' using binary))	a	lengthb(a)
+AB	2	4142	4
+call p1()|
+AB	lengthb('AB')	a	lengthb(a)
+AB	2	AB	2
+convert('AB' using binary)	lengthb(convert('AB' using binary))	a	lengthb(a)
+AB	2	4142	4
+drop procedure p1|
+create procedure p2(s varchar2) as
+a varchar2(8);
+begin
+select s, lengthb(s);	
+end;|
+create procedure p1() as
+begin
+call p2(rawtohex('AB'));
+end;|
+call p1()|
+s	lengthb(s)
+4142	4
+call p1()|
+s	lengthb(s)
+4142	4
+drop procedure p1|
+create or replace procedure p1() as
+s varchar2(64);
+begin
+execute immediate 'call p2(rawtohex(''AB''))';
+end;|
+call p1()|
+s	lengthb(s)
+4142	4
+call p1()|
+s	lengthb(s)
+4142	4
+drop procedure p1|
+drop procedure p2|
+create or replace procedure p1() as    
+begin  
+prepare stmt1 from 'select rawtohex(\'AB\') from dual';
+execute stmt1;
+end;|
+call p1()|
+rawtohex('AB')
+4142
+call p1()|
+rawtohex('AB')
+4142
+drop procedure p1|
+create procedure p1() as
+x varchar2(64) := '';
+y varchar2(64) := '';
+begin
+set x = rawtohex('AB');
+y := rawtohex('AB');
+select x, lengthb(x), y, lengthb(y);
+end;|
+call p1()|
+x	lengthb(x)	y	lengthb(y)
+4142	4	AB	2
+call p1()|
+x	lengthb(x)	y	lengthb(y)
+4142	4	AB	2
+drop procedure p1|
+create procedure p1() as
+x varchar2(64) := rawtohex('AB');
+y varchar2(64) default rawtohex('AB');
+begin
+select x, lengthb(x), y, lengthb(y);
+end;|
+call p1()|
+x	lengthb(x)	y	lengthb(y)
+AB	2	AB	2
+call p1()|
+x	lengthb(x)	y	lengthb(y)
+AB	2	AB	2
+drop procedure p1|
+create procedure p1() as
+s varchar2(64);
+cursor cselecttmp is select rawtohex('AB') from dual;
+begin
+open cselecttmp;
+loop
+fetch cselecttmp into s;
+exit when cselecttmp%notfound;
+select s;
+end loop;
+end;|
+call p1()|
+s
+4142
+call p1()|
+s
+4142
+drop procedure p1|
+set @@udt_format_result='DBA'|
+create procedure p1() as
+type rec_type is record(
+id int,
+str varchar2(64) := rawtohex('AB')
+);
+rec rec_type;
+begin
+rec.id := 1;
+select rec;
+rec.id := 2;
+rec.str := rawtohex('AB');
+select rec;
+end;|
+call p1()|
+rec
+id:1 | str:AB
+rec
+id:2 | str:AB
+call p1()|
+rec
+id:1 | str:AB
+rec
+id:2 | str:AB
+drop procedure p1|
+create procedure p1() as
+begin
+raise_application_error(6502, rawtohex('AB'));
+end;|
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'rawtohex('AB'));
+end' at line 3
+create function f1() return varchar2(64) as
+begin
+return rawtohex('AB');
+end;|
+select f1()|
+f1()
+AB
+select f1()|
+f1()
+AB
+drop function f1|
+create table t1(id int)|
+create table t2(s varchar2(64))|
+create trigger trig after insert on t1 for each row
+begin
+insert into t2 values(rawtohex('AB'));
+end|
+select * from t1|
+id
+select * from t2|
+s
+insert into t1 values(1)|
+select * from t1|
+id
+1
+select * from t2|
+s
+4142
+insert into t1 values(2)|
+select * from t1|
+id
+1
+2
+select * from t2|
+s
+4142
+4142
+drop trigger trig|
+drop table t1|
+drop table t2|
+set @x = rawtohex('AB');
+select @x, lengthb(@x);
+@x	lengthb(@x)
+4142	4
+create table rawtohex_t(id int, a varchar(64) default (rawtohex('AB')));
+insert into rawtohex_t(id) values(1);
+insert into rawtohex_t(id) values(2);
+select * from rawtohex_t;
+id	a
+1	4142
+2	4142
+drop table rawtohex_t;
+create type udt_type as object(id int, s varchar2(64));
+create table rawtohex_t(id int, udt udt_type);
+insert into rawtohex_t values(2, udt_type(1, rawtohex('AB')));
+select * from rawtohex_t;
+id	udt
+2	id:1 | s:4142
+drop table rawtohex_t;
+drop type udt_type;
+set sql_mode=default;
+create procedure p1()
+begin
+declare n int default 0;
+repeat
+set n = n + 1;
+until (rawtohex('AB') = 'AB' or n >= 3) end repeat;
+select n;
+set n = 0;
+repeat
+set n = n + 1;
+until (rawtohex('AB') = '4142' or n >= 3) end repeat;
+select n;
+end;|
+call p1()|
+n
+1
+n
+3
+call p1()|
+n
+1
+n
+3
+drop procedure p1|
+create procedure p1()
+begin
+declare n int default 0;
+while (rawtohex('AB') = 'AB' and n < 3) do
+set n = n + 1;
+end while;
+select n;
+set n = 0;
+while (rawtohex('AB') = '4142' and n < 3) do
+set n = n + 1;
+end while;
+select n;
+end;|
+call p1()|
+n
+3
+n
+0
+call p1()|
+n
+3
+n
+0
+drop procedure p1|
+create procedure p1()
+begin
+declare n int default 0;
+label1: loop
+set n = n + 1;
+if (rawtohex('AB') = 'AB' and n < 3) then iterate label1; end if;
+leave label1;
+end loop label1;
+select n;
+set n = 0;
+label2: loop
+set n = n + 1;
+if (rawtohex('AB') = '4142' and n < 3) then iterate label2; end if;
+leave label2;
+end loop label2;
+select n;
+end;|
+call p1()|
+n
+3
+n
+1
+call p1()|
+n
+3
+n
+1
+drop procedure p1|
+create procedure p1()
+begin
+case rawtohex('AB')
+when 'AB' then select 'AB';
+when '4142' then select '4142';
+else select 'Other';
+end case;
+end;|
+call p1()|
+AB
+AB
+call p1()|
+AB
+AB
+drop procedure p1|
+create procedure p1()
+begin
+declare x varchar(64) default rawtohex('AB');
+select x, lengthb(x);
+end;|
+call p1()|
+x	lengthb(x)
+AB	2
+call p1()|
+x	lengthb(x)
+AB	2
+drop procedure p1|
+create function f1() returns varchar(64)
+begin
+return (select rawtohex('AB') as rtx from dual);
+end;|
+select f1()|
+f1()
+AB
+select f1()|
+f1()
+AB
+drop function f1|
+create table t1(id int)|
+create table t2(s varchar(64))|
+create trigger trig after insert on t1 for each row
+begin
+insert into t2 values(rawtohex('AB'));
+end|
+select * from t1|
+id
+select * from t2|
+s
+insert into t1 values(1)|
+select * from t1|
+id
+1
+select * from t2|
+s
+4142
+drop trigger trig|
+drop table t1|
+drop table t2|
+select rawtohex(NULL) from dual;
+rawtohex(NULL)
+NULL
+create table rawtohex_t(a char);
+insert into rawtohex_t values('a');
+insert into rawtohex_t values('b');
+select a, rawtohex(a) from rawtohex_t;
+a	rawtohex(a)
+a	61
+b	62
+drop table rawtohex_t;
+create table rawtohex_t(a varchar(8));
+insert into rawtohex_t values('a');
+insert into rawtohex_t values('b');
+select a, rawtohex(a) from rawtohex_t;
+a	rawtohex(a)
+a	61
+b	62
+drop table rawtohex_t;
+create table rawtohex_t(a binary);
+insert into rawtohex_t values('a');
+insert into rawtohex_t values('b');
+select a, rawtohex(a) from rawtohex_t;
+a	rawtohex(a)
+a	61
+b	62
+drop table rawtohex_t;
+create table rawtohex_t(a varbinary(8));
+insert into rawtohex_t values('a');
+insert into rawtohex_t values('b');
+select a, rawtohex(a) from rawtohex_t;
+a	rawtohex(a)
+a	61
+b	62
+drop table rawtohex_t;
+create table rawtohex_t(a blob);
+insert into rawtohex_t values('a');
+insert into rawtohex_t values('b');
+select a, rawtohex(a) from rawtohex_t;
+a	rawtohex(a)
+a	61
+b	62
+drop table rawtohex_t;
+create table rawtohex_t(a text);
+insert into rawtohex_t values('a');
+insert into rawtohex_t values('b');
+select a, rawtohex(a) from rawtohex_t;
+a	rawtohex(a)
+a	61
+b	62
+drop table rawtohex_t;
+create table rawtohex_t(a enum('a','b','c'));
+insert into rawtohex_t values('a');
+insert into rawtohex_t values('b');
+select a, rawtohex(a) from rawtohex_t;
+a	rawtohex(a)
+a	61
+b	62
+drop table rawtohex_t;
+create table rawtohex_t(a set('a','b','c'));
+insert into rawtohex_t values('a');
+insert into rawtohex_t values('b');
+select a, rawtohex(a) from rawtohex_t;
+a	rawtohex(a)
+a	61
+b	62
+drop table rawtohex_t;
+create table rawtohex_t(a int);
+insert into rawtohex_t values(1);
+insert into rawtohex_t values(2);
+select a, rawtohex(a) from rawtohex_t;
+ERROR HY000: Incorrect type for argument args 0 in function rawtohex.
+drop table rawtohex_t;
+create table rawtohex_t(a float);
+insert into rawtohex_t values(1);
+insert into rawtohex_t values(2);
+select a, rawtohex(a) from rawtohex_t;
+ERROR HY000: Incorrect type for argument args 0 in function rawtohex.
+drop table rawtohex_t;
+create table rawtohex_t(a double);
+insert into rawtohex_t values(1);
+insert into rawtohex_t values(2);
+select a, rawtohex(a) from rawtohex_t;
+ERROR HY000: Incorrect type for argument args 0 in function rawtohex.
+drop table rawtohex_t;
+set timestamp=1637510400;
+create table rawtohex_t(a datetime);
+insert into rawtohex_t values(now());
+insert into rawtohex_t values(now());
+select a, rawtohex(a) from rawtohex_t;
+ERROR HY000: Incorrect type for argument args 0 in function rawtohex.
+drop table rawtohex_t;
+set sql_mode=oracle;
+create table rawtohex_t(a varchar2(8));
+insert into rawtohex_t values('a');
+insert into rawtohex_t values('b');
+select a, rawtohex(a) from rawtohex_t;
+a	rawtohex(a)
+a	61
+b	62
+drop table rawtohex_t;
+create table rawtohex_t(a raw);
+insert into rawtohex_t values('a');
+insert into rawtohex_t values('b');
+insert into rawtohex_t values(unhex('a'));
+insert into rawtohex_t values(unhex('b'));
+select a, rawtohex(a) from rawtohex_t;
+a	rawtohex(a)
+a	61
+b	62
+
+	0A
+	0B
+drop table rawtohex_t;

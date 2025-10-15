@@ -1,0 +1,51 @@
+--source include/have_debug.inc
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--source include/group_replication.inc
+
+--echo
+--let $rpl_connection_name= server1
+--source include/rpl_connection.inc
+--source include/start_and_bootstrap_group_replication.inc
+
+--echo
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--replace_result $group_replication_group_name group_name
+eval SET GLOBAL group_replication_group_name= "$group_replication_group_name";
+SET DEBUG='+d,group_replication_status_when_terminal_applier';
+send START GROUP_REPLICATION;
+
+
+connect (conn2_1,127.0.0.1,root,,test,$SERVER_MYPORT_2,);
+connect (conn2_2,127.0.0.1,root,,test,$SERVER_MYPORT_2,);
+
+--echo [connect conn2_1]
+connection conn2_1;
+SET DEBUG_SYNC='now WAIT_FOR reach_before_terminate_applier_sync';
+
+--echo [connect conn2_2]
+connection conn2_2;
+SET DEBUG='+d,group_replication_status_when_terminal_applier';
+send SELECT * FROM performance_schema.replication_group_member_stats;
+
+--echo [connect conn2_1]
+connection conn2_1;
+SET DEBUG_SYNC='now WAIT_FOR reach_get_member_status_sync';
+SET DEBUG_SYNC='now SIGNAL end_before_terminate_applier_sync';
+SET DEBUG_SYNC='now WAIT_FOR reach_after_terminate_applier_sync';
+SET DEBUG_SYNC='now SIGNAL end_after_terminate_applier_sync';
+SET DEBUG_SYNC='now SIGNAL end_get_member_status_sync';
+
+--echo [connect conn2_2]
+connection conn2_2;
+--replace_column 3 #
+reap;
+
+
+--let $rpl_connection_name= server2
+--source include/rpl_connection.inc
+--error ER_GROUP_REPLICATION_CONFIGURATION
+reap;
+
+--source include/group_replication_end.inc

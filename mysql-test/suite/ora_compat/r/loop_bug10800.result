@@ -1,0 +1,281 @@
+DROP TABLE IF EXISTS t;
+DROP PROCEDURE IF EXISTS p1;
+CREATE TABLE t1 (s1 INT, s2 char(100),PRIMARY KEY (s1));
+INSERT INTO t1 values(1,'a,aa');
+INSERT INTO t1 values(2,'bb,b');
+INSERT INTO t1 values(3,'c,c,c');
+set sql_mode="oracle";
+CREATE or replace PROCEDURE p1()
+IS
+begin
+FOR i IN (SELECT s2 FROM t1) LOOP
+begin
+select i.s2;
+FOR p IN 0 .. REGEXP_INSTR(i.s2,',') LOOP
+select p;
+END LOOP;
+END;
+END LOOP;
+END$$
+CALL p1();
+i.s2
+a,aa
+p
+0
+p
+1
+p
+2
+i.s2
+bb,b
+p
+0
+p
+1
+p
+2
+p
+3
+i.s2
+c,c,c
+p
+0
+p
+1
+p
+2
+CALL p1();
+i.s2
+a,aa
+p
+0
+p
+1
+p
+2
+i.s2
+bb,b
+p
+0
+p
+1
+p
+2
+p
+3
+i.s2
+c,c,c
+p
+0
+p
+1
+p
+2
+DROP PROCEDURE IF EXISTS p1;
+CREATE or replace PROCEDURE p1()
+IS
+begin
+FOR i IN (SELECT s2 FROM t1) LOOP
+begin
+select i.s2;
+FOR p IN 0 .. REGEXP_COUNT(i.s2,',') LOOP
+select p;
+END LOOP;
+END;
+END LOOP;
+END$$
+CALL p1();
+i.s2
+a,aa
+p
+0
+p
+1
+i.s2
+bb,b
+p
+0
+p
+1
+i.s2
+c,c,c
+p
+0
+p
+1
+p
+2
+CALL p1();
+i.s2
+a,aa
+p
+0
+p
+1
+i.s2
+bb,b
+p
+0
+p
+1
+i.s2
+c,c,c
+p
+0
+p
+1
+p
+2
+DROP PROCEDURE p1;
+CREATE or replace PROCEDURE p1()
+IS
+begin
+FOR i IN (SELECT s2 FROM t1) LOOP
+begin
+select i.s2;
+FOR p IN reverse 0 .. REGEXP_COUNT(i.s2,',') LOOP
+select p;
+END LOOP;
+END;
+END LOOP;
+END$$
+CALL p1();
+i.s2
+a,aa
+p
+1
+p
+0
+i.s2
+bb,b
+p
+1
+p
+0
+i.s2
+c,c,c
+p
+2
+p
+1
+p
+0
+CALL p1();
+i.s2
+a,aa
+p
+1
+p
+0
+i.s2
+bb,b
+p
+1
+p
+0
+i.s2
+c,c,c
+p
+2
+p
+1
+p
+0
+DROP PROCEDURE p1;
+CREATE or replace PROCEDURE p1() IS
+f2 int default 5;
+begin
+FOR f1 IN 1..f2/f1  LOOP
+select f1;
+END LOOP;
+END$$
+ERROR 42000: Incorrect usage/placement of 'f1'
+CREATE or replace PROCEDURE p1() IS
+begin
+FOR f1 IN f1..22  LOOP
+select f1;
+END LOOP;
+END$$
+ERROR 42000: Incorrect usage/placement of 'f1'
+CREATE or replace PROCEDURE p1() IS
+begin
+FOR f1 IN 1..f1+2  LOOP
+select f1;
+END LOOP;
+END$$
+ERROR 42000: Incorrect usage/placement of 'f1'
+CREATE or replace PROCEDURE p1() IS
+begin
+FOR f1 IN 1..to_number(f1+f1)  LOOP
+select f1;
+END LOOP;
+END$$
+ERROR 42000: Incorrect usage/placement of 'f1'
+CREATE PROCEDURE p1(a_a INT) as
+type dr_type is table of t1%ROWTYPE index by binary_integer;
+dr_table dr_type;
+begin
+dr_table(100).a := 100;
+select dr_table(100).a;
+select * BULK COLLECT into dr_table from t1;
+FORALL i IN 1 .. i+i+1/i
+insert into t2 values dr_table (i);
+end$$
+ERROR 42000: Incorrect usage/placement of 'i'
+CREATE PROCEDURE p1(a_a INT) as
+type dr_type is table of t1%ROWTYPE index by binary_integer;
+dr_table dr_type;
+begin
+dr_table(100).a := 100;
+select dr_table(100).a;
+select * BULK COLLECT into dr_table from t1;
+FORALL i IN i*i .. 10
+insert into t2 values dr_table (i);
+end$$
+ERROR 42000: Incorrect usage/placement of 'i'
+alter table t1 change s1 f1 int;
+CREATE or replace PROCEDURE p1() IS
+f2 int default 5;
+begin
+FOR f1 IN (select f1 as f1 from t1)  LOOP
+select f1.f1;
+END LOOP;
+END$$
+CALL p1();
+f1.f1
+1
+f1.f1
+2
+f1.f1
+3
+CALL p1();
+f1.f1
+1
+f1.f1
+2
+f1.f1
+3
+DROP PROCEDURE p1;
+CREATE or replace PROCEDURE p1() IS
+id int default 5;
+begin
+FOR f1 IN (select f1 from t1)  LOOP
+select f1.f1;
+END LOOP;
+END$$
+CALL p1();
+f1.f1
+1
+f1.f1
+2
+f1.f1
+3
+CALL p1();
+f1.f1
+1
+f1.f1
+2
+f1.f1
+3
+DROP PROCEDURE p1;
+drop table t1;

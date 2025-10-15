@@ -1,0 +1,36 @@
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+
+DELIMITER //;
+
+CREATE or replace PROCEDURE p1() as
+
+type tklist is table of varchar(20) INDEX BY VARCHAR2(30);
+arg_array tklist;
+
+type stu_record is record(
+  param_name varchar(20) := 'id',
+  param_value  varchar(20) := 'aa'
+);
+type tklist1 is table of stu_record INDEX BY pls_integer;
+param_array tklist1;
+
+name varchar(10) := 'a';
+begin
+ param_array(1) := stu_record(name,'aa10');
+ param_array(2) := stu_record('b','bb20');
+ FOR i IN 1 .. param_array.COUNT LOOP
+   arg_array(param_array(i).param_name) := param_array(i).param_value;
+   select arg_array(param_array(i).param_name);
+ end loop;
+end; 
+//
+
+DELIMITER ;//
+
+CALL p1();
+CALL p1();
+CALL p1();
+CALL p1();
+
+drop procedure p1;

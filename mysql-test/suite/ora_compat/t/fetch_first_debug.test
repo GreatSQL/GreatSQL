@@ -1,0 +1,20 @@
+--source include/have_debug.inc
+
+create table t (id int);
+insert into t values (1),(2),(3);
+
+set debug='+debug,oracmp_offset_fetch_read_failed';
+--error ER_KEY_NOT_FOUND
+select * from t fetch next 49 percent rows only;
+
+set debug='-debug,oracmp_offset_fetch_read_failed';
+select * from t fetch next 49 percent rows only;
+
+set debug='+debug,oracmp_offset_fetch_init_failed';
+--error ER_WRONG_PARTITION_NAME
+select * from t fetch next 49 percent rows only;
+
+set debug='-debug,oracmp_offset_fetch_init_failed';
+select * from t fetch next 49 percent rows only;
+
+drop table t;

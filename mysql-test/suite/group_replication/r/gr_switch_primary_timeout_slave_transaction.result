@@ -1,0 +1,75 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server1]
+
+# 1. Start group in single primary mode, M1(primary) and M2(secondary).
+include/start_and_bootstrap_group_replication.inc
+CREATE TABLE t1(c1 int primary key);
+[connection server2]
+include/start_group_replication.inc
+
+# 2. Switch primary to server2. Both server1 and server2
+#    will pause after the read mode is set.
+[connect conn1_1]
+SET @@GLOBAL.DEBUG= '+d,before_secondary_signal_read_mode_ready';
+SET @@GLOBAL.DEBUG= '+d,wait_before_commit';
+[connect conn2_1]
+SET @@GLOBAL.DEBUG= '+d,before_primary_signal_read_mode_ready';
+[connect conn2_2]
+SELECT group_replication_set_as_primary("SERVER2_UUID", 3);
+[connect conn1_1]
+SET DEBUG_SYNC= "now wait_for signal.secondary_signal_read_mode_ready_reached";
+SET @@GLOBAL.DEBUG= '-d,before_secondary_signal_read_mode_ready';
+[connect conn2_1]
+SET DEBUG_SYNC= "now wait_for signal.primary_signal_read_mode_ready_reached";
+SET @@GLOBAL.DEBUG= '-d,before_primary_signal_read_mode_ready';
+
+# 3. Wait for the THD_transaction_monitor thread to start.
+[connection server1]
+
+# 4. Currently, server2's read_only is off. Insert a piece of data.
+#    When applying this event, server1 needs to successfully pass through
+#    Trans_delegate::trans_begin and Trans_delegate::before_commit.
+[connect conn2_3]
+SET @group_replication_consistency_save= @@SESSION.group_replication_consistency;
+SET @@SESSION.group_replication_consistency= 'EVENTUAL';
+INSERT INTO t1 VALUES(1);
+SET @@SESSION.group_replication_consistency= @group_replication_consistency_save;
+[connect conn1_1]
+SET DEBUG_SYNC= "now wait_for reach_sync";
+SET @@GLOBAL.DEBUG= '-d,wait_before_commit';
+SET DEBUG_SYNC= "now signal end_sync";
+
+# 5. Reap the results.
+[connect conn1_1]
+SET DEBUG_SYNC= "now signal signal.secondary_signal_read_mode_ready_continue";
+SET DEBUG_SYNC= 'RESET';
+[connect conn2_1]
+SET DEBUG_SYNC= "now signal signal.primary_signal_read_mode_ready_continue";
+SET DEBUG_SYNC= 'RESET';
+[connect conn2_2]
+group_replication_set_as_primary("SERVER2_UUID", 3)
+Primary server switched to: SERVER2_UUID
+
+# 6. Switch primary back to server1.
+[connect conn2_2]
+SELECT group_replication_set_as_primary("SERVER1_UUID", 3);
+group_replication_set_as_primary("SERVER1_UUID", 3)
+Primary server switched to: SERVER1_UUID
+
+# 7. Assert primary and secondary status are correct.
+#    Assert data is present on both members.
+[connection server1]
+include/gr_assert_primary_member.inc
+[connection server2]
+include/gr_assert_secondary_member.inc
+include/assert.inc ['There is a value 1 in table t1']
+include/diff_tables.inc [server1:test.t1, server2:test.t1]
+
+# 8. Cleanup.
+[connection server1]
+DROP TABLE t1;
+include/rpl/sync.inc
+include/group_replication_end.inc

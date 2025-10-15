@@ -1,0 +1,49 @@
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+
+create type mydata as object(x int, y int);
+
+DELIMITER //;
+
+CREATE or replace PROCEDURE p1()
+as  
+  type obj1 is record(a int, b mydata);
+  type obj1tab is table of obj1;
+  val obj1tab := obj1tab(obj1(1, mydata(5,6)));
+begin 
+  select val(1).b;
+end;
+//
+
+DELIMITER ;//
+
+CALL p1();
+CALL p1();
+
+drop procedure p1;
+
+
+DELIMITER //;
+
+CREATE or replace PROCEDURE p1()
+as 
+  type obj1 is record(a int, b mydata);
+  type obj1tab is table of obj1;
+  type obj2 is record(a int, b obj1tab);
+  type obj2tab is table of obj2;
+  type obj3 is record(a int, b obj2tab);
+  type obj4 is record(a int, b obj3);
+  val obj4 := obj4(1, obj3(1, obj2tab(obj2(1, obj1tab(obj1(1, mydata(5,6)), obj1(1, mydata(4,7)))))));
+begin 
+  select val.b.b(1).b(1).b;
+end;
+//
+
+DELIMITER ;//
+
+CALL p1();
+CALL p1();
+
+drop procedure p1;
+
+drop type mydata;

@@ -1,0 +1,22 @@
+set sql_mode = oracle;
+create or replace type var_test_zgh as table of varchar(10);
+
+delimiter //;
+--error ER_DATA_TOO_LONG
+declare
+    v37 var_test_zgh;
+    a32 bit;
+begin
+    v37 := var_test_zgh(1, 0, 1);
+
+    for i IN v37.first .. v37.last loop
+        select v37(i);
+        a32 := v37(i);
+        select a32;
+    end loop;
+end;
+//
+
+delimiter ;//
+
+drop type var_test_zgh;

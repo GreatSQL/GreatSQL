@@ -1,0 +1,113 @@
+# ----------------------------------------------------------------------------
+# Test for parameters IN/OUT annotation in procedure under sql_mode = oracle
+# ----------------------------------------------------------------------------
+
+SET sql_mode=ORACLE;
+
+DELIMITER |;
+
+CREATE PROCEDURE p1(a IN BIT DEFAULT 1)
+AS BEGIN
+  SELECT a;
+END|
+
+CREATE PROCEDURE p2(
+  a IN INT DEFAULT 1, 
+  b OUT INT, 
+  c IN OUT INT
+)
+AS BEGIN
+  SET b = a;
+  SET c = a + b + c;
+END|
+
+DELIMITER ;|
+
+CALL p1();
+
+SET @c = 100;
+
+CALL p2(10, @b, @c);
+
+SELECT @b;
+SELECT @c;
+
+DELIMITER |;
+CREATE FUNCTION f1(a BOOL) RETURN BOOL
+AS BEGIN
+  RETURN a;
+END|
+DELIMITER ;|
+SELECT f1(TRUE);
+DROP PROCEDURE IF EXISTS p1;
+
+DELIMITER |;
+CREATE PROCEDURE p3(d IN INT)
+AS BEGIN
+  CALL p2(10, @b, @c);
+  SELECT 'p3', d;
+  SELECT @b;
+  SELECT @c;
+END|
+DELIMITER ;|
+SELECT f1(TRUE);
+CALL p3(33);
+DROP PROCEDURE IF EXISTS p3;
+# ----------------------------------------------------------------------------
+# recursive case
+# ----------------------------------------------------------------------------
+set sql_mode=oracle;
+SET @@session.max_sp_recursion_depth = 5;
+
+DELIMITER //;
+CREATE PROCEDURE test_fib_ora(n INT) AS
+    val INT;
+BEGIN
+      SELECT 'fib_begin', n;
+      CALL fib_ora(n, val);
+      SELECT 'fib_done', n, val;
+END;//
+
+CREATE PROCEDURE fib_ora(n IN INT, val OUT INT) AS
+    v1 INT;
+    v2 INT;
+BEGIN
+	SELECT 'fib_enter', n;
+	IF n < 0 THEN
+		SET val = 0;
+	ELSIF n < 2 THEN
+		SET val = 1;
+	ELSE
+		CALL fib_ora(n -1, v1);
+		CALL fib_ora(n -2, v2);
+		SET val = v1 + v2;
+	END IF;
+	SELECT 'fib_exit', n, val;
+END;//
+
+DELIMITER ;//
+
+SELECT 'will recursion';
+CALL test_fib_ora(5);
+
+# ----------------------------------------------------------------------------
+# error case
+# ----------------------------------------------------------------------------
+
+DELIMITER |;
+--error ER_SP_INVALID_VALUE_DEFAULT_PARAM
+CREATE PROCEDURE p1(a IN BOOL DEFAULT '')
+AS BEGIN
+  SELECT a;
+END|
+
+DELIMITER ;|
+
+#----------------------------------------
+# cleanup
+#----------------------------------------
+DROP PROCEDURE IF EXISTS p1;
+DROP PROCEDURE IF EXISTS p2;
+DROP FUNCTION IF EXISTS f1;
+DROP PROCEDURE IF EXISTS test_fib_ora;
+DROP PROCEDURE IF EXISTS fib_ora;

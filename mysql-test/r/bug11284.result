@@ -1,0 +1,46 @@
+CREATE TABLE `t1` (
+`id` int NOT NULL AUTO_INCREMENT,
+`trandate` date DEFAULT NULL,
+PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE `t2` (
+`id` int NOT NULL AUTO_INCREMENT,
+`trandate` date DEFAULT NULL,
+PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+insert into t2(trandate) values('2024-10-10'),('2024-10-11'),('2024-10-13');
+CREATE TABLE `t3` (
+`id` int NOT NULL AUTO_INCREMENT,
+`trandate` date DEFAULT NULL,
+PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+explain format=tree insert into t1(trandate) (select trandate from (select trandate from t2 order by trandate desc )a limit 1);
+EXPLAIN
+-> Insert into t1
+    -> Limit: 1 row(s)  (cost=*** rows=***)
+        -> Sort: trandate DESC, limit input to 1 row(s) per chunk  (cost=*** rows=***)
+            -> Table scan on t2  (cost=*** rows=***)
+
+insert into t1(trandate) (select trandate from (select trandate from t2 order by trandate desc )a limit 1);
+select * from t1;
+id	trandate
+1	2024-10-13
+insert all into t1(trandate) into t3(trandate) (select trandate from (select trandate from t2 order by trandate desc )a limit 1);
+select * from t1;
+id	trandate
+1	2024-10-13
+2	2024-10-13
+select * from t3;
+id	trandate
+1	2024-10-13
+explain format=tree insert into t1(trandate) (select trandate from (select trandate from t2 order by trandate desc limit 2 )a limit 1);
+EXPLAIN
+-> Insert into t1
+    -> Limit: 1 row(s)  (cost=***..2.01 rows=***)
+        -> Table scan on a  (cost=***..3.28 rows=***)
+            -> Materialize  (cost=***..0.75 rows=***)
+                -> Limit: 2 row(s)  (cost=*** rows=***)
+                    -> Sort: t2.trandate DESC, limit input to 2 row(s) per chunk  (cost=*** rows=***)
+                        -> Table scan on t2  (cost=*** rows=***)
+
+drop table t1, t2, t3;

@@ -1,0 +1,97 @@
+--echo [connect default]
+connection default;
+SET @old_xa_detach_on_prepare=@@global.xa_detach_on_prepare;
+SET GLOBAL xa_detach_on_prepare=OFF;
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+
+connect (conn1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn2,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+--echo [connect conn1]
+connection conn1;
+XA START '1';
+INSERT INTO t1 VALUES (1,1);
+XA END '1';
+XA PREPARE '1';
+XA COMMIT '1';
+SELECT * FROM t1;
+
+--echo [connect conn1]
+connection conn1;
+XA START '2';
+INSERT INTO t1 VALUES (2,2);
+XA END '2';
+XA COMMIT '2' ONE PHASE;
+SELECT * FROM t1;
+
+--echo [connect conn1]
+connection conn1;
+XA START '3';
+INSERT INTO t1 VALUES (3,3);
+XA END '3';
+XA PREPARE '3';
+--error ER_XAER_RMFAIL
+XA COMMIT '3' ONE PHASE;
+--echo [connect conn2]
+connection conn2;
+SELECT * FROM t1;
+XA RECOVER;
+--echo [connect conn1]
+connection conn1;
+XA COMMIT '3';
+SELECT * FROM t1;
+--echo [connect conn2]
+connection conn2;
+SELECT * FROM t1;
+XA RECOVER;
+
+connect (conn3,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+--echo [connect conn3]
+connection conn3;
+XA START '4';
+INSERT INTO t1 VALUES (4,4);
+XA END '4';
+XA PREPARE '4';
+--disconnect conn3
+sleep 1;
+--echo [connect conn1]
+connection conn1;
+SELECT * FROM t1;
+XA RECOVER;
+--error ER_XAER_RMFAIL
+XA COMMIT '4' ONE PHASE;
+SELECT * FROM t1;
+XA RECOVER;
+XA COMMIT '4';
+SELECT * FROM t1;
+XA RECOVER;
+
+--echo [connect conn2]
+connection conn2;
+SET SESSION xa_detach_on_prepare=ON;
+XA START '5';
+INSERT INTO t1 VALUES (5,5);
+XA END '5';
+XA PREPARE '5';
+sleep 1;
+--echo [connect conn1]
+connection conn1;
+SELECT * FROM t1;
+XA RECOVER;
+--error ER_XAER_RMFAIL
+XA COMMIT '5' ONE PHASE;
+SELECT * FROM t1;
+XA RECOVER;
+XA COMMIT '5';
+SELECT * FROM t1;
+XA RECOVER;
+--echo [connect conn2]
+connection conn2;
+SET SESSION xa_detach_on_prepare=OFF;
+
+--disconnect conn1
+--disconnect conn2
+--echo [connect default]
+connection default;
+SET GLOBAL xa_detach_on_prepare=@old_xa_detach_on_prepare;
+DROP TABLE t1;

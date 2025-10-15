@@ -1,0 +1,284 @@
+--source include/have_debug.inc
+SET sql_mode=ORACLE;
+SET SESSION debug='+d,skip_dd_table_access_check';
+set @@udt_format_result='DBA';
+
+--echo #
+--echo # test of create type
+--echo #
+create or replace type t_air as object(id int,type varchar(20));
+create database db2;
+use db2;
+create or replace type t_air as object(id int,type varchar(20));
+create table tabl1 (id int, u1 t_air);
+insert into tabl1 values(1,t_air(10,'aqwer1'));
+insert into tabl1 values(2,t_air(11,'aqwer2'));
+insert into tabl1 values(3,t_air(12,'aqwer3'));
+insert into tabl1 values(4,t_air(12,'aqwer4'));
+create table tt_air(id int,name t_air);
+insert into tt_air values(10,t_air(10,'aabb'));
+use test;
+
+--echo #
+--echo # test of create table of
+--echo #
+SELECT name,type,options FROM mysql.routines where name='t_air';
+--error ER_NOT_SUPPORTED_YET
+create table table_of of t_air ENGINE=myisam AVG_ROW_LENGTH=1;
+create table table_of of t_air ENGINE=myisam 
+  DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  MAX_ROWS=500 PACK_KEYS=1 COMMENT='create_of'
+  MIN_ROWS= 1 CHECKSUM= 1 STATS_PERSISTENT=1 STATS_AUTO_RECALC=0;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+select options from mysql.tables where name='table_of';
+show create table table_of;
+
+--echo #
+--echo # test of insert
+--echo #
+insert into table_of values(1,'asdf');
+select * from table_of;
+insert into table_of select t_air(10,'qqqq');
+--error ER_WRONG_UDT_DATA_TYPE
+insert into table_of select db2.t_air(10,'qqqq');
+select * from table_of;
+create table tabl1 (id int, u1 t_air);
+insert into tabl1 values(1,t_air(10,'aqwer1'));
+insert into tabl1 values(2,t_air(11,'aqwer2'));
+insert into tabl1 values(3,t_air(12,'aqwer3'));
+insert into tabl1 values(4,t_air(12,'aqwer4'));
+insert into tabl1 values(5,null);
+insert into tabl1 values(6,t_air(12,null));
+insert into tabl1 values(7,t_air(null,null));
+INSERT INTO table_of SELECT u1 FROM tabl1 where u1 is not null;
+--error ER_WRONG_UDT_DATA_TYPE
+INSERT INTO table_of SELECT u1 FROM db2.tabl1;
+
+--error ER_WRONG_VALUE_COUNT_ON_ROW
+INSERT INTO table_of(id,type) SELECT u1 FROM tabl1;
+--error ER_UDT_INCONS_DATATYPES
+INSERT INTO table_of(id) SELECT u1 FROM tabl1;
+
+create table tt_air(id int,name t_air);
+insert into tt_air values(10,t_air(10,'aabb'));
+update tabl1 set (u1)=(select name from tt_air where id=10) where id=1;
+--error ER_WRONG_UDT_DATA_TYPE
+update tabl1 set (u1)=(select name from db2.tt_air where id=10) where id=1;
+--error ER_WRONG_UDT_DATA_TYPE
+update tabl1 set (id,u1)=(select id,name from db2.tt_air where id=10) where id=1;
+--error ER_UDT_INCONS_DATATYPES
+update tabl1 set (id)=(select name from tt_air where id=10) where id=2;
+--error ER_WRONG_UDT_DATA_TYPE
+update tabl1 set (u1)=db2.t_air(10,'www') where id=3;
+update tabl1 set (u1)=t_air(10,'www') where id=3;
+--error ER_UDT_INCONS_DATATYPES
+update tabl1 set (id)=t_air(10,'www') where id=4;
+--error ER_WRONG_UDT_DATA_TYPE
+update tabl1 set (id,u1)=(1,db2.t_air(10,'www')) where id=1;
+select * from tabl1;
+
+--echo #
+--echo # test of merge into
+--echo #
+insert into tt_air values(1,t_air(111,'aabb111'));
+insert into tt_air values(2,t_air(112,'aabb112'));
+select * from tt_air;
+MERGE INTO tabl1 t1
+USING tt_air t2
+ON ( t2.id = t1.id )
+WHEN MATCHED THEN
+UPDATE SET t1.u1=t2.name
+WHEN NOT MATCHED THEN
+INSERT (t1.id, t1.u1)
+VALUES (t2.id, t2.name);
+
+select * from tabl1;
+drop table tt_air;
+
+select * from table_of;
+INSERT INTO table_of(type) SELECT 'qwer' FROM dual;
+select * from table_of;
+--error ER_UDT_INCONS_DATATYPES
+INSERT INTO table_of(id,type) SELECT id,u1 FROM tabl1;
+--error ER_UDT_INCONS_DATATYPES
+INSERT INTO table_of(type) SELECT u1 FROM tabl1;
+--error ER_OPERAND_COLUMNS
+update table_of set (id,type)=(t_air(10,'')) where type is not null;
+--error ER_UDT_INCONS_DATATYPES
+update table_of set (id,type)=(1,t_air(10,'')) where type is not null;
+--error ER_UDT_INCONS_DATATYPES
+update table_of set id=t_air(10,'') where type is not null;
+drop table tabl1;
+
+create table tab12(a int,b varchar(10));
+insert into tab12 values(1,'aaa'),(2,'bbb'),(3,'ccc'),(null,null);
+INSERT INTO table_of SELECT t_air(a,b) FROM tab12;
+select * from table_of;
+--error ER_WRONG_VALUE_COUNT_ON_ROW
+INSERT INTO table_of SELECT a FROM tab12;
+
+--echo #
+--echo # test of create type with 1 argument
+--echo #
+create or replace type t_air1 as object(type varchar(20));
+create table tab2 of t_air1;
+INSERT INTO tab2 SELECT t_air1('aa') FROM dual;
+INSERT INTO tab2 SELECT b FROM tab12;
+INSERT INTO tab2 SELECT t_air1(b) FROM tab12;
+--error ER_UDT_INCONS_DATATYPES
+INSERT INTO tab2(type) SELECT t_air1(b) FROM tab12;
+--error ER_UDT_INCONS_DATATYPES
+INSERT INTO tab2(type) SELECT t_air1('a');
+select * from tab2;
+drop table tab2;
+drop type t_air1;
+drop table tab12;
+
+--echo #
+--echo # test of alter table
+--echo #
+--error ER_ALTER_WITH_OF_TYPE_TABLE
+ALTER TABLE table_of ADD i int;
+
+--error ER_ALTER_WITH_OF_TYPE_TABLE
+ALTER TABLE table_of DROP COLUMN id;
+
+--error ER_ALTER_WITH_OF_TYPE_TABLE
+ALTER TABLE table_of modify i char;
+
+alter table table_of comment ='123';
+show create table table_of;
+
+alter table table_of ENGINE=Innodb;
+show create table table_of;
+
+alter table table_of rename table_of1;
+alter table table_of1 rename table_of;
+
+CREATE INDEX idx11 ON table_of(id,type);
+ALTER TABLE table_of alter INDEX idx11 INVISIBLE;
+drop index idx11 on table_of;
+
+--echo #
+--echo # test of drop type
+--echo #
+--error ER_TYPE_DROP_FAILED
+drop type t_air;
+drop table table_of;
+SELECT name,type,options FROM mysql.routines where name='t_air';
+drop type t_air;
+
+--echo #
+--echo # test of create index
+--echo #
+create or replace type t_air as object(id int,type varchar(20));
+create table table_of of t_air;
+CREATE INDEX idx ON table_of(type,id);
+
+--echo #
+--echo # test of rename table
+--echo #
+ALTER TABLE table_of RENAME table_of1;
+select options from mysql.tables where name='table_of1';
+ALTER TABLE table_of1 RENAME table_of;
+
+--echo #
+--echo # test of create view
+--echo #
+CREATE VIEW vv1 as SELECT * FROM table_of;
+select * from vv1;
+drop VIEW vv1;
+
+--echo #
+--echo # test of create temporary table of
+--echo #
+--error ER_NOT_SUPPORTED_YET
+create temporary table table_of1 of t_air;
+
+drop table table_of;
+drop type t_air;
+
+--echo #
+--echo # test of create table of db1.type
+--echo #
+use test;
+--error ER_WRONG_UDT_DATA_TYPE
+create table table_of of db2.t_air;
+create table db2.table_of of db2.t_air;
+insert into db2.table_of values(1,'aaa');
+
+--echo #
+--echo # test of alter db1.table
+--echo #
+--error ER_WRONG_UDT_DATA_TYPE
+alter table db2.table_of add u2 t_air;
+--error ER_ALTER_WITH_OF_TYPE_TABLE
+alter table db2.table_of add u2 db2.t_air;
+
+drop database db2;
+
+--echo #
+--echo # test of create table of same structure types
+--echo #
+create type t_air10 as object (c1 int, c2 int);
+create type t_air12 as object (c1 int, c2 int);
+create table t_type1 of t_air10;
+create table t_type2 of t_air12;
+insert into t_type1 values (1,1);
+select * from t_type1;
+--error ER_WRONG_UDT_DATA_TYPE
+insert into t_type1 select t_air12(1,1);
+insert into t_type2 select * from t_type1;
+select * from t_type2;
+
+drop table t_type1;
+drop table t_type2;
+drop type t_air10;
+drop type t_air12;
+
+--echo #
+--echo # test of prepare stmt
+--echo #
+create or replace type t_air as object(id int,type int);
+create table table_of of t_air;
+prepare ps1 from 'insert into table_of select t_air(?,?)';
+set @a=1;
+set @b=11;
+execute ps1 using @a,@b;
+select * from table_of;
+insert into table_of select t_air(2,'123456');
+select * from table_of;
+insert into table_of values(3,'333');
+select * from table_of;
+--error ER_WRONG_VALUE_COUNT_ON_ROW
+INSERT INTO table_of select null;
+
+create table tabl1 (id int, u1 t_air);
+insert into tabl1 values(1,t_air(10,100));
+insert into tabl1 values(2,t_air(11,110));
+insert into tabl1 values(3,t_air(12,120));
+insert into tabl1 values(4,t_air(12,130));
+insert into tabl1 values(5,null);
+insert into tabl1 values(6,t_air(12,null));
+insert into tabl1 values(7,t_air(null,13));
+insert into tabl1 values(8,t_air(null,null));
+select * from tabl1;
+prepare ps2 from 'INSERT INTO table_of SELECT u1 FROM tabl1 where id>3';
+--error ER_UDT_INSERT_NULL_OBJECT
+execute ps2;
+delete from tabl1 where id=5;
+execute ps2;
+select * from table_of;
+
+DEALLOCATE PREPARE ps1;
+DEALLOCATE PREPARE ps2;
+drop table tabl1;
+drop table table_of;
+drop type t_air;
+
+
+
+
+
+
+
