@@ -1,0 +1,289 @@
+CREATE TABLE mysql.tmp_backup_tables_priv AS SELECT * FROM mysql.tables_priv;
+CREATE TABLE mysql.tmp_backup_user AS SELECT * FROM mysql.user;
+# restart
+select @@init_greatdb_priv_mode;
+@@init_greatdb_priv_mode
+1
+select @@greatdb_priv_mode;
+@@greatdb_priv_mode
+1
+alter user sysdbo identified by 'Bgview@2021';
+ALTER USER sysdba IDENTIFIED BY 'Bgview@2021';
+SELECT PLUGIN_NAME, PLUGIN_TYPE FROM information_schema.plugins WHERE plugin_name = 'plan_baseline';
+PLUGIN_NAME	PLUGIN_TYPE
+plan_baseline	DAEMON
+show status like 'plan_baseline%';
+Variable_name	Value
+plan_baseline_work	ON
+show variables like 'plan_baseline%';
+Variable_name	Value
+plan_baseline_enable_persistent	OFF
+plan_baseline_enable_summary	OFF
+plan_baseline_max_rows_count	3000
+plan_baseline_max_tables_count	24
+plan_baseline_refresh_interval	3600
+set global plan_baseline_enable_summary = on;
+set global plan_baseline_enable_persistent = on;
+show variables like 'plan_baseline%';
+Variable_name	Value
+plan_baseline_enable_persistent	ON
+plan_baseline_enable_summary	ON
+plan_baseline_max_rows_count	3000
+plan_baseline_max_tables_count	24
+plan_baseline_refresh_interval	3600
+CREATE TABLE t0 (i0 INTEGER);
+insert into t0 values(1);
+CREATE TABLE t1 (f1 INTEGER, f2 INTEGER, f3 INTEGER,
+KEY(f1), KEY(f1,f2), KEY(f3));
+INSERT INTO t1 SELECT i0, i0 + 10*i0, i0 + 10*i0 + 100*i0 FROM t0 AS a0;
+INSERT INTO t1 SELECT i0, i0 + 10*i0, i0 + 10*i0 + 100*i0 FROM t0 AS a0;
+INSERT INTO t1 VALUES (NULL, 1, 2);
+INSERT INTO t1 VALUES (NULL, 1, 3);
+CREATE TABLE t2 LIKE t1;
+INSERT INTO t2 SELECT * FROM t1;
+ANALYZE TABLE t1,t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+create database db1;
+use db1;
+CREATE TABLE t0 (i0 INTEGER);
+insert into t0 values(1);
+CREATE TABLE t1 (f1 INTEGER, f2 INTEGER, f3 INTEGER,
+KEY(f1), KEY(f1,f2), KEY(f3));
+INSERT INTO t1 SELECT i0, i0 + 10*i0, i0 + 10*i0 + 100*i0 FROM t0 AS a0;
+INSERT INTO t1 SELECT i0, i0 + 10*i0, i0 + 10*i0 + 100*i0 FROM t0 AS a0;
+INSERT INTO t1 VALUES (NULL, 1, 2);
+INSERT INTO t1 VALUES (NULL, 1, 3);
+CREATE TABLE t2 LIKE t1;
+INSERT INTO t2 SELECT * FROM t1;
+ANALYZE TABLE t1,t2;
+Table	Op	Msg_type	Msg_text
+db1.t1	analyze	status	OK
+db1.t2	analyze	status	OK
+SELECT *
+FROM (SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
+FROM test.t1 GROUP BY f1, f2
+UNION ALL
+SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
+FROM t2 GROUP BY f1,f2) as dt
+WHERE f1 > 2 and f2 > 30 and (f1+f2) > 40;
+f1	f2	SUM(f2) OVER(PARTITION BY f1,f2)
+drop database db1;
+use test;
+SELECT *
+FROM (SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
+FROM t1 GROUP BY f1, f2
+UNION ALL
+SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
+FROM t2 GROUP BY f1,f2) as dt
+WHERE f1 > 2 and f2 > 30 and (f1+f2) > 40;
+f1	f2	SUM(f2) OVER(PARTITION BY f1,f2)
+SELECT i, j
+FROM (SELECT f1+f2 as i, f2+f3 as j FROM t1
+INTERSECT
+SELECT f1 as l, f2+f3 as m FROM t2) as dt
+WHERE i > 30 and i+j > 300;
+i	j
+SELECT i, j
+FROM (SELECT f1+f2 as i, f2+f3 as j FROM t1
+INTERSECT
+SELECT f1 as l, f2+f3 as m FROM t2) as dt
+WHERE i > 30 and i+j > 100;
+i	j
+SELECT f1
+FROM (SELECT f1 FROM t1
+UNION ALL
+SELECT f1 FROM t1 LIMIT 1) as dt
+WHERE f1 = 1;
+f1
+SELECT f1
+FROM (SELECT f1, f2 FROM t1
+UNION
+SELECT f1, f2 FROM t2 ORDER BY f2) as dt
+WHERE f1 > 3;
+f1
+SELECT * FROM t1 INNER JOIN(SELECT t2.f1, t2.f2 FROM t1
+LEFT JOIN t1 AS t2 ON TRUE) AS dt ON dt.f1 > 3;
+f1	f2	f3	f1	f2
+CREATE FUNCTION p() RETURNS INTEGER
+BEGIN
+DECLARE retn INTEGER;
+SELECT count(f1) FROM t1 INTO retn;
+RETURN retn;
+END|
+SELECT * FROM (SELECT f1, SUM(f2) FROM t1 GROUP BY f1) as dt WHERE p() = 1;
+f1	SUM(f2)
+drop FUNCTION p;
+SELECT *
+FROM (SELECT f1 as j, SUM(f2) as sum
+FROM t1 GROUP BY f1 WITH ROLLUP
+HAVING AVG(f2) > 1
+UNION ALL
+SELECT f1 as j, SUM(f2) as sum
+FROM t1 GROUP BY f1) AS dt
+WHERE j+sum > 50 OR j IS NULL;
+j	sum
+NULL	24
+NULL	2
+SELECT * FROM (SELECT f1, f2,SUM(f2) OVER() FROM t1 GROUP BY f1,f2) as dt
+WHERE f1 > 2;
+f1	f2	SUM(f2) OVER()
+drop table t1,t2;
+CREATE TABLE t (x INTEGER);
+INSERT INTO t VALUES (1), (2), (3);
+ANALYZE TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	analyze	status	OK
+SELECT DISTINCT MIN(t2.x), t1.x
+FROM t t1 JOIN t t2 USING (x)
+GROUP BY t2.x;
+MIN(t2.x)	x
+1	1
+2	2
+3	3
+drop table t;
+CREATE TABLE student (
+id       INT,
+name  VARCHAR(10),
+grade INT
+);
+INSERT INTO student VALUES(1, 'John', NULL);
+INSERT INTO student VALUES(2, 'Paul', 1);
+INSERT INTO student VALUES(3, 'Nancy', 1);
+INSERT INTO student VALUES(4, 'Sarah', 3);
+SELECT id,count(id)
+FROM student
+where id > 1
+start with grade < 3
+CONNECT BY  id =  grade
+group by id;
+id	count(id)
+2	1
+3	1
+drop table student;
+create table t1 (a int, b int);
+insert into t1 values (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11);
+insert into t1 values (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11);
+create table t2 (c int, d int);
+insert into t2 values(4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13), (13, 14);
+insert into t2 values(4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13), (13, 14);
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS ONLY;
+a	b
+13	14
+13	14
+12	13
+set sql_mode=oracle;
+CREATE or replace PROCEDURE p2() as
+a1 int := 2;
+c sys_refcursor;
+begin
+open c for select * from t1 where a=a1;
+close c;
+end;
+$$
+call p2;
+drop PROCEDURE p2;
+CREATE or replace PROCEDURE p3() as
+cursor c is select * from t1 union select * from t2 where c>0;
+begin
+open c;
+close c;
+end;
+$$
+call p3;
+drop PROCEDURE p3;
+CREATE or replace PROCEDURE p4() as
+c sys_refcursor;
+str varchar(100) := 'select * from t1 union select * from t2 where c>0';
+begin
+open c for str;
+close c;
+end;
+$$
+call p4;
+drop PROCEDURE p4;
+CREATE or replace PROCEDURE p1() as
+a int := 2;
+begin
+select * from t2 where c<a;
+end;
+$$
+call p1;
+c	d
+drop PROCEDURE p1;
+CREATE or replace function f1() return int is
+result int;
+begin
+select b into result from t1 where a=2 limit 1;
+return result;
+END;
+$$
+select f1();
+f1()
+3
+drop function f1;
+CREATE or replace procedure ExecuteDDL(ddl_cmd varchar(500)) as
+l_handle integer;
+l_rows int;
+BEGIN
+l_handle := dbms_sql.open_cursor();
+select l_handle;
+call dbms_sql.parse(l_handle, ddl_cmd, 1);
+l_rows:= dbms_sql_execute(l_handle);
+call dbms_sql.close_cursor(l_handle);
+end;
+$$
+Warnings:
+Note	1585	This function 'execute' has the same name as a native function
+call ExecuteDDL('select * from t1 left join t2 on t1.a=t2.c');
+l_handle
+2
+Warnings:
+Note	1585	This function 'execute' has the same name as a native function
+drop procedure ExecuteDDL;
+PREPARE stmt1 FROM 'select * from t1 where a=1';
+EXECUTE stmt1;
+a	b
+1	2
+1	2
+DEALLOCATE PREPARE stmt1;
+EXECUTE IMMEDIATE 'select * from t2 where c>10';
+c	d
+11	12
+12	13
+13	14
+11	12
+12	13
+13	14
+select db_name,operation from performance_schema.gdb_hist_sql_plan where db_name='test,db1';
+db_name	operation
+test,db1	0.Table scan on dt 1.Union all materialize 2.Window aggregate with buffering: sum_func 3.Sort: test.t1.f1, test.t1.f2 4.Table scan on <temporary> 5.Temporary table with deduplication 6.Filter: filter_condition 7.Covering index range scan on t1 using f1_2 over ranges_text : ranges 2.Window aggregate with buffering: sum_func 3.Sort: t2.f1, t2.f2 4.Table scan on <temporary> 5.Temporary table with deduplication 6.Filter: filter_condition 7.Covering index range scan on t2 using f1_2 over ranges_text : ranges
+select db_name,query_sql,table_rows from performance_schema.gdb_digest_sql_info where db_name='test,db1';
+db_name	query_sql	table_rows
+test,db1	SELECT *
+FROM (SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
+FROM test.t1 GROUP BY f1, f2
+UNION ALL
+SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
+FROM t2 GROUP BY f1,f2) as dt
+WHERE f1 > 2 and f2 > 30 and (f1+f2) > 40	0
+select db_name,digest_hash,digest_text,plan_name from performance_schema.gdb_sql_plan_baselines where db_name='test,db1';
+db_name	digest_hash	digest_text	plan_name
+test,db1	11d09e45bac5ef48baae9bb4a1b2347a99dd9be855e9d78f79508abe7f4b574c	SELECT * FROM ( SELECT `f1` , `f2` , SUM ( `f2` ) OVER ( PARTITION BY `f1` , `f2` ) FROM `test` . `t1` GROUP BY `f1` , `f2` UNION ALL SELECT `f1` , `f2` , SUM ( `f2` ) OVER ( PARTITION BY `f1` , `f2` ) FROM `t2` GROUP BY `f1` , `f2` ) AS `dt` WHERE `f1` > ? AND `f2` > ? AND ( `f1` + `f2` ) > ?	6043d35c9b2283473b881467210e2aca0c8f397aac20192f67fcc27c4f8b97ca
+select gdb_create_plan_baseline_tables();
+gdb_create_plan_baseline_tables()
+0
+select count(*) from greatdb_plan_baseline.gdb_sql_plan_baseline_table_info;
+count(*)
+1
+select gdb_create_plan_baseline_tables();
+ERROR 28000: Access denied for user 'sysdba'@'%' (using password: )
+drop table t0,t1,t2;
+# restart
+TRUNCATE TABLE mysql.tables_priv;
+INSERT INTO mysql.tables_priv (SELECT * FROM mysql.tmp_backup_tables_priv);
+DROP TABLE mysql.tmp_backup_tables_priv;
+TRUNCATE TABLE mysql.user;
+INSERT INTO mysql.user (SELECT * FROM mysql.tmp_backup_user);
+DROP TABLE mysql.tmp_backup_user;

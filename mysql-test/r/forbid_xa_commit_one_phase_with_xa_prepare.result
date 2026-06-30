@@ -1,0 +1,127 @@
+[connect default]
+SET @old_xa_detach_on_prepare=@@global.xa_detach_on_prepare;
+SET GLOBAL xa_detach_on_prepare=OFF;
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+[connect conn1]
+XA START '1';
+INSERT INTO t1 VALUES (1,1);
+XA END '1';
+XA PREPARE '1';
+XA COMMIT '1';
+SELECT * FROM t1;
+c1	c2
+1	1
+[connect conn1]
+XA START '2';
+INSERT INTO t1 VALUES (2,2);
+XA END '2';
+XA COMMIT '2' ONE PHASE;
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+[connect conn1]
+XA START '3';
+INSERT INTO t1 VALUES (3,3);
+XA END '3';
+XA PREPARE '3';
+XA COMMIT '3' ONE PHASE;
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  PREPARED state
+[connect conn2]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	3
+[connect conn1]
+XA COMMIT '3';
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+[connect conn2]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+[connect conn3]
+XA START '4';
+INSERT INTO t1 VALUES (4,4);
+XA END '4';
+XA PREPARE '4';
+[connect conn1]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	4
+XA COMMIT '4' ONE PHASE;
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  NON-EXISTING state
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	4
+XA COMMIT '4';
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+[connect conn2]
+SET SESSION xa_detach_on_prepare=ON;
+XA START '5';
+INSERT INTO t1 VALUES (5,5);
+XA END '5';
+XA PREPARE '5';
+[connect conn1]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	5
+XA COMMIT '5' ONE PHASE;
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  NON-EXISTING state
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	5
+XA COMMIT '5';
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+[connect conn2]
+SET SESSION xa_detach_on_prepare=OFF;
+[connect default]
+SET GLOBAL xa_detach_on_prepare=@old_xa_detach_on_prepare;
+DROP TABLE t1;

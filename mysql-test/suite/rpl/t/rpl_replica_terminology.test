@@ -1,0 +1,322 @@
+# === Purpose ===
+#
+# This test validates that new and old terminology for replica commands
+#
+# ==== Requirements ====
+#
+# R1. Both commands that use the new terminology or the old SLAVE terms are
+#     accepted by the server, but the latter are marked as deprecated.
+#
+# === Implementation ====
+#
+# 1. Test EVENT related terminology
+#    - SHOW CREATE EVENT
+#    - SHOW EVENTS
+#    - Queries into information_schema.events
+#
+# 2. Test replica commands
+#    - SHOW REPLICAS
+#    - SHOW REPLICA STATUS
+#    - RESET REPLICA
+#    - START REPLICA UNTIL
+#
+# === References ===
+#
+# WL#14190: Replace old terms in replication SQL commands on the SOURCE
+# WL#14171: Replication: replace SLAVE in SQL commands
+#
+
+--source include/have_binlog_format_row.inc
+--let $rpl_skip_start_slave=1
+--source include/rpl/init_source_replica.inc
+
+#####################################################################
+#
+# WL#14190: Replace old terms in replication SQL commands on the SOURCE
+#
+# This is a test case for the CREATE EVENT on the Replica
+# We test how the variable terminology_use_previous affects the output of:
+#  - SHOW CREATE EVENT
+#  - SHOW EVENTS
+#  - Queries into information_schema.events
+#
+#####################################################################
+
+--source include/rpl/connection_replica.inc
+
+CREATE EVENT test.slave_event ON SCHEDULE EVERY 3 SECOND DISABLE ON SLAVE DO SELECT 1;
+CREATE EVENT test.replica_event ON SCHEDULE EVERY 3 SECOND DISABLE ON REPLICA DO SELECT 1;
+
+# Shows DISABLE ON REPLICA
+--replace_regex /STARTS '[^']+'/STARTS '#'/
+SHOW CREATE EVENT test.slave_event;
+
+--let $assert_text= The event Status should be REPLICA_SIDE_DISABLED for slave_event
+--let $assert_cond= "[SELECT COUNT(*) FROM information_schema.events WHERE event_name="slave_event" AND status="REPLICA_SIDE_DISABLED"]" = 1
+--source include/assert.inc
+
+--let $assert_text= The event Status should be REPLICA_SIDE_DISABLED for replica_event
+--let $assert_cond= "[SELECT COUNT(*) FROM information_schema.events WHERE event_name="replica_event" AND status="REPLICA_SIDE_DISABLED"]" = 1
+--source include/assert.inc
+
+# SHOW EVENTS will show REPLICA_SIDE_DISABLED for both events
+--replace_column 6 # 9 # 10 #
+SHOW EVENTS;
+
+SET @save_terminology_use_previous = @@session.terminology_use_previous;
+
+SET @@session.terminology_use_previous = BEFORE_8_0_26;
+# Shows DISABLE ON SLAVE
+--replace_regex /STARTS '[^']+'/STARTS '#'/
+SHOW CREATE EVENT test.slave_event;
+
+# SHOW EVENTS will show SLAVESIDE_DISABLED for both events
+--replace_column 6 # 9 # 10 #
+SHOW EVENTS;
+
+SET @@session.terminology_use_previous = BEFORE_8_2_0;
+# Shows DISABLE ON SLAVE
+--replace_regex /STARTS '[^']+'/STARTS '#'/
+SHOW CREATE EVENT test.slave_event;
+
+# Shows DISABLE ON SLAVE for the replica_event as well
+--replace_regex /STARTS '[^']+'/STARTS '#'/
+SHOW CREATE EVENT test.replica_event;
+
+# SHOW EVENTS will show SLAVESIDE_DISABLED for both events
+--replace_column 6 # 9 # 10 #
+SHOW EVENTS;
+
+# The table also is affected by the terminology_use_previous
+--let $assert_text= The event Status should be SLAVESIDE_DISABLED for slave_event
+--let $assert_cond= "[SELECT COUNT(*) FROM information_schema.events WHERE event_name="slave_event" AND status="SLAVESIDE_DISABLED"]" = 1
+--source include/assert.inc
+
+--let $assert_text= The event Status should be SLAVESIDE_DISABLED for replica_event
+--let $assert_cond= "[SELECT COUNT(*) FROM information_schema.events WHERE event_name="replica_event" AND status="SLAVESIDE_DISABLED"]" = 1
+--source include/assert.inc
+
+SET @@session.terminology_use_previous = @save_terminology_use_previous;
+
+DROP EVENT test.slave_event;
+DROP EVENT test.replica_event;
+
+RESET MASTER;
+
+--source include/rpl/connection_source.inc
+
+######################################################################
+#
+# WL#14171: Replication: replace SLAVE in SQL commands
+#
+######################################################################
+
+--source include/rpl/connection_source.inc
+
+# Add data on source
+CREATE TABLE t1(a INT PRIMARY KEY);
+DROP TABLE t1;
+
+--let $source_pos=query_get_value('SHOW BINARY LOGS','File_size',1)
+--let $source_file=query_get_value('SHOW BINARY LOGS','Log_name',1)
+
+--source include/rpl/connection_replica.inc
+
+# Execute START REPLICA with MASTER_LOG_FILE and MASTER_LOG_POS param
+--replace_result $source_file source_file $source_pos source_pos
+--eval START REPLICA UNTIL MASTER_LOG_FILE='$source_file',MASTER_LOG_POS=$source_pos
+
+# Check Until_Condition value is 'Source' in the output of
+# SHOW REPLICA STATUS
+--let $replica_until_cond=query_get_value('SHOW REPLICA STATUS','Until_Condition',1)
+--let $assert_cond= "$replica_until_cond" = "Source"
+--let $assert_text= Until condition is 'source' on replica
+--source include/assert.inc
+
+--let $_wait_io_status = Yes
+--let $_wait_sql_status = No
+--source include/rpl/wait_for_slave_status.inc
+
+--source include/rpl/stop_replica.inc
+--let $slave_timeout = 10
+--let $_wait_io_status = No
+--let $_wait_sql_status = No
+--source include/rpl/wait_for_slave_status.inc
+
+# must emit a deprecation warning
+START SLAVE;
+--let $_wait_io_status = Yes
+--let $_wait_sql_status = Yes
+--source include/rpl/wait_for_slave_status.inc
+
+# must emit a deprecation warning
+STOP SLAVE;
+--let $_wait_io_status = No
+--let $_wait_sql_status = No
+--source include/rpl/wait_for_slave_status.inc
+
+# must not emit a deprecation warning
+START REPLICA;
+--let $_wait_io_status = Yes
+--let $_wait_sql_status = Yes
+--source include/rpl/wait_for_slave_status.inc
+
+# must not emit a deprecation warning
+STOP REPLICA;
+--let $_wait_io_status = No
+--let $_wait_sql_status = No
+--source include/rpl/wait_for_slave_status.inc
+
+# Start replication to continue
+--source include/rpl/start_replica.inc
+--let $_wait_io_status = Yes
+--let $_wait_sql_status = Yes
+--source include/rpl/wait_for_slave_status.inc
+
+#
+# SHOW REPLICAS
+#
+
+--source include/rpl/connection_source.inc
+
+# first assert that the fields are in the result set with the expected
+# name (old and new names). Do not record in the result file, since
+# the output is not deterministic
+
+--let $dontcare = query_get_value(SHOW SLAVE HOSTS, Slave_UUID, 1)
+--let $dontcare = query_get_value(SHOW SLAVE HOSTS, Master_id, 1)
+
+# new syntax and assert that the new names of the fields are
+# the ones used
+
+--let $dontcare = query_get_value(SHOW REPLICAS, Replica_UUID, 1)
+--let $dontcare = query_get_value(SHOW REPLICAS, Source_Id, 1)
+
+--disable_result_log
+# emits a deprecation warning
+SHOW SLAVE HOSTS;
+--enable_result_log
+SHOW WARNINGS;
+--disable_result_log
+# does not emit a warning
+SHOW REPLICAS;
+--enable_result_log
+SHOW WARNINGS;
+
+#
+# SHOW REPLICA STATUS
+#
+
+--source include/rpl/connection_replica.inc
+
+# first assert that the fields are in the result set with the expected
+# name (old and new names). Do not record in the result file, since
+# the output is not deterministic
+
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Slave_IO_State, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_Host, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_User, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_Port, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_Log_File, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Read_Master_Log_Pos, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Relay_Master_Log_File, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Slave_IO_Running, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Slave_SQL_Running, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Exec_Master_Log_Pos, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_SSL_Allowed, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_SSL_CA_File, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_SSL_CA_Path, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_SSL_Cert, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_SSL_Cipher, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_SSL_Key, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Seconds_Behind_Master, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_SSL_Verify_Server_Cert, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_Server_Id, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_UUID, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Slave_SQL_Running_State, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_Retry_Count, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_Bind, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_SSL_Crl, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_SSL_Crlpath, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_TLS_Version, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Master_public_key_path, 1)
+--let $dontcare = query_get_value(SHOW SLAVE STATUS, Get_master_public_key, 1)
+
+# new syntax and  assert that the new names of the fields are
+# the ones used
+
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Replica_IO_State, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_Host, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_User, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_Port, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_Log_File, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Read_Source_Log_Pos, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Relay_Source_Log_File, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Replica_IO_Running, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Replica_SQL_Running, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Exec_Source_Log_Pos, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_SSL_Allowed, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_SSL_CA_File, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_SSL_CA_Path, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_SSL_Cert, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_SSL_Cipher, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_SSL_Key, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Seconds_Behind_Source, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_SSL_Verify_Server_Cert, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_Server_Id, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_UUID, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Replica_SQL_Running_State, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_Retry_Count, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_Bind, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_SSL_Crl, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_SSL_Crlpath, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_TLS_Version, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Source_public_key_path, 1)
+--let $dontcare = query_get_value(SHOW REPLICA STATUS, Get_Source_public_key, 1)
+
+# Now check for the deprecation warning and record it in the result file.
+# We output a single deterministic field to make the test case resilient.
+
+--disable_result_log
+# emits a deprecation warning
+SHOW SLAVE STATUS;
+--enable_result_log
+SHOW WARNINGS;
+--disable_result_log
+# does not emit a deprecation warning
+SHOW REPLICA STATUS;
+--enable_result_log
+SHOW WARNINGS;
+
+#
+# RESET REPLICA
+#
+
+--source include/rpl/stop_replica.inc
+
+# must emit a deprecation warning
+RESET SLAVE;
+
+# must not emit a deprecation warning
+RESET REPLICA;
+
+# must emit a deprecation warning
+RESET SLAVE ALL;
+
+# must not emit a deprecation warning
+RESET REPLICA ALL;
+
+--source include/rpl/connection_source.inc
+--let $dump_id = `SELECT ID FROM INFORMATION_SCHEMA.PROCESSLIST`
+if ($dump_id)
+{
+  --disable_query_log
+  --eval kill $dump_id
+  --sleep 10
+  --enable_query_log
+}
+
+--let $assert_text= Thread Binlog Dump GTID is killed.
+--let $assert_cond= "[SELECT COUNT(*) FROM information_schema.processlist WHERE COMMAND=\"Binlog Dump%\"]" = "0"
+--source include/assert.inc
+

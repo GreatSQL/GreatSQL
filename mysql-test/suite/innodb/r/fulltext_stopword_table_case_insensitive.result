@@ -1,0 +1,90 @@
+1
+
+set global innodb_ft_enable_stopword=ON;
+show variables like "%lower_case_table_names%";
+Variable_name	Value
+lower_case_table_names	1
+create database tdb;
+use tdb;
+CREATE TABLE `ft1` (
+`c1` int NOT NULL,
+`c2` varchar(20) DEFAULT NULL,
+PRIMARY KEY (`c1`)
+) ENGINE=InnoDB;
+insert into ft1 values(1, "北京万里开源软件有限公司");
+insert into ft1 values(2, "光大银行");
+insert into ft1 values(3, '民生银行');
+insert into ft1 values(4, '华为有限公司');
+insert into ft1 values(5, '中兴通信');
+insert into ft1 select 10+c1, c2 from ft1;
+insert into ft1 select 20+c1, c2 from ft1;
+insert into ft1 values(9, "中华人民共和国");
+CREATE TABLE MY_STOPWORDS (value VARCHAR(30)) ENGINE=INNODB;
+CREATE TABLE my_stopwords_1 (value VARCHAR(30)) ENGINE=INNODB;
+insert into MY_STOPWORDS  values ("有限"),("限公"),("公司");
+insert into my_stopwords_1  values ("有限"),("限公"),("公司");
+SET GLOBAL INNODB_FT_SERVER_STOPWORD_TABLE='TDB/MY_STOPWORDS';
+alter table ft1 add fulltext ftidx1(c2) with PARSER NGRAM;
+Warnings:
+Warning	124	InnoDB rebuilding table to add column FTS_DOC_ID
+SET GLOBAL innodb_ft_aux_table = 'TDB/FT1';
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_CONFIG WHERE `key`='stopword_table_name' OR `key`='use_stopword';
+KEY	VALUE
+stopword_table_name	tdb/my_stopwords
+use_stopword	1
+SET GLOBAL innodb_ft_aux_table = 'tdb/ft1';
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_CONFIG WHERE `key`='stopword_table_name' OR `key`='use_stopword';
+KEY	VALUE
+stopword_table_name	tdb/my_stopwords
+use_stopword	1
+select * from tdb.ft1 where MATCH(c2) against ('+民生银行' IN BOOLEAN MODE);
+c1	c2
+3	民生银行
+13	民生银行
+23	民生银行
+33	民生银行
+# restart
+select * from tdb.ft1 where MATCH(c2) against ('+北京万里开源软件' IN BOOLEAN MODE);
+c1	c2
+1	北京万里开源软件有限公司
+11	北京万里开源软件有限公司
+21	北京万里开源软件有限公司
+31	北京万里开源软件有限公司
+use tdb;
+show tables;
+Tables_in_tdb
+ft1
+my_stopwords
+my_stopwords_1
+use tdb;
+show tables;
+Tables_in_tdb
+ft1
+my_stopwords
+my_stopwords_1
+# restart
+SET GLOBAL INNODB_FT_SERVER_STOPWORD_TABLE='tdb/my_stopwords_1';
+alter table tdb.ft1 engine=innodb;
+SET GLOBAL innodb_ft_aux_table = 'TDB/FT1';
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_CONFIG WHERE `key`='stopword_table_name' OR `key`='use_stopword';
+KEY	VALUE
+stopword_table_name	tdb/my_stopwords_1
+use_stopword	1
+use tdb;
+show tables;
+Tables_in_tdb
+ft1
+my_stopwords
+my_stopwords_1
+# restart
+SET GLOBAL innodb_ft_aux_table = 'TDB/FT1';
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_CONFIG WHERE `key`='stopword_table_name' OR `key`='use_stopword';
+KEY	VALUE
+stopword_table_name	tdb/my_stopwords_1
+use_stopword	1
+SELECT count(*) from tdb.ft1;
+count(*)
+21
+SET GLOBAL innodb_ft_aux_table = null;
+SET GLOBAL innodb_ft_enable_stopword = ON;
+drop DATABASE IF EXISTS tdb;

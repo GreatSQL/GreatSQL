@@ -1,0 +1,493 @@
+DROP TABLE IF EXISTS t1;
+DROP PROCEDURE IF EXISTS p1;
+create table t1 (id int,a char(10));
+insert into t1 values (1,' ABC123万AH ');
+insert into t1 values (2,'');
+set sql_mode='';
+select trim(a) from t1;
+trim(a)
+ABC123万AH
+
+select trim(a) a from t1 union select 'x' a from t1;
+a
+ABC123万AH
+
+x
+set sql_mode='oracle';
+select trim(a) from t1;
+trim(a)
+ABC123万AH
+NULL
+select trim(a) a from t1 union select 'x' a from t1;
+a
+ABC123万AH
+NULL
+x
+drop table t1;
+set sql_mode='';
+select 'a' union SELECT trim('');
+a
+a
+
+SELECT trim(leading '' from '');
+trim(leading '' from '')
+
+SELECT trim(trailing '' from '');
+trim(trailing '' from '')
+
+SELECT trim(both ' ' from '    ');
+trim(both ' ' from '    ')
+
+SELECT ltrim('    ');
+ltrim('    ')
+
+SELECT rtrim('    ');
+rtrim('    ')
+
+set sql_mode='oracle';
+select 'a' union SELECT trim('');
+a
+a
+NULL
+SELECT trim(leading '' from '');
+trim(leading '' from '')
+NULL
+SELECT trim(trailing '' from '');
+trim(trailing '' from '')
+NULL
+SELECT trim(both ' ' from '    ');
+trim(both ' ' from '    ')
+NULL
+SELECT ltrim('    ');
+ltrim('    ')
+NULL
+SELECT rtrim('    ');
+rtrim('    ')
+NULL
+set sql_mode='';
+CREATE PROCEDURE p1(a varchar(255))
+SET @query = trim(a);
+CALL p1('   ');
+SELECT @query;
+@query
+
+DROP PROCEDURE p1;
+set sql_mode='oracle';
+CREATE PROCEDURE p1(a varchar(255)) as
+begin
+SET @query = trim(a);
+END//
+CALL p1('    ');
+SELECT @query;
+@query
+NULL
+DROP PROCEDURE p1;
+create table t1(c1 int primary key, c2 varchar(20)) engine=innodb;
+insert into t1 values(1, null), (2, 'N'), (3, 'N');
+select t.* from (select c1, c2, TRIM(c2) trim_c2 from t1 where c1 >0 order by c1 limit 3) t;
+c1	c2	trim_c2
+1	NULL	NULL
+2	N	N
+3	N	N
+drop table t1;
+set sql_mode="oracle";
+select 1 from dual where trim('') is null;
+1
+1
+select 1 from dual where trim('')='';
+1
+select trim(both null from 'abc') from dual;
+trim(both null from 'abc')
+NULL
+select trim(both '' from 'abc') from dual;
+trim(both '' from 'abc')
+NULL
+set sql_mode=default;
+select 1 from dual where trim('') is null;
+1
+select 1 from dual where trim('')='';
+1
+1
+select trim(both null from 'abc') from dual;
+trim(both null from 'abc')
+NULL
+select trim(both '' from 'abc') from dual;
+trim(both '' from 'abc')
+abc
+bugfix#4536, original use case
+create or replace view `test`.`v_test` ( `result`) as
+select trim(leading from 'dfssa') `result` from dual;
+show create table `test`.`v_test`;
+View	Create View	character_set_client	collation_connection
+v_test	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_test` (`result`) AS select trim(leading from 'dfssa') AS `result`	utf8mb4	utf8mb4_0900_ai_ci
+select * from  `test`.`v_test`;
+result
+dfssa
+drop view v_test;
+bugfix#4536 testcases, refers to different trim() calls
+create or replace view v1 as select trim(leading from 'abcde');
+select * from v1;
+trim(leading from 'abcde')
+abcde
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select trim(leading from 'abcde') AS `trim(leading from 'abcde')`	utf8mb4	utf8mb4_0900_ai_ci
+create or replace view v1 as select trim(leading '.' from '.abcde');
+select * from v1;
+trim(leading '.' from '.abcde')
+abcde
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select trim(leading '.' from '.abcde') AS `trim(leading '.' from '.abcde')`	utf8mb4	utf8mb4_0900_ai_ci
+create or replace view v1 as select trim(_latin2' abcde ');
+select * from v1;
+trim(_latin2' abcde ')
+abcde
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select trim(_latin2' abcde ') AS `trim(_latin2' abcde ')`	utf8mb4	utf8mb4_0900_ai_ci
+create or replace view v1 as select trim('a' from 'abcde');
+select * from v1;
+trim('a' from 'abcde')
+bcde
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select trim('a' from 'abcde') AS `trim('a' from 'abcde')`	utf8mb4	utf8mb4_0900_ai_ci
+create or replace view v1 as select trim(both '' from 'a');
+select * from v1;
+trim(both '' from 'a')
+a
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select trim(both '' from 'a') AS `trim(both '' from 'a')`	utf8mb4	utf8mb4_0900_ai_ci
+create or replace view v1 as select trim(trailing 'foo' from 'foo');
+select * from v1;
+trim(trailing 'foo' from 'foo')
+
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select trim(trailing 'foo' from 'foo') AS `trim(trailing 'foo' from 'foo')`	utf8mb4	utf8mb4_0900_ai_ci
+create or replace view v1 as select trim(leading _latin2' ' from _latin2'a');
+select * from v1;
+trim(leading _latin2' ' from _latin2'a')
+a
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select trim(leading _latin2' ' from _latin2'a') AS `trim(leading _latin2' ' from _latin2'a')`	utf8mb4	utf8mb4_0900_ai_ci
+create or replace view v1 as select trim(both _latin2' ' from _latin2'a');
+select * from v1;
+trim(both _latin2' ' from _latin2'a')
+a
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select trim(both _latin2' ' from _latin2'a') AS `trim(both _latin2' ' from _latin2'a')`	utf8mb4	utf8mb4_0900_ai_ci
+create or replace view v1 as select ltrim('  abcde');
+select * from v1;
+ltrim('  abcde')
+abcde
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select ltrim('  abcde') AS `ltrim('  abcde')`	utf8mb4	utf8mb4_0900_ai_ci
+create or replace view v1 as select rtrim('abcde  ');
+select * from v1;
+rtrim('abcde  ')
+abcde
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select rtrim('abcde  ') AS `rtrim('abcde  ')`	utf8mb4	utf8mb4_0900_ai_ci
+drop view v1;
+set sql_mode=oracle;
+select ltrim('000greatedb', '0');
+ltrim('000greatedb', '0')
+greatedb
+select ltrim('000greatedb', '0ag');
+ltrim('000greatedb', '0ag')
+reatedb
+select ltrim('1', '11');
+ltrim('1', '11')
+NULL
+select ltrim('αβγ ABC λλ我?βαγ 😀', 'βγα');
+ltrim('αβγ ABC λλ我?βαγ ?', 'βγα')
+ ABC λλ我?βαγ 😀
+select ltrim('我😀bba¢abccc', '😀我ab');
+ltrim('我?bba¢abccc', '?我ab')
+¢abccc
+select ltrim('我我我😀bba¢abccc', '我我我b我');
+ltrim('我我我?bba¢abccc', '我我我b我')
+😀bba¢abccc
+select rtrim('greatedb000', '0');
+rtrim('greatedb000', '0')
+greatedb
+select rtrim('greatedb000', '0abcd');
+rtrim('greatedb000', '0abcd')
+greate
+select rtrim('1', '11');
+rtrim('1', '11')
+NULL
+select rtrim('αβγ ABC λλ我?βαγ😀', '我😀γ?a');
+rtrim('αβγ ABC λλ我?βαγ?', '我?γ?a')
+αβγ ABC λλ我?βα
+select rtrim('αβγ ABC λλ我?βαγ😀😀😀', '😀');
+rtrim('αβγ ABC λλ我?βαγ???', '?')
+αβγ ABC λλ我?βαγ
+select rtrim('αβγ ABC λλ我?βαγ😀😀😀', '😀😀');
+rtrim('αβγ ABC λλ我?βαγ???', '??')
+αβγ ABC λλ我?βαγ
+set character_set_client = 'latin1';
+set character_set_connection = 'latin1';
+select ltrim('000greatedb', '0');
+ltrim('000greatedb', '0')
+greatedb
+select ltrim('000greatedb', '0ag');
+ltrim('000greatedb', '0ag')
+reatedb
+select rtrim('greatedb000', '0');
+rtrim('greatedb000', '0')
+greatedb
+select rtrim('greatedb000', '0abcd');
+rtrim('greatedb000', '0abcd')
+greate
+create table t1(c1 varchar2(128), c2 varchar2(128));
+insert into t1 values('111', '11');
+insert into t1 values('1abc', '1111aaadddbbbcc');
+select ltrim(c1, c2), rtrim(c1, c2) from t1;
+ltrim(c1, c2)	rtrim(c1, c2)
+NULL	NULL
+NULL	NULL
+insert into t1 values(ltrim('123456789', '147'), rtrim('123456789', '369'));
+select * from t1;
+c1	c2
+111	11
+1abc	1111aaadddbbbcc
+23456789	12345678
+drop table t1;
+create table t1(c1 varchar(20), c2 varchar(20));
+insert into t1 values('addd', 'bdddb'),('adddd', 'bddddb');
+select ltrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where ltrim(t.c2, 'b') > 'd';
+ltrim(t.c1, 'a')
+ddd
+dddd
+ddd
+dddd
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where rtrim(t.c2, 'b') > 'b';
+rtrim(t.c1, 'a')
+addd
+adddd
+addd
+adddd
+select ltrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where ltrim(t.c2) > 'd';
+ltrim(t.c1, 'a')
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where rtrim(t.c2) > 'b';
+rtrim(t.c1, 'a')
+addd
+adddd
+addd
+adddd
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where trim(t.c2) > 'd';
+rtrim(t.c1, 'a')
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where trim(t.c2) > 'b';
+rtrim(t.c1, 'a')
+addd
+adddd
+addd
+adddd
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where trim(LEADING 'b' FROM t.c2) > 'd';
+rtrim(t.c1, 'a')
+addd
+adddd
+addd
+adddd
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where trim(trailing 'b' from t.c2) > 'd';
+rtrim(t.c1, 'a')
+select rtrim(t.c1, 'a') from (select * from t1 union all select * from t1) t where trim(both 'b' from t.c2) > 'd';
+rtrim(t.c1, 'a')
+addd
+adddd
+addd
+adddd
+explain select ltrim(t.c1, 1) from (select * from t1 union all select * from t1) t where ltrim(t.c2, 'b') > 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+2	DERIVED	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where
+3	UNION	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select ltrim("t"."c1",1) AS "ltrim(t.c1, 1)" from (/* select#2 */ select "test"."t1"."c1" AS "c1","test"."t1"."c2" AS "c2" from "test"."t1" where (ltrim("test"."t1"."c2",'b') > 2) union all /* select#3 */ select "test"."t1"."c1" AS "c1","test"."t1"."c2" AS "c2" from "test"."t1" where (ltrim("test"."t1"."c2",'b') > 2)) "t"
+show warnings;
+Level	Code	Message
+Note	1003	/* select#1 */ select ltrim("t"."c1",1) AS "ltrim(t.c1, 1)" from (/* select#2 */ select "test"."t1"."c1" AS "c1","test"."t1"."c2" AS "c2" from "test"."t1" where (ltrim("test"."t1"."c2",'b') > 2) union all /* select#3 */ select "test"."t1"."c1" AS "c1","test"."t1"."c2" AS "c2" from "test"."t1" where (ltrim("test"."t1"."c2",'b') > 2)) "t"
+explain select rtrim(t.c1, 1) from (select * from t1 union all select * from t1) t where rtrim(t.c2, 'd') > 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+2	DERIVED	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where
+3	UNION	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select rtrim("t"."c1",1) AS "rtrim(t.c1, 1)" from (/* select#2 */ select "test"."t1"."c1" AS "c1","test"."t1"."c2" AS "c2" from "test"."t1" where (rtrim("test"."t1"."c2",'d') > 2) union all /* select#3 */ select "test"."t1"."c1" AS "c1","test"."t1"."c2" AS "c2" from "test"."t1" where (rtrim("test"."t1"."c2",'d') > 2)) "t"
+show warnings;
+Level	Code	Message
+Note	1003	/* select#1 */ select rtrim("t"."c1",1) AS "rtrim(t.c1, 1)" from (/* select#2 */ select "test"."t1"."c1" AS "c1","test"."t1"."c2" AS "c2" from "test"."t1" where (rtrim("test"."t1"."c2",'d') > 2) union all /* select#3 */ select "test"."t1"."c1" AS "c1","test"."t1"."c2" AS "c2" from "test"."t1" where (rtrim("test"."t1"."c2",'d') > 2)) "t"
+drop table t1;
+create or replace function f1(c1 varchar2(128), c2 varchar2(128)) return varchar2(128)
+as
+begin
+return ltrim(c1, c2);
+end
+//
+create or replace function f2(c1 varchar2(128), c2 varchar2(128)) return varchar2(128)
+as
+begin
+return ltrim(c1, c2);
+end
+//
+create or replace procedure pro(c1 in varchar2(128), c2 in varchar2(128))
+as
+v_str varchar2(512) := '----- ';
+begin
+v_str := CONCAT(v_str, ltrim(c1, c2));
+v_str := CONCAT(v_str, ' ----- ');
+v_str := CONCAT(v_str, rtrim(c1, c2));
+select v_str;
+end
+//
+select f1('1234567', '1258');
+f1('1234567', '1258')
+34567
+select f2('23456', '6890765532');
+f2('23456', '6890765532')
+456
+call pro('aabbccdd', 'cagh');
+v_str
+----- bbccdd ----- aabbccdd
+drop function f1;
+drop function f2;
+drop procedure pro;
+set character_set_client = 'utf8mb4';
+set character_set_connection = 'utf8mb4';
+select trim(leading 'ab' from 'abcdefg');
+ERROR HY000: trim set should have only one character
+select trim(leading 'a' from 'aaaabcdefg');
+trim(leading 'a' from 'aaaabcdefg')
+bcdefg
+select trim(leading '我' from '我我我我abcdef');
+trim(leading '我' from '我我我我abcdef')
+abcdef
+select trim(leading '😀' from '😀😀😀😀😀abcdef');
+trim(leading '?' from '?????abcdef')
+abcdef
+select trim(leading null from 'abcdefg');
+trim(leading null from 'abcdefg')
+NULL
+select trim(leading '' from 'abcdefg');
+trim(leading '' from 'abcdefg')
+NULL
+select trim(trailing 'ab' from 'abcdefg');
+ERROR HY000: trim set should have only one character
+select trim(trailing 'g' from 'abcdefggggg');
+trim(trailing 'g' from 'abcdefggggg')
+abcdef
+select trim(trailing '我' from '我我我我abcdef我我我');
+trim(trailing '我' from '我我我我abcdef我我我')
+我我我我abcdef
+select trim(trailing '😀' from '😀😀😀😀😀abcdef😀😀');
+trim(trailing '?' from '?????abcdef??')
+😀😀😀😀😀abcdef
+select trim(trailing null from 'abcdefg');
+trim(trailing null from 'abcdefg')
+NULL
+select trim(trailing '' from 'abcdefg');
+trim(trailing '' from 'abcdefg')
+NULL
+select trim(both 'ab' from 'abcdefg');
+ERROR HY000: trim set should have only one character
+select trim(both 'g' from 'ggggabcdefggggg');
+trim(both 'g' from 'ggggabcdefggggg')
+abcdef
+select trim(both '我' from '我我我我abcdef我我我');
+trim(both '我' from '我我我我abcdef我我我')
+abcdef
+select trim(both '😀' from '😀😀😀😀😀abcdef😀😀');
+trim(both '?' from '?????abcdef??')
+abcdef
+select trim(both null from 'abcdefg');
+trim(both null from 'abcdefg')
+NULL
+select trim(both '' from 'abcdefg');
+trim(both '' from 'abcdefg')
+NULL
+select trim('ab' from 'abcdefg');
+ERROR HY000: trim set should have only one character
+select trim('g' from 'ggggabcdefggggg');
+trim('g' from 'ggggabcdefggggg')
+abcdef
+select trim('我' from '我我我我abcdef我我我');
+trim('我' from '我我我我abcdef我我我')
+abcdef
+select trim('😀' from '😀😀😀😀😀abcdef😀😀');
+trim('?' from '?????abcdef??')
+abcdef
+select trim(null from 'abcdefg');
+trim(null from 'abcdefg')
+NULL
+select trim('' from 'abcdefg');
+trim('' from 'abcdefg')
+NULL
+set character_set_client = 'latin1';
+set character_set_connection = 'latin1';
+select trim('ab' from 'abcdefg');
+ERROR HY000: trim set should have only one character
+select trim('我' from '我我我我abcdef我我我');
+ERROR HY000: trim set should have only one character
+select trim('😀' from '😀😀😀😀😀abcdef😀😀');
+ERROR HY000: trim set should have only one character
+select trim(null from 'abcdefg');
+trim(null from 'abcdefg')
+NULL
+select trim('' from 'abcdefg');
+trim('' from 'abcdefg')
+NULL
+select trim('g' from 'ggggabcdefggggg');
+trim('g' from 'ggggabcdefggggg')
+abcdef
+set character_set_client = 'utf8mb4';
+set character_set_connection = 'utf8mb4';
+create table t1(
+c1 varchar2(64),
+c2 varchar2(64) default (trim(leading 'a' from 'aaaabcdefg')),
+c3 varchar2(64) default (trim(trailing 'g' from 'abcdefggggg')),
+c4 varchar2(64) default (trim(both 'g' from 'ggggabcdefggggg')),
+c5 varchar2(64) default (trim('g' from 'ggggabcdefggggg'))
+);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE "t1" (
+  "c1" varchar(64) DEFAULT NULL,
+  "c2" varchar(64) DEFAULT (trim(leading _utf8mb4'a' from _utf8mb4'aaaabcdefg')),
+  "c3" varchar(64) DEFAULT (trim(trailing _utf8mb4'g' from _utf8mb4'abcdefggggg')),
+  "c4" varchar(64) DEFAULT (trim(both _utf8mb4'g' from _utf8mb4'ggggabcdefggggg')),
+  "c5" varchar(64) DEFAULT (trim(_utf8mb4'g' from _utf8mb4'ggggabcdefggggg'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+insert into t1(c1) values(trim(both '我' from '我我我我abcdef我我我'));
+select * from t1;
+c1	c2	c3	c4	c5
+abcdef	bcdefg	abcdef	abcdef	abcdef
+create or replace function f(c1 varchar2(64), c2 varchar2(64)) return varchar2(64)
+as
+begin
+return trim(c1 from c2);
+end
+//
+create or replace procedure pro(c1 in varchar2(64), c2 in varchar2(64))
+as
+begin
+insert into t1(c1) values(trim(c1 from c2));
+end
+//
+insert into t1(c1) values(f('😀', '😀😀😀😀😀abcdef😀😀'));
+call pro('😀', '😀😀😀😀😀abcdef😀😀');
+select * from t1;
+c1	c2	c3	c4	c5
+abcdef	bcdefg	abcdef	abcdef	abcdef
+abcdef	bcdefg	abcdef	abcdef	abcdef
+abcdef	bcdefg	abcdef	abcdef	abcdef
+drop function f;
+drop procedure pro;
+drop table t1;

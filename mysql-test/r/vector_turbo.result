@@ -1,0 +1,143 @@
+connect conn1
+set turbo_enable=on;
+set turbo_cost_threshold=0;
+set turbo_enable_warning=on;
+set turbo_enable_ps_and_sp=on;
+set global turbo_condition_pushdown=on;
+CREATE TABLE items (id int PRIMARY KEY, embedding vector(3));
+INSERT INTO items VALUES (1, to_vector('[1,2,3]'));
+INSERT INTO items VALUES (2, to_vector('[4,5]'));
+INSERT INTO items VALUES (3, null);
+set turbo_enable_rollback=off;
+select
+id,
+from_vector(to_vector(from_vector(to_vector('[1,2,3]')))),
+from_vector(to_vector(from_vector(embedding)))
+from items order by id;
+id	from_vector(to_vector(from_vector(to_vector('[1,2,3]'))))	from_vector(to_vector(from_vector(embedding)))
+1	[1.00000e+00,2.00000e+00,3.00000e+00]	[1.00000e+00,2.00000e+00,3.00000e+00]
+2	[1.00000e+00,2.00000e+00,3.00000e+00]	[4.00000e+00,5.00000e+00]
+3	[1.00000e+00,2.00000e+00,3.00000e+00]	NULL
+Warnings:
+Warning	8585	turbo does not support this sql statement: {"exception_type":"INTERNAL","exception_message":"Unsupported Item_func transformation"}
+delete from items where id = 2;
+INSERT INTO items VALUES (2, to_vector('[4,5,6]'));
+SELECT id, from_vector(embedding) FROM items order by id;
+id	from_vector(embedding)
+1	[1.00000e+00,2.00000e+00,3.00000e+00]
+2	[4.00000e+00,5.00000e+00,6.00000e+00]
+3	NULL
+set turbo_enable=off;
+select id, from_vector(embedding) from items where embedding = to_vector('[1,2,3]') order by id;
+id	from_vector(embedding)
+1	[1.00000e+00,2.00000e+00,3.00000e+00]
+set turbo_enable=on;
+select id, from_vector(embedding) from items where embedding = to_vector('[1,2,3]') order by id;
+id	from_vector(embedding)
+1	[1.00000e+00,2.00000e+00,3.00000e+00]
+explain format=tree select id, from_vector(embedding) from items where embedding = to_vector('[1,2,3]') order by id;
+EXPLAIN
+-> Turbo scan
+    -> Sort: items.id ASC  (...)
+        -> projection: (items.id, from_vector(items.embedding))  (...)
+            -> Table scan on items, column(embedding,id), Filters(embedding=blob_str AND embedding IS NOT NULL)  (...)
+
+
+select id, from_vector(embedding) from items where from_vector(embedding) = from_vector(to_vector('[1,2,3]')) order by id;
+id	from_vector(embedding)
+1	[1.00000e+00,2.00000e+00,3.00000e+00]
+select id, from_vector(embedding) from items order by vector_distance(to_vector('[3,3,3]'), embedding, 'euclidean');
+id	from_vector(embedding)
+3	NULL
+1	[1.00000e+00,2.00000e+00,3.00000e+00]
+2	[4.00000e+00,5.00000e+00,6.00000e+00]
+select id, from_vector(embedding), vector_distance(to_vector('[3,3,3]'), embedding, 'euclidean') as distance from items order by distance;
+id	from_vector(embedding)	distance
+3	NULL	NULL
+1	[1.00000e+00,2.00000e+00,3.00000e+00]	2.2360680103302
+2	[4.00000e+00,5.00000e+00,6.00000e+00]	3.7416574954986572
+explain format=tree select id, from_vector(embedding), vector_distance(to_vector('[3,3,3]'), embedding, 'euclidean') as distance from items order by distance;
+EXPLAIN
+-> Turbo scan
+    -> Sort: vector_euclidean_distance((...), items.embedding) ASC  (...)
+        -> projection: (items.id, from_vector(items.embedding), distance)  (...)
+            -> Table scan on items, column(id,embedding)  (...)
+
+
+select id, from_vector(embedding) from items order by vector_distance(to_vector('[3,3,3]'), embedding, 'cosine');
+id	from_vector(embedding)
+3	NULL
+2	[4.00000e+00,5.00000e+00,6.00000e+00]
+1	[1.00000e+00,2.00000e+00,3.00000e+00]
+select id, from_vector(embedding), vector_distance(to_vector('[3,3,3]'), embedding, 'cosine') as distance from items order by distance;
+id	from_vector(embedding)	distance
+3	NULL	NULL
+2	[4.00000e+00,5.00000e+00,6.00000e+00]	0.013072457164525986
+1	[1.00000e+00,2.00000e+00,3.00000e+00]	0.07417990267276764
+explain format=tree select id, from_vector(embedding), vector_distance(to_vector('[3,3,3]'), embedding, 'cosine') as distance from items order by distance;
+EXPLAIN
+-> Turbo scan
+    -> Sort: vector_cosine_distance((...), items.embedding) ASC  (...)
+        -> projection: (items.id, from_vector(items.embedding), distance)  (...)
+            -> Table scan on items, column(id,embedding)  (...)
+
+
+select id, from_vector(embedding) from items order by vector_distance(to_vector('[3,3,3]'), embedding, 'dot');
+id	from_vector(embedding)
+3	NULL
+1	[1.00000e+00,2.00000e+00,3.00000e+00]
+2	[4.00000e+00,5.00000e+00,6.00000e+00]
+select id, from_vector(embedding), vector_distance(to_vector('[3,3,3]'), embedding, 'dot') as distance from items order by distance;
+id	from_vector(embedding)	distance
+3	NULL	NULL
+1	[1.00000e+00,2.00000e+00,3.00000e+00]	18
+2	[4.00000e+00,5.00000e+00,6.00000e+00]	45
+explain format=tree select id, from_vector(embedding), vector_distance(to_vector('[3,3,3]'), embedding, 'dot') as distance from items order by distance;
+EXPLAIN
+-> Turbo scan
+    -> Sort: vector_dot_distance((...), items.embedding) ASC  (...)
+        -> projection: (items.id, from_vector(items.embedding), distance)  (...)
+            -> Table scan on items, column(id,embedding)  (...)
+
+
+create table test1(a float, b float, c float);
+insert into test1 values(1.1, 2.8, 3.9);
+insert into test1 values(2.1, null, 3.9);
+insert into test1 values(2.2, 3.7, 4.0);
+insert into test1 values(3.2, 4.7, null);
+insert into test1 values(3.3, 4.6, 5.1);
+insert into test1 values(null, 5.6, 6.1);
+insert into test1 values(4.4, 5.5, 6.2);
+select from_vector(to_vector(concat('[',a,',',b,']'))) x, from_vector(to_vector(concat('[',b,',',c,']'))) y, from_vector(to_vector(concat('[',c,',',a,']'))) z from test1;
+x	y	z
+[1.10000e+00,2.80000e+00]	[2.80000e+00,3.90000e+00]	[3.90000e+00,1.10000e+00]
+NULL	NULL	[3.90000e+00,2.10000e+00]
+[2.20000e+00,3.70000e+00]	[3.70000e+00,4.00000e+00]	[4.00000e+00,2.20000e+00]
+[3.20000e+00,4.70000e+00]	NULL	NULL
+[3.30000e+00,4.60000e+00]	[4.60000e+00,5.10000e+00]	[5.10000e+00,3.30000e+00]
+NULL	[5.60000e+00,6.10000e+00]	NULL
+[4.40000e+00,5.50000e+00]	[5.50000e+00,6.20000e+00]	[6.20000e+00,4.40000e+00]
+explain format=tree select from_vector(to_vector(concat('[',a,',',b,']'))) x, from_vector(to_vector(concat('[',b,',',c,']'))) y, from_vector(to_vector(concat('[',c,',',a,']'))) z from test1;
+EXPLAIN
+-> Turbo scan
+    -> projection: (x, y, z)  (...)
+        -> projection: (CAST(a AS VARCHAR), CAST(b AS VARCHAR), CAST(c AS VARCHAR))  (...)
+            -> Table scan on test1, column(a,b,c)  (...)
+
+
+set turbo_enable=off;
+select from_vector(to_vector(concat('[',a,',',b,']'))) x, from_vector(to_vector(concat('[',b,',',c,']'))) y, from_vector(to_vector(concat('[',c,',',a,']'))) z from test1;
+x	y	z
+[1.10000e+00,2.80000e+00]	[2.80000e+00,3.90000e+00]	[3.90000e+00,1.10000e+00]
+NULL	NULL	[3.90000e+00,2.10000e+00]
+[2.20000e+00,3.70000e+00]	[3.70000e+00,4.00000e+00]	[4.00000e+00,2.20000e+00]
+[3.20000e+00,4.70000e+00]	NULL	NULL
+[3.30000e+00,4.60000e+00]	[4.60000e+00,5.10000e+00]	[5.10000e+00,3.30000e+00]
+NULL	[5.60000e+00,6.10000e+00]	NULL
+[4.40000e+00,5.50000e+00]	[5.50000e+00,6.20000e+00]	[6.20000e+00,4.40000e+00]
+explain format=tree select from_vector(to_vector(concat('[',a,',',b,']'))) x, from_vector(to_vector(concat('[',b,',',c,']'))) y, from_vector(to_vector(concat('[',c,',',a,']'))) z from test1;
+EXPLAIN
+-> Table scan on test1  (...)
+
+drop table items;
+drop table test1;

@@ -1,0 +1,21 @@
+set sql_mode='oracle';
+CREATE FUNCTION f1() RETURN INT
+as
+BEGIN
+select 'hello world';
+RETURN;
+END;
+/
+ERROR HY000: RETURN is only allowed in a procedure
+CREATE procedure p1 ()
+as
+BEGIN
+select 'hello world';
+RETURN;
+select 'php is the best';
+END;
+/
+call p1();
+hello world
+hello world
+drop procedure p1;

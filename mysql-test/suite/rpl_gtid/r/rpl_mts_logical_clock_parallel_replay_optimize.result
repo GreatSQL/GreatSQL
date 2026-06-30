@@ -1,0 +1,585 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection master]
+CREATE TABLE t1(c1 INT PRIMARY KEY, c2 INT);
+CREATE TABLE t2(c1 INT PRIMARY KEY, c2 INT);
+include/rpl/sync_to_replica.inc
+[connection slave]
+SET @save_replica_parallel_workers = @@GLOBAL.replica_parallel_workers;
+SET @save_replica_parallel_wait_mode = @@GLOBAL.replica_parallel_wait_mode;
+SET @save_replica_preserve_commit_order = @@GLOBAL.replica_preserve_commit_order;
+include/rpl/stop_replica.inc
+
+## test WAIT_FOR_SQL_THREAD with replica_preserve_commit_order=ON
+[connection slave]
+SET GLOBAL replica_parallel_workers = 16;
+SET GLOBAL replica_preserve_commit_order = ON;
+SET GLOBAL replica_parallel_wait_mode = WAIT_ON_SQL_THREAD;
+include/rpl/start_replica.inc
+[connection master]
+TRUNCATE TABLE t1;
+TRUNCATE TABLE t2;
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t1 VALUES (2,2);
+INSERT INTO t2 VALUES (1,1);
+INSERT INTO t2 VALUES (2,2);
+include/rpl/sync_to_replica.inc
+# connect conn2_1 
+BEGIN;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+[connection master]
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t1 VALUES (3,3);
+INSERT INTO t1 VALUES (4,4);
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t2 VALUES (3,3);
+INSERT INTO t2 VALUES (4,4);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (5,5);
+INSERT INTO t2 VALUES (6,6);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (7,7);
+INSERT INTO t2 VALUES (8,8);
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+[connection slave]
+include/assert.inc [There only one transaction Applying Rows]
+include/assert.inc [There have 1 thread waiting dependent transaction to commit ]
+include/assert.inc [There have 2 workers waiting preceding transaction to commit ]
+include/assert.inc [There have 13 workers idle]
+include/assert.inc [SQL thread is waitting dependent transaction to commit, but not waiting for more updates]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+# connect conn2_1 
+ROLLBACK;
+[connection master]
+include/rpl/sync_to_replica.inc
+[connection slave]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+include/rpl/stop_replica.inc
+[connection master]
+INSERT INTO t1 VALUES (11,11);
+INSERT INTO t2 VALUES (11,11);
+INSERT INTO t2 VALUES (12,12);
+# connect conn2_1 
+LOCK TABLE t1 READ;
+[connection slave]
+include/rpl/start_replica.inc
+include/assert.inc [There only one transaction waiting metadata lock]
+include/assert.inc [There have 1 thread waiting dependent transaction to commit ]
+include/assert.inc [There have no workers waiting preceding transaction to commit ]
+include/assert.inc [There have 15 workers idle]
+include/assert.inc [SQL thread is waitting dependent transaction to commit, but not waiting for more updates]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+LOCK TABLE t1 READ;
+UNLOCK TABLES;
+[connection master]
+include/rpl/sync_to_replica.inc
+[connection slave]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+11	11
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+11	11
+12	12
+include/rpl/stop_replica.inc
+
+## test WAIT_FOR_SQL_THREAD with replica_preserve_commit_order=OFF
+[connection slave]
+SET GLOBAL replica_parallel_workers = 16;
+SET GLOBAL replica_preserve_commit_order = OFF;
+SET GLOBAL replica_parallel_wait_mode = WAIT_ON_SQL_THREAD;
+include/rpl/start_replica.inc
+[connection master]
+TRUNCATE TABLE t1;
+TRUNCATE TABLE t2;
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t1 VALUES (2,2);
+INSERT INTO t2 VALUES (1,1);
+INSERT INTO t2 VALUES (2,2);
+include/rpl/sync_to_replica.inc
+# connect conn2_1 
+BEGIN;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+[connection master]
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t1 VALUES (3,3);
+INSERT INTO t1 VALUES (4,4);
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t2 VALUES (3,3);
+INSERT INTO t2 VALUES (4,4);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (5,5);
+INSERT INTO t2 VALUES (6,6);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (7,7);
+INSERT INTO t2 VALUES (8,8);
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+[connection slave]
+include/assert.inc [There only one transaction Applying Rows]
+include/assert.inc [There have 1 thread waiting dependent transaction to commit ]
+include/assert.inc [There have no workers waiting preceding transaction to commit ]
+include/assert.inc [There have 15 workers idle]
+include/assert.inc [SQL thread is waitting dependent transaction to commit, but not waiting for more updates]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+# connect conn2_1 
+ROLLBACK;
+[connection master]
+include/rpl/sync_to_replica.inc
+[connection slave]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+include/rpl/stop_replica.inc
+[connection master]
+INSERT INTO t1 VALUES (11,11);
+INSERT INTO t2 VALUES (11,11);
+INSERT INTO t2 VALUES (12,12);
+# connect conn2_1 
+LOCK TABLE t1 READ;
+[connection slave]
+include/rpl/start_replica.inc
+include/assert.inc [There only one transaction waiting metadata lock]
+include/assert.inc [There have 1 thread waiting dependent transaction to commit ]
+include/assert.inc [There have no workers waiting preceding transaction to commit ]
+include/assert.inc [There have 15 workers idle]
+include/assert.inc [SQL thread is waitting dependent transaction to commit, but not waiting for more updates]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+# connect conn2_1 
+LOCK TABLE t1 READ;
+UNLOCK TABLES;
+[connection master]
+include/rpl/sync_to_replica.inc
+[connection slave]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+11	11
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+11	11
+12	12
+include/rpl/stop_replica.inc
+
+## test WAIT_FOR_WORKER_THREAD with replica_preserve_commit_order=ON
+[connection slave]
+SET GLOBAL replica_parallel_workers = 16;
+SET GLOBAL replica_preserve_commit_order = ON;
+SET GLOBAL replica_parallel_wait_mode = WAIT_ON_WORKER_THREAD;
+include/rpl/start_replica.inc
+[connection master]
+TRUNCATE TABLE t1;
+TRUNCATE TABLE t2;
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t1 VALUES (2,2);
+INSERT INTO t2 VALUES (1,1);
+INSERT INTO t2 VALUES (2,2);
+include/rpl/sync_to_replica.inc
+# connect conn2_1 
+BEGIN;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+[connection master]
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t1 VALUES (3,3);
+INSERT INTO t1 VALUES (4,4);
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t2 VALUES (3,3);
+INSERT INTO t2 VALUES (4,4);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (5,5);
+INSERT INTO t2 VALUES (6,6);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (7,7);
+INSERT INTO t2 VALUES (8,8);
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+[connection slave]
+include/assert.inc [There only one transaction Applying rows]
+include/assert.inc [There have 3 thread waiting dependent transaction to commit ]
+include/assert.inc [There have 8 workers waiting preceding transaction to commit ]
+include/assert.inc [There have 4 workers idle]
+include/assert.inc [SQL thread is waiting for more updates]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+# connect conn2_1 
+ROLLBACK;
+[connection master]
+include/rpl/sync_to_replica.inc
+[connection slave]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+include/rpl/stop_replica.inc
+[connection master]
+INSERT INTO t1 VALUES (11,11);
+INSERT INTO t2 VALUES (11,11);
+INSERT INTO t2 VALUES (12,12);
+# connect conn2_1 
+LOCK TABLE t1 READ;
+[connection slave]
+include/rpl/start_replica.inc
+include/assert.inc [There only one transaction waiting metadata lock]
+include/assert.inc [There have 2 thread waiting dependent transaction to commit ]
+include/assert.inc [There have 0 workers waiting preceding transaction to commit ]
+include/assert.inc [There have 13 workers idle]
+include/assert.inc [SQL thread is waiting for more updates]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+# connect conn2_1 
+LOCK TABLE t1 READ;
+UNLOCK TABLES;
+[connection master]
+include/rpl/sync_to_replica.inc
+[connection slave]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+11	11
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+11	11
+12	12
+include/rpl/stop_replica.inc
+
+## test WAIT_FOR_WORKER_THREAD with replica_preserve_commit_order=OFF
+[connection slave]
+SET GLOBAL replica_parallel_workers = 16;
+SET GLOBAL replica_preserve_commit_order = OFF;
+SET GLOBAL replica_parallel_wait_mode = WAIT_ON_WORKER_THREAD;
+include/rpl/start_replica.inc
+[connection master]
+TRUNCATE TABLE t1;
+TRUNCATE TABLE t2;
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t1 VALUES (2,2);
+INSERT INTO t2 VALUES (1,1);
+INSERT INTO t2 VALUES (2,2);
+include/rpl/sync_to_replica.inc
+# connect conn2_1 
+BEGIN;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+[connection master]
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t1 VALUES (3,3);
+INSERT INTO t1 VALUES (4,4);
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t2 VALUES (3,3);
+INSERT INTO t2 VALUES (4,4);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (5,5);
+INSERT INTO t2 VALUES (6,6);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (7,7);
+INSERT INTO t2 VALUES (8,8);
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+[connection slave]
+include/assert.inc [There only one transaction Applying rows]
+include/assert.inc [There have 3 thread waiting dependent transaction to commit ]
+include/assert.inc [There have 0 workers waiting preceding transaction to commit ]
+include/assert.inc [There have 12 workers idle]
+include/assert.inc [SQL thread is waiting for more updates]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+# connect conn2_1 
+ROLLBACK;
+[connection master]
+include/rpl/sync_to_replica.inc
+[connection slave]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+include/rpl/stop_replica.inc
+[connection master]
+INSERT INTO t1 VALUES (11,11);
+INSERT INTO t2 VALUES (11,11);
+INSERT INTO t2 VALUES (12,12);
+# connect conn2_1 
+LOCK TABLE t1 READ;
+[connection slave]
+include/rpl/start_replica.inc
+include/assert.inc [There only one transaction waiting metadata lock]
+include/assert.inc [There have 2 thread waiting dependent transaction to commit ]
+include/assert.inc [There have 0 workers waiting preceding transaction to commit ]
+include/assert.inc [There have 13 workers idle]
+include/assert.inc [SQL thread is waiting for more updates]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+# connect conn2_1 
+LOCK TABLE t1 READ;
+UNLOCK TABLES;
+[connection master]
+include/rpl/sync_to_replica.inc
+[connection slave]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	4
+3	3
+4	4
+11	11
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+3	5
+4	4
+5	5
+6	6
+7	7
+8	8
+11	11
+12	12
+include/rpl/stop_replica.inc
+[connection slave]
+SET GLOBAL replica_parallel_workers = @save_replica_parallel_workers;
+SET GLOBAL replica_parallel_wait_mode = @save_replica_parallel_wait_mode;
+SET GLOBAL replica_preserve_commit_order = @save_replica_preserve_commit_order;
+include/rpl/start_replica.inc
+[connection master]
+DROP TABLE t1;
+DROP TABLE t2;
+include/rpl/sync_to_replica.inc
+include/rpl/deinit.inc

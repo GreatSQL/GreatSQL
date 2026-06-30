@@ -1,0 +1,113 @@
+#
+# Test of problem with translate() and long separators.
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+DROP PROCEDURE IF EXISTS p1;
+--enable_warnings
+
+create table t1 (a char(10), b char(10), c char(10));
+insert into t1 values ('ABC123万AH', 'A1万', '@里#');
+select * from t1 where translate(A,B,C) = '@BC里23#@H';
+insert into t1 values ('ABC123万AH', 'A1', '@里#');
+select * from t1 where translate(A,B,C) = '@BC里23万@H';
+insert into t1 values ('ABC123万AH', 'A1万', '@里');
+select * from t1 where translate(A,B,C) = '@BC里23万@H';
+drop table t1;
+
+
+select 'a' union SELECT translate('ABC123万AH', 'A1万', '');
+SELECT translate('树a''在','树a''','@');
+SELECT translate('树a在','树a','树a');
+select 'a' union SELECT translate('ABC123万AH', '', '@里#');
+select 'a' union SELECT translate('ABC123万AH', 123, 456);
+
+select 'a' union SELECT translate('ABC123万AH', 123, -+8);
+select 'a' union SELECT translate('ABC123321万', 123, 8.0);
+
+select translate((select x from (select 'abc' as x) as t1 ),
+  (select y from (select 'b' as y) as t2 ),'#') from (select 1 union select 2 )
+  as t3;
+
+create table t1(f1 varchar(6)) charset=utf8;
+insert into t1 values ("12ab万");
+select translate(f1, '1a万','$)!') a from t1 union select 'x' a from t1;
+drop table t1;
+
+
+CREATE TABLE t1 (
+  a VARCHAR(100) NOT NULL DEFAULT '0',
+  b VARCHAR(2) NOT NULL DEFAULT '',
+  c VARCHAR(2) NOT NULL DEFAULT '',
+  d TEXT NOT NULL,
+  PRIMARY KEY (a, b, c),
+  KEY (a)
+) DEFAULT CHARSET=utf8;
+
+INSERT INTO t1 VALUES ('gui_A', 'a', 'b', 'str1'),
+  ('gui_AB', 'a', 'b', 'str2'), ('gui_ABC', 'a', 'b', 'str3');
+
+CREATE TABLE t2 (
+  a VARCHAR(100) NOT NULL DEFAULT '',
+  PRIMARY KEY (a)
+) DEFAULT CHARSET=latin1;
+
+INSERT INTO t2 VALUES ('A'), ('AB'), ('ABC');
+
+ANALYZE TABLE t1,t2;
+
+SELECT translate(t1.a, t2.a,'$'), t1.d FROM t2 
+  LEFT JOIN t1 ON t1.b = 'a' AND t1.c = 'b';
+
+DROP TABLE t1, t2;
+
+CREATE PROCEDURE p1(a varchar(255), b varchar(255), c varchar(255))
+  SET @query = translate(a, b, c);
+
+CALL p1('ABC123万AH', 'A1万', '@里#');
+SELECT @query;
+
+DROP PROCEDURE p1;
+
+
+DELIMITER //;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE v1 varchar(255);
+  DECLARE v2 varchar(255);
+  SET v1= 'A1万';
+  SET v2= '@里#';
+  SET @s = translate('ABC123万AH', v1 , v2);
+  SELECT @s;
+END;//
+DELIMITER ;//
+
+CALL p1();
+CALL p1();
+DROP PROCEDURE p1;
+
+set sql_mode=default;
+select TRANSLATE('10019', 'A0123456789', 'A')  from dual;
+select 1 from dual where  TRANSLATE('10019', 'A0123456789', 'A') ='';
+select 1 from dual where  TRANSLATE('10019', 'A0123456789', 'A') is null;
+select 1 from dual where translate('','','aa') is null;
+select 1 from dual where translate('','','') is null;
+select 1 from dual where translate('aa','','') is null;
+select 1 from dual where translate('','aa','') is null;
+
+set sql_mode="oracle";
+select TRANSLATE('10019', 'A0123456789', 'A')  from dual;
+select 1 from dual where  TRANSLATE('10019', 'A0123456789', 'A') ='';
+select 1 from dual where  TRANSLATE('10019', 'A0123456789', 'A') is null;
+select 1 from dual where translate('','','aa') is null;
+select 1 from dual where translate('','','') is null;
+select 1 from dual where translate('aa','','') is null;
+select 1 from dual where translate('','aa','') is null;
+
+
+
+
+
+
+

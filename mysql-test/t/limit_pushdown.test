@@ -1,0 +1,441 @@
+--source include/elide_costs_and_rows.inc
+--source include/no_turbo.inc
+
+create table t1 (a int, b int);
+insert into t1 values (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11);
+insert into t1 values (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11);
+create table t2 (c int, d int);
+insert into t2 values(4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13), (13, 14);
+insert into t2 values(4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13), (13, 14);
+
+
+create view vt1 as select * from t1;
+create algorithm=temptable view vtt1 as select * from t1;
+create view vt2 as select * from t1 order by a desc;
+create view vt3 as select * from t1 where a < 8 order by a desc;
+create view vt4 as select * from t1 limit 5;
+create view vt5 as select distinct * from t1;
+create view vt5_1 as select distinct * from t1 limit 5;
+create view vt6 as select sum(a) from t1 group by b;
+create view vt7 as select * from t1 union select * from t2;
+create view vt8 as select * from t1 union select * from t2 order by 1 desc;
+create view vt9 as select * from t1 union select * from t2 limit 10;
+create view vt10 as select * from t1 union all select * from t2;
+create view vt11 as select * from t1 union all select * from t2 order by 1 desc;
+create view vt12 as select * from t1 union all select * from t2 limit 10;
+create view vt13 as select * from t1 join t2 on t1.a = t2.c;
+create view vt14 as select * from t1 left join t2 on t1.a = t2.c;
+create view vt15 as select * from t1 full join t2 on t1.a = t2.c;
+
+
+set optimizer_switch='derived_limit_pushdown=on,derived_merge=off';
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt1 limit 5 offset 1;
+select * from vt1 limit 5;
+set optimizer_switch='derived_limit_pushdown=on,derived_merge=on';
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt1 limit 5 offset 1;
+select * from vt1 limit 5;
+
+
+# test view with limit pushdown
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt1 limit 5;
+select * from vt1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vtt1 limit 5;
+select * from vtt1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt2 limit 5;
+select * from vt2 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt3 limit 5;
+select * from vt3 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt4 limit 5;
+select * from vt4 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt5 limit 5;
+select * from vt5 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt5_1 limit 5;
+select * from vt5_1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt6 limit 5;
+select * from vt6 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt7 limit 5;
+select * from vt7 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt8 limit 5;
+select * from vt8 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt9 limit 5;
+select * from vt9 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt10 limit 5;
+select * from vt10 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt11 limit 5;
+select * from vt11 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt12 limit 5;
+select * from vt12 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt13 limit 5;
+select * from vt13 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt14 limit 5;
+select * from vt14 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt15 limit 5;
+select * from vt15 limit 5;
+
+# test subuqery with limit pushdown
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1) v1 limit 5;
+select * from (select * from t1) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 order by a desc) v1 limit 5;
+select * from (select * from t1 order by a desc) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 where a < 8 order by a desc) v1 limit 5;
+select * from (select * from t1 where a < 8 order by a desc) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 limit 5) v1 limit 5;
+select * from (select * from t1 limit 5) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select distinct * from t1) v1 limit 5;
+select * from (select distinct * from t1) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select distinct * from t1 limit 5) v1 limit 5;
+select * from (select distinct * from t1 limit 5) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select sum(a) from t1 group by b) v1 limit 5;
+select * from (select sum(a) from t1 group by b) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union select * from t2) v1 limit 5;
+select * from (select * from t1 union select * from t2) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union select * from t2 order by 1 desc) v1 limit 5;
+select * from (select * from t1 union select * from t2 order by 1 desc) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union select * from t2 limit 10) v1 limit 5;
+select * from (select * from t1 union select * from t2 limit 10) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2) v1 limit 5;
+select * from (select * from t1 union all select * from t2) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 limit 5;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 limit 10) v1 limit 5;
+select * from (select * from t1 union all select * from t2 limit 10) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 join t2 on t1.a = t2.c) v1 limit 5;
+select * from (select * from t1 join t2 on t1.a = t2.c) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 left join t2 on t1.a = t2.c) v1 limit 5;
+select * from (select * from t1 left join t2 on t1.a = t2.c) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 full join t2 on t1.a = t2.c) v1 limit 5;
+select * from (select * from t1 full join t2 on t1.a = t2.c) v1 limit 5;
+
+# test fetch..rows
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 offset 2 rows;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 offset 2 rows;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS ONLY;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS ONLY;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS with TIES;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS with TIES;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS ONLY;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS ONLY;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS with TIES;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS with TIES;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS ONLY;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS ONLY;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS with TIES;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS with TIES;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS ONLY;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS ONLY;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS with TIES;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS with TIES;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 order by 1 desc fetch FIRST 6 PERCENT ROWS with TIES;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 order by 1 desc fetch FIRST 6 PERCENT ROWS with TIES;
+
+set optimizer_switch='derived_limit_pushdown=off,derived_merge=on';
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt1 limit 5;
+select * from vt1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vtt1 limit 5;
+select * from vtt1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt2 limit 5;
+select * from vt2 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt3 limit 5;
+select * from vt3 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt4 limit 5;
+select * from vt4 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt5 limit 5;
+select * from vt5 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt5_1 limit 5;
+select * from vt5_1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt6 limit 5;
+select * from vt6 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt7 limit 5;
+select * from vt7 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt8 limit 5;
+select * from vt8 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt9 limit 5;
+select * from vt9 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt10 limit 5;
+select * from vt10 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt11 limit 5;
+select * from vt11 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt12 limit 5;
+select * from vt12 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt13 limit 5;
+select * from vt13 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt14 limit 5;
+select * from vt14 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from vt15 limit 5;
+select * from vt15 limit 5;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1) v1 limit 5;
+select * from (select * from t1) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 order by a desc) v1 limit 5;
+select * from (select * from t1 order by a desc) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 where a < 8 order by a desc) v1 limit 5;
+select * from (select * from t1 where a < 8 order by a desc) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 limit 5) v1 limit 5;
+select * from (select * from t1 limit 5) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select distinct * from t1) v1 limit 5;
+select * from (select distinct * from t1) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select distinct * from t1 limit 5) v1 limit 5;
+select * from (select distinct * from t1 limit 5) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select sum(a) from t1 group by b) v1 limit 5;
+select * from (select sum(a) from t1 group by b) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union select * from t2) v1 limit 5;
+select * from (select * from t1 union select * from t2) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union select * from t2 order by 1 desc) v1 limit 5;
+select * from (select * from t1 union select * from t2 order by 1 desc) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union select * from t2 limit 10) v1 limit 5;
+select * from (select * from t1 union select * from t2 limit 10) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2) v1 limit 5;
+select * from (select * from t1 union all select * from t2) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 limit 5;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 limit 10) v1 limit 5;
+select * from (select * from t1 union all select * from t2 limit 10) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 join t2 on t1.a = t2.c) v1 limit 5;
+select * from (select * from t1 join t2 on t1.a = t2.c) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 left join t2 on t1.a = t2.c) v1 limit 5;
+select * from (select * from t1 left join t2 on t1.a = t2.c) v1 limit 5;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 full join t2 on t1.a = t2.c) v1 limit 5;
+select * from (select * from t1 full join t2 on t1.a = t2.c) v1 limit 5;
+
+# test fetch..rows
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 offset 2 rows;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 offset 2 rows;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS ONLY;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS ONLY;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS with TIES;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS with TIES;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS ONLY;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS ONLY;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS with TIES;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS with TIES;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS ONLY;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS ONLY;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS with TIES;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS with TIES;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS ONLY;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS ONLY;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS with TIES;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS with TIES;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 order by 1 desc fetch FIRST 6 PERCENT ROWS with TIES;
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 order by 1 desc fetch FIRST 6 PERCENT ROWS with TIES;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (
+  select * from (
+    select * from t1 order by a desc
+  ) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+select * from (
+  select * from (
+    select * from t1 order by a desc
+  ) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+
+set optimizer_switch='derived_limit_pushdown=off,derived_merge=off';
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (
+  select * from (
+    select * from t1 order by a desc
+  ) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+select * from (
+  select * from (
+    select * from t1 order by a desc
+  ) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+
+set optimizer_switch='derived_limit_pushdown=on,derived_merge=on';
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (
+  select * from (
+    select * from t1 order by a desc
+  ) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+select * from (
+  select * from (
+    select * from t1 order by a desc
+  ) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+
+set optimizer_switch='derived_limit_pushdown=on,derived_merge=off';
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (
+  select * from (
+    select * from t1 order by a desc
+  ) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+select * from (
+  select * from (
+    select * from t1 order by a desc
+  ) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN format=tree WITH cte AS (SELECT SUM(a) k1 FROM t1 GROUP BY b)
+SELECT * FROM cte LIMIT 2;
+
+WITH cte AS (SELECT SUM(a) k1 FROM t1 GROUP BY b)
+SELECT * FROM cte LIMIT 2;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1) x order by 1 limit 2 offset 1;
+select * from (select * from t1) x order by 1 limit 2 offset 1;
+
+set optimizer_switch='derived_limit_pushdown=off';
+--replace_regex $elide_costs_and_rows
+EXPLAIN format=tree WITH cte AS (SELECT SUM(a) k1 FROM t1 GROUP BY b)
+SELECT * FROM cte LIMIT 2;
+
+WITH cte AS (SELECT SUM(a) k1 FROM t1 GROUP BY b)
+SELECT * FROM cte LIMIT 2;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree select * from (select * from t1) x order by 1 limit 2 offset 1;
+select * from (select * from t1) x order by 1 limit 2 offset 1;
+
+set optimizer_switch=default;
+
+drop view if exists vt1, vtt1, vt2, vt3;
+drop view if exists vt4, vt5, vt5_1, vt6;
+drop view if exists vt7, vt8, vt9;
+drop view if exists vt10, vt11, vt12;
+drop view if exists vt13, vt14, vt15;
+
+drop table if exists t1, t2;

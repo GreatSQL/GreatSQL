@@ -1,0 +1,315 @@
+connect conn1
+set turbo_enable=off;
+set turbo_cost_threshold=0;
+set turbo_enable_warning=on;
+set turbo_enable_rollback=off;
+CREATE TABLE t1 (id int PRIMARY KEY, vec vector(3));
+INSERT INTO t1 VALUES (1, to_vector('[1,2,3]'));
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]')) = vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[2,4]')) = vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot')
+1
+SELECT distance(to_vector('[1,2]'), to_vector('[2,4]')) = distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot') from t1;
+distance(to_vector('[1,2]'), to_vector('[2,4]')) = distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot')
+1
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), null) from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), null)
+10
+SELECT vector_distance(to_vector('[1,2]'), null) from t1;
+vector_distance(to_vector('[1,2]'), null)
+NULL
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'Euclideanx') from t1;
+ERROR HY000: Incorrect arguments to Invalid distance type. Must be one of: Euclidean, Cosine, Dot
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'Cosinex') from t1;
+ERROR HY000: Incorrect arguments to Invalid distance type. Must be one of: Euclidean, Cosine, Dot
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'Dotx') from t1;
+ERROR HY000: Incorrect arguments to Invalid distance type. Must be one of: Euclidean, Cosine, Dot
+prepare s from 'SELECT id, vector_distance(to_vector(?), vec, ?) dis, from_vector(vec) from t1 order by dis limit 10';
+set @vec = '[9,8,7]';
+set @type = 'euclidean';
+execute s using @vec, @type;
+id	dis	from_vector(vec)
+1	10.770329614269007	[1.00000e+00,2.00000e+00,3.00000e+00]
+set @vec = '[9,8,6]';
+set @type = 'cosine';
+execute s using @vec, @type;
+id	dis	from_vector(vec)
+1	0.14578901848131276	[1.00000e+00,2.00000e+00,3.00000e+00]
+set @vec = '[9,8,5]';
+set @type = 'dot';
+execute s using @vec, @type;
+id	dis	from_vector(vec)
+1	40	[1.00000e+00,2.00000e+00,3.00000e+00]
+set @vec = '[9,8,5]';
+set @type = null;
+execute s using @vec, @type;
+id	dis	from_vector(vec)
+1	40	[1.00000e+00,2.00000e+00,3.00000e+00]
+set @vec = null;
+set @type = 'dot';
+execute s using @vec, @type;
+id	dis	from_vector(vec)
+1	NULL	[1.00000e+00,2.00000e+00,3.00000e+00]
+set @vec = null;
+set @type = null;
+execute s using @vec, @type;
+id	dis	from_vector(vec)
+1	NULL	[1.00000e+00,2.00000e+00,3.00000e+00]
+prepare s from "SELECT vector_distance(?, ?, 'cosine') from t1";
+set @vec1 = to_vector('[1.2,2.2,3.3]');
+set @vec2 = to_vector('[9.8,7.6,5.4]');
+execute s using @vec1, @vec2;
+vector_distance(?, ?, 'cosine')
+0.1739282614968629
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'euclidean')
+2.23606797749979
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'euclidean')
+2.23606797749979
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'euclidean')
+0
+SELECT vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'euclidean')
+2.23606797749979
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'euclidean')
+2.8284271247461903
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[3]'), 'euclidean') from t1;
+ERROR HY000: Incorrect arguments to vector dimensions must be match
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'euclidean')
+0.1414213899547883
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'euclidean')
+2.9698483461135843
+SELECT vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'euclidean') from t1;
+vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'euclidean')
+0
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'euclidean')
+0
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'euclidean')
+33.76388603226827
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'cosine') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'cosine')
+0
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'cosine') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'cosine')
+0
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'cosine') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'cosine')
+0
+SELECT vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'cosine') from t1;
+vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'cosine')
+1
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'cosine') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'cosine')
+2
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[3]'), 'cosine') from t1;
+ERROR HY000: Incorrect arguments to vector dimensions must be match
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'cosine') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'cosine')
+-0.000000005911204636888101
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'cosine') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'cosine')
+2.000000005911205
+SELECT vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'cosine') from t1;
+vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'cosine')
+0
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'cosine') from t1;
+vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'cosine')
+0
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'cosine') from t1;
+vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'cosine')
+2
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot')
+10
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'dot') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'dot')
+0
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'dot') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'dot')
+2
+SELECT vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'dot') from t1;
+vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'dot')
+0
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'dot') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'dot')
+-2
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[3]'), 'dot') from t1;
+ERROR HY000: Incorrect arguments to vector dimensions must be match
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'dot') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'dot')
+2.200000047683716
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'dot') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'dot')
+-2.200000047683716
+SELECT vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'dot') from t1;
+vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'dot')
+0
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'dot') from t1;
+vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'dot')
+285
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'dot') from t1;
+vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'dot')
+-285
+set turbo_enable=on;
+set turbo_cost_threshold=0;
+set turbo_enable_warning=on;
+set turbo_enable_rollback=off;
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]')) = vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[2,4]')) = vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot')
+1
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), null) from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), null)
+10
+SELECT vector_distance(to_vector('[1,2]'), null) from t1;
+vector_distance(to_vector('[1,2]'), null)
+NULL
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'Euclideanx') from t1;
+ERROR HY000: Incorrect arguments to Invalid distance type. Must be one of: Euclidean, Cosine, Dot
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'Cosinex') from t1;
+ERROR HY000: Incorrect arguments to Invalid distance type. Must be one of: Euclidean, Cosine, Dot
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'Dotx') from t1;
+ERROR HY000: Incorrect arguments to Invalid distance type. Must be one of: Euclidean, Cosine, Dot
+prepare s from 'SELECT id, vector_distance(to_vector(?), vec, ?) dis, from_vector(vec) from t1 order by dis limit 10';
+Warnings:
+Warning	8585	turbo does not support this sql statement: {"exception_type":"INTERNAL","exception_message":"Unknown distance type"}
+set @vec = '[9,8,7]';
+set @type = 'euclidean';
+execute s using @vec, @type;
+id	dis	from_vector(vec)
+1	10.770329614269007	[1.00000e+00,2.00000e+00,3.00000e+00]
+set @vec = '[9,8,6]';
+set @type = 'cosine';
+execute s using @vec, @type;
+id	dis	from_vector(vec)
+1	0.14578901848131276	[1.00000e+00,2.00000e+00,3.00000e+00]
+set @vec = '[9,8,5]';
+set @type = 'dot';
+execute s using @vec, @type;
+id	dis	from_vector(vec)
+1	40	[1.00000e+00,2.00000e+00,3.00000e+00]
+set @vec = '[9,8,5]';
+set @type = null;
+execute s using @vec, @type;
+id	dis	from_vector(vec)
+1	40	[1.00000e+00,2.00000e+00,3.00000e+00]
+set @vec = null;
+set @type = 'dot';
+execute s using @vec, @type;
+id	dis	from_vector(vec)
+1	NULL	[1.00000e+00,2.00000e+00,3.00000e+00]
+set @vec = null;
+set @type = null;
+execute s using @vec, @type;
+id	dis	from_vector(vec)
+1	NULL	[1.00000e+00,2.00000e+00,3.00000e+00]
+prepare s from "SELECT vector_distance(?, ?, 'cosine') from t1";
+set @vec1 = to_vector('[1.2,2.2,3.3]');
+set @vec2 = to_vector('[9.8,7.6,5.4]');
+execute s using @vec1, @vec2;
+vector_distance(?, ?, 'cosine')
+0.1739282614968629
+Warnings:
+Warning	8700	sp error : {"exception_type":"Invalid Input","exception_message":"Invalid unicode (byte sequence mismatch) detected in value construction"}
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'euclidean')
+2.2360680103302
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'euclidean')
+2.2360680103302
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'euclidean')
+0
+SELECT vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'euclidean')
+2.2360680103302
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'euclidean')
+2.8284270763397217
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[3]'), 'euclidean') from t1;
+ERROR HY000: execute turbo query failed: Invalid Input Error: distance dimensions must be equal, got left dimension 2 and right dimension 1
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'euclidean')
+0.1414213925600052
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'euclidean')
+2.969848394393921
+SELECT vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'euclidean') from t1;
+vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'euclidean')
+0
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'euclidean')
+0
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'euclidean') from t1;
+vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'euclidean')
+33.763885498046875
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'cosine') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'cosine')
+0
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'cosine') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'cosine')
+0
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'cosine') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'cosine')
+0
+SELECT vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'cosine') from t1;
+vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'cosine')
+1
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'cosine') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'cosine')
+2
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[3]'), 'cosine') from t1;
+ERROR HY000: execute turbo query failed: Invalid Input Error: distance dimensions must be equal, got left dimension 2 and right dimension 1
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'cosine') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'cosine')
+-0.000000005911204858932706
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'cosine') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'cosine')
+2
+SELECT vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'cosine') from t1;
+vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'cosine')
+0
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'cosine') from t1;
+vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'cosine')
+0
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'cosine') from t1;
+vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'cosine')
+2
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot')
+10
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'dot') from t1;
+vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'dot')
+0
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'dot') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'dot')
+2
+SELECT vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'dot') from t1;
+vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'dot')
+0
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'dot') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'dot')
+-2
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[3]'), 'dot') from t1;
+ERROR HY000: execute turbo query failed: Invalid Input Error: distance dimensions must be equal, got left dimension 2 and right dimension 1
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'dot') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'dot')
+2.200000047683716
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'dot') from t1;
+vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'dot')
+-2.200000047683716
+SELECT vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'dot') from t1;
+vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'dot')
+0
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'dot') from t1;
+vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'dot')
+285
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'dot') from t1;
+vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'dot')
+-285
+drop table t1;

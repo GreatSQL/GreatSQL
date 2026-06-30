@@ -1,0 +1,87 @@
+call mtr.add_suppression("Waiting for prepared transaction to exit");
+call mtr.add_suppression("Client: Clone blocked XA operation too long");
+call mtr.add_suppression("Replica SQL for channel '': Worker .* failed executing transaction");
+call mtr.add_suppression("Replica SQL for channel '': ... The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state.");
+[init replication]
+[connect server1]
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+CREATE TABLE t2 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t2 VALUES (1,1);
+[connect server2]
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+SET GLOBAL replica_net_timeout=10;
+SET GLOBAL replica_preserve_commit_order=ON;
+SET GLOBAL replica_transaction_retries=0;
+CHANGE REPLICATION SOURCE TO SOURCE_USER='root',SOURCE_HOST='127.0.0.1',SOURCE_PORT=PORT_1,SOURCE_AUTO_POSITION=1;
+START REPLICA;
+SELECT WAIT_FOR_EXECUTED_GTID_SET('GTID', 30);
+WAIT_FOR_EXECUTED_GTID_SET('GTID', 30)
+0
+[test: CLONE_DATA_RECOVERY_BINLOG_POSITION will lead deadlock]
+[connect server2]
+LOCK TABLE test.t1 READ;
+[connect server1]
+SET SESSION xa_detach_on_prepare=ON;
+XA START '1';
+UPDATE t1 SET c2=c2+1;
+XA END '1';
+XA PREPARE '1';
+UPDATE t2 SET c2=c2+1;
+[connect server2_clone]
+SET GLOBAL clone_data_recovery_mode=CLONE_DATA_RECOVERY_BINLOG_POSITION;
+CLONE LOCAL DATA DIRECTORY 'TMPDIR/clone_1';
+[connect server2]
+Pattern "Waiting for prepared transaction to exit" found
+unlock tables;
+[connect server2_clone]
+[connect server2]
+include/rpl/wait_for_replica_status.inc [Replica_SQL_Running]
+include/rpl/wait_for_replica_status.inc [Last_SQL_Errno]
+[connect server1]
+XA COMMIT '1';
+START REPLICA;
+SELECT WAIT_FOR_EXECUTED_GTID_SET('GTID', 30);
+WAIT_FOR_EXECUTED_GTID_SET('GTID', 30)
+0
+[test: CLONE_DATA_RECOVERY_GTID will success]
+[connect server2]
+LOCK TABLE test.t1 READ;
+[connect server1]
+SET SESSION xa_detach_on_prepare=ON;
+XA START '1';
+UPDATE t1 SET c2=c2+1;
+XA END '1';
+XA PREPARE '1';
+UPDATE t2 SET c2=c2+1;
+[connect server2_clone]
+SET GLOBAL clone_data_recovery_mode=CLONE_DATA_RECOVERY_GTID;
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+CLONE LOCAL DATA DIRECTORY 'TMPDIR/clone_2';
+[connect server2]
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+unlock tables;
+[connect server2_clone]
+[connect server2]
+include/rpl/wait_for_replica_status.inc [Replica_SQL_Running]
+[connect server1]
+XA COMMIT '1';
+SELECT WAIT_FOR_EXECUTED_GTID_SET('GTID', 30);
+WAIT_FOR_EXECUTED_GTID_SET('GTID', 30)
+0
+[cleanup]
+[connect server1]
+DROP TABLE t1;
+DROP TABLE t2;
+[connect server2]
+SELECT WAIT_FOR_EXECUTED_GTID_SET('GTID', 30);
+WAIT_FOR_EXECUTED_GTID_SET('GTID', 30)
+0
+STOP REPLICA;
+RESET REPLICA ALL;
+SET GLOBAL replica_net_timeout=DEFAULT;
+SET GLOBAL replica_preserve_commit_order=DEFAULT;
+SET GLOBAL replica_transaction_retries=DEFAULT;
+UNINSTALL PLUGIN clone;

@@ -1,0 +1,50 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connection server2]
+SET SESSION sql_log_bin= 0;
+call mtr.add_suppression("Error waiting for group executed transactions commit on session");
+SET SESSION sql_log_bin= 1;
+[connection server1]
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+CREATE TABLE t2 (c1 INT PRIMARY KEY, c2 INT);
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t2 VALUES (1,1);
+include/rpl/sync_to_replica.inc
+[connect conn2_1]
+LOCK TABLE t1 READ;
+[connection server1]
+UPDATE t1 SET c2=c2+1;
+UPDATE t2 SET c2=c2+1;
+UPDATE t2 SET c2=c2+1;
+UPDATE t2 SET c2=c2+1;
+UPDATE t2 SET c2=c2+1;
+UPDATE t2 SET c2=c2+1;
+[connect conn2_2]
+SET SESSION group_replication_consistency='BEFORE';
+SELECT * FROM t2;
+[connect conn2_3]
+SELECT db, command, state, info FROM information_schema.processlist WHERE state='Executing hook on transaction begin.';
+db	command	state	info
+test	Query	Executing hook on transaction begin.	SELECT * FROM t2
+Warnings:
+Warning	1287	'INFORMATION_SCHEMA.PROCESSLIST' is deprecated and will be removed in a future release. Please use performance_schema.processlist instead
+STOP GROUP_REPLICATION;
+[connect conn2_2]
+ERROR HY000: Error while waiting for group transactions commit on group_replication_consistency= 'BEFORE'.
+[connect conn2_1]
+SELECT db, command, state, info FROM information_schema.processlist WHERE info='STOP GROUP_REPLICATION';
+db	command	state	info
+test	Query	starting	STOP GROUP_REPLICATION
+Warnings:
+Warning	1287	'INFORMATION_SCHEMA.PROCESSLIST' is deprecated and will be removed in a future release. Please use performance_schema.processlist instead
+UNLOCK TABLES;
+[connect conn2_3]
+[connection server2]
+include/start_group_replication.inc
+[connection server1]
+DROP TABLE t1;
+DROP TABLE t2;
+include/group_replication_end.inc

@@ -1,0 +1,1845 @@
+create table t1 (a int, b int);
+insert into t1 values (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11);
+insert into t1 values (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11);
+create table t2 (c int, d int);
+insert into t2 values(4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13), (13, 14);
+insert into t2 values(4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13), (13, 14);
+create view vt1 as select * from t1;
+create algorithm=temptable view vtt1 as select * from t1;
+create view vt2 as select * from t1 order by a desc;
+create view vt3 as select * from t1 where a < 8 order by a desc;
+create view vt4 as select * from t1 limit 5;
+create view vt5 as select distinct * from t1;
+create view vt5_1 as select distinct * from t1 limit 5;
+create view vt6 as select sum(a) from t1 group by b;
+create view vt7 as select * from t1 union select * from t2;
+create view vt8 as select * from t1 union select * from t2 order by 1 desc;
+create view vt9 as select * from t1 union select * from t2 limit 10;
+create view vt10 as select * from t1 union all select * from t2;
+create view vt11 as select * from t1 union all select * from t2 order by 1 desc;
+create view vt12 as select * from t1 union all select * from t2 limit 10;
+create view vt13 as select * from t1 join t2 on t1.a = t2.c;
+create view vt14 as select * from t1 left join t2 on t1.a = t2.c;
+create view vt15 as select * from t1 full join t2 on t1.a = t2.c;
+set optimizer_switch='derived_limit_pushdown=on,derived_merge=off';
+explain format=tree select * from vt1 limit 5 offset 1;
+EXPLAIN
+-> Table scan on vt1  (...)
+    -> Materialize  (...)
+        -> Limit/Offset: 5/1 row(s)  (...)
+            -> Table scan on t1  (...)
+
+select * from vt1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+set optimizer_switch='derived_limit_pushdown=on,derived_merge=on';
+explain format=tree select * from vt1 limit 5 offset 1;
+EXPLAIN
+-> Limit/Offset: 5/1 row(s)  (...)
+    -> Table scan on t1  (...)
+
+select * from vt1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on t1  (...)
+
+select * from vt1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vtt1 limit 5;
+EXPLAIN
+-> Table scan on vtt1  (...)
+    -> Materialize  (...)
+        -> Limit: 5 row(s)  (...)
+            -> Table scan on t1  (...)
+
+select * from vtt1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt2 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Sort: a DESC, limit input to 5 row(s) per chunk  (...)
+        -> Table scan on t1  (...)
+
+select * from vt2 limit 5;
+a	b
+10	11
+10	11
+9	10
+9	10
+8	9
+explain format=tree select * from vt3 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Sort: a DESC, limit input to 5 row(s) per chunk  (...)
+        -> Filter: (t1.a < 8)  (...)
+            -> Table scan on t1  (...)
+
+select * from vt3 limit 5;
+a	b
+7	8
+7	8
+6	7
+6	7
+5	6
+explain format=tree select * from vt4 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt4  (...)
+        -> Materialize  (...)
+            -> Limit: 5 row(s)  (...)
+                -> Table scan on t1  (...)
+
+select * from vt4 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt5 limit 5;
+EXPLAIN
+-> Table scan on vt5  (...)
+    -> Materialize  (...)
+        -> Limit: 5 row(s)  (...)
+            -> Table scan on <temporary>  (...)
+                -> Temporary table with deduplication  (...)
+                    -> Limit table size: 5 unique row(s)
+                        -> Table scan on t1  (...)
+
+select * from vt5 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt5_1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt5_1  (...)
+        -> Materialize  (...)
+            -> Limit: 5 row(s)  (...)
+                -> Table scan on <temporary>  (...)
+                    -> Temporary table with deduplication  (...)
+                        -> Limit table size: 5 unique row(s)
+                            -> Table scan on t1  (...)
+
+select * from vt5_1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt6 limit 5;
+EXPLAIN
+-> Table scan on vt6  (...)
+    -> Materialize  (...)
+        -> Limit: 5 row(s)
+            -> Table scan on <temporary>
+                -> Aggregate using temporary table
+                    -> Table scan on t1  (...)
+
+select * from vt6 limit 5;
+sum(a)
+2
+4
+6
+8
+10
+explain format=tree select * from vt7 limit 5;
+EXPLAIN
+-> Table scan on vt7  (...)
+    -> Union materialize with deduplication  (...)
+        -> Limit table size: 5 unique row(s)
+            -> Table scan on t1  (...)
+        -> Limit table size: 5 unique row(s)
+            -> Table scan on t2  (...)
+
+select * from vt7 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt8 limit 5;
+EXPLAIN
+-> Table scan on vt8  (...)
+    -> Materialize  (...)
+        -> Limit: 5 row(s)  (...)
+            -> Sort: a DESC, limit input to 5 row(s) per chunk  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union materialize with deduplication  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from vt8 limit 5;
+a	b
+13	14
+12	13
+11	12
+10	11
+9	10
+explain format=tree select * from vt9 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt9  (...)
+        -> Union materialize with deduplication  (...)
+            -> Limit table size: 10 unique row(s)
+                -> Table scan on t1  (...)
+            -> Limit table size: 10 unique row(s)
+                -> Table scan on t2  (...)
+
+select * from vt9 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt10 limit 5;
+EXPLAIN
+-> Table scan on vt10  (...)
+    -> Union all materialize  (...)
+        -> Limit table size: 5 row(s)
+            -> Table scan on t1  (...)
+        -> Limit table size: 5 row(s)
+            -> Table scan on t2  (...)
+
+select * from vt10 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt11 limit 5;
+EXPLAIN
+-> Table scan on vt11  (...)
+    -> Materialize  (...)
+        -> Limit: 5 row(s)  (...)
+            -> Sort: a DESC, limit input to 5 row(s) per chunk  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from vt11 limit 5;
+a	b
+13	14
+13	14
+12	13
+12	13
+11	12
+explain format=tree select * from vt12 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt12  (...)
+        -> Union all materialize  (...)
+            -> Limit table size: 10 row(s)
+                -> Table scan on t1  (...)
+            -> Limit table size: 10 row(s)
+                -> Table scan on t2  (...)
+
+select * from vt12 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt13 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Inner hash join (t2.c = t1.a)  (...)
+        -> Table scan on t2  (...)
+        -> Hash
+            -> Table scan on t1  (...)
+
+select * from vt13 limit 5;
+a	b	c	d
+4	5	4	5
+4	5	4	5
+5	6	5	6
+5	6	5	6
+6	7	6	7
+explain format=tree select * from vt14 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Left hash join (t2.c = t1.a)  (...)
+        -> Table scan on t1  (...)
+        -> Hash
+            -> Table scan on t2  (...)
+
+select * from vt14 limit 5;
+a	b	c	d
+1	2	NULL	NULL
+2	3	NULL	NULL
+3	4	NULL	NULL
+4	5	4	5
+4	5	4	5
+explain format=tree select * from vt15 limit 5;
+EXPLAIN
+-> Table scan on vt15  (...)
+    -> Materialize  (...)
+        -> Limit: 5 row(s)  (...)
+            -> Full hash join (t1.a = t2.c)  (...)
+                -> Table scan on t1  (...)
+                -> Hash
+                    -> Table scan on t2  (...)
+
+select * from vt15 limit 5;
+a	b	c	d
+1	2	NULL	NULL
+2	3	NULL	NULL
+3	4	NULL	NULL
+4	5	4	5
+4	5	4	5
+explain format=tree select * from (select * from t1) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on t1  (...)
+
+select * from (select * from t1) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select * from t1 order by a desc) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Sort: a DESC, limit input to 5 row(s) per chunk  (...)
+        -> Table scan on t1  (...)
+
+select * from (select * from t1 order by a desc) v1 limit 5;
+a	b
+10	11
+10	11
+9	10
+9	10
+8	9
+explain format=tree select * from (select * from t1 where a < 8 order by a desc) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Sort: a DESC, limit input to 5 row(s) per chunk  (...)
+        -> Filter: (t1.a < 8)  (...)
+            -> Table scan on t1  (...)
+
+select * from (select * from t1 where a < 8 order by a desc) v1 limit 5;
+a	b
+7	8
+7	8
+6	7
+6	7
+5	6
+explain format=tree select * from (select * from t1 limit 5) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Limit: 5 row(s)  (...)
+                -> Table scan on t1  (...)
+
+select * from (select * from t1 limit 5) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select distinct * from t1) v1 limit 5;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Materialize  (...)
+        -> Limit: 5 row(s)  (...)
+            -> Table scan on <temporary>  (...)
+                -> Temporary table with deduplication  (...)
+                    -> Limit table size: 5 unique row(s)
+                        -> Table scan on t1  (...)
+
+select * from (select distinct * from t1) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select distinct * from t1 limit 5) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Limit: 5 row(s)  (...)
+                -> Table scan on <temporary>  (...)
+                    -> Temporary table with deduplication  (...)
+                        -> Limit table size: 5 unique row(s)
+                            -> Table scan on t1  (...)
+
+select * from (select distinct * from t1 limit 5) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select sum(a) from t1 group by b) v1 limit 5;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Materialize  (...)
+        -> Limit: 5 row(s)
+            -> Table scan on <temporary>
+                -> Aggregate using temporary table
+                    -> Table scan on t1  (...)
+
+select * from (select sum(a) from t1 group by b) v1 limit 5;
+sum(a)
+2
+4
+6
+8
+10
+explain format=tree select * from (select * from t1 union select * from t2) v1 limit 5;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Union materialize with deduplication  (...)
+        -> Limit table size: 5 unique row(s)
+            -> Table scan on t1  (...)
+        -> Limit table size: 5 unique row(s)
+            -> Table scan on t2  (...)
+
+select * from (select * from t1 union select * from t2) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select * from t1 union select * from t2 order by 1 desc) v1 limit 5;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Materialize  (...)
+        -> Limit: 5 row(s)  (...)
+            -> Sort: a DESC, limit input to 5 row(s) per chunk  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union materialize with deduplication  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union select * from t2 order by 1 desc) v1 limit 5;
+a	b
+13	14
+12	13
+11	12
+10	11
+9	10
+explain format=tree select * from (select * from t1 union select * from t2 limit 10) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union materialize with deduplication  (...)
+            -> Limit table size: 10 unique row(s)
+                -> Table scan on t1  (...)
+            -> Limit table size: 10 unique row(s)
+                -> Table scan on t2  (...)
+
+select * from (select * from t1 union select * from t2 limit 10) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select * from t1 union all select * from t2) v1 limit 5;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Union all materialize  (...)
+        -> Limit table size: 5 row(s)
+            -> Table scan on t1  (...)
+        -> Limit table size: 5 row(s)
+            -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 limit 5;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Materialize  (...)
+        -> Limit: 5 row(s)  (...)
+            -> Sort: a DESC, limit input to 5 row(s) per chunk  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 limit 5;
+a	b
+13	14
+13	14
+12	13
+12	13
+11	12
+explain format=tree select * from (select * from t1 union all select * from t2 limit 10) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union all materialize  (...)
+            -> Limit table size: 10 row(s)
+                -> Table scan on t1  (...)
+            -> Limit table size: 10 row(s)
+                -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 limit 10) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select * from t1 join t2 on t1.a = t2.c) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Inner hash join (t2.c = t1.a)  (...)
+        -> Table scan on t2  (...)
+        -> Hash
+            -> Table scan on t1  (...)
+
+select * from (select * from t1 join t2 on t1.a = t2.c) v1 limit 5;
+a	b	c	d
+4	5	4	5
+4	5	4	5
+5	6	5	6
+5	6	5	6
+6	7	6	7
+explain format=tree select * from (select * from t1 left join t2 on t1.a = t2.c) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Left hash join (t2.c = t1.a)  (...)
+        -> Table scan on t1  (...)
+        -> Hash
+            -> Table scan on t2  (...)
+
+select * from (select * from t1 left join t2 on t1.a = t2.c) v1 limit 5;
+a	b	c	d
+1	2	NULL	NULL
+2	3	NULL	NULL
+3	4	NULL	NULL
+4	5	4	5
+4	5	4	5
+explain format=tree select * from (select * from t1 full join t2 on t1.a = t2.c) v1 limit 5;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Materialize  (...)
+        -> Limit: 5 row(s)  (...)
+            -> Full hash join (t1.a = t2.c)  (...)
+                -> Table scan on t1  (...)
+                -> Hash
+                    -> Table scan on t2  (...)
+
+select * from (select * from t1 full join t2 on t1.a = t2.c) v1 limit 5;
+a	b	c	d
+1	2	NULL	NULL
+2	3	NULL	NULL
+3	4	NULL	NULL
+4	5	4	5
+4	5	4	5
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 offset 2 rows;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Materialize  (...)
+        -> Offset: 2 row(s)  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 offset 2 rows;
+a	b
+12	13
+12	13
+11	12
+11	12
+10	11
+10	11
+10	11
+10	11
+9	10
+9	10
+9	10
+9	10
+8	9
+8	9
+8	9
+8	9
+7	8
+7	8
+7	8
+7	8
+6	7
+6	7
+6	7
+6	7
+5	6
+5	6
+5	6
+5	6
+4	5
+4	5
+4	5
+4	5
+3	4
+3	4
+2	3
+2	3
+1	2
+1	2
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS ONLY;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Materialize  (...)
+        -> Limit: 1 row(s)  (...)
+            -> Sort: a DESC, limit input to 1 row(s) per chunk  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS ONLY;
+a	b
+13	14
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS with TIES;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Materialize  (...)
+        -> Limit: 1 row(s)  (...)
+            -> Sort: a DESC, limit input to 1 row(s) per chunk  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS with TIES;
+a	b
+13	14
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS ONLY;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Materialize  (...)
+        -> Limit: 1 row(s)  (...)
+            -> Sort: a DESC, limit input to 1 row(s) per chunk  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS ONLY;
+a	b
+13	14
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS with TIES;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Materialize  (...)
+        -> Limit: 1 row(s)  (...)
+            -> Sort: a DESC, limit input to 1 row(s) per chunk  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS with TIES;
+a	b
+13	14
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS ONLY;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Materialize  (...)
+        -> Limit: 6 row(s)  (...)
+            -> Sort: a DESC, limit input to 6 row(s) per chunk  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS ONLY;
+a	b
+13	14
+13	14
+12	13
+12	13
+11	12
+11	12
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS with TIES;
+EXPLAIN
+-> Table scan on v1  (...)
+    -> Materialize  (...)
+        -> Limit: 6 row(s)  (...)
+            -> Sort: a DESC, limit input to 6 row(s) per chunk  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS with TIES;
+a	b
+13	14
+13	14
+12	13
+12	13
+11	12
+11	12
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS ONLY;
+EXPLAIN
+-> Fetch next 6 percent row(s) only  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS ONLY;
+a	b
+13	14
+13	14
+12	13
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS with TIES;
+EXPLAIN
+-> Fetch next 6 percent row(s) only  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS with TIES;
+a	b
+13	14
+13	14
+12	13
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 order by 1 desc fetch FIRST 6 PERCENT ROWS with TIES;
+EXPLAIN
+-> Fetch next 6 percent row(s) with ties  (...)
+    -> Sort: v1.a DESC  (...)
+        -> Table scan on v1  (...)
+            -> Materialize  (...)
+                -> Sort: a DESC  (...)
+                    -> Table scan on <union temporary>  (...)
+                        -> Union all materialize  (...)
+                            -> Table scan on t1  (...)
+                            -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 order by 1 desc fetch FIRST 6 PERCENT ROWS with TIES;
+a	b
+13	14
+13	14
+12	13
+12	13
+set optimizer_switch='derived_limit_pushdown=off,derived_merge=on';
+explain format=tree select * from vt1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on t1  (...)
+
+select * from vt1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vtt1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vtt1  (...)
+        -> Materialize  (...)
+            -> Table scan on t1  (...)
+
+select * from vtt1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt2 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Sort: a DESC, limit input to 5 row(s) per chunk  (...)
+        -> Table scan on t1  (...)
+
+select * from vt2 limit 5;
+a	b
+10	11
+10	11
+9	10
+9	10
+8	9
+explain format=tree select * from vt3 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Sort: a DESC, limit input to 5 row(s) per chunk  (...)
+        -> Filter: (t1.a < 8)  (...)
+            -> Table scan on t1  (...)
+
+select * from vt3 limit 5;
+a	b
+7	8
+7	8
+6	7
+6	7
+5	6
+explain format=tree select * from vt4 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt4  (...)
+        -> Materialize  (...)
+            -> Limit: 5 row(s)  (...)
+                -> Table scan on t1  (...)
+
+select * from vt4 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt5 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt5  (...)
+        -> Materialize  (...)
+            -> Table scan on <temporary>  (...)
+                -> Temporary table with deduplication  (...)
+                    -> Table scan on t1  (...)
+
+select * from vt5 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt5_1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt5_1  (...)
+        -> Materialize  (...)
+            -> Limit: 5 row(s)  (...)
+                -> Table scan on <temporary>  (...)
+                    -> Temporary table with deduplication  (...)
+                        -> Limit table size: 5 unique row(s)
+                            -> Table scan on t1  (...)
+
+select * from vt5_1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt6 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt6  (...)
+        -> Materialize  (...)
+            -> Table scan on <temporary>
+                -> Aggregate using temporary table
+                    -> Table scan on t1  (...)
+
+select * from vt6 limit 5;
+sum(a)
+2
+4
+6
+8
+10
+explain format=tree select * from vt7 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt7  (...)
+        -> Union materialize with deduplication  (...)
+            -> Table scan on t1  (...)
+            -> Table scan on t2  (...)
+
+select * from vt7 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt8 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt8  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union materialize with deduplication  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from vt8 limit 5;
+a	b
+13	14
+12	13
+11	12
+10	11
+9	10
+explain format=tree select * from vt9 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt9  (...)
+        -> Union materialize with deduplication  (...)
+            -> Limit table size: 10 unique row(s)
+                -> Table scan on t1  (...)
+            -> Limit table size: 10 unique row(s)
+                -> Table scan on t2  (...)
+
+select * from vt9 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt10 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt10  (...)
+        -> Union all materialize  (...)
+            -> Table scan on t1  (...)
+            -> Table scan on t2  (...)
+
+select * from vt10 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt11 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt11  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from vt11 limit 5;
+a	b
+13	14
+13	14
+12	13
+12	13
+11	12
+explain format=tree select * from vt12 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt12  (...)
+        -> Union all materialize  (...)
+            -> Limit table size: 10 row(s)
+                -> Table scan on t1  (...)
+            -> Limit table size: 10 row(s)
+                -> Table scan on t2  (...)
+
+select * from vt12 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from vt13 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Inner hash join (t2.c = t1.a)  (...)
+        -> Table scan on t2  (...)
+        -> Hash
+            -> Table scan on t1  (...)
+
+select * from vt13 limit 5;
+a	b	c	d
+4	5	4	5
+4	5	4	5
+5	6	5	6
+5	6	5	6
+6	7	6	7
+explain format=tree select * from vt14 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Left hash join (t2.c = t1.a)  (...)
+        -> Table scan on t1  (...)
+        -> Hash
+            -> Table scan on t2  (...)
+
+select * from vt14 limit 5;
+a	b	c	d
+1	2	NULL	NULL
+2	3	NULL	NULL
+3	4	NULL	NULL
+4	5	4	5
+4	5	4	5
+explain format=tree select * from vt15 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on vt15  (...)
+        -> Materialize  (...)
+            -> Full hash join (t1.a = t2.c)  (...)
+                -> Table scan on t1  (...)
+                -> Hash
+                    -> Table scan on t2  (...)
+
+select * from vt15 limit 5;
+a	b	c	d
+1	2	NULL	NULL
+2	3	NULL	NULL
+3	4	NULL	NULL
+4	5	4	5
+4	5	4	5
+explain format=tree select * from (select * from t1) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on t1  (...)
+
+select * from (select * from t1) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select * from t1 order by a desc) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Sort: a DESC, limit input to 5 row(s) per chunk  (...)
+        -> Table scan on t1  (...)
+
+select * from (select * from t1 order by a desc) v1 limit 5;
+a	b
+10	11
+10	11
+9	10
+9	10
+8	9
+explain format=tree select * from (select * from t1 where a < 8 order by a desc) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Sort: a DESC, limit input to 5 row(s) per chunk  (...)
+        -> Filter: (t1.a < 8)  (...)
+            -> Table scan on t1  (...)
+
+select * from (select * from t1 where a < 8 order by a desc) v1 limit 5;
+a	b
+7	8
+7	8
+6	7
+6	7
+5	6
+explain format=tree select * from (select * from t1 limit 5) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Limit: 5 row(s)  (...)
+                -> Table scan on t1  (...)
+
+select * from (select * from t1 limit 5) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select distinct * from t1) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Table scan on <temporary>  (...)
+                -> Temporary table with deduplication  (...)
+                    -> Table scan on t1  (...)
+
+select * from (select distinct * from t1) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select distinct * from t1 limit 5) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Limit: 5 row(s)  (...)
+                -> Table scan on <temporary>  (...)
+                    -> Temporary table with deduplication  (...)
+                        -> Limit table size: 5 unique row(s)
+                            -> Table scan on t1  (...)
+
+select * from (select distinct * from t1 limit 5) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select sum(a) from t1 group by b) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Table scan on <temporary>
+                -> Aggregate using temporary table
+                    -> Table scan on t1  (...)
+
+select * from (select sum(a) from t1 group by b) v1 limit 5;
+sum(a)
+2
+4
+6
+8
+10
+explain format=tree select * from (select * from t1 union select * from t2) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union materialize with deduplication  (...)
+            -> Table scan on t1  (...)
+            -> Table scan on t2  (...)
+
+select * from (select * from t1 union select * from t2) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select * from t1 union select * from t2 order by 1 desc) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union materialize with deduplication  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union select * from t2 order by 1 desc) v1 limit 5;
+a	b
+13	14
+12	13
+11	12
+10	11
+9	10
+explain format=tree select * from (select * from t1 union select * from t2 limit 10) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union materialize with deduplication  (...)
+            -> Limit table size: 10 unique row(s)
+                -> Table scan on t1  (...)
+            -> Limit table size: 10 unique row(s)
+                -> Table scan on t2  (...)
+
+select * from (select * from t1 union select * from t2 limit 10) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select * from t1 union all select * from t2) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union all materialize  (...)
+            -> Table scan on t1  (...)
+            -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 limit 5;
+a	b
+13	14
+13	14
+12	13
+12	13
+11	12
+explain format=tree select * from (select * from t1 union all select * from t2 limit 10) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union all materialize  (...)
+            -> Limit table size: 10 row(s)
+                -> Table scan on t1  (...)
+            -> Limit table size: 10 row(s)
+                -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 limit 10) v1 limit 5;
+a	b
+1	2
+2	3
+3	4
+4	5
+5	6
+explain format=tree select * from (select * from t1 join t2 on t1.a = t2.c) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Inner hash join (t2.c = t1.a)  (...)
+        -> Table scan on t2  (...)
+        -> Hash
+            -> Table scan on t1  (...)
+
+select * from (select * from t1 join t2 on t1.a = t2.c) v1 limit 5;
+a	b	c	d
+4	5	4	5
+4	5	4	5
+5	6	5	6
+5	6	5	6
+6	7	6	7
+explain format=tree select * from (select * from t1 left join t2 on t1.a = t2.c) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Left hash join (t2.c = t1.a)  (...)
+        -> Table scan on t1  (...)
+        -> Hash
+            -> Table scan on t2  (...)
+
+select * from (select * from t1 left join t2 on t1.a = t2.c) v1 limit 5;
+a	b	c	d
+1	2	NULL	NULL
+2	3	NULL	NULL
+3	4	NULL	NULL
+4	5	4	5
+4	5	4	5
+explain format=tree select * from (select * from t1 full join t2 on t1.a = t2.c) v1 limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Full hash join (t1.a = t2.c)  (...)
+                -> Table scan on t1  (...)
+                -> Hash
+                    -> Table scan on t2  (...)
+
+select * from (select * from t1 full join t2 on t1.a = t2.c) v1 limit 5;
+a	b	c	d
+1	2	NULL	NULL
+2	3	NULL	NULL
+3	4	NULL	NULL
+4	5	4	5
+4	5	4	5
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 offset 2 rows;
+EXPLAIN
+-> Offset: 2 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 offset 2 rows;
+a	b
+12	13
+12	13
+11	12
+11	12
+10	11
+10	11
+10	11
+10	11
+9	10
+9	10
+9	10
+9	10
+8	9
+8	9
+8	9
+8	9
+7	8
+7	8
+7	8
+7	8
+6	7
+6	7
+6	7
+6	7
+5	6
+5	6
+5	6
+5	6
+4	5
+4	5
+4	5
+4	5
+3	4
+3	4
+2	3
+2	3
+1	2
+1	2
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS ONLY;
+EXPLAIN
+-> Limit: 1 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS ONLY;
+a	b
+13	14
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS with TIES;
+EXPLAIN
+-> Limit: 1 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST ROWS with TIES;
+a	b
+13	14
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS ONLY;
+EXPLAIN
+-> Limit: 1 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS ONLY;
+a	b
+13	14
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS with TIES;
+EXPLAIN
+-> Limit: 1 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch NEXT ROWS with TIES;
+a	b
+13	14
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS ONLY;
+EXPLAIN
+-> Limit: 6 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS ONLY;
+a	b
+13	14
+13	14
+12	13
+12	13
+11	12
+11	12
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS with TIES;
+EXPLAIN
+-> Limit: 6 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 ROWS with TIES;
+a	b
+13	14
+13	14
+12	13
+12	13
+11	12
+11	12
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS ONLY;
+EXPLAIN
+-> Fetch next 6 percent row(s) only  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS ONLY;
+a	b
+13	14
+13	14
+12	13
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS with TIES;
+EXPLAIN
+-> Fetch next 6 percent row(s) only  (...)
+    -> Table scan on v1  (...)
+        -> Materialize  (...)
+            -> Sort: a DESC  (...)
+                -> Table scan on <union temporary>  (...)
+                    -> Union all materialize  (...)
+                        -> Table scan on t1  (...)
+                        -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS with TIES;
+a	b
+13	14
+13	14
+12	13
+explain format=tree select * from (select * from t1 union all select * from t2 order by 1 desc) v1 order by 1 desc fetch FIRST 6 PERCENT ROWS with TIES;
+EXPLAIN
+-> Fetch next 6 percent row(s) with ties  (...)
+    -> Sort: v1.a DESC  (...)
+        -> Table scan on v1  (...)
+            -> Materialize  (...)
+                -> Sort: a DESC  (...)
+                    -> Table scan on <union temporary>  (...)
+                        -> Union all materialize  (...)
+                            -> Table scan on t1  (...)
+                            -> Table scan on t2  (...)
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 order by 1 desc fetch FIRST 6 PERCENT ROWS with TIES;
+a	b
+13	14
+13	14
+12	13
+12	13
+explain format=tree select * from (
+select * from (
+select * from t1 order by a desc
+) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+EXPLAIN
+-> Limit/Offset: 5/1 row(s)  (...)
+    -> Table scan on s1  (...)
+        -> Materialize  (...)
+            -> Limit/Offset: 6/2 row(s)  (...)
+                -> Sort: a DESC, limit input to 8 row(s) per chunk  (...)
+                    -> Table scan on t1  (...)
+
+select * from (
+select * from (
+select * from t1 order by a desc
+) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+a	b
+9	10
+8	9
+8	9
+7	8
+7	8
+explain format=tree select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+EXPLAIN
+-> Limit/Offset: 5/1 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union all materialize  (...)
+            -> Limit: 1 row(s)  (...)
+                -> Table scan on t1  (...)
+            -> Limit: 2 row(s)  (...)
+                -> Table scan on t2  (...)
+
+select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+a	b
+4	5
+5	6
+explain format=tree select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+EXPLAIN
+-> Limit/Offset: 5/1 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union materialize with deduplication  (...)
+            -> Limit: 1 row(s)  (...)
+                -> Table scan on t1  (...)
+            -> Limit: 2 row(s)  (...)
+                -> Table scan on t2  (...)
+
+select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+a	b
+4	5
+5	6
+explain format=tree select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Inner hash join (no condition)  (...)
+        -> Table scan on t2  (...)
+        -> Hash
+            -> Inner hash join (t2.c = t1.a)  (...)
+                -> Table scan on t2  (...)
+                -> Hash
+                    -> Table scan on t1  (...)
+
+select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+a	b	c	d	c	d
+10	11	10	11	4	5
+10	11	10	11	4	5
+9	10	9	10	4	5
+9	10	9	10	4	5
+8	9	8	9	4	5
+set optimizer_switch='derived_limit_pushdown=off,derived_merge=off';
+explain format=tree select * from (
+select * from (
+select * from t1 order by a desc
+) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+EXPLAIN
+-> Limit/Offset: 5/1 row(s)  (...)
+    -> Table scan on s1  (...)
+        -> Materialize  (...)
+            -> Limit/Offset: 6/2 row(s)  (...)
+                -> Table scan on s2  (...)
+                    -> Materialize  (...)
+                        -> Sort: t1.a DESC  (...)
+                            -> Table scan on t1  (...)
+
+select * from (
+select * from (
+select * from t1 order by a desc
+) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+a	b
+9	10
+8	9
+8	9
+7	8
+7	8
+explain format=tree select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+EXPLAIN
+-> Limit/Offset: 5/1 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union all materialize  (...)
+            -> Limit: 1 row(s)  (...)
+                -> Table scan on t1  (...)
+            -> Limit: 2 row(s)  (...)
+                -> Table scan on t2  (...)
+
+select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+a	b
+4	5
+5	6
+explain format=tree select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+EXPLAIN
+-> Limit/Offset: 5/1 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union materialize with deduplication  (...)
+            -> Limit: 1 row(s)  (...)
+                -> Table scan on t1  (...)
+            -> Limit: 2 row(s)  (...)
+                -> Table scan on t2  (...)
+
+select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+a	b
+4	5
+5	6
+explain format=tree select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Inner hash join (no condition)  (...)
+        -> Table scan on v1  (...)
+            -> Materialize  (...)
+                -> Inner hash join (t2.c = t1.a)  (...)
+                    -> Table scan on t2  (...)
+                    -> Hash
+                        -> Table scan on t1  (...)
+        -> Hash
+            -> Table scan on x  (...)
+                -> Materialize  (...)
+                    -> Table scan on t2  (...)
+
+select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+a	b	c	d	c	d
+4	5	4	5	13	14
+4	5	4	5	12	13
+4	5	4	5	11	12
+4	5	4	5	10	11
+4	5	4	5	9	10
+set optimizer_switch='derived_limit_pushdown=on,derived_merge=on';
+explain format=tree select * from (
+select * from (
+select * from t1 order by a desc
+) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+EXPLAIN
+-> Limit/Offset: 5/1 row(s)  (...)
+    -> Table scan on s1  (...)
+        -> Materialize  (...)
+            -> Limit/Offset: 6/2 row(s)  (...)
+                -> Sort: a DESC, limit input to 8 row(s) per chunk  (...)
+                    -> Table scan on t1  (...)
+
+select * from (
+select * from (
+select * from t1 order by a desc
+) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+a	b
+9	10
+8	9
+8	9
+7	8
+7	8
+explain format=tree select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+EXPLAIN
+-> Limit/Offset: 5/1 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union all materialize  (...)
+            -> Limit table size: 6 row(s)
+                -> Limit: 1 row(s)  (...)
+                    -> Table scan on t1  (...)
+            -> Limit table size: 6 row(s)
+                -> Limit: 2 row(s)  (...)
+                    -> Table scan on t2  (...)
+
+select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+a	b
+4	5
+5	6
+explain format=tree select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+EXPLAIN
+-> Limit/Offset: 5/1 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union materialize with deduplication  (...)
+            -> Limit table size: 6 unique row(s)
+                -> Limit: 1 row(s)  (...)
+                    -> Table scan on t1  (...)
+            -> Limit table size: 6 unique row(s)
+                -> Limit: 2 row(s)  (...)
+                    -> Table scan on t2  (...)
+
+select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+a	b
+4	5
+5	6
+explain format=tree select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Inner hash join (no condition)  (...)
+        -> Table scan on t2  (...)
+        -> Hash
+            -> Inner hash join (t2.c = t1.a)  (...)
+                -> Table scan on t2  (...)
+                -> Hash
+                    -> Table scan on t1  (...)
+
+select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+a	b	c	d	c	d
+10	11	10	11	4	5
+10	11	10	11	4	5
+9	10	9	10	4	5
+9	10	9	10	4	5
+8	9	8	9	4	5
+set optimizer_switch='derived_limit_pushdown=on,derived_merge=off';
+explain format=tree select * from (
+select * from (
+select * from t1 order by a desc
+) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+EXPLAIN
+-> Table scan on s1  (...)
+    -> Materialize  (...)
+        -> Limit/Offset: 5/1 row(s)  (...)
+            -> Table scan on s2  (...)
+                -> Materialize  (...)
+                    -> Limit/Offset: 6/2 row(s)  (...)
+                        -> Sort: t1.a DESC, limit input to 8 row(s) per chunk  (...)
+                            -> Table scan on t1  (...)
+
+select * from (
+select * from (
+select * from t1 order by a desc
+) s2 limit 6 offset 2
+) s1 limit 5 offset 1;
+a	b
+9	10
+8	9
+8	9
+7	8
+7	8
+explain format=tree select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+EXPLAIN
+-> Limit/Offset: 5/1 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union all materialize  (...)
+            -> Limit table size: 6 row(s)
+                -> Limit: 1 row(s)  (...)
+                    -> Table scan on t1  (...)
+            -> Limit table size: 6 row(s)
+                -> Limit: 2 row(s)  (...)
+                    -> Table scan on t2  (...)
+
+select * from ((select * from t1 limit 1) union all (select * from t2 limit 2)) v1 limit 5 offset 1;
+a	b
+4	5
+5	6
+explain format=tree select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+EXPLAIN
+-> Limit/Offset: 5/1 row(s)  (...)
+    -> Table scan on v1  (...)
+        -> Union materialize with deduplication  (...)
+            -> Limit table size: 6 unique row(s)
+                -> Limit: 1 row(s)  (...)
+                    -> Table scan on t1  (...)
+            -> Limit table size: 6 unique row(s)
+                -> Limit: 2 row(s)  (...)
+                    -> Table scan on t2  (...)
+
+select * from ((select * from t1 limit 1) union (select * from t2 limit 2)) v1 limit 5 offset 1;
+a	b
+4	5
+5	6
+explain format=tree select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+EXPLAIN
+-> Limit: 5 row(s)  (...)
+    -> Inner hash join (no condition)  (...)
+        -> Table scan on v1  (...)
+            -> Materialize  (...)
+                -> Inner hash join (t2.c = t1.a)  (...)
+                    -> Table scan on t2  (...)
+                    -> Hash
+                        -> Table scan on t1  (...)
+        -> Hash
+            -> Table scan on x  (...)
+                -> Materialize  (...)
+                    -> Table scan on t2  (...)
+
+select * from (select * from t1 join t2 on t1.a = t2.c) v1 join (select * from t2) x limit 5;
+a	b	c	d	c	d
+4	5	4	5	13	14
+4	5	4	5	12	13
+4	5	4	5	11	12
+4	5	4	5	10	11
+4	5	4	5	9	10
+EXPLAIN format=tree WITH cte AS (SELECT SUM(a) k1 FROM t1 GROUP BY b)
+SELECT * FROM cte LIMIT 2;
+EXPLAIN
+-> Table scan on cte  (...)
+    -> Materialize CTE cte  (...)
+        -> Limit: 2 row(s)
+            -> Table scan on <temporary>
+                -> Aggregate using temporary table
+                    -> Table scan on t1  (...)
+
+WITH cte AS (SELECT SUM(a) k1 FROM t1 GROUP BY b)
+SELECT * FROM cte LIMIT 2;
+k1
+2
+4
+explain format=tree select * from (select * from t1) x order by 1 limit 2 offset 1;
+EXPLAIN
+-> Limit/Offset: 2/1 row(s)  (...)
+    -> Sort: x.a, limit input to 3 row(s) per chunk  (...)
+        -> Table scan on x  (...)
+            -> Materialize  (...)
+                -> Table scan on t1  (...)
+
+select * from (select * from t1) x order by 1 limit 2 offset 1;
+a	b
+1	2
+2	3
+set optimizer_switch='derived_limit_pushdown=off';
+EXPLAIN format=tree WITH cte AS (SELECT SUM(a) k1 FROM t1 GROUP BY b)
+SELECT * FROM cte LIMIT 2;
+EXPLAIN
+-> Limit: 2 row(s)  (...)
+    -> Table scan on cte  (...)
+        -> Materialize CTE cte  (...)
+            -> Table scan on <temporary>
+                -> Aggregate using temporary table
+                    -> Table scan on t1  (...)
+
+WITH cte AS (SELECT SUM(a) k1 FROM t1 GROUP BY b)
+SELECT * FROM cte LIMIT 2;
+k1
+2
+4
+explain format=tree select * from (select * from t1) x order by 1 limit 2 offset 1;
+EXPLAIN
+-> Limit/Offset: 2/1 row(s)  (...)
+    -> Sort: x.a, limit input to 3 row(s) per chunk  (...)
+        -> Table scan on x  (...)
+            -> Materialize  (...)
+                -> Table scan on t1  (...)
+
+select * from (select * from t1) x order by 1 limit 2 offset 1;
+a	b
+1	2
+2	3
+set optimizer_switch=default;
+drop view if exists vt1, vtt1, vt2, vt3;
+drop view if exists vt4, vt5, vt5_1, vt6;
+drop view if exists vt7, vt8, vt9;
+drop view if exists vt10, vt11, vt12;
+drop view if exists vt13, vt14, vt15;
+drop table if exists t1, t2;

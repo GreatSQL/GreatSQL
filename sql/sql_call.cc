@@ -1,0 +1,392 @@
+/* Copyright (c) 2016, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2023, 2025, GreatDB Software Co., Ltd.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+
+/* Execute CALL statement */
+
+#include "sql/sql_call.h"
+
+#include <assert.h>
+#include <limits.h>
+#include <stddef.h>
+#include <sys/types.h>
+#include <algorithm>
+#include <atomic>
+
+#include "lex_string.h"
+#include "my_base.h"
+
+#include "my_inttypes.h"
+#include "my_sys.h"
+#include "mysql/plugin_audit.h"
+#include "mysql/psi/mysql_sp.h"
+#include "mysql_com.h"
+#include "mysqld_error.h"
+#include "scope_guard.h"
+#include "sql/auth/auth_acls.h"
+#include "sql/auth/auth_common.h"  // check_routine_access, check_table_access
+#include "sql/item.h"              // class Item
+#include "sql/protocol.h"
+#include "sql/sp.h"  // sp_find_routine
+#include "sql/sp_head.h"
+#include "sql/sp_pcontext.h"  // class sp_variable
+#include "sql/sql_audit.h"    // AUDIT_EVENT
+#include "sql/sql_class.h"    // class THD
+#include "sql/sql_lex.h"
+#include "sql/sql_list.h"
+#include "sql/system_variables.h"
+#include "template_utils.h"
+
+using std::max;
+
+bool do_execute_sp(THD *thd, sp_head *sp, mem_root_deque<Item *> *args) {
+  auto dbmsotpt_guard =
+      create_scope_guard([thd] { thd->show_dbms_output(true); });
+
+  /*
+    If sp_head::MULTI_RESULTS is set, then set SERVER_MORE_RESULTS_EXISTS if
+    not set already and remember that it should be cleared.
+  */
+  uint bits_to_be_cleared = (~thd->server_status & SERVER_MORE_RESULTS_EXISTS);
+  if (sp->m_flags & sp_head::MULTI_RESULTS) {
+    if (!thd->get_protocol()->has_client_capability(CLIENT_MULTI_RESULTS)) {
+      // Client does not support multiple result sets
+      my_error(ER_SP_BADSELECT, MYF(0), sp->m_qname.str);
+      return true;
+    }
+    thd->server_status |= SERVER_MORE_RESULTS_EXISTS;
+  }
+
+  ha_rows select_limit = thd->variables.select_limit;
+  thd->variables.select_limit = HA_POS_ERROR;
+
+  /*
+    Never write CALL statements into binlog:
+    - If the mode is non-prelocked, each statement will be logged separately.
+    - If the mode is prelocked, the invoking statement will care about writing
+      into binlog.
+    So just execute the statement.
+  */
+  bool result = sp->execute_procedure(thd, args);
+
+  thd->variables.select_limit = select_limit;
+
+  thd->server_status &= ~bits_to_be_cleared;
+
+  if (result) {
+    assert(thd->is_error() || thd->killed);
+    return true;  // Substatement should already have sent error
+  }
+
+  my_ok(thd, max(thd->get_row_count_func(), 0LL));
+  return 0;
+}
+
+bool Sql_cmd_call::precheck(THD *thd) {
+  enum_sp_type sp_type = m_pkg_name->m_name.str ? enum_sp_type::PACKAGE_BODY
+                                                : enum_sp_type::PROCEDURE;
+  // Check execute privilege on stored procedure
+  char *routine_name = (sp_type == enum_sp_type::PROCEDURE)
+                           ? proc_name->m_name.str
+                           : m_pkg_name->m_name.str;
+  if (!proc_name->m_fake_synonym &&
+      check_routine_access(thd, EXECUTE_ACL, proc_name->m_db.str, routine_name,
+                           sp_type, false))
+    return true;
+
+  // Check SELECT privileges for any subqueries
+  if (check_table_access(thd, SELECT_ACL, lex->query_tables, false, UINT_MAX,
+                         false))
+    return true;
+  return false;
+}
+
+bool Sql_cmd_call::check_privileges(THD *thd) {
+  enum_sp_type sp_type = m_pkg_name->m_name.str ? enum_sp_type::PACKAGE_BODY
+                                                : enum_sp_type::PROCEDURE;
+  char *routine_name = (sp_type == enum_sp_type::PROCEDURE)
+                           ? proc_name->m_name.str
+                           : m_pkg_name->m_name.str;
+  if (!proc_name->m_fake_synonym &&
+      check_routine_access(thd, EXECUTE_ACL, proc_name->m_db.str, routine_name,
+                           sp_type, false))
+    return true;
+
+  if (check_all_table_privileges(thd)) {
+    return true;
+  }
+
+  sp_head *sp = sp_find_routine(thd, enum_sp_type::PROCEDURE, proc_name,
+                                &thd->sp_proc_cache, true, m_pkg_name, m_sig);
+  if (sp == nullptr) {
+    my_error(ER_SP_DOES_NOT_EXIST, MYF(0), "PROCEDURE", proc_name->m_qname.str);
+    return true;
+  }
+
+  sp_pcontext *root_parsing_context = sp->get_root_parsing_context();
+
+  if (proc_args != nullptr) {
+    int arg_no = 0;
+    for (Item *arg : *proc_args) {
+      sp_variable *spvar = root_parsing_context->find_variable(arg_no);
+      if (arg->type() == Item::TRIGGER_FIELD_ITEM) {
+        Item_trigger_field *itf = down_cast<Item_trigger_field *>(arg);
+        itf->set_required_privilege(
+            spvar->mode == sp_variable::MODE_IN    ? SELECT_ACL
+            : spvar->mode == sp_variable::MODE_OUT ? UPDATE_ACL
+                                                   : SELECT_ACL | UPDATE_ACL);
+      }
+      if (arg->walk(&Item::check_column_privileges, enum_walk::PREFIX,
+                    pointer_cast<uchar *>(thd)))
+        return true;
+      arg_no++;
+    }
+  }
+  thd->want_privilege = SELECT_ACL;
+  if (lex->query_block->check_privileges_for_subqueries(thd)) {
+    return true;
+  }
+
+  return false;
+}
+
+bool Sql_cmd_call::prepare_inner(THD *thd) {
+  // All required SPs should be in cache so no need to look into DB.
+
+  Query_block *const select = lex->query_block;
+
+  sp_head *sp = sp_find_routine(thd, enum_sp_type::PROCEDURE, proc_name,
+                                &thd->sp_proc_cache, true, m_pkg_name, m_sig);
+  if (sp == nullptr) {
+    my_error(ER_SP_DOES_NOT_EXIST, MYF(0), "PROCEDURE", proc_name->m_qname.str);
+    return true;
+  }
+
+  sp_pcontext *root_parsing_context = sp->get_root_parsing_context();
+
+  uint arg_count = proc_args != nullptr ? proc_args->size() : 0;
+  uint define_count = root_parsing_context->context_var_count();
+
+  if (thd->variables.sql_mode & MODE_ORACLE && arg_count < define_count) {
+    // make sure it is not empty
+    if (proc_args == nullptr)
+      proc_args = new (thd->mem_root) mem_root_deque<Item *>(thd->mem_root);
+
+    if (append_default_parameters(thd, proc_args, sp, &arg_count)) {
+      return true;
+    }
+  }
+
+  if (root_parsing_context->context_var_count() != arg_count) {
+    my_error(ER_SP_WRONG_NO_OF_ARGS, MYF(0), "PROCEDURE",
+             proc_name->m_qname.str, root_parsing_context->context_var_count(),
+             arg_count);
+    return true;
+  }
+
+  if (proc_args == nullptr) {
+    lex->unit->set_prepared();
+    return false;
+  }
+
+  // check for existance of named_parameter in sql_mode = oracle
+  if ((thd->variables.sql_mode & MODE_ORACLE) && arg_count > 0) {
+    auto has_named_parameter = false;
+
+    for (Item *arg : *proc_args) {
+      if (arg->item_name.is_autogenerated() == false) {
+        has_named_parameter = true;
+        break;
+      }
+    }
+
+    if (has_named_parameter) {
+      auto params = thd->mem_root->ArrayAlloc<Item *>(arg_count);
+      auto is_ordered = false;
+
+      if (params == nullptr) return true;
+
+      // assemble the args to array, prepare for reorder named params
+      for (uint i = 0; i < arg_count; ++i) {
+        params[i] = (*proc_args)[i];
+      }
+
+      // get ordered params
+      if (reorder_named_parameters(thd, "procedure", params, arg_count, sp,
+                                   &is_ordered)) {
+        return true;
+      }
+
+      // copy result back to proc_args if not yet ordered
+      if (is_ordered == false) {
+        for (uint i = 0; i < arg_count; ++i) {
+          (*proc_args)[i] = params[i];
+          assert(params[i]);
+        }
+      }
+    }
+  }
+
+  int arg_no = 0;
+  for (Item *&arg : *proc_args) {
+    sp_variable *spvar = root_parsing_context->find_variable(arg_no);
+    assert(arg);
+    if (arg->type() == Item::TRIGGER_FIELD_ITEM) {
+      Item_trigger_field *itf = down_cast<Item_trigger_field *>(arg);
+      itf->set_required_privilege(
+          spvar->mode == sp_variable::MODE_IN    ? SELECT_ACL
+          : spvar->mode == sp_variable::MODE_OUT ? UPDATE_ACL
+                                                 : SELECT_ACL | UPDATE_ACL);
+    }
+    if ((!arg->fixed && arg->fix_fields(thd, &arg)) || arg->check_cols(1))
+      return true; /* purecov: inspected */
+    // for call p1(out sys_refcursor)
+    if (spvar->field_def.ora_record.is_ref_cursor) {
+      if (!arg->is_splocal() && arg->type() != Item::PARAM_ITEM &&
+          arg->type() != Item::FUNC_ITEM) {
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                 "the global variable used as sys_refcursor parameter");
+        return true;
+      }
+    } else {
+      if (arg->data_type() == MYSQL_TYPE_INVALID) {
+        if (spvar->field_def.ora_record.row_field_definitions() ||
+            spvar->field_def.ora_record.row_field_table_definitions()) {
+          my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+                   "user variable as procedure parameter");
+          return true;
+        }
+        switch (Item::type_to_result(spvar->type)) {
+          case INT_RESULT:
+          case REAL_RESULT:
+          case DECIMAL_RESULT:
+            if (arg->propagate_type(
+                    thd,
+                    Type_properties(spvar->type, spvar->field_def.is_unsigned)))
+              return true;
+            break;
+          case STRING_RESULT:
+            if (arg->propagate_type(
+                    thd,
+                    Type_properties(spvar->type, spvar->field_def.charset)))
+              return true;
+            break;
+          default:
+            assert(false);
+        }
+      }
+    }
+    arg_no++;
+  }
+
+  if (select->apply_local_transforms(thd, true)) return true;
+
+  lex->unit->set_prepared();
+
+  return false;
+}
+
+bool Sql_cmd_call::execute_inner(THD *thd) {
+  // All required SPs should be in cache so no need to look into DB.
+
+  /*
+    If proc is called from an SP, the overload subprogram may not be resolved
+    properly. Anyway, the package body is already in cache. What we need to do
+    is resolving it again.
+  */
+  if (m_sig->m_overload_index != 0 && m_sig->m_not_all_fixed) {
+    MEM_ROOT *saved_mem_root = thd->mem_root;
+    if (thd->lex->sphead)
+      thd->mem_root = thd->lex->sphead->get_persistent_mem_root();
+    m_sig->clear();
+    m_sig->init_by(proc_args);
+    proc_name->m_db = m_save_db;
+    proc_name->m_name = m_save_fn_name;
+    proc_name->m_explicit_name = m_save_explicit_name;
+    if (sp_resolve_package_routine(thd, enum_sp_type::PROCEDURE,
+                                   thd->lex->sphead, proc_name, m_pkg_name,
+                                   m_sig)) {
+      thd->mem_root = saved_mem_root;
+      return true;
+    }
+    thd->mem_root = saved_mem_root;
+  }
+
+  sp_head *sp = sp_setup_routine(thd, enum_sp_type::PROCEDURE, proc_name,
+                                 &thd->sp_proc_cache, m_pkg_name, m_sig);
+  if (sp == nullptr) {
+    my_error(ER_SP_DOES_NOT_EXIST, MYF(0), "PROCEDURE", proc_name->m_qname.str);
+    return true;
+  }
+
+  /*
+    Check that the stored procedure doesn't contain Dynamic SQL and doesn't
+    return result sets: such stored procedures can't be called from
+    a function or trigger.
+  */
+  if (thd->in_sub_stmt) {
+    const char *where =
+        (thd->in_sub_stmt & SUB_STMT_TRIGGER ? "trigger" : "function");
+    if (sp->is_not_allowed_in_function(where)) return true;
+  }
+
+  if (mysql_event_tracking_stored_program_notify(
+          thd, AUDIT_EVENT(EVENT_TRACKING_STORED_PROGRAM_EXECUTE),
+          proc_name->m_db.str, proc_name->m_name.str, nullptr))
+    return true;
+
+  return do_execute_sp(thd, sp, proc_args);
+}
+
+bool Sql_cmd_compound::precheck(THD *thd) {
+  if (check_table_access(thd, SELECT_ACL, lex->query_tables, false, UINT_MAX,
+                         false)) {
+    return true;
+  }
+  return false;
+}
+
+bool Sql_cmd_compound::check_privileges(THD *thd) {
+  if (check_all_table_privileges(thd)) {
+    return true;
+  }
+  return false;
+}
+
+bool Sql_cmd_compound::prepare_inner(THD *) {
+  lex->unit->set_prepared();
+  return false;
+}
+
+bool Sql_cmd_compound::execute_inner(THD *thd) {
+  assert(thd->in_sub_stmt == 0);
+  sp->m_sql_mode = thd->variables.sql_mode;
+#ifdef HAVE_PSI_SP_INTERFACE
+  sp->m_sp_share =
+      MYSQL_GET_SP_SHARE(static_cast<uint>(sp->m_type), sp->m_db.str,
+                         static_cast<uint>(sp->m_db.length), sp->m_name.str,
+                         static_cast<uint>(sp->m_name.length));
+#endif
+  // only run once  sp->optimize();
+  return do_execute_sp(thd, sp, nullptr);
+}

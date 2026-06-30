@@ -1,0 +1,345 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server1]
+server1
+include/start_and_bootstrap_group_replication.inc
+server2
+include/start_group_replication.inc
+server3
+include/start_group_replication.inc
+server1
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+INSERT INTO t1 VALUES (1,1);
+## test internal_xa_commit error with stop mgr
+[connect conn1_1_1]
+XA START '1';
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+XA END '1';
+XA PREPARE '1';
+SET DEBUG='+d,xa_commit_wait';
+XA COMMIT '1';
+[connect conn1_1_2]
+SET DEBUG_SYNC='now WAIT_FOR reach_wait_sync';
+STOP GROUP_REPLICATION;
+[connect conn1_1_3]
+SET DEBUG_SYNC='now SIGNAL end_wait_sync';
+[connect conn1_1_2]
+[connect conn1_1_1]
+ERROR HY000: Error on observer while running replication hook 'before_commit'.
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+[connect conn2_1_1]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+SELECT * FROM t1;
+c1	c2
+1	1
+XA COMMIT '1';
+SELECT * FROM t1;
+c1	c2
+1	2
+server1
+include/start_group_replication.inc
+[connect conn1_1_2]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+SELECT * FROM t1;
+c1	c2
+1	2
+UPDATE t1 SET c2=c1 WHERE c1=1;
+## test external_xa_commit error with stop mgr
+[connect conn1_2_1]
+XA START '1';
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+XA END '1';
+XA PREPARE '1';
+[connect conn1_2_2]
+SET DEBUG='+d,xa_commit_wait';
+XA COMMIT '1';
+[connect conn1_2_3]
+SET DEBUG_SYNC='now WAIT_FOR reach_wait_sync';
+STOP GROUP_REPLICATION;
+[connect conn1_2_4]
+SET DEBUG_SYNC='now SIGNAL end_wait_sync';
+[connect conn1_2_3]
+[connect conn1_2_2]
+ERROR HY000: Error on observer while running replication hook 'before_commit'.
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+[connect conn2_2_1]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+SELECT * FROM t1;
+c1	c2
+1	1
+XA COMMIT '1';
+SELECT * FROM t1;
+c1	c2
+1	2
+server1
+include/start_group_replication.inc
+[connect conn1_2_2]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+SELECT * FROM t1;
+c1	c2
+1	2
+UPDATE t1 SET c2=c1 WHERE c1=1;
+## test internal_xa_rollback error with stop mgr
+[connect conn1_3_1]
+XA START '1';
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+XA END '1';
+XA PREPARE '1';
+SET DEBUG='+d,xa_rollback_wait';
+XA ROLLBACK '1';
+[connect conn1_3_2]
+SET DEBUG_SYNC='now WAIT_FOR reach_wait_sync';
+STOP GROUP_REPLICATION;
+[connect conn1_3_3]
+SET DEBUG_SYNC='now SIGNAL end_wait_sync';
+[connect conn1_3_2]
+[connect conn1_3_1]
+ERROR HY000: Error on observer while running replication hook 'before_commit'.
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+[connect conn2_3_1]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+SELECT * FROM t1;
+c1	c2
+1	1
+XA COMMIT '1';
+SELECT * FROM t1;
+c1	c2
+1	2
+server1
+include/start_group_replication.inc
+[connect conn1_3_2]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+SELECT * FROM t1;
+c1	c2
+1	2
+UPDATE t1 SET c2=c1 WHERE c1=1;
+## test external_xa_commit error with stop mgr
+[connect conn1_4_1]
+XA START '1';
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+XA END '1';
+XA PREPARE '1';
+[connect conn1_4_2]
+SET DEBUG='+d,xa_rollback_wait';
+XA ROLLBACK '1';
+[connect conn1_4_3]
+SET DEBUG_SYNC='now WAIT_FOR reach_wait_sync';
+STOP GROUP_REPLICATION;
+[connect conn1_4_4]
+SET DEBUG_SYNC='now SIGNAL end_wait_sync';
+[connect conn1_4_3]
+[connect conn1_4_2]
+ERROR HY000: Error on observer while running replication hook 'before_commit'.
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+[connect conn2_4_1]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+SELECT * FROM t1;
+c1	c2
+1	1
+XA COMMIT '1';
+SELECT * FROM t1;
+c1	c2
+1	2
+server1
+include/start_group_replication.inc
+[connect conn1_4_2]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+SELECT * FROM t1;
+c1	c2
+1	2
+UPDATE t1 SET c2=c1 WHERE c1=1;
+## test internal_xa_commit error with kill
+[connect conn1_5_1]
+XA START '1';
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+XA END '1';
+XA PREPARE '1';
+SET DEBUG='+d,xa_commit_sleep';
+XA COMMIT '1';
+[server1 shutdown]
+[connect conn1_5_1]
+Got one of the listed errors
+[connect conn2_5_1]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+SELECT * FROM t1;
+c1	c2
+1	1
+XA COMMIT '1';
+SELECT * FROM t1;
+c1	c2
+1	2
+server1
+[start server1]
+# restart
+SET GLOBAL group_replication_local_address='s1_local_address';
+SET GLOBAL group_replication_group_seeds='s1_seeds';
+SET GLOBAL group_replication_group_name='aabbccdd-eeff-eeff-eeff-112233445566';
+include/start_group_replication.inc
+[connect conn1_5_2]
+SET SESSION group_replication_consistency='BEFORE';
+SELECT * FROM t1;
+c1	c2
+1	2
+UPDATE t1 SET c2=c1 WHERE c1=1;
+## test external_xa_commit error with kill
+[connect conn1_6_1]
+XA START '1';
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+XA END '1';
+XA PREPARE '1';
+[connect conn1_6_2]
+SET DEBUG='+d,xa_commit_sleep';
+XA COMMIT '1';
+[server1 shutdown]
+[connect conn1_6_2]
+Got one of the listed errors
+[connect conn2_6_1]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+SELECT * FROM t1;
+c1	c2
+1	1
+XA COMMIT '1';
+SELECT * FROM t1;
+c1	c2
+1	2
+server1
+[start server1]
+# restart
+SET GLOBAL group_replication_local_address='s1_local_address';
+SET GLOBAL group_replication_group_seeds='s1_seeds';
+SET GLOBAL group_replication_group_name='aabbccdd-eeff-eeff-eeff-112233445566';
+include/start_group_replication.inc
+[connect conn1_6_3]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+SELECT * FROM t1;
+c1	c2
+1	2
+UPDATE t1 SET c2=c1 WHERE c1=1;
+## test internal_xa_rollback error with kill
+[connect conn1_7_1]
+XA START '1';
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+XA END '1';
+XA PREPARE '1';
+SET DEBUG='+d,xa_rollback_sleep';
+XA ROLLBACK '1';
+[server1 shutdown]
+[connect conn1_7_1]
+Got one of the listed errors
+[connect conn2_7_1]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+SELECT * FROM t1;
+c1	c2
+1	1
+XA COMMIT '1';
+SELECT * FROM t1;
+c1	c2
+1	2
+server1
+[start server1]
+# restart
+SET GLOBAL group_replication_local_address='s1_local_address';
+SET GLOBAL group_replication_group_seeds='s1_seeds';
+SET GLOBAL group_replication_group_name='aabbccdd-eeff-eeff-eeff-112233445566';
+include/start_group_replication.inc
+[connect conn1_7_2]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+SELECT * FROM t1;
+c1	c2
+1	2
+UPDATE t1 SET c2=c1 WHERE c1=1;
+## test external_xa_rollback error with kill
+[connect conn1_8_1]
+XA START '1';
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+XA END '1';
+XA PREPARE '1';
+[connect conn1_8_2]
+SET DEBUG='+d,xa_rollback_sleep';
+XA ROLLBACK '1';
+[server1 shutdown]
+[connect conn1_8_2]
+Got one of the listed errors
+[connect conn2_8_1]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+SELECT * FROM t1;
+c1	c2
+1	1
+XA COMMIT '1';
+SELECT * FROM t1;
+c1	c2
+1	2
+server1
+[start server1]
+# restart
+SET GLOBAL group_replication_local_address='s1_local_address';
+SET GLOBAL group_replication_group_seeds='s1_seeds';
+SET GLOBAL group_replication_group_name='aabbccdd-eeff-eeff-eeff-112233445566';
+include/start_group_replication.inc
+[connect conn1_8_3]
+SET SESSION group_replication_consistency='BEFORE';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+SELECT * FROM t1;
+c1	c2
+1	2
+UPDATE t1 SET c2=c1 WHERE c1=1;
+server1
+DROP TABLE t1;
+include/stop_group_replication.inc
+RESET REPLICA ALL;
+RESET BINARY LOGS AND GTIDS;
+server2
+include/stop_group_replication.inc
+RESET REPLICA ALL;
+RESET BINARY LOGS AND GTIDS;
+server3
+include/stop_group_replication.inc
+RESET REPLICA ALL;
+RESET BINARY LOGS AND GTIDS;

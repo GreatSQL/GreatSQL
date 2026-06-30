@@ -1,0 +1,351 @@
+
+--source include/have_debug.inc
+# Save a copy of the user/tables_priv tables, to restore later
+--let $backup= 1
+--source include/backup_tables_priv_and_users.inc
+
+--let $datadir=`select @@datadir`
+
+--remove_file $datadir/auto.cnf
+--write_file $datadir/auto.cnf
+[auto]
+server-uuid=bc392208-8935-11f0-a7f3-2cf05daaf60d
+greatdb_priv_mode=1
+EOF
+
+--source include/restart_mysqld.inc
+select @@init_greatdb_priv_mode;
+select @@greatdb_priv_mode;
+
+
+--connect (con1, localhost, sysdbo, Bgview@2021, test)
+alter user sysdbo identified by 'Bgview@2021';
+--source suite/greatdb_plan_baseline_role/include/install_gdb_plan_baseline_db_mac.inc
+
+--connect (con2, localhost, sysdba, Bgview@2021, performance_schema)
+ALTER USER sysdba IDENTIFIED BY 'Bgview@2021';
+--source suite/greatdb_plan_baseline_role/include/install_gdb_plan_baseline_mac.inc
+
+SELECT PLUGIN_NAME, PLUGIN_TYPE FROM information_schema.plugins WHERE plugin_name = 'plan_baseline';
+show status like 'plan_baseline%';
+show variables like 'plan_baseline%';
+set global plan_baseline_enable_summary = on;
+set global plan_baseline_enable_persistent = on;
+show variables like 'plan_baseline%';
+
+--connect (con3, localhost, sysdbo, Bgview@2021, test)
+#
+# Test of index
+#
+CREATE TABLE t0 (i0 INTEGER);
+insert into t0 values(1);
+CREATE TABLE t1 (f1 INTEGER, f2 INTEGER, f3 INTEGER,
+KEY(f1), KEY(f1,f2), KEY(f3));
+INSERT INTO t1 SELECT i0, i0 + 10*i0, i0 + 10*i0 + 100*i0 FROM t0 AS a0;
+INSERT INTO t1 SELECT i0, i0 + 10*i0, i0 + 10*i0 + 100*i0 FROM t0 AS a0;
+INSERT INTO t1 VALUES (NULL, 1, 2);
+INSERT INTO t1 VALUES (NULL, 1, 3);
+CREATE TABLE t2 LIKE t1;
+INSERT INTO t2 SELECT * FROM t1;
+ANALYZE TABLE t1,t2;
+
+#
+# Test of different db
+#
+create database db1;
+use db1;
+CREATE TABLE t0 (i0 INTEGER);
+insert into t0 values(1);
+CREATE TABLE t1 (f1 INTEGER, f2 INTEGER, f3 INTEGER,
+KEY(f1), KEY(f1,f2), KEY(f3));
+INSERT INTO t1 SELECT i0, i0 + 10*i0, i0 + 10*i0 + 100*i0 FROM t0 AS a0;
+INSERT INTO t1 SELECT i0, i0 + 10*i0, i0 + 10*i0 + 100*i0 FROM t0 AS a0;
+INSERT INTO t1 VALUES (NULL, 1, 2);
+INSERT INTO t1 VALUES (NULL, 1, 3);
+CREATE TABLE t2 LIKE t1;
+INSERT INTO t2 SELECT * FROM t1;
+ANALYZE TABLE t1,t2;
+
+SELECT *
+FROM (SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
+FROM test.t1 GROUP BY f1, f2
+UNION ALL
+SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
+FROM t2 GROUP BY f1,f2) as dt
+WHERE f1 > 2 and f2 > 30 and (f1+f2) > 40;
+
+drop database db1;
+use test;
+#
+# Test of index skip scan
+#
+SELECT *
+FROM (SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
+FROM t1 GROUP BY f1, f2
+UNION ALL
+SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
+FROM t2 GROUP BY f1,f2) as dt
+WHERE f1 > 2 and f2 > 30 and (f1+f2) > 40;
+
+#
+# test Index range scan
+#
+SELECT i, j
+FROM (SELECT f1+f2 as i, f2+f3 as j FROM t1
+INTERSECT
+SELECT f1 as l, f2+f3 as m FROM t2) as dt
+WHERE i > 30 and i+j > 300;
+
+#
+# test Index range scan1
+#
+SELECT i, j
+FROM (SELECT f1+f2 as i, f2+f3 as j FROM t1
+INTERSECT
+SELECT f1 as l, f2+f3 as m FROM t2) as dt
+WHERE i > 30 and i+j > 100;
+
+#
+# test Limit table size
+#
+SELECT f1
+FROM (SELECT f1 FROM t1
+UNION ALL
+SELECT f1 FROM t1 LIMIT 1) as dt
+WHERE f1 = 1;
+
+#
+# test Covering index range scan
+#
+SELECT f1
+FROM (SELECT f1, f2 FROM t1
+UNION
+SELECT f1, f2 FROM t2 ORDER BY f2) as dt
+WHERE f1 > 3;
+
+#
+# test Inner hash join and Filter
+#
+SELECT * FROM t1 INNER JOIN(SELECT t2.f1, t2.f2 FROM t1
+LEFT JOIN t1 AS t2 ON TRUE) AS dt ON dt.f1 > 3;
+
+#
+# test Group aggregate
+#
+DELIMITER |;
+CREATE FUNCTION p() RETURNS INTEGER
+BEGIN
+  DECLARE retn INTEGER;
+  SELECT count(f1) FROM t1 INTO retn;
+  RETURN retn;
+END|
+DELIMITER ;|
+
+SELECT * FROM (SELECT f1, SUM(f2) FROM t1 GROUP BY f1) as dt WHERE p() = 1;
+drop FUNCTION p;
+
+#
+# test Group aggregate with rollup
+#
+SELECT *
+FROM (SELECT f1 as j, SUM(f2) as sum
+FROM t1 GROUP BY f1 WITH ROLLUP
+HAVING AVG(f2) > 1
+UNION ALL
+SELECT f1 as j, SUM(f2) as sum
+FROM t1 GROUP BY f1) AS dt
+WHERE j+sum > 50 OR j IS NULL;
+
+#
+# test Window aggregate with buffering:
+#
+SELECT * FROM (SELECT f1, f2,SUM(f2) OVER() FROM t1 GROUP BY f1,f2) as dt
+WHERE f1 > 2;
+
+drop table t1,t2;
+
+#
+# test Remove duplicates from input grouped
+#
+CREATE TABLE t (x INTEGER);
+INSERT INTO t VALUES (1), (2), (3);
+ANALYZE TABLE t;
+
+SELECT DISTINCT MIN(t2.x), t1.x
+FROM t t1 JOIN t t2 USING (x)
+GROUP BY t2.x;
+
+drop table t;
+
+#
+# test CONNECT_BY_SCAN
+#
+CREATE TABLE student (
+id       INT,
+name  VARCHAR(10),
+grade INT
+);
+INSERT INTO student VALUES(1, 'John', NULL);
+INSERT INTO student VALUES(2, 'Paul', 1);
+INSERT INTO student VALUES(3, 'Nancy', 1);
+INSERT INTO student VALUES(4, 'Sarah', 3);
+
+SELECT id,count(id)
+FROM student
+where id > 1
+start with grade < 3
+CONNECT BY  id =  grade
+group by id;
+
+drop table student;
+
+#
+# test LIMIT_OFFSET
+#
+create table t1 (a int, b int);
+insert into t1 values (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11);
+insert into t1 values (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11);
+create table t2 (c int, d int);
+insert into t2 values(4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13), (13, 14);
+insert into t2 values(4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 13), (13, 14);
+
+select * from (select * from t1 union all select * from t2 order by 1 desc) v1 fetch FIRST 6 PERCENT ROWS ONLY;
+
+set sql_mode=oracle;
+
+#
+# test procedure with cursor
+#
+DELIMITER $$;
+CREATE or replace PROCEDURE p2() as
+  a1 int := 2;
+  c sys_refcursor;
+begin
+  open c for select * from t1 where a=a1;
+  close c;
+end;
+$$
+DELIMITER ;$$
+call p2;
+drop PROCEDURE p2;
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p3() as
+  cursor c is select * from t1 union select * from t2 where c>0;
+begin
+  open c;
+  close c;
+end;
+$$
+DELIMITER ;$$
+call p3;
+
+drop PROCEDURE p3;
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p4() as
+  c sys_refcursor;
+  str varchar(100) := 'select * from t1 union select * from t2 where c>0';
+begin
+  open c for str;
+  close c;
+end;
+$$
+DELIMITER ;$$
+call p4;
+
+drop PROCEDURE p4;
+
+#
+# test procedure with select
+#
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  a int := 2;
+begin
+  select * from t2 where c<a;
+end;
+$$
+DELIMITER ;$$
+call p1;
+drop PROCEDURE p1;
+
+#
+# test function with select into
+#
+DELIMITER $$;
+CREATE or replace function f1() return int is
+  result int;
+begin
+   select b into result from t1 where a=2 limit 1;
+   return result;
+END;
+$$
+DELIMITER ;$$
+select f1();
+drop function f1;
+
+#
+# test function with dbms_sql
+#
+DELIMITER $$;
+CREATE or replace procedure ExecuteDDL(ddl_cmd varchar(500)) as
+l_handle integer;
+l_rows int;
+BEGIN
+	l_handle := dbms_sql.open_cursor();
+	select l_handle;
+	call dbms_sql.parse(l_handle, ddl_cmd, 1);
+	l_rows:= dbms_sql_execute(l_handle);
+	call dbms_sql.close_cursor(l_handle);
+end;
+$$
+DELIMITER ;$$
+call ExecuteDDL('select * from t1 left join t2 on t1.a=t2.c');
+drop procedure ExecuteDDL;
+
+#
+# test prepare with select
+#
+PREPARE stmt1 FROM 'select * from t1 where a=1';
+EXECUTE stmt1;
+DEALLOCATE PREPARE stmt1;
+
+EXECUTE IMMEDIATE 'select * from t2 where c>10';
+
+#
+# test get result
+#
+--connection con2
+select db_name,operation from performance_schema.gdb_hist_sql_plan where db_name='test,db1';
+select db_name,query_sql,table_rows from performance_schema.gdb_digest_sql_info where db_name='test,db1';
+select db_name,digest_hash,digest_text,plan_name from performance_schema.gdb_sql_plan_baselines where db_name='test,db1';
+
+--connection con1
+select gdb_create_plan_baseline_tables();
+select count(*) from greatdb_plan_baseline.gdb_sql_plan_baseline_table_info;
+
+--connection con2
+--error ER_ACCESS_DENIED_ERROR
+select gdb_create_plan_baseline_tables();
+
+--connection con3
+drop table t0,t1,t2;
+
+--source suite/greatdb_plan_baseline_role/include/uninstall_gdb_plan_baseline_db_mac.inc
+
+--connection con2
+--source suite/greatdb_plan_baseline_role/include/uninstall_gdb_plan_baseline_mac.inc
+
+--remove_file $datadir/auto.cnf
+--write_file $datadir/auto.cnf
+[auto]
+server-uuid=bc392208-8935-11f0-a7f3-2cf05daaf60d
+greatdb_priv_mode=0
+EOF
+
+--source include/restart_mysqld.inc
+
+#Restore the saved contents of mysql.user and mysql.tables_priv
+--let $restore= 1
+--source include/backup_tables_priv_and_users.inc

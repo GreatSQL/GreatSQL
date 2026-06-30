@@ -1,0 +1,88 @@
+connect conn1
+create database db;
+create user user1;
+flush privileges;
+## test create acl denied ##
+create sequence db.sq1 start with 1 increment by 1;
+ERROR 42000: Access denied for user 'user1'@'%' to database 'db'
+[ create on db.* ]
+grant create on db.* to user1;
+flush privileges;
+create sequence db.sq1 start with 1 increment by 1;
+[ create on *.* ]
+drop sequence db.sq1;
+revoke create on db.* from user1;
+grant create on *.* to user1;
+flush privileges;
+create sequence db.sq1 start with 1 increment by 1;
+revoke create on *.* from user1;
+flush privileges;
+## test drop acl denied ##
+drop sequence db.sq1;
+ERROR 42000: Access denied for user 'user1'@'%' to database 'db'
+[ drop on db.* ]
+grant drop on db.* to user1;
+flush privileges;
+drop sequence db.sq1;
+[ drop on *.* ]
+create sequence db.sq1 start with 1 increment by 1;
+revoke drop on db.* from user1;
+grant drop on *.* to user1;
+flush privileges;
+drop sequence db.sq1;
+revoke drop on *.* from user1;
+flush privileges;
+create sequence db.sq1 start with 1 increment by 1;
+## test alter acl denied ##
+alter sequence db.sq1 increment by 4;
+ERROR 42000: Access denied for user 'user1'@'%' to database 'db'
+[ alter on db.* ]
+grant alter on db.* to user1;
+flush privileges;
+alter sequence db.sq1 increment by 4;
+[ alter on *.* ]
+revoke alter on db.* from user1;
+grant alter on *.* to user1;
+flush privileges;
+alter sequence db.sq1 increment by 6;
+## test create, alter, drop on db.* ##
+revoke alter on *.* from user1;
+grant create, alter, drop on db.* to user1;
+flush privileges;
+drop sequence db.sq1;
+create sequence db.sq1 start with 1 increment by 1;
+alter sequence db.sq1 increment by 4;
+drop sequence db.sq1;
+## test create, alter, drop on *.* ##
+revoke create, alter, drop on db.* from user1;
+grant create, alter, drop on *.* to user1;
+flush privileges;
+create sequence db.sq1 start with 1 increment by 1;
+alter sequence db.sq1 increment by 4;
+drop sequence db.sq1;
+## test all on db.* ##
+revoke create, alter, drop on *.* from user1;
+grant all on db.* to user1;
+flush privileges;
+create sequence db.sq1 start with 1 increment by 1;
+alter sequence db.sq1 increment by 4;
+drop sequence db.sq1;
+## test all on *.* ##
+revoke all on db.* from user1;
+grant all on *.* to user1;
+flush privileges;
+create sequence db.sq1 start with 1 increment by 1;
+alter sequence db.sq1 increment by 4;
+drop sequence db.sq1;
+revoke all on *.* from user1;
+drop user user1;
+drop database db;
+## test no assign database name ##
+create user user2;
+grant all on test.* to user2;
+flush privileges;
+use test;
+create sequence sq1 start with 1 increment by 1;
+alter sequence sq1 increment by 4;
+drop sequence sq1;
+drop user user2;

@@ -1,0 +1,38 @@
+#1.table test_nvl
+--disable_warnings
+drop table if exists test_nvl;
+CREATE TABLE `test_nvl` (
+  `c0` int NOT NULL AUTO_INCREMENT,
+  `c1` date DEFAULT NULL,
+  `c2` time DEFAULT NULL,
+  `c3` datetime DEFAULT NULL,
+  `c4` year DEFAULT NULL,
+  `c5` int DEFAULT NULL,
+  `c6` decimal(10,6) DEFAULT NULL,
+  `c7` double DEFAULT NULL,
+  `c8` float DEFAULT NULL,
+  `c9` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`c0`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+#2.insert data
+
+INSERT INTO `test_nvl` VALUES ('1', '2021-04-26', '15:36:37', NULL, '2021', NULL, '6.000000', '7.1', '118.169', 'a8.168111');
+INSERT INTO `test_nvl` VALUES ('2', '2021-04-28', '15:36:37', '2021-04-27 15:36:41', '2021', '6', '7877.126000', '8.1', '119.187', 'a9.16');
+INSERT INTO `test_nvl` VALUES ('3', '2021-04-29', '15:36:37', '2021-04-27 15:36:41', '2021', '6', '7877.126890', '8.1', '119.187', 'a9.1682');
+INSERT INTO `test_nvl` VALUES ('4', '2021-04-30', '15:36:37', '2021-04-27 15:36:41', '2021', '6', '7877.126890', '8.1', '119.187', 'a9.168333');
+
+#3.test to_number
+
+select nvl(c3,2) from test_nvl;
+
+select nvl(c5,'isnull') from test_nvl ; 
+
+select nvl(c5,1) +1 ,nvl(c5,1) -1 ,nvl(c5,1) *2 ,nvl(c5,1) /2 from test_nvl ;       
+
+select nvl(null,null) +1 from test_nvl ; 
+
+--error 1054
+select nvl(c111,2)  from test_nvl ;  
+
+--enable_warnings
+drop table if exists test_nvl;

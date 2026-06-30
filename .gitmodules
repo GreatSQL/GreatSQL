@@ -1,0 +1,9 @@
+[submodule "storage/rocksdb/rocksdb"]
+  path = storage/rocksdb/rocksdb
+  url = http://github.com/percona/rocksdb.git
+[submodule "extra/coredumper"]
+	path = extra/coredumper
+	url = http://github.com/Percona-Lab/coredumper.git
+[submodule "extra/libkmip"]
+	path = extra/libkmip
+	url = http://github.com/Percona-Lab/libkmip.git

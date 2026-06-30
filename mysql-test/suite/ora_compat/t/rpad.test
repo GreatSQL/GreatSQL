@@ -1,0 +1,83 @@
+#
+# Test of problem with rpad() and long separators.
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+DROP PROCEDURE IF EXISTS p1;
+--enable_warnings
+
+create table t1 (id int,a char(10),b char(10));
+insert into t1 values (1,'しa','树开');
+insert into t1 values (2,'しa','''.');
+set sql_mode='';
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+select rpad(a,1) from t1;
+select rpad(a,0,b) from t1;
+select rpad(a,2,b) from t1;
+select rpad(a,3,b) from t1;
+select rpad(a,4,b) from t1;
+select rpad(a,5,b) from t1;
+select rpad(a,6,b) from t1;
+select rpad(a,7,b) from t1;
+select rpad(a,8,b) from t1;
+select rpad_oracle(a,0) from t1;
+select rpad_oracle(a,1) from t1;
+select rpad_oracle(a,2,b) from t1;
+select rpad_oracle(a,3,b) from t1;
+select rpad_oracle(a,4,b) from t1;
+select rpad_oracle(a,5,b) from t1;
+select rpad_oracle(a,6,b) from t1;
+select rpad_oracle(a,7,b) from t1;
+select rpad_oracle(a,8,b) from t1;
+
+set sql_mode='oracle';
+select rpad(a,0) from t1;
+select rpad(a,1) from t1;
+select rpad(a,2,b) from t1;
+select rpad(a,3,b) from t1;
+select rpad(a,4,b) from t1;
+select rpad(a,5,b) from t1;
+select rpad(a,6,b) from t1;
+select rpad(a,7,b) from t1;
+select rpad(a,8,b) from t1;
+drop table t1;
+
+set sql_mode='';
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+select rpad('しa長',5);
+select rpad('しa長',4,'.');
+select rpad('しa長',6,'树');
+select rpad('万a',6,'树开');
+select rpad('しa長',7,'树');
+select rpad('しa長',9,'树a');
+select rpad_oracle('1234', 12, null);
+select rpad_oracle('1234', 12);
+
+set sql_mode='oracle';
+select rpad('しa長',4);
+select rpad('しa長',5);
+select rpad('しa長',4,'.');
+select rpad('しa長',6,'.');
+select rpad('しa長',6,'树');
+select rpad('万a',6,'树开');
+select rpad('しa長',7,'树');
+select rpad('しa長',9,'树a');
+
+set sql_mode='';
+CREATE PROCEDURE p1(a varchar(255),c int,b varchar(255))
+  SET @query = rpad(a,c,b);
+CALL p1('万里',10,'开源.');
+SELECT @query;
+DROP PROCEDURE p1;
+
+set sql_mode='oracle';
+delimiter //;
+CREATE PROCEDURE p1(a varchar(255),c int,b varchar(255)) as
+begin
+  SET @query = rpad(a,c,b);
+END//
+delimiter ;//
+CALL p1('万里',10,'开源.');
+SELECT @query;
+DROP PROCEDURE p1;

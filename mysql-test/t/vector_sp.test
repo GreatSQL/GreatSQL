@@ -1,0 +1,411 @@
+SET SQL_MODE=oracle;
+
+
+DELIMITER /;
+CREATE FUNCTION f1() RETURN vector IS BEGIN RETURN to_vector('[1,2,3]'); END/
+select f1()/
+DROP FUNCTION f1/
+CREATE FUNCTION f1() RETURN vector(3) AS BEGIN RETURN to_vector('[1,2,3]'); END/
+select f1()/
+DROP FUNCTION f1/
+DELIMITER ;/
+
+--echo # Testing top-level declarations
+DELIMITER /;
+CREATE PROCEDURE p1 (p1 OUT vector(10))
+AS
+  p2 vector(10);
+BEGIN
+  SET p2:=to_vector('[1.1,2.2,3.3]');
+  SET p1:=p2;
+END;
+/
+
+DELIMITER ;/
+SET @p1=to_vector('[1,2,3]');
+CALL p1(@p1);
+SELECT vector_to_string(@p1);
+DROP PROCEDURE p1;
+
+DELIMITER /;
+CREATE FUNCTION f1 (p1 vector(10)) RETURN double
+AS
+  p2 vector(10);
+BEGIN
+  SET p2:=to_vector('[3,2,1]');
+  RETURN vector_distance(p1, p2);
+END;
+/
+DELIMITER ;/
+SET @p1=to_vector('[1,2,3]');
+SELECT f1(@p1);
+DROP FUNCTION f1;
+
+--echo # Testing non-top declarations
+
+DELIMITER /;
+CREATE PROCEDURE p1 (p1 OUT vector(6))
+AS
+BEGIN
+  DECLARE
+    p2 vector(10);
+  BEGIN
+    SET p2:=to_vector('[1,2,3,4,5,6]');
+    SET p1:=p2;
+  END;
+  DECLARE
+    t1 vector(6);
+    t2 vector(6);
+  BEGIN
+  END;
+END;
+/
+
+DELIMITER ;/
+SET @p1=to_vector('[0.1,0.2,0.3,0.4,0.5,0.6]');
+CALL p1(@p1);
+SELECT vector_to_string(@p1);
+DROP PROCEDURE p1;
+
+#
+# Testing CONDITIONs, HANDLERs and CURORs
+# Note that all the cases in this section are copied from
+# sp.test after modifying the constructure to apply to
+# the syntax under oracle mode
+#
+
+CREATE TABLE t1 (
+  id   vector(2) NOT NULL,
+  data INT NOT NULL
+) ENGINE=MYISAM;
+CREATE TABLE t2 (
+  s   vector(2),
+  i   INT,
+  d   DOUBLE
+) ENGINE=MYISAM;
+
+-- echo # CONDITIONs and HANDLERs
+DELIMITER /;
+--disable_warnings ER_SP_DOES_NOT_EXIST ONCE
+DROP PROCEDURE IF EXISTS hndlr1/
+CREATE PROCEDURE hndlr1(val int)
+AS
+x INT DEFAULT 0;
+foo CONDITION FOR 1136;
+bar CONDITION FOR SQLSTATE '42S98';  # Just for testing syntax
+zip CONDITION FOR SQLSTATE VALUE '42S99';  # Just for testing syntax
+CONTINUE handler FOR foo SET x = 1;
+
+BEGIN
+  INSERT INTO test.t1 VALUES (to_vector('[0.1,0.2]'), val, 2);  # Too many values
+  IF (x) THEN
+    INSERT INTO test.t1 VALUES (to_vector('[0.1,0.2]'), val);   # This instead then
+  END IF;
+END/
+
+CALL hndlr1(42)/
+SELECT vector_to_string(id), data FROM t1/
+DELETE FROM t1/
+DROP PROCEDURE HNDLR1/
+
+--disable_warnings ER_SP_DOES_NOT_EXIST ONCE
+DROP PROCEDURE IF EXISTS hndlr2/
+CREATE PROCEDURE hndlr2(VAL INT)
+AS
+  x INT DEFAULT 0;
+BEGIN
+  DECLARE
+    EXIT HANDLER FOR SQLSTATE '21S01' SET x = 1;
+  BEGIN
+    INSERT INTO test.t1 VALUES (to_vector('[1,2]'), val, 2); # Too many values
+  END;
+
+  INSERT INTO test.t1 VALUES (to_vector('[1,2]'), x);
+END/
+
+CALL hndlr2(42)/
+SELECT vector_to_string(id), data FROM t1/
+DELETE FROM t1/
+DROP PROCEDURE hndlr2/
+
+--disable_warnings ER_SP_DOES_NOT_EXIST ONCE
+DROP PROCEDURE IF EXISTS hndlr3/
+CREATE PROCEDURE hndlr3(val INT)
+AS
+  x INT DEFAULT 0;
+  CONTINUE HANDLER FOR sqlexception
+  DECLARE
+    z INT;
+  BEGIN
+    SET z = 2 * val;
+    SET x = 1;
+  END;
+BEGIN
+  IF val < 10 THEN
+    DECLARE
+      y INT;
+    BEGIN
+      SET y = val + 10;
+      INSERT INTO test.t1 VALUES (to_vector('[10,20]'), y, 2);  # Too many values
+      IF x THEN
+        INSERT INTO test.t1 VALUES (to_vector('[10,20]'), y);
+      END IF;
+    END;
+  END IF;
+END/
+
+CALL hndlr3(3)/
+SELECT vector_to_string(id), data FROM t1/
+DELETE FROM t1/
+DROP PROCEDURE hndlr3/
+
+CREATE TABLE t3 ( id vector(16), data INT )/
+
+--disable_warnings ER_SP_DOES_NOT_EXIST ONCE
+DROP PROCEDURE IF EXISTS hndlr4/
+CREATE PROCEDURE hndlr4()
+AS
+  x INT DEFAULT 0;
+  val INT;                               # No default
+  CONTINUE HANDLER FOR SQLSTATE '02000' SET x=1;
+BEGIN
+  SELECT data INTO val FROM test.t3 WHERE id=to_vector('[1,2]') LIMIT 1;  # No hits
+
+  INSERT INTO test.t3 VALUES (to_vector('[1,2]') , val);
+END/
+
+CALL hndlr4()/
+--sorted_result
+SELECT vector_to_string(id), data FROM t3/
+DROP TABLE t3/
+DROP PROCEDURE hndlr4/
+
+
+# Cursors
+
+INSERT INTO t2 VALUES (to_vector('[1,2]'), 42, -1.9), (to_vector('[3,4]'), 3, 12.1), (to_vector('[5,6]'), 666, -3.14)/
+SELECT vector_to_string(id), data FROM t1/
+
+CREATE TABLE t3 ( s vector(16), i INT )/
+
+SELECT * FROM t3 ORDER BY i,s/
+DELETE FROM t1/
+DELETE FROM t2/
+DROP TABLE t3/
+
+DELIMITER ;/
+DROP TABLE t1;
+DROP TABLE t2;
+
+
+
+--echo #
+--echo # Tests for common usages of create or replace stored programs
+--echo #
+
+SET SQL_MODE=default;
+DELIMITER $$;
+
+CREATE OR REPLACE PROCEDURE p1() SELECT to_vector('[1,2]') FROM dual;$$
+CALL p1();$$
+
+--error ER_SP_ALREADY_EXISTS
+CREATE PROCEDURE p1() SELECT to_vector('[3,4]') FROM dual;$$
+CALL p1();$$
+
+CREATE OR REPLACE PROCEDURE p1() select to_vector('[5,6]') FROM dual;$$
+CALL p1();$$
+CREATE OR REPLACE PROCEDURE P1() select to_vector('[7,8]') from dual;$$
+CALL p1();$$
+
+DROP PROCEDURE p1;$$
+CREATE OR REPLACE PROCEDURE p1() SELECT to_vector('[9,10]') FROM dual;$$
+CALL p1();$$
+DROP PROCEDURE p1;$$
+
+DELIMITER ;$$
+
+--echo # Testing routines with no parameters
+SET SQL_MODE=oracle;
+CREATE PROCEDURE p1 AS BEGIN END;
+CALL p1;
+DROP PROCEDURE p1;
+
+DELIMITER /;
+CREATE FUNCTION f1 RETURN vector(2) AS BEGIN RETURN to_vector('[1,2]'); END/
+SELECT f1()/
+DROP FUNCTION f1/
+CREATE FUNCTION f1 RETURN vector(2) IS BEGIN RETURN to_vector('[3,4]'); END/
+SELECT f1()/
+DROP FUNCTION f1/
+DELIMITER ;/
+
+DELIMITER /;
+CREATE FUNCTION f1 RETURN vector(2)
+AS
+BEGIN
+  RETURN to_vector('[5,6]');
+END;
+/
+
+SHOW CREATE FUNCTION f1/
+SELECT f1()/
+DROP FUNCTION f1/
+
+CREATE PROCEDURE p1
+AS
+BEGIN
+  SET @a=to_vector('[7,8]');
+END;
+/
+SHOW CREATE PROCEDURE p1/
+SET @a=to_vector('[5,6]')/
+CALL p1()/
+SELECT vector_to_string(@a)/
+DROP PROCEDURE p1/
+
+SET @@global.max_sp_recursion_depth = 5 /
+SET @@session.max_sp_recursion_depth = 5 /
+CREATE OR REPLACE FUNCTION recur() RETURN vector(2) AS
+BEGIN RETURN recur(); END; /
+--error ER_SP_NO_RECURSION
+SELECT recur() /
+
+
+SET SQL_MODE=DEFAULT;
+CREATE OR REPLACE FUNCTION recur() RETURNS vector(2) DETERMINISTIC RETURN recur() /
+--error ER_SP_NO_RECURSION
+SELECT recur() /
+
+
+DROP FUNCTION recur /
+SET @@global.max_sp_recursion_depth = 0 /
+SET @@session.max_sp_recursion_depth = 0 /
+DELIMITER ;/
+
+--echo #
+--echo # type: vector without indicate length, default len is 2048
+--echo # 
+DELIMITER |;
+
+SET sql_mode=DEFAULT|
+
+CREATE or replace PROCEDURE p1(str vector(16383)) BEGIN DECLARE x vector(16383); SET x = str; SELECT vector_dim(x); END;|
+CREATE or replace PROCEDURE p2(str vector) BEGIN DECLARE x vector(16383); SET x = str; SELECT vector_dim(x); END;|
+CREATE or replace PROCEDURE p3(str vector(16383)) BEGIN DECLARE x vector; SET x = str; SELECT vector_dim(x); END;|
+
+CALL p1(to_vector('[1,2]'))|
+
+set @x = concat('[', repeat('1,', 2047), 42, ']') |
+call p2(to_vector(@x))|
+call p3(to_vector(@x))|
+
+set @x = concat('[', repeat('1,', 2048), 42, ']') |
+--error 1406
+call p2(to_vector(@x))|
+--error 1406
+call p3(to_vector(@x))|
+
+DROP PROCEDURE p1|
+DROP PROCEDURE p2|
+DROP PROCEDURE p3|
+
+SET sql_mode=ORACLE|
+
+CREATE or replace PROCEDURE p1(str vector(16383)) AS x vector(16383); BEGIN x := str; SELECT vector_dim(x); END;|
+CREATE or replace PROCEDURE p2(str vector) AS x vector(16383); BEGIN x := str; SELECT vector_dim(x); END;|
+CREATE or replace PROCEDURE p3(str vector(16383)) AS x vector; BEGIN x := str; SELECT vector_dim(x); END;|
+
+CALL p1(to_vector('[1,2]'))|
+
+set @x = concat('[', repeat('1,', 2047), 42, ']') |
+call p2(to_vector(@x))|
+call p3(to_vector(@x))|
+
+set @x = concat('[', repeat('1,', 2048), 42, ']') |
+--error 1406
+call p2(to_vector(@x))|
+--error 1406
+call p3(to_vector(@x))|
+
+DROP PROCEDURE p1|
+DROP PROCEDURE p2|
+DROP PROCEDURE p3|
+
+SET sql_mode=DEFAULT|
+
+CREATE FUNCTION f1(str vector(16383)) RETURNS vector(16383) BEGIN DECLARE x vector(16383); SET x = str; RETURN x; END;|
+CREATE FUNCTION f2(str vector) RETURNS vector(16383) BEGIN DECLARE x vector(16383); SET x = str; RETURN x; END;|
+CREATE FUNCTION f3(str vector(16383)) RETURNS vector BEGIN DECLARE x vector(16383); SET x = str; RETURN x; END;|
+CREATE FUNCTION f4(str vector(16383)) RETURNS vector(16383) BEGIN DECLARE x vector; SET x = str; RETURN x; END;|
+SELECT f1(to_vector('[1,2]'))|
+SELECT f2(to_vector('[1,2]'))|
+SELECT f3(to_vector('[1,2]'))|
+SELECT f4(to_vector('[1,2]'))|
+DROP FUNCTION f1|
+DROP FUNCTION f2|
+DROP FUNCTION f3|
+DROP FUNCTION f4|
+
+SET sql_mode=ORACLE|
+
+CREATE FUNCTION f1(str vector(16383)) RETURN vector(16383) AS x vector(16383); BEGIN x := str; RETURN x; END;|
+CREATE FUNCTION f2(str vector) RETURN vector(16383) AS x vector(16383); BEGIN x := str; RETURN x; END;|
+CREATE FUNCTION f3(str vector(16383)) RETURN vector AS x vector(16383); BEGIN x := str; RETURN x; END;|
+CREATE FUNCTION f4(str vector(16383)) RETURN vector(16383) AS x vector; BEGIN x := str; RETURN x; END;|
+CREATE FUNCTION f5(str vector) RETURN vector AS x vector(16383); BEGIN x := str; RETURN x; END;|
+SELECT f1(to_vector('[1,2]'))|
+SELECT f2(to_vector('[1,2]'))|
+SELECT f3(to_vector('[1,2]'))|
+SELECT f4(to_vector('[1,2]'))|
+SELECT f5(to_vector('[1,2]'))|
+DROP FUNCTION f1|
+DROP FUNCTION f2|
+DROP FUNCTION f3|
+DROP FUNCTION f4|
+DROP FUNCTION f5|
+
+
+SET sql_mode=DEFAULT|
+--error 1064
+CREATE PROCEDURE p1(str vector(16383)) BEGIN DECLARE x vector(16383); SET x = str; SELECT x; END p1;|
+--error 1064
+CREATE FUNCTION f1(str vector(16383)) RETURNS vector(16383) BEGIN DECLARE x vector(16383); SET x = str; RETURN x; END f1;|
+
+SET sql_mode=ORACLE|
+
+
+CREATE OR REPLACE PROCEDURE p1 
+is  
+var0 vector(10);
+cursor my_cur_1(tj_month vector) is
+  select to_vector('[1]'),to_vector('[2]')  from dual;
+cursor my_cur_2(tj_month vector) is
+  select to_vector('[3]'),to_vector('[4]')  from dual;
+var1 vector(10);
+cursor my_cur_3(tj_month vector,tj_month1 vector(10),tj_month2 vector) is
+  select to_vector('[5]'),to_vector('[6]') from dual;
+BEGIN
+    select 1;
+END;|
+DROP PROCEDURE p1|
+
+DELIMITER ;|
+
+SET sql_mode=default;
+
+CREATE TABLE items (id int PRIMARY KEY, embedding vector(3));
+INSERT INTO items VALUES (1, to_vector('[1,2,3]'));
+INSERT INTO items VALUES (2, to_vector('[4,5]'));
+INSERT INTO items VALUES (3, null);
+
+CREATE or replace function f1(id1 int) returns vector(3) DETERMINISTIC
+  return (select embedding from items where id=id1);
+
+select f1(1);
+select f1(2);
+select f1(3);
+
+drop function f1;
+
+drop table items;

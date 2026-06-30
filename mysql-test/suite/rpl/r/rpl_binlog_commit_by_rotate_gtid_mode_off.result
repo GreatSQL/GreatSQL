@@ -1,0 +1,17 @@
+# Prepare
+SET @saved_binlog_large_commit_threshold= @@GLOBAL.binlog_large_commit_threshold;
+SET GLOBAL binlog_large_commit_threshold = 10 * 1024 * 1024;
+CREATE TABLE t1 (c1 LONGTEXT) ENGINE = InnoDB;
+CREATE TABLE t2 (c1 LONGTEXT) ENGINE = MyISAM;
+INSERT INTO t1 values(repeat("1", 5242880));
+INSERT INTO t1 values(repeat("1", 5242880));
+INSERT INTO t2 values(repeat("1", 5242880));
+INSERT INTO t2 values(repeat("1", 5242880));
+FLUSH BINARY LOGS;
+#
+# 1. Not rename to binlog file if both stmt and trx cache are not empty
+#
+UPDATE t1, t2 SET t1.c1 = repeat('2', 5242880), t2.c1 = repeat('2', 5242880);
+include/assert.inc [Binlog is not rotated]
+DROP TABLE t1, t2;
+SET GLOBAL binlog_large_commit_threshold = @saved_binlog_large_commit_threshold;

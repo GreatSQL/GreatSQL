@@ -1,0 +1,165 @@
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--source include/have_clone_plugin.inc
+--let plugins = CLONE_PLUGIN
+--source include/check_plugin_dir.inc
+
+connect (server1,127.0.0.1,root,,test,$MASTER_MYPORT,);
+connect (server2,127.0.0.1,root,,test,$SLAVE_MYPORT,);
+connect (server2_clone,127.0.0.1,root,,test,$SLAVE_MYPORT,);
+
+--connection server2
+call mtr.add_suppression("Waiting for prepared transaction to exit");
+call mtr.add_suppression("Client: Clone blocked XA operation too long");
+call mtr.add_suppression("Replica SQL for channel '': Worker .* failed executing transaction");
+call mtr.add_suppression("Replica SQL for channel '': ... The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state.");
+
+--echo [init replication]
+--connection server1
+--echo [connect server1]
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+CREATE TABLE t2 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t2 VALUES (1,1);
+--let $gtid=`SELECT @@gtid_executed`
+
+--connection server2
+--echo [connect server2]
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+SET GLOBAL replica_net_timeout=10;
+SET GLOBAL replica_preserve_commit_order=ON;
+SET GLOBAL replica_transaction_retries=0;
+--disable_warnings
+--replace_result $MASTER_MYPORT PORT_1
+eval CHANGE REPLICATION SOURCE TO SOURCE_USER='root',SOURCE_HOST='127.0.0.1',SOURCE_PORT=$MASTER_MYPORT,SOURCE_AUTO_POSITION=1;
+--enable_warnings
+START REPLICA;
+--replace_result $gtid GTID
+eval SELECT WAIT_FOR_EXECUTED_GTID_SET('$gtid', 30);
+
+--echo [test: CLONE_DATA_RECOVERY_BINLOG_POSITION will lead deadlock]
+--connection server2
+--echo [connect server2]
+LOCK TABLE test.t1 READ;
+--connection server1
+--echo [connect server1]
+SET SESSION xa_detach_on_prepare=ON;
+XA START '1';
+UPDATE t1 SET c2=c2+1;
+XA END '1';
+XA PREPARE '1';
+UPDATE t2 SET c2=c2+1;
+--connection server2
+--let $wait_condition=select count(*)=1 from information_schema.processlist where state='Waiting for preceding transaction to commit' and user='system user'
+--source include/wait_condition.inc
+
+--connection server2_clone
+--echo [connect server2_clone]
+SET GLOBAL clone_data_recovery_mode=CLONE_DATA_RECOVERY_BINLOG_POSITION;
+--let $tmpdir=`SELECT @@tmpdir`
+--replace_result $tmpdir TMPDIR
+send_eval CLONE LOCAL DATA DIRECTORY '$tmpdir/clone_1';
+
+--connection server2
+--echo [connect server2]
+--let SEARCH_FILE= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let SEARCH_PATTERN= Waiting for prepared transaction to exit
+--source include/wait_for_search_pattern.inc
+unlock tables;
+
+--connection server2_clone
+--echo [connect server2_clone]
+reap;
+--force-rmdir $tmpdir/clone_1
+
+--connection server2
+--echo [connect server2]
+--let $slave_param= Replica_SQL_Running
+--let $slave_param_value= No
+--source include/rpl/wait_for_replica_status.inc
+--let $slave_param= Last_SQL_Errno
+--let $slave_param_value= 8702
+--source include/rpl/wait_for_replica_status.inc
+
+--connection server1
+--echo [connect server1]
+XA COMMIT '1';
+--let $gtid=`SELECT @@gtid_executed`
+--connection server2
+START REPLICA;
+--replace_result $gtid GTID
+eval SELECT WAIT_FOR_EXECUTED_GTID_SET('$gtid', 30);
+
+--echo [test: CLONE_DATA_RECOVERY_GTID will success]
+--connection server2
+--echo [connect server2]
+LOCK TABLE test.t1 READ;
+--connection server1
+--echo [connect server1]
+SET SESSION xa_detach_on_prepare=ON;
+XA START '1';
+UPDATE t1 SET c2=c2+1;
+XA END '1';
+XA PREPARE '1';
+UPDATE t2 SET c2=c2+1;
+--connection server2
+--let $wait_condition=select count(*)=1 from information_schema.processlist where state='Waiting for preceding transaction to commit' and user='system user'
+--source include/wait_condition.inc
+
+--connection server2_clone
+--echo [connect server2_clone]
+SET GLOBAL clone_data_recovery_mode=CLONE_DATA_RECOVERY_GTID;
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+--let $tmpdir=`SELECT @@tmpdir`
+--replace_result $tmpdir TMPDIR
+send_eval CLONE LOCAL DATA DIRECTORY '$tmpdir/clone_2';
+
+--connection server2
+--echo [connect server2]
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+sleep 6;
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+unlock tables;
+
+--connection server2_clone
+--echo [connect server2_clone]
+reap;
+--force-rmdir $tmpdir/clone_2
+
+--connection server2
+--echo [connect server2]
+--let $slave_param= Replica_SQL_Running
+--let $slave_param_value= Yes
+--source include/rpl/wait_for_replica_status.inc
+
+--connection server1
+--echo [connect server1]
+XA COMMIT '1';
+--let $gtid=`SELECT @@gtid_executed`
+--connection server2
+--replace_result $gtid GTID
+eval SELECT WAIT_FOR_EXECUTED_GTID_SET('$gtid', 30);
+
+--echo [cleanup]
+--connection server1
+--echo [connect server1]
+DROP TABLE t1;
+DROP TABLE t2;
+--let $gtid=`SELECT @@gtid_executed`
+--connection server2
+--echo [connect server2]
+--replace_result $gtid GTID
+eval SELECT WAIT_FOR_EXECUTED_GTID_SET('$gtid', 30);
+STOP REPLICA;
+RESET REPLICA ALL;
+SET GLOBAL replica_net_timeout=DEFAULT;
+SET GLOBAL replica_preserve_commit_order=DEFAULT;
+SET GLOBAL replica_transaction_retries=DEFAULT;
+UNINSTALL PLUGIN clone;
+
+--connection server1
+--let $wait_timeout=30
+--let $wait_condition=SELECT COUNT(*)=0 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE COMMAND = 'Binlog dump' OR COMMAND = 'Binlog Dump GTID'
+--source include/wait_condition.inc

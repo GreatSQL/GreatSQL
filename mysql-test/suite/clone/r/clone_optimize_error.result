@@ -1,0 +1,35 @@
+# 1. Test local clone print error
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+truncate mysql.clone_history;
+CREATE TABLE t1(col1 INT PRIMARY KEY, col2 int, col3 varchar(64), col4 BLOB);
+insert into t1 values(1,1,1,"aaa");
+insert into t1 values(2,2,2,"aaa");
+insert into t1 values(3,3,3,"aaa");
+insert into t1 values(4,4,4,"aaa");
+insert into t1 values(5,5,5,"aaa");
+# In connection con1 - Running Insert
+begin;
+insert into t1 values(120,120,120,"aaa");
+# In connection default - Cloning database
+SET GLOBAL DEBUG = '+d,simulate_clone_linux_system_error';
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';;
+ERROR HY000: Error writing file 'Clone File' (errno: 122 - Disk quota exceeded)
+# In connection default - Finished Cloning
+# In connection con1 - Waiting
+commit;
+# In connection default
+select ID, STATE, ERROR_NO from performance_schema.clone_status;
+ID	STATE	ERROR_NO
+0	Failed	1026
+select ID, STAGE, STATE  from performance_schema.clone_progress;
+ID	STAGE	STATE
+0	DROP DATA	Failed
+0	FILE COPY	Not Started
+0	PAGE COPY	Not Started
+0	REDO COPY	Not Started
+0	FILE SYNC	Not Started
+0	RESTART	Not Started
+0	RECOVERY	Not Started
+drop table t1;
+SET GLOBAL DEBUG = '-d,simulate_clone_linux_system_error';
+UNINSTALL PLUGIN clone;

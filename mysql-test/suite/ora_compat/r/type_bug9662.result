@@ -1,0 +1,46 @@
+set sql_mode=oracle;
+set @@udt_format_result=DBA;
+create or replace type TC10314_t65_type2 as object(addr varchar2(123),name varchar(213));
+create table TC10314_t65_t2(id int,name TC10314_t65_type2,sid int,name1 TC10314_t65_type2);
+insert into TC10314_t65_t2 values(12,TC10314_t65_type2(1,'asd'),11, TC10314_t65_type2(1,'asd'));
+insert into TC10314_t65_t2 values(22,TC10314_t65_type2(2,'asd'),12, TC10314_t65_type2(2,'asd'));
+insert into TC10314_t65_t2 values(23,TC10314_t65_type2(2,'asd'),12, TC10314_t65_type2(2,'asd'));
+insert into TC10314_t65_t2 values(24,TC10314_t65_type2(2,'asd'),12, TC10314_t65_type2(2,'asd'));
+select ratio_to_report(id) over(partition by name) from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select row_number() over (PARTITION BY name order by name) from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select ROW_NUMBER() OVER (PARTITION BY name ORDER BY name) row_num from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select CUME_DIST() OVER (PARTITION BY name ORDER BY name) cume_dist_val from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select RANK() OVER (PARTITION BY name ORDER BY name) rank_val from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select DENSE_RANK() OVER (PARTITION BY name ORDER BY name) dense_rank_val from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select FIRST_VALUE(id) OVER (PARTITION BY name ORDER BY name) first_val from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select LAST_VALUE(id) OVER (PARTITION BY name ORDER BY name) last_val from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select LAG(id,1) OVER (PARTITION BY name ORDER BY name) lag_val from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select LEAD(id,1) OVER (PARTITION BY name ORDER BY name) lead_val from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select NTH_VALUE(id,1) OVER (PARTITION BY name ORDER BY name) nth_val from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select NTILE(2) OVER (PARTITION BY name ORDER BY name) ntile_val from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select PERCENT_RANK() OVER (PARTITION BY name ORDER BY name) percent_val from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+explain select ratio_to_report(id) over(partition by name) from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+explain format=tree select ratio_to_report(id) over(partition by name) from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select row_number() over (PARTITION BY id), sum(id) over(PARTITION BY name1 order by name1) from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select ratio_to_report(id) over(partition by (select name)) from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+select ratio_to_report(id) over(partition by (select name1 from TC10314_t65_t2 limit 1)) from TC10314_t65_t2;
+ERROR HY000: cannot ORDER objects without window function or ORDER method
+drop table TC10314_t65_t2;
+drop type TC10314_t65_type2;

@@ -1,0 +1,37 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connection server2]
+SET SESSION sql_log_bin = 0;
+call mtr.add_suppression("Error writing file.*(errno: 28 - No space left on device)");
+call mtr.add_suppression("Failed to write to temp file in do_io_health_check().");
+call mtr.add_suppression("Error writing file.*(OS errno 28 - No space left on device)");
+call mtr.add_suppression("io full on data or binlog directory");
+call mtr.add_suppression("The server was automatically set into read only mode after an error was detected.");
+call mtr.add_suppression("The server was automatically set into offline mode after an error was detected.");
+call mtr.add_suppression("Skipping leave operation: concurrent attempt to leave the group is on-going.");
+SET SESSION sql_log_bin = 1;
+
+# 1. Start group in single primary mode, M1(primary) and M2(secondary).
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+[connection server2]
+include/start_group_replication.inc
+
+# 2. Simulate that server2 has no disk space left.
+[connect conn2_1]
+SET @@GLOBAL.DEBUG= '+d,simulate_no_free_space_error';
+
+# 3. Waiting for server2 to exit the mgr cluster.
+include/gr_wait_for_member_state.inc
+
+# 4. Assert there is expected error line in the server2 log.
+include/assert_grep.inc [Found the expected error line in the server log.]
+
+# 5. Cleanup.
+[connection server2]
+SET @@GLOBAL.DEBUG= '-d,simulate_no_free_space_error';
+include/rpl/sync.inc
+include/group_replication_end.inc

@@ -1,0 +1,28 @@
+!include default_mysqld.cnf
+!include default_client.cnf
+
+[mysqld]
+
+plugin-load-add=turbo=turbo.so
+loose-turbo_enable=on
+loose-turbo_cost_threshold=0
+loose-turbo_enable_rollback=on
+loose-turbo_worker_threads=1
+loose-innodb_parallel_read_threads=1
+loose-turbo_condition_pushdown=on
+loose-turbo_skip_charset_check=off
+
+# if build without  WITH_TURBO_MTR_TEST
+# use testcase 
+# 
+# NOTE: 
+#  result is different 
+#  when run has explain or rapid testcase    
+#
+# default run mtr test with turbo plugin 
+# 
+# example ：
+#   ./mtr --defaults-extra-file=include/turbo_mysqld.cnf   main.type_year
+#
+# debug
+#   ./mtr --defaults-extra-file=include/turbo_mysqld.cnf --mysqld='--gdb'  --start alias

@@ -1,0 +1,18 @@
+create table t1 (c1 int,c2 varchar(100) , c3 varchar(100));
+insert into t1 (c1,c2,c3)values(1,null,null),(2,'2','a'),(null,'3','a'),(null,null,null);
+
+create view v1 as select c1|| c2|| c3  from t1;
+select c1|| c2|| c3  from t1;
+explain select c1|| c2|| c3  from t1;
+show create view v1;
+
+set sql_mode=oracle;
+create view v2 as select c1|| c2|| c3  from t1;
+
+explain select c1|| c2|| c3  from t1;
+select c1|| c2|| c3  from t1;
+select ora_oror(ora_oror("test"."t1"."c1","test"."t1"."c2"),"test"."t1"."c3") AS "c1|| c2|| c3  " from "test"."t1"; 
+show create view v2;
+
+drop table t1;
+drop view v1,v2;

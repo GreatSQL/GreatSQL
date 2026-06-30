@@ -1,0 +1,197 @@
+SET SQL_MODE=DEFAULT;
+set @@udt_format_result='DBA';
+# in default mode, type is used as ident
+GRANT EXECUTE ON type test.typ TO u1@localhost;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'test.typ TO u1@localhost' at line 1
+GRANT EXECUTE ON TYPE TO u1@localhost;
+ERROR 42000: Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used
+# should be syntax error
+DROP TYPE typ;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'TYPE typ' at line 1
+SET sql_mode=ORACLE;
+CREATE DATABASE db1;
+CREATE USER u1@localhost IDENTIFIED BY '';
+GRANT SELECT ON db1.* TO u1@localhost;
+SELECT CURRENT_USER;
+CURRENT_USER
+u1@localhost
+SET sql_mode=ORACLE;
+#
+# User u1 cannot drop TYPE by default
+#
+DROP TYPE t_air;
+ERROR 42000: alter routine command denied to user 'u1'@'localhost' for routine 'db1.t_air'
+create or replace type t_air as object(id int,type char(5));
+ERROR 42000: Access denied for user 'u1'@'localhost' to database 'db1'
+#
+# Now create a type by root
+#
+USE db1;
+create or replace type t_air as object(id int,type char(5));
+SELECT t_air(1+1,'aabb') FROM dual;
+t_air(1+1,'aabb')
+id:2 | type:aabb
+SHOW CREATE type t_air;
+Type	sql_mode	Create Type	character_set_client	collation_connection	Database Collation
+t_air	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="root"@"localhost" TYPE "t_air" AS OBJECT(id int,type char(5))	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+#
+# u1 cannot SHOW yet:
+# - the standalone procedure earlier created by root
+# - the type specifications earlier create by root
+#
+SHOW CREATE type t_air;
+ERROR 42000: TYPE t_air does not exist
+SHOW CREATE type t_air;
+ERROR 42000: TYPE t_air does not exist
+#
+# User u1 still cannot create a type
+#
+create or replace type t_air as object(id int,type char(5));
+ERROR 42000: Access denied for user 'u1'@'localhost' to database 'db1'
+#
+# Now grant EXECUTE:
+# - on the standalone procedure earlier created by root
+# - on the type specification earlier created by root
+#
+GRANT EXECUTE ON type db1.t_air TO u1@localhost;
+#
+# Now u1 can do SHOW for:
+# - the standalone procedure earlier created by root
+# - the type specification earlier created by root
+#
+SET sql_mode=ORACLE;
+SHOW CREATE type db1.t_air;
+Type	sql_mode	Create Type	character_set_client	collation_connection	Database Collation
+t_air	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	NULL	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+#
+# Now revoke EXECUTE and grant CREATE ROUTINE instead
+#
+REVOKE EXECUTE ON type db1.t_air FROM u1@localhost;
+GRANT CREATE ROUTINE ON db1.* TO u1@localhost;
+#
+# Reconnect u1 to make new grants have effect
+#
+SET sql_mode=ORACLE;
+#
+# Now u1 can also CREATE, DROP its own type specifications
+#
+create or replace type t_air1 as object(id int,type varchar(15));
+SHOW CREATE type t_air1;
+Type	sql_mode	Create Type	character_set_client	collation_connection	Database Collation
+t_air1	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="u1"@"localhost" TYPE "t_air1" AS OBJECT(id int,type varchar(15))	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SHOW GRANTS;
+Grants for u1@localhost
+GRANT USAGE ON *.* TO "u1"@"localhost"
+GRANT SELECT, CREATE ROUTINE ON "db1".* TO "u1"@"localhost"
+GRANT EXECUTE, ALTER ROUTINE ON TYPE `db1`.`t_air1` TO "u1"@"localhost"
+create or replace type t_air_table as table of t_air1;
+SHOW CREATE type t_air_table;
+Type	sql_mode	Create Type	character_set_client	collation_connection	Database Collation
+t_air_table	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="u1"@"localhost" TYPE "t_air_table" AS TABLE OF db1.t_air1	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SHOW GRANTS;
+Grants for u1@localhost
+GRANT USAGE ON *.* TO "u1"@"localhost"
+GRANT SELECT, CREATE ROUTINE ON "db1".* TO "u1"@"localhost"
+GRANT EXECUTE, ALTER ROUTINE ON TYPE `db1`.`t_air1` TO "u1"@"localhost"
+GRANT EXECUTE, ALTER ROUTINE ON TYPE `db1`.`t_air_table` TO "u1"@"localhost"
+create or replace type t_air_array as varray(1) of raw;
+SHOW CREATE type t_air_array;
+Type	sql_mode	Create Type	character_set_client	collation_connection	Database Collation
+t_air_array	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER="u1"@"localhost" TYPE "t_air_array" AS VARRAY(1) OF raw	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SHOW GRANTS;
+Grants for u1@localhost
+GRANT USAGE ON *.* TO "u1"@"localhost"
+GRANT SELECT, CREATE ROUTINE ON "db1".* TO "u1"@"localhost"
+GRANT EXECUTE, ALTER ROUTINE ON TYPE `db1`.`t_air1` TO "u1"@"localhost"
+GRANT EXECUTE, ALTER ROUTINE ON TYPE `db1`.`t_air_array` TO "u1"@"localhost"
+GRANT EXECUTE, ALTER ROUTINE ON TYPE `db1`.`t_air_table` TO "u1"@"localhost"
+DROP type t_air_table;
+DROP type t_air_array;
+DROP type t_air1;
+SHOW GRANTS;
+Grants for u1@localhost
+GRANT USAGE ON *.* TO "u1"@"localhost"
+GRANT SELECT, CREATE ROUTINE ON "db1".* TO "u1"@"localhost"
+#
+# Now create a type by root.
+# u1 does not have EXECUTE access by default.
+#
+create or replace type t_air2 as object(id int,type varchar(15));
+create or replace type t_air_table as table of t_air2;
+create or replace type t_air_array as varray(1) of raw;
+SHOW CREATE type t_air2;
+Type	sql_mode	Create Type	character_set_client	collation_connection	Database Collation
+t_air2	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	NULL	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SHOW CREATE type t_air_table;
+Type	sql_mode	Create Type	character_set_client	collation_connection	Database Collation
+t_air_table	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	NULL	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SHOW CREATE type t_air_array;
+Type	sql_mode	Create Type	character_set_client	collation_connection	Database Collation
+t_air_array	PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ORACLE,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	NULL	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SELECT t_air2(1+1,'aabb') FROM dual;
+ERROR 42000: execute command denied to user 'u1'@'localhost' for routine 'db1.t_air2'
+SELECT t_air_table(t_air2(1,'aa'),t_air2(2,'bb')) FROM dual;
+ERROR 42000: execute command denied to user 'u1'@'localhost' for routine 'db1.t_air_table'
+SELECT t_air_array(null) FROM dual;
+ERROR 42000: execute command denied to user 'u1'@'localhost' for routine 'db1.t_air_array'
+drop type t_air_table;
+drop type t_air_array;
+DROP type t_air2;
+#
+# u1 still cannot DROP the type specification earlier created by root.
+#
+DROP type t_air;
+ERROR 42000: alter routine command denied to user 'u1'@'localhost' for routine 'db1.t_air'
+#
+# Grant ALTER ROUTINE to u1
+#
+GRANT ALTER ROUTINE ON db1.* TO u1@localhost;
+FLUSH PRIVILEGES;
+DROP USER u1@localhost;
+DROP DATABASE db1;
+USE test;
+#
+# Creator=root, definer=xxx
+#
+CREATE USER xxx@localhost;
+create or replace DEFINER=xxx@localhost type t_air3 as object(id int,type char(4));
+create or replace DEFINER=xxx@localhost type t_air_table as table of t_air3;
+create or replace DEFINER=xxx@localhost type t_air_array as varray(1) of raw;
+# no support now, should be: error ER_PROCACCESS_DENIED_ERROR
+SELECT t_air3(1+1,'aabb') FROM dual;
+t_air3(1+1,'aabb')
+id:2 | type:aabb
+SELECT t_air_table(t_air3(1,'aa'),t_air3(2,'bb')) FROM dual;
+t_air_table(t_air3(1,'aa'),t_air3(2,'bb'))
+t_air_table(t_air3(1,aa),t_air3(2,bb))
+SELECT t_air_array(null) FROM dual;
+t_air_array(null)
+t_air_array(NULL)
+GRANT EXECUTE ON type t_air3 TO xxx@localhost;
+GRANT EXECUTE ON type t_air_table TO xxx@localhost;
+GRANT EXECUTE ON type t_air_table TO xxx@localhost;
+FLUSH PRIVILEGES;
+SELECT t_air3(1+1,'aabb') FROM dual;
+t_air3(1+1,'aabb')
+id:2 | type:aabb
+SELECT t_air_table(t_air3(1,'aa'),t_air3(2,'bb')) FROM dual;
+t_air_table(t_air3(1,'aa'),t_air3(2,'bb'))
+t_air_table(t_air3(1,aa),t_air3(2,bb))
+SELECT t_air_array(null) FROM dual;
+t_air_array(null)
+t_air_array(NULL)
+drop type t_air_table;
+drop type t_air_array;
+DROP type t_air3;
+DROP USER xxx@localhost;
+#
+# Creator=root, definer=xxx, SQL SECURITY INVOKER
+#
+CREATE USER xxx@localhost;
+create or replace DEFINER=xxx@localhost type t_air4 as object(id int,type char(4)) SQL SECURITY INVOKER;
+SELECT t_air4(1+1,'aabb') FROM dual;
+t_air4(1+1,'aabb')
+id:2 | type:aabb
+DROP type t_air4;
+DROP USER xxx@localhost;
+# DONE

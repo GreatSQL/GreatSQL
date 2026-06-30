@@ -1,0 +1,38 @@
+################################################################################
+# Rename binlog cache to binlog file
+#
+# It verifies that rename is not supported in below cases:
+#   - both statement and transaction cache should be flushed.
+#
+# Test steps:
+#   0. Prepare.
+#   1. Not rename to binlog file if both stmt and trx cache are not empty
+################################################################################
+--source include/have_binlog_format_row.inc
+
+--echo # Prepare
+SET @saved_binlog_large_commit_threshold= @@GLOBAL.binlog_large_commit_threshold;
+SET GLOBAL binlog_large_commit_threshold = 10 * 1024 * 1024;
+
+CREATE TABLE t1 (c1 LONGTEXT) ENGINE = InnoDB;
+CREATE TABLE t2 (c1 LONGTEXT) ENGINE = MyISAM;
+
+INSERT INTO t1 values(repeat("1", 5242880));
+INSERT INTO t1 values(repeat("1", 5242880));
+INSERT INTO t2 values(repeat("1", 5242880));
+INSERT INTO t2 values(repeat("1", 5242880));
+
+FLUSH BINARY LOGS;
+
+--echo #
+--echo # 1. Not rename to binlog file if both stmt and trx cache are not empty
+--echo #
+UPDATE t1, t2 SET t1.c1 = repeat('2', 5242880), t2.c1 = repeat('2', 5242880);
+--let $binlog_file= query_get_value(SHOW BINARY LOG STATUS, File, 1)
+--let $assert_cond= "$binlog_file" = "master-bin.000002"
+--let $assert_text= Binlog is not rotated
+--source include/assert.inc
+
+# cleanup
+DROP TABLE t1, t2;
+SET GLOBAL binlog_large_commit_threshold = @saved_binlog_large_commit_threshold;

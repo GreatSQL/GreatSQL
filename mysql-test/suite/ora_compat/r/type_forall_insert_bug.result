@@ -1,0 +1,350 @@
+set sql_mode="oracle";
+set @@udt_format_result='DBA';
+CREATE TABLE t1 (a INT, b VARCHAR(100));
+#
+# test bug12156
+#
+CREATE OR REPLACE PROCEDURE p1() AS
+TYPE stu_record IS RECORD(
+id INT := 1,
+name_d VARCHAR(20) := 'a'
+  );
+TYPE tklist IS TABLE OF stu_record INDEX BY BINARY_INTEGER;
+stu_record_val tklist;
+BEGIN
+stu_record_val(0).id := 1000;
+stu_record_val(0).name_d := 'xxx';
+stu_record_val(1).id := 1001;
+stu_record_val(1).name_d := 'yyy';
+FORALL i IN stu_record_val.FIRST .. stu_record_val.LAST 
+INSERT INTO t1 VALUES stu_record_val(i);
+END;
+$$
+call p1;
+table t1;
+a	b
+1000	xxx
+1001	yyy
+call p1;
+drop procedure p1;
+delete from t1;
+#
+# test bug12156
+#
+CREATE OR REPLACE PROCEDURE p1() AS
+TYPE stu_record IS RECORD(
+id INT := 1,
+name_d VARCHAR(20) := 'a'
+  );
+TYPE tklist IS TABLE OF stu_record INDEX BY BINARY_INTEGER;
+stu_record_val tklist;
+BEGIN
+stu_record_val(0).id := 1000;
+stu_record_val(0).name_d := 'xxx';
+stu_record_val(1).id := 1001;
+stu_record_val(1).name_d := 'yyy';
+FORALL i IN stu_record_val.FIRST .. stu_record_val.LAST 
+INSERT INTO t1 VALUES stu_record_val(i);
+stu_record_val(2).id := 1002;
+stu_record_val(2).name_d := 'yyy12';
+FORALL i IN stu_record_val.FIRST .. stu_record_val.LAST 
+INSERT INTO t1 VALUES stu_record_val(i);
+END;
+$$
+call p1;
+table t1;
+a	b
+1000	xxx
+1001	yyy
+1000	xxx
+1001	yyy
+1002	yyy12
+call p1;
+drop procedure p1;
+delete from t1;
+#
+# test bug12156
+#
+CREATE OR REPLACE PROCEDURE p1() AS
+TYPE stu_record IS RECORD(
+id INT := 1,
+name_d VARCHAR(20) := 'a'
+  );
+TYPE tklist IS TABLE OF stu_record INDEX BY BINARY_INTEGER;
+stu_record_val tklist;
+stu_record_val2 tklist;
+BEGIN
+stu_record_val2(0).id := 1000;
+stu_record_val2(0).name_d := 'xxx';
+stu_record_val2(1).id := 1001;
+stu_record_val2(1).name_d := 'yyy';
+forall i in stu_record_val.first .. stu_record_val.last
+insert into t1 values stu_record_val2(i);
+forall i in stu_record_val.first .. stu_record_val.last
+insert into t1 values stu_record_val2(i);
+END;
+$$
+call p1;
+table t1;
+a	b
+call p1;
+drop procedure p1;
+drop table t1;
+#
+# test bug12624
+#
+CREATE TABLE TC10248_ta46(col1  int  not null auto_increment primary key,col2 VARCHAR(100),col3 pls_integer) partition by hash(col1) partitions 15 ;
+INSERT INTO TC10248_ta46 values(1,'col1',11),(2,'col2',12),(3,'col3',13),(4,'col4',14),(5,'col5',15);
+CREATE TABLE TC10248_ta47 as SELECT * from TC10248_ta46 limit 0;
+CREATE OR REPLACE PROCEDURE TC10248_pa46(f1 number(10,2),f2 decimal(10,2)) AS
+TYPE t_rec1 IS TABLE OF TC10248_ta46%ROWTYPE index by binary_integer; 
+v_t_rec1 t_rec1;
+BEGIN
+SELECT *  BULK COLLECT INTO v_t_rec1  FROM TC10248_ta46  where rownum<=15 order by col1;  
+FORALL i IN f1 .. f2
+insert into TC10248_ta47 values v_t_rec1(i);   
+END;
+$$
+CALL TC10248_pa46(5,3);
+CALL TC10248_pa46(3.4,1.5);
+SELECT * FROM TC10248_ta47 order by col1;
+col1	col2	col3
+drop procedure TC10248_pa46;
+delete from TC10248_ta47;
+CREATE OR REPLACE PROCEDURE TC10248_pa46(f1 number(10,2),f2 decimal(10,2)) AS
+TYPE t_rec1 IS TABLE OF TC10248_ta46%ROWTYPE index by binary_integer; 
+v_t_rec1 t_rec1;
+i int :=1;
+BEGIN
+SELECT *  BULK COLLECT INTO v_t_rec1  FROM TC10248_ta46  where rownum<=15 order by col1;  
+select v_t_rec1(i);
+FORALL i IN f1 .. f2
+insert into TC10248_ta47 values v_t_rec1(i); 
+table TC10248_ta47;
+insert into TC10248_ta47 values v_t_rec1(i);  
+table TC10248_ta47;
+END;
+$$
+CALL TC10248_pa46(5,3);
+v_t_rec1(i)
+col1:1 | col2:col1 | col3:11
+col1	col2	col3
+col1	col2	col3
+1	col1	11
+CALL TC10248_pa46(3.4,1.5);
+v_t_rec1(i)
+col1:1 | col2:col1 | col3:11
+col1	col2	col3
+1	col1	11
+col1	col2	col3
+1	col1	11
+1	col1	11
+drop procedure TC10248_pa46;
+delete from TC10248_ta47;
+CREATE OR REPLACE PROCEDURE TC10248_pa46(f1 number(10,2),f2 decimal(10,2)) AS
+TYPE t_rec1 IS TABLE OF TC10248_ta46%ROWTYPE index by binary_integer; 
+v_t_rec1 t_rec1;
+i int :=1;
+BEGIN
+SELECT *  BULK COLLECT INTO v_t_rec1  FROM TC10248_ta46  where rownum<=15 order by col1;  
+select v_t_rec1(i);
+insert into TC10248_ta47 values v_t_rec1(i);
+table TC10248_ta47;
+FORALL i IN f1 .. f2
+insert into TC10248_ta47 values v_t_rec1(i); 
+table TC10248_ta47;
+END;
+$$
+CALL TC10248_pa46(5,3);
+v_t_rec1(i)
+col1:1 | col2:col1 | col3:11
+col1	col2	col3
+1	col1	11
+col1	col2	col3
+1	col1	11
+CALL TC10248_pa46(3.4,1.5);
+v_t_rec1(i)
+col1:1 | col2:col1 | col3:11
+col1	col2	col3
+1	col1	11
+1	col1	11
+col1	col2	col3
+1	col1	11
+1	col1	11
+drop procedure TC10248_pa46;
+drop table TC10248_ta46,TC10248_ta47;
+#
+# test bug13178
+#
+CREATE TABLE t1 (a INT, b VARCHAR(10));
+CREATE TABLE t2 (a INT, b VARCHAR(10));
+INSERT INTO t1 VALUES (1,'11');
+INSERT INTO t1 VALUES (2,'12');
+INSERT INTO t1 VALUES (3,'21');
+INSERT INTO t1 VALUES (4,'22');
+INSERT INTO t1 VALUES (5,'31');
+INSERT INTO t1 VALUES (6,'32');
+CREATE TABLE t3 (b varchar(10));
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+a int := 1,
+b varchar(20)
+);
+type tklist is table of stu_record index by binary_integer;
+value1 tklist;
+CURSOR c is SELECT a,b FROM t1 ;
+j int := 1;
+BEGIN
+value1(1).a := 100;
+delete from t2;
+insert into t2 values value1(j);
+select * from t2 order by a;
+END;
+$$
+call p1;
+a	b
+100	NULL
+drop procedure p1;
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) index by binary_integer;
+value1 tklist;
+CURSOR c is SELECT a,b FROM t1 ;
+j int := 1;
+BEGIN
+value1(1).a := 100;
+insert into t2 values value1(j);
+END;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'single type define value1 used in 'into list' without parentheses'
+CREATE or replace PROCEDURE p1() as
+type tklist is table of t1%rowtype index by binary_integer;
+value1 tklist;
+CURSOR c is SELECT a,b FROM t1 ;
+j int := 1;
+BEGIN
+value1(1).a := 100;
+insert into t2 values value1(j);
+END;
+$$
+call p1;
+drop procedure p1;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+a int := 1,
+b varchar(20)
+);
+type tklist is table of stu_record index by binary_integer;
+value1 tklist;
+CURSOR c is SELECT a,b FROM t1 ;
+j int;
+BEGIN
+value1(1).a := 100;
+OPEN c;
+fetch c bulk collect into value1 limit 3;
+delete from t2;
+for i in value1.first .. value1.last loop
+insert into t2 values value1(i);
+end loop;
+select * from t2 order by a;
+CLOSE c;
+END;
+$$
+call p1;
+a	b
+1	11
+2	12
+3	21
+call p1;
+a	b
+1	11
+2	12
+3	21
+drop procedure p1;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+a int := 1,
+b varchar(20)
+);
+type tklist is table of stu_record index by binary_integer;
+value1 tklist;
+CURSOR c is SELECT a,b FROM t1 ;
+j int;
+BEGIN
+value1(1).a := 100;
+OPEN c;
+fetch c bulk collect into value1 limit 3;
+forall i in value1.first .. value1.last
+insert into t2 values (1,1);
+select * from t2 order by a;
+CLOSE c;
+END;
+$$
+ERROR 42000: This version of MySQL doesn't yet support 'this value in forall statment'
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+a int := 1,
+b varchar(20)
+);
+type tklist is table of stu_record index by binary_integer;
+value1 tklist;
+CURSOR c is SELECT a,b FROM t1 ;
+j int := 1;
+BEGIN
+value1(1).a := 100;
+OPEN c;
+fetch c bulk collect into value1 limit 3;
+delete from t2;
+j:=2;
+insert into t2 values value1(j);
+j:=3;
+insert into t2 values value1(j);
+select * from t2 order by a;
+for i in value1.first .. value1.last loop
+insert into t2 values value1(i);
+end loop;
+select * from t2 order by a;
+CLOSE c;
+END;
+$$
+call p1;
+a	b
+2	12
+3	21
+a	b
+1	11
+2	12
+2	12
+3	21
+3	21
+call p1;
+a	b
+2	12
+3	21
+a	b
+1	11
+2	12
+2	12
+3	21
+3	21
+drop procedure p1;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+a int := 1,
+b varchar(20)
+);
+type tklist is table of t1%rowtype index by binary_integer;
+value1 tklist;
+CURSOR c is SELECT b FROM t1 ;
+j int := 1;
+BEGIN
+value1(1).a := 100;
+OPEN c;
+fetch c bulk collect into value1 limit 3;
+delete from t2;
+insert into t2 values value1;
+select * from t2 order by a;
+CLOSE c;
+END;
+$$
+ERROR HY000: The variable: value1 is not record type.
+drop table t1,t2,t3;

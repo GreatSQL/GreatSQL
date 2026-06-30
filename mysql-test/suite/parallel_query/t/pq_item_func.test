@@ -1,0 +1,37 @@
+--source include/pq_test.inc
+
+CREATE TABLE t1 (c1 int);
+INSERT INTO t1 VALUES(162);
+INSERT INTO t1 VALUES(163);
+
+explain SELECT nchr(c1) FROM t1;
+SELECT nchr(c1) FROM t1;
+
+create table t2(c1 varchar2(64));
+INSERT INTO t2 VALUES('aaa');
+
+set sql_mode='oracle,EMPTYSTRING_EQUAL_NULL';
+
+explain select utl_encode.base64_encode(utl_raw.cast_to_raw(c1)) from t2;
+explain select utl_encode.base64_decode(utl_encode.base64_encode(utl_raw.cast_to_raw(c1))) from t2;
+explain select utl_encode.quoted_printable_encode(utl_raw.cast_to_raw(c1)) from t2;
+explain select utl_encode.quoted_printable_decode(utl_encode.quoted_printable_encode(utl_raw.cast_to_raw(c1))) from t2;
+explain select utl_encode.text_encode(c1) from t2;
+explain select utl_encode.text_decode(utl_encode.text_encode(c1)) from t2;
+explain select utl_encode.mimeheader_encode(c1) from t2;
+explain select utl_encode.mimeheader_decode(utl_encode.mimeheader_encode(c1)) from t2;
+explain select utl_encode.uuencode(utl_raw.cast_to_raw(c1)) from t2;
+explain select utl_encode.uudecode(utl_encode.uuencode(utl_raw.cast_to_raw(c1))) from t2;
+select utl_encode.base64_encode(utl_raw.cast_to_raw(c1)) from t2;
+select utl_encode.base64_decode(utl_encode.base64_encode(utl_raw.cast_to_raw(c1))) from t2;
+select utl_encode.quoted_printable_encode(utl_raw.cast_to_raw(c1)) from t2;
+select utl_encode.quoted_printable_decode(utl_encode.quoted_printable_encode(utl_raw.cast_to_raw(c1))) from t2;
+select utl_encode.text_encode(c1) from t2;
+select utl_encode.text_decode(utl_encode.text_encode(c1)) from t2;
+select utl_encode.mimeheader_encode(c1) from t2;
+select utl_encode.mimeheader_decode(utl_encode.mimeheader_encode(c1)) from t2;
+select utl_encode.uuencode(utl_raw.cast_to_raw(c1)) from t2;
+select utl_encode.uudecode(utl_encode.uuencode(utl_raw.cast_to_raw(c1))) from t2;
+
+drop table t1;
+drop table t2;

@@ -1,0 +1,111 @@
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--source include/have_clone_plugin.inc
+--let plugins = CLONE_PLUGIN
+--source include/check_plugin_dir.inc
+
+connect (server2,127.0.0.1,root,,test,$SLAVE_MYPORT,);
+connect (server1,127.0.0.1,root,,test,$MASTER_MYPORT,);
+
+--connection server1
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+SET xa_detach_on_prepare=ON;
+INSERT INTO t1 VALUES (1,1),(2,2),(3,3),(4,4);
+XA START '1', '', 2;
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+XA END '1', '', 2;
+XA PREPARE '1', '', 2;
+XA START '2', '', 1;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+XA END '2', '', 1;
+XA PREPARE '2', '', 1;
+XA START '3', '', 1;
+UPDATE t1 SET c2=c2+1 WHERE c1=3;
+XA END '3', '', 1;
+XA PREPARE '3', '', 1;
+XA START '4', '', 1;
+UPDATE t1 SET c2=c2+1 WHERE c1=4;
+XA END '4', '', 1;
+XA PREPARE '4', '', 1;
+--let $gtid_1=`SELECT @@gtid_executed`
+
+--connection server2
+--replace_result $CLONE_PLUGIN CLONE_PLUGIN
+--eval INSTALL PLUGIN clone SONAME '$CLONE_PLUGIN'
+SET @slave_timeout=@@slave_net_timeout;
+SET GLOBAL slave_net_timeout=10;
+--disable_warnings
+--replace_result $MASTER_MYPORT PORT_1
+eval CHANGE REPLICATION SOURCE TO SOURCE_USER='root',SOURCE_HOST='127.0.0.1',SOURCE_PORT=$MASTER_MYPORT,SOURCE_AUTO_POSITION=1;
+--enable_warnings
+START REPLICA;
+--replace_result $gtid_1 GTID_1
+eval SELECT WAIT_FOR_EXECUTED_GTID_SET('$gtid_1', 30);
+STOP REPLICA;
+
+--connection server1
+RESET BINARY LOGS AND GTIDS;
+INSERT INTO t1 VALUES (5,5);
+SET DEBUG='+d,set_commit_parent_100';
+XA COMMIT '1', '', 2;
+XA COMMIT '2', '', 1;
+XA COMMIT '3', '', 1;
+XA COMMIT '4', '', 1;
+SET DEBUG='-d,set_commit_parent_100';
+--let $gtid_2=`SELECT @@gtid_executed`
+
+--connection server2
+RESET BINARY LOGS AND GTIDS;
+SET GLOBAL debug='+d,wait_before_xa_guard';
+--disable_warnings
+--replace_result $MASTER_MYPORT PORT_1
+eval CHANGE REPLICATION SOURCE TO SOURCE_USER='root',SOURCE_HOST='127.0.0.1',SOURCE_PORT=$MASTER_MYPORT,SOURCE_AUTO_POSITION=1;
+--enable_warnings
+START REPLICA;
+sleep 1;
+SET debug_sync='now WAIT_FOR reach_xa_guard';
+--let $wait_condition=select count(*)=3 from information_schema.processlist where state='Waiting for preceding transaction to commit' and user='system user'
+--source include/wait_condition.inc
+
+--connection server2
+SET GLOBAL clone_data_recovery_mode=CLONE_DATA_RECOVERY_BINLOG_POSITION;
+SET GLOBAL debug='+d,clone_block_xa_operation';
+connection server1;
+--replace_result $SLAVE_MYPORT port_2
+eval SET GLOBAL clone_valid_donor_list='127.0.0.1:$SLAVE_MYPORT';
+--let $tmpdir=`SELECT @@tmpdir`
+--replace_result $SLAVE_MYPORT port_2 $tmpdir tmpdir
+send_eval CLONE INSTANCE FROM 'root'@'127.0.0.1':$SLAVE_MYPORT IDENTIFIED BY '' DATA DIRECTORY '$tmpdir/clone_1';
+
+--connection server2
+SET debug_sync='now WAIT_FOR reach_xa_block';
+sleep 1;
+SET debug_sync='now SIGNAL end_xa_guard';
+sleep 1;
+SET debug_sync='now SIGNAL end_xa_block';
+--replace_result $gtid_2 GTID_2
+eval SELECT WAIT_FOR_EXECUTED_GTID_SET('$gtid_2', 30);
+XA RECOVER;
+SELECT * FROM t1;
+SET GLOBAL debug='';
+
+--connection server1
+reap;
+--force-rmdir $tmpdir/clone_1
+
+--connection server2
+STOP REPLICA;
+RESET REPLICA ALL;
+SET GLOBAL slave_net_timeout=@slave_timeout;
+SET GLOBAL clone_data_recovery_mode=DEFAULT;
+DROP TABLE t1;
+UNINSTALL PLUGIN clone;
+
+--connection server1
+--let $wait_timeout=30
+--let $wait_condition=SELECT COUNT(*)=0 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE COMMAND = 'Binlog dump' OR COMMAND = 'Binlog Dump GTID'
+--source include/wait_condition.inc
+DROP TABLE t1;
+UNINSTALL PLUGIN clone;

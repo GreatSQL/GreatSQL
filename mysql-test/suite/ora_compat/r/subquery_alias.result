@@ -1,0 +1,24 @@
+DROP TABLE IF EXISTS `test_subquery_alias1`;
+Warnings:
+Note	1051	Unknown table 'test.test_subquery_alias1'
+CREATE TABLE `test_subquery_alias1` (
+`c00` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+`c1` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+DROP TABLE IF EXISTS `test_subquery_alias2`;
+Warnings:
+Note	1051	Unknown table 'test.test_subquery_alias2'
+CREATE TABLE `test_subquery_alias2` (
+`c0` int NOT NULL AUTO_INCREMENT,
+`c1` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+`c2` varchar(255) CHARACTER SET gbk COLLATE gbk_chinese_ci DEFAULT NULL,
+`c3` decimal(10,5) DEFAULT NULL,
+PRIMARY KEY (`c0`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+INSERT INTO test_subquery_alias1 (`c00`, `c1`) VALUES ('c00', 'c1');
+INSERT INTO test_subquery_alias2 (`c0`, `c1`, `c2`, `c3`) VALUES (6, 'c1', 'c2', 3.00000);
+select  c00,c3 from (select * from (select * from test_subquery_alias1) test_subquery_alias1)  ,(select * from (select * from test_subquery_alias2) test_subquery_alias1) ;
+c00	c3
+c00	3.00000
+drop table if exists test_subquery_alias1;
+drop table if exists test_subquery_alias2;

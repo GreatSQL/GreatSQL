@@ -1,0 +1,31 @@
+--source include/all_data_types_data.inc
+
+select maskall('123456');
+
+select maskall('123456','A');
+
+select maskall(123456,'A');
+
+select mask_inside('123456',1,3); 
+
+select mask_inside(123456,0,3);
+
+select mask_inside(123456,0,3 ,'A');
+
+select mask_inside(123456,0,-1 ,'A');
+
+select mask_inside(123456,-1,3 ,'A');
+
+select mask_inside('中文测试',1,2);
+
+select mask_inside('中文测试',1,2,'燙');
+
+
+select mask_inside('中文测试',1,2,'\0');
+select maskall('中文测试','\0');
+
+select maskall('123456','\0');
+select mask_inside(123456,0,-1 ,'\0');
+
+drop table t1;
+drop table t2;

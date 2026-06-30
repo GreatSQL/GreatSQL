@@ -1,0 +1,196 @@
+--source include/install_turbo_plugin.inc
+
+connect (conn1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+--echo connect conn1
+connection conn1;
+
+set turbo_enable=off;
+set turbo_cost_threshold=0;
+set turbo_enable_warning=on;
+set turbo_enable_rollback=off;
+
+
+# select from table, pass for turbo check
+CREATE TABLE t1 (id int PRIMARY KEY, vec vector(3));
+INSERT INTO t1 VALUES (1, to_vector('[1,2,3]'));
+
+# default distance type is dot
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]')) = vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot') from t1;
+
+# distance is alias of vector_distance
+SELECT distance(to_vector('[1,2]'), to_vector('[2,4]')) = distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot') from t1;
+
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), null) from t1;
+SELECT vector_distance(to_vector('[1,2]'), null) from t1;
+-- error ER_WRONG_ARGUMENTS
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'Euclideanx') from t1;
+-- error ER_WRONG_ARGUMENTS
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'Cosinex') from t1;
+-- error ER_WRONG_ARGUMENTS
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'Dotx') from t1;
+
+
+prepare s from 'SELECT id, vector_distance(to_vector(?), vec, ?) dis, from_vector(vec) from t1 order by dis limit 10';
+
+set @vec = '[9,8,7]';
+set @type = 'euclidean';
+execute s using @vec, @type;
+
+set @vec = '[9,8,6]';
+set @type = 'cosine';
+execute s using @vec, @type;
+
+set @vec = '[9,8,5]';
+set @type = 'dot';
+execute s using @vec, @type;
+
+set @vec = '[9,8,5]';
+set @type = null;
+execute s using @vec, @type;
+
+set @vec = null;
+set @type = 'dot';
+execute s using @vec, @type;
+
+set @vec = null;
+set @type = null;
+execute s using @vec, @type;
+
+prepare s from "SELECT vector_distance(?, ?, 'cosine') from t1";
+set @vec1 = to_vector('[1.2,2.2,3.3]');
+set @vec2 = to_vector('[9.8,7.6,5.4]');
+execute s using @vec1, @vec2;
+
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'euclidean') from t1;
+--error ER_WRONG_ARGUMENTS
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[3]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'euclidean') from t1;
+
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'cosine') from t1;
+--error ER_WRONG_ARGUMENTS
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[3]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'cosine') from t1;
+
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'dot') from t1;
+--error ER_WRONG_ARGUMENTS
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[3]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'dot') from t1;
+
+
+set turbo_enable=on;
+set turbo_cost_threshold=0;
+set turbo_enable_warning=on;
+set turbo_enable_rollback=off;
+
+# default distance type is dot
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]')) = vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot') from t1;
+
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), null) from t1;
+SELECT vector_distance(to_vector('[1,2]'), null) from t1;
+-- error ER_WRONG_ARGUMENTS
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'Euclideanx') from t1;
+-- error ER_WRONG_ARGUMENTS
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'Cosinex') from t1;
+-- error ER_WRONG_ARGUMENTS
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'Dotx') from t1;
+
+
+prepare s from 'SELECT id, vector_distance(to_vector(?), vec, ?) dis, from_vector(vec) from t1 order by dis limit 10';
+
+set @vec = '[9,8,7]';
+set @type = 'euclidean';
+execute s using @vec, @type;
+
+set @vec = '[9,8,6]';
+set @type = 'cosine';
+execute s using @vec, @type;
+
+set @vec = '[9,8,5]';
+set @type = 'dot';
+execute s using @vec, @type;
+
+set @vec = '[9,8,5]';
+set @type = null;
+execute s using @vec, @type;
+
+set @vec = null;
+set @type = 'dot';
+execute s using @vec, @type;
+
+set @vec = null;
+set @type = null;
+execute s using @vec, @type;
+
+prepare s from "SELECT vector_distance(?, ?, 'cosine') from t1";
+set @vec1 = to_vector('[1.2,2.2,3.3]');
+set @vec2 = to_vector('[9.8,7.6,5.4]');
+execute s using @vec1, @vec2;
+
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'euclidean') from t1;
+--error 8700
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[3]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'euclidean') from t1;
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'euclidean') from t1;
+
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'cosine') from t1;
+--error 8700
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[3]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'cosine') from t1;
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'cosine') from t1;
+
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[2,4]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[0,0]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1,1]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,0]'), to_vector('[0,2]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1,-1]'), 'dot') from t1;
+--error 8700
+SELECT vector_distance(to_vector('[1,2]'), to_vector('[3]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[1.1,1.1]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,1]'), to_vector('[-1.1,-1.1]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[3e38]'), to_vector('[3e38]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[1,2,3,4,5,6,7,8,9]'), 'dot') from t1;
+SELECT vector_distance(to_vector('[1,2,3,4,5,6,7,8,9]'), to_vector('[-1,-2,-3,-4,-5,-6,-7,-8,-9]'), 'dot') from t1;
+
+
+drop table t1;
+
+--source include/uninstall_turbo_plugin.inc

@@ -1,0 +1,374 @@
+set optimizer_switch='remove_useless_outerjoin=on';
+create table join_aa(ida int, age int);
+create table join_bb(ida int, age int);
+insert into join_aa values(1, 2);
+insert into join_aa values(1, 3);
+insert into join_aa values(null, 4);
+
+insert into join_bb values(1, 1);
+insert into join_bb values(1, 2);
+insert into join_bb values(4, 3);
+insert into join_bb values(null, 7);
+insert into join_bb values(null, 7);
+
+--sorted_result
+select t1.* from join_aa t1 left join join_bb t2 on t1.ida = t2.ida;
+
+
+select * from join_aa;
+
+create table join_cc(ida int, age int);
+alter table join_cc add primary key (ida);
+insert into join_cc values(1, 2);
+insert into join_cc values(2, 2);
+select * from join_cc;
+select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida;
+
+select t1.* from join_aa t1 left join (select ida, count(age) from join_cc group by ida) t2 on t1.ida = t2.ida;
+select t1.* from join_aa t1 left join (select age, max(ida), count(*) from join_cc group by age) t2 on t1.ida = t2.age;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join (select ida, count(age) from join_cc group by ida) t2 on t1.ida = t2.ida;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join (select age, max(ida), count(*) from join_cc group by age) t2 on t1.ida = t2.age;
+
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida join join_bb t3 on t1.ida = t3.ida;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join join_bb t2 on t1.ida = t2.ida left join join_cc t3 on t1.ida = t3.ida;
+--replace_column 10 #
+explain select * from (select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida);
+--replace_column 10 #
+explain select * from (select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida limit 10) t join join_bb tt on t.ida = tt.ida;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida join join_bb t3 on t1.ida = t3.ida and t2.age = t1.age; 
+
+create table join_dd(ida int, age int, score int);
+create unique index u_key on join_dd(ida);
+create index c_key on join_dd(age);
+create unique index u_key2 on join_dd(ida, score);
+insert into join_dd values(1, 2, 3);
+insert into join_dd values(null, 2, null);
+insert into join_dd values(3, null, 3);
+select * from join_dd;
+select t1.* from join_aa t1 left join join_dd t2 on t1.ida = t2.ida;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join join_dd t2 on t1.ida = t2.ida;
+select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida left join join_dd t3 on t2.ida = t3.ida;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join join_cc t2 on t1.ida = t2.ida left join join_dd t3 on t2.ida = t3.ida;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join (select t2.ida, t2.age from join_cc t2 left join join_dd t3 on t2.ida = t3.ida) t2 on t1.ida = t2.ida;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join (select t2.ida, t2.age from join_cc t2 left join join_dd t3 on t2.ida = t3.ida) t3 on t1.ida = t3.ida;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join (join_cc t2 left join join_dd t3 on t2.ida = t3.ida) on t1.ida = t2.ida;
+create unique index u_key_join_aa on join_aa(ida, age);
+--replace_column 10 #
+explain select t1.*  from join_aa t1 full  join join_dd t2 on t1.ida = t2.ida;
+
+
+create table join_ee(ida int, age int);
+alter table join_ee add primary key(ida, age);
+insert into join_ee values(1, 2);
+insert into join_ee values(1, 3);
+
+--replace_column 10 #
+explain select t1.* from (join_aa t1 left join join_cc t2 on t1.ida = t2.ida) left join (join_dd t3 join join_ee t4 on t3.ida = t4.ida) on t1.ida = t3.ida;
+--replace_column 10 #
+explain select t1.* from (join_aa t1 left join join_cc t2 on t1.ida = t2.ida) left join (join_dd t3 join join_ee t4 on t3.ida = t4.ida) on t1.ida = t1.ida;
+--replace_column 10 #
+explain select t1.* from (join_aa t1 left join join_cc t2 on t1.ida = t2.ida) left join (join_dd t3 left join join_dd t4 on t3.ida = t4.ida) on t1.ida = t1.ida;
+
+## no support not uniquey key.
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join join_dd t2 on t1.ida = t2.age;
+## no support multi columns key optimize.
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join join_dd t2 on t1.ida = t2.ida and t1.age = t2.age;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join join_ee t2 on t1.ida = t2.ida and t1.age = t2.age;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join (select ida, age from join_cc group by ida, age) t2 on t1.ida = t2.age;
+--replace_column 10 #
+explain select t1.* from join_aa t1 left join (select distinct ida, age from join_cc) t2 on t1.ida = t2.age;
+drop table join_aa, join_bb, join_cc, join_dd, join_ee;
+
+create table t2(grade int,name varchar2(200));
+create unique index idx1 on t2(grade);
+insert into t2 values(1, 'test1');
+insert into t2 values(2, 'test2');
+insert into t2 values(3, 'test3');
+insert into t2 values(4, 'test4');
+create table s1(id int,grade int);
+insert into s1 values(1, -1);
+insert into s1 values(2, 1);
+insert into s1 values(3, 1);
+insert into s1 values(4, 2);
+
+select s1.id , s1.grade  from s1 left join t2 on s1.id = t2.grade connect by prior s1.id = s1.grade;
+--replace_column 10 #
+explain select s1.id , s1.grade  from s1 left join t2 on s1.id = t2.grade connect by prior s1.id = s1.grade;
+create unique index idx2 on s1(id);
+--replace_column 10 #
+select t2.grade, t2.name from s1 right join t2 on s1.id = t2.grade connect by prior s1.id = s1.grade;
+explain select t2.grade, t2.name from s1 right join t2 on s1.id = t2.grade connect by prior s1.id = s1.grade;
+drop table t2, s1;
+
+##fixbug7838
+set sql_mode=oracle;
+drop table if exists x1,x1_rate;
+drop table if exists x2;
+drop view if exists v1;
+create table x1(c1 int, c2 varchar(20));
+insert into x1 values(1,'math');
+insert into x1 values(2,'english');
+insert into x1 values(7,'economic');
+create table x1_rate(c1 int ,c2 double);
+create unique index idx1 on x1_rate(c1);
+insert into x1_rate values(3,'3');
+insert into x1_rate values(2,'2');
+insert into x1_rate values(5,'5');
+create table x2 as select x1.c1, ratio_to_report(x1.c1) over(partition by x1.c1) c2 from x1 left join x1_rate on x1.c1 = x1_rate.c1;
+insert into x2 values(10,100);
+create unique index idx2 on x2(c1);
+update x2 ,(select x1_rate.c1, ratio_to_report(x1_rate.c1) over() c2 from x1_rate left join x2 on x1_rate.c1=x2.c1 ) tmp set x2.c2=tmp.c2 where x2.c1=tmp.c1;
+--replace_column 10 #
+explain update x2 ,(select x1_rate.c1, ratio_to_report(x1_rate.c1) over() c2 from x1_rate left join x2 on x1_rate.c1=x2.c1 ) tmp set x2.c2=tmp.c2 where x2.c1=tmp.c1;
+select * from x2 order by 1,2;
+delete from x2 where c2 in (select ratio_to_report(x1.c1) over() c2 from x1 left join x1_rate on x1_rate.c1=x1.c1 );
+--replace_column 10 #
+explain delete from x2 where c2 in (select ratio_to_report(x1.c1) over() c2 from x1 left join x1_rate on x1_rate.c1=x1.c1 );
+select * from x2 order by 1,2;
+drop table x1;
+drop table x2;
+drop table x1_rate;
+
+set sql_mode='';
+create table x1(s1 int , s2 varchar(20)) comment 'shard=sd3';
+insert into x1 values(4000,'0.2');
+insert into x1 values(6000,'0.1');
+insert into x1 values(4000,'0.8');
+insert into x1 values(6000,'0.9');
+create table x2(s1 int primary key , s2 varchar(20)) comment 'shard=sd3';
+insert into x2 values(4000,'0.1');
+insert into x2 values(6000,'0.9');
+insert into x2 values(7000,'1');
+create table x3(c1 int primary key , c2 varchar(20)) comment 'shard=sd3';
+insert into x3 values(4000,'0.1');
+insert into x3 values(6000,'0.9');
+insert into x3 values(7000,'1');
+select x1.*,dt.* from x1 left join (select s1, sum(s1) as s1_sum, s2, max(s2) as s2_max from x2 left join x3 on x2.s1=x3.c1) dt on x1.s2=dt.s1_sum;
+--replace_column 10 #
+explain select x1.*,dt.* from x1 left join (select s1, sum(s1) as s1_sum, s2, max(s2) as s2_max from x2 left join x3 on x2.s1=x3.c1) dt on x1.s2=dt.s1_sum;
+drop table x1, x2, x3;
+
+##bug7837
+create table x1 (
+    id1 int  primary key,
+    id2 int ,
+    id3 int ,
+    name varchar(30),
+    name2 varchar(30) 
+);
+insert into x1(id1, id2, id3, name, name2) values(1, 2, 3, 'test1', 'test1');
+insert into x1(id1, id2, id3, name, name2) values(4, 5, 6, 'test2', 'test2');
+
+create table x2 (
+    id1 int  primary key,
+    id2 int ,
+    id3 int ,
+    name varchar(30),
+    name2 varchar(30) 
+);
+insert into x2(id1, id2, id3, name, name2) values(1, 2, 3, 'test1', 'test1');
+insert into x2(id1, id2, id3, name, name2) values(4, 5, 6, 'test2', 'test2');
+select sum(1) over() as tmp, d.*
+from (select x1.* from x1) d left join (select x2.* from x2) q on d.id1=q.id1 order by d.name;
+--replace_column 10 #
+EXPLAIN select sum(1) over() as tmp, d.*
+from (select x1.* from x1) d left join (select x2.* from x2) q on d.id1=q.id1 order by d.name;
+
+EXPLAIN select sum(1) over() as tmp, d.*
+from (select x1.* from x1) d left join (select x2.* from x2 join x1 on x2.id2 = x1.id2) q on d.id1=q.id1 order by d.name;
+
+drop table x1, x2;
+
+##bug7836
+drop table if exists x1,x2,x3;
+create table x1(id int primary key,a int,b int);
+insert into x1 values(1,1,1);
+insert into x1 values(2,2,2);
+
+create table x2(id int primary key,a int,b int);
+insert into x2 values(1,1,1);
+insert into x2 values(3,3,3);
+
+create table x3 as select * from x1;
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+EXPLAIN format=tree update x3 set a=a+200 where a in (select x1.a from x1 left join x2 on x1.id=x2.id);
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+EXPLAIN format=tree delete from  x3 where a in (select x1.a from x1 left join x2 on x1.id=x2.id);
+--source include/disable_turbo.inc
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+EXPLAIN format=tree select * from  x3 where a in (select x1.a from x1 left join x2 on x1.id=x2.id);
+--source include/restore_turbo.inc
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+EXPLAIN format=tree insert into x3 select * from x1 where a in (select x1.a from x1 left join x2 on x1.id=x2.id);
+--source include/disable_turbo.inc
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+EXPLAIN format=tree select x1.a from x1 left join x2 on x1.id=x2.id;
+--source include/restore_turbo.inc
+
+drop table x1, x2, x3;
+
+## fix bug12893
+
+CREATE TABLE WO_RES (
+WR_ID bigint NOT NULL AUTO_INCREMENT,
+WO_ID bigint DEFAULT NULL,
+DR_ID varchar(128) DEFAULT NULL,
+DR_NAME varchar(128) DEFAULT NULL,
+RES_VALUE varchar(256) DEFAULT NULL,
+RES_DESC varchar(256) DEFAULT NULL,
+PROVINCE int DEFAULT NULL,
+SHARDING_ID int DEFAULT NULL COMMENT '用于cobar分库字段，填省份编码',
+PRIMARY KEY (`WR_ID`),
+KEY index_WoRes_DrId (`DR_ID`),
+KEY index_WoRes_WoId (`WO_ID`)
+)  AUTO_INCREMENT=285905 DEFAULT CHARSET=utf8mb3 COMMENT='资源表';
+
+
+CREATE TABLE WO_WORK_ORDER (
+WO_ID bigint NOT NULL AUTO_INCREMENT,
+BUSI_TYPE int DEFAULT NULL COMMENT '1：装机，2：修机，5：性能工单,6:扩容工单,69:第三方装机，7:整治工单，9:智能组网延伸服务',
+ORDER_TYPE int DEFAULT NULL COMMENT '业务字典：正常单，外堪单，投诉故障单69、第三方工单',
+BUSI_NO varchar(32) DEFAULT NULL,
+ACCOUNT varchar(32) DEFAULT NULL COMMENT '宽带账号',
+PROVINCE int DEFAULT NULL,
+CITY int DEFAULT NULL,
+CUST_ORDER_CD varchar(64) DEFAULT NULL COMMENT '客户订单号',
+ORDER_CD varchar(64) DEFAULT NULL COMMENT '服务定单号',
+WORK_ORDER_SN varchar(64) DEFAULT NULL COMMENT '工单流水号，装存iom的工单流水号，修存客服的工单流水号',
+URGENCY int DEFAULT NULL COMMENT '业务字典',
+CONTACT_MAN varchar(256) DEFAULT NULL COMMENT '装机：从客户信息读到此处，\n 修机：申告时客户留的联系人和联系电话，若没有，从客户信息中取',
+CONTACT_MAN_TEL varchar(48) DEFAULT NULL COMMENT '同联系人',
+PROD_CD varchar(16) DEFAULT NULL COMMENT '1000:语音遥控器、279:IPTV、2795:宽带+IPTV、40:宽带、4006:多路固话宽带、4007:多路固话、4003:TV+、4004:宽带+TV+、5955:IMS固话、5959:固话自动回单、888:智能组网前置、2170:终端更换、1700:预受理、3011:千兆光猫更换、4005:魔百和维修后置更换,3012:普通光猫更换,886:组网施工,887:智能组网后置,888:智能组网前置,889:智能组网勘测,3300:平安乡村,3200:爱心套装,4300:单点扩容,1050:光改,3016:云打印机(政企)',
+PROD_ACTION varchar(24) DEFAULT NULL,
+SERVICE_CD varchar(16) DEFAULT NULL,
+SERVICE_NAME varchar(32) DEFAULT NULL,
+WORK_ACTION varchar(22) DEFAULT NULL COMMENT '1:装 2:拆 3:移 42:装维移机拆 69:第三方装机 （4：客服系统受理投诉单 21：第三方投诉单）(6:PON口弱光 7：ONU弱光 8：质差用户 9：质差ONU/ONT 10：质差PON口 11：OLT高流量 13:分支光纤断PON口聚合派单 14:质差小区,24: OLT上行收光弱光（派单到自维）,25：高频故障（派单到自维），26：千兆接入能力预警（派单到自维）,29:督办提醒工单（派单到自维）)12：扩容,80：智能组网前置,81：智能组网后置,82：组网勘测,83:终端更换,84:预受理,85:千兆光猫更换,86:魔百和维修后置更换,79:普通光猫更换,78:组网施工,77:语音遥控器,76:平安乡村,75:爱心套装,43:单点扩容,73:光改',
+WORK_ADDRESS varchar(256) DEFAULT NULL,
+STD_ADDR_ID varchar(128) DEFAULT NULL,
+STD_ADDR_NAME varchar(256) DEFAULT NULL COMMENT '标准地址名称',
+EXCH_CD varchar(256) DEFAULT NULL COMMENT '用户局向编码',
+SITE_CD varchar(16) DEFAULT NULL COMMENT '局站编码',
+SITE_NAME varchar(64) DEFAULT NULL COMMENT '局站名称',
+ACCEPT_MAN varchar(32) DEFAULT NULL COMMENT '受理人名称',
+ACCEPT_DEP varchar(64) DEFAULT NULL COMMENT '受理人部门',
+ACCEPT_TIME datetime DEFAULT NULL COMMENT '受理时间',
+CONTENT varchar(4000) DEFAULT NULL COMMENT '障碍现象描述，开通单受理备注',
+DEL_FLAG int DEFAULT '0' COMMENT '0：否，1：删除 2、撤单 3、退单',
+CREATE_TIME datetime DEFAULT NULL COMMENT '创建时间',
+SHARDING_ID int DEFAULT NULL COMMENT '用于cobar分库字段，填省份编码',
+PRIMARY KEY (`WO_ID`),
+KEY idx_order_cd (`ORDER_CD`),
+KEY BUSI_NO (`BUSI_NO`),
+KEY ACCEPT_TIME (`ACCEPT_TIME`),
+KEY CUST_ORDER_CD (`CUST_ORDER_CD`),
+KEY idx_wo_sn (`WORK_ORDER_SN`),
+KEY idx_accept_man (`ACCEPT_MAN`),
+KEY woAction (`WORK_ACTION`),
+KEY create_time (`CREATE_TIME`),
+KEY delflag (`DEL_FLAG`),
+KEY PROD_CD (`PROD_CD`),
+KEY worksn (`WORK_ORDER_SN`),
+KEY ind_busi_type (`BUSI_TYPE`),
+KEY stand_addr_id (`STD_ADDR_ID`)
+)  AUTO_INCREMENT=7735 DEFAULT CHARSET=utf8mb3;
+
+CREATE TABLE WO_PROCESS (
+WO_ID bigint NOT NULL AUTO_INCREMENT,
+WO_CD varchar(32) DEFAULT NULL,
+PROCESSINSTID bigint DEFAULT NULL,
+STATUS int DEFAULT NULL COMMENT 'workOrder.status字典表',
+BOOK_ID bigint DEFAULT NULL COMMENT '预约表主键',
+BOOK_FLAG int DEFAULT '1' COMMENT '1：系统补约（未预约），2：预约，3：改约',
+READ_FLAG int DEFAULT '0',
+ASSIGN_TO_ORGID bigint DEFAULT NULL,
+ASSIGN_TO_ORGSEQ varchar(128) DEFAULT NULL COMMENT '最小一级机构seq',
+BELONG_MAN varchar(32) DEFAULT NULL,
+DEAL_USERID varchar(32) DEFAULT NULL,
+LAST_ASSIGN_ID bigint DEFAULT NULL,
+LAST_DELAY_ID bigint DEFAULT NULL,
+TIME_LIMIT int DEFAULT NULL,
+HASTEN_CUST_CNT int DEFAULT '0' COMMENT '可认为是重复申告',
+SHARDING_ID int DEFAULT NULL COMMENT '用于cobar分库字段，填省份编码',
+OPER_ID varchar(30) DEFAULT NULL,
+ORDER_STATUS int DEFAULT NULL,
+PRIMARY KEY (`WO_ID`),
+UNIQUE KEY idx_instid (`PROCESSINSTID`),
+KEY STATUS (`STATUS`),
+KEY idx_ASSIGN_TO_ORGID (`ASSIGN_TO_ORGID`),
+KEY idx_ASSIGN_TO_ORGSEQ (`ASSIGN_TO_ORGSEQ`),
+KEY idx_wop_deal_userid (`DEAL_USERID`),
+KEY idx_book_id (`BOOK_ID`),
+KEY idx_book_flag (`BOOK_FLAG`),
+KEY idx_delay_id (`LAST_DELAY_ID`)
+)  AUTO_INCREMENT=7735 DEFAULT CHARSET=utf8mb3;
+
+
+CREATE TABLE WO_REPAIR_EXT (
+WO_ID bigint NOT NULL AUTO_INCREMENT,
+CALL_TEL varchar(16) DEFAULT NULL COMMENT '用户申告时使用的电话号码',
+OCCUR_TIME datetime DEFAULT NULL,
+PHEN_ID int DEFAULT NULL,
+PRETREATMENT varchar(1024) DEFAULT NULL COMMENT '来自预处理系统的单子，需要显示预处理信息，供排障过程参考。',
+LAST_OCCUR_GAP int DEFAULT NULL COMMENT '再次发生间隔',
+SHARDING_ID int DEFAULT NULL COMMENT '用于cobar分库字段，填省份编码',
+FAULT_TYPE varchar(128) DEFAULT NULL COMMENT '故障类型',
+BR_CUSTOM_TYPE varchar(64) DEFAULT NULL COMMENT '用户类型',
+BR_CUSTOMR_EQUIRE varchar(256) DEFAULT NULL COMMENT '用户要求',
+PHEN_ID_NAME varchar(256) DEFAULT NULL COMMENT '问题类型描述',
+PRIORITY varchar(32) DEFAULT NULL COMMENT '客户星级',
+ACCEPT_NAME varchar(32) DEFAULT NULL COMMENT '申告人',
+IF_UP_COMPLAINT varchar(8) DEFAULT NULL COMMENT '是否升级投诉',
+ACCEPT_TEL varchar(32) DEFAULT NULL COMMENT '受理人电话',
+TERMINAL_TYPE varchar(128) DEFAULT NULL COMMENT '终端描述',
+COMPLAINT_DESC varchar(2000) DEFAULT NULL COMMENT '投诉内容，用户描述',
+SVC_TYPE varchar(64) DEFAULT NULL COMMENT '服务标识，集团分类',
+COMPLAINT_TIME datetime DEFAULT NULL COMMENT '投诉时间',
+PLAN_FINAL_TIME datetime DEFAULT NULL COMMENT '计划结束时间',
+COMPLAINT_TYPE varchar(256) DEFAULT NULL COMMENT '投诉分类（省）',
+WACCT_NO varchar(16) DEFAULT NULL COMMENT 'RADIUS宽带主帐号',
+CUST_EXPECTE varchar(256) DEFAULT NULL COMMENT '客户预期处理结果',
+ACCESS_TYPE varchar(16) DEFAULT NULL COMMENT '接入方式',
+IS_VISIT varchar(16) DEFAULT NULL COMMENT '用户回访',
+PRIMARY KEY (`WO_ID`)
+)  AUTO_INCREMENT=31611982 DEFAULT CHARSET=utf8mb3;
+
+CREATE TABLE DIC_PROD (
+PROD_CD varchar(16) NOT NULL COMMENT '产品编码作为主键',
+PROD_NAME varchar(128) DEFAULT NULL,
+TYPE int DEFAULT NULL COMMENT '2:PSTN，1:ADSL，4:WLAN，5:IPTV 业务字典产品类型',
+PROD_CLASS tinyint unsigned NOT NULL COMMENT '0:固话,1:ftth,2:LAN,3:ADSL,4:IPTV,5:WLAN',
+DISP_ORDER int DEFAULT NULL,
+DEL_FLAG int DEFAULT '0' COMMENT '0：否，1：是',
+PROVINCE int DEFAULT NULL,
+SHARDING_ID int DEFAULT NULL,
+PRIMARY KEY (`PROD_CD`),
+KEY idx_access_class (`PROD_CLASS`)
+)  DEFAULT CHARSET=utf8mb3 COMMENT='产品编码表，各省不同的数据，通过province字段区分';
+
+
+SELECT 
+  DP.TYPE AS prodType,
+  WP.TIME_LIMIT AS timeLimit
+FROM WO_WORK_ORDER WO LEFT JOIN WO_PROCESS WP ON WO.WO_ID=WP.WO_ID 
+     LEFT JOIN WO_REPAIR_EXT WRE ON WRE.WO_ID=WO.WO_ID 
+     LEFT JOIN DIC_PROD DP ON DP.PROD_CD=WO.PROD_CD 
+     LEFT JOIN WO_RES WR ON WR.WO_ID=WO.WO_ID 
+WHERE WP.STATUS=1;
+
+drop table WO_WORK_ORDER, WO_PROCESS, WO_REPAIR_EXT, DIC_PROD, WO_RES;

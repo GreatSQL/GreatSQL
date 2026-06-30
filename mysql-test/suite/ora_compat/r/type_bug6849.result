@@ -1,0 +1,350 @@
+SET sql_mode=ORACLE;
+show variables like '%udt_format_result%';
+Variable_name	Value
+udt_format_result	BINARY
+set @@udt_format_result='DBA';
+#
+# test of function in type is table of
+#
+CREATE or replace  FUNCTION f1 (a VARCHAR(32)) RETURN VARCHAR(32) no sql
+is result VARCHAR(32);
+BEGIN
+result := CONCAT(a,'y');
+RETURN(result);
+END;$$
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist := tklist(f1(1),f1(2),'cc');
+id1 int := 1;
+begin
+select stu_record_val(1),stu_record_val(2);
+stu_record_val(1) := 1;
+select stu_record_val(1);
+stu_record_val(3) := 1;
+select stu_record_val(1), stu_record_val(3);
+select stu_record_val.count;
+end;
+$$
+call p1;
+stu_record_val(1)	stu_record_val(2)
+1y	2y
+stu_record_val(1)
+1
+stu_record_val(1)	stu_record_val(3)
+1	1
+stu_record_val.count
+3
+drop PROCEDURE p1;
+#
+# test of function in type is record of
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := f1(1),
+score varchar(20) := f1(2)
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>stu_record(10,f1(10),f1(20)));
+BEGIN
+stu_record_val(2).id := 20;
+select stu_record_val(1),stu_record_val(2);
+END;
+$$
+call p1();
+stu_record_val(1)	stu_record_val(2)
+id:10 | name_d:10y | score:20y	id:20 | name_d:1y | score:2y
+drop PROCEDURE p1;
+#
+# test of for in inner layer of sp
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := f1(1),
+score varchar(20) := f1(2)
+);
+stu_record_val stu_record;
+BEGIN
+stu_record_val.id := 10;
+select stu_record_val;
+END;
+$$
+call p1();
+stu_record_val
+id:10 | name_d:1y | score:2y
+drop PROCEDURE p1;
+#
+# test of for in inner layer of sp
+#
+create database db1;
+use db1;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := test.f1(1),
+score varchar(20) := test.f1(2)
+);
+stu_record_val stu_record;
+BEGIN
+stu_record_val.id := 10;
+select stu_record_val;
+END;
+$$
+use test;
+CREATE or replace PROCEDURE p2() as
+type tklist1 is table of varchar(20);
+stu_record_val1 tklist1 := tklist1();
+begin
+show procedure code db1.p1;
+call db1.p1;
+end;
+$$
+call p2();
+Pos	Instruction
+0	setup_row_field stu_record@0
+1	set stu_record.id@0[0] 1
+2	set stu_record.name_d@0[1] "test"."f1"(1)
+3	set stu_record.score@0[2] "test"."f1"(2)
+4	setup_row_field stu_record_val@1
+5	set stu_record_val@1 stu_record@0
+6	set stu_record_val.id@1[id] 10
+7	stmt "select stu_record_val"
+stu_record_val
+id:10 | name_d:1y | score:2y
+drop PROCEDURE p2;
+drop database db1;
+drop function f1;
+#
+# test of bug9509
+#
+create or replace type t_air as object(id int,type varchar(20));
+create table tt_air(id int,name1 t_air);
+insert into tt_air values(1,t_air(10,'aabb'));
+insert into tt_air values(2,t_air(20,'qwed'));
+select * from (select t_air(null,null)=t_air(null,null));
+t_air(null,null)=t_air(null,null)
+1
+insert into tt_air values (1,t_air(1,1)=t_air(1,1));
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+insert into tt_air(name1) values (t_air(1,1)=t_air(1,1));
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+insert into tt_air(name1) select t_air(1,1)=t_air(1,1);
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+insert into tt_air(id) select t_air(1,1);
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+insert into tt_air(id) select t_air(1,1)=t_air(1,1);
+table tt_air;
+id	name1
+1	id:10 | type:aabb
+2	id:20 | type:qwed
+1	NULL
+SELECT * from tt_air where lnnvl(name1)+lnnvl(name1);
+id	name1
+create table aas as select t_air(1,1)=t_air(1,1);
+table aas;
+t_air(1,1)=t_air(1,1)
+1
+drop table aas;
+create table table_of of t_air ENGINE=innodb DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+insert into table_of select t_air(10,'05');
+insert into table_of select t_air(100,'asdf');
+insert into table_of select t_air(100,'asdf')=t_air(1,1);
+ERROR 21S01: Column count doesn't match value count at row 1
+drop table table_of;
+#
+# test of bug9503
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist:=tklist(1,2,3,4);
+begin
+select stu_record_val(1) bulk collect into stu_record_val from sequence_table(2) a;
+for i in stu_record_val.first .. stu_record_val.last loop
+select stu_record_val(i);
+end loop;
+end;
+$$
+Warnings:
+Warning	1287	'SEQUENCE_TABLE' is deprecated and will be removed in a future release. Please use PERCONA_SEQUENCE_TABLE instead
+call p1;
+stu_record_val(i)
+1
+stu_record_val(i)
+1
+call p1;
+stu_record_val(i)
+1
+stu_record_val(i)
+1
+drop PROCEDURE p1;
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20);
+stu_record_val tklist:=tklist(1,2,3,4);
+begin
+stu_record_val := tklist(stu_record_val(1),stu_record_val(2),30,40);
+for i in stu_record_val.first .. stu_record_val.last loop
+select stu_record_val(i);
+end loop;
+end;
+$$
+call p1;
+stu_record_val(i)
+1
+stu_record_val(i)
+2
+stu_record_val(i)
+30
+stu_record_val(i)
+40
+call p1;
+stu_record_val(i)
+1
+stu_record_val(i)
+2
+stu_record_val(i)
+30
+stu_record_val(i)
+40
+drop PROCEDURE p1;
+drop table tt_air;
+drop type t_air;
+#
+# test of bug11401
+#
+create table t1(id int,name1 longtext);
+select count(*) from t1 a where xmltype(a.name1).extract('//status/text()').getstringval() <> '00'));
+ERROR HY000: Incorrect usage of extract and .
+#
+# test of bug11544
+#
+CREATE or replace PROCEDURE p1() as
+type1 t1%rowtype;
+begin
+end;
+$$
+call p1;
+call p1;
+SET global debug = "+d,rowtype_with_null_mdl_ticket";
+call p1;
+ERROR HY000: Resolve table t1 failed,or it doesn't support view table.
+SET global debug = "-d,rowtype_with_null_mdl_ticket";
+call p1;
+drop PROCEDURE p1;
+drop table t1;
+#
+# test of bug11947
+#
+create or replace type t_air as object(id int,type varchar(20));
+CREATE OR REPLACE TYPE t_air_table AS table OF t_air;
+create table t1(id int,name1 varchar(20));
+insert into t1 values(1,'aabb');
+insert into t1 values(2,'qwed');
+insert into t1 values(2,'qwssq');
+create table tt_air(id int,air t_air);
+insert into tt_air values(1,t_air(1,'aabb'));
+insert into tt_air values(2,t_air(2,'qwed'));
+create table t2 like t1;
+insert into t2 select * from t1;
+CREATE or replace PROCEDURE p1() as
+rec t1%ROWTYPE;
+rec1_row t2%ROWTYPE;
+begin
+select * from (SELECT rec.id,rec.name1) t1 inner join (SELECT rec1_row.id,rec1_row.name1) t2;
+end;
+$$
+call p1;
+id	name1	id	name1
+NULL	NULL	NULL	NULL
+call p1;
+id	name1	id	name1
+NULL	NULL	NULL	NULL
+drop PROCEDURE p1;
+CREATE OR replace PROCEDURE p1() as
+type tklist is table of t1%rowtype INDEX BY pls_integer;
+tb1 tklist;
+begin
+tb1(2).id := 100;
+tb1(2).name1 := 'bb';
+tb1(1).id := 200;
+tb1(1).name1 := 'ccc';
+select * from (select  tb1(2).id,tb1(2).name1) t1 inner join (SELECT tb1(1).id,tb1(1).name1) t2;
+end;
+$$
+call p1;
+id	name1	id	name1
+100	bb	200	ccc
+call p1;
+id	name1	id	name1
+100	bb	200	ccc
+drop PROCEDURE p1;
+CREATE OR replace PROCEDURE p1() as
+rec tt_air%ROWTYPE;
+rec1_row tt_air%ROWTYPE;
+begin
+select * from (select rec.id,rec.air) t1 inner join (select rec1_row.id,rec1_row.air) t2;
+end;
+$$
+call p1;
+id	air	id	air
+NULL	NULL	NULL	NULL
+call p1;
+id	air	id	air
+NULL	NULL	NULL	NULL
+drop PROCEDURE p1;
+#
+# test of bug12411
+#
+create or replace procedure p1() as
+st t1.name1%TYPE;
+begin
+select name1 into st from t1 where id = 1;
+select st;
+end;
+$$
+call p1;
+st
+aabb
+call p1;
+st
+aabb
+drop PROCEDURE p1;
+create or replace procedure p1() as
+st tt_air.air%TYPE;
+begin
+select air into st from tt_air where id = 1;
+select st;
+end;
+$$
+call p1;
+st
+id:1 | type:aabb
+call p1;
+st
+id:1 | type:aabb
+drop PROCEDURE p1;
+create or replace procedure p1() as
+st tt_air.air%TYPE;
+begin
+select name1 into st from t1 where id = 1;
+select st;
+end;
+$$
+call p1;
+ERROR 21000: The used SELECT statements have a different number of columns
+drop PROCEDURE p1;
+create or replace procedure p1() as
+st t1.name1%TYPE;
+begin
+select air into st from tt_air where id = 1;
+select st;
+end;
+$$
+call p1;
+ERROR HY000: inconsistent datatypes: udt type and non udt type
+drop PROCEDURE p1;
+drop table tt_air;
+drop type t_air_table;
+drop type t_air;
+drop table t1;
+drop table t2;

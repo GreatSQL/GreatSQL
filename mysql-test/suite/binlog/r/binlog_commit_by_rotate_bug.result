@@ -1,0 +1,13 @@
+RESET BINARY LOGS AND GTIDS;
+#
+# BUG1
+#
+CREATE TABLE t1 (c1 int, c2 LONGTEXT) ENGINE = InnoDB;
+SET @saved_binlog_large_commit_threshold= @@GLOBAL.binlog_large_commit_threshold;
+SET GLOBAL binlog_large_commit_threshold = 10 * 1024 * 1024;
+BEGIN;
+INSERT INTO t1 values(1, repeat("a", 10485760));
+CREATE INDEX idx1 ON t1 (c1);
+COMMIT;
+SET GLOBAL binlog_large_commit_threshold = @saved_binlog_large_commit_threshold;
+DROP TABLE t1;

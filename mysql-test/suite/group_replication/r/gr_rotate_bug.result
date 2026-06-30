@@ -1,0 +1,141 @@
+include/group_replication.inc [rpl_server_count=4]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connection server1]
+SET sql_log_bin = 0;
+call mtr.add_suppression("Member was expelled from the group due to network failures, changing member status to ERROR.");
+call mtr.add_suppression("Due to a plugin error, some transactions were unable to be certified and will now rollback.");
+call mtr.add_suppression("Error while waiting for conflict detection procedure to finish on session");
+call mtr.add_suppression("Run function 'before_commit' in plugin 'group_replication' failed");
+call mtr.add_suppression("Replica SQL for channel 'ch1': Worker .* failed executing transaction");
+call mtr.add_suppression("The server was automatically set into read only mode after an error was detected.");
+call mtr.add_suppression("The server was automatically set into offline mode after an error was detected.");
+SET sql_log_bin = 1;
+[connection server4]
+SET sql_log_bin = 0;
+call mtr.add_suppression("The Monitor IO thread failed to connect to the source");
+call mtr.add_suppression("The Monitor IO thread failed to detect if the source belongs to the group majority on the source");
+call mtr.add_suppression("Error reading relay log event for channel");
+call mtr.add_suppression("Relay log read failure");
+SET sql_log_bin = 1;
+
+# 1. Deploy a 3 members group A in single primary mode.
+
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+[connection server2]
+include/start_group_replication.inc
+[connection server3]
+include/start_group_replication.inc
+[connection server4]
+CHANGE REPLICATION SOURCE TO SOURCE_USER='root', SOURCE_HOST='127.0.0.1', SOURCE_PORT=PORT_1, SOURCE_RETRY_COUNT=2, SOURCE_AUTO_POSITION=1 FOR CHANNEL 'ch1';
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	1760	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+CHANGE REPLICATION SOURCE TO SOURCE_CONNECTION_AUTO_FAILOVER=1 FOR CHANNEL 'ch1';
+SELECT asynchronous_connection_failover_add_managed('ch1', 'GroupReplication', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '127.0.0.1', PORT_1, '', 80, 60);
+asynchronous_connection_failover_add_managed('ch1', 'GroupReplication', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '127.0.0.1', PORT_1, '', 80, 60)
+The UDF asynchronous_connection_failover_add_managed() executed successfully.
+START REPLICA FOR CHANNEL 'ch1';
+include/rpl/wait_for_receiver_to_start.inc
+[connection server1]
+CHANGE REPLICATION SOURCE TO SOURCE_USER='root', SOURCE_HOST='127.0.0.1', SOURCE_PORT=PORT_4, SOURCE_RETRY_COUNT=2, SOURCE_AUTO_POSITION=1 FOR CHANNEL 'ch1';
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	1760	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+START REPLICA FOR CHANNEL 'ch1';
+include/rpl/wait_for_receiver_to_start.inc
+[connection server1]
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t1 VALUES (2,2);
+INSERT INTO t1 VALUES (3,3);
+INSERT INTO t1 VALUES (4,4);
+[connection server4]
+CREATE TABLE t2 (c1 INT PRIMARY KEY, c2 INT);
+INSERT INTO t2 VALUES (1,1);
+INSERT INTO t2 VALUES (2,2);
+INSERT INTO t2 VALUES (3,3);
+INSERT INTO t2 VALUES (4,4);
+[connection server1]
+# Get server 1 pid.
+SET SESSION sql_log_bin= 0;
+CREATE TABLE pid_table(pid_no INT);
+LOAD DATA LOCAL INFILE 'pid_file' INTO TABLE pid_table;
+DROP TABLE pid_table;
+SET SESSION sql_log_bin= 1;
+conn1_1
+SET GLOBAL debug='+d,dump_thread_wait_after_send_xid';
+[connection server1]
+INSERT INTO t1 VALUES (5,5);
+INSERT INTO t1 VALUES (6,6);
+INSERT INTO t1 VALUES (7,7);
+INSERT INTO t1 VALUES (8,8);
+[connection server4]
+INSERT INTO t2 VALUES (5,5);
+INSERT INTO t2 VALUES (6,6);
+INSERT INTO t2 VALUES (7,7);
+INSERT INTO t2 VALUES (8,8);
+conn1_1
+SET debug_sync='now wait_for send_pause';
+SET GLOBAL debug='-d,dump_thread_wait_after_send_xid';
+conn4_1
+SET GLOBAL debug='+d,wait_auto_failover';
+SET debug_sync='now wait_for terminate_slave_thread_pause_1';
+[suspend MYSQLD_1]
+[connection server2]
+include/rpl/gr_wait_for_number_of_members.inc
+conn4_1
+conn4_2
+SET GLOBAL debug='+d,wait_rotate';
+SET debug_sync='now wait_for write_rotate_event_puase';
+[awake MYSQLD_1]
+conn4_2
+conn4_1
+SET debug_sync='now signal terminate_slave_thread_continue_1';
+SET debug_sync='now wait_for terminate_slave_thread_pause_2';
+conn4_2
+SET debug_sync='now signal write_rotate_event_continue';
+conn4_1
+SET GLOBAL debug='-d,wait_rotate';
+SET debug_sync='now signal terminate_slave_thread_continue_2';
+SET GLOBAL debug='-d,wait_auto_failover';
+[connection server4]
+include/rpl/wait_for_replica_status.inc [Source_Port]
+include/rpl/wait_for_receiver_to_start.inc
+[connection server2]
+INSERT INTO t1 VALUES (9,9);
+INSERT INTO t1 VALUES (10,10);
+[connection server4]
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+10	10
+[connection server1]
+[connection server2]
+include/rpl/gr_wait_for_number_of_members.inc
+include/gr_wait_for_member_state.inc
+[connection server1]
+STOP REPLICA FOR CHANNEL 'ch1';
+CHANGE REPLICATION SOURCE TO SOURCE_AUTO_POSITION=0 FOR CHANNEL 'ch1';
+RESET REPLICA FOR CHANNEL 'ch1';
+[connection server4]
+STOP REPLICA FOR CHANNEL 'ch1';
+CHANGE REPLICATION SOURCE TO SOURCE_CONNECTION_AUTO_FAILOVER=0, SOURCE_AUTO_POSITION=0 FOR CHANNEL 'ch1';
+RESET REPLICA FOR CHANNEL 'ch1';
+DROP TABLE t1;
+DROP TABLE t2;
+[connection server2]
+DROP TABLE t1;
+DROP TABLE t2;
+include/group_replication_end.inc

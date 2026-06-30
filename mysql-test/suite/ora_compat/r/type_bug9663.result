@@ -1,0 +1,14 @@
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+create or replace type TC10314_t65_type2 as object(addr varchar2(123),name varchar(213));
+CREATE OR REPLACE  PROCEDURE TC10314_t65_sp2() as
+BEGIN
+select avg(TC10314_t65_type2(2,'asd'));
+END;
+//
+CALL TC10314_t65_sp2;
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
+CALL TC10314_t65_sp2;
+ERROR 42000: This version of MySQL doesn't yet support 'udt value in aggregate function'
+drop procedure TC10314_t65_sp2;
+drop type TC10314_t65_type2;

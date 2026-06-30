@@ -1,0 +1,470 @@
+--source include/not_group_replication_plugin.inc
+--source include/have_binlog_format_row.inc
+--source include/rpl/init_source_replica.inc
+
+--source include/rpl/connection_source.inc
+CREATE TABLE t1(c1 INT PRIMARY KEY, c2 INT);
+CREATE TABLE t2(c1 INT PRIMARY KEY, c2 INT);
+--source include/rpl/sync_to_replica.inc
+
+--source include/rpl/connection_replica.inc
+SET @save_replica_parallel_workers = @@GLOBAL.replica_parallel_workers;
+SET @save_replica_parallel_wait_mode = @@GLOBAL.replica_parallel_wait_mode;
+SET @save_replica_preserve_commit_order = @@GLOBAL.replica_preserve_commit_order;
+--source include/rpl/stop_replica.inc
+
+connect(conn2_1,127.0.0.1,root,,,$SLAVE_MYPORT,);
+
+--echo
+--echo ## test WAIT_FOR_SQL_THREAD with replica_preserve_commit_order=ON
+--source include/rpl/connection_replica.inc
+SET GLOBAL replica_parallel_workers = 16;
+SET GLOBAL replica_preserve_commit_order = ON;
+SET GLOBAL replica_parallel_wait_mode = WAIT_ON_SQL_THREAD;
+--source include/rpl/start_replica.inc
+
+--source include/rpl/connection_source.inc
+TRUNCATE TABLE t1;
+TRUNCATE TABLE t2;
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t1 VALUES (2,2);
+INSERT INTO t2 VALUES (1,1);
+INSERT INTO t2 VALUES (2,2);
+--source include/rpl/sync_to_replica.inc
+--echo # connect conn2_1 
+connection conn2_1;
+BEGIN;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+--source include/rpl/connection_source.inc
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t1 VALUES (3,3);
+INSERT INTO t1 VALUES (4,4);
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t2 VALUES (3,3);
+INSERT INTO t2 VALUES (4,4);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (5,5);
+INSERT INTO t2 VALUES (6,6);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (7,7);
+INSERT INTO t2 VALUES (8,8);
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/rpl/connection_replica.inc
+--let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.processlist WHERE STATE LIKE '%Applying batch of row changes%'
+--source include/wait_condition.inc
+--let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for dependent transaction to commit'
+--source include/wait_condition.inc
+--let $wait_condition=SELECT COUNT(*)=2 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for preceding transaction to commit'
+--source include/wait_condition.inc
+sleep 1;
+--let $assert_text = There only one transaction Applying Rows
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE LIKE \'%Applying batch of row changes%\']" = "1"
+--source include/assert.inc
+--let $assert_text = There have 1 thread waiting dependent transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for dependent transaction to commit\']" = "1"
+--source include/assert.inc
+--let $assert_text = There have 2 workers waiting preceding transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for preceding transaction to commit\']" = "2"
+--source include/assert.inc
+--let $assert_text = There have 13 workers idle
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for an event from Coordinator\']" = "13"
+--source include/assert.inc
+--let $assert_text = SQL thread is waitting dependent transaction to commit, but not waiting for more updates
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Replica has read all relay log; waiting for more updates\']" = "0"
+--source include/assert.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--echo # connect conn2_1 
+connection conn2_1;
+ROLLBACK;
+--source include/rpl/connection_source.inc
+--source include/rpl/sync_to_replica.inc
+--source include/rpl/connection_replica.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/rpl/stop_replica.inc
+--source include/rpl/connection_source.inc
+INSERT INTO t1 VALUES (11,11);
+INSERT INTO t2 VALUES (11,11);
+INSERT INTO t2 VALUES (12,12);
+--echo # connect conn2_1 
+connection conn2_1;
+LOCK TABLE t1 READ;
+--source include/rpl/connection_replica.inc
+--source include/rpl/start_replica.inc
+--let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for table metadata lock'
+--source include/wait_condition.inc
+--let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for dependent transaction to commit'
+--source include/wait_condition.inc
+--let $assert_text = There only one transaction waiting metadata lock
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for table metadata lock\']" = "1"
+--source include/assert.inc
+--let $assert_text = There have 1 thread waiting dependent transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for dependent transaction to commit\']" = "1"
+--source include/assert.inc
+--let $assert_text = There have no workers waiting preceding transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for preceding transaction to commit\']" = "0"
+--source include/assert.inc
+--let $assert_text = There have 15 workers idle
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for an event from Coordinator\']" = "15"
+--source include/assert.inc
+--let $assert_text = SQL thread is waitting dependent transaction to commit, but not waiting for more updates
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Replica has read all relay log; waiting for more updates\']" = "0"
+--source include/assert.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+connection conn2_1;
+LOCK TABLE t1 READ;
+UNLOCK TABLES;
+--source include/rpl/connection_source.inc
+--source include/rpl/sync_to_replica.inc
+--source include/rpl/connection_replica.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/rpl/stop_replica.inc
+
+
+--echo
+--echo ## test WAIT_FOR_SQL_THREAD with replica_preserve_commit_order=OFF
+--source include/rpl/connection_replica.inc
+SET GLOBAL replica_parallel_workers = 16;
+SET GLOBAL replica_preserve_commit_order = OFF;
+SET GLOBAL replica_parallel_wait_mode = WAIT_ON_SQL_THREAD;
+--source include/rpl/start_replica.inc
+
+--source include/rpl/connection_source.inc
+TRUNCATE TABLE t1;
+TRUNCATE TABLE t2;
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t1 VALUES (2,2);
+INSERT INTO t2 VALUES (1,1);
+INSERT INTO t2 VALUES (2,2);
+--source include/rpl/sync_to_replica.inc
+--echo # connect conn2_1 
+connection conn2_1;
+BEGIN;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+--source include/rpl/connection_source.inc
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t1 VALUES (3,3);
+INSERT INTO t1 VALUES (4,4);
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t2 VALUES (3,3);
+INSERT INTO t2 VALUES (4,4);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (5,5);
+INSERT INTO t2 VALUES (6,6);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (7,7);
+INSERT INTO t2 VALUES (8,8);
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/rpl/connection_replica.inc
+--let $wait_condition=select count(*)=4 from t1
+--source include/wait_condition.inc
+--let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.processlist WHERE STATE LIKE '%Applying batch of row changes%'
+--source include/wait_condition.inc
+--let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for dependent transaction to commit'
+--source include/wait_condition.inc
+--let $assert_text = There only one transaction Applying Rows
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE LIKE \'%Applying batch of row changes%\']" = "1"
+--source include/assert.inc
+--let $assert_text = There have 1 thread waiting dependent transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for dependent transaction to commit\']" = "1"
+--source include/assert.inc
+--let $assert_text = There have no workers waiting preceding transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for preceding transaction to commit\']" = "0"
+--source include/assert.inc
+--let $assert_text = There have 15 workers idle
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for an event from Coordinator\']" = "15"
+--source include/assert.inc
+--let $assert_text = SQL thread is waitting dependent transaction to commit, but not waiting for more updates
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Replica has read all relay log; waiting for more updates\']" = "0"
+--source include/assert.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--echo # connect conn2_1 
+connection conn2_1;
+ROLLBACK;
+--source include/rpl/connection_source.inc
+--source include/rpl/sync_to_replica.inc
+--source include/rpl/connection_replica.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/rpl/stop_replica.inc
+--source include/rpl/connection_source.inc
+INSERT INTO t1 VALUES (11,11);
+INSERT INTO t2 VALUES (11,11);
+INSERT INTO t2 VALUES (12,12);
+--echo # connect conn2_1 
+connection conn2_1;
+LOCK TABLE t1 READ;
+--source include/rpl/connection_replica.inc
+--source include/rpl/start_replica.inc
+--let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for table metadata lock'
+--source include/wait_condition.inc
+--let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for dependent transaction to commit'
+--source include/wait_condition.inc
+--let $assert_text = There only one transaction waiting metadata lock
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for table metadata lock\']" = "1"
+--source include/assert.inc
+--let $assert_text = There have 1 thread waiting dependent transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for dependent transaction to commit\']" = "1"
+--source include/assert.inc
+--let $assert_text = There have no workers waiting preceding transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for preceding transaction to commit\']" = "0"
+--source include/assert.inc
+--let $assert_text = There have 15 workers idle
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for an event from Coordinator\']" = "15"
+--source include/assert.inc
+--let $assert_text = SQL thread is waitting dependent transaction to commit, but not waiting for more updates
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Replica has read all relay log; waiting for more updates\']" = "0"
+--source include/assert.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--echo # connect conn2_1 
+connection conn2_1;
+LOCK TABLE t1 READ;
+UNLOCK TABLES;
+--source include/rpl/connection_source.inc
+--source include/rpl/sync_to_replica.inc
+--source include/rpl/connection_replica.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/rpl/stop_replica.inc
+
+
+--echo
+--echo ## test WAIT_FOR_WORKER_THREAD with replica_preserve_commit_order=ON
+--source include/rpl/connection_replica.inc
+SET GLOBAL replica_parallel_workers = 16;
+SET GLOBAL replica_preserve_commit_order = ON;
+SET GLOBAL replica_parallel_wait_mode = WAIT_ON_WORKER_THREAD;
+--source include/rpl/start_replica.inc
+
+--source include/rpl/connection_source.inc
+TRUNCATE TABLE t1;
+TRUNCATE TABLE t2;
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t1 VALUES (2,2);
+INSERT INTO t2 VALUES (1,1);
+INSERT INTO t2 VALUES (2,2);
+--source include/rpl/sync_to_replica.inc
+--echo # connect conn2_1 
+connection conn2_1;
+BEGIN;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+--source include/rpl/connection_source.inc
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t1 VALUES (3,3);
+INSERT INTO t1 VALUES (4,4);
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t2 VALUES (3,3);
+INSERT INTO t2 VALUES (4,4);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (5,5);
+INSERT INTO t2 VALUES (6,6);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (7,7);
+INSERT INTO t2 VALUES (8,8);
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/rpl/connection_replica.inc
+--let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.processlist WHERE STATE LIKE '%Applying batch of row changes%'
+--source include/wait_condition.inc
+--let $wait_condition=SELECT COUNT(*)=3 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for dependent transaction to commit'
+--source include/wait_condition.inc
+--let $wait_condition=SELECT COUNT(*)=8 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for preceding transaction to commit'
+--source include/wait_condition.inc
+--let $assert_text = There only one transaction Applying rows
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE LIKE \'%Applying batch of row changes%\']" = "1"
+--source include/assert.inc
+--let $assert_text = There have 3 thread waiting dependent transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for dependent transaction to commit\']" = "3"
+--source include/assert.inc
+--let $assert_text = There have 8 workers waiting preceding transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for preceding transaction to commit\']" = "8"
+--source include/assert.inc
+--let $assert_text = There have 4 workers idle
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for an event from Coordinator\']" = "4"
+--source include/assert.inc
+--let $assert_text = SQL thread is waiting for more updates
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Replica has read all relay log; waiting for more updates\']" = "1"
+--source include/assert.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--echo # connect conn2_1 
+connection conn2_1;
+ROLLBACK;
+--source include/rpl/connection_source.inc
+--source include/rpl/sync_to_replica.inc
+--source include/rpl/connection_replica.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/rpl/stop_replica.inc
+--source include/rpl/connection_source.inc
+INSERT INTO t1 VALUES (11,11);
+INSERT INTO t2 VALUES (11,11);
+INSERT INTO t2 VALUES (12,12);
+--echo # connect conn2_1 
+connection conn2_1;
+LOCK TABLE t1 READ;
+--source include/rpl/connection_replica.inc
+--source include/rpl/start_replica.inc
+--let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for table metadata lock'
+--source include/wait_condition.inc
+--let $wait_condition=SELECT COUNT(*)=2 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for dependent transaction to commit'
+--source include/wait_condition.inc
+--let $assert_text = There only one transaction waiting metadata lock
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for table metadata lock\']" = "1"
+--source include/assert.inc
+--let $assert_text = There have 2 thread waiting dependent transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for dependent transaction to commit\']" = "2"
+--source include/assert.inc
+--let $assert_text = There have 0 workers waiting preceding transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for preceding transaction to commit\']" = "0"
+--source include/assert.inc
+--let $assert_text = There have 13 workers idle
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for an event from Coordinator\']" = "13"
+--source include/assert.inc
+--let $assert_text = SQL thread is waiting for more updates
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Replica has read all relay log; waiting for more updates\']" = "1"
+--source include/assert.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--echo # connect conn2_1 
+connection conn2_1;
+LOCK TABLE t1 READ;
+UNLOCK TABLES;
+--source include/rpl/connection_source.inc
+--source include/rpl/sync_to_replica.inc
+--source include/rpl/connection_replica.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/rpl/stop_replica.inc
+
+
+--echo
+--echo ## test WAIT_FOR_WORKER_THREAD with replica_preserve_commit_order=OFF
+--source include/rpl/connection_replica.inc
+SET GLOBAL replica_parallel_workers = 16;
+SET GLOBAL replica_preserve_commit_order = OFF;
+SET GLOBAL replica_parallel_wait_mode = WAIT_ON_WORKER_THREAD;
+--source include/rpl/start_replica.inc
+
+--source include/rpl/connection_source.inc
+TRUNCATE TABLE t1;
+TRUNCATE TABLE t2;
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t1 VALUES (2,2);
+INSERT INTO t2 VALUES (1,1);
+INSERT INTO t2 VALUES (2,2);
+--source include/rpl/sync_to_replica.inc
+--echo # connect conn2_1 
+connection conn2_1;
+BEGIN;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+--source include/rpl/connection_source.inc
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t1 VALUES (3,3);
+INSERT INTO t1 VALUES (4,4);
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+INSERT INTO t2 VALUES (3,3);
+INSERT INTO t2 VALUES (4,4);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (5,5);
+INSERT INTO t2 VALUES (6,6);
+UPDATE t2 SET c2=c2+1 WHERE c1=3;
+INSERT INTO t2 VALUES (7,7);
+INSERT INTO t2 VALUES (8,8);
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/rpl/connection_replica.inc
+--let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.processlist WHERE STATE LIKE '%Applying batch of row changes%'
+--source include/wait_condition.inc
+--let $wait_condition=SELECT COUNT(*)=3 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for dependent transaction to commit'
+--source include/wait_condition.inc
+--let $wait_condition=SELECT COUNT(*)=8 FROM t2 
+--source include/wait_condition.inc
+--let $assert_text = There only one transaction Applying rows
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE LIKE \'%Applying batch of row changes%\']" = "1"
+--source include/assert.inc
+--let $assert_text = There have 3 thread waiting dependent transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for dependent transaction to commit\']" = "3"
+--source include/assert.inc
+--let $assert_text = There have 0 workers waiting preceding transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for preceding transaction to commit\']" = "0"
+--source include/assert.inc
+--let $assert_text = There have 12 workers idle
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for an event from Coordinator\']" = "12"
+--source include/assert.inc
+--let $assert_text = SQL thread is waiting for more updates
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Replica has read all relay log; waiting for more updates\']" = "1"
+--source include/assert.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--echo # connect conn2_1 
+connection conn2_1;
+ROLLBACK;
+--source include/rpl/connection_source.inc
+--source include/rpl/sync_to_replica.inc
+--source include/rpl/connection_replica.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/rpl/stop_replica.inc
+--source include/rpl/connection_source.inc
+INSERT INTO t1 VALUES (11,11);
+INSERT INTO t2 VALUES (11,11);
+INSERT INTO t2 VALUES (12,12);
+--echo # connect conn2_1 
+connection conn2_1;
+LOCK TABLE t1 READ;
+--source include/rpl/connection_replica.inc
+--source include/rpl/start_replica.inc
+--let $wait_condition=SELECT COUNT(*)=1 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for table metadata lock'
+--source include/wait_condition.inc
+--let $wait_condition=SELECT COUNT(*)=2 FROM INFORMATION_SCHEMA.processlist WHERE STATE = 'Waiting for dependent transaction to commit'
+--source include/wait_condition.inc
+--let $assert_text = There only one transaction waiting metadata lock
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for table metadata lock\']" = "1"
+--source include/assert.inc
+--let $assert_text = There have 2 thread waiting dependent transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for dependent transaction to commit\']" = "2"
+--source include/assert.inc
+--let $assert_text = There have 0 workers waiting preceding transaction to commit 
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for preceding transaction to commit\']" = "0"
+--source include/assert.inc
+--let $assert_text = There have 13 workers idle
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Waiting for an event from Coordinator\']" = "13"
+--source include/assert.inc
+--let $assert_text = SQL thread is waiting for more updates
+--let $assert_cond = "[SELECT COUNT(*) FROM INFORMATION_SCHEMA.processlist WHERE STATE = \'Replica has read all relay log; waiting for more updates\']" = "1"
+--source include/assert.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--echo # connect conn2_1 
+connection conn2_1;
+LOCK TABLE t1 READ;
+UNLOCK TABLES;
+--source include/rpl/connection_source.inc
+--source include/rpl/sync_to_replica.inc
+--source include/rpl/connection_replica.inc
+SELECT * FROM t1;
+SELECT * FROM t2;
+--source include/rpl/stop_replica.inc
+
+
+#
+# Cleanup
+#
+--source include/rpl/connection_replica.inc
+SET GLOBAL replica_parallel_workers = @save_replica_parallel_workers;
+SET GLOBAL replica_parallel_wait_mode = @save_replica_parallel_wait_mode;
+SET GLOBAL replica_preserve_commit_order = @save_replica_preserve_commit_order;
+--source include/rpl/start_replica.inc
+--source include/rpl/connection_source.inc
+DROP TABLE t1;
+DROP TABLE t2;
+--source include/rpl/sync_to_replica.inc
+--source include/rpl/deinit.inc

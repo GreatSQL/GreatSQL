@@ -1,0 +1,812 @@
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--let $rpl_topology = 1->2
+--let $use_gtids = 1
+--source include/rpl/init.inc
+
+--echo [connection server_1]
+--connection server_1
+SET sql_log_bin=OFF;
+call mtr.add_suppression("Waiting for prepared transaction to exit");
+call mtr.add_suppression("Client: Clone blocked XA operation too long");
+SET sql_log_bin=ON;
+--echo [connection server_2]
+--connection server_2
+SET sql_log_bin=OFF;
+call mtr.add_suppression("Waiting for prepared transaction to exit");
+call mtr.add_suppression("Client: Clone blocked XA operation too long");
+call mtr.add_suppression("Replica SQL for channel.*XA PREPARE operation is blocked timeout by clone");
+call mtr.add_suppression("Replica SQL for channel.*XA COMMIT operation is blocked timeout by clone");
+call mtr.add_suppression("Replica SQL for channel.*XA ROLLBACK operation is blocked timeout by clone");
+SET sql_log_bin=ON;
+
+--echo [connection server_1]
+--connection server_1
+CREATE TABLE t1 (c1 INT, c2 INT);
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+SELECT * FROM t1;
+
+--echo [connection server_1]
+--connection server_1
+INSTALL PLUGIN clone SONAME 'mysql_clone.so';
+SET GLOBAL clone_data_recovery_mode=CLONE_DATA_RECOVERY_BINLOG_POSITION;
+--echo [connection server_2]
+--connection server_2
+INSTALL PLUGIN clone SONAME 'mysql_clone.so';
+SET GLOBAL clone_data_recovery_mode=CLONE_DATA_RECOVERY_BINLOG_POSITION;
+
+connect (conn2_1,127.0.0.1,root,,test,$SLAVE_MYPORT,);
+connect (conn2_2,127.0.0.1,root,,test,$SLAVE_MYPORT,);
+
+--echo ## test XA block timeout on slave side
+--echo ## First, test XA PREPARE blocked by clone
+--echo [connection server_2]
+--connection server_2
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+
+--echo [1. do clone and wait before synchronize_binlog]
+--echo [connect conn2_1]
+connection conn2_1;
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/clone_data
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+send_eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR';
+--echo [connection server_2]
+--connection server_2
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+
+--echo [2. commit a big transaction, which engine prepared, but not finish yet]
+--echo [connect conn2_2]
+connection conn2_2;
+BEGIN;
+INSERT INTO t1 VALUES (10,10);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+send COMMIT;
+--echo [connection server_2]
+--connection server_2
+SET debug_sync='now wait_for clone_trx_prepared';
+
+--echo [3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+--echo [connection server_2]
+--connection server_2
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+
+--echo [4. now, XA PREPARE from master server]
+--echo [connection server_2]
+--connection server_2
+SET GLOBAL debug='+d,error_on_xa_blocked_timeout';
+--echo [connection server_1]
+--connection server_1
+XA START '1';
+INSERT INTO t1 VALUES (1,1);
+XA END '1';
+XA PREPARE '1';
+
+--echo [5. XA PREPARE in slave will hang and timeout]
+--echo [connection server_2]
+--connection server_2
+--let $wait_condition=select count(*)=1 from information_schema.processlist where state='Executing event' and time > 5
+--source include/wait_condition.inc
+SELECT user, command, state, info FROM information_schema.processlist WHERE state='Executing event';
+SET debug_sync='now wait_for xa_blocked_timeout_retry_start';
+
+--echo [6. check errorlog]
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_text= XA PREPARE is blocked timeout 
+--let $assert_select= Client: Clone blocked XA operation too long
+--let $assert_count= 1
+--source include/assert_grep.inc
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_text= XA PREPARE transaction is error 
+--let $assert_select= .*XA PREPARE operation is blocked timeout by clone.* 
+--let $assert_count= 1
+--source include/assert_grep.inc
+
+--echo [7. now, the big transaction finish commit, and clone progress will finish]
+--echo [connection server_2]
+--connection server_2
+SET debug_sync='now signal clone_trx_commit_continue';
+--echo [connect conn2_2]
+connection conn2_2;
+reap;
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+--echo [connect conn2_1]
+connection conn2_1;
+reap;
+--echo [connection server_2]
+--connection server_2
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,error_on_xa_blocked_timeout';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+SET debug_sync='now signal xa_blocked_timeout_retry_continue';
+--force-rmdir $CLONE_DATADIR
+
+--echo [8. check XA PREPARE transaction finish]
+--echo [connection server_1]
+--connection server_1
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+XA RECOVER;
+--echo [connection server_1]
+--connection server_1
+XA COMMIT '1';
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+SELECT * FROM t1;
+
+--echo ## Secondary, test XA COMMIT blocked by clone
+--echo [connection server_1]
+--connection server_1
+XA START '2';
+INSERT INTO t1 VALUES (2,2);
+XA END '2';
+XA PREPARE '2';
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+XA RECOVER;
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+
+--echo [1. do clone and wait before synchronize_binlog]
+--echo [connect conn2_1]
+connection conn2_1;
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/clone_data
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+send_eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR';
+--echo [connection server_2]
+--connection server_2
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+
+--echo [2. commit a big transaction, which engine prepared, but not finish yet]
+--echo [connect conn2_2]
+connection conn2_2;
+BEGIN;
+INSERT INTO t1 VALUES (20,20);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+send COMMIT;
+--echo [connection server_2]
+--connection server_2
+SET debug_sync='now wait_for clone_trx_prepared';
+
+--echo [3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+--echo [connection server_2]
+--connection server_2
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+
+--echo [4. now, XA COMMIT from master server]
+--echo [connection server_2]
+--connection server_2
+SET GLOBAL debug='+d,error_on_xa_blocked_timeout';
+--echo [connection server_1]
+--connection server_1
+XA COMMIT '2';
+
+--echo [5. XA COMMIT in slave will hang and timeout]
+--echo [connection server_2]
+--connection server_2
+--let $wait_condition=select count(*)=1 from information_schema.processlist where info like '%XA COMMIT%' and time > 5
+--source include/wait_condition.inc
+SELECT user, command, state, info FROM information_schema.processlist WHERE info LIKE '%XA COMMIT%';
+SET debug_sync='now wait_for xa_blocked_timeout_retry_start';
+
+--echo [6. check errorlog]
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_text= XA COMMIT is blocked timeout 
+--let $assert_select= Client: Clone blocked XA operation too long
+--let $assert_count= 2
+--source include/assert_grep.inc
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_text= XA COMMIT transaction is error 
+--let $assert_select= .*XA COMMIT operation is blocked timeout by clone.* 
+--let $assert_count= 1
+--source include/assert_grep.inc
+
+--echo [7. now, the big transaction finish commit, and clone progress will finish]
+--echo [connection server_2]
+--connection server_2
+SET debug_sync='now signal clone_trx_commit_continue';
+--echo [connect conn2_2]
+connection conn2_2;
+reap;
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+--echo [connect conn2_1]
+connection conn2_1;
+reap;
+--echo [connection server_2]
+--connection server_2
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,error_on_xa_blocked_timeout';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+SET debug_sync='now signal xa_blocked_timeout_retry_continue';
+--force-rmdir $CLONE_DATADIR
+
+--echo [8. check XA COMMIT transaction finish]
+--echo [connection server_1]
+--connection server_1
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+XA RECOVER;
+SELECT * FROM t1;
+
+--echo ## Third, test XA ROLLBACK blocked by clone
+--echo [connection server_1]
+--connection server_1
+XA START '3';
+INSERT INTO t1 VALUES (3,3);
+XA END '3';
+XA PREPARE '3';
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+XA RECOVER;
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+
+--echo [1. do clone and wait before synchronize_binlog]
+--echo [connect conn2_1]
+connection conn2_1;
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/clone_data
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+send_eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR';
+--echo [connection server_2]
+--connection server_2
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+
+--echo [2. commit a big transaction, which engine prepared, but not finish yet]
+--echo [connect conn2_2]
+connection conn2_2;
+BEGIN;
+INSERT INTO t1 VALUES (30,30);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+send COMMIT;
+--echo [connection server_2]
+--connection server_2
+SET debug_sync='now wait_for clone_trx_prepared';
+
+--echo [3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+--echo [connection server_2]
+--connection server_2
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+
+--echo [4. now, XA ROLLBACK from master server]
+--echo [connection server_2]
+--connection server_2
+SET GLOBAL debug='+d,error_on_xa_blocked_timeout';
+--echo [connection server_1]
+--connection server_1
+XA ROLLBACK '3';
+
+--echo [5. XA ROLLBACK in slave will hang and timeout]
+--echo [connection server_2]
+--connection server_2
+--let $wait_condition=select count(*)=1 from information_schema.processlist where info like '%XA ROLLBACK%' and time > 5
+--source include/wait_condition.inc
+SELECT user, command, state, info FROM information_schema.processlist WHERE info LIKE '%XA ROLLBACK%';
+SET debug_sync='now wait_for xa_blocked_timeout_retry_start';
+
+--echo [6. check errorlog]
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_text= XA ROLLBACK is blocked timeout 
+--let $assert_select= Client: Clone blocked XA operation too long
+--let $assert_count= 3
+--source include/assert_grep.inc
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_text= XA ROLLBACK transaction is error 
+--let $assert_select= .*XA ROLLBACK operation is blocked timeout by clone.* 
+--let $assert_count= 1
+--source include/assert_grep.inc
+
+--echo [7. now, the big transaction finish commit, and clone progress will finish]
+--echo [connection server_2]
+--connection server_2
+SET debug_sync='now signal clone_trx_commit_continue';
+--echo [connect conn2_2]
+connection conn2_2;
+reap;
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+--echo [connect conn2_1]
+connection conn2_1;
+reap;
+--echo [connection server_2]
+--connection server_2
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,error_on_xa_blocked_timeout';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+SET debug_sync='now signal xa_blocked_timeout_retry_continue';
+--force-rmdir $CLONE_DATADIR
+
+--echo [8. check XA ROLLBACK transaction finish]
+--echo [connection server_1]
+--connection server_1
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+XA RECOVER;
+SELECT * FROM t1;
+
+--echo ## test XA block timeout on master side
+connect (conn1_1,127.0.0.1,root,,test,$MASTER_MYPORT,);
+connect (conn1_2,127.0.0.1,root,,test,$MASTER_MYPORT,);
+connect (conn1_3,127.0.0.1,root,,test,$MASTER_MYPORT,);
+--echo [connection server_1]
+--connection server_1
+TRUNCATE TABLE t1;
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+SELECT * FROM t1;
+
+--echo ## First, test XA PREPARE block by clone
+--echo [connection server_1]
+--connection server_1
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+
+--echo [1. do clone and wait before synchronize_binlog]
+--echo [connect conn1_1]
+connection conn1_1;
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/clone_data
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+send_eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR';
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+
+--echo [2. commit a big transaction, which engine prepared, but not finish yet]
+--echo [connect conn1_2]
+connection conn1_2;
+BEGIN;
+INSERT INTO t1 VALUES (1,1);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+send COMMIT;
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now wait_for clone_trx_prepared';
+
+--echo [3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+
+--echo [4. now, do XA PREPARE, it will timeout and error]
+--echo [connect conn1_3]
+connection conn1_3;
+XA START '1';
+INSERT INTO t1 VALUES (10,10);
+XA END '1';
+--error ER_XA_BLOCK_TIMEOUT_CLONE
+XA PREPARE '1';
+XA RECOVER;
+
+--echo [5. check errorlog]
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_text= XA PREPARE is blocked timeout 
+--let $assert_select= Client: Clone blocked XA operation too long
+--let $assert_count= 1
+--source include/assert_grep.inc
+
+--echo [6. now, the big transaction finish commit, and clone progress will finish]
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now signal clone_trx_commit_continue';
+--echo [connect conn1_2]
+connection conn1_2;
+reap;
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+--echo [connect conn1_1]
+connection conn1_1;
+reap;
+--echo [connection server_1]
+--connection server_1
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+--force-rmdir $CLONE_DATADIR
+
+--echo [7. check connection can still do next transaction]
+--echo [connect conn1_3]
+connection conn1_3;
+XA START '1';
+INSERT INTO t1 VALUES (11,11);
+XA END '1';
+XA PREPARE '1';
+XA RECOVER;
+XA COMMIT '1';
+SELECT * FROM t1;
+--echo [connection server_1]
+--connection server_1
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+SELECT * FROM t1;
+
+--echo ## Secondary, test attached XA COMMIT block by clone
+--echo [connection server_1]
+--connection server_1
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+
+--echo [connect conn1_3]
+connection conn1_3;
+SET SESSION xa_detach_on_prepare=OFF;
+XA START '2';
+INSERT INTO t1 VALUES (20,20);
+XA END '2';
+XA PREPARE '2';
+XA RECOVER;
+
+--echo [1. do clone and wait before synchronize_binlog]
+--echo [connect conn1_1]
+connection conn1_1;
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/clone_data
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+send_eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR';
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+
+--echo [2. commit a big transaction, which engine prepared, but not finish yet]
+--echo [connect conn1_2]
+connection conn1_2;
+BEGIN;
+INSERT INTO t1 VALUES (2,2);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+send COMMIT;
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now wait_for clone_trx_prepared';
+
+--echo [3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+
+--echo [4. now, do XA COMMIT, it will timeout and error]
+--echo [connect conn1_3]
+connection conn1_3;
+--error ER_XA_BLOCK_TIMEOUT_CLONE
+XA COMMIT '2';
+XA RECOVER;
+--error ER_XAER_RMFAIL
+SELECT * FROM t1;
+
+--echo [5. check errorlog]
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_text= XA COMMIT is blocked timeout 
+--let $assert_select= Client: Clone blocked XA operation too long
+--let $assert_count= 2
+--source include/assert_grep.inc
+
+--echo [6. now, the big transaction finish commit, and clone progress will finish]
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now signal clone_trx_commit_continue';
+--echo [connect conn1_2]
+connection conn1_2;
+reap;
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+--echo [connect conn1_1]
+connection conn1_1;
+reap;
+--echo [connection server_1]
+--connection server_1
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+--force-rmdir $CLONE_DATADIR
+
+--echo [7. check connection can still do next transaction]
+--echo [connect conn1_3]
+connection conn1_3;
+XA COMMIT '2';
+SELECT * FROM t1;
+XA START '2_2';
+INSERT INTO t1 VALUES (21,21);
+XA END '2_2';
+XA PREPARE '2_2';
+XA RECOVER;
+XA COMMIT '2_2';
+SELECT * FROM t1;
+--echo [connection server_1]
+--connection server_1
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+SELECT * FROM t1;
+
+--echo ## Third, test attached XA ROLLBACK block by clone
+--echo [connection server_1]
+--connection server_1
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+
+--echo [connect conn1_3]
+connection conn1_3;
+SET SESSION xa_detach_on_prepare=OFF;
+XA START '3';
+INSERT INTO t1 VALUES (30,30);
+XA END '3';
+XA PREPARE '3';
+XA RECOVER;
+
+--echo [1. do clone and wait before synchronize_binlog]
+--echo [connect conn1_1]
+connection conn1_1;
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/clone_data
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+send_eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR';
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+
+--echo [2. commit a big transaction, which engine prepared, but not finish yet]
+--echo [connect conn1_2]
+connection conn1_2;
+BEGIN;
+INSERT INTO t1 VALUES (3,3);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+send COMMIT;
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now wait_for clone_trx_prepared';
+
+--echo [3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+
+--echo [4. now, do XA COMMIT, it will timeout and error]
+--echo [connect conn1_3]
+connection conn1_3;
+--error ER_XA_BLOCK_TIMEOUT_CLONE
+XA ROLLBACK '3';
+XA RECOVER;
+--error ER_XAER_RMFAIL
+SELECT * FROM t1;
+
+--echo [5. check errorlog]
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_text= XA ROLLBACK is blocked timeout 
+--let $assert_select= Client: Clone blocked XA operation too long
+--let $assert_count= 3
+--source include/assert_grep.inc
+
+--echo [6. now, the big transaction finish commit, and clone progress will finish]
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now signal clone_trx_commit_continue';
+--echo [connect conn1_2]
+connection conn1_2;
+reap;
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+--echo [connect conn1_1]
+connection conn1_1;
+reap;
+--echo [connection server_1]
+--connection server_1
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+--force-rmdir $CLONE_DATADIR
+
+--echo [7. check connection can still do next transaction]
+--echo [connect conn1_3]
+connection conn1_3;
+XA ROLLBACK '3';
+SELECT * FROM t1;
+XA START '3_3';
+INSERT INTO t1 VALUES (31,31);
+XA END '3_3';
+XA PREPARE '3_3';
+XA RECOVER;
+XA ROLLBACK '3_3';
+SELECT * FROM t1;
+--echo [connection server_1]
+--connection server_1
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+SELECT * FROM t1;
+
+--echo ## Forth, test dettached XA COMMIT block by clone
+--echo [connection server_1]
+--connection server_1
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+
+--echo [connect conn1_3]
+connection conn1_3;
+SET SESSION xa_detach_on_prepare=ON;
+XA START '4';
+INSERT INTO t1 VALUES (40,40);
+XA END '4';
+XA PREPARE '4';
+XA RECOVER;
+
+--echo [1. do clone and wait before synchronize_binlog]
+--echo [connect conn1_1]
+connection conn1_1;
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/clone_data
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+send_eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR';
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+
+--echo [2. commit a big transaction, which engine prepared, but not finish yet]
+--echo [connect conn1_2]
+connection conn1_2;
+BEGIN;
+INSERT INTO t1 VALUES (4,4);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+send COMMIT;
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now wait_for clone_trx_prepared';
+
+--echo [3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+
+--echo [4. now, do XA COMMIT, it will timeout and error]
+--echo [connect conn1_3]
+connection conn1_3;
+--error ER_XA_BLOCK_TIMEOUT_CLONE
+XA COMMIT '4';
+XA RECOVER;
+SELECT * FROM t1;
+
+--echo [5. check errorlog]
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_text= XA COMMIT is blocked timeout 
+--let $assert_select= Client: Clone blocked XA operation too long
+--let $assert_count= 4
+--source include/assert_grep.inc
+
+--echo [6. now, the big transaction finish commit, and clone progress will finish]
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now signal clone_trx_commit_continue';
+--echo [connect conn1_2]
+connection conn1_2;
+reap;
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+--echo [connect conn1_1]
+connection conn1_1;
+reap;
+--echo [connection server_1]
+--connection server_1
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+--force-rmdir $CLONE_DATADIR
+
+--echo [7. check connection can still do next transaction]
+--echo [connect conn1_3]
+connection conn1_3;
+XA COMMIT '4';
+SELECT * FROM t1;
+XA START '4_4';
+INSERT INTO t1 VALUES (41,41);
+XA END '4_4';
+XA PREPARE '4_4';
+XA RECOVER;
+XA COMMIT '4_4';
+SELECT * FROM t1;
+--echo [connection server_1]
+--connection server_1
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+SELECT * FROM t1;
+
+--echo ## Fifth, test dettached XA ROLLBACK block by clone
+--echo [connection server_1]
+--connection server_1
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+
+--echo [connect conn1_3]
+connection conn1_3;
+SET SESSION xa_detach_on_prepare=ON;
+XA START '5';
+INSERT INTO t1 VALUES (50,50);
+XA END '5';
+XA PREPARE '5';
+XA RECOVER;
+
+--echo [1. do clone and wait before synchronize_binlog]
+--echo [connect conn1_1]
+connection conn1_1;
+--let $CLONE_DATADIR = $MYSQL_TMP_DIR/clone_data
+--replace_result $CLONE_DATADIR CLONE_DATADIR
+send_eval CLONE LOCAL DATA DIRECTORY = '$CLONE_DATADIR';
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+
+--echo [2. commit a big transaction, which engine prepared, but not finish yet]
+--echo [connect conn1_2]
+connection conn1_2;
+BEGIN;
+INSERT INTO t1 VALUES (5,5);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+send COMMIT;
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now wait_for clone_trx_prepared';
+
+--echo [3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+
+--echo [4. now, do XA COMMIT, it will timeout and error]
+--echo [connect conn1_3]
+connection conn1_3;
+--error ER_XA_BLOCK_TIMEOUT_CLONE
+XA ROLLBACK '5';
+XA RECOVER;
+SELECT * FROM t1;
+
+--echo [5. check errorlog]
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_text= XA ROLLBACK is blocked timeout 
+--let $assert_select= Client: Clone blocked XA operation too long
+--let $assert_count= 5
+--source include/assert_grep.inc
+
+--echo [6. now, the big transaction finish commit, and clone progress will finish]
+--echo [connection server_1]
+--connection server_1
+SET debug_sync='now signal clone_trx_commit_continue';
+--echo [connect conn1_2]
+connection conn1_2;
+reap;
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+--echo [connect conn1_1]
+connection conn1_1;
+reap;
+--echo [connection server_1]
+--connection server_1
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+--force-rmdir $CLONE_DATADIR
+
+--echo [7. check connection can still do next transaction]
+--echo [connect conn1_3]
+connection conn1_3;
+XA ROLLBACK '5';
+SELECT * FROM t1;
+XA START '5_5';
+INSERT INTO t1 VALUES (51,51);
+XA END '5_5';
+XA PREPARE '5_5';
+XA RECOVER;
+XA ROLLBACK '5_5';
+SELECT * FROM t1;
+--echo [connection server_1]
+--connection server_1
+--source include/rpl/sync.inc
+--echo [connection server_2]
+--connection server_2
+SELECT * FROM t1;
+
+
+--disconnect conn1_1
+--disconnect conn1_2
+--disconnect conn1_3
+--disconnect conn2_1
+--disconnect conn2_2
+--echo [connection server_1]
+--connection server_1
+DROP TABLE t1;
+--source include/rpl/sync.inc
+UNINSTALL PLUGIN clone;
+--echo [connection server_2]
+--connection server_2
+UNINSTALL PLUGIN clone;
+--source include/rpl/deinit.inc

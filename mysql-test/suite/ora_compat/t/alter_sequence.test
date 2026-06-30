@@ -1,0 +1,219 @@
+--echo
+--echo [### create sequence]
+
+create sequence seq_err start with 2 increment by 2 minvalue -1000 maxvalue 1000000 cycle cache 10 order;
+
+select * from mysql.greatdb_sequences order by db,name;
+select * from mysql.greatdb_sequences_persist order by db,name;
+
+--echo [### not support alter start with value]
+--error ER_GDB_ALTER_SEQUENCE
+alter sequence seq_err start with 100;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err start with 100 start with 100;
+
+--echo [### test duplicate options]
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err increment by 2 increment by 12;
+
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err minvalue 10000 minvalue 20000;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err minvalue 10000 nominvalue;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err nominvalue nominvalue;
+
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err maxvalue 4 maxvalue 41;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err maxvalue 10000 maxvalue 20000;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err maxvalue 10000 nomaxvalue;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq nomaxvalue nomaxvalue;
+
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err cycle cycle;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err cycle nocycle;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err nocycle nocycle;
+
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err cache 10 cache 100;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err cache 10 nocache;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err nocache nocache;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err order order;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err order noorder;
+--error ER_GDB_SEQUENCE_DUPLICATE_OPTION
+alter sequence seq_err noorder noorder;
+
+--error ER_PARSE_ERROR
+alter sequence seq_err;
+
+--echo
+--echo [### alter sequence]
+--error ER_GDB_READ_SEQUENCE
+select seq_err.currval;
+select seq_err.nextval;
+select seq_err.nextval;
+select seq_err.nextval;
+alter sequence seq_err increment by 4;
+select seq_err.currval;
+select seq_err.nextval;
+select seq_err.nextval;
+select seq_err.nextval;
+--error ER_GDB_ALTER_SEQUENCE
+alter sequence seq_err minvalue 100;
+select seq_err.currval;
+select seq_err.nextval;
+select seq_err.nextval;
+select seq_err.nextval;
+alter sequence seq_err maxvalue 4000000;
+select seq_err.currval;
+select seq_err.nextval;
+select seq_err.nextval;
+select seq_err.nextval;
+drop sequence seq_err;
+
+--echo [###test duplciated attributes]
+create sequence seq1 start with 3 increment by 4 minvalue 1 maxvalue 50 cycle cache 10 order;
+select seq1.nextval;
+select seq1.currval;
+alter sequence seq1 increment by 4;
+alter sequence seq1 minvalue 1;
+alter sequence seq1 maxvalue 50;
+alter sequence seq1 cycle;
+alter sequence seq1 cache 10;
+alter sequence seq1 order;
+alter sequence seq1 increment by 4 minvalue 1;
+alter sequence seq1 increment by 4 minvalue 1 maxvalue 50;
+alter sequence seq1 increment by 4 minvalue 1 maxvalue 50 cycle;
+alter sequence seq1 increment by 4 minvalue 1 maxvalue 50 cycle cache 10;
+alter sequence seq1 increment by 4 minvalue 1 maxvalue 50 cycle cache 10 order;
+alter sequence seq1 minvalue 1 maxvalue 50;
+alter sequence seq1 minvalue 1 maxvalue 50 cycle;
+alter sequence seq1 minvalue 1 maxvalue 50 cycle cache 10;
+alter sequence seq1 minvalue 1 maxvalue 50 cycle cache 10 order;
+alter sequence seq1 maxvalue 50 cycle;
+alter sequence seq1 maxvalue 50 cycle cache 10;
+alter sequence seq1 maxvalue 50 cycle cache 10 order;
+alter sequence seq1 cycle;
+alter sequence seq1 cycle cache 10;
+alter sequence seq1 cycle cache 10 order;
+drop sequence seq1;
+
+--echo
+--echo [###test cycle]
+create sequence seq1 start with 3 increment by 4 minvalue 1 maxvalue 100 cycle cache 2 order;
+select seq1.nextval;
+select seq1.currval;
+select seq1.nextval;
+select seq1.nextval;
+alter sequence seq1 maxvalue 11;
+select seq1.currval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+drop sequence seq1;
+
+--echo
+--echo [###test nocycle]
+create sequence seq1 start with 3 increment by 4 minvalue 1 maxvalue 10 nocycle cache 10 order;
+select seq1.nextval;
+select seq1.currval;
+select seq1.nextval;
+--error ER_GDB_READ_SEQUENCE
+select seq1.nextval;
+drop sequence seq1;
+
+--echo
+--echo [###test nocycle --> cycle]
+create sequence seq1 start with 3 increment by 4 minvalue 1 maxvalue 10 nocycle cache 10 order;
+select seq1.nextval;
+select seq1.currval;
+select seq1.nextval;
+--error ER_GDB_READ_SEQUENCE
+select seq1.nextval;
+alter sequence seq1 cycle maxvalue 40;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+drop sequence seq1;
+
+--echo
+--echo [###test cycle --> nocycle]
+create sequence seq1 start with 3 increment by 4 minvalue 1 maxvalue 10 cycle cache 2 order;
+select seq1.nextval;
+select seq1.currval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+alter sequence seq1 nocycle;
+select seq1.currval;
+--error ER_GDB_READ_SEQUENCE
+select seq1.nextval;
+
+drop sequence seq1;
+
+--echo
+--echo [###test cache && nocache]
+create sequence seq1 start with 2 increment by 4 minvalue 1 maxvalue 10 cycle cache 2 order;
+select seq1.nextval;
+select seq1.currval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+alter sequence seq1 maxvalue 20;
+select seq1.currval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+alter sequence seq1 nocache;
+select seq1.currval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+drop sequence seq1;
+
+--echo
+--echo [###test cache <-- && --> nocache]
+create sequence seq1 start with 2 increment by 4 minvalue 1 maxvalue 10 cycle cache 2 order;
+select seq1.nextval;
+select seq1.currval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+alter sequence seq1 maxvalue 100 nocache;
+select seq1.currval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+alter sequence seq1 maxvalue 20 nocache;
+select seq1.currval;
+select seq1.nextval;
+select seq1.nextval;
+select seq1.nextval;
+drop sequence seq1;
+
+--echo
+--echo [###test alter cache less than on cycle]
+create sequence seq1 minvalue 0 maxvalue 5 cycle start with 3 increment by -2 cache 3;
+--error ER_GDB_ALTER_SEQUENCE
+alter sequence seq1 minvalue 1;
+drop sequence seq1;
+create sequence seq1 minvalue 0 maxvalue 5 cycle start with 3 increment by 2 cache 3;
+--error ER_GDB_ALTER_SEQUENCE
+alter sequence seq1 minvalue 1;
+drop sequence seq1;

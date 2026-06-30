@@ -1,0 +1,53 @@
+--source include/not_valgrind.inc
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/have_binlog_format_row.inc
+
+call mtr.add_suppression("Found 1 prepared XA transactions");
+
+--connect(con1, localhost, root,,)
+--connection con1
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+INSERT INTO t1 VALUES (1,1);
+
+XA START 'xid1';
+INSERT INTO t1 VALUES (2,2);
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+XA END 'xid1';
+
+--let $auxiliary_connection = default
+--let $statement_connection = con1
+--let $statement = XA PREPARE 'xid1'
+--let $sync_point = before_set_prepared_in_tc
+--source include/execute_to_conditional_timestamp_sync_point.inc
+--source include/kill_mysqld.inc
+--source include/start_mysqld.inc
+
+--connect(con2, localhost, root,,)
+--connection con2
+XA COMMIT 'xid1';
+SELECT * FROM t1;
+
+XA START 'xid2';
+INSERT INTO t1 VALUES (3,3);
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+XA END 'xid2';
+
+--let $auxiliary_connection = default
+--let $statement_connection = con2
+--let $statement = XA PREPARE 'xid2'
+--let $sync_point = before_set_prepared_in_tc
+--source include/execute_to_conditional_timestamp_sync_point.inc
+--source include/kill_mysqld.inc
+--source include/start_mysqld.inc
+# crash again
+--source include/kill_mysqld.inc
+--source include/start_mysqld.inc
+
+--connect(con3, localhost, root,,)
+--connection con3
+XA COMMIT 'xid2';
+SELECT * FROM t1;
+
+#cleanup
+DROP TABLE t1;

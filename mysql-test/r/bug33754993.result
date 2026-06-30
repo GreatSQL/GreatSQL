@@ -1,0 +1,44 @@
+[#test offical fix of bug33754993]
+
+commit aed590bce0786cec44eb0fd5587aadb4a91e6503
+Author: Roy Lyseng <roy.lyseng@oracle.com>
+Date:   Fri May 6 08:22:39 2022 +0200
+
+Bug#33754993: crash in Item_ref::check_cols after function execution
+
+create database test2 CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+use test2;
+CREATE TABLE t1 (
+T006 varchar(12) DEFAULT NULL,
+T007 varchar(12) DEFAULT NULL
+)CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE  PROCEDURE p1()
+BEGIN
+declare scType varchar(12);
+set scType='012001';
+create temporary  table if not exists temp1 
+select * from t1 b  where b.T006="001001" and b.T007=scType ;
+END$$
+call p1;
+ERROR HY000: Illegal mix of collations (utf8mb4_0900_ai_ci,IMPLICIT) and (utf8mb4_general_ci,IMPLICIT) for operation '='
+call p1;
+ERROR HY000: Illegal mix of collations (utf8mb4_0900_ai_ci,IMPLICIT) and (utf8mb4_general_ci,IMPLICIT) for operation '='
+drop procedure p1;
+drop table t1;
+drop database test2;
+
+[#test introduced bug by above fix]
+use test;
+create table t1(c1 int);
+create procedure p1 ()
+begin
+set @mxt=(select max(c1) from t1); 
+end$$
+call p1;
+drop table t1;
+call p1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+create table t1(c1 int);
+call p1;
+drop procedure p1;
+drop table t1;

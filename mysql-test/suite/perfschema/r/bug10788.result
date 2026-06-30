@@ -1,0 +1,58 @@
+con1
+create table test.t_range(id int primary key, val int) partition by range(id) (partition p0 values less than(100), partition p1 values less than(200));
+set debug='+d,gdb_mdl_upgrade_or_downgrade';
+alter table test.t_range drop partition p1;
+con2
+set DEBUG_SYNC = 'now WAIT_FOR gdb_mdl_upgrade_begin';
+select OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS from performance_schema.metadata_locks where OBJECT_NAME like 't_range' and OBJECT_TYPE='TABLE';
+OBJECT_TYPE	OBJECT_SCHEMA	OBJECT_NAME	LOCK_TYPE	LOCK_STATUS
+TABLE	test	t_range	SHARED_UPGRADABLE	GRANTED
+TABLE	test	t_range	SHARED	GRANTED
+set DEBUG_SYNC = 'now SIGNAL gdb_mdl_upgrade_continue WAIT_FOR gdb_mdl_downgrade_begin';
+select OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS from performance_schema.metadata_locks where OBJECT_NAME like 't_range' and OBJECT_TYPE='TABLE';
+OBJECT_TYPE	OBJECT_SCHEMA	OBJECT_NAME	LOCK_TYPE	LOCK_STATUS
+TABLE	test	t_range	EXCLUSIVE	GRANTED
+TABLE	test	t_range	SHARED	GRANTED
+set DEBUG_SYNC = 'now SIGNAL gdb_mdl_downgrade_continue WAIT_FOR gdb_mdl_downgrade_end';
+select OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS from performance_schema.metadata_locks where OBJECT_NAME like 't_range' and OBJECT_TYPE='TABLE';
+OBJECT_TYPE	OBJECT_SCHEMA	OBJECT_NAME	LOCK_TYPE	LOCK_STATUS
+TABLE	test	t_range	SHARED_UPGRADABLE	GRANTED
+TABLE	test	t_range	SHARED	GRANTED
+set DEBUG_SYNC = 'now SIGNAL gdb_mdl_downgrade_continue';
+con1
+set debug='-d,gdb_mdl_upgrade_or_downgrade';
+select OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS from performance_schema.metadata_locks where OBJECT_NAME like 't_range' and OBJECT_TYPE='TABLE';
+OBJECT_TYPE	OBJECT_SCHEMA	OBJECT_NAME	LOCK_TYPE	LOCK_STATUS
+CREATE TABLE test.test1(a INT NOT NULL, b CHAR(2) NOT NULL, PRIMARY KEY(a, b)) ENGINE=INNODB;
+lock tables test.test1 write;
+SELECT OBJECT_TYPE, OBJECT_NAME, LOCK_TYPE, LOCK_DURATION, LOCK_STATUS FROM performance_schema.metadata_locks WHERE OBJECT_TYPE = 'table' AND OBJECT_SCHEMA = 'test' OR       OBJECT_TYPE = 'tablespace' ORDER BY OBJECT_NAME;
+OBJECT_TYPE	OBJECT_NAME	LOCK_TYPE	LOCK_DURATION	LOCK_STATUS
+TABLESPACE	test/test1	INTENTION_EXCLUSIVE	TRANSACTION	GRANTED
+TABLE	test1	SHARED_NO_READ_WRITE	TRANSACTION	GRANTED
+alter table test.test1 rename test.test1_tmp;
+SELECT OBJECT_TYPE, OBJECT_NAME, LOCK_TYPE, LOCK_DURATION, LOCK_STATUS FROM performance_schema.metadata_locks WHERE OBJECT_TYPE = 'table' AND OBJECT_SCHEMA = 'test' OR       OBJECT_TYPE = 'tablespace' ORDER BY OBJECT_NAME;
+OBJECT_TYPE	OBJECT_NAME	LOCK_TYPE	LOCK_DURATION	LOCK_STATUS
+TABLESPACE	test/test1_tmp	INTENTION_EXCLUSIVE	EXPLICIT	GRANTED
+TABLE	test1_tmp	SHARED_NO_READ_WRITE	EXPLICIT	GRANTED
+con2
+begin;
+show columns from test.test1_tmp;
+Field	Type	Null	Key	Default	Extra
+a	int	NO	PRI	NULL	
+b	char(2)	NO	PRI	NULL	
+SELECT OBJECT_TYPE, OBJECT_NAME, LOCK_TYPE, LOCK_DURATION, LOCK_STATUS FROM performance_schema.metadata_locks WHERE OBJECT_TYPE = 'table' AND OBJECT_SCHEMA = 'test' OR       OBJECT_TYPE = 'tablespace' ORDER BY OBJECT_NAME;
+OBJECT_TYPE	OBJECT_NAME	LOCK_TYPE	LOCK_DURATION	LOCK_STATUS
+TABLESPACE	test/test1_tmp	INTENTION_EXCLUSIVE	EXPLICIT	GRANTED
+TABLE	test1_tmp	SHARED_NO_READ_WRITE	EXPLICIT	GRANTED
+TABLE	test1_tmp	SHARED_HIGH_PRIO	TRANSACTION	GRANTED
+rollback;
+con1
+SELECT OBJECT_TYPE, OBJECT_NAME, LOCK_TYPE, LOCK_DURATION, LOCK_STATUS FROM performance_schema.metadata_locks WHERE OBJECT_TYPE = 'table' AND OBJECT_SCHEMA = 'test' OR       OBJECT_TYPE = 'tablespace' ORDER BY OBJECT_NAME;
+OBJECT_TYPE	OBJECT_NAME	LOCK_TYPE	LOCK_DURATION	LOCK_STATUS
+TABLESPACE	test/test1_tmp	INTENTION_EXCLUSIVE	EXPLICIT	GRANTED
+TABLE	test1_tmp	SHARED_NO_READ_WRITE	EXPLICIT	GRANTED
+unlock tables;
+SELECT OBJECT_TYPE, OBJECT_NAME, LOCK_TYPE, LOCK_DURATION, LOCK_STATUS FROM performance_schema.metadata_locks WHERE OBJECT_TYPE = 'table' AND OBJECT_SCHEMA = 'test' OR       OBJECT_TYPE = 'tablespace' ORDER BY OBJECT_NAME;
+OBJECT_TYPE	OBJECT_NAME	LOCK_TYPE	LOCK_DURATION	LOCK_STATUS
+drop table test.t_range;
+drop table test.test1_tmp;

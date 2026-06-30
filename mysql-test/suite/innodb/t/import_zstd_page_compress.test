@@ -1,0 +1,158 @@
+let $MYSQLD_DATADIR = `SELECT @@datadir`;
+LET $prev_innodb_file_per_table = `SELECT @@innodb_file_per_table`;
+SET GLOBAL innodb_file_per_table = ON;
+SELECT @@innodb_file_per_table;
+
+SELECT @@innodb_page_zstd_compression_level;
+
+CREATE TABLE t1 (a INT AUTO_INCREMENT PRIMARY KEY, b VARCHAR(1000)  NOT NULL, c VARCHAR(1024)  NOT NULL) ENGINE=innodb compression="ZSTD" ROW_FORMAT=DYNAMIC;
+SHOW CREATE TABLE t1;
+CREATE TABLE t2 (a INT AUTO_INCREMENT PRIMARY KEY, b VARCHAR(1000), c VARCHAR(1024) DEFAULT "c_default",  d VARCHAR(1024) DEFAULT NULL) ENGINE=innodb compression="ZSTD" ROW_FORMAT=DYNAMIC; 
+SHOW CREATE TABLE t2;
+
+INSERT INTO t1 (`b`,`c`)  VALUES (REPEAT('file', 100), REPEAT('PAGE', 200)), (REPEAT('docu', 100), REPEAT('segm', 200));
+
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+INSERT INTO t1(`b`,`c`) SELECT `b`, `c` FROM t1;
+FLUSH TABLE t1 WITH READ LOCK;
+UNLOCK TABLES;
+CHECK TABLE t1;
+SELECT COUNT(*) FROM t1;
+
+
+OPTIMIZE TABLE t1;
+CHECK TABLE t1;
+SELECT COUNT(*) FROM t1;
+
+
+
+INSERT INTO t2(`b`) VALUES (REPEAT('testdefault', 90)), (REPEAT('testnull',120));
+
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+INSERT INTO t2(`b`) SELECT `b` FROM t2;
+FLUSH TABLE t2 WITH READ LOCK;
+UNLOCK TABLES;
+CHECK TABLE t2;
+SELECT COUNT(*) FROM t2;
+
+OPTIMIZE TABLE t2;
+CHECK TABLE t2;
+SELECT COUNT(*) FROM t2;
+
+
+
+--echo #
+--echo test export/import table with zstd page Compression
+--echo #
+
+
+FLUSH TABLES t1 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t1.ibd   $MYSQLD_DATADIR/test/t1e.ibd
+--copy_file $MYSQLD_DATADIR/test/t1.cfg   $MYSQLD_DATADIR/test/t1e.cfg 
+UNLOCK TABLES;
+
+ALTER TABLE t1 DISCARD TABLESPACE;
+--move_file $MYSQLD_DATADIR/test/t1e.ibd  $MYSQLD_DATADIR/test/t1.ibd
+--move_file $MYSQLD_DATADIR/test/t1e.cfg  $MYSQLD_DATADIR/test/t1.cfg
+ALTER TABLE t1 IMPORT TABLESPACE;
+CHECK TABLE t1;
+OPTIMIZE TABLE t1;
+CHECK TABLE t1;
+SELECT COUNT(*) FROM t1;
+
+
+
+FLUSH TABLES t2 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t2.ibd   $MYSQLD_DATADIR/test/t2e.ibd
+--copy_file $MYSQLD_DATADIR/test/t2.cfg   $MYSQLD_DATADIR/test/t2e.cfg 
+UNLOCK TABLES;
+
+ALTER TABLE t2 DISCARD TABLESPACE;
+--move_file $MYSQLD_DATADIR/test/t2e.ibd  $MYSQLD_DATADIR/test/t2.ibd
+--move_file $MYSQLD_DATADIR/test/t2e.cfg  $MYSQLD_DATADIR/test/t2.cfg
+ALTER TABLE t2 IMPORT TABLESPACE;
+CHECK TABLE t2;
+OPTIMIZE TABLE t2;
+CHECK TABLE t2;
+SELECT COUNT(*) FROM t2;
+
+
+
+--echo #
+--echo #  zstd page compression option NOT affect already exist zlib
+--echo #
+
+CREATE TABLE t3 (a INT AUTO_INCREMENT PRIMARY KEY, b VARCHAR(1000)  NOT NULL, c VARCHAR(1024)  NOT NULL) ENGINE=innodb compression="ZLIB" ROW_FORMAT=DYNAMIC;
+SHOW CREATE TABLE t3;
+INSERT INTO t3 (`b`,`c`)  VALUES (REPEAT('file', 100), REPEAT('PAGE', 200)), (REPEAT('docu', 100), REPEAT('segm', 200));
+
+INSERT INTO t3(`b`,`c`) SELECT `b`, `c` FROM t3;
+INSERT INTO t3(`b`,`c`) SELECT `b`, `c` FROM t3;
+INSERT INTO t3(`b`,`c`) SELECT `b`, `c` FROM t3;
+INSERT INTO t3(`b`,`c`) SELECT `b`, `c` FROM t3;
+INSERT INTO t3(`b`,`c`) SELECT `b`, `c` FROM t3;
+INSERT INTO t3(`b`,`c`) SELECT `b`, `c` FROM t3;
+INSERT INTO t3(`b`,`c`) SELECT `b`, `c` FROM t3;
+INSERT INTO t3(`b`,`c`) SELECT `b`, `c` FROM t3;
+INSERT INTO t3(`b`,`c`) SELECT `b`, `c` FROM t3;
+INSERT INTO t3(`b`,`c`) SELECT `b`, `c` FROM t3;
+INSERT INTO t3(`b`,`c`) SELECT `b`, `c` FROM t3;
+FLUSH TABLE t3 WITH READ LOCK;
+UNLOCK TABLES;
+CHECK TABLE t3;
+SELECT COUNT(*)  FROM t3;
+
+OPTIMIZE TABLE t3;
+CHECK TABLE t3;
+SELECT COUNT(*) FROM t3;
+
+FLUSH TABLES t3 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t3.ibd  $MYSQLD_DATADIR/test/t3e.ibd 
+--copy_file $MYSQLD_DATADIR/test/t3.cfg  $MYSQLD_DATADIR/test/t3e.cfg
+UNLOCK TABLES;
+
+ALTER TABLE t3 DISCARD TABLESPACE;
+
+--move_file $MYSQLD_DATADIR/test/t3e.ibd  $MYSQLD_DATADIR/test/t3.ibd 
+--move_file $MYSQLD_DATADIR/test/t3e.cfg  $MYSQLD_DATADIR/test/t3.cfg 
+
+ALTER TABLE t3 IMPORT TABLESPACE;
+CHECK TABLE t3;
+OPTIMIZE TABLE t3;
+CHECK TABLE t3;
+SELECT COUNT(*) FROM t3;
+
+
+eval SET GLOBAL INNODB_FILE_PER_TABLE=$prev_innodb_file_per_table;
+
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE t3;

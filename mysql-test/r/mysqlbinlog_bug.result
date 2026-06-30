@@ -1,0 +1,32 @@
+#
+# When using the mysqlbinlog tool to specify a database for filtering the binlog,
+# rows_query_log_event events from non-specified databases were not filtered out.
+#
+show variables like 'binlog_format';
+Variable_name	Value
+binlog_format	ROW
+reset binary logs and gtids;
+create database if not exists test1;
+create database if not exists test2;
+set session binlog_rows_query_log_events=on;
+use test1;
+create table t1 (c1 int, c2 int) engine=innodb;
+use test2;
+create table t2 (c1 int, c2 int) engine=innodb;
+insert into test1.t1 values (1,1);
+insert into test1.t1 values (2,2);
+insert into test1.t1 values (3,3);
+insert into test2.t2 values (1,1);
+insert into test2.t2 values (2,2);
+insert into test2.t2 values (3,3);
+flush logs;
+include/assert_grep.inc [Verify 'test2' is absent in test1.sql.]
+drop database test1;
+drop database test2;
+reset binary logs and gtids;
+select * from test1.t1;
+c1	c2
+1	1
+2	2
+3	3
+drop database test1;

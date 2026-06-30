@@ -1,0 +1,32 @@
+#
+# Bug#37061960: InnoDB redo recovery failure/corruption
+#               due to INSTANT DDL + InnoDB column limits
+#
+# Create a stored procedure to generate wide tables
+CREATE PROCEDURE create_table(table_name varchar(50), n_cols INT)
+BEGIN
+DECLARE i INT DEFAULT 1;
+SET @sql_text = CONCAT('CREATE TABLE ', table_name, ' (');
+WHILE (i <= n_cols) DO
+SET @sql_text = CONCAT(@sql_text, CONCAT('col_', i), ' INTEGER DEFAULT NULL');
+SET i = i + 1;
+IF (i <= n_cols) THEN
+SET @sql_text = CONCAT(@sql_text, ', ');
+END IF;
+END WHILE;
+SET @sql_text = CONCAT(@sql_text, ')');
+PREPARE stmt FROM @sql_text;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+END|
+# Create table at column limit
+CALL create_table('test_tb', 1017);
+INSERT INTO test_tb (col_1017) VALUES (1);
+# Drop then add with INSTANT should fail
+ALTER TABLE test_tb DROP COLUMN col_1017, ALGORITHM=INSTANT;
+ALTER TABLE test_tb ADD COLUMN col_1017 INT, ALGORITHM=INSTANT;
+ERROR HY000: Column can't be added to 'test/test_tb' with ALGORITHM=INSTANT anymore. Please try ALGORITHM=INPLACE/COPY.
+# Fallback to INPLACE should succeed
+ALTER TABLE test_tb ADD COLUMN col_1017 INT;
+DROP TABLE test_tb;
+DROP PROCEDURE create_table;

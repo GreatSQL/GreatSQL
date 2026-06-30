@@ -1,0 +1,76 @@
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+SET xa_detach_on_prepare=ON;
+INSERT INTO t1 VALUES (1,1),(2,2),(3,3),(4,4);
+XA START '1', '', 2;
+UPDATE t1 SET c2=c2+1 WHERE c1=1;
+XA END '1', '', 2;
+XA PREPARE '1', '', 2;
+XA START '2', '', 1;
+UPDATE t1 SET c2=c2+1 WHERE c1=2;
+XA END '2', '', 1;
+XA PREPARE '2', '', 1;
+XA START '3', '', 1;
+UPDATE t1 SET c2=c2+1 WHERE c1=3;
+XA END '3', '', 1;
+XA PREPARE '3', '', 1;
+XA START '4', '', 1;
+UPDATE t1 SET c2=c2+1 WHERE c1=4;
+XA END '4', '', 1;
+XA PREPARE '4', '', 1;
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+SET @slave_timeout=@@slave_net_timeout;
+Warnings:
+Warning	1287	'@@slave_net_timeout' is deprecated and will be removed in a future release. Please use replica_net_timeout instead.
+SET GLOBAL slave_net_timeout=10;
+Warnings:
+Warning	1287	'@@slave_net_timeout' is deprecated and will be removed in a future release. Please use replica_net_timeout instead.
+CHANGE REPLICATION SOURCE TO SOURCE_USER='root',SOURCE_HOST='127.0.0.1',SOURCE_PORT=PORT_1,SOURCE_AUTO_POSITION=1;
+START REPLICA;
+SELECT WAIT_FOR_EXECUTED_GTID_SET('GTID_1', 30);
+WAIT_FOR_EXECUTED_GTID_SET('GTID_1', 30)
+0
+STOP REPLICA;
+RESET BINARY LOGS AND GTIDS;
+INSERT INTO t1 VALUES (5,5);
+SET DEBUG='+d,set_commit_parent_100';
+XA COMMIT '1', '', 2;
+XA COMMIT '2', '', 1;
+XA COMMIT '3', '', 1;
+XA COMMIT '4', '', 1;
+SET DEBUG='-d,set_commit_parent_100';
+RESET BINARY LOGS AND GTIDS;
+SET GLOBAL debug='+d,wait_before_xa_guard';
+CHANGE REPLICATION SOURCE TO SOURCE_USER='root',SOURCE_HOST='127.0.0.1',SOURCE_PORT=PORT_1,SOURCE_AUTO_POSITION=1;
+START REPLICA;
+SET debug_sync='now WAIT_FOR reach_xa_guard';
+SET GLOBAL clone_data_recovery_mode=CLONE_DATA_RECOVERY_BINLOG_POSITION;
+SET GLOBAL debug='+d,clone_block_xa_operation';
+SET GLOBAL clone_valid_donor_list='127.0.0.1:port_2';
+CLONE INSTANCE FROM 'root'@'127.0.0.1':port_2 IDENTIFIED BY '' DATA DIRECTORY 'tmpdir/clone_1';
+SET debug_sync='now WAIT_FOR reach_xa_block';
+SET debug_sync='now SIGNAL end_xa_guard';
+SET debug_sync='now SIGNAL end_xa_block';
+SELECT WAIT_FOR_EXECUTED_GTID_SET('GTID_2', 30);
+WAIT_FOR_EXECUTED_GTID_SET('GTID_2', 30)
+0
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+SELECT * FROM t1;
+c1	c2
+1	2
+2	3
+3	4
+4	5
+5	5
+SET GLOBAL debug='';
+STOP REPLICA;
+RESET REPLICA ALL;
+SET GLOBAL slave_net_timeout=@slave_timeout;
+Warnings:
+Warning	1287	'@@slave_net_timeout' is deprecated and will be removed in a future release. Please use replica_net_timeout instead.
+SET GLOBAL clone_data_recovery_mode=DEFAULT;
+DROP TABLE t1;
+UNINSTALL PLUGIN clone;
+DROP TABLE t1;
+UNINSTALL PLUGIN clone;

@@ -1,0 +1,83 @@
+###############################################################################
+#
+# Functions to execute configuration changes are only present
+# when the plugin is installed.
+#
+# Test:
+#   0. This test use one server
+#   1. Test New GTID FUNCTION GTID_COUNT(), GTID_SUB() and GTID_POSITION_IN_BINLOG()
+#   2. test user variables
+#   3. test error GTID format
+#
+###############################################################################
+
+--echo # 1. Test New GTID FUNCTION GTID_COUNT() and GTID_SUB();
+
+select gtid_sub('a10e77bb-8228-11f0-923b-0242ac120002:2-6', 'a10e77bb-8228-11f0-923b-0242ac120002:2-4:3-10,c09701b4-8250-11f0-9165-0242ac120002:2-55');
+
+## GTID_2 not include GTID_1
+select gtid_sub('a10e77bb-8228-11f0-923b-0242ac120002:1-6', 'a10e77bb-8228-11f0-923b-0242ac120002:2-4:3-10,c09701b4-8250-11f0-9165-0242ac120002:2-55');
+
+select gtid_sub('a10e77bb-8228-11f0-923b-0242ac120002:2-6', '5523ad82-825d-11f0-90b3-0242ac120002:2-4:3-10,c09701b4-8250-11f0-9165-0242ac120002:2-55');
+
+select gtid_count('a10e77bb-8228-11f0-923b-0242ac120002:1-6:3-20');
+
+select gtid_count('a10e77bb-8228-11f0-923b-0242ac120002:1-6:3-20,c09701b4-8250-11f0-9165-0242ac120002:2-55');
+
+--echo # 2. test user variables
+SET @a='a10e77bb-8228-11f0-923b-0242ac120002:2-6', @b='a10e77bb-8228-11f0-923b-0242ac120002:2-4:3-10, c09701b4-8250-11f0-9165-0242ac120002:2-55';
+
+select gtid_sub(@a,@b);
+
+select gtid_count(@b);
+
+--echo # 3. test error GTID format
+--error 1772
+select gtid_count('a10e77bb-8228-11f0-923b-0242ac120002:1-6,3-20');
+--error 1772
+select gtid_sub('a10e77bb-8228-11f0-0242ac120002:2-6, c09701b4-8250-11f0-9165-0242ac120002', 'a10e77bb-8228-11f0-923b-0242ac120002:2-4:3-10,c09701b4-8250-11f0-9165-0242ac120002:2-55');
+--error 1772
+select gtid_sub('a10e77bb-8228-11f0-0242ac120002:2-6, c09701b4-8250-11f0-9165-0242ac120002', 'a10e77bb-8228-11f0-923b-0242ac120002:2-4:3-10:c09701b4-8250-11f0-9165-0242ac120002:2-55');
+
+--echo # 4. test function GTID_POSITION_IN_BINLOG()
+create database db1;
+create database db2;
+create database db3;
+--let $server_uuid= `SELECT @@GLOBAL.SERVER_UUID`
+--let $gtid1=$server_uuid:2
+
+--replace_result $gtid1 GTID
+eval select GTID_POSITION_IN_BINLOG('$gtid1', true) as gtid_pos;
+
+flush binary logs;
+create database db4;
+create database db5;
+create database db6;
+--replace_result $gtid1 GTID
+eval select GTID_POSITION_IN_BINLOG('$gtid1', false) as gtid_pos;
+
+--let $gtid2=$server_uuid:6
+--replace_result $gtid2 GTID
+eval SET @b='$gtid2';
+select GTID_POSITION_IN_BINLOG(@b, false) as gtid_pos;
+select GTID_POSITION_IN_BINLOG(@b, true) as gtid_pos;
+
+--let $gtid3=$server_uuid:1-5
+# test input gtid set, the result is null
+--replace_result $gtid3 GTID_SET
+eval select GTID_POSITION_IN_BINLOG('$gtid3', true) as gtid_pos;
+
+# not found, the result is null
+select GTID_POSITION_IN_BINLOG('a10e77bb-8228-11f0-923b-0242ac120002:3', false) as gtid_pos;
+
+# uuid is error, will report error
+--error 1772
+select GTID_POSITION_IN_BINLOG('a10e77bb-8228-11f0-0242ac120002:2', false) as gtid_pos;
+
+drop database db1;
+drop database db2;
+drop database db3;
+drop database db4;
+drop database db5;
+drop database db6;
+

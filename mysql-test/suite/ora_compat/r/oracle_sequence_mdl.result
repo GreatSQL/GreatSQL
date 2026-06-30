@@ -1,0 +1,107 @@
+[connect conn1]
+create sequence seq;
+select seq.nextval;
+nextval
+1
+[connect conn1_2]
+select @@lock_wait_timeout into @old_lock_wait_timeout;
+set session lock_wait_timeout=1;
+
+[## test dml block ddl ##]
+[connect conn1]
+set global debug='+d,greatdb_sequence_hold_mdl';
+select seq.nextval;
+[connect conn1_2]
+set debug_sync = 'now WAIT_FOR reach_wait_sync';
+drop sequence seq;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+set debug_sync = 'now SIGNAL end_wait_sync';
+[connect conn1]
+nextval
+2
+[connect conn1_2]
+set debug_sync = 'RESET';
+set global debug='-d,greatdb_sequence_hold_mdl';
+
+[## test ddl block dml ##]
+[connect conn1]
+set global debug='+d,greatdb_sequence_hold_mdl';
+drop sequence seq;
+[connect conn1_2]
+set debug_sync = 'now WAIT_FOR reach_wait_sync';
+select seq.nextval;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+set debug_sync = 'now SIGNAL end_wait_sync';
+[connect conn1]
+[connect conn1_2]
+set debug_sync = 'RESET';
+set global debug='-d,greatdb_sequence_hold_mdl';
+
+[## test create seq block create table ##]
+[connect conn1]
+set global debug='+d,greatdb_sequence_hold_mdl';
+create sequence seq;
+[connect conn1_2]
+set debug_sync = 'now WAIT_FOR reach_wait_sync';
+create table seq(c1 int primary key) engine=innodb;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+set debug_sync = 'now SIGNAL end_wait_sync';
+[connect conn1]
+[connect conn1_2]
+set debug_sync = 'RESET';
+set global debug='-d,greatdb_sequence_hold_mdl';
+
+[## test ddl block create view ##]
+[connect conn1]
+create table t1(c1 int primary key) engine=innodb;
+set global debug='+d,greatdb_sequence_hold_mdl';
+drop sequence seq;
+[connect conn1_2]
+set debug_sync = 'now WAIT_FOR reach_wait_sync';
+create view seq as select c1 from t1;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+set debug_sync = 'now SIGNAL end_wait_sync';
+[connect conn1]
+[connect conn1_2]
+set debug_sync = 'RESET';
+set global debug='-d,greatdb_sequence_hold_mdl';
+
+[## test lock table block create seq]
+[connect conn1]
+rename table t1 to seq;
+lock table seq write;
+[connect conn1_2]
+create sequence seq;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+[connect conn1]
+unlock tables;
+drop table seq;
+[connect conn1_2]
+set session lock_wait_timeout=@old_lock_wait_timeout;
+
+[# bug7590: MDL of sequence not released if autocommit=off]
+[connect conn1]
+set @@autocommit=off;
+create sequence seq;
+select seq.nextval;
+nextval
+1
+[connect conn1_2]
+drop sequence seq;
+[connect conn1]
+select seq.nextval;
+ERROR 42S02: Unknown table 'seq' in field list
+select seq.currval;
+ERROR 42S02: Unknown table 'seq' in field list
+create sequence seq;
+select seq.currval;
+ERROR HY000: read sequence value failed, cause currval is not yet defined in this session
+[connect conn1]
+drop sequence seq;
+select seq.nextval;
+ERROR 42S02: Unknown table 'seq' in field list
+[connect conn1_2]
+drop sequence seq;
+ERROR HY000: drop sequence failed, cause sequence 'test.seq' not exists
+[connect conn1]
+set @@autocommit=1;

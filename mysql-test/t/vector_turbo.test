@@ -1,0 +1,77 @@
+--source include/no_turbo.inc
+--source include/install_turbo_plugin.inc
+--source include/elide_costs_and_rows.inc
+
+connect (conn1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+--echo connect conn1
+connection conn1;
+set turbo_enable=on;
+set turbo_cost_threshold=0;
+set turbo_enable_warning=on;
+set turbo_enable_ps_and_sp=on;
+set global turbo_condition_pushdown=on;
+
+CREATE TABLE items (id int PRIMARY KEY, embedding vector(3));
+
+INSERT INTO items VALUES (1, to_vector('[1,2,3]'));
+INSERT INTO items VALUES (2, to_vector('[4,5]'));
+INSERT INTO items VALUES (3, null);
+
+set turbo_enable_rollback=off;
+select
+    id,
+    from_vector(to_vector(from_vector(to_vector('[1,2,3]')))),
+    from_vector(to_vector(from_vector(embedding)))
+from items order by id;
+
+delete from items where id = 2;
+INSERT INTO items VALUES (2, to_vector('[4,5,6]'));
+
+SELECT id, from_vector(embedding) FROM items order by id;
+
+set turbo_enable=off;
+select id, from_vector(embedding) from items where embedding = to_vector('[1,2,3]') order by id;
+set turbo_enable=on;
+
+select id, from_vector(embedding) from items where embedding = to_vector('[1,2,3]') order by id;
+--replace_regex $elide_costs_and_rows
+explain format=tree select id, from_vector(embedding) from items where embedding = to_vector('[1,2,3]') order by id;
+
+select id, from_vector(embedding) from items where from_vector(embedding) = from_vector(to_vector('[1,2,3]')) order by id;
+select id, from_vector(embedding) from items order by vector_distance(to_vector('[3,3,3]'), embedding, 'euclidean');
+select id, from_vector(embedding), vector_distance(to_vector('[3,3,3]'), embedding, 'euclidean') as distance from items order by distance;
+--replace_regex /[(]cost=[0-9.e+-]+[,]? row[s]?=[0-9.e+-]+[)]|_compat_wrap[(]\w*[)]/(...)/
+explain format=tree select id, from_vector(embedding), vector_distance(to_vector('[3,3,3]'), embedding, 'euclidean') as distance from items order by distance;
+select id, from_vector(embedding) from items order by vector_distance(to_vector('[3,3,3]'), embedding, 'cosine');
+select id, from_vector(embedding), vector_distance(to_vector('[3,3,3]'), embedding, 'cosine') as distance from items order by distance;
+--replace_regex /[(]cost=[0-9.e+-]+[,]? row[s]?=[0-9.e+-]+[)]|_compat_wrap[(]\w*[)]/(...)/
+explain format=tree select id, from_vector(embedding), vector_distance(to_vector('[3,3,3]'), embedding, 'cosine') as distance from items order by distance;
+select id, from_vector(embedding) from items order by vector_distance(to_vector('[3,3,3]'), embedding, 'dot');
+select id, from_vector(embedding), vector_distance(to_vector('[3,3,3]'), embedding, 'dot') as distance from items order by distance;
+--replace_regex /[(]cost=[0-9.e+-]+[,]? row[s]?=[0-9.e+-]+[)]|_compat_wrap[(]\w*[)]/(...)/
+explain format=tree select id, from_vector(embedding), vector_distance(to_vector('[3,3,3]'), embedding, 'dot') as distance from items order by distance;
+
+create table test1(a float, b float, c float);
+insert into test1 values(1.1, 2.8, 3.9);
+insert into test1 values(2.1, null, 3.9);
+insert into test1 values(2.2, 3.7, 4.0);
+insert into test1 values(3.2, 4.7, null);
+insert into test1 values(3.3, 4.6, 5.1);
+insert into test1 values(null, 5.6, 6.1);
+insert into test1 values(4.4, 5.5, 6.2);
+select from_vector(to_vector(concat('[',a,',',b,']'))) x, from_vector(to_vector(concat('[',b,',',c,']'))) y, from_vector(to_vector(concat('[',c,',',a,']'))) z from test1;
+--replace_regex $elide_costs_and_rows
+explain format=tree select from_vector(to_vector(concat('[',a,',',b,']'))) x, from_vector(to_vector(concat('[',b,',',c,']'))) y, from_vector(to_vector(concat('[',c,',',a,']'))) z from test1;
+
+set turbo_enable=off;
+
+select from_vector(to_vector(concat('[',a,',',b,']'))) x, from_vector(to_vector(concat('[',b,',',c,']'))) y, from_vector(to_vector(concat('[',c,',',a,']'))) z from test1;
+--replace_regex $elide_costs_and_rows
+explain format=tree select from_vector(to_vector(concat('[',a,',',b,']'))) x, from_vector(to_vector(concat('[',b,',',c,']'))) y, from_vector(to_vector(concat('[',c,',',a,']'))) z from test1;
+
+
+drop table items;
+drop table test1;
+
+--source include/uninstall_turbo_plugin.inc

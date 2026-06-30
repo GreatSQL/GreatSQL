@@ -1,0 +1,126 @@
+# ./mtr  --initialize=--lower_case_table_names=1  fulltext_stopword_case.test
+--let $default_enable_stopword = `select @@innodb_ft_enable_stopword`
+--echo $default_enable_stopword
+
+--let $default_aux_table = `select @@innodb_ft_aux_table`
+--echo $default_aux_table
+set global innodb_ft_enable_stopword=ON;
+show variables like "%lower_case_table_names%";
+create database tdb;
+
+connect (conn1,localhost,root,,);
+connection conn1;
+use tdb;
+
+CREATE TABLE `ft1` (
+  `c1` int NOT NULL,
+  `c2` varchar(20) DEFAULT NULL,
+  PRIMARY KEY (`c1`)
+) ENGINE=InnoDB;
+
+insert into ft1 values(1, "北京万里开源软件有限公司");
+insert into ft1 values(2, "光大银行");
+insert into ft1 values(3, '民生银行');
+insert into ft1 values(4, '华为有限公司');
+insert into ft1 values(5, '中兴通信');
+insert into ft1 select 10+c1, c2 from ft1;
+insert into ft1 select 20+c1, c2 from ft1;
+# insert into ft1 select 40+c1, c2 from ft1;
+# insert into ft1 select 80+c1, c2 from ft1;
+# insert into ft1 select 160+c1, c2 from ft1;
+# insert into ft1 select 320+c1, c2 from ft1;
+# insert into ft1 select 640+c1, c2 from ft1;
+# insert into ft1 select 1280+c1, c2 from ft1;
+insert into ft1 values(9, "中华人民共和国");
+
+
+CREATE TABLE MY_STOPWORDS (value VARCHAR(30)) ENGINE=INNODB;
+CREATE TABLE my_stopwords_1 (value VARCHAR(30)) ENGINE=INNODB;
+insert into MY_STOPWORDS  values ("有限"),("限公"),("公司");
+insert into my_stopwords_1  values ("有限"),("限公"),("公司");
+SET GLOBAL INNODB_FT_SERVER_STOPWORD_TABLE='tdb/MY_STOPWORDS';
+alter table ft1 add fulltext ftidx1(c2) with PARSER NGRAM;
+
+--error 1231
+SET GLOBAL innodb_ft_aux_table = 'tdb/FT1';
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_CONFIG WHERE `key`='stopword_table_name' OR `key`='use_stopword';
+
+
+SET GLOBAL innodb_ft_aux_table = 'tdb/ft1';
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_CONFIG WHERE `key`='stopword_table_name' OR `key`='use_stopword';
+
+select * from tdb.ft1 where MATCH(c2) against ('+民生银行' IN BOOLEAN MODE);
+
+
+--source include/restart_mysqld.inc
+
+
+connection conn1;
+select * from tdb.ft1 where MATCH(c2) against ('+北京万里开源软件' IN BOOLEAN MODE);
+use tdb;
+show tables;
+
+connect (conn2,localhost,root,,);
+connection conn2;
+use tdb;
+show tables;
+disconnect conn2;
+
+connection conn1;
+--source  include/restart_mysqld.inc
+
+connection conn1;
+
+SET GLOBAL INNODB_FT_SERVER_STOPWORD_TABLE='tdb/my_stopwords_1';
+alter table tdb.ft1 engine=innodb;
+--error 1231
+SET GLOBAL innodb_ft_aux_table = 'tdb/Ft1';
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_CONFIG WHERE `key`='stopword_table_name' OR `key`='use_stopword';
+
+SET GLOBAL innodb_ft_aux_table = 'tdb/ft1';
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_CONFIG WHERE `key`='stopword_table_name' OR `key`='use_stopword';
+
+connect (conn3,localhost,root,,);
+connection conn3;
+use tdb;
+show tables;
+disconnect conn3;
+
+
+connection conn1;
+
+--source  include/restart_mysqld.inc
+
+connection conn1;
+--error 1231
+SET GLOBAL innodb_ft_aux_table = 'tdb/FT1';
+SET GLOBAL innodb_ft_aux_table = 'tdb/ft1';
+SELECT * FROM INFORMATION_SCHEMA.INNODB_FT_CONFIG WHERE `key`='stopword_table_name' OR `key`='use_stopword';
+SELECT count(*) from tdb.ft1;
+disconnect conn1;
+
+
+connect (conn4,localhost,root,,);
+connection conn4;
+#--echo $default_aux_table
+
+if($default_aux_table)
+{
+  SET GLOBAL innodb_ft_aux_table = $default_aux_table;
+}
+if(!$default_aux_table)
+{
+  SET GLOBAL innodb_ft_aux_table = null;
+}
+
+
+if($default_enable_stopword)
+{
+  SET GLOBAL innodb_ft_enable_stopword = ON;
+}
+if(!$default_enable_stopword)
+{
+  SET GLOBAL innodb_ft_enable_stopword = OFF;
+}
+drop DATABASE IF EXISTS tdb;
+disconnect conn4;

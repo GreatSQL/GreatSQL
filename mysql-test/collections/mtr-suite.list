@@ -1,0 +1,5 @@
+# TODO
+# max_parts (waste too much time)
+MTR_SUITE_FULL="main,sys_vars,group_replication,ora_compat,innodb,component_audit_log_filter,audit_null,auth_sec,binlog,binlog_gtid,binlog_nogtid,clone,collations,component_keyring_file,connection_control,encryption,engines,federated,funcs_1,funcs_2,gcol,gis,information_schema,innodb_fts,innodb_gis,innodb_undo,innodb_zip,interactive_utilities,json,lock_order,network_namespace,opt_trace,parts,perfschema,query_rewrite_plugins,rpl,rpl_gtid,rpl_nogtid,secondary_engine,service_status_var_registration,service_sys_var_registration,service_udf_registration,special,stress,sysschema,test_services,test_service_sql_api,clone,data_mask,greatdb_plan_baseline_role"
+
+MTR_SUITE_MINIMAL="main,sys_vars,group_replication,ora_compat,innodb,component_audit_log_filter,data_mask,clone,rpl,rpl_gtid,rpl_nogtid,greatdb_plan_baseline_role"

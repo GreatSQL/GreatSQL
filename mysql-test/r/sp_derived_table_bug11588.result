@@ -1,0 +1,81 @@
+SET sql_mode=ORACLE;
+#
+# test of BUG11588
+#
+CREATE TABLE t1 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+input VARCHAR2(100),
+fmt  VARCHAR2(100)
+);
+INSERT INTO t1 (id,input, fmt) VALUES (1,'1234567',null);
+INSERT INTO t1 (id,input, fmt) VALUES (2,'1,234.567','9,999.999');
+create view v1 as select * from t1;
+CREATE OR REPLACE PROCEDURE p1() IS
+BEGIN
+for i in 0 .. 10 loop
+WITH ali_s1 AS(SELECT * FROM v1 union all SELECT * FROM v1)   
+SELECT * FROM ali_s1;
+end loop;
+END ;
+$$
+call p1();
+id	input	fmt
+1	1234567	NULL
+2	1,234.567	9,999.999
+1	1234567	NULL
+2	1,234.567	9,999.999
+id	input	fmt
+1	1234567	NULL
+2	1,234.567	9,999.999
+1	1234567	NULL
+2	1,234.567	9,999.999
+id	input	fmt
+1	1234567	NULL
+2	1,234.567	9,999.999
+1	1234567	NULL
+2	1,234.567	9,999.999
+id	input	fmt
+1	1234567	NULL
+2	1,234.567	9,999.999
+1	1234567	NULL
+2	1,234.567	9,999.999
+id	input	fmt
+1	1234567	NULL
+2	1,234.567	9,999.999
+1	1234567	NULL
+2	1,234.567	9,999.999
+id	input	fmt
+1	1234567	NULL
+2	1,234.567	9,999.999
+1	1234567	NULL
+2	1,234.567	9,999.999
+id	input	fmt
+1	1234567	NULL
+2	1,234.567	9,999.999
+1	1234567	NULL
+2	1,234.567	9,999.999
+id	input	fmt
+1	1234567	NULL
+2	1,234.567	9,999.999
+1	1234567	NULL
+2	1,234.567	9,999.999
+id	input	fmt
+1	1234567	NULL
+2	1,234.567	9,999.999
+1	1234567	NULL
+2	1,234.567	9,999.999
+id	input	fmt
+1	1234567	NULL
+2	1,234.567	9,999.999
+1	1234567	NULL
+2	1,234.567	9,999.999
+id	input	fmt
+1	1234567	NULL
+2	1,234.567	9,999.999
+1	1234567	NULL
+2	1,234.567	9,999.999
+alter table t1 modify input varchar(10);
+alter table t1 modify input varchar(100);
+drop PROCEDURE p1;
+drop view v1;
+drop table t1;

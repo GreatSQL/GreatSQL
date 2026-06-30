@@ -1,0 +1,179 @@
+source include/have_debug.inc;
+
+CREATE TABLE t1 (
+    x INT PRIMARY key,
+    y INT,
+    z INT
+);
+
+
+
+set sql_mode=oracle;
+create MATERIALIZED  view log on t1;
+
+INSERT INTO t1 VALUES
+(1, 10, 100),
+(2, 20, 200),
+(3, 30, 300);
+
+select "{op}", x,y,z from mlog$_t1;
+
+drop table t1;
+
+
+CREATE TABLE t2 (id INT PRIMARY key,  t timestamp);
+
+create MATERIALIZED  view log on t2;
+
+drop table t2;
+
+CREATE TABLE t3 (id INT PRIMARY key,  b BLOB);
+
+--error ER_TABLE_CANT_HANDLE_BLOB
+create MATERIALIZED  view log on t3;
+
+drop table t3;
+
+set sql_generate_invisible_primary_key=on;
+
+set timestamp=1;
+CREATE TABLE t4 (id INT  ,  t timestamp default now() );
+
+create MATERIALIZED  view log on t4;
+insert into t4(id ) values(1);
+
+select t from mlog$_t4;
+select t from  t4;
+drop table t4;
+
+
+CREATE TABLE tt1 (
+        col_tinyint tinyint,
+        col_tinyintus tinyint unsigned,
+        col_smallint smallint,
+        col_smallintus smallint unsigned,
+        col_mediumint mediumint,
+        col_mediumintus mediumint unsigned,
+        col_int int,
+        col_intus int unsigned,
+        col_integer integer,
+        col_integerus int unsigned,
+        col_bigint bigint,
+        col_bigintus bigint unsigned,
+        col_decimal decimal(10, 2),
+        col_dec dec(10, 2),
+        col_numeric numeric(10, 2),
+        col_float float,
+        col_double double,
+        col_real real,
+        col_bool bool,
+        col_boolean boolean,
+        col_DATE DATE,
+        col_DATETIME DATETIME,
+        col_TIMESTAMP TIMESTAMP,
+        col_TIME TIME,
+        col_YEAR YEAR,
+        col_CHAR CHAR(10),
+        col_VARCHAR VARCHAR(20),
+        col_BINARY BINARY(10),
+        col_VARBINARY VARBINARY(50),
+        col_bit bit,
+        col_enum enum('上北','下南','左西','右东','simple','-128','127'),
+        col_SET SET('C', 'G', 'O'),
+        col_number number,
+        col_VARCHAR2 VARCHAR2(100),
+        col_plsinteger PLS_INTEGER,
+        col_raw varchar2(200)
+);
+
+create MATERIALIZED  view log on  tt1;
+
+insert into tt1 (col_enum) values ('simple') ;
+insert into tt1 (col_tinyint) values (1) ;
+insert into tt1 (col_bigintus) values (1) ;
+
+select col_enum,col_tinyint,col_bigintus from mlog$_tt1;
+
+--error  ER_CANNOT_ALTER_WITH_MLOG
+truncate table tt1;
+
+--error ER_CANNOT_ALTER_WITH_MLOG
+alter table tt1 add column xx int;
+--error ER_CANNOT_ALTER_WITH_MLOG
+alter table tt1 drop column col_raw;
+--error ER_CANNOT_ALTER_WITH_MLOG
+alter table tt1 rename t2;
+
+--error ER_CANNOT_ALTER_WITH_MLOG
+alter table tt1 MODIFY col_smallint int;
+
+--error ER_CANNOT_CREATE_MLOG
+create MATERIALIZED  view log on tt1;
+
+--error ER_CANNOT_CREATE_MLOG
+create MATERIALIZED  view log on mlog$_tt1;
+
+
+drop table tt1;
+
+
+set sql_generate_invisible_primary_key=OFF;
+
+create table t1(id int , x int);
+
+--error ER_REQUIRES_PRIMARY_KEY
+create MATERIALIZED  view log on t1;
+
+drop table t1;
+
+
+create table t1(id int primary key , x blob);
+--error ER_TABLE_CANT_HANDLE_BLOB
+create MATERIALIZED  view log on t1;
+
+drop table t1;
+
+
+# trigger name overflow: imv_mlog_trigger_<src> must fit NAME_CHAR_LEN(64)
+create table long_name_table_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (x int primary key);
+--error ER_TOO_LONG_IDENT,ER_UPDATING_DD_TABLE
+create MATERIALIZED  view log on long_name_table_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx;
+drop table long_name_table_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx;
+
+
+# generated columns cannot be replayed by the trigger body
+create table t_gcol (x int primary key, y int generated always as (x+1) stored);
+--error ER_CANNOT_CREATE_MLOG
+create MATERIALIZED  view log on t_gcol;
+drop table t_gcol;
+
+create table t_vgcol (x int primary key, y int generated always as (x+1) virtual);
+--error ER_CANNOT_CREATE_MLOG
+create MATERIALIZED  view log on t_vgcol;
+drop table t_vgcol;
+
+
+# source table as child with cascade foreign key is not supported by mlog
+create table fk_parent_delete (id int primary key) engine=innodb;
+create table fk_child_delete (
+  id int primary key,
+  parent_id int,
+  constraint fk_child_delete_parent foreign key (parent_id)
+    references fk_parent_delete(id) on delete cascade
+) engine=innodb;
+--error ER_CANNOT_CREATE_MLOG
+create MATERIALIZED  view log on fk_child_delete;
+drop table fk_child_delete;
+drop table fk_parent_delete;
+
+create table fk_parent_update (id int primary key) engine=innodb;
+create table fk_child_update (
+  id int primary key,
+  parent_id int,
+  constraint fk_child_update_parent foreign key (parent_id)
+    references fk_parent_update(id) on update cascade
+) engine=innodb;
+--error ER_CANNOT_CREATE_MLOG
+create MATERIALIZED  view log on fk_child_update;
+drop table fk_child_update;
+drop table fk_parent_update;

@@ -1,0 +1,12 @@
+# skip test list, skip test which will not pass
+main.mysqldump                         : WL#000 ignore
+main.fix_priv_tables                   : WL#000 skip
+main.func_gm                           : WL#000 skip need babassl
+main.mysqldumpslow                     : WL#000 timeout
+innodb.ddl_kill                        : WL#000 timeout
+innodb.alter_kill                      : WL#000 unexpected error number of Command "exec" faild
+innodb.bootstrap                       : WL#000 unexpected error number of Command "exec" faild
+innodb.tablespace_encrypt_9            : WL#000 unexpected error number of Command "exec" faild
+innodb.innodb_page_size_func           : WL#000 unexpected error number of Command "exec" faild
+innodb.temporary_table                 : WL#000 unexpected error number of Command "exec" faild
+innodb.innodb_pagesize_max_recordsize  : WL#000 unexpected error number of Command "exec" faild

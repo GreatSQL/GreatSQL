@@ -1,0 +1,79 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connection server2]
+SET SESSION sql_log_bin = 0;
+call mtr.add_suppression("Replica SQL for channel 'group_replication_applier'");
+call mtr.add_suppression("Disk is full writing");
+call mtr.add_suppression("The applier thread execution was aborted.");
+call mtr.add_suppression("Fatal error during execution on the Applier process of Group Replication.");
+call mtr.add_suppression("Skipping leave operation: member already left the group.");
+call mtr.add_suppression("Transaction's sequence number is inconsistent with that of a preceding one");
+call mtr.add_suppression("Cannot execute the current event group in the parallel mode");
+call mtr.add_suppression("Unable to confirm whether the server has left the group or not.");
+call mtr.add_suppression("There was a previous plugin error while the member joined the group. The member will now exit the group.");
+call mtr.add_suppression("io full on data or binlog directory");
+call mtr.add_suppression("The server was automatically set into read only mode after an error was detected.");
+call mtr.add_suppression("The server was automatically set into offline mode after an error was detected.");
+call mtr.add_suppression("errno: 28 - No space left on device");
+SET SESSION sql_log_bin = 1;
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+[connection server2]
+include/start_group_replication.inc
+[connection server1]
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(256), c3 VARCHAR(256)) ENGINE=InnoDB;
+include/rpl/sync.inc
+[connection server2]
+SET GLOBAL debug='+d,replica_insert_io_full';
+SET GLOBAL debug='+d,gr_io_full_applier_stop_after_sql_error';
+[connection server1]
+BEGIN;
+INSERT INTO t1 VALUES (NULL, REPEAT('a', 250), REPEAT('a', 250));
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+COMMIT;
+[connection server2]
+SET debug_sync='now wait_for reach_insert';
+SET GLOBAL debug='-d,replica_insert_io_full';
+SET GLOBAL debug='+d,group_replication_before_apply_data_packet';
+[connection server1]
+INSERT INTO t1 VALUES (NULL, 'a', 'b');
+[connection server2]
+SET debug_sync='now wait_for signal.group_replication_before_apply_data_packet_reached';
+SET GLOBAL debug='+d,gr_io_full_leave_group';
+SET GLOBAL debug='+d,group_replication_io_full';
+SET debug_sync='now wait_for reach_suspend_packet';
+SET GLOBAL debug='+d,simulate_no_free_space_error';
+SET debug_sync='now signal continue_insert';
+SET debug_sync='now wait_for reach_applier_stop';
+SET GLOBAL debug='+d,gr_io_full_apply_data_error';
+SET debug_sync='now signal continue_suspend_packet';
+SET debug_sync='now signal continue_apply';
+SET debug_sync='now wait_for reach_apply_error';
+SET debug_sync='now signal continue_apply_error';
+[connection server2]
+SET GLOBAL debug='-d,gr_io_full_apply_data_error';
+SET GLOBAL debug='-d,group_replication_before_apply_data_packet';
+SET GLOBAL debug='-d,simulate_no_free_space_error';
+SET GLOBAL debug='-d,group_replication_io_full';
+SET GLOBAL debug='-d,gr_io_full_applier_stop_after_sql_error';
+SET GLOBAL debug='-d,gr_io_full_leave_group';
+include/stop_group_replication.inc
+START GROUP_REPLICATION;
+ERROR HY000: The server is not configured properly to be an active member of the group. Please see more details on error log.
+include/start_group_replication.inc
+#
+# Clean
+#
+[connection server1]
+DROP TABLE t1;
+include/rpl/sync.inc
+include/group_replication_end.inc

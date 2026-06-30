@@ -1,0 +1,22 @@
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+
+create or replace type TC10314_t65_type2 as object(addr varchar2(123),name varchar(213));
+
+DELIMITER //;
+
+CREATE OR REPLACE  PROCEDURE TC10314_t65_sp2() as
+BEGIN
+  select avg(TC10314_t65_type2(2,'asd'));
+END;
+//
+
+DELIMITER ;//
+
+--error ER_NOT_SUPPORTED_YET
+CALL TC10314_t65_sp2;
+--error ER_NOT_SUPPORTED_YET
+CALL TC10314_t65_sp2;
+
+drop procedure TC10314_t65_sp2;
+drop type TC10314_t65_type2;

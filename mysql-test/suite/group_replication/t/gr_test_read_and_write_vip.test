@@ -1,0 +1,799 @@
+################################################################################
+# Validate that list of senders is updated when the sources are (fake) 5.7
+# servers.
+#
+# Test:
+#  0. The test requires 3 servers:
+#       server1: group primary
+#       server2: group secondary
+#       server3: group secondary
+#  1. Deploy one group which have 3 members in single primary mode. and check vip tope
+#  2. test MGR status change then check vip_tope status
+#  3. check greatdb_ha variables change then check vip_tope status
+#  4. Clean up.
+################################################################################
+
+--disable_query_log
+CALL mtr.add_suppression("Sending passwords in plain text without SSL/TLS is extremely insecure");
+CALL mtr.add_suppression("FUNCTION .* does not exist");
+CALL mtr.add_suppression("Can't initialize function .*; UDF not has_privileges");
+CALL mtr.add_suppression("Get mac SIOCGIFINDEX failed. No such device");
+CALL mtr.add_suppression("skip error format arg_view_id.*");
+CALL mtr.add_suppression("skip error format arg_vip_tope.*");
+--enable_query_log
+
+--source include/big_test.inc
+--source include/have_debug.inc
+--let $group_replication_group_name= aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_server_count= 4
+--source include/group_replication.inc
+--let $allow_rpl_inited = 1
+
+--exec sed -i "s/^server-uuid=.*/server-uuid=86de1827-49f0-11f1-81ac-0242ac120003/" $MYSQLTEST_VARDIR/mysqld.3/data/auto.cnf
+--exec sed -i "s/^server-uuid=.*/server-uuid=86bc1827-49f0-11f1-81ac-0242ac120002/" $MYSQLTEST_VARDIR/mysqld.2/data/auto.cnf
+--exec sed -i "s/^server-uuid=.*/server-uuid=86ab1827-49f0-11f1-81ac-0242ac120001/" $MYSQLTEST_VARDIR/mysqld.1/data/auto.cnf
+
+--let $rpl_connection_name= server3
+--source include/connection.inc
+# Save all the context we'll need during the test
+--let $local_address_server3= `SELECT @@GLOBAL.group_replication_local_address`
+--let $group_seeds_server3= `SELECT @@GLOBAL.group_replication_group_seeds`
+# Restart the server
+--let $allow_rpl_inited = 1
+--let $restart_parameters=restart:--group_replication_local_address=$local_address_server3 --group_replication_group_seeds=$group_seeds_server3 --group-replication-group-name=$group_replication_group_name
+--replace_result $local_address_server3 GROUP_REPLICATION_LOCAL_ADDRESS $group_seeds_server3 GROUP_REPLICATION_GROUP_SEEDS $group_replication_group_name GROUP_REPLICATION_GROUP_NAME
+--source include/restart_mysqld.inc
+# Reestablish the connection to the server
+--let $rpl_server_number= 3
+--source include/rpl/reconnect.inc
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+# Save all the context we'll need during the test
+--let $local_address_server2= `SELECT @@GLOBAL.group_replication_local_address`
+--let $group_seeds_server2= `SELECT @@GLOBAL.group_replication_group_seeds`
+# Restart the server
+--let $allow_rpl_inited = 1
+--let $restart_parameters=restart:--group_replication_local_address=$local_address_server2 --group_replication_group_seeds=$group_seeds_server2 --group-replication-group-name=$group_replication_group_name
+--replace_result $local_address_server2 GROUP_REPLICATION_LOCAL_ADDRESS $group_seeds_server2 GROUP_REPLICATION_GROUP_SEEDS $group_replication_group_name GROUP_REPLICATION_GROUP_NAME
+--source include/restart_mysqld.inc
+# Reestablish the connection to the server
+--let $rpl_server_number= 2
+--source include/rpl/reconnect.inc
+
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+# Save all the context we'll need during the test
+--let $local_address_server1= `SELECT @@GLOBAL.group_replication_local_address`
+--let $group_seeds_server1= `SELECT @@GLOBAL.group_replication_group_seeds`
+# Restart the server
+--let $allow_rpl_inited = 1
+--let $restart_parameters=restart:--group_replication_local_address=$local_address_server1 --group_replication_group_seeds=$group_seeds_server1 --group-replication-group-name=$group_replication_group_name
+--replace_result $local_address_server1 GROUP_REPLICATION_LOCAL_ADDRESS $group_seeds_server1 GROUP_REPLICATION_GROUP_SEEDS $group_replication_group_name GROUP_REPLICATION_GROUP_NAME
+--source include/restart_mysqld.inc
+# Reestablish the connection to the server
+--let $rpl_server_number= 1
+--source include/rpl/reconnect.inc
+
+--echo
+--echo ############################################################
+--echo # 1. Deploy one group which have 3 members in single primary mode.
+--let $rpl_connection_name= server1
+--source include/connection.inc
+
+--disable_query_log
+SELECT @@server_uuid;
+--let $server1_uuid= `SELECT @@server_uuid`
+--let $view_id = 15640438507639552
+--let $arg_tope= `select concat("$server1_uuid", "::192.168.2.124,192.168.2.125,192.168.2.126")`
+
+--error ER_SP_DOES_NOT_EXIST
+SELECT HA_SET_ALL_NODE_BIND_VIPS("$view_id", 1, "$arg_tope");
+--error ER_SP_DOES_NOT_EXIST
+SELECT HA_GET_BIND_VIPS("$view_id", 1);
+
+--eval INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so'
+
+create user aaa;
+create user bbb;
+grant REPLICATION_SLAVE_ADMIN on *.* to bbb;
+
+connect(server1_aaa,localhost,aaa,,test,$SERVER_MYPORT_1);
+--echo ## --connection server1_aaa
+--connection server1_aaa
+--error ER_CANT_INITIALIZE_UDF
+eval SELECT HA_SET_ALL_NODE_BIND_VIPS("$view_id", 1, "$arg_tope");
+--error ER_CANT_INITIALIZE_UDF
+eval SELECT HA_GET_BIND_VIPS("$view_id", 1);
+
+connect(server1_bbb,localhost,bbb,,test,$SERVER_MYPORT_1);
+--echo ## --connection server1_bbb
+--connection server1_bbb
+eval SELECT HA_GET_BIND_VIPS("$view_id", 1);
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+# args error format
+--error ER_CANT_INITIALIZE_UDF
+SELECT HA_SET_ALL_NODE_BIND_VIPS();
+--error ER_CANT_INITIALIZE_UDF
+SELECT HA_GET_BIND_VIPS();
+--error ER_CANT_INITIALIZE_UDF
+SELECT HA_SET_ALL_NODE_BIND_VIPS("$view_id", "abc");
+--error ER_CANT_INITIALIZE_UDF
+SELECT HA_GET_BIND_VIPS("$view_id", "1");
+--error ER_WRONG_ARGUMENTS
+SELECT HA_SET_ALL_NODE_BIND_VIPS("", 1, "");
+--error ER_WRONG_ARGUMENTS
+SELECT HA_GET_BIND_VIPS("1234567890123456a", 1);
+--error ER_WRONG_ARGUMENTS
+SELECT HA_GET_BIND_VIPS("12345678901234.56", 1);
+--error ER_WRONG_ARGUMENTS
+SELECT HA_GET_BIND_VIPS("12345678901234567890123456789012345678901234567890123456789012345", 1);
+
+--let $sql_injection = `select concat("$server1_uuid", "::192.168.2.124,192.168.2.125,192.168.2.126", "); select 1=1")`
+--error ER_WRONG_ARGUMENTS
+eval SELECT HA_SET_ALL_NODE_BIND_VIPS("$view_id", 1, "$sql_injection");
+--error ER_WRONG_ARGUMENTS
+eval SELECT HA_GET_BIND_VIPS("$sql_injection", 1);
+
+# reinstall plugin
+--eval UNINSTALL PLUGIN greatdb_ha
+--enable_query_log
+
+--eval INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so'
+set global debug = 'd,test_vip';
+--source include/start_and_bootstrap_group_replication.inc
+--replace_result $server1_uuid MEMBER1_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--disable_query_log
+set session sql_log_bin=0;
+CALL mtr.add_suppression("Plugin greatdb_ha reported: 'Error:greatdb ha skip invalid message.");
+set session sql_log_bin=1;
+--enable_query_log
+--eval INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so'
+set global debug = 'd,test_vip';
+--source include/start_group_replication.inc
+SELECT @@server_uuid;
+--let $server2_uuid= `SELECT @@server_uuid`
+--sleep 3
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--eval INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so'
+set global debug = 'd,test_vip';
+--source include/start_group_replication.inc
+SELECT @@server_uuid;
+--let $server3_uuid= `SELECT @@server_uuid`
+--sleep 3
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--disable_query_log
+--error 127,1
+--exec echo | telnet localhost 3401 > /dev/null 2>&1
+--enable_query_log
+
+--echo ############################################################
+--echo # test vip label and nic_name change
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--error ER_WRONG_VALUE_FOR_VAR
+set global greatdb_ha_mgr_vip_label = "test";
+--error ER_WRONG_VALUE_FOR_VAR
+set global greatdb_ha_mgr_vip_label = "?";
+set global greatdb_ha_mgr_vip_label = "a";
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+sleep 5;
+set global greatdb_ha_mgr_vip_label = "";
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+sleep 5;
+--error ER_WRONG_VALUE_FOR_VAR
+set global greatdb_ha_mgr_vip_nic = "enp129s0f1c1d";
+
+--echo
+--echo ############################################################
+--echo # 2. test MGR status change then check vip_tope status
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--echo # test change master to server2
+--replace_result $server2_uuid MEMBER2_UUID
+--eval SELECT group_replication_set_as_primary("$server2_uuid")
+--sleep 3
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--echo # primary server2 stop group_replication, then check vip_tope
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--echo ## test arbitrator node join MGR
+--let $rpl_connection_name= server4
+--source include/connection.inc
+--disable_query_log
+set session sql_log_bin=0;
+CALL mtr.add_suppression("Plugin greatdb_ha reported: 'HA plugin is disabled for ARBITRATOR node, is being turned off.");
+set session sql_log_bin=1;
+--enable_query_log
+--eval INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so'
+set global debug = 'd,test_vip';
+--let $server4_uuid= `SELECT @@server_uuid`
+--source include/start_group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID $server4_uuid MEMBER4_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID $server4_uuid MEMBER4_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server4
+--source include/connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/start_group_replication.inc
+--sleep 5
+
+--echo # secondary server3, server2 stop group_replication, then check vip_tope
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 20;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--echo ## test only arbitrator node in MGR
+--let $rpl_connection_name= server4
+--source include/connection.inc
+--source include/start_group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID $server4_uuid MEMBER4_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server4
+--source include/connection.inc
+--source include/stop_group_replication.inc
+--eval UNINSTALL PLUGIN greatdb_ha
+set global debug = '';
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/start_group_replication.inc
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 10;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--source include/start_group_replication.inc
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 10;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+
+--echo
+--echo ############################################################
+--echo # 3. check greatdb_ha variables change then check vip_tope status
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--error ER_WRONG_VALUE_FOR_VAR
+set global greatdb_ha_mgr_vip_ip = "192.168.2.";
+
+--echo # test set write vip, and check vip_tope changed
+set global greatdb_ha_mgr_vip_ip = "192.168.2.126";
+--let $rpl_connection_name= server2
+--source include/connection.inc
+set global greatdb_ha_mgr_vip_ip = "192.168.2.126";
+--let $rpl_connection_name= server3
+--source include/connection.inc
+set global greatdb_ha_mgr_vip_ip = "192.168.2.126";
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--error ER_WRONG_VALUE_FOR_VAR
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.";
+
+--echo # test set read vip nums larger than 61
+--error ER_WRONG_VALUE_FOR_VAR
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.101,192.168.2.102,192.168.2.103,192.168.2.104,192.168.2.105,192.168.2.106,192.168.2.107,192.168.2.108,192.168.2.109,192.168.2.110,192.168.2.111,192.168.2.112,192.168.2.113,192.168.2.114,192.168.2.115,192.168.2.116,192.168.2.117,192.168.2.118,192.168.2.119,192.168.2.120,192.168.2.121,192.168.2.122,192.168.2.123,192.168.2.124,192.168.2.125,192.168.2.126,192.168.2.127,192.168.2.128,192.168.2.129,192.168.2.130,192.168.2.131,192.168.2.132,192.168.2.133,192.168.2.134,192.168.2.135,192.168.2.136,192.168.2.137,192.168.2.138,192.168.2.139,192.168.2.140,192.168.2.141,192.168.2.142,192.168.2.143,192.168.2.144,192.168.2.145,192.168.2.146,192.168.2.147,192.168.2.148,192.168.2.149,192.168.2.150,192.168.2.151,192.168.2.152,192.168.2.153,192.168.2.154,192.168.2.155,192.168.2.156,192.168.2.157,192.168.2.158,192.168.2.159,192.168.2.160,192.168.2.161,192.168.2.162";
+
+--echo # test set read vip nums equals 61
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.101,192.168.2.102,192.168.2.103,192.168.2.104,192.168.2.105,192.168.2.106,192.168.2.107,192.168.2.108,192.168.2.109,192.168.2.110,192.168.2.111,192.168.2.112,192.168.2.113,192.168.2.114,192.168.2.115,192.168.2.116,192.168.2.117,192.168.2.118,192.168.2.119,192.168.2.120,192.168.2.121,192.168.2.122,192.168.2.123,192.168.2.124,192.168.2.125,192.168.2.126,192.168.2.127,192.168.2.128,192.168.2.129,192.168.2.130,192.168.2.131,192.168.2.132,192.168.2.133,192.168.2.134,192.168.2.135,192.168.2.136,192.168.2.137,192.168.2.138,192.168.2.139,192.168.2.140,192.168.2.141,192.168.2.142,192.168.2.143,192.168.2.144,192.168.2.145,192.168.2.146,192.168.2.147,192.168.2.148,192.168.2.149,192.168.2.150,192.168.2.151,192.168.2.152,192.168.2.153,192.168.2.154,192.168.2.155,192.168.2.156,192.168.2.157,192.168.2.158,192.168.2.159,192.168.2.160,192.168.2.161";
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--echo # test set read vip, and read vip nums larger than secondary_members nums
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.130";
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.130";
+--let $rpl_connection_name= server3
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.130";
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--echo # test set read vip, and read vip nums less than secondary_members nums
+--let $rpl_connection_name= server1
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128";
+--let $rpl_connection_name= server2
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128";
+--let $rpl_connection_name= server3
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128";
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--echo # test set read vip, and read vip nums larger than secondary_members nums when greatdb_ha_mgr_read_vip_floating_type is TO_PRIMARY
+set global greatdb_ha_mgr_read_vip_floating_type=TO_PRIMARY;
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.130";
+--let $rpl_connection_name= server1
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_floating_type=TO_PRIMARY;
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.130";
+--let $rpl_connection_name= server1
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_floating_type=TO_PRIMARY;
+set global greatdb_ha_mgr_read_vip_ips = "192.168.2.128,192.168.2.129,192.168.2.130";
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--echo
+--echo ############################################################
+--echo # 4. clean up
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--eval UNINSTALL PLUGIN greatdb_ha
+set global debug = '';
+
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--source include/stop_group_replication.inc
+--eval UNINSTALL PLUGIN greatdb_ha
+set global debug = '';
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/stop_group_replication.inc
+--eval UNINSTALL PLUGIN greatdb_ha
+set global debug = '';
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--source include/stop_group_replication.inc
+
+
+--echo ######################[Start test ipv6]#######################
+--echo
+--echo ############################################################
+--echo # 1. Deploy one group which have 3 members in single primary mode.
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--eval INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so'
+set global debug = 'd,test_vip';
+--echo "ready ipv6 variables"
+set global greatdb_ha_mgr_vip_ip = 'fd12:3456:789a:2::7';
+set global greatdb_ha_mgr_read_vip_ips = 'fd12:3456:789a:2::8,fd12:3456:789a:2::9';
+set global greatdb_ha_mgr_vip_mask = '64';
+set global greatdb_ha_mgr_vip_nic = 'eno1';
+--let $server1_uuid= `SELECT @@server_uuid`
+--source include/start_and_bootstrap_group_replication.inc
+--replace_result $server1_uuid MEMBER1_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--eval INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so'
+set global debug = 'd,test_vip';
+--echo "ready ipv6 variables"
+set global greatdb_ha_mgr_vip_ip = 'fd12:3456:789a:2::7';
+set global greatdb_ha_mgr_read_vip_ips = 'fd12:3456:789a:2::8,fd12:3456:789a:2::9';
+set global greatdb_ha_mgr_vip_mask = '64';
+set global greatdb_ha_mgr_vip_nic = 'eno1';
+--source include/start_group_replication.inc
+--let $server2_uuid= `SELECT @@server_uuid`
+--sleep 3
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--eval INSTALL PLUGIN greatdb_ha SONAME 'greatdb_ha.so'
+set global debug = 'd,test_vip';
+--echo "ready ipv6 variables"
+set global greatdb_ha_mgr_vip_ip = 'fd12:3456:789a:2::7';
+set global greatdb_ha_mgr_read_vip_ips = 'fd12:3456:789a:2::8,fd12:3456:789a:2::9';
+set global greatdb_ha_mgr_vip_mask = '64';
+set global greatdb_ha_mgr_vip_nic = 'eno1';
+--source include/start_group_replication.inc
+--let $server3_uuid= `SELECT @@server_uuid`
+--sleep 3
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--echo
+--echo ############################################################
+--echo # 2. test MGR status change then check vip_tope status
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--echo # test change master to server2
+--replace_result $server2_uuid MEMBER2_UUID
+--eval SELECT group_replication_set_as_primary("$server2_uuid")
+--sleep 3
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--echo # primary server2 stop group_replication, then check vip_tope
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/start_group_replication.inc
+--sleep 5
+
+--echo # secondary server3, server2 stop group_replication, then check vip_tope
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 20;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/start_group_replication.inc
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 10;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--source include/start_group_replication.inc
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 10;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+
+--echo
+--echo ############################################################
+--echo # 3. check greatdb_ha variables change then check vip_tope status
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--error ER_WRONG_VALUE_FOR_VAR
+set global greatdb_ha_mgr_vip_ip = "fd12:3456::789a:2::a";
+
+--echo # test set write vip, and check vip_tope changed
+set global greatdb_ha_mgr_vip_ip = "fd12:3456:789a:2::6";
+--let $rpl_connection_name= server2
+--source include/connection.inc
+set global greatdb_ha_mgr_vip_ip = "fd12:3456:789a:2::6";
+--let $rpl_connection_name= server3
+--source include/connection.inc
+set global greatdb_ha_mgr_vip_ip = "fd12:3456:789a:2::6";
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--error ER_WRONG_VALUE_FOR_VAR
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456::789a:2::a";
+
+--echo # test set read vip, and read vip nums larger than secondary_members nums
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456:789a:2::a";
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456:789a:2::a";
+--let $rpl_connection_name= server3
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456:789a:2::a";
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--echo # test set read vip, and read vip nums less than secondary_members nums
+--let $rpl_connection_name= server1
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8";
+--let $rpl_connection_name= server2
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8";
+--let $rpl_connection_name= server3
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8";
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--echo # test set read vip, and read vip nums larger than secondary_members nums when greatdb_ha_mgr_read_vip_floating_type is TO_PRIMARY
+set global greatdb_ha_mgr_read_vip_floating_type=TO_PRIMARY;
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456:789a:2::a";
+--let $rpl_connection_name= server1
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_floating_type=TO_PRIMARY;
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456:789a:2::a";
+--let $rpl_connection_name= server1
+--source include/connection.inc
+set global greatdb_ha_mgr_read_vip_floating_type=TO_PRIMARY;
+set global greatdb_ha_mgr_read_vip_ips = "fd12:3456:789a:2::8,fd12:3456:789a:2::9,fd12:3456:789a:2::a";
+--let $rpl_connection_name= server1
+--source include/connection.inc
+sleep 5;
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--replace_result $server1_uuid MEMBER1_UUID $server2_uuid MEMBER2_UUID $server3_uuid MEMBER3_UUID
+select @@greatdb_ha_vip_tope;
+
+--echo
+--echo ############################################################
+--echo # 4. clean up
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--eval UNINSTALL PLUGIN greatdb_ha
+set global debug = '';
+
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--source include/stop_group_replication.inc
+--eval UNINSTALL PLUGIN greatdb_ha
+set global debug = '';
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/stop_group_replication.inc
+--eval UNINSTALL PLUGIN greatdb_ha
+set global debug = '';
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_group_replication_reset_persistent_vars=1
+--source include/group_replication_end.inc
+

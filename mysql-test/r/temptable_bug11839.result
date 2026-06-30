@@ -1,0 +1,92 @@
+CREATE TABLE esop_organization (
+ORG_ID decimal(12,0) NOT NULL COMMENT '机构ID',
+ORG_NAME varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL COMMENT '组织名称',
+ORG_CODE varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL COMMENT '组织编码',
+ORG_TYPE varchar(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT (_utf8mb4'01') COMMENT '组织类型',
+ORG_LEVEL varchar(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '组织级别',
+PORG_ID decimal(12,0) DEFAULT NULL COMMENT '上级机构ID',
+ORG_STATE varchar(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL COMMENT '机构状态(1-有效，0-无效 对应esop：00A-有效,00X-无效)',
+COMMENTS varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '备注',
+MANAGER_FLAG varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '管理标识',
+SOET_WEEKLY varchar(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT 'SOET_WEEKLY',
+CONTACT_NAME varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '联系人姓名',
+CONTACT_TELEPHONE decimal(32,0) DEFAULT NULL COMMENT '联系电话',
+OTHER_TELEPHONE decimal(32,0) DEFAULT NULL COMMENT '其他人电话',
+OFFICE_ADDR varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '办公地址',
+PROVINCE varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '机构归属省',
+CITY varchar(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '机构归属市',
+COUNTRY varchar(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '机构归属县(区)',
+ORG_CLASS varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '机构类别：01-政企内部组织;02-省公司组织;03-代理商组织;04-其他外部组织(01、02、03类别外的组织，包括供应商组织等)',
+UPDATE_TIME datetime DEFAULT NULL COMMENT '更新时间 yyyyMMdd',
+OPERATE_TYPE varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '更新类型：1-新增、2-修改、3-删除',
+CREATE_TIME datetime DEFAULT NULL COMMENT '创建时间',
+KEY IDX_ESOP_ORGANIZATION (ORG_ID,PORG_ID),
+KEY INX_ESOP_ORG_OID (ORG_ID),
+KEY IDX_PROVINCE_CITY (PROVINCE,CITY)
+);
+insert into esop_organization values(29100709,'紫阳县',29100709,01,5,291007,1,null,null,null,null,null,null,null,290,9150,915009,02,'2018-02-09 04:19:00',1,'2017-11-15 00:00:00');
+CREATE TABLE esop_users (
+USER_ID decimal(14,0) NOT NULL COMMENT '用户ID',
+USER_NAME varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL COMMENT '用户名称',
+NICK_NAME varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '昵称  Alias',
+USER_CODE varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL COMMENT '用户编码',
+PASS_WORD varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '密码',
+ORG_ID decimal(12,0) DEFAULT NULL COMMENT '机构ID',
+POSITION varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '职位',
+FUNCTIONS varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '功能',
+MOBILE_NO varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '手机号',
+EXTENSION_NO varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '分机号',
+EMAIL varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '邮箱',
+STATE varchar(4) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '状态 0为无效, 1为有效',
+COMMENTS varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '备注',
+SCORE decimal(10,0) DEFAULT NULL COMMENT '积分',
+IDCARD varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '身份证',
+AUDIT_STATE decimal(1,0) DEFAULT NULL COMMENT '审计状态',
+UPDATE_TIME datetime DEFAULT NULL COMMENT '更新时间 yyyyMMddHHmmss',
+OPERATE_TYPE varchar(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '更新类型：1-新增、2-修改、3-删除',
+MAPPINGCODE varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL COMMENT '映射码',
+CREATE_TIME datetime DEFAULT NULL COMMENT '创建时间',
+KEY IDX_ESOP_USERS_ID (USER_ID,USER_CODE),
+KEY INX_EUS_MCOD (MAPPINGCODE),
+KEY INX_EUERS_UNM (USER_NAME),
+KEY IDX_ESOP_USERS_MOBILE_NO (MOBILE_NO),
+KEY INX_ESOP_USR_ID (USER_ID),
+KEY IDX_ESOP_USERS_USER_CODE (USER_CODE),
+KEY IDX_ORG_ID (ORG_ID)
+);
+insert into esop_users(USER_ID,user_name,user_code,org_id) values(1001,'daizhong','daizhong',1);
+insert into esop_users(USER_ID,user_name,user_code,org_id) values(1002,'daizhong1','daizhong1',29100709);
+set tmp_table_size=1342;
+WITH RECURSIVE cte_tree AS ( SELECT 1 AS LEVEL, t.org_id,t.org_id as porg_id,user_name, nick_name, user_code FROM esop_users t
+UNION ALL SELECT LEVEL + 1 AS LEVEL, pt.org_id,pt.porg_id,pt.ORG_NAME,pt.CONTACT_NAME,pt.ORG_CODE
+FROM esop_organization pt JOIN cte_tree ct ON pt.org_id = ct.porg_id ) 
+SELECT a.* FROM cte_tree a;
+LEVEL	org_id	porg_id	user_name	nick_name	user_code
+1	1	1	daizhong	NULL	daizhong
+1	29100709	29100709	daizhong1	NULL	daizhong1
+2	29100709	291007	紫阳县	NULL	29100709
+WITH RECURSIVE cte_tree AS ( SELECT 1 AS LEVEL, t.org_id,t.org_id as porg_id,user_name, nick_name, user_code FROM esop_users t
+UNION ALL SELECT LEVEL + 1 AS LEVEL, pt.org_id,pt.porg_id,pt.ORG_NAME,pt.CONTACT_NAME,pt.ORG_CODE
+FROM esop_organization pt JOIN cte_tree ct ON pt.org_id = ct.porg_id ) 
+SELECT a.* FROM cte_tree a;
+LEVEL	org_id	porg_id	user_name	nick_name	user_code
+1	1	1	daizhong	NULL	daizhong
+1	29100709	29100709	daizhong1	NULL	daizhong1
+2	29100709	291007	紫阳县	NULL	29100709
+drop table esop_organization,esop_users;
+CREATE TABLE t7 (
+ID int NOT NULL AUTO_INCREMENT,
+NAME varchar(128) COLLATE utf8mb4_bin DEFAULT NULL,
+PARENTNODEID int DEFAULT NULL,
+STATE int DEFAULT NULL,
+PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+insert into t7 values(-1,'万里',0,1);
+WITH RECURSIVE cte AS(   (select id    from t7 where id= -1)   UNION   (select b.id     from t7 b inner join cte on cte.id=b.parentNodeid and b.state =1) ) select * from cte;
+id
+-1
+set tmp_table_size=1024;
+WITH RECURSIVE cte AS(   (select id    from t7 where id= -1)   UNION   (select b.id     from t7 b inner join cte on cte.id=b.parentNodeid and b.state =1) ) select * from cte;
+id
+-1
+drop table t7;

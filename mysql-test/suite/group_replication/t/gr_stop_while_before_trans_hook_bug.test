@@ -1,0 +1,76 @@
+--let $group_replication_group_name= 8a94f357-aab4-11df-86ab-c80aa9429563
+--source include/have_group_replication_plugin.inc
+--source include/group_replication.inc
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+SET SESSION sql_log_bin= 0;
+call mtr.add_suppression("Error waiting for group executed transactions commit on session");
+SET SESSION sql_log_bin= 1;
+
+connect (conn2_1,127.0.0.1,root,,test,$SLAVE_MYPORT,);
+connect (conn2_2,127.0.0.1,root,,test,$SLAVE_MYPORT,);
+connect (conn2_3,127.0.0.1,root,,test,$SLAVE_MYPORT,);
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+CREATE TABLE t2 (c1 INT PRIMARY KEY, c2 INT);
+INSERT INTO t1 VALUES (1,1);
+INSERT INTO t2 VALUES (1,1);
+--let $sync_slave_connection= server2
+--source include/rpl/sync_to_replica.inc
+
+--echo [connect conn2_1]
+connection conn2_1;
+LOCK TABLE t1 READ;
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+UPDATE t1 SET c2=c2+1;
+UPDATE t2 SET c2=c2+1;
+UPDATE t2 SET c2=c2+1;
+UPDATE t2 SET c2=c2+1;
+UPDATE t2 SET c2=c2+1;
+UPDATE t2 SET c2=c2+1;
+sleep 1;
+
+--echo [connect conn2_2]
+connection conn2_2;
+SET SESSION group_replication_consistency='BEFORE';
+send SELECT * FROM t2;
+sleep 1;
+
+--echo [connect conn2_3]
+connection conn2_3;
+SELECT db, command, state, info FROM information_schema.processlist WHERE state='Executing hook on transaction begin.';
+send STOP GROUP_REPLICATION;
+
+--echo [connect conn2_2]
+connection conn2_2;
+--error ER_GRP_TRX_CONSISTENCY_BEFORE
+reap;
+
+--echo [connect conn2_1]
+connection conn2_1;
+SELECT db, command, state, info FROM information_schema.processlist WHERE info='STOP GROUP_REPLICATION';
+UNLOCK TABLES;
+
+--echo [connect conn2_3]
+connection conn2_3;
+reap;
+
+disconnect conn2_1;
+disconnect conn2_2;
+disconnect conn2_3;
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/start_group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+DROP TABLE t1;
+DROP TABLE t2;
+
+--source include/group_replication_end.inc

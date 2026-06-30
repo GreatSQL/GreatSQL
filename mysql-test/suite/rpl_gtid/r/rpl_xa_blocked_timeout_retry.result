@@ -1,0 +1,688 @@
+include/rpl/init.inc [topology=1->2]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server_1]
+SET sql_log_bin=OFF;
+call mtr.add_suppression("Waiting for prepared transaction to exit");
+call mtr.add_suppression("Client: Clone blocked XA operation too long");
+SET sql_log_bin=ON;
+[connection server_2]
+SET sql_log_bin=OFF;
+call mtr.add_suppression("Waiting for prepared transaction to exit");
+call mtr.add_suppression("Client: Clone blocked XA operation too long");
+call mtr.add_suppression("Replica SQL for channel.*XA PREPARE operation is blocked timeout by clone");
+call mtr.add_suppression("Replica SQL for channel.*XA COMMIT operation is blocked timeout by clone");
+call mtr.add_suppression("Replica SQL for channel.*XA ROLLBACK operation is blocked timeout by clone");
+SET sql_log_bin=ON;
+[connection server_1]
+CREATE TABLE t1 (c1 INT, c2 INT);
+include/rpl/sync.inc
+[connection server_2]
+SELECT * FROM t1;
+c1	c2
+[connection server_1]
+INSTALL PLUGIN clone SONAME 'mysql_clone.so';
+SET GLOBAL clone_data_recovery_mode=CLONE_DATA_RECOVERY_BINLOG_POSITION;
+[connection server_2]
+INSTALL PLUGIN clone SONAME 'mysql_clone.so';
+SET GLOBAL clone_data_recovery_mode=CLONE_DATA_RECOVERY_BINLOG_POSITION;
+## test XA block timeout on slave side
+## First, test XA PREPARE blocked by clone
+[connection server_2]
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+[1. do clone and wait before synchronize_binlog]
+[connect conn2_1]
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+[connection server_2]
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+[2. commit a big transaction, which engine prepared, but not finish yet]
+[connect conn2_2]
+BEGIN;
+INSERT INTO t1 VALUES (10,10);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+COMMIT;
+[connection server_2]
+SET debug_sync='now wait_for clone_trx_prepared';
+[3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+[connection server_2]
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+[4. now, XA PREPARE from master server]
+[connection server_2]
+SET GLOBAL debug='+d,error_on_xa_blocked_timeout';
+[connection server_1]
+XA START '1';
+INSERT INTO t1 VALUES (1,1);
+XA END '1';
+XA PREPARE '1';
+[5. XA PREPARE in slave will hang and timeout]
+[connection server_2]
+SELECT user, command, state, info FROM information_schema.processlist WHERE state='Executing event';
+user	command	state	info
+system user	Query	Executing event	NULL
+Warnings:
+Warning	1287	'INFORMATION_SCHEMA.PROCESSLIST' is deprecated and will be removed in a future release. Please use performance_schema.processlist instead
+SET debug_sync='now wait_for xa_blocked_timeout_retry_start';
+[6. check errorlog]
+include/assert_grep.inc [XA PREPARE is blocked timeout ]
+include/assert_grep.inc [XA PREPARE transaction is error ]
+[7. now, the big transaction finish commit, and clone progress will finish]
+[connection server_2]
+SET debug_sync='now signal clone_trx_commit_continue';
+[connect conn2_2]
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+[connect conn2_1]
+[connection server_2]
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,error_on_xa_blocked_timeout';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+SET debug_sync='now signal xa_blocked_timeout_retry_continue';
+[8. check XA PREPARE transaction finish]
+[connection server_1]
+include/rpl/sync.inc
+[connection server_2]
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+[connection server_1]
+XA COMMIT '1';
+include/rpl/sync.inc
+[connection server_2]
+SELECT * FROM t1;
+c1	c2
+10	10
+1	1
+## Secondary, test XA COMMIT blocked by clone
+[connection server_1]
+XA START '2';
+INSERT INTO t1 VALUES (2,2);
+XA END '2';
+XA PREPARE '2';
+include/rpl/sync.inc
+[connection server_2]
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	2
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+[1. do clone and wait before synchronize_binlog]
+[connect conn2_1]
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+[connection server_2]
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+[2. commit a big transaction, which engine prepared, but not finish yet]
+[connect conn2_2]
+BEGIN;
+INSERT INTO t1 VALUES (20,20);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+COMMIT;
+[connection server_2]
+SET debug_sync='now wait_for clone_trx_prepared';
+[3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+[connection server_2]
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+[4. now, XA COMMIT from master server]
+[connection server_2]
+SET GLOBAL debug='+d,error_on_xa_blocked_timeout';
+[connection server_1]
+XA COMMIT '2';
+[5. XA COMMIT in slave will hang and timeout]
+[connection server_2]
+SELECT user, command, state, info FROM information_schema.processlist WHERE info LIKE '%XA COMMIT%';
+user	command	state	info
+root	Query	executing	SELECT user, command, state, info FROM information_schema.processlist WHERE info LIKE '%XA COMMIT%'
+system user	Query	starting	XA COMMIT X'32',X'',1
+Warnings:
+Warning	1287	'INFORMATION_SCHEMA.PROCESSLIST' is deprecated and will be removed in a future release. Please use performance_schema.processlist instead
+SET debug_sync='now wait_for xa_blocked_timeout_retry_start';
+[6. check errorlog]
+include/assert_grep.inc [XA COMMIT is blocked timeout ]
+include/assert_grep.inc [XA COMMIT transaction is error ]
+[7. now, the big transaction finish commit, and clone progress will finish]
+[connection server_2]
+SET debug_sync='now signal clone_trx_commit_continue';
+[connect conn2_2]
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+[connect conn2_1]
+[connection server_2]
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,error_on_xa_blocked_timeout';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+SET debug_sync='now signal xa_blocked_timeout_retry_continue';
+[8. check XA COMMIT transaction finish]
+[connection server_1]
+include/rpl/sync.inc
+[connection server_2]
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+SELECT * FROM t1;
+c1	c2
+10	10
+1	1
+2	2
+20	20
+## Third, test XA ROLLBACK blocked by clone
+[connection server_1]
+XA START '3';
+INSERT INTO t1 VALUES (3,3);
+XA END '3';
+XA PREPARE '3';
+include/rpl/sync.inc
+[connection server_2]
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	3
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+[1. do clone and wait before synchronize_binlog]
+[connect conn2_1]
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+[connection server_2]
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+[2. commit a big transaction, which engine prepared, but not finish yet]
+[connect conn2_2]
+BEGIN;
+INSERT INTO t1 VALUES (30,30);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+COMMIT;
+[connection server_2]
+SET debug_sync='now wait_for clone_trx_prepared';
+[3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+[connection server_2]
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+[4. now, XA ROLLBACK from master server]
+[connection server_2]
+SET GLOBAL debug='+d,error_on_xa_blocked_timeout';
+[connection server_1]
+XA ROLLBACK '3';
+[5. XA ROLLBACK in slave will hang and timeout]
+[connection server_2]
+SELECT user, command, state, info FROM information_schema.processlist WHERE info LIKE '%XA ROLLBACK%';
+user	command	state	info
+root	Query	executing	SELECT user, command, state, info FROM information_schema.processlist WHERE info LIKE '%XA ROLLBACK%'
+system user	Query	starting	XA ROLLBACK X'33',X'',1
+Warnings:
+Warning	1287	'INFORMATION_SCHEMA.PROCESSLIST' is deprecated and will be removed in a future release. Please use performance_schema.processlist instead
+SET debug_sync='now wait_for xa_blocked_timeout_retry_start';
+[6. check errorlog]
+include/assert_grep.inc [XA ROLLBACK is blocked timeout ]
+include/assert_grep.inc [XA ROLLBACK transaction is error ]
+[7. now, the big transaction finish commit, and clone progress will finish]
+[connection server_2]
+SET debug_sync='now signal clone_trx_commit_continue';
+[connect conn2_2]
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+[connect conn2_1]
+[connection server_2]
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,error_on_xa_blocked_timeout';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+SET debug_sync='now signal xa_blocked_timeout_retry_continue';
+[8. check XA ROLLBACK transaction finish]
+[connection server_1]
+include/rpl/sync.inc
+[connection server_2]
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+SELECT * FROM t1;
+c1	c2
+10	10
+1	1
+2	2
+20	20
+30	30
+## test XA block timeout on master side
+[connection server_1]
+TRUNCATE TABLE t1;
+include/rpl/sync.inc
+[connection server_2]
+SELECT * FROM t1;
+c1	c2
+## First, test XA PREPARE block by clone
+[connection server_1]
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+[1. do clone and wait before synchronize_binlog]
+[connect conn1_1]
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+[connection server_1]
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+[2. commit a big transaction, which engine prepared, but not finish yet]
+[connect conn1_2]
+BEGIN;
+INSERT INTO t1 VALUES (1,1);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+COMMIT;
+[connection server_1]
+SET debug_sync='now wait_for clone_trx_prepared';
+[3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+[connection server_1]
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+[4. now, do XA PREPARE, it will timeout and error]
+[connect conn1_3]
+XA START '1';
+INSERT INTO t1 VALUES (10,10);
+XA END '1';
+XA PREPARE '1';
+ERROR HY000: XA PREPARE operation is blocked timeout by clone
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+[5. check errorlog]
+include/assert_grep.inc [XA PREPARE is blocked timeout ]
+[6. now, the big transaction finish commit, and clone progress will finish]
+[connection server_1]
+SET debug_sync='now signal clone_trx_commit_continue';
+[connect conn1_2]
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+[connect conn1_1]
+[connection server_1]
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+[7. check connection can still do next transaction]
+[connect conn1_3]
+XA START '1';
+INSERT INTO t1 VALUES (11,11);
+XA END '1';
+XA PREPARE '1';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	1
+XA COMMIT '1';
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+[connection server_1]
+include/rpl/sync.inc
+[connection server_2]
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+## Secondary, test attached XA COMMIT block by clone
+[connection server_1]
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+[connect conn1_3]
+SET SESSION xa_detach_on_prepare=OFF;
+XA START '2';
+INSERT INTO t1 VALUES (20,20);
+XA END '2';
+XA PREPARE '2';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	2
+[1. do clone and wait before synchronize_binlog]
+[connect conn1_1]
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+[connection server_1]
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+[2. commit a big transaction, which engine prepared, but not finish yet]
+[connect conn1_2]
+BEGIN;
+INSERT INTO t1 VALUES (2,2);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+COMMIT;
+[connection server_1]
+SET debug_sync='now wait_for clone_trx_prepared';
+[3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+[connection server_1]
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+[4. now, do XA COMMIT, it will timeout and error]
+[connect conn1_3]
+XA COMMIT '2';
+ERROR HY000: XA COMMIT operation is blocked timeout by clone
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	2
+SELECT * FROM t1;
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  PREPARED state
+[5. check errorlog]
+include/assert_grep.inc [XA COMMIT is blocked timeout ]
+[6. now, the big transaction finish commit, and clone progress will finish]
+[connection server_1]
+SET debug_sync='now signal clone_trx_commit_continue';
+[connect conn1_2]
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+[connect conn1_1]
+[connection server_1]
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+[7. check connection can still do next transaction]
+[connect conn1_3]
+XA COMMIT '2';
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+XA START '2_2';
+INSERT INTO t1 VALUES (21,21);
+XA END '2_2';
+XA PREPARE '2_2';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	3	0	2_2
+XA COMMIT '2_2';
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+[connection server_1]
+include/rpl/sync.inc
+[connection server_2]
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+## Third, test attached XA ROLLBACK block by clone
+[connection server_1]
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+[connect conn1_3]
+SET SESSION xa_detach_on_prepare=OFF;
+XA START '3';
+INSERT INTO t1 VALUES (30,30);
+XA END '3';
+XA PREPARE '3';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	3
+[1. do clone and wait before synchronize_binlog]
+[connect conn1_1]
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+[connection server_1]
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+[2. commit a big transaction, which engine prepared, but not finish yet]
+[connect conn1_2]
+BEGIN;
+INSERT INTO t1 VALUES (3,3);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+COMMIT;
+[connection server_1]
+SET debug_sync='now wait_for clone_trx_prepared';
+[3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+[connection server_1]
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+[4. now, do XA COMMIT, it will timeout and error]
+[connect conn1_3]
+XA ROLLBACK '3';
+ERROR HY000: XA ROLLBACK operation is blocked timeout by clone
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	3
+SELECT * FROM t1;
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  PREPARED state
+[5. check errorlog]
+include/assert_grep.inc [XA ROLLBACK is blocked timeout ]
+[6. now, the big transaction finish commit, and clone progress will finish]
+[connection server_1]
+SET debug_sync='now signal clone_trx_commit_continue';
+[connect conn1_2]
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+[connect conn1_1]
+[connection server_1]
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+[7. check connection can still do next transaction]
+[connect conn1_3]
+XA ROLLBACK '3';
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+3	3
+XA START '3_3';
+INSERT INTO t1 VALUES (31,31);
+XA END '3_3';
+XA PREPARE '3_3';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	3	0	3_3
+XA ROLLBACK '3_3';
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+3	3
+[connection server_1]
+include/rpl/sync.inc
+[connection server_2]
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+3	3
+## Forth, test dettached XA COMMIT block by clone
+[connection server_1]
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+[connect conn1_3]
+SET SESSION xa_detach_on_prepare=ON;
+XA START '4';
+INSERT INTO t1 VALUES (40,40);
+XA END '4';
+XA PREPARE '4';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	4
+[1. do clone and wait before synchronize_binlog]
+[connect conn1_1]
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+[connection server_1]
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+[2. commit a big transaction, which engine prepared, but not finish yet]
+[connect conn1_2]
+BEGIN;
+INSERT INTO t1 VALUES (4,4);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+COMMIT;
+[connection server_1]
+SET debug_sync='now wait_for clone_trx_prepared';
+[3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+[connection server_1]
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+[4. now, do XA COMMIT, it will timeout and error]
+[connect conn1_3]
+XA COMMIT '4';
+ERROR HY000: XA COMMIT operation is blocked timeout by clone
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	4
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+3	3
+[5. check errorlog]
+include/assert_grep.inc [XA COMMIT is blocked timeout ]
+[6. now, the big transaction finish commit, and clone progress will finish]
+[connection server_1]
+SET debug_sync='now signal clone_trx_commit_continue';
+[connect conn1_2]
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+[connect conn1_1]
+[connection server_1]
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+[7. check connection can still do next transaction]
+[connect conn1_3]
+XA COMMIT '4';
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+3	3
+40	40
+4	4
+XA START '4_4';
+INSERT INTO t1 VALUES (41,41);
+XA END '4_4';
+XA PREPARE '4_4';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	3	0	4_4
+XA COMMIT '4_4';
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+3	3
+40	40
+4	4
+41	41
+[connection server_1]
+include/rpl/sync.inc
+[connection server_2]
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+3	3
+40	40
+4	4
+41	41
+## Fifth, test dettached XA ROLLBACK block by clone
+[connection server_1]
+SET GLOBAL debug='+d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='+d,test_small_clone_block_timeout';
+[connect conn1_3]
+SET SESSION xa_detach_on_prepare=ON;
+XA START '5';
+INSERT INTO t1 VALUES (50,50);
+XA END '5';
+XA PREPARE '5';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	5
+[1. do clone and wait before synchronize_binlog]
+[connect conn1_1]
+CLONE LOCAL DATA DIRECTORY = 'CLONE_DATADIR';
+[connection server_1]
+SET debug_sync='now wait_for redo_copy_before_synchronize_binlog';
+[2. commit a big transaction, which engine prepared, but not finish yet]
+[connect conn1_2]
+BEGIN;
+INSERT INTO t1 VALUES (5,5);
+SET debug='+d,test_big_trx_during_clone_redo_copy';
+COMMIT;
+[connection server_1]
+SET debug_sync='now wait_for clone_trx_prepared';
+[3. then, continue clone synchronize_binlog, which should wait until the big transaction finish]
+[connection server_1]
+SET debug_sync='now signal redo_copy_continue_synchronize_binlog';
+[4. now, do XA COMMIT, it will timeout and error]
+[connect conn1_3]
+XA ROLLBACK '5';
+ERROR HY000: XA ROLLBACK operation is blocked timeout by clone
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	1	0	5
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+3	3
+40	40
+4	4
+41	41
+[5. check errorlog]
+include/assert_grep.inc [XA ROLLBACK is blocked timeout ]
+[6. now, the big transaction finish commit, and clone progress will finish]
+[connection server_1]
+SET debug_sync='now signal clone_trx_commit_continue';
+[connect conn1_2]
+SET debug='-d,test_big_trx_during_clone_redo_copy';
+[connect conn1_1]
+[connection server_1]
+SET GLOBAL debug='-d,test_clone_redo_copy_synchronize_binlog';
+SET GLOBAL debug='-d,test_small_clone_block_timeout';
+[7. check connection can still do next transaction]
+[connect conn1_3]
+XA ROLLBACK '5';
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+3	3
+40	40
+4	4
+41	41
+5	5
+XA START '5_5';
+INSERT INTO t1 VALUES (51,51);
+XA END '5_5';
+XA PREPARE '5_5';
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+1	3	0	5_5
+XA ROLLBACK '5_5';
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+3	3
+40	40
+4	4
+41	41
+5	5
+[connection server_1]
+include/rpl/sync.inc
+[connection server_2]
+SELECT * FROM t1;
+c1	c2
+1	1
+11	11
+20	20
+2	2
+21	21
+3	3
+40	40
+4	4
+41	41
+5	5
+[connection server_1]
+DROP TABLE t1;
+include/rpl/sync.inc
+UNINSTALL PLUGIN clone;
+[connection server_2]
+UNINSTALL PLUGIN clone;
+include/rpl/deinit.inc

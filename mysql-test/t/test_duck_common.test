@@ -1,0 +1,142 @@
+# test for common code between turbo and rapid
+--source include/no_turbo.inc
+--source include/elide_costs_and_rows.inc
+
+SET sql_log_bin=OFF;
+call mtr.add_suppression("finish load data for database test table t1 failed");
+SET sql_log_bin=On;
+
+##############################################################
+# test turbo
+##############################################################
+--source include/install_turbo_plugin.inc
+
+--echo ################## bug 12714 turbo
+
+CREATE TABLE t1 (t TIME);
+INSERT INTO t1 VALUES (+11), (+12.0), (+13e0);
+INSERT INTO t1 VALUES (-9), (-8.0), (-7e0);
+
+SELECT * FROM t1 order by 1;
+
+set turbo_enable=forced;
+
+--error ER_QUERY_PLAN_PLUGIN
+SELECT * FROM t1 order by 1;
+
+delete from t1 where t in (-9, -8.0, -7e0);
+
+--replace_regex $elide_costs_and_rows
+explain format=tree SELECT * FROM t1 order by 1;
+SELECT * FROM t1 order by 1;
+
+
+--echo ################## bug 12758 turbo
+
+set turbo_enable=default;
+
+create table test      (a float, b double, c real, d decimal(18,6), e numeric(18,6), f fixed(18,6));
+insert into test values(123,     456,      789,    101,             234,             567);
+insert into test values(123.456, 456.789,  789.101,101.345,         234.567,         567.891);
+insert into test values(
+    123.45678910123456789101,
+    456.78910123456789101234,
+    789.10123456789101234567,
+    101.34567891012345678910,
+    234.56789101234567891012,
+    567.89123456789101234567
+);
+
+create table test_mdec (a float(18,6), b double(18,6), c real(18,6), d decimal(18,6), e numeric(18,6), f fixed(18,6));
+insert into test_mdec values(123.123456,456.123456,789.123456,101.123456,234.123456,567.123456);
+
+select * from test;
+select * from test_mdec;
+
+set turbo_enable = forced;
+-- error ER_QUERY_PLAN_PLUGIN
+select cast(a as varchar(32)) from test_mdec;
+-- error ER_QUERY_PLAN_PLUGIN
+select cast(b as varchar(32)) from test_mdec;
+set turbo_enable = default;
+
+--echo "TEST turbo"
+
+let $cols = a b c d e f;
+
+let $query1_init_env= set turbo_enable = forced;
+let $query2_init_env= set turbo_enable = off;
+
+
+let $i=1;
+while ($i <= 6) {
+  let $col= `SELECT SUBSTRING_INDEX(SUBSTRING_INDEX('$cols', ' ', $i), ' ', -1)`;
+
+  echo >>> Executing cast on $col;
+
+  let $query1= SELECT cast($col as varchar(32)) from test order by 1;
+  let query2= $query1;
+  source include/diff_duckdb_queries.inc;
+
+  inc $i;
+}
+
+
+--source include/uninstall_turbo_plugin.inc
+
+##############################################################
+# test rapid
+##############################################################
+
+INSTALL PLUGIN rapid SONAME "ha_rapid.so";
+
+--echo ################## bug 12714 rapid
+
+set use_secondary_engine = forced;
+
+INSERT INTO t1 VALUES (-9), (-8.0), (-7e0);
+
+alter table t1 secondary_engine=rapid;
+--error ER_SECONDARY_ENGINE_PLUGIN
+ALTER TABLE t1 SECONDARY_LOAD;
+
+delete from t1 where t in (-9, -8.0, -7e0);
+
+ALTER TABLE t1 SECONDARY_LOAD;
+
+--replace_regex $elide_costs_and_rows
+explain format=tree SELECT * FROM t1 order by 1;
+SELECT * FROM t1 order by 1;
+
+set use_secondary_engine = default;
+
+--echo ################## bug 12758 rapid
+
+alter table test secondary_engine=rapid;
+alter table test secondary_load;
+
+alter table test_mdec secondary_engine=rapid;
+--error 3877
+alter table test_mdec secondary_load;
+
+let $query1_init_env= set use_secondary_engine = forced;
+let $query2_init_env= set use_secondary_engine = off;
+
+let $i=1;
+while ($i <= 6) {
+  let $col= `SELECT SUBSTRING_INDEX(SUBSTRING_INDEX('$cols', ' ', $i), ' ', -1)`;
+
+  echo >>> Executing cast on $col;
+
+  let $query1= SELECT cast($col as varchar(32)) from test order by 1;
+  let query2= $query1;
+  source include/diff_duckdb_queries.inc;
+
+  inc $i;
+}
+
+drop table t1;
+drop table test;
+drop table test_mdec;
+
+UNINSTALL PLUGIN rapid;

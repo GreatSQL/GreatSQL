@@ -1,0 +1,21 @@
+--source include/have_debug.inc
+CREATE TABLE t1 (c1 INT PRIMARY KEY, c2 INT);
+INSERT INTO t1 VALUES (1,1),(2,2),(3,3),(4,4),(5,5);
+SET debug='+d,xa_commit_one_phase_error';
+XA START '1';
+UPDATE t1 SET c2=c2+1;
+XA END '1';
+--error ER_XA_RBROLLBACK
+XA COMMIT '1' ONE PHASE;
+XA RECOVER;
+SELECT * FROM t1;
+SET debug='-d,xa_commit_one_phase_error';
+UPDATE t1 SET c2=c2+1;
+SELECT * FROM t1;
+XA START '1';
+UPDATE t1 SET c2=c2+1;
+XA END '1';
+XA COMMIT '1' ONE PHASE;
+XA RECOVER;
+SELECT * FROM t1;
+DROP TABLE t1;

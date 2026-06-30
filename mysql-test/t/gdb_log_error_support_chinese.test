@@ -1,0 +1,8 @@
+# Task #2991: [Log] error log supports chinese language
+--source include/have_debug.inc
+call mtr.add_suppression("Warning");
+set @@debug='+d,test_errorlog_support_chinese';
+set global errorlog_messages_language = 'zh_CN';
+select PRIO,ERROR_CODE,SUBSYSTEM,DATA from performance_schema.error_log where ERROR_CODE = 'MY-011071'  or  ERROR_CODE >= 'MY-010025' and  ERROR_CODE <= 'MY-010030' order by LOGGED ;
+set global errorlog_messages_language = 'en_US';
+set @@debug='-d,test_errorlog_support_chinese';

@@ -1,0 +1,162 @@
+create table test as select 1;
+create or replace view tv as 
+select * from (
+select '中文' as a from test
+union all
+select 'engl' as a from test
+);
+Warnings:
+Warning	1300	Invalid utf8mb4 character string: 'D6D0CE'
+Warning	1300	Cannot convert string '\xD6\xD0\xCE\xC4' from utf8mb4 to utf8mb3
+create or replace view tvx as 
+select * from (
+select '' as a from test
+union all
+select 'engl' as a from test
+);
+# invalid charactor string would be cast to empty string, follow 4 sql return same result
+select * from tv  order by 1;
+a
+
+engl
+Warnings:
+Warning	1300	Invalid utf8mb4 character string: 'D6D0CE'
+Warning	1366	Incorrect string value: '\xD6\xD0\xCE\xC4' for column 'a' at row 1
+select * from tvx order by 1;
+a
+
+engl
+select * from (
+select '' as a from test
+union all
+select 'engl' as a from test
+) order by 1;
+a
+
+engl
+select * from (
+select '中文' as a from test
+union all
+select 'engl' as a from test
+) order by 1;
+a
+
+engl
+Warnings:
+Warning	1300	Invalid utf8mb4 character string: 'D6D0CE'
+Warning	1366	Incorrect string value: '\xD6\xD0\xCE\xC4' for column 'a' at row 1
+# return empty result set
+select * from tv except select * from tvx except select * from (
+select '' as a from test
+union all
+select 'engl' as a from test
+) except select * from (
+select '中文' as a from test
+union all
+select 'engl' as a from test
+) order by 1;
+a
+Warnings:
+Warning	1300	Invalid utf8mb4 character string: 'D6D0CE'
+Warning	1366	Incorrect string value: '\xD6\xD0\xCE\xC4' for column 'a' at row 1
+Warning	1366	Incorrect string value: '\xD6\xD0\xCE\xC4' for column 'a' at row 1
+set sql_mode='oracle,EMPTYSTRING_EQUAL_NULL';
+# invalid charactor string would be cast to empty string 
+# and then treated as null, follow 4 sql return same result
+select * from tv  order by 1;
+a
+engl
+NULL
+Warnings:
+Warning	1300	Invalid utf8mb4 character string: 'D6D0CE'
+Warning	1366	Incorrect string value: '\xD6\xD0\xCE\xC4' for column 'a' at row 1
+select * from tvx order by 1;
+a
+engl
+NULL
+select * from (
+select '' as a from test
+union all
+select 'engl' as a from test
+) order by 1;
+a
+engl
+NULL
+select * from (
+select '中文' as a from test
+union all
+select 'engl' as a from test
+) order by 1;
+a
+engl
+NULL
+Warnings:
+Warning	1300	Invalid utf8mb4 character string: 'D6D0CE'
+Warning	1366	Incorrect string value: '\xD6\xD0\xCE\xC4' for column 'a' at row 1
+# return empty result set
+select * from tv except select * from tvx except select * from (
+select '' as a from test
+union all
+select 'engl' as a from test
+) except select * from (
+select '中文' as a from test
+union all
+select 'engl' as a from test
+) order by 1;
+a
+Warnings:
+Warning	1300	Invalid utf8mb4 character string: 'D6D0CE'
+Warning	1366	Incorrect string value: '\xD6\xD0\xCE\xC4' for column 'a' at row 1
+Warning	1366	Incorrect string value: '\xD6\xD0\xCE\xC4' for column 'a' at row 1
+set sql_mode='EMPTYSTRING_EQUAL_NULL';
+# invalid charactor string would be cast to empty string 
+# and then treated as null, follow 4 sql return same result
+select * from tv  order by 1;
+a
+NULL
+engl
+Warnings:
+Warning	1300	Invalid utf8mb4 character string: 'D6D0CE'
+Warning	1366	Incorrect string value: '\xD6\xD0\xCE\xC4' for column 'a' at row 1
+select * from tvx order by 1;
+a
+NULL
+engl
+select * from (
+select '' as a from test
+union all
+select 'engl' as a from test
+) order by 1;
+a
+NULL
+engl
+select * from (
+select '中文' as a from test
+union all
+select 'engl' as a from test
+) order by 1;
+a
+NULL
+engl
+Warnings:
+Warning	1300	Invalid utf8mb4 character string: 'D6D0CE'
+Warning	1366	Incorrect string value: '\xD6\xD0\xCE\xC4' for column 'a' at row 1
+# return empty result set
+select * from tv except select * from tvx except select * from (
+select '' as a from test
+union all
+select 'engl' as a from test
+) except select * from (
+select '中文' as a from test
+union all
+select 'engl' as a from test
+) order by 1;
+a
+Warnings:
+Warning	1300	Invalid utf8mb4 character string: 'D6D0CE'
+Warning	1366	Incorrect string value: '\xD6\xD0\xCE\xC4' for column 'a' at row 1
+Warning	1366	Incorrect string value: '\xD6\xD0\xCE\xC4' for column 'a' at row 1
+set sql_mode=default;
+drop view tv;
+drop view tvx;
+drop table test;

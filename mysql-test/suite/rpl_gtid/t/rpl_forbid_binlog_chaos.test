@@ -1,0 +1,92 @@
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--let $rpl_topology = 1->2
+--let $use_gtids = 1
+--source include/rpl/init.inc
+
+--let $rpl_connection_name = server_1
+--source include/connection.inc
+SET sql_log_bin=OFF;
+call mtr.add_suppression("No table_map_log_event is written");
+SET sql_log_bin=ON;
+--let $rpl_connection_name = server_2
+--source include/connection.inc
+SET sql_log_bin=OFF;
+call mtr.add_suppression("Replica SQL for channel '': Worker .* failed executing transaction");
+call mtr.add_suppression("Replica SQL for channel '':.* The replica coordinator and worker threads are stopped");
+SET sql_log_bin=ON;
+
+--let $rpl_connection_name = server_1
+--source include/connection.inc
+CREATE TABLE t1 (c1 INT, c2 INT);
+INSERT INTO t1 VALUES (1,1);
+--source include/rpl/sync.inc
+--let $rpl_connection_name = server_2
+--source include/connection.inc
+SELECT * FROM t1;
+
+--let $rpl_connection_name = server_1
+--source include/connection.inc
+SET debug='+d,test_thd_lock_no';
+--error ER_BINLOG_ROW_LOGGING_FAILED
+INSERT INTO t1 VALUES (2,2);
+SET debug='-d,test_thd_lock_no';
+SET debug='+d,test_table_wrlock_no';
+--error ER_BINLOG_ROW_LOGGING_FAILED
+INSERT INTO t1 VALUES (3,3);
+SET debug='-d,test_table_wrlock_no';
+SET debug='+d,test_binlog_table_maps_not_clean';
+--error ER_BINLOG_ROW_LOGGING_FAILED
+INSERT INTO t1 VALUES (4,4);
+SET debug='-d,test_binlog_table_maps_not_clean';
+--let $rpl_connection_name = server_2
+--source include/connection.inc
+SELECT * FROM t1;
+
+--let $rpl_connection_name = server_1
+--source include/connection.inc
+--let $binlog_file= query_get_value(show binary log status, File, 1)
+--let $pos= query_get_value(show binary log status, Position, 1)
+BEGIN;
+INSERT INTO t1 VALUES (5,5);
+SET debug='+d,test_thd_lock_no';
+SET debug='+d,test_no_table_map_for_slave';
+INSERT INTO t1 VALUES (6,6);
+SET debug='-d,test_thd_lock_no';
+SET debug='-d,test_no_table_map_for_slave';
+COMMIT;
+--replace_column 6 # 
+eval SHOW BINLOG EVENTS FROM $pos;
+--let $rpl_connection_name = server_2
+--source include/connection.inc
+--let $slave_sql_errno= convert_error(ER_REPLICA_FATAL_ERROR)
+--let $show_slave_sql_error=
+--source include/rpl/wait_for_applier_error.inc
+SELECT * FROM t1;
+--error 1
+--exec $MYSQL_BINLOG --read-from-remote-source=BINLOG-DUMP-GTID --user=root --host=127.0.0.1 --port=$MASTER_MYPORT $binlog_file --start-position=$pos | $MYSQL -uroot -h127.0.0.1 -P$SLAVE_MYPORT
+SELECT * FROM t1;
+
+# clean
+--let $rpl_connection_name = server_1
+--source include/connection.inc
+--let $gtid_set= query_get_value(show binary log status, Executed_Gtid_Set, 1)
+--let $rpl_connection_name = server_2
+--source include/connection.inc
+--source include/rpl/stop_replica.inc
+RESET BINARY LOGS AND GTIDS;
+SET sql_log_bin=OFF;
+BEGIN;
+INSERT INTO t1 VALUES (5,5);
+INSERT INTO t1 VALUES (6,6);
+COMMIT;
+SET sql_log_bin=ON;
+--replace_result $gtid_set GTID_SET
+eval SET GLOBAL GTID_PURGED='$gtid_set';
+--source include/rpl/start_replica.inc
+
+--let $rpl_connection_name = server_1
+--source include/connection.inc
+DROP TABLE t1;
+--source include/rpl/sync.inc
+--source include/rpl/deinit.inc

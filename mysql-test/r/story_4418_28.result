@@ -1,0 +1,312 @@
+create table t_v4q ( 
+c_cn6g int ,
+c_gmn9 tinyint ,
+c_d8drdlv0kp text ,
+primary key(c_cn6g),
+unique(c_cn6g)
+);
+alter table t_v4q add column c_u_8v250 tinyint;
+create table t_c6psa ( 
+c_k int ,
+c_tm text ,
+primary key(c_k),
+unique(c_k),
+check(c_k between abs(
+cast(cast(nullif(
+case when c_k >= c_k AND ((c_k <> c_k) 
+or (c_k is NULL)) 
+or ((c_k <= c_k) 
+or (0<>0)) then c_k else c_k end
+, 
+case when c_tm not like '_35c3s1' then c_k else c_k end
+) as signed) as signed)) and (c_k | c_k))
+);
+create table t_u8vhqrr ( 
+c__ccv_p12vz int not null ,
+c_dfm1qr double not null ,
+c__dsn double ,
+c_xm text ,
+c_ojghglqv double ,
+c_v_7u int ,
+c_tpt double ,
+primary key(c_v_7u),
+unique(c_ojghglqv, c_tpt)
+);
+create view t_vt9qdc82x1 as 
+select  
+subq_0.c1 as c0
+from 
+(select  
+ref_0.c__dsn as c0, 
+53 as c1, 
+abs(
+cast(ref_0.c_v_7u as signed)) as c2
+from 
+t_u8vhqrr as ref_0
+where ref_0.c_dfm1qr is NULL
+window q4pb as ( partition by (select sum(c_cn6g) from t_v4q)
+order by ref_0.c__dsn asc) limit 69) as subq_0
+where (subq_0.c2 <= subq_0.c1) 
+and (subq_0.c0 not in (
+select  
+ref_1.c_tpt as c0
+from 
+t_u8vhqrr as ref_1
+where ref_1.c_dfm1qr in (
+select  
+14.12 as c0
+from 
+t_c6psa as ref_2
+where ref_2.c_k <= ref_2.c_k OR ref_2.c_k <> ref_2.c_k OR ref_2.c_k between ref_2.c_k and ref_2.c_k
+order by c0 desc)
+union
+select  
+80.18 as c0
+from 
+t_v4q as ref_3
+where ref_3.c_cn6g not in (
+select  
+ref_4.c_cn6g as c0
+from 
+t_v4q as ref_4
+where ref_4.c_cn6g <> ref_4.c_cn6g
+union all
+select  
+ref_5.c_cn6g as c0
+from 
+t_v4q as ref_5
+where ref_5.c_cn6g < ref_5.c_cn6g)))
+group by subq_0.c1;
+WITH 
+cte_0 AS (select  
+(select c_tm from t_c6psa order by c_tm limit 1 offset 4)
+as c0, 
+subq_0.c0 as c1, 
+(subq_0.c0 >= subq_0.c2) as c2, 
+(select c_xm from t_u8vhqrr order by c_xm limit 1 offset 6)
+as c3, 
+ref_2.c0 as c4, 
+ref_2.c0 as c5, 
+ref_2.c0 as c6, 
+(select c_gmn9 from t_v4q order by c_gmn9 limit 1 offset 5)
+as c7, 
+ref_2.c0 as c8, 
+ref_2.c0 as c9, 
+ref_2.c0 as c10, 
+case when (select c__ccv_p12vz from t_u8vhqrr order by c__ccv_p12vz limit 1 offset 4)
+> subq_0.c2 then (select count(c_dfm1qr) from t_u8vhqrr)
+else 
+NTILE(
+16) over (partition by ref_2.c0 order by subq_0.c0) end
+as c11, 
+subq_0.c0 as c12
+from 
+((select  
+ref_0.c0 as c0, 
+(select c_gmn9 from t_v4q order by c_gmn9 limit 1 offset 5)
+as c1, 
+ref_0.c0 as c2
+from 
+t_vt9qdc82x1 as ref_0
+where ref_0.c0 not in (
+select  
+ref_1.c__ccv_p12vz as c0
+from 
+t_u8vhqrr as ref_1
+where (1=1) 
+and (ref_1.c__ccv_p12vz = ref_1.c__ccv_p12vz))
+window j as ( partition by ref_0.c0, ref_0.c0 order by ref_0.c0 asc)) as subq_0
+left outer join t_vt9qdc82x1 as ref_2
+on (subq_0.c0 = ref_2.c0 ))
+where subq_0.c0 <= 76), 
+cte_1 AS (select  
+ref_6.c_k as c0, 
+ref_4.c_dfm1qr as c1, 
+ref_3.c_xm as c2, 
+ref_4.c__dsn as c3, 
+case when (ref_3.c_v_7u >= ref_4.c_v_7u) 
+or (ref_4.c_xm not like 'x%ygsl_ge') then 13 else ref_5.c__ccv_p12vz end
+as c4, 
+(select min(c_dfm1qr) from t_u8vhqrr)
+as c5, 
+(ref_5.c_v_7u >= ref_4.c_v_7u) as c6
+from 
+(t_u8vhqrr as ref_3
+left outer join (t_u8vhqrr as ref_4
+left outer join (t_u8vhqrr as ref_5
+cross join t_c6psa as ref_6
+)
+on (ref_6.c_tm <= ( 
+select  
+ref_7.c_xm as c0
+from 
+t_u8vhqrr as ref_7
+where ((1=1) 
+and (ref_5.c_xm like 'c7r_') OR ref_5.c__ccv_p12vz between ref_6.c_k and ref_7.c_v_7u) 
+or (0<>0)
+union
+select  
+ref_4.c_xm as c0
+from 
+t_v4q as ref_8
+where ref_4.c_v_7u = ref_8.c_cn6g)))
+on (ref_3.c_xm = ref_5.c_xm ))
+where (select avg(c_cn6g) from t_v4q)
+is NULL
+order by c0, c1, c2, c3, c4, c5, c6 asc limit 147), 
+cte_2 AS (select  
+subq_2.c0 as c0, 
+hex(
+cast(substr(
+cast((select c_d8drdlv0kp from t_v4q order by c_d8drdlv0kp limit 1 offset 3)
+as char), 
+cast(98 as signed)) as char)) as c1, 
+subq_2.c0 as c2, 
+(select c_d8drdlv0kp from t_v4q order by c_d8drdlv0kp limit 1 offset 5)
+as c3
+from 
+(select  
+subq_1.c0 as c0
+from 
+(select  
+ref_9.c_tpt as c0, 
+ref_9.c_ojghglqv as c1, 
+ref_9.c__ccv_p12vz as c2, 
+(select c_u_8v250 from t_v4q order by c_u_8v250 limit 1 offset 6)
+as c3, 
+ref_9.c_tpt as c4
+from 
+t_u8vhqrr as ref_9
+where ref_9.c_xm is not NULL) as subq_1
+where case when subq_1.c2 <> (select c__ccv_p12vz from t_u8vhqrr order by c__ccv_p12vz limit 1 offset 13)
+then 'oc014vw' else (select c_d8drdlv0kp from t_v4q order by c_d8drdlv0kp limit 1 offset 69)
+end
+not like 'xpwn7%') as subq_2
+where (87 % (abs(
+cast((select c0 from t_vt9qdc82x1 order by c0 limit 1 offset 3)
+as signed)) + 89)) >= case when EXISTS (
+select  
+ref_10.c_gmn9 as c0, 
+ref_10.c_gmn9 as c1, 
+80 as c2, 
+ref_10.c_u_8v250 as c3, 
+subq_2.c0 as c4, 
+ref_10.c_cn6g as c5
+from 
+t_v4q as ref_10
+where subq_2.c0 > ( 
+select  
+subq_2.c0 as c0
+from 
+t_c6psa as ref_11
+where ref_10.c_cn6g < ref_10.c_cn6g
+union
+select  
+subq_2.c0 as c0
+from 
+t_vt9qdc82x1 as ref_12
+where 1=1) limit 98) then length(
+cast('oc' as char)) else round(
+cast(subq_2.c0 as double), 
+cast(case when subq_2.c0 is not NULL then (select c_cn6g from t_v4q order by c_cn6g limit 1 offset 1)
+else (28 / (select c__ccv_p12vz from t_u8vhqrr order by c__ccv_p12vz limit 1 offset 6)
+) end
+as signed)) end
+)
+select  
+(ref_13.c10 <= ref_13.c6) as c0, 
+ref_13.c10 as c1, 
+ref_13.c2 as c2
+from 
+(cte_0 as ref_13
+cross join (select  
+ref_15.c_gmn9 as c0, 
+ref_15.c_gmn9 as c1, 
+ref_14.c1 as c2, 
+ref_14.c3 as c3, 
+ref_14.c3 as c4
+from 
+(cte_2 as ref_14
+cross join (t_v4q as ref_15
+inner join cte_0 as ref_16
+on (1=1))
+)
+where (ref_14.c1 not like '%71') 
+and (EXISTS (
+select  
+ref_17.c0 as c0, 
+ref_17.c0 as c1, 
+(select c_k from t_c6psa order by c_k limit 1 offset 4)
+as c2, 
+ref_17.c0 as c3
+from 
+t_vt9qdc82x1 as ref_17
+where ref_16.c1 >= ref_16.c9))) as subq_3
+)
+where ref_13.c11 in (
+select  
+subq_4.c0 as c0
+from 
+(select  
+ref_18.c4 as c0, 
+ref_18.c2 as c1
+from 
+cte_1 as ref_18
+where ref_18.c1 = ( 
+select  
+ref_18.c3 as c0
+from 
+t_v4q as ref_19
+where ref_19.c_cn6g > ref_18.c4) AND ref_18.c3 is NULL) as subq_4
+where EXISTS (
+select distinct 
+ref_20.c3 as c0, 
+ref_20.c0 as c1, 
+ref_20.c3 as c2, 
+subq_4.c0 as c3, 
+ref_20.c3 as c4, 
+ref_20.c0 as c5, 
+ref_20.c1 as c6, 
+ref_20.c0 as c7, 
+49 as c8, 
+subq_4.c0 as c9, 
+subq_4.c1 as c10, 
+ref_20.c2 as c11
+from 
+cte_2 as ref_20
+where (subq_4.c0 = subq_4.c0) 
+and ((ref_20.c3 is not NULL) 
+or (subq_4.c0 <= subq_4.c0 AND (subq_4.c1 not in (
+select  
+ref_21.c2 as c0
+from 
+cte_1 as ref_21
+where ref_21.c4 in (
+select  
+ref_22.c_k as c0
+from 
+t_c6psa as ref_22
+where 0<>0)
+union
+select  
+ref_23.c_xm as c0
+from 
+t_u8vhqrr as ref_23
+where ref_23.c_xm like '%trj') AND subq_4.c0 between subq_4.c0 and subq_4.c0 AND ref_20.c0 not in (
+select distinct 
+22.58 as c0
+from 
+t_vt9qdc82x1 as ref_24
+where ref_24.c0 between ref_24.c0 and ref_24.c0) AND ref_20.c3 > ( 
+select  
+ref_20.c1 as c0
+from 
+t_v4q as ref_25
+where 0<>0
+window _d44_3w1jl as ( partition by ref_25.c_gmn9 order by ref_20.c1 desc))) 
+and (0<>0)))));
+c0	c1	c2
+drop table t_v4q;
+drop table t_c6psa;
+drop table t_u8vhqrr;
+drop view t_vt9qdc82x1;

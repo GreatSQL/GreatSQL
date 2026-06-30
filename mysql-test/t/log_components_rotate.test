@@ -1,0 +1,87 @@
+
+--source include/have_debug.inc
+--source include/linux.inc
+--source include/have_log_component.inc
+
+SET @@global.log_error_verbosity=3;
+
+ 
+let $log_error_ = $MYSQLTEST_VARDIR/tmp/myerror.err;
+let $log_error_1 = $MYSQLTEST_VARDIR/tmp/myerror.err.1;
+let $log_error_2 = $MYSQLTEST_VARDIR/tmp/myerror.err.2;
+let $log_error_3 = $MYSQLTEST_VARDIR/tmp/myerror.err.3;
+ 
+
+INSTALL COMPONENT "file://component_log_sink_rotate";
+
+select component_urn from mysql.component;
+
+SET @@session.debug="+d,parser_stmt_to_error_log";
+
+
+SET PERSIST log_error_services="log_filter_internal; log_sink_rotate";
+
+
+--let $restart_parameters="restart:--log_error=$log_error_ --no-console"
+--replace_result $log_error_ LOG_ERR
+--source include/restart_mysqld.inc
+
+select component_urn from mysql.component;
+
+set global log_error_rotate.max_size = 1024*10;
+set global  log_error_rotate.total_size = 1024 * 30; 
+
+
+SET @@session.debug="+d,parser_stmt_to_error_log";
+disable_query_log;
+disable_result_log;
+--let $xx = 80
+
+while ( $xx > 0 )
+{
+  eval select $xx,'iK9fgx1Vs+3lTYkH2a8nPl6wz5Xs!qR)7JiQeh8.6WBoD0zT4X=+yNvLhcM3vZ9O]G*b1wUBYKziF5_=CgR0+Jpgq^t';
+  --dec $xx
+}
+enable_query_log;
+enable_result_log;
+
+--file_exists $log_error_
+--file_exists $log_error_1
+--file_exists $log_error_2
+--error 1
+--file_exists $log_error_3
+
+select PRIO , ERROR_CODE , SUBSYSTEM , DATA from performance_schema.error_log order by LOGGED desc limit 2;
+set global  log_error_rotate.total_size = 1048576 * 35; 
+set global log_error_rotate.max_size = 10485760;
+
+--exec dd if=/dev/zero of=$log_error_ bs=10485760 count=1
+--exec dd if=/dev/zero of=$log_error_1 bs=10485760 count=1
+--exec dd if=/dev/zero of=$log_error_2 bs=10485760 count=1
+--exec dd if=/dev/zero of=$log_error_3 bs=10485760 count=1
+
+select 'test log_components_rotate';
+
+show variables like 'log_error_rotate%';
+--replace_result $log_error_ LOG_ERR
+show variables like 'log_error';
+FLUSH LOGS;
+
+# remove $log_error_3
+--file_exists $log_error_
+--file_exists $log_error_1
+--file_exists $log_error_2
+--error 1
+--file_exists $log_error_3
+
+
+RESET PERSIST;
+set global log_error_services = default;
+
+--let restart_parameters="restart:"
+--source include/restart_mysqld.inc
+
+--remove_file $log_error_2
+--remove_file $log_error_1
+--remove_file $log_error_
+uninstall COMPONENT "file://component_log_sink_rotate";

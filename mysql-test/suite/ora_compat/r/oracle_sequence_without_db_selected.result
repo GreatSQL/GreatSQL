@@ -1,0 +1,18 @@
+[### Create sequence without database]
+create sequence seq_without_db;
+ERROR 3D000: No database selected
+[### Use sequqnce without database]
+select seq.nextval;
+ERROR 3D000: No database selected
+[### Create sequence with database]
+create sequence seq;
+[### Use sequence with database]
+select seq.nextval;
+nextval
+1
+select seq.currval;
+currval
+1
+[### Cleanup]
+drop sequence seq;
+[### Finalize]

@@ -1,0 +1,229 @@
+SET sql_mode=ORACLE;
+show variables like '%udt_format_result%';
+Variable_name	Value
+udt_format_result	BINARY
+set @@udt_format_result='DBA';
+CREATE TABLE `t` (
+`order_id` int DEFAULT NULL,
+`cp_arg_name` varchar(20) DEFAULT NULL,
+`parameter_value` varchar(20) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+insert into t values(1,'aa1','bb2');
+insert into t values(2,'aa1','bb2');
+#
+# test of for in inner layer of sp
+#
+CREATE or replace PROCEDURE p1(nReturn OUT NUMBER(2)) As
+TYPE param_rec_type IS RECORD 
+(
+param_name  VARCHAR2(5),
+param_value VARCHAR2(20) 
+);
+TYPE array_param_type IS TABLE OF param_rec_type index by BINARY_INTEGER; 
+param_array array_param_type; 
+BEGIN
+insert into t values(3,'c',1);
+begin
+SELECT cp_arg_name, parameter_value
+BULK COLLECT
+INTO param_array
+FROM t t
+WHERE t.order_id = 1; 
+FOR i IN param_array.first .. param_array.last LOOP 
+select param_array(i).param_name as param_name, param_array(i).param_value as param_value;
+END LOOP;
+exception when no_data_found THEN
+nReturn:=-1;
+end;
+exception when others THEN
+nReturn:=-1;
+rollback;
+end;
+$$
+set @a=1;
+call p1(@a);
+param_name	param_value
+aa1	bb2
+drop PROCEDURE p1;
+#
+# test of forall in inner layer of sp
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score varchar(20) := 'a'
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>stu_record(10,'bb','cc'));
+BEGIN
+select * from t;
+begin
+FORALL i IN stu_record_val.first .. stu_record_val.last
+insert into t values stu_record_val (i);
+select * from t;
+end;
+END;
+$$
+call p1();
+order_id	cp_arg_name	parameter_value
+1	aa1	bb2
+2	aa1	bb2
+3	c	1
+order_id	cp_arg_name	parameter_value
+1	aa1	bb2
+2	aa1	bb2
+3	c	1
+10	bb	cc
+drop PROCEDURE p1;
+#
+# test of for in inner layer of sp
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score varchar(20) := 'a'
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>stu_record(10,'bb','cc'));
+BEGIN
+begin
+stu_record_val(2) := stu_record(11,'bb1','cc1');
+select stu_record_val(2);
+end;
+END;
+$$
+call p1();
+stu_record_val(2)
+id:11 | name_d:bb1 | score:cc1
+drop PROCEDURE p1;
+#
+# test of for in inner layer of sp
+#
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+id int := 1,
+name_d  varchar(20) := 'a',
+score varchar(20) := 'a'
+);
+type tklist is table of stu_record INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>stu_record(10,'bb','cc'));
+BEGIN
+declare stu_record_val tklist:= tklist(1=>stu_record(10,'bb','cc'));
+begin
+stu_record_val(1) := stu_record(11,'bb1','cc1');
+select stu_record_val(1);
+end;
+END;
+$$
+call p1();
+stu_record_val(1)
+id:11 | name_d:bb1 | score:cc1
+drop PROCEDURE p1;
+#
+# test of for in inner layer of sp
+#
+CREATE or replace PROCEDURE p1() as
+type tklist is table of varchar(20) INDEX BY pls_integer;
+stu_record_val tklist := tklist(1=>'aa');
+BEGIN
+begin
+stu_record_val(2) := 'bb';
+select stu_record_val(2);
+end;
+END;
+$$
+call p1();
+stu_record_val(2)
+bb
+drop PROCEDURE p1;
+drop table t;
+#
+# test of bug9483
+#
+create or replace type type1 as object(id int,type varchar(20));
+create or replace type type2 is object(id2 int,name2 varchar(20));
+create table t1(id int AUTO_INCREMENT,f1 type1 default null,f2 type2,primary key (id));
+insert into t1 select 4,null,null;
+insert into t1 select 5,type1(null,'awed'),type2(22,null);
+insert into t1 select 6,type1(NULL,'null'),type2(null,'fffff');
+insert into t1 select 7,type1(1,'null'),type2(22,'fffff');
+insert into t1 select 8,type1(1,'ssss'),type2(33,'wwqq');
+insert into t1 select 9,type1(null,null),type2(null,null);
+insert into t1 select 10,type1(2,null),type2(null,null);
+CREATE or replace PROCEDURE p1() as
+stu_record_val type1 := type1(1,'ssss');
+BEGIN
+select * from t1 where stu_record_val=f1;
+END;
+$$
+call p1();
+id	f1	f2
+8	id:1 | type:ssss	id2:33 | name2:wwqq
+drop PROCEDURE p1;
+drop table t1;
+drop type type1;
+drop type type2;
+#
+# test of bug10351
+#
+drop database test;
+create table test.qqq(id aaa , cname varchar(10));
+ERROR HY000: inconsistent datatypes: expected 'test'.'aaa' got '(null)'.'aaa'
+set sql_mode=default;
+create table test.qqq(id aaa , cname varchar(10));
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'aaa , cname varchar(10))' at line 1
+create database test;
+#
+# test of bug10599
+#
+use test;
+create table t1 (c1 int primary key, c2 varchar(32),date1 datetime);
+create table t2 (c1 int primary key, c3 varchar(32));
+insert into t1 values (1,'aaa','2021-03-25 16:44:00.123456'),(2,'bbb','2022-03-25 16:44:00.123456'),(3,'ccc','2023-03-25 16:44:00.123456');
+insert into t2 values (1,'aaa'),(2,'bbb');
+prepare stmt1 from 'update t1 a set c2=(select distinct c2 from t2 c where c1=a.c1 and date1 BETWEEN ''2020-03-25 16:44:00.123456'' and ''2024-03-25 16:44:00.123456'')';
+EXECUTE stmt1;
+EXECUTE stmt1;
+EXECUTE stmt1;
+DEALLOCATE PREPARE stmt1;
+drop table t1;
+drop table t2;
+#
+# test of bug12532
+#
+create table TC10594_table15 (
+id int primary key,
+date datetime not null default '2025-06-26 10:24:34'
+);
+insert into TC10594_table15 values (1, '2020-01-01 00:00:00');
+create table TC10594_table16 (
+child_id int auto_increment primary key,
+id varchar(10),
+date datetime
+);
+insert into TC10594_table16(id) values ('11');
+set sql_mode=oracle;
+CREATE or replace PROCEDURE p1() as
+CURSOR row_type IS select * from TC10594_table15 order by id desc;
+rec row_type%ROWTYPE;
+rec1_row  TC10594_table16%ROWTYPE;
+BEGIN
+OPEN row_type;
+FETCH row_type INTO rec;
+CLOSE row_type;
+SELECT rec1_row.child_id,rec1_row.id,rec1_row.date;
+select * from (SELECT rec.id,rec.date) t1;
+select * from (SELECT rec.id,rec.date) t1 inner join (SELECT rec1_row.child_id,rec1_row.id,rec1_row.date) t2;
+END;
+$$
+call p1();
+rec1_row.child_id	rec1_row.id	rec1_row.date
+NULL	NULL	NULL
+rec.id	rec.date
+1	2020-01-01 00:00:00
+rec.id	rec.date	rec1_row.child_id	rec1_row.id	rec1_row.date
+1	2020-01-01 00:00:00	NULL	NULL	NULL
+drop PROCEDURE p1;
+drop table TC10594_table15,TC10594_table16;

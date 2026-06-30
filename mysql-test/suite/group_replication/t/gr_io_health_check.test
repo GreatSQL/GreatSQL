@@ -1,0 +1,81 @@
+#######################################################################################
+# MGR will check the disk write ability by writing a temporary file. If the
+# temporary file fails to be written, print the original OS error message.
+#
+# Test :
+# 0. The test requires two servers: M1 and M2.
+# 1. Start group in single primary mode, M1(primary) and M2(secondary).
+# 2. Simulate that server2 has no disk space left.
+# 3. Waiting for server2 to exit the mgr cluster.
+# 4. Assert there is expected error line in the server2 log.
+# 5. Cleanup.
+#######################################################################################
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_group_replication_single_primary_mode=1
+--source include/group_replication.inc
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+SET SESSION sql_log_bin = 0;
+call mtr.add_suppression("Error writing file.*(errno: 28 - No space left on device)");
+call mtr.add_suppression("Failed to write to temp file in do_io_health_check().");
+call mtr.add_suppression("Error writing file.*(OS errno 28 - No space left on device)");
+call mtr.add_suppression("io full on data or binlog directory");
+call mtr.add_suppression("The server was automatically set into read only mode after an error was detected.");
+call mtr.add_suppression("The server was automatically set into offline mode after an error was detected.");
+call mtr.add_suppression("Skipping leave operation: concurrent attempt to leave the group is on-going.");
+SET SESSION sql_log_bin = 1;
+
+--echo
+--echo # 1. Start group in single primary mode, M1(primary) and M2(secondary).
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+
+--let $server1_uuid= query_get_value(SELECT @@SERVER_UUID, @@SERVER_UUID, 1)
+--source include/start_and_bootstrap_group_replication.inc
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+
+--let $server2_uuid= query_get_value(SELECT @@SERVER_UUID, @@SERVER_UUID, 1)
+--source include/start_group_replication.inc
+
+connect (conn2_1,127.0.0.1,root,,test,$SERVER_MYPORT_2,);
+
+--echo
+--echo # 2. Simulate that server2 has no disk space left.
+
+--echo [connect conn2_1]
+connection conn2_1;
+SET @@GLOBAL.DEBUG= '+d,simulate_no_free_space_error';
+
+--echo
+--echo # 3. Waiting for server2 to exit the mgr cluster.
+
+--let $group_replication_member_state= ERROR
+--source include/gr_wait_for_member_state.inc
+
+--echo
+--echo # 4. Assert there is expected error line in the server2 log.
+
+--let $error_log= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_file= $error_log
+--let $assert_select=.* \[ERROR\] \[[^]]*\] \[[^]]*\] Error writing file .* \(OS errno .*\)
+--let $assert_text= Found the expected error line in the server log.
+--let $assert_count=1
+--source include/assert_grep.inc
+
+--echo
+--echo # 5. Cleanup.
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+
+SET @@GLOBAL.DEBUG= '-d,simulate_no_free_space_error';
+
+--source include/rpl/sync.inc
+--source include/group_replication_end.inc

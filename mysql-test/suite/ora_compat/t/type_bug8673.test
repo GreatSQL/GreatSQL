@@ -1,0 +1,27 @@
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+
+CREATE TABLE tab_tmp (col1 INT, col2 char(50),PRIMARY KEY (col1));
+CREATE TABLE tab (col1 INT, col2 char(50));
+insert into tab values(1,'aa'),(2,'bb');
+
+DELIMITER //;
+CREATE OR REPLACE PROCEDURE p1() 
+as
+  type dr_type is table of tab_tmp%ROWTYPE index by binary_integer;
+  dr_table dr_type;
+begin
+  select * BULK COLLECT into dr_table from tab;
+  for i IN dr_table.first .. dr_table.last loop
+    explain format=tree select dr_table(i).col1,dr_table(i).col2;
+  end loop;
+end;
+//
+
+DELIMITER ;//
+call p1();
+call p1();
+
+drop table tab;
+drop table tab_tmp;
+drop procedure p1;

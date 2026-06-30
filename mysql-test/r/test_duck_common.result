@@ -1,0 +1,172 @@
+SET sql_log_bin=OFF;
+call mtr.add_suppression("finish load data for database test table t1 failed");
+SET sql_log_bin=On;
+################## bug 12714 turbo
+CREATE TABLE t1 (t TIME);
+INSERT INTO t1 VALUES (+11), (+12.0), (+13e0);
+INSERT INTO t1 VALUES (-9), (-8.0), (-7e0);
+SELECT * FROM t1 order by 1;
+t
+-00:00:09
+-00:00:08
+-00:00:07
+00:00:11
+00:00:12
+00:00:13
+set turbo_enable=forced;
+SELECT * FROM t1 order by 1;
+ERROR HY000: execute turbo query failed: Conversion Error: Unsupported negative time: -0:0:9.0
+delete from t1 where t in (-9, -8.0, -7e0);
+explain format=tree SELECT * FROM t1 order by 1;
+EXPLAIN
+-> Turbo scan
+    -> Sort: t ASC  (...)
+        -> Table scan on t1, column(t)  (...)
+
+
+SELECT * FROM t1 order by 1;
+t
+00:00:11
+00:00:12
+00:00:13
+################## bug 12758 turbo
+set turbo_enable=default;
+create table test      (a float, b double, c real, d decimal(18,6), e numeric(18,6), f fixed(18,6));
+insert into test values(123,     456,      789,    101,             234,             567);
+insert into test values(123.456, 456.789,  789.101,101.345,         234.567,         567.891);
+insert into test values(
+123.45678910123456789101,
+456.78910123456789101234,
+789.10123456789101234567,
+101.34567891012345678910,
+234.56789101234567891012,
+567.89123456789101234567
+);
+Warnings:
+Note	1265	Data truncated for column 'd' at row 1
+Note	1265	Data truncated for column 'e' at row 1
+Note	1265	Data truncated for column 'f' at row 1
+create table test_mdec (a float(18,6), b double(18,6), c real(18,6), d decimal(18,6), e numeric(18,6), f fixed(18,6));
+Warnings:
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+Warning	1681	Specifying number of digits for floating point data types is deprecated and will be removed in a future release.
+insert into test_mdec values(123.123456,456.123456,789.123456,101.123456,234.123456,567.123456);
+select * from test;
+a	b	c	d	e	f
+123	456	789	101.000000	234.000000	567.000000
+123.456	456.789	789.101	101.345000	234.567000	567.891000
+123.457	456.7891012345679	789.101234567891	101.345679	234.567891	567.891235
+select * from test_mdec;
+a	b	c	d	e	f
+123.123459	456.123456	789.123456	101.123456	234.123456	567.123456
+set turbo_enable = forced;
+select cast(a as varchar(32)) from test_mdec;
+ERROR HY000: turbo_enable is FORCED but query could not be executed in Turbo
+select cast(b as varchar(32)) from test_mdec;
+ERROR HY000: turbo_enable is FORCED but query could not be executed in Turbo
+set turbo_enable = default;
+"TEST turbo"
+>>> Executing cast on a
+SELECT cast(a as varchar(32)) from test order by 1
+cast(a as varchar(32))
+123
+123.456
+123.457
+>>> Executing cast on b
+SELECT cast(b as varchar(32)) from test order by 1
+cast(b as varchar(32))
+456
+456.789
+456.7891012345679
+>>> Executing cast on c
+SELECT cast(c as varchar(32)) from test order by 1
+cast(c as varchar(32))
+789
+789.101
+789.101234567891
+>>> Executing cast on d
+SELECT cast(d as varchar(32)) from test order by 1
+cast(d as varchar(32))
+101.000000
+101.345000
+101.345679
+>>> Executing cast on e
+SELECT cast(e as varchar(32)) from test order by 1
+cast(e as varchar(32))
+234.000000
+234.567000
+234.567891
+>>> Executing cast on f
+SELECT cast(f as varchar(32)) from test order by 1
+cast(f as varchar(32))
+567.000000
+567.891000
+567.891235
+INSTALL PLUGIN rapid SONAME "ha_rapid.so";
+################## bug 12714 rapid
+set use_secondary_engine = forced;
+INSERT INTO t1 VALUES (-9), (-8.0), (-7e0);
+alter table t1 secondary_engine=rapid;
+ALTER TABLE t1 SECONDARY_LOAD;
+ERROR HY000: An error occurred while process value, {"exception_type":"Conversion","exception_message":"Unsupported negative time: -0:0:9.0"}
+delete from t1 where t in (-9, -8.0, -7e0);
+ALTER TABLE t1 SECONDARY_LOAD;
+explain format=tree SELECT * FROM t1 order by 1;
+EXPLAIN
+-> Rapid scan
+    -> Sort: t ASC  (...)
+        -> Table scan on t1, column(t)  (...)
+
+SELECT * FROM t1 order by 1;
+t
+00:00:11
+00:00:12
+00:00:13
+set use_secondary_engine = default;
+################## bug 12758 rapid
+alter table test secondary_engine=rapid;
+alter table test secondary_load;
+alter table test_mdec secondary_engine=rapid;
+alter table test_mdec secondary_load;
+ERROR HY000: The field a type is not supported
+>>> Executing cast on a
+SELECT cast(a as varchar(32)) from test order by 1
+cast(a as varchar(32))
+123
+123.456
+123.457
+>>> Executing cast on b
+SELECT cast(b as varchar(32)) from test order by 1
+cast(b as varchar(32))
+456
+456.789
+456.7891012345679
+>>> Executing cast on c
+SELECT cast(c as varchar(32)) from test order by 1
+cast(c as varchar(32))
+789
+789.101
+789.101234567891
+>>> Executing cast on d
+SELECT cast(d as varchar(32)) from test order by 1
+cast(d as varchar(32))
+101.000000
+101.345000
+101.345679
+>>> Executing cast on e
+SELECT cast(e as varchar(32)) from test order by 1
+cast(e as varchar(32))
+234.000000
+234.567000
+234.567891
+>>> Executing cast on f
+SELECT cast(f as varchar(32)) from test order by 1
+cast(f as varchar(32))
+567.000000
+567.891000
+567.891235
+drop table t1;
+drop table test;
+drop table test_mdec;
+UNINSTALL PLUGIN rapid;

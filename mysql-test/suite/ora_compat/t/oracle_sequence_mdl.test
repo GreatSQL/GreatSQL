@@ -1,0 +1,151 @@
+--source include/have_debug.inc
+connect (conn1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+connect (conn1_2,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+connection conn1;
+--echo [connect conn1]
+create sequence seq;
+select seq.nextval;
+connection conn1_2;
+--echo [connect conn1_2]
+select @@lock_wait_timeout into @old_lock_wait_timeout;
+set session lock_wait_timeout=1;
+
+--echo
+--echo [## test dml block ddl ##]
+connection conn1;
+--echo [connect conn1]
+set global debug='+d,greatdb_sequence_hold_mdl';
+--send select seq.nextval
+connection conn1_2;
+--echo [connect conn1_2]
+set debug_sync = 'now WAIT_FOR reach_wait_sync';
+--error ER_LOCK_WAIT_TIMEOUT
+drop sequence seq;
+set debug_sync = 'now SIGNAL end_wait_sync';
+connection conn1;
+--echo [connect conn1]
+reap;
+connection conn1_2;
+--echo [connect conn1_2]
+set debug_sync = 'RESET';
+set global debug='-d,greatdb_sequence_hold_mdl';
+
+--echo
+--echo [## test ddl block dml ##]
+connection conn1;
+--echo [connect conn1]
+set global debug='+d,greatdb_sequence_hold_mdl';
+--send drop sequence seq
+connection conn1_2;
+--echo [connect conn1_2]
+set debug_sync = 'now WAIT_FOR reach_wait_sync';
+--error ER_LOCK_WAIT_TIMEOUT
+select seq.nextval;
+set debug_sync = 'now SIGNAL end_wait_sync';
+connection conn1;
+--echo [connect conn1]
+reap;
+connection conn1_2;
+--echo [connect conn1_2]
+set debug_sync = 'RESET';
+set global debug='-d,greatdb_sequence_hold_mdl';
+
+--echo
+--echo [## test create seq block create table ##]
+connection conn1;
+--echo [connect conn1]
+set global debug='+d,greatdb_sequence_hold_mdl';
+--send create sequence seq
+connection conn1_2;
+--echo [connect conn1_2]
+set debug_sync = 'now WAIT_FOR reach_wait_sync';
+--error ER_LOCK_WAIT_TIMEOUT
+create table seq(c1 int primary key) engine=innodb;
+set debug_sync = 'now SIGNAL end_wait_sync';
+connection conn1;
+--echo [connect conn1]
+reap;
+connection conn1_2;
+--echo [connect conn1_2]
+set debug_sync = 'RESET';
+set global debug='-d,greatdb_sequence_hold_mdl';
+
+--echo
+--echo [## test ddl block create view ##]
+connection conn1;
+--echo [connect conn1]
+create table t1(c1 int primary key) engine=innodb;
+set global debug='+d,greatdb_sequence_hold_mdl';
+--send drop sequence seq
+connection conn1_2;
+--echo [connect conn1_2]
+set debug_sync = 'now WAIT_FOR reach_wait_sync';
+--error ER_LOCK_WAIT_TIMEOUT
+create view seq as select c1 from t1;
+set debug_sync = 'now SIGNAL end_wait_sync';
+connection conn1;
+--echo [connect conn1]
+reap;
+connection conn1_2;
+--echo [connect conn1_2]
+set debug_sync = 'RESET';
+set global debug='-d,greatdb_sequence_hold_mdl';
+
+--echo
+--echo [## test lock table block create seq]
+connection conn1;
+--echo [connect conn1]
+rename table t1 to seq;
+lock table seq write;
+connection conn1_2;
+--echo [connect conn1_2]
+--error ER_LOCK_WAIT_TIMEOUT
+create sequence seq;
+connection conn1;
+--echo [connect conn1]
+unlock tables;
+drop table seq;
+
+## clean
+connection conn1_2;
+--echo [connect conn1_2]
+set session lock_wait_timeout=@old_lock_wait_timeout;
+
+--echo
+--echo [# bug7590: MDL of sequence not released if autocommit=off]
+# existing sequence
+connection conn1;
+--echo [connect conn1]
+set @@autocommit=off;
+create sequence seq;
+select seq.nextval;
+connection conn1_2;
+--echo [connect conn1_2]
+drop sequence seq;
+connection conn1;
+--echo [connect conn1]
+--error ER_UNKNOWN_TABLE
+select seq.nextval;
+--error ER_UNKNOWN_TABLE
+select seq.currval;
+create sequence seq;
+--error ER_GDB_READ_SEQUENCE
+select seq.currval;
+# not existing sequence
+connection conn1;
+--echo [connect conn1]
+drop sequence seq;
+--error ER_UNKNOWN_TABLE
+select seq.nextval;
+connection conn1_2;
+--echo [connect conn1_2]
+--error ER_GDB_DROP_SEQUENCE
+drop sequence seq;
+connection conn1;
+--echo [connect conn1]
+set @@autocommit=1;
+
+
+--disconnect conn1
+--disconnect conn1_2

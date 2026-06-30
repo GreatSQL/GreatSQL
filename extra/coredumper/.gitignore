@@ -1,0 +1,32 @@
+# Editor/IDE/debugger artifacts
+*~
+\#*\#
+*.diff
+*.patch
+*.log
+*.out
+*.swp
+.gdb_history
+GPATH
+GRTAGS
+GSYMS
+GTAGS
+ID
+TAGS
+
+# Build / autotools artifacts
+/autom4te.cache/
+Makefile
+config.h
+config.status
+stamp-*
+.dirstamp
+.deps/
+.libs/
+*.o
+*.lo
+*.la
+core.*
+coredumper_unittest
+linux_syscall_support_unittest
+*.trs

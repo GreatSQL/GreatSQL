@@ -1,0 +1,82 @@
+set @@udt_format_result='dba';
+set sql_mode=oracle;
+
+#create table
+create table "tsm_code" (
+  "fldicodeid" varchar(100) character set utf8mb3 collate utf8mb3_bin default null,
+  "fldccodename" varchar(1024) default null,
+  "flditypeid" varchar(100) character set utf8mb3 collate utf8mb3_bin default null,
+  unique key "uk_tsm_code_flditypeid_icodeid" ("flditypeid","fldicodeid") /* nulls are equal in unique index as oracle does */,
+  key "idx_tsmcode_typeid" ("flditypeid"),
+  key "idx_tsmcode_codename" ("fldccodename"(768)),
+  key "idx_tsmcode_codeid" ("fldicodeid")
+) engine=innodb default charset=utf8mb3;
+insert into  tsm_code values(1,'现网',625),(2,'退网',625),(3,'工程',625);
+
+create table "tld_device" (
+  "fldid" varchar(32) not null comment '对象id',
+  "fldtag" varchar(64) character set utf8mb3 collate utf8mb3_general_ci default null comment '对象标识',
+  "fldrunstate" varchar(32) default null comment '运行状态:故障、正常',
+  primary key ("fldid"),
+  key "idx_tld_device_fldtag" ("fldtag"),
+  key "idx_tld_device_runstate" ("fldrunstate")
+) engine=innodb default charset=utf8mb3 ;
+insert into  tld_device values('120650041006317776','001004001066003',2);
+insert into  tld_device values('120650041185409138','001004001066003',2);
+
+create table "tld_device_contain" (
+  "fldtag" varchar(64) default null comment '类型标识',
+  "fldid" varchar(32) default null comment 'id',
+  "fldchildid" varchar(32) default null comment '子对象id',
+  "fldparenttag" varchar(64) default null comment '父对象类型标识',
+  "fldparentid" varchar(32) default null comment '父对象id',
+  key "idx$0001c1" ("fldid","fldtag"),
+  key "idx_device_contain_parentid" ("fldparentid"),
+  key "idx_device_contain_lac_tag" ("fldtag"),
+  key "idx_device_contain_childid" ("fldchildid")
+) engine=innodb default charset=utf8mb3;
+insert into  tld_device_contain values('001004003024', '120650053138490419157' , '120650041006317776','001004001066003', '120650041185409138'),('001004003024', '120650053138490419148' , '120650041006317776','001004001066003', '120650041185409138'),('001004003024', '120650053138490419157', '120650041006317776','001004001066003', '120650041185409138'),('001004003024','120650053138490419148','120650041006317776','001004001066003', '120650041185409138');
+
+
+# test bug12496
+delimiter //;
+create or replace function "func_wire_getfldrunstate"(
+	"vfldtag" varchar(4000), 
+	"vfldid" varchar(4000)
+) return varchar(4000) charset utf8mb3
+    deterministic
+as
+"vresult" varchar(1024);
+begin
+		select "fldccodename"
+		into "vresult"
+		from "tsm_code"
+		where "flditypeid" = '625'
+			and "fldicodeid" = (
+				select "fldrunstate"
+				from (
+					select "fldrunstate"
+					from "tld_device"
+					where "fldid" in ((
+						select "tdc"."fldchildid"
+						from "tld_device_contain" tdc
+						where "tdc"."fldtag" = '001004003024'
+							and "tdc"."fldparentid" = vfldid
+							and "tdc"."fldparenttag" = vfldtag
+					))
+					order by "fldrunstate"
+				) limit 1
+				#where rownum = 1
+			);
+	return ("vresult");
+end;//
+delimiter ;//
+
+select * from tld_device where func_wire_getfldrunstate(fldtag,fldid)='退网' and fldtag='001004001066003' limit 1;
+
+drop function func_wire_getfldrunstate;
+drop table tsm_code,tld_device,tld_device_contain;
+
+
+
+

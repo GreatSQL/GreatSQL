@@ -1,0 +1,90 @@
+set sql_mode=oracle;
+CREATE TABLE "cc_processing_order" (
+"OPERATION_ID" decimal(12,0) NOT NULL COMMENT '工单标识',
+"ORDER_NUMBER" varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL COMMENT '大订单号',
+"PRODUCT_ORDER_NUMBER" varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL COMMENT '子订单号',
+"SUBS_ID" decimal(12,0) NOT NULL COMMENT '订购实例ID',
+"REQ_CONTENT" longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL COMMENT '请求内容',
+"ORG_REQ_HEADER" text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin COMMENT '请求头',
+"MULTI_SUBS" decimal(1,0) NOT NULL COMMENT '是否为组合订购(排除购物车)，1：是 0/空：否',
+"status" smallint DEFAULT NULL,
+"CREATE_TIME" timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '创建时间',
+"UPDATE_TIME" datetime DEFAULT NULL COMMENT '更新时间',
+"accept_id" varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
+PRIMARY KEY ("OPERATION_ID"),
+KEY "IDX_ORDER_NUMBER" ("ORDER_NUMBER"),
+KEY "IDX_PRODUCT_ORDER_NUMBER" ("PRODUCT_ORDER_NUMBER"),
+KEY "IDX_SUBS_ID" ("SUBS_ID"),
+KEY "idx_accept_id" ("accept_id")
+);
+insert into cc_processing_order values(100019473170,'MOP-O-25050682665740','MOP-T-25050615706716',10050108344,'comment',null,0,0,'2024-11-04 14:25:10.356813','2024-11-04 14:25:11','MOP-T-24110427463850144');
+WITH RankedOrders AS
+(SELECT cpo.operation_id,
+cpo.order_number,
+cpo.product_order_number,
+cpo.subs_id,
+cpo.req_content,
+cpo.multi_subs,
+cpo.status,
+DATE_FORMAT(cpo.create_time, '%Y%m%d%H%i%s%f') AS create_time,
+cpo.ORG_REQ_HEADER,
+ROW_NUMBER() OVER(PARTITION BY cpo.accept_id ORDER BY cpo.create_time) AS rn,
+ROW_NUMBER() OVER(PARTITION BY cpo.subs_id ORDER BY cpo.create_time) AS sub_rn
+FROM cc_processing_order cpo
+where cpo.status = 0)
+SELECT operation_id,
+order_number,
+product_order_number,
+subs_id,
+req_content,
+multi_subs,
+STATUS,
+create_time,
+ORG_REQ_HEADER
+FROM RankedOrders
+where (multi_subs = 1 and rn = 1 and sub_rn = 1)
+OR (multi_subs != 1 and sub_rn = 1 and NOT EXISTS
+(SELECT 1
+FROM RankedOrders ro
+where ro.subs_id = RankedOrders.subs_id
+and ro.multi_subs = 1
+and ro.create_time < RankedOrders.create_time))
+ORDER BY create_time;
+operation_id	order_number	product_order_number	subs_id	req_content	multi_subs	STATUS	create_time	ORG_REQ_HEADER
+100019473170	MOP-O-25050682665740	MOP-T-25050615706716	10050108344	comment	0	0	20241104142510356813	NULL
+SET global debug = "+d,temptable_open_return_null_opened_table";
+WITH RankedOrders AS
+(SELECT cpo.operation_id,
+cpo.order_number,
+cpo.product_order_number,
+cpo.subs_id,
+cpo.req_content,
+cpo.multi_subs,
+cpo.status,
+DATE_FORMAT(cpo.create_time, '%Y%m%d%H%i%s%f') AS create_time,
+cpo.ORG_REQ_HEADER,
+ROW_NUMBER() OVER(PARTITION BY cpo.accept_id ORDER BY cpo.create_time) AS rn,
+ROW_NUMBER() OVER(PARTITION BY cpo.subs_id ORDER BY cpo.create_time) AS sub_rn
+FROM cc_processing_order cpo
+where cpo.status = 0)
+SELECT operation_id,
+order_number,
+product_order_number,
+subs_id,
+req_content,
+multi_subs,
+STATUS,
+create_time,
+ORG_REQ_HEADER
+FROM RankedOrders
+where (multi_subs = 1 and rn = 1 and sub_rn = 1)
+OR (multi_subs != 1 and sub_rn = 1 and NOT EXISTS
+(SELECT 1
+FROM RankedOrders ro
+where ro.subs_id = RankedOrders.subs_id
+and ro.multi_subs = 1
+and ro.create_time < RankedOrders.create_time))
+ORDER BY create_time;
+ERROR HY000: Out of memory; check if mysqld or some other process uses all available memory; if not, you may have to use 'ulimit' to allow mysqld to use more memory or you can add more swap space
+SET global debug = "-d,temptable_open_return_null_opened_table";
+drop table cc_processing_order;

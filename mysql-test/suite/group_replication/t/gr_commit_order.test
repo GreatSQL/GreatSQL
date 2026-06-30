@@ -1,0 +1,44 @@
+# start up
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_server_count= 2
+--source include/group_replication.inc
+--source include/start_and_bootstrap_group_replication.inc
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/start_group_replication.inc
+
+# init conn
+connect (conn2,127.0.0.1,root,,test,$SLAVE_MYPORT,);
+
+--echo [test for mgr replica_preserve_commit_order off]
+--connection server2
+stop group_replication;
+set global replica_preserve_commit_order=off;
+start group_replication;
+--connection server1
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+CREATE TABLE t2 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+insert into test.t1 values(1,1),(2,2),(3,3),(4,4);
+insert into test.t2 values(1,1),(2,2),(3,3),(4,4);
+--let $sync_slave_connection= server2
+--source include/rpl/sync_to_replica.inc
+--connection server2
+lock table t2 read;
+--connection server1
+--echo [Execute together and let the third sql wait for the second sql to be committed]
+update t1 set c1=c1+10;
+update t2 set c1=c1+10;
+update t1 set c1=c1+20;
+update t1 set c2=c1+30;
+connection conn2;
+--let $wait_condition=select count(*)=1 from information_schema.processlist where state='Waiting for preceding transaction to commit'
+--source include/wait_condition.inc
+--connection server2
+unlock tables;
+set global replica_preserve_commit_order=on;
+--connection server1
+drop table t1,t2;
+--echo [end test for mgr replica_preserve_commit_order off]
+
+--source include/group_replication_end.inc

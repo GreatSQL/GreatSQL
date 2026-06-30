@@ -1,0 +1,1845 @@
+connect conn1
+create table test_constant(id int, a varchar(20));
+insert into test_constant values(1, '01:02:03');
+insert into test_constant values(2, '1:2:3');
+insert into test_constant values(3, '01:02:03.000');
+insert into test_constant values(4, '01:02:03.123');
+CREATE TABLE t(a TIME(6), KEY(a));
+INSERT INTO t VALUES ('01:02:03');
+INSERT INTO t VALUES ('01:02:03.123');
+INSERT INTO t VALUES ('00:00:00');
+INSERT INTO t VALUES ('00:00:00.123');
+create table test(
+a TIMESTAMP,
+b TIMESTAMP(6),
+c datetime,
+d datetime(6),
+e date,
+f time,
+g time(6)
+);
+SET TIME_ZONE='+00:00';
+insert into test values('2026-05-01 08:59:59.999999-08:00','2026-05-01 08:59:59.999999-08:00','2026-05-01 08:59:59.999999-08:00','2026-05-01 08:59:59.999999-08:00','2026-05-01 08:59:59.999999-08:00','2026-05-01 08:59:59.999999-08:00','2026-05-01 08:59:59.999999-08:00');
+Warnings:
+Note	1292	Incorrect date value: '2026-05-01 08:59:59.999999-08:00' for column 'e' at row 1
+Note	1292	Incorrect time value: '2026-05-01 08:59:59.999999-08:00' for column 'f' at row 1
+Note	1292	Incorrect time value: '2026-05-01 08:59:59.999999-08:00' for column 'g' at row 1
+insert into test values('2026-06-01 08:01:01-08:00','2026-06-01 08:01:59.999999-08:00','2026-06-01 08:01:50-08:00','2026-06-01 08:01:59.999999-08:00','2026-06-01','08:01:01','08:01:59.999999');
+insert into test values('2026-06-01 08:01:01+00:00','2026-06-01 08:01:01+00:00',       '2026-06-01 08:01:01+00:00','2026-06-01 08:01:01+00:00',       '2026-06-01','18:01:01','18:01:01');
+set turbo_enable = forced;
+select * from test order by 1,2,3;
+a	b	c	d	e	f	g
+2026-05-01 09:00:00	2026-05-01 16:59:59.999999	2026-05-01 09:00:00	2026-05-01 16:59:59.999999	2026-05-01	17:00:00	16:59:59.999999
+2026-06-01 08:01:01	2026-06-01 08:01:01.000000	2026-06-01 08:01:01	2026-06-01 08:01:01.000000	2026-06-01	18:01:01	18:01:01.000000
+2026-06-01 16:01:01	2026-06-01 16:01:59.999999	2026-06-01 16:01:50	2026-06-01 16:01:59.999999	2026-06-01	08:01:01	08:01:59.999999
+select id, a from test_constant where a = time'1:2:3';
+id	a
+1	01:02:03
+select id, a from test_constant where a = time'1:2:3.00';
+id	a
+select id, a from test_constant where a = time'1:2:3.000';
+id	a
+3	01:02:03.000
+select id, a from test_constant where a = time'1:2:3.123';
+id	a
+4	01:02:03.123
+select id, a from test_constant where a = time'1:2:3.1230';
+id	a
+SET timestamp = UNIX_TIMESTAMP('2023-03-15 01:02:03.123');
+SELECT * FROM t WHERE a = CURRENT_TIME;
+a
+01:02:03.000000
+SELECT * FROM t WHERE a = CURRENT_TIMESTAMP;
+a
+01:02:03.000000
+SELECT * FROM t WHERE a = CURRENT_DATE;
+a
+00:00:00.000000
+SET timestamp = DEFAULT;
+SELECT * FROM t WHERE a = TIME'01:02:03.123';
+a
+01:02:03.123000
+SELECT * FROM t WHERE a = timestamp'2023-03-15 01:02:03.123';
+a
+01:02:03.123000
+SELECT * FROM t WHERE a = date'2023-01-01';
+a
+00:00:00.000000
+set turbo_enable = off;
+select * from test order by 1,2,3;
+a	b	c	d	e	f	g
+2026-05-01 09:00:00	2026-05-01 16:59:59.999999	2026-05-01 09:00:00	2026-05-01 16:59:59.999999	2026-05-01	17:00:00	16:59:59.999999
+2026-06-01 08:01:01	2026-06-01 08:01:01.000000	2026-06-01 08:01:01	2026-06-01 08:01:01.000000	2026-06-01	18:01:01	18:01:01.000000
+2026-06-01 16:01:01	2026-06-01 16:01:59.999999	2026-06-01 16:01:50	2026-06-01 16:01:59.999999	2026-06-01	08:01:01	08:01:59.999999
+select id, a from test_constant where a = time'1:2:3';
+id	a
+1	01:02:03
+select id, a from test_constant where a = time'1:2:3.00';
+id	a
+select id, a from test_constant where a = time'1:2:3.000';
+id	a
+3	01:02:03.000
+select id, a from test_constant where a = time'1:2:3.123';
+id	a
+4	01:02:03.123
+select id, a from test_constant where a = time'1:2:3.1230';
+id	a
+SET timestamp = UNIX_TIMESTAMP('2023-03-15 01:02:03.123');
+SELECT * FROM t WHERE a = CURRENT_TIME;
+a
+01:02:03.000000
+SELECT * FROM t WHERE a = CURRENT_TIMESTAMP;
+a
+01:02:03.000000
+SELECT * FROM t WHERE a = CURRENT_DATE;
+a
+00:00:00.000000
+SET timestamp = DEFAULT;
+SELECT * FROM t WHERE a = TIME'01:02:03.123';
+a
+01:02:03.123000
+SELECT * FROM t WHERE a = timestamp'2023-03-15 01:02:03.123';
+a
+01:02:03.123000
+SELECT * FROM t WHERE a = date'2023-01-01';
+a
+00:00:00.000000
+"TEST turbo"
+>>> Executing CAST a to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as varchar) from test order by 1
+CAST(a as varchar)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:01
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as varchar) from test order by 1
+CAST(a as varchar)
+2026-05-01 12:00:00
+2026-06-01 11:01:01
+2026-06-01 19:01:01
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as varchar) from test order by 1
+CAST(a as varchar)
+2026-05-01 06:00:00
+2026-06-01 05:01:01
+2026-06-01 13:01:01
+>>> Executing CAST a to datetime
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as datetime) from test order by 1
+CAST(a as datetime)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:01
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as datetime) from test order by 1
+CAST(a as datetime)
+2026-05-01 12:00:00
+2026-06-01 11:01:01
+2026-06-01 19:01:01
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as datetime) from test order by 1
+CAST(a as datetime)
+2026-05-01 06:00:00
+2026-06-01 05:01:01
+2026-06-01 13:01:01
+>>> Executing CAST a to datetime(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as datetime(4)) from test order by 1
+CAST(a as datetime(4))
+2026-05-01 09:00:00.0000
+2026-06-01 08:01:01.0000
+2026-06-01 16:01:01.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as datetime(4)) from test order by 1
+CAST(a as datetime(4))
+2026-05-01 12:00:00.0000
+2026-06-01 11:01:01.0000
+2026-06-01 19:01:01.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as datetime(4)) from test order by 1
+CAST(a as datetime(4))
+2026-05-01 06:00:00.0000
+2026-06-01 05:01:01.0000
+2026-06-01 13:01:01.0000
+>>> Executing CAST a to date
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as date) from test order by 1
+CAST(a as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as date) from test order by 1
+CAST(a as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as date) from test order by 1
+CAST(a as date)
+2026-05-01
+2026-06-01
+2026-06-01
+>>> Executing CAST a to time
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as time) from test order by 1
+CAST(a as time)
+08:01:01
+09:00:00
+16:01:01
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as time) from test order by 1
+CAST(a as time)
+11:01:01
+12:00:00
+19:01:01
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as time) from test order by 1
+CAST(a as time)
+05:01:01
+06:00:00
+13:01:01
+>>> Executing CAST a to time(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as time(4)) from test order by 1
+CAST(a as time(4))
+08:01:01.0000
+09:00:00.0000
+16:01:01.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as time(4)) from test order by 1
+CAST(a as time(4))
+11:01:01.0000
+12:00:00.0000
+19:01:01.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as time(4)) from test order by 1
+CAST(a as time(4))
+05:01:01.0000
+06:00:00.0000
+13:01:01.0000
+>>> Executing CAST a to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as double) from test order by 1
+CAST(a as double)
+20260501090000
+20260601080101
+20260601160101
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as double) from test order by 1
+CAST(a as double)
+20260501120000
+20260601110101
+20260601190101
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as double) from test order by 1
+CAST(a as double)
+20260501060000
+20260601050101
+20260601130101
+>>> Executing CAST b to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(b as varchar) from test order by 1
+CAST(b as varchar)
+2026-05-01 16:59:59.999999
+2026-06-01 08:01:01.000000
+2026-06-01 16:01:59.999999
+SET TIME_ZONE="+03:00";
+SELECT CAST(b as varchar) from test order by 1
+CAST(b as varchar)
+2026-05-01 19:59:59.999999
+2026-06-01 11:01:01.000000
+2026-06-01 19:01:59.999999
+SET TIME_ZONE="-03:00";
+SELECT CAST(b as varchar) from test order by 1
+CAST(b as varchar)
+2026-05-01 13:59:59.999999
+2026-06-01 05:01:01.000000
+2026-06-01 13:01:59.999999
+>>> Executing CAST b to date
+SET TIME_ZONE='+00:00';
+SELECT CAST(b as date) from test order by 1
+CAST(b as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="+03:00";
+SELECT CAST(b as date) from test order by 1
+CAST(b as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="-03:00";
+SELECT CAST(b as date) from test order by 1
+CAST(b as date)
+2026-05-01
+2026-06-01
+2026-06-01
+>>> Executing CAST b to time
+SET TIME_ZONE='+00:00';
+SELECT CAST(b as time) from test order by 1
+CAST(b as time)
+08:01:01
+16:02:00
+17:00:00
+SET TIME_ZONE="+03:00";
+SELECT CAST(b as time) from test order by 1
+CAST(b as time)
+11:01:01
+19:02:00
+20:00:00
+SET TIME_ZONE="-03:00";
+SELECT CAST(b as time) from test order by 1
+CAST(b as time)
+05:01:01
+13:02:00
+14:00:00
+>>> Executing CAST b to time(4)
+>>> test with time_truncate_fractional
+disable_query_log
+SET sql_mode=time_truncate_fractional;
+SET sql_mode=time_truncate_fractional;
+SELECT CAST(b as time(4)) from test order by 1
+CAST(b as time(4))
+05:01:01.0000
+13:01:59.9999
+13:59:59.9999
+SELECT CAST(b as time(4)) from test order by 1
+CAST(b as time(4))
+05:01:01.0000
+13:02:00.0000
+14:00:00.0000
+SET TIME_ZONE='+00:00';
+SELECT CAST(b as time(4)) from test order by 1
+CAST(b as time(4))
+08:01:01.0000
+16:02:00.0000
+17:00:00.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(b as time(4)) from test order by 1
+CAST(b as time(4))
+11:01:01.0000
+19:02:00.0000
+20:00:00.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(b as time(4)) from test order by 1
+CAST(b as time(4))
+05:01:01.0000
+13:02:00.0000
+14:00:00.0000
+>>> Executing CAST b to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(b as double) from test order by 1
+CAST(b as double)
+20260501165960
+20260601080101
+20260601160160
+SET TIME_ZONE="+03:00";
+SELECT CAST(b as double) from test order by 1
+CAST(b as double)
+20260501195960
+20260601110101
+20260601190160
+SET TIME_ZONE="-03:00";
+SELECT CAST(b as double) from test order by 1
+CAST(b as double)
+20260501135960
+20260601050101
+20260601130160
+>>> Executing CAST c to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as varchar) from test order by 1
+CAST(c as varchar)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:50
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as varchar) from test order by 1
+CAST(c as varchar)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:50
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as varchar) from test order by 1
+CAST(c as varchar)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:50
+>>> Executing CAST c to datetime
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as datetime) from test order by 1
+CAST(c as datetime)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:50
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as datetime) from test order by 1
+CAST(c as datetime)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:50
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as datetime) from test order by 1
+CAST(c as datetime)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:50
+>>> Executing CAST c to datetime(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as datetime(4)) from test order by 1
+CAST(c as datetime(4))
+2026-05-01 09:00:00.0000
+2026-06-01 08:01:01.0000
+2026-06-01 16:01:50.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as datetime(4)) from test order by 1
+CAST(c as datetime(4))
+2026-05-01 09:00:00.0000
+2026-06-01 08:01:01.0000
+2026-06-01 16:01:50.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as datetime(4)) from test order by 1
+CAST(c as datetime(4))
+2026-05-01 09:00:00.0000
+2026-06-01 08:01:01.0000
+2026-06-01 16:01:50.0000
+>>> Executing CAST c to date
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as date) from test order by 1
+CAST(c as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as date) from test order by 1
+CAST(c as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as date) from test order by 1
+CAST(c as date)
+2026-05-01
+2026-06-01
+2026-06-01
+>>> Executing CAST c to time
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as time) from test order by 1
+CAST(c as time)
+08:01:01
+09:00:00
+16:01:50
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as time) from test order by 1
+CAST(c as time)
+08:01:01
+09:00:00
+16:01:50
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as time) from test order by 1
+CAST(c as time)
+08:01:01
+09:00:00
+16:01:50
+>>> Executing CAST c to time(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as time(4)) from test order by 1
+CAST(c as time(4))
+08:01:01.0000
+09:00:00.0000
+16:01:50.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as time(4)) from test order by 1
+CAST(c as time(4))
+08:01:01.0000
+09:00:00.0000
+16:01:50.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as time(4)) from test order by 1
+CAST(c as time(4))
+08:01:01.0000
+09:00:00.0000
+16:01:50.0000
+>>> Executing CAST c to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as double) from test order by 1
+CAST(c as double)
+20260501090000
+20260601080101
+20260601160150
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as double) from test order by 1
+CAST(c as double)
+20260501090000
+20260601080101
+20260601160150
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as double) from test order by 1
+CAST(c as double)
+20260501090000
+20260601080101
+20260601160150
+>>> Executing CAST d to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(d as varchar) from test order by 1
+CAST(d as varchar)
+2026-05-01 16:59:59.999999
+2026-06-01 08:01:01.000000
+2026-06-01 16:01:59.999999
+SET TIME_ZONE="+03:00";
+SELECT CAST(d as varchar) from test order by 1
+CAST(d as varchar)
+2026-05-01 16:59:59.999999
+2026-06-01 08:01:01.000000
+2026-06-01 16:01:59.999999
+SET TIME_ZONE="-03:00";
+SELECT CAST(d as varchar) from test order by 1
+CAST(d as varchar)
+2026-05-01 16:59:59.999999
+2026-06-01 08:01:01.000000
+2026-06-01 16:01:59.999999
+>>> Executing CAST d to date
+SET TIME_ZONE='+00:00';
+SELECT CAST(d as date) from test order by 1
+CAST(d as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="+03:00";
+SELECT CAST(d as date) from test order by 1
+CAST(d as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="-03:00";
+SELECT CAST(d as date) from test order by 1
+CAST(d as date)
+2026-05-01
+2026-06-01
+2026-06-01
+>>> Executing CAST d to time
+SET TIME_ZONE='+00:00';
+SELECT CAST(d as time) from test order by 1
+CAST(d as time)
+08:01:01
+16:02:00
+17:00:00
+SET TIME_ZONE="+03:00";
+SELECT CAST(d as time) from test order by 1
+CAST(d as time)
+08:01:01
+16:02:00
+17:00:00
+SET TIME_ZONE="-03:00";
+SELECT CAST(d as time) from test order by 1
+CAST(d as time)
+08:01:01
+16:02:00
+17:00:00
+>>> Executing CAST d to time(4)
+>>> test with time_truncate_fractional
+disable_query_log
+SET sql_mode=time_truncate_fractional;
+SET sql_mode=time_truncate_fractional;
+SELECT CAST(d as time(4)) from test order by 1
+CAST(d as time(4))
+08:01:01.0000
+16:01:59.9999
+16:59:59.9999
+SELECT CAST(d as time(4)) from test order by 1
+CAST(d as time(4))
+08:01:01.0000
+16:02:00.0000
+17:00:00.0000
+SET TIME_ZONE='+00:00';
+SELECT CAST(d as time(4)) from test order by 1
+CAST(d as time(4))
+08:01:01.0000
+16:02:00.0000
+17:00:00.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(d as time(4)) from test order by 1
+CAST(d as time(4))
+08:01:01.0000
+16:02:00.0000
+17:00:00.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(d as time(4)) from test order by 1
+CAST(d as time(4))
+08:01:01.0000
+16:02:00.0000
+17:00:00.0000
+>>> Executing CAST d to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(d as double) from test order by 1
+CAST(d as double)
+20260501165960
+20260601080101
+20260601160160
+SET TIME_ZONE="+03:00";
+SELECT CAST(d as double) from test order by 1
+CAST(d as double)
+20260501165960
+20260601080101
+20260601160160
+SET TIME_ZONE="-03:00";
+SELECT CAST(d as double) from test order by 1
+CAST(d as double)
+20260501165960
+20260601080101
+20260601160160
+>>> Executing CAST e to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as varchar) from test order by 1
+CAST(e as varchar)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as varchar) from test order by 1
+CAST(e as varchar)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as varchar) from test order by 1
+CAST(e as varchar)
+2026-05-01
+2026-06-01
+2026-06-01
+>>> Executing CAST e to datetime
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as datetime) from test order by 1
+CAST(e as datetime)
+2026-05-01 00:00:00
+2026-06-01 00:00:00
+2026-06-01 00:00:00
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as datetime) from test order by 1
+CAST(e as datetime)
+2026-05-01 00:00:00
+2026-06-01 00:00:00
+2026-06-01 00:00:00
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as datetime) from test order by 1
+CAST(e as datetime)
+2026-05-01 00:00:00
+2026-06-01 00:00:00
+2026-06-01 00:00:00
+>>> Executing CAST e to datetime(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as datetime(4)) from test order by 1
+CAST(e as datetime(4))
+2026-05-01 00:00:00.0000
+2026-06-01 00:00:00.0000
+2026-06-01 00:00:00.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as datetime(4)) from test order by 1
+CAST(e as datetime(4))
+2026-05-01 00:00:00.0000
+2026-06-01 00:00:00.0000
+2026-06-01 00:00:00.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as datetime(4)) from test order by 1
+CAST(e as datetime(4))
+2026-05-01 00:00:00.0000
+2026-06-01 00:00:00.0000
+2026-06-01 00:00:00.0000
+>>> Executing CAST e to date
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as date) from test order by 1
+CAST(e as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as date) from test order by 1
+CAST(e as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as date) from test order by 1
+CAST(e as date)
+2026-05-01
+2026-06-01
+2026-06-01
+>>> Executing CAST e to time
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as time) from test order by 1
+CAST(e as time)
+00:00:00
+00:00:00
+00:00:00
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as time) from test order by 1
+CAST(e as time)
+00:00:00
+00:00:00
+00:00:00
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as time) from test order by 1
+CAST(e as time)
+00:00:00
+00:00:00
+00:00:00
+>>> Executing CAST e to time(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as time(4)) from test order by 1
+CAST(e as time(4))
+00:00:00.0000
+00:00:00.0000
+00:00:00.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as time(4)) from test order by 1
+CAST(e as time(4))
+00:00:00.0000
+00:00:00.0000
+00:00:00.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as time(4)) from test order by 1
+CAST(e as time(4))
+00:00:00.0000
+00:00:00.0000
+00:00:00.0000
+>>> Executing CAST e to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as double) from test order by 1
+CAST(e as double)
+20260501
+20260601
+20260601
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as double) from test order by 1
+CAST(e as double)
+20260501
+20260601
+20260601
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as double) from test order by 1
+CAST(e as double)
+20260501
+20260601
+20260601
+>>> Executing CAST f to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(f as varchar) from test order by 1
+CAST(f as varchar)
+08:01:01
+17:00:00
+18:01:01
+SET TIME_ZONE="+03:00";
+SELECT CAST(f as varchar) from test order by 1
+CAST(f as varchar)
+08:01:01
+17:00:00
+18:01:01
+SET TIME_ZONE="-03:00";
+SELECT CAST(f as varchar) from test order by 1
+CAST(f as varchar)
+08:01:01
+17:00:00
+18:01:01
+>>> Executing CAST f to datetime
+SET TIME_ZONE='+00:00';
+SELECT CONCAT(current_date() , ' ', f) = CAST(f as datetime) from test order by 1
+CONCAT(current_date() , ' ', f) = CAST(f as datetime)
+1
+1
+1
+SET TIME_ZONE="+03:00";
+SELECT CONCAT(current_date() , ' ', f) = CAST(f as datetime) from test order by 1
+CONCAT(current_date() , ' ', f) = CAST(f as datetime)
+1
+1
+1
+SET TIME_ZONE="-03:00";
+SELECT CONCAT(current_date() , ' ', f) = CAST(f as datetime) from test order by 1
+CONCAT(current_date() , ' ', f) = CAST(f as datetime)
+1
+1
+1
+>>> Executing CAST f to datetime(4)
+SET TIME_ZONE='+00:00';
+SELECT CONCAT(current_date() , ' ', f) = CAST(f as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', f) = CAST(f as datetime(4))
+1
+1
+1
+SET TIME_ZONE="+03:00";
+SELECT CONCAT(current_date() , ' ', f) = CAST(f as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', f) = CAST(f as datetime(4))
+1
+1
+1
+SET TIME_ZONE="-03:00";
+SELECT CONCAT(current_date() , ' ', f) = CAST(f as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', f) = CAST(f as datetime(4))
+1
+1
+1
+>>> Executing CAST f to date
+SET TIME_ZONE='+00:00';
+SELECT current_date()= CAST(f as date) from test order by 1
+current_date()= CAST(f as date)
+1
+1
+1
+SET TIME_ZONE="+03:00";
+SELECT current_date()= CAST(f as date) from test order by 1
+current_date()= CAST(f as date)
+1
+1
+1
+SET TIME_ZONE="-03:00";
+SELECT current_date()= CAST(f as date) from test order by 1
+current_date()= CAST(f as date)
+1
+1
+1
+>>> Executing CAST f to time
+SET TIME_ZONE='+00:00';
+SELECT CAST(f as time) from test order by 1
+CAST(f as time)
+08:01:01
+17:00:00
+18:01:01
+SET TIME_ZONE="+03:00";
+SELECT CAST(f as time) from test order by 1
+CAST(f as time)
+08:01:01
+17:00:00
+18:01:01
+SET TIME_ZONE="-03:00";
+SELECT CAST(f as time) from test order by 1
+CAST(f as time)
+08:01:01
+17:00:00
+18:01:01
+>>> Executing CAST f to time(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(f as time(4)) from test order by 1
+CAST(f as time(4))
+08:01:01.0000
+17:00:00.0000
+18:01:01.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(f as time(4)) from test order by 1
+CAST(f as time(4))
+08:01:01.0000
+17:00:00.0000
+18:01:01.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(f as time(4)) from test order by 1
+CAST(f as time(4))
+08:01:01.0000
+17:00:00.0000
+18:01:01.0000
+>>> Executing CAST f to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(f as double) from test order by 1
+CAST(f as double)
+80101
+170000
+180101
+SET TIME_ZONE="+03:00";
+SELECT CAST(f as double) from test order by 1
+CAST(f as double)
+80101
+170000
+180101
+SET TIME_ZONE="-03:00";
+SELECT CAST(f as double) from test order by 1
+CAST(f as double)
+80101
+170000
+180101
+>>> Executing CAST g to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(g as varchar) from test order by 1
+CAST(g as varchar)
+08:01:59.999999
+16:59:59.999999
+18:01:01.000000
+SET TIME_ZONE="+03:00";
+SELECT CAST(g as varchar) from test order by 1
+CAST(g as varchar)
+08:01:59.999999
+16:59:59.999999
+18:01:01.000000
+SET TIME_ZONE="-03:00";
+SELECT CAST(g as varchar) from test order by 1
+CAST(g as varchar)
+08:01:59.999999
+16:59:59.999999
+18:01:01.000000
+>>> Executing CAST g to datetime
+SET TIME_ZONE='+00:00';
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime)
+0
+0
+1
+SET TIME_ZONE="+03:00";
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime)
+0
+0
+1
+SET TIME_ZONE="-03:00";
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime)
+0
+0
+1
+>>> Executing CAST g to datetime(4)
+>>> test with time_truncate_fractional
+disable_query_log
+SET sql_mode=time_truncate_fractional;
+SET sql_mode=time_truncate_fractional;
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime(4))
+0
+0
+1
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime(4))
+0
+0
+1
+SET TIME_ZONE='+00:00';
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime(4))
+0
+0
+1
+SET TIME_ZONE="+03:00";
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime(4))
+0
+0
+1
+SET TIME_ZONE="-03:00";
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime(4))
+0
+0
+1
+>>> Executing CAST g to date
+SET TIME_ZONE='+00:00';
+SELECT current_date()= CAST(g as date) from test order by 1
+current_date()= CAST(g as date)
+1
+1
+1
+SET TIME_ZONE="+03:00";
+SELECT current_date()= CAST(g as date) from test order by 1
+current_date()= CAST(g as date)
+1
+1
+1
+SET TIME_ZONE="-03:00";
+SELECT current_date()= CAST(g as date) from test order by 1
+current_date()= CAST(g as date)
+1
+1
+1
+>>> Executing CAST g to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(g as double) from test order by 1
+CAST(g as double)
+80159.999999
+165959.999999
+180101
+SET TIME_ZONE="+03:00";
+SELECT CAST(g as double) from test order by 1
+CAST(g as double)
+80159.999999
+165959.999999
+180101
+SET TIME_ZONE="-03:00";
+SELECT CAST(g as double) from test order by 1
+CAST(g as double)
+80159.999999
+165959.999999
+180101
+"TEST rapid"
+INSTALL PLUGIN rapid SONAME "ha_rapid.so";
+alter table test secondary_engine=rapid;
+alter table test secondary_load;
+set use_secondary_engine = forced;
+select * from test order by 1,2,3;
+a	b	c	d	e	f	g
+2026-05-01 12:00:00	2026-05-01 19:59:59.999999	2026-05-01 09:00:00	2026-05-01 16:59:59.999999	2026-05-01	17:00:00	16:59:59.999999
+2026-06-01 11:01:01	2026-06-01 11:01:01.000000	2026-06-01 08:01:01	2026-06-01 08:01:01.000000	2026-06-01	18:01:01	18:01:01.000000
+2026-06-01 19:01:01	2026-06-01 19:01:59.999999	2026-06-01 16:01:50	2026-06-01 16:01:59.999999	2026-06-01	08:01:01	08:01:59.999999
+set use_secondary_engine = off;
+select * from test order by 1,2,3;
+a	b	c	d	e	f	g
+2026-05-01 12:00:00	2026-05-01 19:59:59.999999	2026-05-01 09:00:00	2026-05-01 16:59:59.999999	2026-05-01	17:00:00	16:59:59.999999
+2026-06-01 11:01:01	2026-06-01 11:01:01.000000	2026-06-01 08:01:01	2026-06-01 08:01:01.000000	2026-06-01	18:01:01	18:01:01.000000
+2026-06-01 19:01:01	2026-06-01 19:01:59.999999	2026-06-01 16:01:50	2026-06-01 16:01:59.999999	2026-06-01	08:01:01	08:01:59.999999
+>>> Executing CAST a to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as varchar) from test order by 1
+CAST(a as varchar)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:01
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as varchar) from test order by 1
+CAST(a as varchar)
+2026-05-01 12:00:00
+2026-06-01 11:01:01
+2026-06-01 19:01:01
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as varchar) from test order by 1
+CAST(a as varchar)
+2026-05-01 06:00:00
+2026-06-01 05:01:01
+2026-06-01 13:01:01
+>>> Executing CAST a to datetime
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as datetime) from test order by 1
+CAST(a as datetime)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:01
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as datetime) from test order by 1
+CAST(a as datetime)
+2026-05-01 12:00:00
+2026-06-01 11:01:01
+2026-06-01 19:01:01
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as datetime) from test order by 1
+CAST(a as datetime)
+2026-05-01 06:00:00
+2026-06-01 05:01:01
+2026-06-01 13:01:01
+>>> Executing CAST a to datetime(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as datetime(4)) from test order by 1
+CAST(a as datetime(4))
+2026-05-01 09:00:00.0000
+2026-06-01 08:01:01.0000
+2026-06-01 16:01:01.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as datetime(4)) from test order by 1
+CAST(a as datetime(4))
+2026-05-01 12:00:00.0000
+2026-06-01 11:01:01.0000
+2026-06-01 19:01:01.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as datetime(4)) from test order by 1
+CAST(a as datetime(4))
+2026-05-01 06:00:00.0000
+2026-06-01 05:01:01.0000
+2026-06-01 13:01:01.0000
+>>> Executing CAST a to date
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as date) from test order by 1
+CAST(a as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as date) from test order by 1
+CAST(a as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as date) from test order by 1
+CAST(a as date)
+2026-05-01
+2026-06-01
+2026-06-01
+>>> Executing CAST a to time
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as time) from test order by 1
+CAST(a as time)
+08:01:01
+09:00:00
+16:01:01
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as time) from test order by 1
+CAST(a as time)
+11:01:01
+12:00:00
+19:01:01
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as time) from test order by 1
+CAST(a as time)
+05:01:01
+06:00:00
+13:01:01
+>>> Executing CAST a to time(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as time(4)) from test order by 1
+CAST(a as time(4))
+08:01:01.0000
+09:00:00.0000
+16:01:01.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as time(4)) from test order by 1
+CAST(a as time(4))
+11:01:01.0000
+12:00:00.0000
+19:01:01.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as time(4)) from test order by 1
+CAST(a as time(4))
+05:01:01.0000
+06:00:00.0000
+13:01:01.0000
+>>> Executing CAST a to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(a as double) from test order by 1
+CAST(a as double)
+20260501090000
+20260601080101
+20260601160101
+SET TIME_ZONE="+03:00";
+SELECT CAST(a as double) from test order by 1
+CAST(a as double)
+20260501120000
+20260601110101
+20260601190101
+SET TIME_ZONE="-03:00";
+SELECT CAST(a as double) from test order by 1
+CAST(a as double)
+20260501060000
+20260601050101
+20260601130101
+>>> Executing CAST b to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(b as varchar) from test order by 1
+CAST(b as varchar)
+2026-05-01 16:59:59.999999
+2026-06-01 08:01:01.000000
+2026-06-01 16:01:59.999999
+SET TIME_ZONE="+03:00";
+SELECT CAST(b as varchar) from test order by 1
+CAST(b as varchar)
+2026-05-01 19:59:59.999999
+2026-06-01 11:01:01.000000
+2026-06-01 19:01:59.999999
+SET TIME_ZONE="-03:00";
+SELECT CAST(b as varchar) from test order by 1
+CAST(b as varchar)
+2026-05-01 13:59:59.999999
+2026-06-01 05:01:01.000000
+2026-06-01 13:01:59.999999
+>>> Executing CAST b to date
+SET TIME_ZONE='+00:00';
+SELECT CAST(b as date) from test order by 1
+CAST(b as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="+03:00";
+SELECT CAST(b as date) from test order by 1
+CAST(b as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="-03:00";
+SELECT CAST(b as date) from test order by 1
+CAST(b as date)
+2026-05-01
+2026-06-01
+2026-06-01
+>>> Executing CAST b to time
+SET TIME_ZONE='+00:00';
+SELECT CAST(b as time) from test order by 1
+CAST(b as time)
+08:01:01
+16:02:00
+17:00:00
+SET TIME_ZONE="+03:00";
+SELECT CAST(b as time) from test order by 1
+CAST(b as time)
+11:01:01
+19:02:00
+20:00:00
+SET TIME_ZONE="-03:00";
+SELECT CAST(b as time) from test order by 1
+CAST(b as time)
+05:01:01
+13:02:00
+14:00:00
+>>> Executing CAST b to time(4)
+>>> test with time_truncate_fractional
+disable_query_log
+SET sql_mode=time_truncate_fractional;
+SET sql_mode=time_truncate_fractional;
+SELECT CAST(b as time(4)) from test order by 1
+CAST(b as time(4))
+05:01:01.0000
+13:01:59.9999
+13:59:59.9999
+SELECT CAST(b as time(4)) from test order by 1
+CAST(b as time(4))
+05:01:01.0000
+13:02:00.0000
+14:00:00.0000
+SET TIME_ZONE='+00:00';
+SELECT CAST(b as time(4)) from test order by 1
+CAST(b as time(4))
+08:01:01.0000
+16:02:00.0000
+17:00:00.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(b as time(4)) from test order by 1
+CAST(b as time(4))
+11:01:01.0000
+19:02:00.0000
+20:00:00.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(b as time(4)) from test order by 1
+CAST(b as time(4))
+05:01:01.0000
+13:02:00.0000
+14:00:00.0000
+>>> Executing CAST b to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(b as double) from test order by 1
+CAST(b as double)
+20260501165960
+20260601080101
+20260601160160
+SET TIME_ZONE="+03:00";
+SELECT CAST(b as double) from test order by 1
+CAST(b as double)
+20260501195960
+20260601110101
+20260601190160
+SET TIME_ZONE="-03:00";
+SELECT CAST(b as double) from test order by 1
+CAST(b as double)
+20260501135960
+20260601050101
+20260601130160
+>>> Executing CAST c to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as varchar) from test order by 1
+CAST(c as varchar)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:50
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as varchar) from test order by 1
+CAST(c as varchar)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:50
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as varchar) from test order by 1
+CAST(c as varchar)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:50
+>>> Executing CAST c to datetime
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as datetime) from test order by 1
+CAST(c as datetime)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:50
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as datetime) from test order by 1
+CAST(c as datetime)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:50
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as datetime) from test order by 1
+CAST(c as datetime)
+2026-05-01 09:00:00
+2026-06-01 08:01:01
+2026-06-01 16:01:50
+>>> Executing CAST c to datetime(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as datetime(4)) from test order by 1
+CAST(c as datetime(4))
+2026-05-01 09:00:00.0000
+2026-06-01 08:01:01.0000
+2026-06-01 16:01:50.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as datetime(4)) from test order by 1
+CAST(c as datetime(4))
+2026-05-01 09:00:00.0000
+2026-06-01 08:01:01.0000
+2026-06-01 16:01:50.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as datetime(4)) from test order by 1
+CAST(c as datetime(4))
+2026-05-01 09:00:00.0000
+2026-06-01 08:01:01.0000
+2026-06-01 16:01:50.0000
+>>> Executing CAST c to date
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as date) from test order by 1
+CAST(c as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as date) from test order by 1
+CAST(c as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as date) from test order by 1
+CAST(c as date)
+2026-05-01
+2026-06-01
+2026-06-01
+>>> Executing CAST c to time
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as time) from test order by 1
+CAST(c as time)
+08:01:01
+09:00:00
+16:01:50
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as time) from test order by 1
+CAST(c as time)
+08:01:01
+09:00:00
+16:01:50
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as time) from test order by 1
+CAST(c as time)
+08:01:01
+09:00:00
+16:01:50
+>>> Executing CAST c to time(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as time(4)) from test order by 1
+CAST(c as time(4))
+08:01:01.0000
+09:00:00.0000
+16:01:50.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as time(4)) from test order by 1
+CAST(c as time(4))
+08:01:01.0000
+09:00:00.0000
+16:01:50.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as time(4)) from test order by 1
+CAST(c as time(4))
+08:01:01.0000
+09:00:00.0000
+16:01:50.0000
+>>> Executing CAST c to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(c as double) from test order by 1
+CAST(c as double)
+20260501090000
+20260601080101
+20260601160150
+SET TIME_ZONE="+03:00";
+SELECT CAST(c as double) from test order by 1
+CAST(c as double)
+20260501090000
+20260601080101
+20260601160150
+SET TIME_ZONE="-03:00";
+SELECT CAST(c as double) from test order by 1
+CAST(c as double)
+20260501090000
+20260601080101
+20260601160150
+>>> Executing CAST d to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(d as varchar) from test order by 1
+CAST(d as varchar)
+2026-05-01 16:59:59.999999
+2026-06-01 08:01:01.000000
+2026-06-01 16:01:59.999999
+SET TIME_ZONE="+03:00";
+SELECT CAST(d as varchar) from test order by 1
+CAST(d as varchar)
+2026-05-01 16:59:59.999999
+2026-06-01 08:01:01.000000
+2026-06-01 16:01:59.999999
+SET TIME_ZONE="-03:00";
+SELECT CAST(d as varchar) from test order by 1
+CAST(d as varchar)
+2026-05-01 16:59:59.999999
+2026-06-01 08:01:01.000000
+2026-06-01 16:01:59.999999
+>>> Executing CAST d to date
+SET TIME_ZONE='+00:00';
+SELECT CAST(d as date) from test order by 1
+CAST(d as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="+03:00";
+SELECT CAST(d as date) from test order by 1
+CAST(d as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="-03:00";
+SELECT CAST(d as date) from test order by 1
+CAST(d as date)
+2026-05-01
+2026-06-01
+2026-06-01
+>>> Executing CAST d to time
+SET TIME_ZONE='+00:00';
+SELECT CAST(d as time) from test order by 1
+CAST(d as time)
+08:01:01
+16:02:00
+17:00:00
+SET TIME_ZONE="+03:00";
+SELECT CAST(d as time) from test order by 1
+CAST(d as time)
+08:01:01
+16:02:00
+17:00:00
+SET TIME_ZONE="-03:00";
+SELECT CAST(d as time) from test order by 1
+CAST(d as time)
+08:01:01
+16:02:00
+17:00:00
+>>> Executing CAST d to time(4)
+>>> test with time_truncate_fractional
+disable_query_log
+SET sql_mode=time_truncate_fractional;
+SET sql_mode=time_truncate_fractional;
+SELECT CAST(d as time(4)) from test order by 1
+CAST(d as time(4))
+08:01:01.0000
+16:01:59.9999
+16:59:59.9999
+SELECT CAST(d as time(4)) from test order by 1
+CAST(d as time(4))
+08:01:01.0000
+16:02:00.0000
+17:00:00.0000
+SET TIME_ZONE='+00:00';
+SELECT CAST(d as time(4)) from test order by 1
+CAST(d as time(4))
+08:01:01.0000
+16:02:00.0000
+17:00:00.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(d as time(4)) from test order by 1
+CAST(d as time(4))
+08:01:01.0000
+16:02:00.0000
+17:00:00.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(d as time(4)) from test order by 1
+CAST(d as time(4))
+08:01:01.0000
+16:02:00.0000
+17:00:00.0000
+>>> Executing CAST d to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(d as double) from test order by 1
+CAST(d as double)
+20260501165960
+20260601080101
+20260601160160
+SET TIME_ZONE="+03:00";
+SELECT CAST(d as double) from test order by 1
+CAST(d as double)
+20260501165960
+20260601080101
+20260601160160
+SET TIME_ZONE="-03:00";
+SELECT CAST(d as double) from test order by 1
+CAST(d as double)
+20260501165960
+20260601080101
+20260601160160
+>>> Executing CAST e to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as varchar) from test order by 1
+CAST(e as varchar)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as varchar) from test order by 1
+CAST(e as varchar)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as varchar) from test order by 1
+CAST(e as varchar)
+2026-05-01
+2026-06-01
+2026-06-01
+>>> Executing CAST e to datetime
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as datetime) from test order by 1
+CAST(e as datetime)
+2026-05-01 00:00:00
+2026-06-01 00:00:00
+2026-06-01 00:00:00
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as datetime) from test order by 1
+CAST(e as datetime)
+2026-05-01 00:00:00
+2026-06-01 00:00:00
+2026-06-01 00:00:00
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as datetime) from test order by 1
+CAST(e as datetime)
+2026-05-01 00:00:00
+2026-06-01 00:00:00
+2026-06-01 00:00:00
+>>> Executing CAST e to datetime(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as datetime(4)) from test order by 1
+CAST(e as datetime(4))
+2026-05-01 00:00:00.0000
+2026-06-01 00:00:00.0000
+2026-06-01 00:00:00.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as datetime(4)) from test order by 1
+CAST(e as datetime(4))
+2026-05-01 00:00:00.0000
+2026-06-01 00:00:00.0000
+2026-06-01 00:00:00.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as datetime(4)) from test order by 1
+CAST(e as datetime(4))
+2026-05-01 00:00:00.0000
+2026-06-01 00:00:00.0000
+2026-06-01 00:00:00.0000
+>>> Executing CAST e to date
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as date) from test order by 1
+CAST(e as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as date) from test order by 1
+CAST(e as date)
+2026-05-01
+2026-06-01
+2026-06-01
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as date) from test order by 1
+CAST(e as date)
+2026-05-01
+2026-06-01
+2026-06-01
+>>> Executing CAST e to time
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as time) from test order by 1
+CAST(e as time)
+00:00:00
+00:00:00
+00:00:00
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as time) from test order by 1
+CAST(e as time)
+00:00:00
+00:00:00
+00:00:00
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as time) from test order by 1
+CAST(e as time)
+00:00:00
+00:00:00
+00:00:00
+>>> Executing CAST e to time(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as time(4)) from test order by 1
+CAST(e as time(4))
+00:00:00.0000
+00:00:00.0000
+00:00:00.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as time(4)) from test order by 1
+CAST(e as time(4))
+00:00:00.0000
+00:00:00.0000
+00:00:00.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as time(4)) from test order by 1
+CAST(e as time(4))
+00:00:00.0000
+00:00:00.0000
+00:00:00.0000
+>>> Executing CAST e to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(e as double) from test order by 1
+CAST(e as double)
+20260501
+20260601
+20260601
+SET TIME_ZONE="+03:00";
+SELECT CAST(e as double) from test order by 1
+CAST(e as double)
+20260501
+20260601
+20260601
+SET TIME_ZONE="-03:00";
+SELECT CAST(e as double) from test order by 1
+CAST(e as double)
+20260501
+20260601
+20260601
+>>> Executing CAST f to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(f as varchar) from test order by 1
+CAST(f as varchar)
+08:01:01
+17:00:00
+18:01:01
+SET TIME_ZONE="+03:00";
+SELECT CAST(f as varchar) from test order by 1
+CAST(f as varchar)
+08:01:01
+17:00:00
+18:01:01
+SET TIME_ZONE="-03:00";
+SELECT CAST(f as varchar) from test order by 1
+CAST(f as varchar)
+08:01:01
+17:00:00
+18:01:01
+>>> Executing CAST f to datetime
+SET TIME_ZONE='+00:00';
+SELECT CONCAT(current_date() , ' ', f) = CAST(f as datetime) from test order by 1
+CONCAT(current_date() , ' ', f) = CAST(f as datetime)
+1
+1
+1
+SET TIME_ZONE="+03:00";
+SELECT CONCAT(current_date() , ' ', f) = CAST(f as datetime) from test order by 1
+CONCAT(current_date() , ' ', f) = CAST(f as datetime)
+1
+1
+1
+SET TIME_ZONE="-03:00";
+SELECT CONCAT(current_date() , ' ', f) = CAST(f as datetime) from test order by 1
+CONCAT(current_date() , ' ', f) = CAST(f as datetime)
+1
+1
+1
+>>> Executing CAST f to datetime(4)
+SET TIME_ZONE='+00:00';
+SELECT CONCAT(current_date() , ' ', f) = CAST(f as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', f) = CAST(f as datetime(4))
+1
+1
+1
+SET TIME_ZONE="+03:00";
+SELECT CONCAT(current_date() , ' ', f) = CAST(f as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', f) = CAST(f as datetime(4))
+1
+1
+1
+SET TIME_ZONE="-03:00";
+SELECT CONCAT(current_date() , ' ', f) = CAST(f as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', f) = CAST(f as datetime(4))
+1
+1
+1
+>>> Executing CAST f to date
+SET TIME_ZONE='+00:00';
+SELECT current_date()= CAST(f as date) from test order by 1
+current_date()= CAST(f as date)
+1
+1
+1
+SET TIME_ZONE="+03:00";
+SELECT current_date()= CAST(f as date) from test order by 1
+current_date()= CAST(f as date)
+1
+1
+1
+SET TIME_ZONE="-03:00";
+SELECT current_date()= CAST(f as date) from test order by 1
+current_date()= CAST(f as date)
+1
+1
+1
+>>> Executing CAST f to time
+SET TIME_ZONE='+00:00';
+SELECT CAST(f as time) from test order by 1
+CAST(f as time)
+08:01:01
+17:00:00
+18:01:01
+SET TIME_ZONE="+03:00";
+SELECT CAST(f as time) from test order by 1
+CAST(f as time)
+08:01:01
+17:00:00
+18:01:01
+SET TIME_ZONE="-03:00";
+SELECT CAST(f as time) from test order by 1
+CAST(f as time)
+08:01:01
+17:00:00
+18:01:01
+>>> Executing CAST f to time(4)
+SET TIME_ZONE='+00:00';
+SELECT CAST(f as time(4)) from test order by 1
+CAST(f as time(4))
+08:01:01.0000
+17:00:00.0000
+18:01:01.0000
+SET TIME_ZONE="+03:00";
+SELECT CAST(f as time(4)) from test order by 1
+CAST(f as time(4))
+08:01:01.0000
+17:00:00.0000
+18:01:01.0000
+SET TIME_ZONE="-03:00";
+SELECT CAST(f as time(4)) from test order by 1
+CAST(f as time(4))
+08:01:01.0000
+17:00:00.0000
+18:01:01.0000
+>>> Executing CAST f to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(f as double) from test order by 1
+CAST(f as double)
+80101
+170000
+180101
+SET TIME_ZONE="+03:00";
+SELECT CAST(f as double) from test order by 1
+CAST(f as double)
+80101
+170000
+180101
+SET TIME_ZONE="-03:00";
+SELECT CAST(f as double) from test order by 1
+CAST(f as double)
+80101
+170000
+180101
+>>> Executing CAST g to varchar
+SET TIME_ZONE='+00:00';
+SELECT CAST(g as varchar) from test order by 1
+CAST(g as varchar)
+08:01:59.999999
+16:59:59.999999
+18:01:01.000000
+SET TIME_ZONE="+03:00";
+SELECT CAST(g as varchar) from test order by 1
+CAST(g as varchar)
+08:01:59.999999
+16:59:59.999999
+18:01:01.000000
+SET TIME_ZONE="-03:00";
+SELECT CAST(g as varchar) from test order by 1
+CAST(g as varchar)
+08:01:59.999999
+16:59:59.999999
+18:01:01.000000
+>>> Executing CAST g to datetime
+SET TIME_ZONE='+00:00';
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime)
+0
+0
+1
+SET TIME_ZONE="+03:00";
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime)
+0
+0
+1
+SET TIME_ZONE="-03:00";
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime)
+0
+0
+1
+>>> Executing CAST g to datetime(4)
+>>> test with time_truncate_fractional
+disable_query_log
+SET sql_mode=time_truncate_fractional;
+SET sql_mode=time_truncate_fractional;
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime(4))
+0
+0
+1
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime(4))
+0
+0
+1
+SET TIME_ZONE='+00:00';
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime(4))
+0
+0
+1
+SET TIME_ZONE="+03:00";
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime(4))
+0
+0
+1
+SET TIME_ZONE="-03:00";
+SELECT CONCAT(current_date() , ' ', g) = CAST(g as datetime(4)) from test order by 1
+CONCAT(current_date() , ' ', g) = CAST(g as datetime(4))
+0
+0
+1
+>>> Executing CAST g to date
+SET TIME_ZONE='+00:00';
+SELECT current_date()= CAST(g as date) from test order by 1
+current_date()= CAST(g as date)
+1
+1
+1
+SET TIME_ZONE="+03:00";
+SELECT current_date()= CAST(g as date) from test order by 1
+current_date()= CAST(g as date)
+1
+1
+1
+SET TIME_ZONE="-03:00";
+SELECT current_date()= CAST(g as date) from test order by 1
+current_date()= CAST(g as date)
+1
+1
+1
+>>> Executing CAST g to double
+SET TIME_ZONE='+00:00';
+SELECT CAST(g as double) from test order by 1
+CAST(g as double)
+80159.999999
+165959.999999
+180101
+SET TIME_ZONE="+03:00";
+SELECT CAST(g as double) from test order by 1
+CAST(g as double)
+80159.999999
+165959.999999
+180101
+SET TIME_ZONE="-03:00";
+SELECT CAST(g as double) from test order by 1
+CAST(g as double)
+80159.999999
+165959.999999
+180101
+drop table test;
+drop table test_constant;
+drop table t;
+UNINSTALL PLUGIN rapid;

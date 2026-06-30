@@ -1,0 +1,156 @@
+SET sql_mode=ORACLE;
+CREATE PROCEDURE p1(a IN BIT DEFAULT 1)
+AS BEGIN
+SELECT a;
+END|
+CREATE PROCEDURE p2(
+a IN INT DEFAULT 1, 
+b OUT INT, 
+c IN OUT INT
+)
+AS BEGIN
+SET b = a;
+SET c = a + b + c;
+END|
+CALL p1();
+a
+
+SET @c = 100;
+CALL p2(10, @b, @c);
+SELECT @b;
+@b
+10
+SELECT @c;
+@c
+120
+CREATE FUNCTION f1(a BOOL) RETURN BOOL
+AS BEGIN
+RETURN a;
+END|
+SELECT f1(TRUE);
+f1(TRUE)
+1
+DROP PROCEDURE IF EXISTS p1;
+CREATE PROCEDURE p3(d IN INT)
+AS BEGIN
+CALL p2(10, @b, @c);
+SELECT 'p3', d;
+SELECT @b;
+SELECT @c;
+END|
+SELECT f1(TRUE);
+f1(TRUE)
+1
+CALL p3(33);
+p3	d
+p3	33
+@b
+10
+@c
+140
+DROP PROCEDURE IF EXISTS p3;
+set sql_mode=oracle;
+SET @@session.max_sp_recursion_depth = 5;
+CREATE PROCEDURE test_fib_ora(n INT) AS
+val INT;
+BEGIN
+SELECT 'fib_begin', n;
+CALL fib_ora(n, val);
+SELECT 'fib_done', n, val;
+END;//
+CREATE PROCEDURE fib_ora(n IN INT, val OUT INT) AS
+v1 INT;
+v2 INT;
+BEGIN
+SELECT 'fib_enter', n;
+IF n < 0 THEN
+SET val = 0;
+ELSIF n < 2 THEN
+SET val = 1;
+ELSE
+CALL fib_ora(n -1, v1);
+CALL fib_ora(n -2, v2);
+SET val = v1 + v2;
+END IF;
+SELECT 'fib_exit', n, val;
+END;//
+SELECT 'will recursion';
+will recursion
+will recursion
+CALL test_fib_ora(5);
+fib_begin	n
+fib_begin	5
+fib_enter	n
+fib_enter	5
+fib_enter	n
+fib_enter	4
+fib_enter	n
+fib_enter	3
+fib_enter	n
+fib_enter	2
+fib_enter	n
+fib_enter	1
+fib_exit	n	val
+fib_exit	1	1
+fib_enter	n
+fib_enter	0
+fib_exit	n	val
+fib_exit	0	1
+fib_exit	n	val
+fib_exit	2	2
+fib_enter	n
+fib_enter	1
+fib_exit	n	val
+fib_exit	1	1
+fib_exit	n	val
+fib_exit	3	3
+fib_enter	n
+fib_enter	2
+fib_enter	n
+fib_enter	1
+fib_exit	n	val
+fib_exit	1	1
+fib_enter	n
+fib_enter	0
+fib_exit	n	val
+fib_exit	0	1
+fib_exit	n	val
+fib_exit	2	2
+fib_exit	n	val
+fib_exit	4	5
+fib_enter	n
+fib_enter	3
+fib_enter	n
+fib_enter	2
+fib_enter	n
+fib_enter	1
+fib_exit	n	val
+fib_exit	1	1
+fib_enter	n
+fib_enter	0
+fib_exit	n	val
+fib_exit	0	1
+fib_exit	n	val
+fib_exit	2	2
+fib_enter	n
+fib_enter	1
+fib_exit	n	val
+fib_exit	1	1
+fib_exit	n	val
+fib_exit	3	3
+fib_exit	n	val
+fib_exit	5	8
+fib_done	n	val
+fib_done	5	8
+CREATE PROCEDURE p1(a IN BOOL DEFAULT '')
+AS BEGIN
+SELECT a;
+END|
+ERROR HY000: Parameter 'a' has invalid value.
+DROP PROCEDURE IF EXISTS p1;
+Warnings:
+Note	1305	PROCEDURE test.p1 does not exist
+DROP PROCEDURE IF EXISTS p2;
+DROP FUNCTION IF EXISTS f1;
+DROP PROCEDURE IF EXISTS test_fib_ora;
+DROP PROCEDURE IF EXISTS fib_ora;

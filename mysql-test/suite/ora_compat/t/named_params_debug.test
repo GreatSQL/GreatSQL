@@ -1,0 +1,329 @@
+# ----------------------------------------------------------------------------
+# Test for named parameters in procedure and function under sql_mode = oracle
+# ----------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------
+# prepare
+# ----------------------------------------------------------------------------
+
+--source include/have_debug.inc
+--disable_warnings
+DROP SCHEMA IF EXISTS testsp;
+CREATE SCHEMA testsp;
+USE testsp;
+
+SET sql_mode = oracle;
+
+DELIMITER |;
+CREATE FUNCTION f1(a int, b int, c int) RETURN INTEGER
+AS
+BEGIN
+  RETURN a * b + c;
+END|
+
+CREATE FUNCTION f2(a bool, b int, c varchar(16)) RETURN VARCHAR(16)
+AS
+BEGIN
+  RETURN CONCAT(c , ':', a+b);
+END|
+
+CREATE PROCEDURE p1 (a int, b int, c int)
+AS
+BEGIN
+  SELECT a*b+c;
+  SELECT f1(a, b, c);
+END|
+
+CREATE PROCEDURE p2 (a bool, b int, c varchar(16))
+AS
+BEGIN
+  SELECT a*b+c;
+  SELECT f2(a, b, c);
+END|
+
+DELIMITER ;|
+--enable_warnings
+
+# ----------------------------------------------------------------------------
+# normal case
+# ----------------------------------------------------------------------------
+
+CALL p1(1, 2, 3);
+SELECT f1(1, 2, 3);
+
+SET sql_mode = oracle;
+
+CALL p1(1, 2, 3);
+CALL p1(1, 2, c=>3);
+CALL p1(1, b=>2, c=>3);
+CALL p1(a=>1, b=>3, c=>3);
+CALL p1(b=>3, c=>3, a=>1);
+CALL p2(true, 10, 'test');
+CALL p2(true, b=>10, c=>'test');
+CALL p2(true, c=>'test', b=>10);
+CALL p2(a=>true, b=>10, c=>'test');
+CALL p2(b=>10, c=> 'test', a=>true);
+
+SELECT f1(1, 2, 3);
+SELECT f1(1, 2, c=>3);
+SELECT f1(1, b=>2, c=>3);
+SELECT f1(a=>1, b=>3, c=>3);
+SELECT f1(b=>3, c=>3, a=>1);
+SELECT f2(true, 10, 'test');
+SELECT f2(true, b=>10, c=>'test');
+SELECT f2(true, c=>'test', b=>10);
+SELECT f2(a=>true, b=>10, c=>'test');
+SELECT f2(b=>10, c=> 'test', a=>true);
+
+CALL p1(a=>f1(a=>1, b=>2, c=>3), b=>2, c=>f1(a=>3,b=>2, c=>1));
+
+SHOW CREATE PROCEDURE p1;
+SHOW CREATE PROCEDURE p2;
+
+SHOW CREATE FUNCTION f1;
+SHOW CREATE FUNCTION f2;
+
+SET sql_mode = 'oracle';
+
+CALL p1(1, 2, 3);
+CALL p1(1, 2, c=>3);
+CALL p1(1, b=>2, c=>3);
+CALL p1(a=>1, b=>3, c=>3);
+CALL p1(b=>3, c=>3, a=>1);
+CALL p2(true, 10, 'test');
+CALL p2(true, b=>10, c=>'test');
+CALL p2(true, c=>'test', b=>10);
+CALL p2(a=>true, b=>10, c=>'test');
+CALL p2(b=>10, c=> 'test', a=>true);
+
+SELECT f1(1, 2, 3);
+SELECT f1(1, 2, c=>3);
+SELECT f1(1, b=>2, c=>3);
+SELECT f1(a=>1, b=>3, c=>3);
+SELECT f1(b=>3, c=>3, a=>1);
+SELECT f2(true, 10, 'test');
+SELECT f2(true, b=>10, c=>'test');
+SELECT f2(true, c=>'test', b=>10);
+SELECT f2(a=>true, b=>10, c=>'test');
+SELECT f2(b=>10, c=> 'test', a=>true);
+
+CALL p1(a=>f1(a=>1, b=>2, c=>3), b=>2, c=>f1(a=>3,b=>2, c=>1));
+
+EXPLAIN SELECT f1(1, 2, 3);
+EXPLAIN SELECT f1(1, 2, c=>3);
+EXPLAIN SELECT f1(1, b=>2, c=>3);
+EXPLAIN SELECT f1(a=>1, b=>3, c=>3);
+EXPLAIN SELECT f1(b=>3, c=>3, a=>1);
+EXPLAIN SELECT f2(true, 10, 'test');
+EXPLAIN SELECT f2(true, b=>10, c=>'test');
+EXPLAIN SELECT f2(true, c=>'test', b=>10);
+EXPLAIN SELECT f2(a=>true, b=>10, c=>'test');
+EXPLAIN SELECT f2(b=>10, c=> 'test', a=>true);
+
+SHOW CREATE PROCEDURE p1;
+SHOW CREATE PROCEDURE p2;
+
+SHOW CREATE FUNCTION f1;
+SHOW CREATE FUNCTION f2;
+
+SHOW PROCEDURE CODE p1;
+SHOW PROCEDURE CODE p2;
+
+SHOW FUNCTION CODE f1;
+SHOW FUNCTION CODE f2;
+# ----------------------------------------------------------------------------
+# error case
+# ----------------------------------------------------------------------------
+
+SET sql_mode = oracle;
+
+--error ER_SP_INVALID_DEFAULT_PARAM
+CALL p1();
+--error ER_SP_INVALID_DEFAULT_PARAM
+CALL p1(a=>1);
+--error ER_SP_INVALID_DEFAULT_PARAM
+CALL p1(a=>1, a=>1);
+--error ER_SP_WRONG_NO_OF_ARGS
+CALL p1(a=>1, a=>1, a=>1, a=>1);
+
+--error ER_SP_INVALID_DEFAULT_PARAM
+SELECT f1();
+--error ER_SP_INVALID_DEFAULT_PARAM
+SELECT f1(a=>1);
+--error ER_SP_INVALID_DEFAULT_PARAM
+SELECT f1(a=>1, a=>1);
+--error ER_SP_WRONG_NO_OF_ARGS
+SELECT f1(a=>1, a=>1, a=>1, a=>1);
+
+
+--error ER_SP_NAMED_PARAM_BEFORE_POS_PARAM
+CALL p1(a=>1, 2, 3);
+--error ER_SP_NAMED_PARAM_BEFORE_POS_PARAM
+CALL p1(1, b=>2, 3);
+--error ER_SP_NAMED_PARAM_BEFORE_POS_PARAM
+CALL p1(a=>1, b=>2, 3);
+
+--error ER_SP_NAMED_PARAM_BEFORE_POS_PARAM
+SELECT f1(a=>1, 2, 3);
+--error ER_SP_NAMED_PARAM_BEFORE_POS_PARAM
+SELECT f1(1, b=>2, 3);
+--error ER_SP_NAMED_PARAM_BEFORE_POS_PARAM
+SELECT f1(a=>1, b=>2, 3);
+
+--error ER_SP_NAMED_PARAM_BEFORE_POS_PARAM
+CALL p1(a=>1, 2, 3);
+
+--error ER_SP_INVALID_NAMED_PARAM
+CALL p1(1, 2, cc=>3);
+--error ER_SP_INVALID_NAMED_PARAM
+CALL p1(1, bb=>2, cc=>3);
+--error ER_SP_INVALID_NAMED_PARAM
+CALL p1(aa=>1, bb=>2, cc=>3);
+--error ER_SP_INVALID_NAMED_PARAM
+CALL p1(aa=>1, b=>2, cc=>3);
+--error ER_SP_INVALID_NAMED_PARAM
+CALL p1(a=>1, b=>2, cc=>3);
+
+--error ER_SP_INVALID_NAMED_PARAM
+SELECT f1(1, 2, cc=>3);
+--error ER_SP_INVALID_NAMED_PARAM
+SELECT f1(1, bb=>2, cc=>3);
+--error ER_SP_INVALID_NAMED_PARAM
+SELECT f1(aa=>1, bb=>2, cc=>3);
+--error ER_SP_INVALID_NAMED_PARAM
+SELECT f1(aa=>1, b=>2, cc=>3);
+--error ER_SP_INVALID_NAMED_PARAM
+SELECT f1(a=>1, b=>2, cc=>3);
+
+--error ER_SP_MISSING_NAMED_PARAM
+CALL p1(b=>1, b=>2, c=>3);
+--error ER_SP_MISSING_NAMED_PARAM
+CALL p1(a=>1, a=>2, c=>3);
+--error ER_SP_MISSING_NAMED_PARAM
+CALL p1(a=>1, a=>2, a=>3);
+--error ER_SP_MISSING_NAMED_PARAM
+CALL p1(1, a=>2, a=>3);
+--error ER_SP_MISSING_NAMED_PARAM
+CALL p1(1, a=>2, c=>3);
+--error ER_SP_MISSING_NAMED_PARAM
+CALL p1(1, a=>2, b=>3);
+
+--error ER_SP_MISSING_NAMED_PARAM
+SELECT f1(b=>1, b=>2, c=>3);
+--error ER_SP_MISSING_NAMED_PARAM
+SELECT f1(a=>1, a=>2, c=>3);
+--error ER_SP_MISSING_NAMED_PARAM
+SELECT f1(a=>1, a=>2, a=>3);
+--error ER_SP_MISSING_NAMED_PARAM
+SELECT f1(1, a=>2, a=>3);
+--error ER_SP_MISSING_NAMED_PARAM
+SELECT f1(1, a=>2, c=>3);
+--error ER_SP_MISSING_NAMED_PARAM
+SELECT f1(1, a=>2, b=>3);
+
+# ----------------------------------------------------------------------------
+# edge case: create in sql_mode=oracle, run in normal / oracle mode
+# ----------------------------------------------------------------------------
+
+SET sql_mode = oracle;
+
+DELIMITER |;
+CREATE FUNCTION f3(a int, b int, c int) RETURN INTEGER
+AS
+BEGIN
+  RETURN a * b + c;
+END|
+
+CREATE FUNCTION f4(a bool, b int, c varchar(16)) RETURN VARCHAR(16)
+AS
+BEGIN
+  RETURN CONCAT(c , ':', a+b);
+END|
+
+CREATE PROCEDURE p3 (a int, b int, c int)
+AS
+BEGIN
+  SELECT a*b+c;
+  SELECT f3(a=>a, b=>b, c=>c);
+END|
+
+CREATE PROCEDURE p4 (a bool, b int, c varchar(16))
+AS
+BEGIN
+  SELECT a*b+c;
+  SELECT f4(a=>a, b=>b, c=>c);
+END|
+
+DELIMITER ;|
+
+SHOW CREATE PROCEDURE p3;
+SHOW CREATE PROCEDURE p4;
+
+SHOW CREATE FUNCTION f4;
+SHOW CREATE FUNCTION f4;
+
+SHOW PROCEDURE CODE p3;
+SHOW PROCEDURE CODE p4;
+
+SHOW FUNCTION CODE f4;
+SHOW FUNCTION CODE f4;
+
+SET sql_mode = '';
+
+SELECT f3(1,2,3);
+SELECT f4(true, 2, 'testing');
+CALL p3(1,2,3);
+CALL p4(true, 2, 'testing');
+
+SET sql_mode = oracle;
+
+SELECT f3(a=>1, b=>2, c=>3);
+SELECT f4(a=>true, b=>2, c=>'testing');
+CALL p3(a=>1, b=>2, c=>3);
+CALL p4(a=>true, b=>2, c=>'testing');
+
+SHOW CREATE PROCEDURE p3;
+SHOW CREATE PROCEDURE p4;
+
+SHOW CREATE FUNCTION f3;
+SHOW CREATE FUNCTION f4;
+
+SHOW PROCEDURE CODE p3;
+SHOW PROCEDURE CODE p4;
+
+SHOW FUNCTION CODE f4;
+SHOW FUNCTION CODE f4;
+
+DROP FUNCTION f3;
+DROP FUNCTION f4;
+DROP PROCEDURE p3;
+DROP PROCEDURE p4;
+
+# ----------------------------------------------------------------------------
+# edge case: item_name is same as value
+# ----------------------------------------------------------------------------
+
+SET sql_mode = oracle;
+
+DELIMITER |;
+CREATE FUNCTION mytest(a VARCHAR(128), b VARCHAR(128), c VARCHAR(128)) RETURN VARCHAR(128)
+AS
+BEGIN
+  RETURN b;
+END|
+DELIMITER ;|
+
+create table tj(b varchar(128));
+insert into tj values('TTT');
+
+select mytest(b,c=>'CC',b=>'BB') from tj;
+
+
+DROP FUNCTION mytest;
+DROP TABLE tj;
+# ----------------------------------------------------------------------------
+# cleaning
+# ----------------------------------------------------------------------------
+
+DROP SCHEMA testsp;

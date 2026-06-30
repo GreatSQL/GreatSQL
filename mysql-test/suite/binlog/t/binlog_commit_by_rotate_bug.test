@@ -1,0 +1,29 @@
+################################################################################
+#
+# BUG1:
+#   When a large transaction is implicitly committed by rotate,
+#   binlog_should_commit_by_rotate flag fails to be set to false.
+#   This causes the subsequent small transaction to commit by rotate.
+#   Then assertion failure due to missing corresponding disk file.
+#
+################################################################################
+--source include/have_binlog_format_row.inc
+RESET BINARY LOGS AND GTIDS;
+
+--echo #
+--echo # BUG1
+--echo #
+--connect(con1,localhost,root,,)
+CREATE TABLE t1 (c1 int, c2 LONGTEXT) ENGINE = InnoDB;
+
+SET @saved_binlog_large_commit_threshold= @@GLOBAL.binlog_large_commit_threshold;
+SET GLOBAL binlog_large_commit_threshold = 10 * 1024 * 1024;
+
+## "INSERT" is implicitly committed by "CREATE INDEX"
+BEGIN;
+INSERT INTO t1 values(1, repeat("a", 10485760));
+CREATE INDEX idx1 ON t1 (c1);
+COMMIT;
+
+SET GLOBAL binlog_large_commit_threshold = @saved_binlog_large_commit_threshold;
+DROP TABLE t1;

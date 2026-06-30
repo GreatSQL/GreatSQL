@@ -1,0 +1,40 @@
+
+CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `trandate` date DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `trandate` date DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+insert into t2(trandate) values('2024-10-10'),('2024-10-11'),('2024-10-13');
+
+CREATE TABLE `t3` (
+
+  `id` int NOT NULL AUTO_INCREMENT,
+
+  `trandate` date DEFAULT NULL,
+
+  PRIMARY KEY (`id`)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree insert into t1(trandate) (select trandate from (select trandate from t2 order by trandate desc )a limit 1);
+
+insert into t1(trandate) (select trandate from (select trandate from t2 order by trandate desc )a limit 1);
+
+select * from t1;
+
+insert all into t1(trandate) into t3(trandate) (select trandate from (select trandate from t2 order by trandate desc )a limit 1);
+
+select * from t1;
+select * from t3;
+
+--replace_regex /cost=\d+.\d+/cost=***/  /rows=\d+/rows=***/
+explain format=tree insert into t1(trandate) (select trandate from (select trandate from t2 order by trandate desc limit 2 )a limit 1);
+
+drop table t1, t2, t3;

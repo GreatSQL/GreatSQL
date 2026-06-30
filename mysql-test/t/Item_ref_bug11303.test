@@ -1,0 +1,71 @@
+#
+# Test of problem with bug11303
+#
+
+CREATE TABLE t1 (s1 INT, s2 char(100),PRIMARY KEY (s1));
+INSERT INTO t1 values(1,'a,aa');
+INSERT INTO t1 values(2,'bb,b');
+INSERT INTO t1 values(3,'c,c,c');
+
+# Test of bug 1
+EXPLAIN  
+select  
+    trim(ref_15.c_ogj),
+    0<>0 as c_lrcm63eani
+  from 
+    (select 
+    0<>0 as c_ogj
+  from 
+    t1
+  where 0<>0
+  order by c_ogj asc) as ref_15;
+
+# Test of bug 2
+EXPLAIN 
+WITH 
+cte_0 AS (select  
+    (select 1 from t1 limit 1 offset 51)
+       as c_nn7max69
+  from t1 as subq_0), 
+cte_2 AS (select  
+    1 as c_h0u_
+)
+select  
+    ref_22.c_nn7max69
+  from 
+    ((cte_0 as ref_22 join cte_2 as ref_23 on (0<>0))
+      join (select 1 as ref_31) as subq_3
+      on ( select cast(ref_22.c_nn7max69 as char) as c_ds6nqmige
+                    from 
+                      t1 as ref_35
+                    order by c_ds6nqmige desc
+                    limit 1) <> (cast(ref_23.c_h0u_ as decimal) 
+          ));
+
+# Test of bug 3
+EXPLAIN 
+WITH 
+cte_0 AS (select  
+    (select 1 from t1 limit 1 offset 51)
+       as c_nn7max69
+  from t1 as subq_0), 
+cte_2 AS (select  
+    1 as c_h0u_)
+select  
+    ref_22.c_nn7max69
+  from 
+    ((cte_0 as ref_22
+        join cte_2 as ref_23
+          on (0<>0))
+      right outer join (select 1
+          from t1 as ref_31
+) as subq_3
+      on ( select  
+                      cast(ref_22.c_nn7max69 as char) as c_ds6nqmige
+                    from 
+                      t1 as ref_35
+                    order by c_ds6nqmige desc
+                    limit 1) <> (cast(ref_23.c_h0u_ as decimal) 
+));
+
+drop table t1;

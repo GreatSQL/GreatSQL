@@ -1,0 +1,28 @@
+DROP TABLE IF EXISTS t;
+DROP PROCEDURE IF EXISTS p1;
+CREATE TABLE t (s1 INT, s2 char(100),PRIMARY KEY (s1));
+INSERT INTO t values(1,'aaa');
+INSERT INTO t values(2,'bbb');
+INSERT INTO t values(3,'ccc');
+set sql_mode="oracle";
+CREATE PROCEDURE p1(num IN integer) as
+BEGIN
+if num=10 then
+select 10 as a,num as exeuted;
+elsif num>=100 then
+select 100 as a,num as exeuted;
+else
+select 0 as a,num as exeuted;
+end if;
+END//
+CALL p1(10);
+a	exeuted
+10	10
+CALL p1(110);
+a	exeuted
+100	110
+CALL p1(1);
+a	exeuted
+0	1
+DROP PROCEDURE IF EXISTS p1;
+drop table t;

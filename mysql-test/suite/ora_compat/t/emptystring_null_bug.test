@@ -1,0 +1,103 @@
+
+create table test as select 1;
+
+create or replace view tv as 
+select * from (
+  select '中文' as a from test
+  union all
+  select 'engl' as a from test
+);
+
+create or replace view tvx as 
+select * from (
+  select '' as a from test
+  union all
+  select 'engl' as a from test
+);
+-- echo # invalid charactor string would be cast to empty string, follow 4 sql return same result
+select * from tv  order by 1;
+select * from tvx order by 1;
+select * from (
+  select '' as a from test
+  union all
+  select 'engl' as a from test
+) order by 1;
+select * from (
+  select '中文' as a from test
+  union all
+  select 'engl' as a from test
+) order by 1;
+
+-- echo # return empty result set
+select * from tv except select * from tvx except select * from (
+  select '' as a from test
+  union all
+  select 'engl' as a from test
+) except select * from (
+  select '中文' as a from test
+  union all
+  select 'engl' as a from test
+) order by 1;
+
+set sql_mode='oracle,EMPTYSTRING_EQUAL_NULL';
+
+-- echo # invalid charactor string would be cast to empty string 
+-- echo # and then treated as null, follow 4 sql return same result
+select * from tv  order by 1;
+select * from tvx order by 1;
+select * from (
+  select '' as a from test
+  union all
+  select 'engl' as a from test
+) order by 1;
+select * from (
+  select '中文' as a from test
+  union all
+  select 'engl' as a from test
+) order by 1;
+
+-- echo # return empty result set
+select * from tv except select * from tvx except select * from (
+  select '' as a from test
+  union all
+  select 'engl' as a from test
+) except select * from (
+  select '中文' as a from test
+  union all
+  select 'engl' as a from test
+) order by 1;
+
+set sql_mode='EMPTYSTRING_EQUAL_NULL';
+
+-- echo # invalid charactor string would be cast to empty string 
+-- echo # and then treated as null, follow 4 sql return same result
+select * from tv  order by 1;
+select * from tvx order by 1;
+select * from (
+  select '' as a from test
+  union all
+  select 'engl' as a from test
+) order by 1;
+select * from (
+  select '中文' as a from test
+  union all
+  select 'engl' as a from test
+) order by 1;
+
+-- echo # return empty result set
+select * from tv except select * from tvx except select * from (
+  select '' as a from test
+  union all
+  select 'engl' as a from test
+) except select * from (
+  select '中文' as a from test
+  union all
+  select 'engl' as a from test
+) order by 1;
+
+set sql_mode=default;
+
+drop view tv;
+drop view tvx;
+drop table test;
+

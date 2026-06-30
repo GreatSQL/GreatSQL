@@ -1,0 +1,436 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection slave]
+call mtr.add_suppression("Recovery from source pos .*");
+call mtr.add_suppression("Corrupted table mysql.slave_worker_info");
+call mtr.add_suppression("Could not delete from Replica Workers info repository");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+call mtr.add_suppression("Replica SQL for channel '': .*Could not execute .* event on table");
+call mtr.add_suppression("Replica SQL for channel '': Worker 1 failed executing transaction 'ANONYMOUS' at source log .*, end_log_pos [0-9]+; Related event data has been written to file: replica_report.error, Error_code: MY-001032");
+SET session default_storage_engine=InnoDB;
+[test1: conflict without table key and NULL value]
+[connect conn1]
+drop table if exists t1;
+create table t1(c1 int, c2 longtext);
+insert into t1 values(1,'A'),(2,'B'), (3,3), (4,4);
+include/rpl/sync_to_replica.inc
+[connect conn2]
+set global replication_error_write_file=1000;
+delete from t1 where c1 > 1;
+[connect conn1]
+delete from t1 where c1 > 0;
+[connect conn2]
+# Event table: t1
+# Event scan and not apply rows: 3
+# Event scan and not apply data:
+## row [1] :
+# c1='4'
+# c2='4'
+## row [2] :
+# c1='3'
+# c2='3'
+## row [3] :
+# c1='2'
+# c2='B'
+stop replica;
+set global sql_replica_skip_counter = 1;
+start replica;
+[connect conn1]
+drop table t1;
+create table t1(c1 int, c2 varchar(100), c3 int);
+insert into t1 values(1,'A', 1),(2,'B', 2) , (3,3,3), (4,4,4), (NULL, 5, 5), (NULL, 6, 6);
+include/rpl/sync_to_replica.inc
+[connect conn2]
+delete from t1 where c3=3 or c3=5 or c3 = 6;
+[connect conn1]
+delete from t1 where c3 > 1;
+[connect conn2]
+# Event scan and not apply rows: 3
+# Event scan and not apply data:
+## row [1] :
+# c1=NULL
+# c2='6'
+# c3='6'
+## row [2] :
+# c1='3'
+# c2='3'
+# c3='3'
+## row [3] :
+# c1=NULL
+# c2='5'
+# c3='5'
+stop replica;
+set global sql_replica_skip_counter = 1;
+start replica;
+[connect conn1]
+drop table t1;
+[test2: conflict with primary key]
+create table t1(c1 int primary key, c2 longtext);
+insert into t1 values(1,REPEAT('ManyMegaByteBlck', 2)),(2,REPEAT('ManyMegaByteBlck', 2)) , (3,3), (4,4);
+include/rpl/sync_to_replica.inc
+[connect conn2]
+delete from t1 where c1 > 1;
+[connect conn1]
+delete from t1 where c1 > 0;
+[connect conn2]
+select regexp_substr(LAST_ERROR_MESSAGE, 'contains entry.*PRIMARY') from performance_schema.replication_applier_status_by_worker where LAST_ERROR_MESSAGE!='';
+regexp_substr(LAST_ERROR_MESSAGE, 'contains entry.*PRIMARY')
+contains entry '2' for key 't1.PRIMARY
+stop replica;
+set global sql_replica_skip_counter = 1;
+start replica;
+[connect conn1]
+drop table t1;
+[test3: conflict with unique key]
+create table t1(c1 int unique, c2 varchar(100), c3 int);
+insert into t1 values(1,REPEAT('ManyMegaByteBlck', 2), 1),(2,REPEAT('ManyMegaByteBlck', 2), 2) , (3,3,3), (4,4,4), (5, 5, 5), (6, 6, 6);
+include/rpl/sync_to_replica.inc
+[connect conn2]
+delete from t1 where c3 > 1;
+[connect conn1]
+delete from t1 where c3 > 0;
+[connect conn2]
+# Event table: t1
+# Event scan and not apply rows: 5
+# Event scan and not apply data:
+# lost data key: c1=2
+stop replica;
+set global sql_replica_skip_counter = 1;
+start replica;
+[connect conn1]
+drop table t1;
+[test4: conflict with index key]
+create table t3(c1 int, c2 varchar(50), c3 int, c4 int);
+create index idx_1 on t3 (c4);
+create index idx_2 on t3 (c3);
+insert into t3 values(1,'A',11,12),(2,'B',21,22),(3,'C',31,32),(4,'D',41,42);
+include/rpl/sync_to_replica.inc
+[connect conn2]
+delete from t3 where c3=31;
+[connect conn1]
+delete from t3 where c1 =2 or (c1=3 and c3=31);
+[connect conn2]
+# Event scan and not apply rows: 1
+# Event scan and not apply data:
+# lost data key: idx_1=32
+stop replica;
+set global sql_replica_skip_counter = 1;
+start replica;
+[connect conn1]
+drop table t3;
+[test5: test mixed key]
+create table t3(c1 int, c2 varchar(50), c3 int, c4 int, primary key(c1,c3), INDEX idx(c2), unique key(c4));
+insert into t3 values(1,'A',11,12),(2,'B',21,22),(3,'C',31,32),(4,'D',41,42);
+include/rpl/sync_to_replica.inc
+[connect conn2]
+delete from t3 where c3=31;
+[connect conn1]
+delete from t3 where c1 =2 or (c1=3 and c3=31);
+[connect conn2]
+select regexp_substr(LAST_ERROR_MESSAGE, 'contains entry.*PRIMARY') from performance_schema.replication_applier_status_by_worker where LAST_ERROR_MESSAGE!='';
+regexp_substr(LAST_ERROR_MESSAGE, 'contains entry.*PRIMARY')
+contains entry '3-31' for key 't3.PRIMARY
+stop replica;
+set global sql_replica_skip_counter = 1;
+start replica;
+[connect conn1]
+drop table t3;
+[test6: test with multiple data type column]
+[prepare data included all data types data: create table t1]
+CREATE TABLE t1 (
+col_tinyint tinyint AUTO_INCREMENT PRIMARY KEY,
+col_tinyintus tinyint unsigned,
+col_smallint smallint,
+col_smallintus smallint unsigned,
+col_mediumint mediumint,
+col_mediumintus mediumint unsigned,
+col_int int,
+col_intus int unsigned,
+col_integer integer,
+col_integerus int unsigned,
+col_bigint bigint,
+col_bigintus bigint unsigned,
+col_decimal decimal(10, 2),
+col_dec dec(10, 2),
+col_numeric numeric(10, 2),
+col_float float,
+col_double double,
+col_real real,
+col_bool bool,
+col_boolean boolean,
+col_DATE DATE,
+col_DATETIME DATETIME,
+col_TIMESTAMP TIMESTAMP,
+col_TIME TIME,
+col_YEAR YEAR,
+col_CHAR CHAR(10),
+col_VARCHAR VARCHAR(20),
+col_BINARY BINARY(10),
+col_VARBINARY VARBINARY(50),
+col_TEXT TEXT,
+col_TINYTEXT TINYTEXT,
+col_MEDIUMTEXT MEDIUMTEXT,
+col_LONGTEXT LONGTEXT,
+col_BLOB BLOB,
+col_TINYBLOB TINYBLOB,
+col_MEDIUMBLOB MEDIUMBLOB,
+col_LONGBLOB LONGBLOB,
+col_bit bit,
+col_enum enum('上北','下南','左西','右东','simple','-128','127'),
+col_SET SET('C', 'G', 'O'),
+col_CLOB CLOB,
+col_number number,
+col_VARCHAR2 VARCHAR2(100),
+col_plsinteger PLS_INTEGER,
+col_long long,
+col_raw varchar2(200),
+col_json json
+);
+INSERT INTO t1
+VALUES (-128,0,-32768,0, -8388608,0, -2147483648,0, -2147483648,0
+, -9223372036854775808,0, -99999999.99, -99999999.99, -99999999.99, -3.402823466E+38
+, -1.7976931348623157E+308, -3.402823466E+38, 0, 0, '1000-01-01'
+        , '1000-01-01 00:00:00', '1970-01-01 08:00:01.000000', '-838:59:59.000000', '1901', 'halo'
+        , 'halo', 'nuphy', 'nuphy', 'MySQL的提供了四种TEXT类型：TINYTEXT，TEXT，MEDIUMTEXT，和LONGTEXT', 'MySQL的提供了四种TEXT类型：TINYTEXT，TEXT，MEDIUMTEXT，和LONGTEXT'
+        , 'MySQL的提供了四种TEXT类型：TINYTEXT，TEXT，MEDIUMTEXT，和LONGTEXT', 'MySQL的提供了四种TEXT类型：TINYTEXT，TEXT，MEDIUMTEXT，和LONGTEXT', 'MySQL中BLOB是个类型系列，包括：TinyBlob、Blob、MediumBlob、LongBlob，这几个类型之间的唯一区别是在存储文件的最大大小上不同', 'MySQL中BLOB是个类型系列，包括：TinyBlob、Blob、MediumBlob、LongBlob，这几个类型之间的唯一区别是在存储文件的最大大小上不同', 'MySQL中BLOB是个类型系列，包括：TinyBlob、Blob、MediumBlob、LongBlob，这几个类型之间的唯一区别是在存储文件的最大大小上不同'
+        , 'MySQL中BLOB是个类型系列，包括：TinyBlob、Blob、MediumBlob、LongBlob，这几个类型之间的唯一区别是在存储文件的最大大小上不同', b'0', '上北', 'C', 'clob'
+        , '1.234', 'ooooooo', '987', 'woshi long','woshi raw',
+'{"username":"admin","password":"123"}'
+);
+INSERT INTO t1
+VALUES (1,127, +32767,65535, +8388607,8388607, +2147483647,2147483647, +2147483647,2147483647
+, +9223372036854775807,9223372036854775807, +99999999.99, +99999999.99, +99999999.99, 0
+, 0, 0, 0, 1, null
+, null, null, '00:00:00', '0000', '!@#$%^&*()'
+        , '!@#$%^&*()', 'binary,me', 'varbinary,me.varbinary,me.varbinary,me.', 'text col,me.text col,me.text col,me.', 'tinytext col,me.tinytext col,me.tinytext col,me.'
+        , 'mediumtext col,me.mediumtext col,me.mediumtext col,me.', 'longtext col,me.longtext col,me.longtext col,me.', 'this is blob col,loc bolb si siht.this is blob col,loc bolb si siht.this is blob col,loc bolb si siht.', 'this is tinyblob col,loc bolbynit si siht.this is tinyblob col,loc bolbynit si siht.this is tinyblob col,loc bolbynit si siht.', 'this is mediumblob col,loc bolbmuidem si siht.this is mediumblob col,loc bolbmuidem si siht.this is mediumblob col,loc bolbmuidem si siht.'
+        , 'this is longblob col,loc bolbgnol si siht.this is longblob col,loc bolbgnol si siht.this is longblob col,loc bolbgnol si siht.', b'0', '右东', 'C,G,O', 'woshi clob ,bolc ihsow.woshi clob ,bolc ihsow.'
+        , '301.9', 'this is varchar2 col.this is varchar2 col.this is varchar2 col.', '666', 'this is long col.this is long col.','this is raw col.this is raw col.',
+'[{"username":"bazhu","password":"root"},{"username":"batai","password":"qiantai"},{"username":"shouhuoji","password":"free"}]'
+);
+INSERT INTO t1
+VALUES (3,255, 32767,65535, 8388607,16777215, 2147483647,4294967295, 2147483647,4294967295
+, 9223372036854775807,18446744073709551615, 99999999.99, 99999999.99, 99999999.99, -1.175494351E-38
+, -2.2250738585072014E-308, 3.402823466E+38, 1, 1, '9999-12-31'
+        , '9999-12-31 23:59:59', '2038-01-19 03:14:07.000000', '838:59:59.000000', '2155', 'thisischar'
+        , 'thisisvarchar', 'me,binary', 'thisisvarbinary', 'this is text col', 'this is tinytext col'
+        , 'this is mediumtext col', 'this is longtext col', 'this is blob col,loc bolb si siht', 'this is tinyblob col,loc bolbynit si siht', 'this is mediumblob col,loc bolbmuidem si siht'
+        , 'this is longblob col,loc bolbgnol si siht', b'1', '下南', 'G', 'woshi clob ,bolc ihsow'
+        , '9.301', 'this is varchar2 col', '930', 'this is long col','this is raw col',
+'{"username":"wangguan","password":"root"}'
+);
+create table t2(
+col0 tinyint,
+col1 smallint,
+col2 mediumint,
+col3 int,
+col4 integer,
+col5 bigint,
+col6 decimal(10, 2),
+col7 dec(10, 2),
+col8 numeric(10, 2),
+col9 float,
+col10 double,
+col11 real,
+col12 bool,
+col13 boolean,
+col14 DATE,
+col15 DATETIME,
+col16 TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+col17 TIME,
+col18 YEAR,
+col19 CHAR(10),
+col20 VARCHAR(20),
+col21 BINARY(10),
+col22 VARBINARY(50),
+col31 bit,
+col32 enum('春', '夏', '秋', '冬', 'unknow'),
+col33 SET('A', 'B', 'C'),
+col35 number,
+col36 VARCHAR2(100),
+col37 PLS_INTEGER);
+INSERT INTO t2 VALUES (-128, -32768, -8388608, -2147483648, -2147483648, -9223372036854775808, -99999999.99, -99999999.99, -99999999.99, -3.402823466E+38, -1.7976931348623157E+308, -3.402823466E+38, 1, 0, '1000-01-01', '1000-01-01 00:00:00', '1980-01-01 03:00:01.000000', '-838:59:59.000000', '1901', 'asdfghjklq', 'asdfghjklq', '我', '我', b'0', '春', 'A' , '1.234', 'ooooooo', '987');
+INSERT INTO t2 VALUES (127, 32767, 8388607, 2147483647, 2147483647, 9223372036854775807, 99999999.99, 99999999.99, 99999999.99, -1.175494351E-38, -2.2250738585072014E-308, -1.175494351E-38, 1, 0, '9999-12-31', '9999-12-31 23:59:59', '2038-01-19 05:14:07.999999', '838:59:59.000000', '2155', 'QWERTYUIOP', 'QWERTYUIOP', '我', '我', b'1', '秋', 'A,B', '1.234', 'ooooooo', '987');
+INSERT INTO t2 VALUES (+127, +32767, +8388607, +2147483647, +2147483647, +9223372036854775807, +99999999.99, +99999999.99, +99999999.99, 0, 0, 0, 1, 0, NULL, NULL, NULL, '00:00:00', '0000', '!@#$%^&*()', '!@#$%^&*()', '我', '我', b'0', 'UNKNOW', 'A,B,C', '1.234', 'ooooooo', '987');
+alter table t1 modify column col_tinyint tinyint;
+alter table t1 drop primary key;
+include/rpl/sync_to_replica.inc
+[connect conn2]
+delete from t1 where col_tinyintus > 0;
+[connect conn1]
+delete from t1 where col_tinyintus >= 0;
+[connect conn2]
+# Event table: t1
+# Event scan and not apply rows: 2
+# Event scan and not apply data:
+## row [1] :
+# col_tinyint='3'
+# col_tinyintus='255'
+# col_smallint='32767'
+# col_smallintus='65535'
+# col_mediumint='8388607'
+# col_mediumintus='16777215'
+# col_int='2147483647'
+# col_intus='4294967295'
+# col_integer='2147483647'
+# col_integerus='4294967295'
+# col_bigint='9223372036854775807'
+# col_bigintus='18446744073709551615'
+# col_decimal='99999999.99'
+# col_dec='99999999.99'
+# col_numeric='99999999.99'
+# col_float='-1.17549e-38'
+# col_double='-2.2250738585072014e-308'
+# col_real='3.402823466e38'
+# col_bool='1'
+# col_boolean='1'
+# col_DATE='9999-12-31'
+# col_DATETIME='9999-12-31 23:59:59'
+# col_TIMESTAMP='2038-01-19 03:14:07'
+# col_TIME='838:59:59'
+# col_YEAR='2155'
+# col_CHAR='thisischar'
+# col_VARCHAR='thisisvarchar'
+# col_BINARY='me,binary'
+# col_VARBINARY='thisisvarbinary'
+# col_TEXT='this is text col'
+# col_TINYTEXT='this is tinytext col'
+# col_MEDIUMTEXT='this is mediumtext col'
+# col_LONGTEXT='this is longtext col'
+# col_BLOB='this is blob col,loc bolb si siht'
+# col_TINYBLOB='this is tinyblob col,loc bolbynit si siht'
+# col_MEDIUMBLOB='this is mediumblob col,loc bolbmuidem si siht'
+# col_LONGBLOB='this is longblob col,loc bolbgnol si siht'
+# col_bit='\x01'
+# col_enum='下南'
+# col_SET='G'
+# col_CLOB='woshi clob ,bolc ihsow'
+# col_number='9.301000000000000000000000000000'
+# col_VARCHAR2='this is varchar2 col'
+# col_plsinteger='930'
+# col_long='this is long col'
+# col_raw='this is raw col'
+# col_json='{"password": "root", "username": "wangguan"}'
+## row [2] :
+# col_tinyint='1'
+# col_tinyintus='127'
+# col_smallint='32767'
+# col_smallintus='65535'
+# col_mediumint='8388607'
+# col_mediumintus='8388607'
+# col_int='2147483647'
+# col_intus='2147483647'
+# col_integer='2147483647'
+# col_integerus='2147483647'
+# col_bigint='9223372036854775807'
+# col_bigintus='9223372036854775807'
+# col_decimal='99999999.99'
+# col_dec='99999999.99'
+# col_numeric='99999999.99'
+# col_float='0'
+# col_double='0'
+# col_real='0'
+# col_bool='0'
+# col_boolean='1'
+# col_DATE=NULL
+# col_DATETIME=NULL
+# col_TIMESTAMP=NULL
+# col_TIME='00:00:00'
+# col_YEAR='0000'
+# col_CHAR='!@#$%^&*()'
+# col_VARCHAR='!@#$%^&*()'
+# col_BINARY='binary,me'
+# col_VARBINARY='varbinary,me.varbinary,me.varbinary,me.'
+# col_TEXT='text col,me.text col,me.text col,me.'
+# col_TINYTEXT='tinytext col,me.tinytext col,me.tinytext col,me.'
+# col_MEDIUMTEXT='mediumtext col,me.mediumtext col,me.mediumtext col,me.'
+# col_LONGTEXT='longtext col,me.longtext col,me.longtext col,me.'
+# col_BLOB='this is blob col,loc bolb si siht.this is blob col,loc bolb si siht.this is blob col,loc bolb si siht.'
+# col_TINYBLOB='this is tinyblob col,loc bolbynit si siht.this is tinyblob col,loc bolbynit si siht.this is tinyblob col,loc bolbynit si siht.'
+# col_MEDIUMBLOB='this is mediumblob col,loc bolbmuidem si siht.this is mediumblob col,loc bolbmuidem si siht.this is mediumblob col,loc bolbmuidem si siht.'
+# col_LONGBLOB='this is longblob col,loc bolbgnol si siht.this is longblob col,loc bolbgnol si siht.this is longblob col,loc bolbgnol si siht.'
+# col_bit='\x00'
+# col_enum='右东'
+# col_SET='C,G,O'
+# col_CLOB='woshi clob ,bolc ihsow.woshi clob ,bolc ihsow.'
+# col_number='301.900000000000000000000000000000'
+# col_VARCHAR2='this is varchar2 col.this is varchar2 col.this is varchar2 col.'
+# col_plsinteger='666'
+# col_long='this is long col.this is long col.'
+# col_raw='this is raw col.this is raw col.'
+# col_json='[{"password": "root", "username": "bazhu"}, {"password": "qiantai", "username": "batai"}, {"password": "free", "username": "shouhuoji"}]'
+stop replica;
+set global sql_replica_skip_counter = 1;
+start replica;
+[connect conn1]
+drop table t1;
+drop table t2;
+[test7: test with invisible column and beyond the replication_error_write_file]
+create table t3(c1 int, c2 varchar(50), c3 int, c4 int);
+insert into t3 values(1,'A',11,12),(2,'B',21,22),(3,'C',31,32),(4,'D',41,42),(5,'E',51,52),(6,'F',61,62);
+alter table t3 modify column c4 int invisible;
+include/rpl/sync_to_replica.inc
+[connect conn2]
+set global replication_error_write_file=2;
+delete from t3 where c3 > 2;
+[connect conn1]
+delete from t3 where c1 > 1;
+[connect conn2]
+# Event scan and not apply rows: 5
+# Event scan and not apply data:
+## row [1] :
+# c1='6'
+# c2='F'
+# c3='61'
+# c4='62'
+## row [2] :
+# c1='5'
+# c2='E'
+# c3='51'
+# c4='52'
+## Event has too many conflict rows, will only output [2] rows.
+stop replica;
+set global sql_replica_skip_counter = 1;
+start replica;
+[connect conn1]
+drop table t3;
+[test8: test with update and delete]
+create table t1(c1 int, c2 longtext);
+insert into t1 values(1,REPEAT('ManyMegaByteBlck', 2)),(2,REPEAT('ManyMegaByteBlck', 2)), (3,3), (4,4);
+include/rpl/sync_to_replica.inc
+[connect conn2]
+set global replication_error_write_file=1000;
+update t1 set c2="myupdate text" where c1 > 1;
+delete from t1 where c1=3;
+update t1 set c2="update c4, myupdate text" where c1=4;
+[connect conn1]
+delete from t1 where c1 = 4;
+delete from t1 where c1 > 1;
+[connect conn2]
+# Event table: t1
+# Event scan and not apply rows: 1
+# Event scan and not apply data:
+## row [1] :
+# c1='4'
+# c2='4'
+stop replica;
+set global sql_replica_skip_counter = 1;
+start replica;
+[connect conn1]
+truncate table t1;
+[connect conn2]
+stop replica;
+set global sql_replica_skip_counter = 1;
+start replica;
+[connect conn1]
+drop table t1;
+include/rpl/sync_to_replica.inc
+[connect conn2]
+set global replication_error_write_file=500;
+[connection slave]
+STOP REPLICA;
+RESET REPLICA ALL;
+include/rpl/deinit.inc

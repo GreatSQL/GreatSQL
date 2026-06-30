@@ -1,0 +1,128 @@
+[connect conn1]
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+[connect conn2]
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+[connect conn3]
+INSTALL PLUGIN clone SONAME 'CLONE_PLUGIN';
+[connect conn1]
+CREATE TABLE t1 (c1 INT, c2 INT);
+INSERT INTO t1 VALUES (1,1),(2,2);
+[connect conn2]
+CREATE TABLE t2 (c1 INT, c2 INT);
+INSERT INTO t2 VALUES (1,1),(2,2);
+[connect conn3]
+CREATE TABLE t3 (c1 INT, c2 INT);
+INSERT INTO t3 VALUES (1,1),(2,2);
+## test multiple clone in recipient node
+[connect conn3]
+SET GLOBAL clone_valid_donor_list='127.0.0.1:PORT_1,127.0.0.1:PORT_2';
+SET GLOBAL debug='+d,clone_courrency_wait';
+[connect conn3_1_1]
+CLONE INSTANCE FROM 'root'@'127.0.0.1':PORT_1 IDENTIFIED BY '' DATA DIRECTORY='TMP/data_clone_1';
+[connect conn3]
+SET debug_sync='now WAIT_FOR clone_courrency_wait';
+SET GLOBAL debug='-d,clone_courrency_wait';
+[connect conn3_1_2]
+CLONE INSTANCE FROM 'root'@'127.0.0.1':PORT_2 IDENTIFIED BY '' DATA DIRECTORY='TMP/data_clone_2';
+[connect conn3]
+SET debug_sync='now SIGNAL clone_courrency_continue';
+[connect conn3_1_1]
+[connect conn3_1_2]
+# Restart server3 
+# restart: --datadir=TMP/data_clone_1
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+# restart: --datadir=TMP/data_clone_2
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+# restart:
+SELECT * FROM t3;
+c1	c2
+1	1
+2	2
+## test multiple clone in donor node
+[connect conn2]
+SET GLOBAL clone_valid_donor_list='127.0.0.1:PORT_1';
+[connect conn3]
+SET GLOBAL clone_valid_donor_list='127.0.0.1:PORT_1';
+[connect conn1]
+SET GLOBAL debug='+d,clone_courrency_wait';
+[connect conn2_2_1]
+CLONE INSTANCE FROM 'root'@'127.0.0.1':PORT_1 IDENTIFIED BY '' DATA DIRECTORY='TMP/data_clone_3';
+[connect conn1]
+SET debug_sync='now WAIT_FOR clone_courrency_wait';
+SET GLOBAL debug='-d,clone_courrency_wait';
+[connect conn3_2_1]
+CLONE INSTANCE FROM 'root'@'127.0.0.1':PORT_1 IDENTIFIED BY '' DATA DIRECTORY='TMP/data_clone_4';
+[connect conn1]
+SET debug_sync='now SIGNAL clone_courrency_continue';
+[connect conn2_2_1]
+[connect conn3_2_1]
+ERROR HY000: Clone Donor Error: 3634 : Too many concurrent clone operations. Maximum allowed - 1..
+# Restart server2 
+# restart: --datadir=TMP/data_clone_3
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+# restart:
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+[connect conn2]
+SET GLOBAL clone_valid_donor_list='127.0.0.1:PORT_1';
+[connect conn3]
+SET GLOBAL clone_valid_donor_list='127.0.0.1:PORT_1';
+[connect conn1]
+SET GLOBAL debug='+d,test_multiple_clones_during_ddl';
+SET GLOBAL debug='+d,test_rename_table_after_file_copy_1';
+[connect conn2_3_1]
+CLONE INSTANCE FROM 'root'@'127.0.0.1':PORT_1 IDENTIFIED BY '' DATA DIRECTORY='TMP/data_clone_5';
+[connect conn1]
+SET debug_sync='now WAIT_FOR reach_file_copy_1';
+SET GLOBAL debug='-d,test_rename_table_after_file_copy_1';
+SET GLOBAL debug='+d,test_rename_table_after_file_copy_2';
+[connect conn3_3_1]
+CLONE INSTANCE FROM 'root'@'127.0.0.1':PORT_1 IDENTIFIED BY '' DATA DIRECTORY='TMP/data_clone_6';
+[connect conn1]
+SET debug_sync='now WAIT_FOR reach_file_copy_2';
+SET GLOBAL debug='-d,test_rename_table_after_file_copy_2';
+[connect conn1]
+RENAME TABLE t1 TO t1_bak;
+SET debug_sync='now SIGNAL continue_file_copy_1';
+SET debug_sync='now SIGNAL continue_file_copy_2';
+[connect conn2_3_1]
+[connect conn3_3_1]
+ERROR HY000: Clone Donor Error: 1004 : Can't create file './test/t1.ibd' (errno: 2 - No such file or directory).
+[connect conn1]
+SET GLOBAL debug='-d,test_multiple_clones_during_ddl';
+# Restart server2 
+# restart: --datadir=TMP/data_clone_5
+SELECT * FROM t1_bak;
+c1	c2
+1	1
+2	2
+# restart:
+SELECT * FROM t2;
+c1	c2
+1	1
+2	2
+[connect conn1]
+RENAME TABLE t1_bak to t1;
+[connect conn1]
+UNINSTALL PLUGIN clone;
+[connect conn2]
+UNINSTALL PLUGIN clone;
+[connect conn3]
+UNINSTALL PLUGIN clone;
+[connect conn1]
+DROP TABLE t1;
+[connect conn2]
+DROP TABLE t2;
+[connect conn3]
+DROP TABLE t3;

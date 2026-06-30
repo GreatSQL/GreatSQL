@@ -1,0 +1,243 @@
+--source include/no_turbo.inc
+
+--source include/install_turbo_plugin.inc
+
+connect (conn1,127.0.0.1,root,,test,$SERVER_MYPORT_1,);
+
+--echo connect conn1
+connection conn1;
+
+create table test_constant(id int, a varchar(20));
+insert into test_constant values(1, '01:02:03');
+insert into test_constant values(2, '1:2:3');
+
+insert into test_constant values(3, '01:02:03.000');
+insert into test_constant values(4, '01:02:03.123');
+
+CREATE TABLE t(a TIME(6), KEY(a));
+INSERT INTO t VALUES ('01:02:03');
+INSERT INTO t VALUES ('01:02:03.123');
+INSERT INTO t VALUES ('00:00:00');
+INSERT INTO t VALUES ('00:00:00.123');
+
+create table test(
+    a TIMESTAMP,
+    b TIMESTAMP(6),
+    c datetime,
+    d datetime(6),
+    e date,
+    f time,
+    g time(6)
+);
+
+SET TIME_ZONE='+00:00';
+
+insert into test values('2026-05-01 08:59:59.999999-08:00','2026-05-01 08:59:59.999999-08:00','2026-05-01 08:59:59.999999-08:00','2026-05-01 08:59:59.999999-08:00','2026-05-01 08:59:59.999999-08:00','2026-05-01 08:59:59.999999-08:00','2026-05-01 08:59:59.999999-08:00');
+
+insert into test values('2026-06-01 08:01:01-08:00','2026-06-01 08:01:59.999999-08:00','2026-06-01 08:01:50-08:00','2026-06-01 08:01:59.999999-08:00','2026-06-01','08:01:01','08:01:59.999999');
+insert into test values('2026-06-01 08:01:01+00:00','2026-06-01 08:01:01+00:00',       '2026-06-01 08:01:01+00:00','2026-06-01 08:01:01+00:00',       '2026-06-01','18:01:01','18:01:01');
+
+set turbo_enable = forced;
+select * from test order by 1,2,3;
+
+
+select id, a from test_constant where a = time'1:2:3';
+select id, a from test_constant where a = time'1:2:3.00';
+select id, a from test_constant where a = time'1:2:3.000';
+select id, a from test_constant where a = time'1:2:3.123';
+select id, a from test_constant where a = time'1:2:3.1230';
+
+SET timestamp = UNIX_TIMESTAMP('2023-03-15 01:02:03.123');
+SELECT * FROM t WHERE a = CURRENT_TIME;
+SELECT * FROM t WHERE a = CURRENT_TIMESTAMP;
+SELECT * FROM t WHERE a = CURRENT_DATE;
+SET timestamp = DEFAULT;
+
+SELECT * FROM t WHERE a = TIME'01:02:03.123';
+SELECT * FROM t WHERE a = timestamp'2023-03-15 01:02:03.123';
+SELECT * FROM t WHERE a = date'2023-01-01';
+
+set turbo_enable = off;
+select * from test order by 1,2,3;
+
+select id, a from test_constant where a = time'1:2:3';
+select id, a from test_constant where a = time'1:2:3.00';
+select id, a from test_constant where a = time'1:2:3.000';
+select id, a from test_constant where a = time'1:2:3.123';
+select id, a from test_constant where a = time'1:2:3.1230';
+
+SET timestamp = UNIX_TIMESTAMP('2023-03-15 01:02:03.123');
+SELECT * FROM t WHERE a = CURRENT_TIME;
+SELECT * FROM t WHERE a = CURRENT_TIMESTAMP;
+SELECT * FROM t WHERE a = CURRENT_DATE;
+SET timestamp = DEFAULT;
+
+SELECT * FROM t WHERE a = TIME'01:02:03.123';
+SELECT * FROM t WHERE a = timestamp'2023-03-15 01:02:03.123';
+SELECT * FROM t WHERE a = date'2023-01-01';
+
+--echo "TEST turbo"
+
+let $col_list = a b c d e f g;
+let $col_count = 7;
+
+let $type_list = varchar datetime datetime(4) date time time(4) double;
+let $type_count = 7;
+
+let $query1_init_env= set turbo_enable = forced;
+let $query2_init_env= set turbo_enable = off;
+
+let $i=1;
+while ($i <= $col_count) {
+  let $col= `SELECT SUBSTRING_INDEX(SUBSTRING_INDEX('$col_list', ' ', $i), ' ', -1)`;
+
+  let $j = 1;
+  while ($j <= $type_count) {
+    let $type= `SELECT SUBSTRING_INDEX(SUBSTRING_INDEX('$type_list', ' ', $j), ' ', -1)`;
+
+    # cast(time(x) to time(y)) and cast(datetime/timestamp(x) as datetime/timestamp(y))
+    # is not supported now, may get diffrent result, skip it
+    if (`select not(
+      ($i in (2, 4) and $j in (2, 3)) or
+      ($i in (7) and $j in (5, 6))
+    )`) {
+
+      echo >>> Executing CAST $col to $type;
+      let $query1= SELECT CAST($col as $type) from test order by 1;
+      let query2= $query1;
+
+      # date will be current date, so test by follow sql
+      if (`select '$col' in('f', 'g') and '$type' in ('datetime', 'datetime(4)')`) {
+          let $query1= SELECT CONCAT(current_date() , ' ', $col) = CAST($col as $type) from test order by 1;
+          let query2= $query1;
+      }
+
+      if (`select '$col' in('f', 'g') and '$type' in ('date')`) {
+          let $query1= SELECT current_date()= CAST($col as $type) from test order by 1;
+          let query2= $query1;
+      }
+
+      # time will be affected by time_truncate_fractional, test it
+      if (`select '$col' in('b', 'd', 'g') and '$type' in ('datetime(4)', 'time(4)')`) {
+        echo >>> test with time_truncate_fractional
+
+        disable_query_log;
+        let $query1_init_env= set turbo_enable = forced;    SET sql_mode=time_truncate_fractional;
+        let $query2_init_env= set turbo_enable = off;       SET sql_mode=time_truncate_fractional;
+        enable_query_log;
+        source include/diff_duckdb_queries.inc;
+
+        disable_query_log;
+        let $query1_init_env= set turbo_enable = forced;    SET sql_mode=default;
+        let $query2_init_env= set turbo_enable = off;       SET sql_mode=default;
+        enable_query_log;
+        source include/diff_duckdb_queries.inc;
+
+        disable_query_log;
+        let $query1_init_env= set turbo_enable = forced;
+        let $query2_init_env= set turbo_enable = off;
+        enable_query_log;
+      }
+
+      SET TIME_ZONE='+00:00';
+      source include/diff_duckdb_queries.inc;
+
+      SET TIME_ZONE="+03:00";
+      source include/diff_duckdb_queries.inc;
+
+      SET TIME_ZONE="-03:00";
+      source include/diff_duckdb_queries.inc;
+    }
+    inc $j;
+  }
+
+  inc $i;
+}
+
+
+--source include/uninstall_turbo_plugin.inc
+
+--echo "TEST rapid"
+INSTALL PLUGIN rapid SONAME "ha_rapid.so";
+
+alter table test secondary_engine=rapid;
+
+alter table test secondary_load;
+
+let $query1_init_env= set use_secondary_engine = forced;
+let $query2_init_env= set use_secondary_engine = off;
+
+set use_secondary_engine = forced;
+select * from test order by 1,2,3;
+set use_secondary_engine = off;
+select * from test order by 1,2,3;
+
+let $i=1;
+while ($i <= $col_count) {
+  let $col= `SELECT SUBSTRING_INDEX(SUBSTRING_INDEX('$col_list', ' ', $i), ' ', -1)`;
+
+  let $j = 1;
+  while ($j <= $type_count) {
+    let $type= `SELECT SUBSTRING_INDEX(SUBSTRING_INDEX('$type_list', ' ', $j), ' ', -1)`;
+
+    if (`select not(
+      ($i in (2, 4) and $j in (2, 3)) or
+      ($i in (7) and $j in (5, 6))
+    )`) {
+      echo >>> Executing CAST $col to $type;
+      let $query1= SELECT CAST($col as $type) from test order by 1;
+      let query2= $query1;
+
+      # date will be current date, so test by follow sql
+      if (`select '$col' in('f', 'g') and '$type' in ('datetime', 'datetime(4)')`) {
+          let $query1= SELECT CONCAT(current_date() , ' ', $col) = CAST($col as $type) from test order by 1;
+          let query2= $query1;
+      }
+
+      if (`select '$col' in('f', 'g') and '$type' in ('date')`) {
+          let $query1= SELECT current_date()= CAST($col as $type) from test order by 1;
+          let query2= $query1;
+      }
+
+      # time will be affected by time_truncate_fractional, test it
+      if (`select '$col' in('b', 'd', 'g') and '$type' in ('datetime(4)', 'time(4)')`) {
+        echo >>> test with time_truncate_fractional
+
+        disable_query_log;
+        let $query1_init_env= set use_secondary_engine = forced;SET sql_mode=time_truncate_fractional;
+        let $query2_init_env= set use_secondary_engine = off;SET sql_mode=time_truncate_fractional;
+        enable_query_log;
+        source include/diff_duckdb_queries.inc;
+
+        disable_query_log;
+        let $query1_init_env= set use_secondary_engine = forced;SET sql_mode=default;
+        let $query2_init_env= set use_secondary_engine = off;SET sql_mode=default;
+        enable_query_log;
+        source include/diff_duckdb_queries.inc;
+
+        disable_query_log;
+        let $query1_init_env= set use_secondary_engine = forced;
+        let $query2_init_env= set use_secondary_engine = off;
+        enable_query_log;
+      }
+
+      SET TIME_ZONE='+00:00';
+      source include/diff_duckdb_queries.inc;
+
+      SET TIME_ZONE="+03:00";
+      source include/diff_duckdb_queries.inc;
+
+      SET TIME_ZONE="-03:00";
+      source include/diff_duckdb_queries.inc;
+    }
+    inc $j;
+  }
+
+  inc $i;
+}
+
+drop table test;
+drop table test_constant;
+drop table t;
+
+UNINSTALL PLUGIN rapid;

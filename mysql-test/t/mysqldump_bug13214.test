@@ -1,0 +1,44 @@
+--echo # bug13214 MYSQLDUMP 
+
+SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE = 'oracle,EMPTYSTRING_EQUAL_NULL';
+let $mysqldumpfile = $MYSQLTEST_VARDIR/tmp/bug13214.sql;
+CREATE DATABASE test_bug13214;
+USE test_bug13214;
+
+--echo #Pre-test cleanup
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+CREATE TABLE t1 (
+pk INT,
+v1 VARCHAR(255),
+v2 VARCHAR(255),
+v3 VARCHAR(255),
+v4 VARCHAR(128),
+v5 VARCHAR(64),
+v6 VARCHAR(16),
+v7 VARCHAR(16),
+v8 VARCHAR(8),
+v9 VARBINARY(32),
+v10 VARBINARY(32));
+
+INSERT INTO t1 VALUES (1, 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', '','NULL');
+
+SELECT * FROM test_bug13214.t1;
+
+--exec $MYSQL_DUMP --skip-comments test_bug13214 > $mysqldumpfile
+
+SET global SQL_MODE = 'oracle,EMPTYSTRING_EQUAL_NULL';
+--exec $MYSQL_DUMP --skip-comments test_bug13214 > $mysqldumpfile
+
+SET global SQL_MODE = 'EMPTYSTRING_EQUAL_NULL';
+--exec $MYSQL_DUMP --skip-comments test_bug13214 > $mysqldumpfile
+
+SET global SQL_MODE = @OLD_SQL_MODE;
+--exec $MYSQL_DUMP --skip-comments test_bug13214 > $mysqldumpfile
+
+#Cleanup
+--remove_file $mysqldumpfile
+DROP DATABASE test_bug13214;
+SET SQL_MODE = @OLD_SQL_MODE;

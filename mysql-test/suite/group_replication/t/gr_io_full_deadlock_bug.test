@@ -1,0 +1,105 @@
+# bug #12270
+--source include/have_debug.inc
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--source include/group_replication.inc
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+SET SESSION sql_log_bin = 0;
+call mtr.add_suppression("Replica SQL for channel 'group_replication_applier'");
+call mtr.add_suppression("Disk is full writing");
+call mtr.add_suppression("The applier thread execution was aborted.");
+call mtr.add_suppression("Fatal error during execution on the Applier process of Group Replication.");
+call mtr.add_suppression("Skipping leave operation: member already left the group.");
+call mtr.add_suppression("Transaction's sequence number is inconsistent with that of a preceding one");
+call mtr.add_suppression("Cannot execute the current event group in the parallel mode");
+call mtr.add_suppression("Unable to confirm whether the server has left the group or not.");
+call mtr.add_suppression("There was a previous plugin error while the member joined the group. The member will now exit the group.");
+call mtr.add_suppression("io full on data or binlog directory");
+call mtr.add_suppression("The server was automatically set into read only mode after an error was detected.");
+call mtr.add_suppression("The server was automatically set into offline mode after an error was detected.");
+call mtr.add_suppression("errno: 28 - No space left on device");
+SET SESSION sql_log_bin = 1;
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--source include/start_and_bootstrap_group_replication.inc
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/start_group_replication.inc
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(256), c3 VARCHAR(256)) ENGINE=InnoDB;
+--source include/rpl/sync.inc
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+SET GLOBAL debug='+d,replica_insert_io_full';
+SET GLOBAL debug='+d,gr_io_full_applier_stop_after_sql_error';
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+BEGIN;
+INSERT INTO t1 VALUES (NULL, REPEAT('a', 250), REPEAT('a', 250));
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+INSERT INTO t1 (c2, c3) SELECT c2,c3 FROM t1;
+COMMIT;
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+SET debug_sync='now wait_for reach_insert';
+SET GLOBAL debug='-d,replica_insert_io_full';
+SET GLOBAL debug='+d,group_replication_before_apply_data_packet';
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+INSERT INTO t1 VALUES (NULL, 'a', 'b');
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+SET debug_sync='now wait_for signal.group_replication_before_apply_data_packet_reached';
+SET GLOBAL debug='+d,gr_io_full_leave_group';
+SET GLOBAL debug='+d,group_replication_io_full';
+SET debug_sync='now wait_for reach_suspend_packet';
+SET GLOBAL debug='+d,simulate_no_free_space_error';
+SET debug_sync='now signal continue_insert';
+SET debug_sync='now wait_for reach_applier_stop';
+SET GLOBAL debug='+d,gr_io_full_apply_data_error';
+SET debug_sync='now signal continue_suspend_packet';
+SET debug_sync='now signal continue_apply';
+SET debug_sync='now wait_for reach_apply_error';
+sleep 15;
+SET debug_sync='now signal continue_apply_error';
+
+sleep 5;
+--let $rpl_connection_name= server2
+--source include/connection.inc
+SET GLOBAL debug='-d,gr_io_full_apply_data_error';
+SET GLOBAL debug='-d,group_replication_before_apply_data_packet';
+SET GLOBAL debug='-d,simulate_no_free_space_error';
+SET GLOBAL debug='-d,group_replication_io_full';
+SET GLOBAL debug='-d,gr_io_full_applier_stop_after_sql_error';
+SET GLOBAL debug='-d,gr_io_full_leave_group';
+--source include/stop_group_replication.inc
+## for simulate_no_free_space_error, the insert(2) transaction will write twice to relaylog
+## so, first start group_replication will report error, and need retry again
+--error ER_GROUP_REPLICATION_CONFIGURATION
+START GROUP_REPLICATION;
+--source include/start_group_replication.inc
+
+
+--echo #
+--echo # Clean
+--echo #
+--let $rpl_connection_name= server1
+--source include/connection.inc
+DROP TABLE t1;
+--source include/rpl/sync.inc
+--source include/group_replication_end.inc

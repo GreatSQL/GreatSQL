@@ -1,0 +1,283 @@
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+
+--echo #
+--echo # test of create type
+--echo #
+create or replace type t_air as object(id int,type varchar(20));
+
+--echo #
+--echo # test of create table with udt column
+--echo #
+create table t1(a int,b varchar(100));
+create table t2(a int,b varchar(100));
+create table tt_air(id int,name1 t_air);
+insert into tt_air values(1,t_air(10,'aabb'));
+insert into tt_air values(2,t_air(20,'qwed'));
+select * from tt_air;
+
+--echo #
+--echo # test of insert into cursor%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1(min INT,max INT) as
+  CURSOR cur(pmin INT, pmax INT) is SELECT * FROM t1 WHERE a BETWEEN pmin AND pmax;
+  v_t1_rec cur%ROWTYPE;
+BEGIN
+  insert into t1 values v_t1_rec;
+  v_t1_rec.a:=1;
+  v_t1_rec.b:='dd';
+  insert into t1 values v_t1_rec;
+  FOR i IN cur(min,max) loop
+   insert into t2 values i;
+  END LOOP;
+END;
+$$
+DELIMITER ;$$
+call p1(1,10);
+call p1(1,10);
+table t1;
+delete from t1;
+table t2;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of insert into table%rowtype
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+  v_t1_rec t1%ROWTYPE;
+BEGIN
+  v_t1_rec.a:=1;
+  v_t1_rec.b:='dd';
+  insert into t1 values v_t1_rec;
+END;
+$$
+DELIMITER ;$$
+call p1();
+call p1();
+table t1;
+delete from t1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of insert into udt
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p3() as
+  v_t1_rec tt_air.name1%TYPE;
+BEGIN
+  v_t1_rec := t_air(10,'qqq');
+  v_t1_rec.id:=1;
+  v_t1_rec.type:='dd';
+  insert into t1 values v_t1_rec;
+END;
+$$
+DELIMITER ;$$
+call p3;
+call p3;
+table t1;
+delete from t1;
+drop PROCEDURE p3;
+
+--echo #
+--echo # test of insert into udt
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p3() as
+  v_t1_rec t_air;
+  v_t1_rec2 v_t1_rec%TYPE;
+BEGIN
+  v_t1_rec2 := null;
+  insert into t1 values v_t1_rec2;
+  v_t1_rec2 := t_air(1,'qwer');
+  v_t1_rec2.id:=1;
+  v_t1_rec2.type:='dd';
+  insert into t1 values v_t1_rec2;
+END;
+$$
+DELIMITER ;$$
+call p3;
+call p3;
+table t1;
+delete from t1;
+drop PROCEDURE p3;
+
+--echo #
+--echo # test of insert into udt
+--echo #
+
+DELIMITER $$;
+CREATE or replace PROCEDURE p4() as
+  type stu_record is record(
+    id int := 1,
+    name_d  varchar(20) := 'a'
+  );
+  v_t1_rec stu_record;
+begin
+  insert into t1 values v_t1_rec;
+  v_t1_rec.id:=10;
+  v_t1_rec.name_d:='dd';
+  insert into t1 values v_t1_rec;
+end;
+$$
+DELIMITER ;$$
+call p4;
+call p4;
+table t1;
+delete from t1;
+drop PROCEDURE p4;
+
+--echo #
+--echo # test of insert into udt table(index)
+--echo #
+delete from t2;
+INSERT INTO t2 VALUES (1,'12');
+INSERT INTO t2 VALUES (2,'22');
+INSERT INTO t2 VALUES (3,'31');
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a'
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+ select * bulk collect into stu_record_val from t2;
+ forall i in stu_record_val.first .. stu_record_val.last
+   insert into t1 values stu_record_val(i);
+end;
+$$
+DELIMITER ;$$
+call p1;
+call p1;
+table t1;
+delete from t1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of insert into udt table(index)
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a'
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(0).id := 2;
+ stu_record_val(0).name_d := 1;
+ insert into t1 values stu_record_val(0);
+end;
+$$
+DELIMITER ;$$
+call p1;
+call p1;
+table t1;
+delete from t1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of insert into udt table(index)
+--echo #
+DELIMITER $$;
+--error ER_SP_UNDECLARED_VAR
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a'
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(0).id := 2;
+ stu_record_val(0).name_d := 1;
+ insert into t1 values stu_record_val(j);
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of insert into udt table(index)
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a'
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+j int:=0;
+begin
+ stu_record_val(0).id := 2;
+ stu_record_val(0).name_d := 1;
+ insert into t1 values stu_record_val(j);
+end;
+$$
+DELIMITER ;$$
+call p1;
+call p1;
+table t1;
+delete from t1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of insert into udt table error
+--echo #
+DELIMITER $$;
+--error ER_SP_MISMATCH_RECORD_VAR
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a'
+);
+type tklist is table of stu_record index by binary_integer;
+stu_record_val tklist;
+begin
+ stu_record_val(0).id := 2;
+ stu_record_val(0).name_d := 1;
+ insert into t1 values stu_record_val;
+end;
+$$
+DELIMITER ;$$
+
+--echo #
+--echo # test of insert into udt error
+--echo #
+DELIMITER $$;
+CREATE or replace PROCEDURE p1() as
+type stu_record is record(
+  id int := 1,
+  name_d  varchar(20) := 'a',
+  score float := 0.1
+);
+stu_record_val stu_record;
+begin
+ stu_record_val.id := 2;
+ stu_record_val.name_d := 1;
+ insert into t1 values stu_record_val;
+end;
+$$
+DELIMITER ;$$
+--error ER_WRONG_VALUE_COUNT_ON_ROW
+call p1;
+drop PROCEDURE p1;
+
+--echo #
+--echo # test of error
+--echo #
+--error 1064
+insert into t1 values a;
+
+drop table t1;
+drop table t2;
+drop table tt_air;
+drop type t_air;
+
+

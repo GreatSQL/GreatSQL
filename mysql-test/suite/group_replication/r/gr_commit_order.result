@@ -1,0 +1,28 @@
+include/group_replication.inc [rpl_server_count=2]
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+[connection server2]
+include/start_group_replication.inc
+[test for mgr replica_preserve_commit_order off]
+stop group_replication;
+set global replica_preserve_commit_order=off;
+start group_replication;
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+CREATE TABLE t2 (c1 INT NOT NULL PRIMARY KEY, c2 INT) ENGINE=InnoDB;
+insert into test.t1 values(1,1),(2,2),(3,3),(4,4);
+insert into test.t2 values(1,1),(2,2),(3,3),(4,4);
+include/rpl/sync_to_replica.inc
+lock table t2 read;
+[Execute together and let the third sql wait for the second sql to be committed]
+update t1 set c1=c1+10;
+update t2 set c1=c1+10;
+update t1 set c1=c1+20;
+update t1 set c2=c1+30;
+unlock tables;
+set global replica_preserve_commit_order=on;
+drop table t1,t2;
+[end test for mgr replica_preserve_commit_order off]
+include/group_replication_end.inc

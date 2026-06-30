@@ -1,0 +1,15 @@
+call mtr.add_suppression("Warning");
+set @@debug='+d,test_errorlog_support_chinese';
+set global errorlog_messages_language = 'zh_CN';
+select PRIO,ERROR_CODE,SUBSYSTEM,DATA from performance_schema.error_log where ERROR_CODE = 'MY-011071'  or  ERROR_CODE >= 'MY-010025' and  ERROR_CODE <= 'MY-010030' order by LOGGED ;
+PRIO	ERROR_CODE	SUBSYSTEM	DATA
+Warning	MY-011071	Server	debug模式,开始测试errorlog支持中文,清忽略以下输出
+Warning	MY-010025	Server	关闭时词典缓存不为空。
+Warning	MY-010026	Server	已使用但未释放的字典对象。
+Warning	MY-010027	Server	字典对象留在默认释放程序中。
+Warning	MY-010028	Server	未删除词典对象自动释放程序
+Warning	MY-010029	Server	错误:无法创建主对象键
+Warning	MY-010030	Server	错误:无法创建对象键
+Warning	MY-011071	Server	debug模式,结束测试errorlog支持中文,清忽略以上输出
+set global errorlog_messages_language = 'en_US';
+set @@debug='-d,test_errorlog_support_chinese';

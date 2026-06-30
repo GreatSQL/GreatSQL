@@ -1,0 +1,33 @@
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection server1]
+[connection server2]
+SET GLOBAL debug = '+d,force_buffer_relay_log';
+SET GLOBAL debug = '+d,disable_adding_executed_gtids_to_received_gtids';
+
+# 1. Create table and insert data.
+[connection server1]
+CREATE TABLE t1 (i INT PRIMARY KEY);
+[connection server2]
+SET GLOBAL debug = '-d,force_buffer_relay_log';
+[connection server1]
+
+# 2. Sync with server2.
+[connection server2]
+include/rpl/sync_to_replica.inc
+[connection server1]
+[connection server2]
+include/assert.inc [server1 GTID_EXECUTED must be equal to server2 GTID_EXECUTED]
+
+# 3. The RECEIVED_TRANSACTION_SET of server2 should not have gaps.
+[connection server2]
+include/assert.inc [server2_gtid_received equals server2_gtid_executed indicates that the RECEIVED_TRANSACTION_SET of server2 have no gaps.]
+
+# 4. Clean up.
+[connection server2]
+SET GLOBAL debug = '-d,disable_adding_executed_gtids_to_received_gtids';
+[connection server1]
+DROP TABLE t1;
+include/group_replication_end.inc

@@ -1,0 +1,94 @@
+############################################################################
+# When MGR relay log are flushed to disk in batches, only the GTID of the
+# last transaction is updated to the RECEIVED_TRANSACTION_SET, which results
+# in gaps in the RECEIVED_TRANSACTION_SET.
+#
+# Test:
+# 0. The test requires two servers: server1 and server2.
+# 1. Create table and insert data.
+# 2. Sync with server2.
+# 3. The RECEIVED_TRANSACTION_SET of server2 should not have gaps.
+# 4. Clean up.
+############################################################################
+
+--source include/have_debug.inc
+--source include/have_group_replication_plugin.inc
+--source include/group_replication.inc
+
+--let $rpl_connection_name = server2
+--source include/connection.inc
+SET GLOBAL debug = '+d,force_buffer_relay_log';
+SET GLOBAL debug = '+d,disable_adding_executed_gtids_to_received_gtids';
+
+--echo
+--echo # 1. Create table and insert data.
+
+--let $rpl_connection_name = server1
+--source include/connection.inc
+CREATE TABLE t1 (i INT PRIMARY KEY);
+
+--disable_query_log
+--let $counter = 1
+while ($counter <= 256)
+{
+  eval INSERT INTO t1 VALUES($counter);
+  --inc $counter
+}
+--enable_query_log
+
+--let $rpl_connection_name = server2
+--source include/connection.inc
+SET GLOBAL debug = '-d,force_buffer_relay_log';
+
+--let $rpl_connection_name = server1
+--source include/connection.inc
+--disable_query_log
+while ($counter <= 512)
+{
+  eval INSERT INTO t1 VALUES($counter);
+  --inc $counter
+}
+--enable_query_log
+
+--echo
+--echo # 2. Sync with server2.
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--let $sync_slave_connection= server1
+--source include/rpl/sync_to_replica.inc
+
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--let $server1_gtid_executed= `SELECT @@GLOBAL.GTID_EXECUTED`
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--let $server2_gtid_executed= `SELECT @@GLOBAL.GTID_EXECUTED`
+
+--let $assert_text= server1 GTID_EXECUTED must be equal to server2 GTID_EXECUTED
+--let $assert_cond= "$server1_gtid_executed" = "$server2_gtid_executed"
+--source include/assert.inc
+
+--echo
+--echo # 3. The RECEIVED_TRANSACTION_SET of server2 should not have gaps.
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--let $server2_gtid_received= query_get_value(SELECT received_transaction_set FROM performance_schema.replication_connection_status WHERE channel_name="group_replication_applier", received_transaction_set, 1)
+
+--let $assert_text= server2_gtid_received equals server2_gtid_executed indicates that the RECEIVED_TRANSACTION_SET of server2 have no gaps.
+--let $assert_cond= "$server2_gtid_received" = "$server2_gtid_executed"
+--source include/assert.inc
+
+--echo
+--echo # 4. Clean up.
+
+--let $rpl_connection_name = server2
+--source include/connection.inc
+SET GLOBAL debug = '-d,disable_adding_executed_gtids_to_received_gtids';
+
+--let $rpl_connection_name = server1
+--source include/connection.inc
+DROP TABLE t1;
+--source include/group_replication_end.inc

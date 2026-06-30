@@ -1,0 +1,48 @@
+#
+# Test of problem with union bug11747
+#
+
+set local tmp_table_size=2000000;
+select @@tmp_table_size;
+
+CREATE TABLE `cmdb_item` (
+  `cm_item_id` varchar(350) NOT NULL,
+  `cm_model_id` varchar(350) NOT NULL,
+  PRIMARY KEY (`cm_item_id`,`cm_model_id`)
+);
+CREATE TABLE `sys_auth_role_cmdb` (
+  `id` varchar(60) NOT NULL,
+  `auth_type_id` varchar(60) DEFAULT NULL,
+  `cmdb_item_id` varchar(60) DEFAULT NULL,
+  `cmdb_model_id` varchar(60) DEFAULT NULL,
+  `role_id` varchar(60) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+);
+
+insert into cmdb_item values('8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J',
+'PmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmq');
+
+--echo expect 1 result
+select b.* from ( select cmdb_item_id from sys_auth_role_cmdb where 1=0 union select cm_item_id from cmdb_item) a left join cmdb_item b on a.cmdb_item_id = b.cm_item_id where b.cm_model_id='PmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmq' and cm_item_id='8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J';
+
+set sql_mode="oracle";
+delimiter $$;
+CREATE or replace PROCEDURE p1() as
+BEGIN
+  for i in 1 .. 5000 loop
+    insert into cmdb_item values('8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J'|| i,'PmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmq' || i);
+  end loop;
+END$$
+delimiter ;$$
+CALL p1();
+DROP PROCEDURE IF EXISTS p1;
+
+--echo expect 1 result
+select b.* from ( select cmdb_item_id from sys_auth_role_cmdb where 1=0 union select cm_item_id from cmdb_item) a left join cmdb_item b on a.cmdb_item_id = b.cm_item_id where b.cm_model_id='PmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmqPmqECfANKxmbpgt3XBWaxzF6dx32dLmq' and cm_item_id='8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J8b0zIlHsiarv8Ls6NejWji6Cu4h3iN2J';
+
+
+drop table cmdb_item;
+drop table sys_auth_role_cmdb;
+
+
+

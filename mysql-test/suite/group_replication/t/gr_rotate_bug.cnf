@@ -1,0 +1,26 @@
+!include ../my.cnf
+
+[mysqld.1]
+loose-group_replication_single_primary_mode= TRUE
+loose-group_replication_enforce_update_everywhere_checks= FALSE
+loose-group_replication_member_weight = 80
+local-infile=       true
+
+[mysqld.2]
+loose-group_replication_single_primary_mode= TRUE
+loose-group_replication_enforce_update_everywhere_checks= FALSE
+loose-group_replication_member_weight = 80
+
+[mysqld.3]
+loose-group_replication_single_primary_mode= TRUE
+loose-group_replication_enforce_update_everywhere_checks= FALSE
+loose-group_replication_member_weight = 60
+
+[mysqld.4]
+
+[ENV]
+SERVER_MYPORT_3=		@mysqld.3.port
+SERVER_MYSOCK_3=		@mysqld.3.socket
+
+SERVER_MYPORT_4=		@mysqld.4.port
+SERVER_MYSOCK_4=		@mysqld.4.socket

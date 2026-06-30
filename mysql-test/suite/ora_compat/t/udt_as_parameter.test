@@ -1,0 +1,977 @@
+SET sql_mode=ORACLE;
+set @@udt_format_result='DBA';
+
+## object as parameter
+
+CREATE OR REPLACE TYPE mydata AS OBJECT(x int, y int);
+CREATE OR REPLACE TYPE mydataarr as varray(3) of mydata;
+CREATE OR REPLACE TYPE mydatatab as table of mydata;
+CREATE OR REPLACE TYPE intarr IS varray(3) OF int;
+CREATE OR REPLACE TYPE inttab IS table OF int;
+
+# as function parameter
+
+delimiter //;
+create or replace function fr_object1(x int, y int) return mydata
+as
+	val mydata;
+begin
+	val := mydata(x, y);
+	return val;
+end;
+//
+
+create or replace function fp_object1(p1 mydata, p2 mydata) return mydata
+as
+	val mydata;
+begin
+	val := mydata(null,null);
+	val.x := p1.x + p2.x;
+	val.y := p1.y + p2.y;
+	return val;
+end;
+//
+
+delimiter ;//
+create table t1(id int, c mydata);
+insert into t1 values(1, mydata(5,6));
+insert into t1 values(2, mydata(7,4));
+
+select fp_object1(mydata(5,6),mydata(7,4));
+select fp_object1(fr_object1(5,6), fr_object1(7,4));
+select fp_object1((select mydata(5,6)), (select mydata(7,4)));
+select fp_object1((select (select mydata(5,6))), (select (select mydata(7,4))));
+select fp_object1((select mydata(5,6) from t1 limit 1), (select mydata(7,4) from t1 limit 1));
+select fp_object1((select c from t1 where id = 1), (select c from t1 where id = 2));
+
+delimiter //;
+create or replace procedure p1()
+as
+	v1 mydata;
+	v2 mydata;
+begin
+	v1 := mydata(5, 6);
+	v2 := mydata(7, 4);
+	select fp_object1(v1, v2);
+
+	v1 := fp_object1(v1, v2);
+	select v1;
+
+	v2 := fp_object1(v1, v2);
+	select v2;
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+delimiter //;
+create or replace procedure p1()
+as
+	val mydatatab;
+begin
+	val := mydatatab(mydata(5,6),mydata(7,4));
+
+	select fp_object1(val(1), val(2));
+end;
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+## as procedure parameter
+## in
+
+delimiter //;
+create or replace procedure p1(p1 in mydata, p2 in mydata)
+as
+begin
+	select CONCAT('x =', p1.x + p2.x, ' y = ', p1.y + p2.y);
+	select fp_object1(p1, p2);
+end;
+//
+
+create or replace procedure p1_exe()
+as
+	v1 mydata := mydata(5,6);
+	v2 mydata := mydata(7,4);
+	val mydatatab := mydatatab(mydata(5,6),mydata(7,4));
+begin
+	call p1(mydata(5,6),mydata(7,4));
+	call p1(fr_object1(5,6), fr_object1(7,4));
+	call p1((select mydata(5,6)), (select mydata(7,4)));
+	call p1((select (select mydata(5,6))), (select (select mydata(7,4))));
+	call p1((select mydata(5,6) from t1 limit 1), (select mydata(7,4) from t1 limit 1));
+	call p1((select c from t1 where id = 1), (select c from t1 where id = 2));
+	call p1(v1, v2);
+	call p1(val(1), val(2));
+end;
+//
+
+delimiter ;//
+call p1_exe();
+call p1_exe();
+drop procedure p1;
+drop procedure p1_exe;
+
+## out
+delimiter //;
+create or replace procedure p1(p1 out mydata)
+as
+begin
+	p1 := fp_object1(mydata(5,6), mydata(6,2));
+end;
+//
+
+create or replace procedure p1_exe()
+as
+	val mydata;
+begin
+	val := mydata(5,6);
+	select val;
+	call p1(val);
+	select val;
+end;
+//
+
+delimiter ;//
+call p1_exe();
+call p1_exe();
+drop procedure p1;
+drop procedure p1_exe;
+
+## in out
+delimiter //;
+create or replace procedure p1(p1 in out mydata)
+as
+	val mydata;
+begin
+	val := fp_object1(p1, mydata(7,4));
+	p1 := val;
+end;
+//
+
+create or replace procedure p1_exe()
+as
+	val mydata;
+begin
+	val := mydata(5,6);
+	call p1(val);
+	select val;
+end;
+//
+
+delimiter ;//
+call p1_exe();
+call p1_exe();
+drop procedure p1;
+drop procedure p1_exe;
+
+
+## collection of single type as parameter
+## function parameter
+
+delimiter //;
+create or replace function fp_varray1(p1 intarr, p2 intarr) return int
+as
+	val int;
+begin
+	val := p1(2) + p2(2);
+	return val;
+end;
+//
+
+create or replace function fp_varray2(p1 inttab, p2 inttab) return int
+as
+	val int;
+begin
+	val := p1(2) + p2(2);
+	return val;
+end;
+//
+
+create or replace function fp_varray3(p1 inttab) return int
+as
+	val int := 0;
+begin
+	for i in p1.first .. p1.last loop
+		val := val + p1(i);
+	end loop;
+	return val;
+end;
+//
+
+delimiter ;//
+select fp_varray1(intarr(5,6),intarr(7,4));
+select fp_varray1((select intarr(5,6)), (select intarr(7,4)));
+select fp_varray1((select (intarr(5,6))), (select (intarr(7,4))));
+select fp_varray1((select intarr(5,6) from t1 limit 1), (select intarr(7,4) from t1 limit 1));
+select fp_varray2(inttab(5,6),inttab(7,4));
+select fp_varray2((select inttab(5,6)), (select inttab(7,4)));
+select fp_varray2((select (inttab(5,6))), (select (inttab(7,4))));
+select fp_varray2((select inttab(5,6) from t1 limit 1), (select inttab(7,4) from t1 limit 1));
+select fp_varray3(inttab(5,6,7,8));
+
+## procedure in
+delimiter //;
+create or replace procedure p1(p1 in intarr, p2 in inttab)
+as
+	val int;
+begin
+	select * from table(p1);
+	select * from table(p2);
+	val := p1(1) + p2(1);
+	select val;
+end;
+//
+
+delimiter ;//
+call p1(intarr(5,6),inttab(7,4));
+call p1((select intarr(5,6)), (select inttab(7,4)));
+call p1((select (select intarr(5,6))), (select (select inttab(7,4))));
+call p1((select intarr(5,6) from t1 limit 1), (select inttab(7,4) from t1 limit 1));
+
+delimiter //;
+create or replace procedure p2()
+as
+	v1 intarr;
+	v2 inttab;
+begin
+	v1 := intarr(5,6);
+	v2 := inttab(7,4);
+	call p1(v1, v2);
+end;
+//
+
+delimiter ;//
+call p2();
+call p2();
+drop procedure p2;
+
+delimiter //;
+create or replace procedure p2()
+as
+	type t1 is record(a int, b intarr);
+	type t2 is record(a int, b inttab);
+	v1 t1;
+	v2 t2;
+begin
+	v1 := t1(5, intarr(5,6));
+	v2 := t2(7, inttab(7,4));
+	call p1(v1.b, v2.b);
+end;
+//
+
+delimiter ;//
+call p2();
+call p2();
+drop procedure p2;
+
+drop procedure p1;
+
+## procedure out
+delimiter //;
+create or replace procedure p1(p1 out intarr, p2 out inttab)
+as
+begin
+	select p1;
+	select p2;
+	p1 := intarr(5,6);
+	p2 := inttab(7,4);
+end;
+//
+
+create or replace procedure p2()
+as
+	v1 intarr := intarr(1,2);
+	v2 inttab := inttab(3,4);
+begin
+	select v1;
+	select v2;
+	call p1(v1, v2);
+	select v1;
+	select v2;
+end;
+//
+
+delimiter ;//
+call p2();
+call p2();
+drop procedure p2;
+
+delimiter //;
+create or replace procedure p2()
+as
+	type t1 is record(a int, b intarr);
+	type t2 is record(a int, b inttab);
+	v1 t1;
+	v2 t2;
+begin
+	v1 := t1(5, intarr(1,2));
+	v2 := t2(7, inttab(3,4));
+	select v1.b;
+	select v2.b;
+	call p1(v1.b, v2.b);
+	select v1.b;
+	select v2.b;
+end;
+//
+
+delimiter ;//
+call p2();
+call p2();
+drop procedure p2;
+
+drop procedure p1;
+
+## procedure inout
+delimiter //;
+create or replace procedure p1(p1 in out intarr, p2 in out inttab)
+as
+begin
+	select p1;
+	select p2;
+	p1 := intarr(5,6);
+	p2 := inttab(7,4);
+end;
+//
+
+create or replace procedure p2()
+as
+	v1 intarr := intarr(1,2);
+	v2 inttab := inttab(3,4);
+begin
+	select v1;
+	select v2;
+	call p1(v1, v2);
+	select v1;
+	select v2;
+end;
+//
+
+delimiter ;//
+call p2();
+call p2();
+drop procedure p2;
+
+delimiter //;
+create or replace procedure p2()
+as
+	type t1 is record(a int, b intarr);
+	type t2 is record(a int, b inttab);
+	v1 t1;
+	v2 t2;
+begin
+	v1 := t1(5, intarr(1,2));
+	v2 := t2(7, inttab(3,4));
+	select v1.b;
+	select v2.b;
+	call p1(v1.b, v2.b);
+	select v1.b;
+	select v2.b;
+end;
+//
+
+delimiter ;//
+call p2();
+call p2();
+drop procedure p2;
+
+drop procedure p1;
+
+## collection of object as parameter
+## function parameter
+
+delimiter //;
+create or replace function fp_varray_obj1(p1 mydataarr, p2 mydatatab) return mydata
+as
+	val mydata;
+begin
+	val := fp_object1(p1(1), p2(1));
+	return val;
+end;
+//
+
+delimiter ;//
+
+select fp_varray_obj1(mydataarr(mydata(5,6)), mydatatab(mydata(7,4)));
+select fp_varray_obj1((select mydataarr(mydata(5,6))),(select mydatatab(mydata(7,4))));
+select fp_varray_obj1((select (select mydataarr(mydata(5,6)))),(select (select mydatatab(mydata(7,4)))));
+select fp_varray_obj1((select mydataarr(mydata(5,6)) from t1 limit 1),(select mydatatab(mydata(7,4)) from t1 limit 1));
+
+## procedure in
+delimiter //;
+create or replace procedure p1(p1 in mydataarr, p2 in mydatatab)
+as
+	val mydata;
+begin
+	select * from table(p1);
+	select * from table(p2);
+	val := fp_object1(p1(1), p2(1));
+	select val;
+end;
+//
+
+delimiter ;//
+call p1(mydataarr(mydata(5,6)), mydatatab(mydata(7,4)));
+call p1((select mydataarr(mydata(5,6))),(select mydatatab(mydata(7,4))));
+call p1((select (select mydataarr(mydata(5,6)))),(select (select mydatatab(mydata(7,4)))));
+call p1((select mydataarr(mydata(5,6)) from t1 limit 1),(select mydatatab(mydata(7,	4)) from t1 limit 1));
+
+delimiter //;
+create or replace procedure p2()
+as
+	v1 mydataarr;
+	v2 mydatatab;
+begin
+	v1 := mydataarr(mydata(5,6));
+	v2 := mydatatab(mydata(7,4));
+	call p1(v1, v2);
+end;
+//
+
+delimiter ;//
+call p2();
+call p2();
+drop procedure p2;
+
+delimiter //;
+create or replace procedure p2()
+as
+	type t1 is record(a int, b mydataarr);
+	type t2 is record(a int, b mydatatab);
+	v1 t1;
+	v2 t2;
+begin
+	v1 := t1(5, mydataarr(mydata(5,6)));
+	v2 := t2(7, mydatatab(mydata(7,4)));
+	call p1(v1.b, v2.b);
+end;
+//
+
+delimiter ;//
+call p2();
+call p2();
+drop procedure p2;
+
+drop procedure p1;
+
+## procedure out
+delimiter //;
+create or replace procedure p1(p1 out mydataarr, p2 out mydatatab)
+as
+begin
+	select p1;
+	select p2;
+	p1 := mydataarr(mydata(5,6));
+	p2 := mydatatab(mydata(7,4));
+end;
+//
+
+create or replace procedure p2()
+as
+	v1 mydataarr := mydataarr(mydata(1,2));
+	v2 mydatatab := mydatatab(mydata(3,4));
+begin
+	select v1;
+	select v2;
+	call p1(v1, v2);
+	select v1;
+	select v2;
+end;
+//
+
+delimiter ;//
+call p2();
+call p2();
+drop procedure p2;
+
+delimiter //;
+create or replace procedure p2()
+as
+	type t1 is record(a int, b mydataarr);
+	type t2 is record(a int, b mydatatab);
+	v1 t1;
+	v2 t2;
+begin
+	v1 := t1(5, mydataarr(mydata(1,2)));
+	v2 := t2(7, mydatatab(mydata(3,4)));
+	select v1.b;
+	select v2.b;
+	call p1(v1.b, v2.b);
+	select v1.b;
+	select v2.b;
+end;
+//
+
+delimiter ;//
+call p2();
+call p2();
+drop procedure p2;
+
+drop procedure p1;
+
+## procedure inout
+delimiter //;
+create or replace procedure p1(p1 in out mydataarr, p2 in out mydatatab)
+as
+begin
+	select p1;
+	select p2;
+	p1 := mydataarr(mydata(5,6));
+	p2 := mydatatab(mydata(7,4));
+end;
+//
+
+create or replace procedure p2()
+as
+	v1 mydataarr := mydataarr(mydata(1,2));
+	v2 mydatatab := mydatatab(mydata(3,4));
+begin
+	select v1;
+	select v2;
+	call p1(v1, v2);
+	select v1;
+	select v2;
+end;
+//
+
+delimiter ;//
+call p2();
+call p2();
+drop procedure p2;
+
+delimiter //;
+create or replace procedure p2()
+as
+	type t1 is record(a int, b mydataarr);
+	type t2 is record(a int, b mydatatab);
+	v1 t1;
+	v2 t2;
+begin
+	v1 := t1(5, mydataarr(mydata(1,2)));
+	v2 := t2(7, mydatatab(mydata(3,4)));
+	select v1.b;
+	select v2.b;
+	call p1(v1.b, v2.b);
+	select v1.b;
+	select v2.b;
+end;
+//
+
+delimiter ;//
+call p2();
+call p2();
+drop procedure p2;
+
+drop procedure p1;
+
+delimiter //;
+create or replace function f1(p1 mydatatab) return mydata
+as
+begin
+    return p1(1);
+END;
+//
+
+create or replace procedure p1()
+as
+	val mydata;
+begin
+    val := f1(mydatatab(mydata(5,6),mydata(8,7)));
+	select val;
+END;
+//
+
+delimiter ;//
+select f1(mydatatab(mydata(5,6),mydata(8,7)));
+
+call p1();
+call p1();
+
+drop procedure p1;
+drop function f1;
+
+delimiter //;
+create or replace procedure p1()
+as
+	val mydatatab := mydatatab(mydata(2,5),mydata(9,4));
+begin
+    val := mydatatab(val(2), val(1));
+	select val;
+END;
+//
+
+delimiter ;//
+call p1();
+call p1();
+
+drop procedure p1;
+
+select * from table(mydatatab(mydata(5,6),null,null,mydata(7,4)));
+
+--error ER_NOT_SUPPORTED_YET
+select mydata(5,6) + mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) + inttab(7,4);
+--error ER_NOT_SUPPORTED_YET
+select mydata(5,6) - mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) + inttab(7,4);
+--error ER_NOT_SUPPORTED_YET
+select mydata(5,6) * mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) * inttab(7,4);
+--error ER_NOT_SUPPORTED_YET
+select mydata(5,6) / mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) / inttab(7,4);
+--error ER_NOT_SUPPORTED_YET
+select mydata(5,6) div mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) div inttab(7,4);
+--error ER_NOT_SUPPORTED_YET
+select mydata(5,6) % mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) % inttab(7,4);
+--error ER_NOT_SUPPORTED_YET
+select mydata(5,6) mod mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) mod inttab(7,4);
+
+create or replace type mydata1 as object(x int, y int);
+create or replace type inttab1 as table of int;
+select mydata(5,6)=mydata(5,6);
+select mydata(5,6)=mydata(7,4);
+select inttab(5,6)=inttab(5,6);
+select inttab(5,6)=inttab(7,4);
+--error ER_WRONG_UDT_DATA_TYPE
+select mydata(5,6)=mydata1(5,6);
+--error ER_WRONG_UDT_DATA_TYPE
+select inttab(5,6)=inttab1(7,4);
+select mydata(5,6)<>mydata(5,6);
+select mydata(5,6)<>mydata(7,4);
+select inttab(5,6)!=inttab(5,6);
+select inttab(5,6)!=inttab(7,4);
+--error ER_WRONG_ARGUMENTS
+select mydata(5,6)>mydata(5,6);
+--error ER_WRONG_ARGUMENTS
+select inttab(5,6)>inttab(5,6);
+--error ER_WRONG_ARGUMENTS
+select mydata(5,6)<mydata(5,6);
+--error ER_WRONG_ARGUMENTS
+select inttab(5,6)<inttab(5,6);
+--error ER_WRONG_ARGUMENTS
+select mydata(5,6)<=mydata(5,6);
+--error ER_WRONG_ARGUMENTS
+select inttab(5,6)<=inttab(5,6);
+--error ER_WRONG_ARGUMENTS
+select mydata(5,6)>=mydata(5,6);
+--error ER_WRONG_ARGUMENTS
+select inttab(5,6)>=inttab(5,6);
+--error ER_WRONG_ARGUMENTS
+select mydata(5,6) between mydata(1,6) and mydata(7,6);
+--error ER_WRONG_ARGUMENTS
+select inttab(5,6) between inttab(1,6) and inttab(7,6);
+--error ER_WRONG_ARGUMENTS
+select mydata(5,6) not between mydata(1,6) and mydata(7,6);
+--error ER_WRONG_ARGUMENTS
+select inttab(5,6) not between inttab(1,6) and inttab(7,6);
+select mydata(5,6) in (mydata(5,6),mydata(7,6));
+select mydata(5,6) in (mydata(1,6),mydata(7,6));
+select inttab(5,6) in (inttab(5,6),inttab(7,6));
+select inttab(5,6) in (inttab(1,6),inttab(7,6));
+select mydata(5,6) not in (mydata(5,6),mydata(7,6));
+select mydata(5,6) not in (mydata(1,6),mydata(7,6));
+select inttab(5,6) not in (inttab(5,6),inttab(7,6));
+select inttab(5,6) not in (inttab(1,6),inttab(7,6));
+select mydata(5,6)<=>mydata(5,6);
+select mydata(5,6)<=>mydata(7,4);
+select inttab(5,6)<=>inttab(5,6);
+select inttab(5,6)<=>inttab(7,4);
+--error ER_UDT_INCONS_DATATYPES
+select mydata(5,6)<=>null;
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6)<=>null;
+select mydata(5,6) is null;
+select inttab(5,6) is null;
+select mydata(5,6) is not null;
+select inttab(5,6) is not null;
+
+--error ER_UDT_INCONS_DATATYPES
+select mydata(5,6) && mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) && inttab(7,4);
+--error ER_UDT_INCONS_DATATYPES
+select mydata(5,6) and mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) and inttab(7,4);
+--error ER_UDT_INCONS_DATATYPES
+select !mydata(5,6);
+--error ER_NOT_SUPPORTED_YET
+select !inttab(5,6);
+--error ER_UDT_INCONS_DATATYPES
+select not mydata(5,6);
+--error ER_NOT_SUPPORTED_YET
+select not inttab(5,6);
+--error ER_UDT_INCONS_DATATYPES
+select mydata(5,6) xor mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) xor inttab(7,4);
+
+--error ER_NOT_SUPPORTED_YET
+select mydata(5,6) & mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) & inttab(7,4);
+--error ER_NOT_SUPPORTED_YET
+select mydata(5,6) | mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) | inttab(7,4);
+--error ER_NOT_SUPPORTED_YET
+select mydata(5,6) ^ mydata(7,4);
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) ^ inttab(7,4);
+--error ER_NOT_SUPPORTED_YET
+select ~mydata(5,6);
+--error ER_NOT_SUPPORTED_YET
+select ~inttab(5,6);
+--error ER_NOT_SUPPORTED_YET
+select mydata(5,6) << 2;
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) << 2;
+--error ER_NOT_SUPPORTED_YET
+select mydata(5,6) >> 2;
+--error ER_NOT_SUPPORTED_YET
+select inttab(5,6) >> 2;
+
+delimiter //;
+CREATE or replace PROCEDURE p1(var in mydata) as
+BEGIN
+	select var;
+END;
+//
+
+CREATE or replace PROCEDURE p2(var in inttab) as
+BEGIN
+	select var;
+END;
+//
+
+CREATE or replace PROCEDURE p3(var out mydata) as
+BEGIN
+	var := mydata(5,6);
+	select var;
+END;
+//
+
+CREATE or replace PROCEDURE p4(var out inttab) as
+BEGIN
+	var := inttab(5,6);
+	select var;
+END;
+//
+
+CREATE or replace PROCEDURE p5(var in out mydata) as
+BEGIN
+	var := mydata(5,6);
+	select var;
+END;
+//
+
+CREATE or replace PROCEDURE p6(var in out inttab) as
+BEGIN
+	var := mydata(5,6);
+	select var;
+END;
+//
+
+delimiter ;//
+--error ER_NOT_SUPPORTED_YET
+call p1(@varp1);
+--error ER_NOT_SUPPORTED_YET
+call p1(@varp2);
+--error ER_NOT_SUPPORTED_YET
+call p1(@varp3);
+--error ER_NOT_SUPPORTED_YET
+call p1(@varp4);
+--error ER_NOT_SUPPORTED_YET
+call p1(@varp5);
+--error ER_NOT_SUPPORTED_YET
+call p1(@varp6);
+
+drop procedure p1;
+drop procedure p2;
+drop procedure p3;
+drop procedure p4;
+drop procedure p5;
+drop procedure p6;
+
+## test some system function
+--error ER_NOT_SUPPORTED_YET
+select hour(mydata(1,1));
+--error ER_NOT_SUPPORTED_YET
+select SQLERRM(mydata(1,1));
+--error ER_NOT_SUPPORTED_YET
+select ADDDATE(mydata(1,1),mydata(1,1));
+--error ER_NOT_SUPPORTED_YET
+select if(mydata(1,1),1,2);
+--error ER_NOT_SUPPORTED_YET
+select char(mydata(1,1));
+
+delimiter //;
+CREATE or replace PROCEDURE p1() 
+as
+	val inttab := inttab(4,5,6);
+begin
+	select hex(val);
+end;
+//
+
+delimiter ;//
+--error ER_NOT_SUPPORTED_YET
+call p1();
+
+drop procedure p1;
+
+## bug8826 test udt display width also fix bit display
+create or replace type var_test1 as object(col0 tinyint,col1 smallint,col2 mediumint, col3 int,col4 integer, col5 bigint,col6 decimal(10, 2),
+        col7 dec(10, 2),col8 numeric(10, 2),col9 float, col10 double,col11 real,col12 bool, col13 boolean,col14 DATE,col15 DATETIME,
+        col16 TIMESTAMP,col17 TIME,col18 YEAR,col19 CHAR(10),col20 VARCHAR(20), col21 BINARY(10),col22 VARBINARY(50), col31 bit,
+        col32 enum('春', '夏', '秋', '冬', 'unknow'),col33 SET('A', 'B', 'C'),col35 number,col36 VARCHAR2(100),col37 PLS_INTEGER);
+
+create or replace type var_test1_tab is  table of var_test1;
+
+delimiter //;
+create or replace procedure p1(v1 in var_test1) as
+begin
+select v1;
+end;
+//
+
+create or replace procedure p2(v1 in var_test1_tab) as
+begin
+select v1;
+end;
+//
+
+delimiter ;//
+call p1(var_test1(1,11,111,1111,1111,111111,1.23,1.45,1.67,1.89,1.91,1.43,1,1,
+'2003-01-02','2003-01-02 10:11:12','2003-01-02 10:11:12','10:11:12',2023,'aaa','bbbb','6161','626262',1,
+'春', 'B', 12.34,'cccddd', 20));
+call p1(var_test1(1,11,111,1111,1111,111111,1.23,1.45,1.67,1.89,1.91,1.43,1,1,
+'2003-01-02','2003-01-02 10:11:12','2003-01-02 10:11:12','10:11:12',2023,'aaa','bbbb','6161','626262',1,
+'春', 'B', 12.34,'cccddd', 20));
+
+call p2(var_test1_tab(var_test1(1,11,111,1111,1111,111111,1.23,1.45,1.67,1.89,1.91,1.43,1,1,
+'2003-01-02','2003-01-02 10:11:12','2003-01-02 10:11:12','10:11:12',2023,'aaa','bbbb','6161','626262',1,
+'春', 'B', 12.34,'cccddd', 20)));
+call p2(var_test1_tab(var_test1(1,11,111,1111,1111,111111,1.23,1.45,1.67,1.89,1.91,1.43,1,1,
+'2003-01-02','2003-01-02 10:11:12','2003-01-02 10:11:12','10:11:12',2023,'aaa','bbbb','6161','626262',1,
+'春', 'B', 12.34,'cccddd', 20)));
+drop procedure p1;
+drop procedure p2;
+drop type var_test1_tab;
+drop type var_test1;
+
+create or replace type bit_type as object(x int, y bit(8), z int);
+create or replace type bit_type_tab as table of bit_type;
+
+select bit_type_tab(bit_type(1,7,3),bit_type(2,18,5));
+select bit_type_tab((select bit_type(1,7,3)), (select bit_type(2,18,5)));
+select bit_type_tab((select (select bit_type(1,7,3))), (select (select bit_type(2,18,5))));
+
+create table t_bit(id int, c1 bit_type, c2 bit_type);
+insert into t_bit values(1, bit_type(1,7,3), bit_type(2,18,5));
+insert into t_bit values(2, bit_type(2,18,5), bit_type(1,7,3));
+select bit_type_tab(c1, c2) from t_bit;
+
+delimiter //;
+create or replace function f1(num int) return bit_type
+as
+begin
+	return bit_type(1,num,5);
+end
+//
+
+delimiter ;//
+select bit_type_tab(f1(7), f1(18));
+
+
+delimiter //;
+create or replace procedure p1()
+as
+	v1 bit_type := bit_type(1,7,3);
+	v2 bit_type_tab := bit_type_tab(bit_type(1,7,3),bit_type(2,18,5));
+begin
+	select bit_type_tab(v1, v2(2));
+end
+//
+
+delimiter ;//
+call p1();
+call p1();
+drop procedure p1;
+
+drop table t_bit;
+drop type bit_type_tab;
+drop type bit_type;
+drop function f1;
+
+delimiter //;
+Create or replace function f11(p1 mydata) return int 
+as 
+begin
+	return p1.x+p1.y;
+End;
+//
+
+Create or replace function f12(p1 inttab) return int 
+as
+	s int := 0;
+begin
+	for i in p1.first .. p1.last loop
+		s := s + p1(i);
+	end loop;
+	return s;
+End;
+//
+
+Create or replace procedure p1()
+as
+	val int := 0;
+begin
+	val := f11(mydata(5,6));
+	select val;
+	val := f12(inttab(3,5,9));
+	select val;
+End;
+//
+
+delimiter ;//
+call p1();
+call p1();
+
+select f11(mydata(5,6)) connect by level<1;
+
+drop function f11;
+drop function f12;
+drop procedure p1;
+
+drop type intarr;
+drop type inttab;
+drop table t1;
+drop type mydataarr;
+drop type mydatatab;
+drop type mydata;
+drop type inttab1;
+drop type mydata1;
+drop function fp_object1;
+drop function fr_object1;
+drop function fp_varray1;
+drop function fp_varray2;
+drop function fp_varray3;
+drop function fp_varray_obj1;

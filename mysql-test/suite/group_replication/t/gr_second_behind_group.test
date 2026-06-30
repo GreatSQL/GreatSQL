@@ -1,0 +1,241 @@
+################################################################################
+#
+# This test shall verify that the second_behind_group status of
+# MGR plugin is reliable.
+#
+# Test:
+# 0) The test requires four servers.
+# 1) Init test data.
+# 2) Lock table and insert data. Unlock table after sleep, and check second_behind_group value.
+# 3) Set replica_parallel_workers=0, repeat test;
+# 4) Stop Secondary and Arbitrator node MGR, Priamry node insert 1000 data. start MGR, check second_behind_group value when Secondary node recovering.
+# 5) Stop Secondary and Arbitrator node and reset replica all; Priamry node insert 1000 data. start MGR, check second_behind_group value.
+# 6) Cleanup.
+#
+################################################################################
+--source include/big_test.inc
+--source include/linux.inc
+--source include/have_group_replication_plugin.inc
+--let $rpl_skip_group_replication_start= 1
+--let $rpl_server_count = 4
+--source include/group_replication.inc
+
+--echo
+--echo ####
+--echo # 0) The test requires four servers.
+--echo ####
+--echo
+--let $rpl_connection_name= server1
+--source include/connection.inc
+--source include/start_and_bootstrap_group_replication.inc
+
+--let $rpl_connection_name= server2
+--source include/connection.inc
+--source include/start_group_replication.inc
+
+--let $rpl_connection_name= server3
+--source include/connection.inc
+--source include/start_group_replication.inc
+
+--let $rpl_connection_name= server4
+--source include/connection.inc
+--source include/start_group_replication.inc
+
+--echo ####
+--echo # 1) init test data.
+--echo ####
+--let $rpl_connection_name = server1
+--source include/connection.inc
+create table test.t1 (id int primary key);
+SHOW GLOBAL STATUS LIKE "group_replication_second_behind_group";
+
+--let $rpl_connection_name = server1
+--source include/connection.inc
+--let $old_parallel_workers=query_get_value(SHOW GLOBAL VARIABLES LIKE "replica_parallel_workers", Value, 1)
+
+--let $rpl_connection_name = server4
+--source include/connection.inc
+SHOW GLOBAL STATUS LIKE "group_replication_second_behind_group";
+
+--echo ####
+--echo # 2) Lock table and insert data. Unlock table after sleep, and check second_behind_group value.
+--echo ####
+--let $rpl_connection_name = server2
+--source include/connection.inc
+set global read_only = false;
+lock tables test.t1 write;
+
+--let $rpl_connection_name = server1
+--source include/connection.inc
+DELIMITER $;
+CREATE PROCEDURE insert_one_by_one()
+BEGIN
+  DECLARE i INT DEFAULT 1;
+  WHILE i <= 1000 DO
+    INSERT INTO test.t1 VALUES (i);
+    SET i = i + 1;
+  END WHILE;
+END
+$
+DELIMITER ;$
+CALL insert_one_by_one();
+truncate test.t1;
+
+--let $rpl_connection_name = server4
+--source include/connection.inc
+SHOW GLOBAL STATUS LIKE "group_replication_second_behind_group";
+
+--let $rpl_connection_name = server2
+--source include/connection.inc
+--sleep 3
+unlock tables;
+--let $assert_text= Check second_behind_group status success.
+--let $assert_cond= [SHOW GLOBAL STATUS LIKE "group_replication_second_behind_group", Value, 1] > 3 AND <1> < 100
+--source include/assert.inc
+
+select t.SECOND_BEHIND_GROUP > 3 and t.SECOND_BEHIND_GROUP < 100 from (select SECOND_BEHIND_GROUP from performance_schema.replication_group_member_stats where MEMBER_ID = @@server_uuid) t;
+select (select sum(SECOND_BEHIND_GROUP) from (select SECOND_BEHIND_GROUP from performance_schema.replication_group_member_stats where MEMBER_ID != @@server_uuid)) = 0;
+
+--echo ####
+--echo # 3) Set replica_parallel_workers=0, repeat test;
+--echo ####
+--let $rpl_connection_name = server3
+--source include/connection.inc
+set global replica_parallel_workers=0;
+--source include/stop_group_replication.inc
+--source include/start_group_replication.inc
+SHOW GLOBAL VARIABLES LIKE "replica_parallel_workers";
+
+set global read_only = false;
+lock tables test.t1 write;
+
+--let $rpl_connection_name = server1
+--source include/connection.inc
+CALL insert_one_by_one();
+truncate test.t1;
+
+--let $rpl_connection_name = server3
+--source include/connection.inc
+--sleep 3
+unlock tables;
+--let $assert_text= Check second_behind_group status success.
+--let $assert_cond= [SHOW GLOBAL STATUS LIKE "group_replication_second_behind_group", Value, 1] > 3 AND <1> < 100
+--source include/assert.inc
+
+select t.SECOND_BEHIND_GROUP > 3 and t.SECOND_BEHIND_GROUP < 100 from (select SECOND_BEHIND_GROUP from performance_schema.replication_group_member_stats where MEMBER_ID = @@server_uuid) t;
+select (select sum(SECOND_BEHIND_GROUP) from (select SECOND_BEHIND_GROUP from performance_schema.replication_group_member_stats where MEMBER_ID != @@server_uuid)) = 0;
+
+--echo
+--echo ####
+--echo # 4) Stop Secondary and Arbitrator node MGR, Priamry node insert 1000 data. start MGR, check second_behind_group value when Secondary node recovering.
+--echo ####
+--echo
+--let $rpl_connection_name = server2
+--source include/connection.inc
+--source include/stop_group_replication.inc
+
+--let $rpl_connection_name = server4
+--source include/connection.inc
+--source include/stop_group_replication.inc
+SHOW GLOBAL STATUS LIKE "group_replication_second_behind_group";
+
+--let $rpl_connection_name = server1
+--source include/connection.inc
+CALL insert_one_by_one();
+truncate test.t1;
+
+--connect(server__2,127.0.0.1,root,,test,$SERVER_MYPORT_2,)
+--connection server__2
+begin;
+select * from test.t1 for update;
+
+--let $rpl_connection_name = server2
+--source include/connection.inc
+--sleep 3
+start group_replication;
+--let $assert_text= Check second_behind_group status success.
+--let $assert_cond= [SHOW GLOBAL STATUS LIKE "group_replication_second_behind_group", Value, 1] > 3 AND <1> < 100
+--source include/assert.inc
+
+select t.SECOND_BEHIND_GROUP > 3 and t.SECOND_BEHIND_GROUP < 100 from (select SECOND_BEHIND_GROUP from performance_schema.replication_group_member_stats where MEMBER_ID = @@server_uuid) t;
+select (select sum(SECOND_BEHIND_GROUP) from (select SECOND_BEHIND_GROUP from performance_schema.replication_group_member_stats where MEMBER_ID != @@server_uuid)) = 0;
+
+SELECT member_state, member_role from performance_schema.replication_group_members WHERE MEMBER_ID = @@server_uuid;
+
+--connection server__2
+rollback;
+
+--let $rpl_connection_name = server4
+--source include/connection.inc
+start group_replication;
+SHOW GLOBAL STATUS LIKE "group_replication_second_behind_group";
+
+--echo
+--echo ####
+--echo # 5) Stop Secondary and Arbitrator node and reset replica all; Priamry node insert 1000 data. start MGR, check second_behind_group value.
+--echo ####
+--echo
+--let $rpl_connection_name = server2
+--source include/connection.inc
+--source include/stop_group_replication.inc
+reset replica all;
+CHANGE REPLICATION SOURCE TO SOURCE_USER='root', SOURCE_PASSWORD='' FOR CHANNEL 'group_replication_recovery';
+--source include/start_group_replication.inc
+--let $group_replication_member_state= ONLINE
+--source include/gr_wait_for_member_state.inc
+
+--let $rpl_connection_name = server4
+--source include/connection.inc
+--source include/stop_group_replication.inc
+reset replica all;
+CHANGE REPLICATION SOURCE TO SOURCE_USER='root', SOURCE_PASSWORD='' FOR CHANNEL 'group_replication_recovery';
+SHOW GLOBAL STATUS LIKE "group_replication_second_behind_group";
+
+--let $rpl_connection_name = server2
+--source include/connection.inc
+set global read_only = false;
+lock tables test.t1 write;
+
+--let $rpl_connection_name = server1
+--source include/connection.inc
+CALL insert_one_by_one();
+truncate test.t1;
+
+--let $rpl_connection_name = server2
+--source include/connection.inc
+--sleep 3
+unlock tables;
+--let $assert_text= Check second_behind_group status success.
+--let $assert_cond= [SHOW GLOBAL STATUS LIKE "group_replication_second_behind_group", Value, 1] > 3 AND <1> < 100
+--source include/assert.inc
+
+select t.SECOND_BEHIND_GROUP > 3 and t.SECOND_BEHIND_GROUP < 100 from (select SECOND_BEHIND_GROUP from performance_schema.replication_group_member_stats where MEMBER_ID = @@server_uuid) t;
+select (select sum(SECOND_BEHIND_GROUP) from (select SECOND_BEHIND_GROUP from performance_schema.replication_group_member_stats where MEMBER_ID != @@server_uuid)) = 0;
+
+SELECT member_state, member_role from performance_schema.replication_group_members WHERE MEMBER_ID = @@server_uuid;
+
+--let $rpl_connection_name = server4
+--source include/connection.inc
+start group_replication;
+SHOW GLOBAL STATUS LIKE "group_replication_second_behind_group";
+
+--echo
+--echo ####
+--echo # 6) Cleanup.
+--echo ####
+--echo
+--let $rpl_connection_name = server1
+--source include/connection.inc
+drop table test.t1;
+DROP PROCEDURE insert_one_by_one;
+
+--let $rpl_connection_name = server3
+--source include/connection.inc
+--eval set global replica_parallel_workers=$old_parallel_workers;
+--let $rpl_connection_name = server2
+--source include/connection.inc
+--let $_member_id= query_get_value(SELECT @@SERVER_UUID, @@SERVER_UUID, 1)
+--let $wait_condition= SELECT COUNT(*)=1 FROM performance_schema.replication_group_members group_members WHERE group_members.channel_name="group_replication_applier" AND group_members.member_id="$_member_id" AND group_members.member_state="ONLINE"
+--source include/wait_condition.inc
+
+--source include/group_replication_end.inc

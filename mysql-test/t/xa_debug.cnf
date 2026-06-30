@@ -1,0 +1,4 @@
+!include include/default_my.cnf
+
+[mysqld]
+xa_detach_on_prepare=ON

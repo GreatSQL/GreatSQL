@@ -1,0 +1,89 @@
+select nchr(162);
+select nchr(162.9840);
+select nchr(+162.9840);
+--error 1210
+select nchr(-162);
+select nchr('162');
+--error 1292
+select nchr('162a');
+select nchr('    162');
+select nchr('    162     ');
+select nchr('  162.9840');
+--error 1292
+select nchr('  162.9840.9840');
+--error 1210
+select nchr('0.9840');
+select nchr(0);
+--error 1210
+select nchr('   ');
+--error 1210
+select nchr(0xA2);
+--error 1210
+select nchr(9999999999);
+
+select nchr(167);
+select nchr(19968);
+select nchr(20005);
+
+create table t1(
+    id INT,
+    c1 varchar(100) default (nchr(162))
+);
+show create table t1;
+
+INSERT INTO t1(id, c1) VALUES
+(162, '¢'),
+(167, nchr(167)),
+(20005, '严');
+select nchr(id) from t1;
+select * from t1 where c1 = nchr(162);
+select * from t1 where c1 = '§';
+
+INSERT INTO t1(id) VALUES(1);
+select * from t1 where id = 1;
+
+INSERT INTO t1(id, c1) VALUES(12, '');
+INSERT INTO t1(id, c1) VALUES(13, null);
+INSERT INTO t1(id, c1) VALUES(14, '    ');
+INSERT INTO t1(id, c1) VALUES(15, ' 162 ');
+select nchr(c1) from t1 where id > 10 and id < 14;
+--error 1210
+select nchr(c1) from t1 where id = 14;
+select nchr(c1) from t1 where id = 15;
+
+drop table t1;
+
+CREATE TABLE t1 (
+	id INT NULL,
+	nchr_col1 varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL,
+	nchr_col2 varchar(100) CHARACTER SET gbk COLLATE gbk_chinese_ci NULL
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO t1
+(id, nchr_col1,nchr_col2)
+VALUES(167, nchr(167), nchr(167));
+INSERT INTO t1
+(id, nchr_col1,nchr_col2)
+VALUES(20005, '严', '严');
+
+select* from t1 where id = 167;
+select* from t1 where nchr_col1 = '§';
+select* from t1 where nchr_col2 = '§';
+select length(nchr_col1), length(nchr_col2) from t1;
+
+set character_set_client = 'gbk';
+set character_set_connection = 'gbk';
+
+select nchr(167);
+select nchr(19968);
+select nchr(20005);
+
+select * from t1 where nchr_col1 = nchr(167);
+select * from t1 where nchr_col2 = nchr(167);
+select * from t1 where nchr_col2 = nchr(20005);
+select * from t1 where nchr_col2 = nchr(20005);
+
+drop table t1;

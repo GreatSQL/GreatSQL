@@ -1,0 +1,45 @@
+--echo [### test create sequence of special db/seq name]
+create database `t``e"s'\'t`;
+create sequence `t``e"s'\'t`.`s``e"q'\'uen.ce` cache 2;
+show sequences from `t``e"s'\'t`;
+show full sequences from `t``e"s'\'t`;
+show create sequence `t``e"s'\'t`.`s``e"q'\'uen.ce`;
+select * from mysql.greatdb_sequences;
+select * from mysql.greatdb_sequences_persist;
+
+--echo
+--echo [### test get value from sequence with special name]
+--error ER_GDB_READ_SEQUENCE
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.nextval;
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.nextval;
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+select * from mysql.greatdb_sequences_persist;
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.nextval;
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.nextval;
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+select * from mysql.greatdb_sequences_persist;
+
+--echo
+--echo [### test drop sequence with special name]
+drop sequence `t``e"s'\'t`.`s``e"q'\'uen.ce`;
+select * from mysql.greatdb_sequences;
+select * from mysql.greatdb_sequences_persist;
+
+--echo
+--echo [### test backend sequence with special name]
+create sequence `t``e"s'\'t`.`s``e"q'\'uen.ce`;
+select * from mysql.greatdb_sequences;
+--echo [shard_id=15 is shard 'sd2']
+show full sequences from `t``e"s'\'t`;
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.nextval;
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.nextval;
+select `t``e"s'\'t`.`s``e"q'\'uen.ce`.currval;
+select * from mysql.greatdb_sequences_persist;
+drop sequence `t``e"s'\'t`.`s``e"q'\'uen.ce`;
+
+## clean
+drop database `t``e"s'\'t`;
